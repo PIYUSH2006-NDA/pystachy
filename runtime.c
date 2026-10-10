@@ -947,7 +947,19 @@ static const char *repr(Buf *b, I v, const char *d) {
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
 static I entry(Dict *d, I k);
+static int eqv(I a, I b, const char *d);
+/* Container items use identity before equality (PyObject_RichCompareBool). Keep this
+   separate from direct comparison: equal unboxed float bits need not compare equal,
+   and an optional scalar's box does not give that scalar Python object identity. */
+static int eqitem(I a, I b, const char *d) {
+  char c = d[*d == '?'];
+  return (a == b && (c == 'L' || c == 'D' || c == 'T')) || eqv(a, b, d);
+}
+#ifndef EQ_PROBE
+#define EQ_PROBE()
+#endif
 static int eqv(I a, I b, const char *d) {
+  EQ_PROBE();
   switch (*d) {
   case 'f': return dbl(a) == dbl(b);
   case 's': return a && b ? pys_str_eq((Str *)a, (Str *)b) : a == b;   /* (None in a looked-up key, see hval) */
@@ -955,7 +967,7 @@ static int eqv(I a, I b, const char *d) {
                    lengths at every step, and once a list has no item left, compare them */
     List *x = (List *)a, *y = (List *)b; I i = 0;
     if (x->len != y->len) return 0;
-    while (i < x->len && i < y->len && eqv(x->a[i], y->a[i], d + 1)) i++;
+    while (i < x->len && i < y->len && eqitem(x->a[i], y->a[i], d + 1)) i++;
     return (i >= x->len || i >= y->len) && x->len == y->len;
   }
   case 'D': {
@@ -964,14 +976,14 @@ static int eqv(I a, I b, const char *d) {
     for (I e = 0; e < x->n; e++) {
       if (!x->hs[e]) continue;
       I f = entry(y, x->keys[e]);
-      if (f < 0 || !eqv(x->vals[e], y->vals[f], dv)) return 0;
+      if (f < 0 || !eqitem(x->vals[e], y->vals[f], dv)) return 0;
     }
     return 1;
   }
   case 'T': {
     I *x = (I *)a, *y = (I *)b; const char *e = d + 2;
     if (!x || !y) return x == y;
-    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqv(x[i], y[i], e)) return 0;
+    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return 0;
     return 1;
   }
   case 'O': return a == b || pys_obj_eq(ocls(d + 1), a, b);   /* identity first, like CPython */
@@ -992,13 +1004,13 @@ static int opv(I a, I b, const char *d, I op) {
   case 's': return cmpop(pys_str_cmp((Str *)a, (Str *)b), op);
   case 'L': {
     List *x = (List *)a, *y = (List *)b; I i = 0;
-    while (i < x->len && i < y->len && eqv(x->a[i], y->a[i], d + 1)) i++;
+    while (i < x->len && i < y->len && eqitem(x->a[i], y->a[i], d + 1)) i++;
     if (i < x->len && i < y->len) return opv(x->a[i], y->a[i], d + 1, op);
     return cmpop((x->len > y->len) - (x->len < y->len), op);
   }
   case 'T': {
     I *x = (I *)a, *y = (I *)b; const char *e = d + 2;
-    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqv(x[i], y[i], e)) return opv(x[i], y[i], e, op);
+    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return opv(x[i], y[i], e, op);
     return cmpop(0, op);
   }
   case 'O': return pys_obj_cmp(ocls(d + 1), op, a, b) != 0;
@@ -1086,11 +1098,11 @@ List *pys_list_mul(List *a, I n) {
   for (I i = 0; i < n; i++) memcpy(r->a + i * m, a->a, m * 8);
   r->len = n > 0 ? m * n : 0; return r;
 }
-I pys_list_find(List *l, I v, Str *d) { for (I i = 0; i < l->len; i++) if (eqv(l->a[i], v, d->s)) return i; return -1; }
+I pys_list_find(List *l, I v, Str *d) { for (I i = 0; i < l->len; i++) if (eqitem(l->a[i], v, d->s)) return i; return -1; }
 static I index_in(List *l, I v, const char *d, I st, I en) {   /* the first i in [st, en) where l[i] == v, or -1 */
   if (st < 0 && (st += l->len) < 0) st = 0;
   if (en < 0 && (en += l->len) < 0) en = 0;
-  for (I j = st; j < en && j < l->len; j++) if (eqv(l->a[j], v, d)) return j;
+  for (I j = st; j < en && j < l->len; j++) if (eqitem(l->a[j], v, d)) return j;
   return -1;
 }
 static _Noreturn void not_in_list(I x, const char *xd) {
@@ -1107,7 +1119,7 @@ I pys_list_index_as(List *l, I v, Str *d, I st, I en, I ok, I x, Str *xd) {  /* 
   if (i < 0) not_in_list(x, xd->s);
   return i;
 }
-I pys_list_count(List *l, I v, Str *d) { I c = 0; for (I i = 0; i < l->len; i++) c += eqv(l->a[i], v, d->s); return c; }
+I pys_list_count(List *l, I v, Str *d) { I c = 0; for (I i = 0; i < l->len; i++) c += eqitem(l->a[i], v, d->s); return c; }
 void pys_list_remove(List *l, I v, Str *d) {
   I i = pys_list_find(l, v, d);
   if (i < 0) pys_fail("ValueError: list.remove(x): x not in list");

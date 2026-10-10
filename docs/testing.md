@@ -15,6 +15,7 @@ honest.
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
+| `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
 
 ## Differential tests
@@ -110,6 +111,9 @@ versions, platform, git commit and a timestamp:
   checks that their backing capacity is released and collected live bytes stay below 1 MiB,
   and checks empty copying, reuse and sort mutation markers, normally and with collection
   at every allocation; these are deterministic allocation checks, without RSS or timing thresholds;
+- **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
+  searches for it in lists, normally and with collection at every allocation. More than 64
+  recursive comparisons fail immediately, so an exponential traversal fails without hanging;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
