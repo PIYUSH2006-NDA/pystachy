@@ -29,6 +29,8 @@
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
+#   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
+#                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
 #   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types under
@@ -252,6 +254,14 @@ L=$V/list-storage.log; s=$(now); r=fail
   "${LLVM}clang" -O2 "$V/listprobe.bc" -o "$V/listprobe" -lm &&
   "$V/listprobe" && PYSTACHY_GC_STRESS=1 "$V/listprobe" && r=pass; } > "$L" 2>&1
 step list-storage $r "$s" "$L" ', "lists": 64, "historical_slots_per_list": 65536, "live_byte_limit": 1048576'
+
+# ---- container-eq: bounded comparisons for small DAGs with exponentially many logical leaves
+L=$V/container-eq.log; s=$(now); r=fail
+{ "${LLVM}clang" -O2 -S -emit-llvm tools/eqprobe.c -o "$V/eqprobe.ll" &&
+  "${LLVM}llvm-link" "$V/rt1.ll" "$V/eqprobe.ll" -o "$V/eqprobe.bc" &&
+  "${LLVM}clang" -O2 "$V/eqprobe.bc" -o "$V/eqprobe" -lm &&
+  "$V/eqprobe" && PYSTACHY_GC_STRESS=1 "$V/eqprobe" && r=pass; } > "$L" 2>&1
+step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
 
 # ---- dict-probes: table slots per dict lookup for colliding keys, sequential keys the control
 L=$V/dict-probes.log; s=$(now); r=fail

@@ -53,6 +53,16 @@ listprobe: tools/listprobe.c runtime.c runtime.py pystachy
 	build/listprobe
 	PYSTACHY_GC_STRESS=1 build/listprobe
 
+# Shared container DAGs compare without expanding into their logical trees.
+eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
+	mkdir -p build
+	./pystachy rt runtime.py -o build/eqprobe-rt.ll
+	$(LLVMBIN)clang -O2 -S -emit-llvm tools/eqprobe.c -o build/eqprobe.ll
+	$(LLVMBIN)llvm-link build/eqprobe-rt.ll build/eqprobe.ll -o build/eqprobe.bc
+	$(LLVMBIN)clang -O2 build/eqprobe.bc -o build/eqprobe -lm
+	build/eqprobe
+	PYSTACHY_GC_STRESS=1 build/eqprobe
+
 # Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
 # scaling) -> build/verification.json
 verify:
@@ -99,9 +109,9 @@ check-runtime:
 lint:
 	ruff check
 	shellcheck -s sh -S warning $(wildcard tests/*.sh tools/*.sh bench/*.sh)
-	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c
 
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench dictprobe listprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py bench dictprobe listprobe eqprobe verify irsame irsame-py ref check-ir check-runtime lint clean
