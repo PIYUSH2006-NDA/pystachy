@@ -38,6 +38,9 @@ jobs:
       - name: make verify
         run: make verify
 
+      - name: Extended subset benchmark correctness
+        run: make bench-extended-check
+
       - name: Upload verification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,5 +48,6 @@ jobs:
           name: verification
           path: |
             build/verification.json
+            build/extended-smoke.json
             build/verify/*.log
           if-no-files-found: warn
