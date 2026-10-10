@@ -33,6 +33,7 @@
 #                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
+#   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
 #   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types under
 #                  256 MiB / ten CPU seconds, with short diagnostics; finite controls still compile
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
@@ -269,6 +270,11 @@ L=$V/dict-probes.log; s=$(now); r=fail
   "${LLVM}llvm-link" "$V/dictprobe-rt.ll" "$V/dictprobe.ll" -o "$V/dictprobe.bc" && "${LLVM}clang" -O2 "$V/dictprobe.bc" -o "$V/dictprobe" -lm &&
   "$V/dictprobe" && r=pass; } > "$L" 2>&1
 step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per lookup (limit \([0-9.]*\))$/, "worst_average_slots": \1, "limit": \2/p' "$L")"
+
+# ---- inherited ASTs: declaration headers grow linearly; unused method bodies are shared
+L=$V/inherited-ast.log; s=$(now); r=fail
+$PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
+step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
 
 # ---- compile limits: small sources must receive bounded source diagnostics, not exhaust memory
 L=$V/compile-limits.log; s=$(now); r=fail

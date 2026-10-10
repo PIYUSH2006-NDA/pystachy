@@ -114,6 +114,11 @@ versions, platform, git commit and a timestamp:
 - **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
+- **inherited-ast** — `tools/inheritprobe.py` counts retained and cloned AST nodes for an
+  unused class method with N statements and N exception subclasses at N = 80, 160 and 320.
+  Both counts must stay linear; native ir/run/build also succeed at N = 800 under 256 MiB.
+  Each inherited method keeps its declaration metadata but shares an immutable body until
+  it is needed, when its own class binding and definite-assignment checks are applied;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
