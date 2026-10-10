@@ -24,7 +24,7 @@
 #include <unwind.h>
 
 typedef int64_t I;
-typedef struct { I len; char s[]; } Str;              /* immutable, NUL-terminated */
+typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
 typedef struct { char *p; I n, cap; } Buf;
@@ -1453,7 +1453,15 @@ static uint64_t hval(I k, const char *d) {           /* a tuple key's hash (or i
   return h ^ h >> 29;
 }
 static uint64_t hsh(Dict *d, I k) {                  /* kind: 0 int keys, 1 str keys, else a tuple key's descriptor */
-  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)(d->kind ? pys_hash_str((Str *)k) : pys_hash_int(k));
+  if (d->kind == 1) {
+    Str *s = (Str *)k;
+    if (!s->dict_hash) {                /* zeroed allocations and writable literals start uncached */
+      uint64_t h = (uint64_t)pys_hash_str(s);
+      s->dict_hash = h ? h : 1;         /* cache the dictionary's normalized hash, also for tuple items */
+    }
+    return s->dict_hash;
+  }
+  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)pys_hash_int(k);
   return h ? h : 1;                                  /* 0 marks a hole */
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */

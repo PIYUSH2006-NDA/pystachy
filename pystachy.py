@@ -5156,7 +5156,7 @@ RTL: dict[str, str] = {
 }
 TBAA_LEN = 3
 TBAA_BYTES = 4
-STRLEN_RANGE = 5  # !range of a str's length in runtime mode: 0 to 2**63 - 10 (_rt.str_new's limit)
+STRLEN_RANGE = 5  # !range of a str's length in runtime mode: 0 to 2**63 - 18 (_rt.str_new's limit)
 # the errno module: the platform's error numbers (runtime.c's table)
 ERRNO: dict[str, bool] = {}
 for _k in ("EPERM ENOENT ESRCH EINTR EIO ENXIO E2BIG ENOEXEC EBADF ECHILD EAGAIN ENOMEM EACCES EFAULT ENOTBLK EBUSY EEXIST EXDEV ENODEV "
@@ -7314,8 +7314,8 @@ class Gen:
             for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n0}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n0}, {a[1]}')}",
                       f"icmp ugt i64 {a[3]}, {n1}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n1}, {a[3]}')}"]:
                 self.guard(self.ins(x), "IndexError: compare out of range")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
-            p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 8')}")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
+            p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
             return Val(self.ins(f"icmp eq i32 {self.rt('memcmp', 'i32', [f'ptr {p0}', f'ptr {p1}', f'i64 {a[4]}'])}, 0"), "bool")
         if name == "find_byte":
             # find_byte(s, c, st, en): 0 <= st <= en <= len(s)
@@ -7323,26 +7323,26 @@ class Gen:
             for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
                 self.guard(self.ins(x), "IndexError: search out of range")
             self.guard(self.ins(f"icmp ugt i64 {a[1]}, 255"), "ValueError: byte must be in range(0, 256)")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 8')}")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
             f = self.rt("memchr", "ptr", [f"ptr {p0}", f"i32 {self.ins(f'trunc i64 {a[1]} to i32')}", f"i64 {self.ins(f'sub i64 {a[3]}, {a[2]}')}"])
             d = self.ins(f"sub i64 {self.ins(f'ptrtoint ptr {f} to i64')}, {self.ins(f'ptrtoint ptr {a[0]} to i64')}")
-            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 8')}"), "int")
+            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 16')}"), "int")
         if name == "find_sub":
             # find_sub(h, n, st, en): 0 <= st <= en <= len(h)
             n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
             for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
                 self.guard(self.ins(x), "IndexError: search out of range")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 8')}")
-            p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 8")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
+            p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 16")
             m = self.ins(f"load i64, ptr {a[1]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
             f = self.rt("memmem", "ptr", [f"ptr {p0}", f"i64 {self.ins(f'sub i64 {a[3]}, {a[2]}')}", f"ptr {p1}", f"i64 {m}"])
             d = self.ins(f"sub i64 {self.ins(f'ptrtoint ptr {f} to i64')}, {self.ins(f'ptrtoint ptr {a[0]} to i64')}")
-            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 8')}"), "int")
+            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 16')}"), "int")
         if name == "str_new":
             # a size the allocator cannot serve (negative, or past 2**63 with the header and NUL)
             # is CPython's MemoryError, as in runtime.c
-            self.guard(self.ins(f"icmp ugt i64 {a[0]}, 9223372036854775798"), "MemoryError: ")
-            r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.ins(f'add nuw nsw i64 {a[0]}, 9')}"])  # zeroed: the NUL is there
+            self.guard(self.ins(f"icmp ugt i64 {a[0]}, 9223372036854775790"), "MemoryError: ")
+            r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.ins(f'add nuw nsw i64 {a[0]}, 17')}"])  # zeroed: dict_hash and NUL
             self.emit(f"store i64 {a[0]}, ptr {r}, !tbaa !{TBAA_LEN}")
             return Val(r, "str")
         # the others index a str: an unsigned compare with its length also rejects a negative index
@@ -7353,12 +7353,12 @@ class Gen:
             for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n}, {a[1]}')}",
                       f"icmp ugt i64 {a[3]}, {m}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {m}, {a[3]}')}"]:
                 self.guard(self.ins(x), "IndexError: copy out of range")
-            dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
-            src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 8')}")
+            dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
+            src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
             self.rt("llvm.memmove.p0.p0.i64", "void", [f"ptr {dst}", f"ptr {src}", f"i64 {a[4]}", "i1 false"])
             return Val("null", "None")
         self.guard(self.ins(f"icmp uge i64 {a[1]}, {n}"), "IndexError: string index out of range")
-        p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
+        p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
         if name == "byte":
             return Val(self.ins(f"zext i8 {self.ins(f'load i8, ptr {p}, !tbaa !{TBAA_BYTES}')} to i64"), "int")
         self.guard(self.ins(f"icmp ugt i64 {a[2]}, 255"), "ValueError: byte must be in range(0, 256)")
@@ -7444,7 +7444,8 @@ class Gen:
         self.strs[s] = name
         self.strvals.append(s)
         n = len(s) + 1
-        self.consts.append(f'{name} = private unnamed_addr constant {{i64, [{n} x i8]}} {{i64 {n - 1}, [{n} x i8] c"{llstr(s)}\\00"}}, align 8')
+        # Bytes stay immutable; the dictionary hash cache must be writable (runtime.c Str).
+        self.consts.append(f'{name} = private unnamed_addr global {{i64, i64, [{n} x i8]}} {{i64 {n - 1}, i64 0, [{n} x i8] c"{llstr(s)}\\00"}}, align 8')
         return name
 
     def alloca(self, t: str, name: str) -> str:
@@ -11095,7 +11096,7 @@ class Gen:
             hdr.append(f'!{TBAA_LEN - 1} = !{{!"str bytes", !{TBAA_LEN - 3}, i64 0}}')
             hdr.append(f"!{TBAA_LEN} = !{{!{TBAA_LEN - 2}, !{TBAA_LEN - 2}, i64 0}}")
             hdr.append(f"!{TBAA_BYTES} = !{{!{TBAA_LEN - 1}, !{TBAA_LEN - 1}, i64 0}}")
-            hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775799}}")
+            hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775791}}")
             return "\n".join(hdr) + "\n"
         # pys_init gets the GC roots: main's frame address bounds the stack scan (it also
         # covers @main.init if inlined here) and the table of pointer-typed globals

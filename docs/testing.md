@@ -14,6 +14,7 @@ honest.
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
+| `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
@@ -106,7 +107,10 @@ versions, platform, git commit and a timestamp:
   lookups visit for twelve key patterns that defeat a weak hash or probe sequence (`i << 46`,
   spaced ints, str keys sharing a long prefix or suffix, ...) and every shift `i << s`, with
   sequential keys as the control, at 4k to 30k keys, and fails above 3 slots per lookup: the
-  counts are the same on every machine, so no timing is compared with a threshold;
+  counts are the same on every machine, so no timing is compared with a threshold. A test-only
+  wrapper around the real string hash also counts calls and bytes: repeated, alternating,
+  equal-but-distinct and tuple keys retain their caches across lookups, resize and deletion.
+  `--hash-cache` runs those cache checks alone, also with collection at every allocation;
 - **list-storage** — `tools/listprobe.c` retains 64 cleared lists that each held 65,536 slots,
   checks that their backing capacity is released and collected live bytes stay below 1 MiB,
   and checks empty copying, reuse and sort mutation markers, normally and with collection
