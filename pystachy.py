@@ -13789,8 +13789,9 @@ class Gen:
     # ---- tests the static types decide
     def static(self, n: Node) -> int:
         # 1 or 0 if n is a test whose result the static types decide and that has nothing else to
-        # evaluate: isinstance(x, T), x is None and x is not None for a variable x (that is surely
-        # assigned), and not/and/or of those; -1 otherwise. A template's function, compiled for its
+        # evaluate: isinstance(x, T), x is None and x is not None (also x == None and x != None,
+        # unless x's class defines __eq__ or __ne__) for a variable x (that is surely assigned),
+        # and not/and/or of those; -1 otherwise. A template's function, compiled for its
         # argument types, can so dispatch on them as unannotated code does.
         k = n.kind
         if k == "name" and self.static_type(n) == "None":
@@ -13805,10 +13806,12 @@ class Gen:
             if a < 0 or (a == 1) == (n.s == "or"):
                 return a
             return self.static(n.kids[1])
-        if k == "cmp" and (n.s == "is" or n.s == "is not") and n.kids[1].kind == "None":
+        if k == "cmp" and (n.s == "is" or n.s == "is not" or n.s == "==" or n.s == "!=") and n.kids[1].kind == "None":
             t = self.static_type(n.kids[0])
             r = -1 if t == "" or (t in self.classes and not self.knownobj(n.kids[0])) or is_opt(t) else 1 if t == "None" else 0
-            return r if r < 0 or n.s == "is" else 1 - r
+            if (n.s == "==" or n.s == "!=") and (t == "exc" or (t in self.classes and ("__eq__" in self.classes[t].methods or "__ne__" in self.classes[t].methods))):
+                r = -1  # (CPython calls x.__eq__ or __ne__; an exception's class may define one)
+            return r if r < 0 or n.s == "is" or n.s == "==" else 1 - r
         if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "hasattr" and not self.bound("hasattr") and len(n.kids) == 3 and n.kids[2].kind == "str":
             t = self.static_type(n.kids[1], True)
             h = self.has(t, n.kids[2].s) if t != "" else -1
@@ -15308,7 +15311,11 @@ class Gen:
                 r = self.select(self.ins(f"icmp eq i64 {r}, 2"), Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
             return Val(self.ins(MIXCMP[op].replace("R", r)), "bool")
         eq = op == "==" or op == "!="
+        if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):
+            return Val("false" if op == "==" else "true", "bool")  # a number or bool never equals None
         if eq and (a.t == "None" or b.t == "None" or (a.t == b.t and a.t in self.classes)) and self.isref(a.t) and self.isref(b.t):
+            if a.t == "exc" or b.t == "exc":
+                self.exc_eq("exc", "between an exception and None")
             return Val(self.ins(f"icmp {ICMP[op]} ptr {a.v}, {b.v}"), "bool")
         # T and T | None (also as items): None == None, None == x is False, and None < x raises
         ct = self.wider(a.t, b.t)
