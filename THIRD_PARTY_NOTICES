@@ -3,6 +3,17 @@ Third-party notices
 
 Pystachy is distributed under the MIT License (LICENSE), except for the parts below.
 
+CPython's sequence regression (tests/upstream_slice_none.py)
+------------------------------------------------------------
+
+The two list assertions with explicit None bounds are adapted from CPython 3.13.16's
+Lib/test/seq_tests.py, CommonTest.test_getslice, at commit
+cbc944f4bc59639a444dd971c737788ba2283a91. They use the Python Software Foundation
+License Version 2; the complete upstream license is in tests/upstream/CPYTHON-LICENSE.txt.
+The adaptation removes the unittest and type2test wrappers. The remaining assertions
+extend that scenario to strings, computed None bounds,
+evaluation order, optional bounds, bool bounds, and the signed-64-bit minimum.
+
 CPython's standard library modules (lib/)
 -----------------------------------------
 
@@ -11,6 +22,19 @@ lib/posixpath.py, lib/stat.py, lib/this.py and lib/curses/ascii.py are unmodifie
 Lib/ directory (lib/README.md lists their SHA-256 sums). They are part of Python and are used
 under the Python Software Foundation License Version 2, reproduced below, with the copyright
 notice below. lib/curses/__init__.py is Pystachy's own.
+
+CPython's math tests (tests/)
+----------------------------
+
+tests/upstream_math_fmod.py and tests/errors/upstream_math_fmod_arity.py adapt
+MathTests.testFmod from CPython 3.13.16's Lib/test/test_math.py, commit
+cbc944f4bc59639a444dd971c737788ba2283a91, under the Python Software Foundation
+License Version 2 reproduced below; tests/upstream/CPYTHON-LICENSE.txt retains CPython's
+full license. unittest and test.support scaffolding is removed;
+the supported calls keep their expected values and exception classes as plain assertions.
+The no-argument TypeError becomes an expected compile-time rejection, as Pystachy's
+language contract specifies for static type errors. tests/math_fmod_ieee.py is Pystachy's
+own extension covering the IEEE nonfinite and signed-zero cross-product.
 
 iniconfig (ports/iniconfig/)
 ----------------------------
@@ -86,3 +110,19 @@ products or services of Licensee, or any third party.
 8. By copying, installing or otherwise using Python, Licensee
 agrees to be bound by the terms and conditions of this License
 Agreement.
+
+CPython's sum regression tests (tests/upstream_sum_start.py)
+-----------------------------------------------------------
+
+The range/start assertion in tests/upstream_sum_start.py is adapted from
+Lib/test/test_builtin.py, BuiltinTest.test_sum, at CPython commit
+cbc944f4bc59639a444dd971c737788ba2283a91. The bool-start rejection fixture in
+tests/errors/sum_bool_start.py records the supported-language disposition of that
+method's empty-list/bool-start assertion. These adaptations are used under the
+Python Software Foundation License Version 2; the complete CPython license and
+copyright notices are retained in tests/upstream/CPYTHON-LICENSE.txt.
+
+Summary of changes: remove unittest scaffolding, annotate typed containers,
+replace the dynamic bool result expectation with an explicit compiler rejection,
+and add Pystachy regressions for iterator construction, argument evaluation and
+traversal order. Differential output is recorded with CPython 3.13.16.

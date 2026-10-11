@@ -18,11 +18,15 @@ pystachy: pystachy.py runtime.c runtime.py
 	@echo "fixed point: runtime.py's IR, rt1 == rt2 == rt3 ($$(wc -l < build/rt1.ll) lines)"
 	cp build/pystachy2 pystachy
 
+# FILES: only these cases, e.g. make test FILES="tests/str_*.py tests/errors/rtmode_*.py"
 test: pystachy
-	tests/run.sh ./pystachy
+	tests/run.sh ./pystachy "jit aot" $(FILES)
 
+# the CPython-hosted compiler runs as a module, whose bytecode CPython caches (it compiles a script's
+# 16k lines again at every start); the cache is checked against pystachy.py's hash, not its mtime
 test-py:
-	tests/run.sh "$(PY) pystachy.py"
+	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
+	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
 bench: pystachy
 	PY="$(PY)" bench/run.sh
@@ -38,6 +42,26 @@ dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	$(LLVMBIN)llvm-link build/dictprobe-rt.ll build/dictprobe.ll -o build/dictprobe.bc
 	$(LLVMBIN)clang -O2 build/dictprobe.bc -o build/dictprobe -lm
 	build/dictprobe
+
+# A reachable empty list must release its historical backing, without allocating in clear.
+listprobe: tools/listprobe.c runtime.c runtime.py pystachy
+	mkdir -p build
+	./pystachy rt runtime.py -o build/listprobe-rt.ll
+	$(LLVMBIN)clang -O2 -S -emit-llvm tools/listprobe.c -o build/listprobe.ll
+	$(LLVMBIN)llvm-link build/listprobe-rt.ll build/listprobe.ll -o build/listprobe.bc
+	$(LLVMBIN)clang -O2 build/listprobe.bc -o build/listprobe -lm
+	build/listprobe
+	PYSTACHY_GC_STRESS=1 build/listprobe
+
+# Shared container DAGs compare without expanding into their logical trees.
+eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
+	mkdir -p build
+	./pystachy rt runtime.py -o build/eqprobe-rt.ll
+	$(LLVMBIN)clang -O2 -S -emit-llvm tools/eqprobe.c -o build/eqprobe.ll
+	$(LLVMBIN)llvm-link build/eqprobe-rt.ll build/eqprobe.ll -o build/eqprobe.bc
+	$(LLVMBIN)clang -O2 build/eqprobe.bc -o build/eqprobe -lm
+	build/eqprobe
+	PYSTACHY_GC_STRESS=1 build/eqprobe
 
 # Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
 # scaling) -> build/verification.json
@@ -80,7 +104,14 @@ check-ir: pystachy
 check-runtime:
 	$(PY) tools/check_runtime.py
 
+# ruff (findings only, ruff.toml), shellcheck of the scripts as POSIX sh, and clang's warnings on the C
+# sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
+lint:
+	ruff check
+	shellcheck -s sh -S warning $(wildcard tests/*.sh tools/*.sh bench/*.sh)
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c
+
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench dictprobe verify irsame irsame-py ref check-ir check-runtime clean
+.PHONY: test test-py bench dictprobe listprobe eqprobe verify irsame irsame-py ref check-ir check-runtime lint clean

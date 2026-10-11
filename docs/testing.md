@@ -8,12 +8,15 @@ honest.
 | command | what it checks |
 |---|---|
 | `make` | the bootstrap: the compiler built by itself reproduces its own LLVM IR byte for byte |
-| `make test` | the differential tests with the native compiler, JIT and AOT |
+| `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
+| `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
+| `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
+| `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
 
 ## Differential tests
 
@@ -24,8 +27,10 @@ records a test's expected output from CPython, the way `tests/run.sh` runs it. E
 must be rejected with the message on its first line (a `tests/errors/syntax_*.py` one also by
 `pystachy check`), and each `tests/deviations/*.py` must print its hand-written expected
 output. Where `tests/NAME.path` exists, it is the module path: `PYTHONPATH` when
-`tests/record.sh` records the test, `PYSTACHY_PATH` when `tests/run.sh` runs it. The cases run
-in `PYSTACHY_JOBS` workers at once (default: one per CPU), with `PYSTACHY_IRCHECK=1`: the
+`tests/record.sh` records the test, `PYSTACHY_PATH` when `tests/run.sh` runs it.
+`tests/run.sh COMPILER MODES FILE...` runs only the cases it names (e.g. `tests/run.sh ./pystachy jit
+tests/str_*.py`). The cases run in `PYSTACHY_JOBS` workers at once (default: one per CPU), each
+worker taking the next case no other has claimed, with `PYSTACHY_IRCHECK=1`: the
 compiler then checks the IR it built before lowering it (every op is known, each block ends
 with its one terminator, an op left as LLVM text is no call, phi or terminator, each op
 defines the numbers its lowering prints, branches go to blocks of the function, a phi's
@@ -58,7 +63,9 @@ both the CPython-hosted and the self-compiled compiler.
 versions, platform, git commit and a timestamp:
 
 - **bootstrap** — stage1, stage2 and stage3 emit identical IR, for the compiler and for `runtime.py`;
-- **tests-cpython / tests-native** — the differential tests with each compiler, JIT and AOT;
+- **tests-cpython / tests-native** — the differential tests with each compiler, JIT and AOT (the
+  CPython-hosted one runs as `python3 -m pystachy`, whose bytecode CPython caches, checked
+  against `pystachy.py`'s hash: run as a script, it would compile its 16k lines at every start);
 - **tests-opt-off** — the differential tests with the native compiler and every optimization
   on the IR turned off (`PYSTACHY_OPT=-all`): the passes change no output;
 - **python-free** — `PATH` holds only the LLVM tools, the system linker and a few POSIX
@@ -86,7 +93,8 @@ versions, platform, git commit and a timestamp:
   and every test passes JIT and AOT with a collection at every allocation of the program
   (`PYSTACHY_GC_STRESS_PROGRAM=1`), compiled by the compiler collecting every 1,000 (at every
   100, the compiler's collections, which mark the IR it keeps until the program is built, would
-  take minutes);
+  take minutes); the self-compile runs on one core, so it starts when the bootstrap ends and runs
+  beside the test runs;
 - **benchmarks** — output equal to CPython's, with timings;
 - **rtcheck** — `tools/rtcheck.py` runs `runtime.py` on CPython and compares each of its
   functions with CPython's str methods, `math` functions and `format()` (and the dict hashes
@@ -99,11 +107,23 @@ versions, platform, git commit and a timestamp:
   spaced ints, str keys sharing a long prefix or suffix, ...) and every shift `i << s`, with
   sequential keys as the control, at 4k to 30k keys, and fails above 3 slots per lookup: the
   counts are the same on every machine, so no timing is compared with a threshold;
+- **list-storage** — `tools/listprobe.c` retains 64 cleared lists that each held 65,536 slots,
+  checks that their backing capacity is released and collected live bytes stay below 1 MiB,
+  and checks empty copying, reuse and sort mutation markers, normally and with collection
+  at every allocation; these are deterministic allocation checks, without RSS or timing thresholds;
+- **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
+  searches for it in lists, normally and with collection at every allocation. More than 64
+  recursive comparisons fail immediately, so an exponential traversal fails without hanging;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
   both compilers; the lines the CPython-hosted compiler executes, and the items its builtin
   calls copy or scan, must grow no faster than the programs.
+
+The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
+others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
+`PYSTACHY_CFLAGS`, `PYSTACHY_PATH` and the like) from its environment, and lists the ones it
+found in the report's `ignored_env`; it keeps `PYSTACHY_LLVM` and `PYSTACHY_JOBS`.
 
 ## IR identity for refactors
 

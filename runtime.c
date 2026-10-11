@@ -110,7 +110,7 @@ static List *args;
 static struct { Exc *cur, *handled, *shown, *pend; } xr;   /* the exception raised last, the one being handled,
                                      the uncaught one whose str() is being shown, the one a with-file's close
                                      raised while unwinding (see exceptions) */
-static int eh;                         /* the program has a try: stored by pys_eh_on alone (see exceptions) */
+static int eh;                         /* the program has try or with: stored by pys_eh_on alone (see exceptions) */
 typedef void Thrower(Exc *);
 static Thrower *xthrow;                /* where the funnels send what they raise: NULL until pys_eh_on (ditto),
                                           or until an uncaught exception object is reported */
@@ -320,10 +320,10 @@ static void gc_init(char *sb, I **roots, I nroots) {
 }
 
 /* errors end the program after flushing stdout; a flush that fails is reported at exit, as
-   CPython reports it, with status 120. In a program that has a try (pys_eh_on) they are
+   CPython reports it, with status 120. In a program that has try or with (pys_eh_on) they are
    raised instead, and end the program the same way if nothing catches them (see exceptions).
    They reach that code only through xthrow, which nothing but pys_eh_on and the report of an
-   uncaught exception stores: a program without try links neither, so LLVM folds xthrow to
+   uncaught exception stores: a program without try or with links neither, so LLVM folds xthrow to
    NULL and keeps none of it, and the funnels compile to the code they had before. */
 static volatile sig_atomic_t io_intr;  /* a Ctrl-C waiting for the I/O layer to finish a call (see I/O) */
 static _Noreturn void kbint_exit(void);
@@ -744,7 +744,11 @@ double pys_m_pow(double x, double y) {
   if (x == 0 && y < 0 && isfinite(y)) pys_fail("ValueError: math domain error");
   return mchk(pow(x, y), x, y, 1);
 }
-double pys_m_fmod(double x, double y) { if (isinf(x) || (y == 0 && !isnan(x))) pys_fail("ValueError: math domain error"); return fmod(x, y); }
+double pys_m_fmod(double x, double y) {
+  /* A NaN in either argument propagates even with an infinite dividend or zero divisor. */
+  if ((isinf(x) || y == 0) && !isnan(x) && !isnan(y)) pys_fail("ValueError: math domain error");
+  return fmod(x, y);
+}
 double pys_m_atan2(double y, double x) { return atan2(y, x); }
 /* math.hypot is CPython's vector_norm, not libm's hypot, so its last bit agrees: lossless scaling
    by a power of two, exact squares (fma), compensated summation and a differential correction of
@@ -943,7 +947,19 @@ static const char *repr(Buf *b, I v, const char *d) {
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
 static I entry(Dict *d, I k);
+static int eqv(I a, I b, const char *d);
+/* Container items use identity before equality (PyObject_RichCompareBool). Keep this
+   separate from direct comparison: equal unboxed float bits need not compare equal,
+   and an optional scalar's box does not give that scalar Python object identity. */
+static int eqitem(I a, I b, const char *d) {
+  char c = d[*d == '?'];
+  return (a == b && (c == 'L' || c == 'D' || c == 'T')) || eqv(a, b, d);
+}
+#ifndef EQ_PROBE
+#define EQ_PROBE()
+#endif
 static int eqv(I a, I b, const char *d) {
+  EQ_PROBE();
   switch (*d) {
   case 'f': return dbl(a) == dbl(b);
   case 's': return a && b ? pys_str_eq((Str *)a, (Str *)b) : a == b;   /* (None in a looked-up key, see hval) */
@@ -951,7 +967,7 @@ static int eqv(I a, I b, const char *d) {
                    lengths at every step, and once a list has no item left, compare them */
     List *x = (List *)a, *y = (List *)b; I i = 0;
     if (x->len != y->len) return 0;
-    while (i < x->len && i < y->len && eqv(x->a[i], y->a[i], d + 1)) i++;
+    while (i < x->len && i < y->len && eqitem(x->a[i], y->a[i], d + 1)) i++;
     return (i >= x->len || i >= y->len) && x->len == y->len;
   }
   case 'D': {
@@ -960,14 +976,14 @@ static int eqv(I a, I b, const char *d) {
     for (I e = 0; e < x->n; e++) {
       if (!x->hs[e]) continue;
       I f = entry(y, x->keys[e]);
-      if (f < 0 || !eqv(x->vals[e], y->vals[f], dv)) return 0;
+      if (f < 0 || !eqitem(x->vals[e], y->vals[f], dv)) return 0;
     }
     return 1;
   }
   case 'T': {
     I *x = (I *)a, *y = (I *)b; const char *e = d + 2;
     if (!x || !y) return x == y;
-    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqv(x[i], y[i], e)) return 0;
+    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return 0;
     return 1;
   }
   case 'O': return a == b || pys_obj_eq(ocls(d + 1), a, b);   /* identity first, like CPython */
@@ -988,13 +1004,13 @@ static int opv(I a, I b, const char *d, I op) {
   case 's': return cmpop(pys_str_cmp((Str *)a, (Str *)b), op);
   case 'L': {
     List *x = (List *)a, *y = (List *)b; I i = 0;
-    while (i < x->len && i < y->len && eqv(x->a[i], y->a[i], d + 1)) i++;
+    while (i < x->len && i < y->len && eqitem(x->a[i], y->a[i], d + 1)) i++;
     if (i < x->len && i < y->len) return opv(x->a[i], y->a[i], d + 1, op);
     return cmpop((x->len > y->len) - (x->len < y->len), op);
   }
   case 'T': {
     I *x = (I *)a, *y = (I *)b; const char *e = d + 2;
-    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqv(x[i], y[i], e)) return opv(x[i], y[i], e, op);
+    for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return opv(x[i], y[i], e, op);
     return cmpop(0, op);
   }
   case 'O': return pys_obj_cmp(ocls(d + 1), op, a, b) != 0;
@@ -1021,13 +1037,19 @@ void pys_unpack_check(I have, I want) {
 }
 
 /* ---------- lists ---------- */
+static I empty_list[1];                /* valid even for zero-byte copies; distinct from sort's sentinel */
+static void empty(List *l) {           /* detach an empty list's historical storage without allocating */
+  if (l->cap) { l->cap = 0; l->a = empty_list; }   /* cap 0 during sort: preserve its mutation marker */
+}
 List *pys_list_new(I cap) {
   List *l = pys_alloc(sizeof(List));
   l->cap = cap > 4 ? cap : 4; l->a = pys_alloc(l->cap * 8); return l;
 }
 static void reserve(List *l, I n) {
   if (n <= l->cap) return;
-  I c = l->cap * 2 > n ? l->cap * 2 : n; I *a = pys_alloc(c * 8);
+  I c = l->cap * 2 > n ? l->cap * 2 : n;
+  if (c < 4) c = 4;
+  I *a = pys_alloc(c * 8);
   memcpy(a, l->a, l->len * 8); l->a = a; l->cap = c;
 }
 /* element access through a distinct struct type: TBAA then knows a store to an element
@@ -1042,9 +1064,11 @@ void pys_list_set(List *l, I i, I v) { AT(l, idx(i, l->len, "IndexError: list as
 I pys_list_pop(List *l, I i) {
   if (!l->len) pys_fail("IndexError: pop from empty list");
   i = idx(i, l->len, "IndexError: pop index out of range");
-  I v = l->a[i]; memmove(l->a + i, l->a + i + 1, (l->len - i - 1) * 8); l->a[--l->len] = 0; return v;
+  I v = l->a[i]; memmove(l->a + i, l->a + i + 1, (l->len - i - 1) * 8); l->a[--l->len] = 0;
+  if (!l->len) empty(l);
+  return v;
 }
-void pys_list_del(List *l, I i) { i = idx(i, l->len, "IndexError: list assignment index out of range"); memmove(l->a + i, l->a + i + 1, (l->len - i - 1) * 8); l->a[--l->len] = 0; }
+void pys_list_del(List *l, I i) { i = idx(i, l->len, "IndexError: list assignment index out of range"); memmove(l->a + i, l->a + i + 1, (l->len - i - 1) * 8); l->a[--l->len] = 0; if (!l->len) empty(l); }
 void pys_list_insert(List *l, I i, I v) {
   if (i < 0 && (i += l->len) < 0) i = 0;
   if (i > l->len) i = l->len;
@@ -1056,7 +1080,7 @@ List *pys_list_slice(List *l, I lo, I hi) {
   List *r = pys_list_new(hi - lo); memcpy(r->a, l->a + lo, (hi - lo) * 8); r->len = hi - lo; return r;
 }
 List *pys_list_copy(List *l) { return pys_list_slice(l, NONE, NONE); }
-void pys_list_clear(List *l) { memset(l->a, 0, l->len * 8); l->len = 0; }
+void pys_list_clear(List *l) { memset(l->a, 0, l->len * 8); l->len = 0; empty(l); }
 List *pys_list_add(List *a, List *b) { List *r = pys_list_new(a->len + b->len); pys_list_extend(r, a); pys_list_extend(r, b); return r; }
 void pys_list_imul(List *l, I n) {               /* xs *= n, in place */
   I m = l->len;
@@ -1074,11 +1098,11 @@ List *pys_list_mul(List *a, I n) {
   for (I i = 0; i < n; i++) memcpy(r->a + i * m, a->a, m * 8);
   r->len = n > 0 ? m * n : 0; return r;
 }
-I pys_list_find(List *l, I v, Str *d) { for (I i = 0; i < l->len; i++) if (eqv(l->a[i], v, d->s)) return i; return -1; }
+I pys_list_find(List *l, I v, Str *d) { for (I i = 0; i < l->len; i++) if (eqitem(l->a[i], v, d->s)) return i; return -1; }
 static I index_in(List *l, I v, const char *d, I st, I en) {   /* the first i in [st, en) where l[i] == v, or -1 */
   if (st < 0 && (st += l->len) < 0) st = 0;
   if (en < 0 && (en += l->len) < 0) en = 0;
-  for (I j = st; j < en && j < l->len; j++) if (eqv(l->a[j], v, d)) return j;
+  for (I j = st; j < en && j < l->len; j++) if (eqitem(l->a[j], v, d)) return j;
   return -1;
 }
 static _Noreturn void not_in_list(I x, const char *xd) {
@@ -1095,7 +1119,7 @@ I pys_list_index_as(List *l, I v, Str *d, I st, I en, I ok, I x, Str *xd) {  /* 
   if (i < 0) not_in_list(x, xd->s);
   return i;
 }
-I pys_list_count(List *l, I v, Str *d) { I c = 0; for (I i = 0; i < l->len; i++) c += eqv(l->a[i], v, d->s); return c; }
+I pys_list_count(List *l, I v, Str *d) { I c = 0; for (I i = 0; i < l->len; i++) c += eqitem(l->a[i], v, d->s); return c; }
 void pys_list_remove(List *l, I v, Str *d) {
   I i = pys_list_find(l, v, d);
   if (i < 0) pys_fail("ValueError: list.remove(x): x not in list");
@@ -1120,8 +1144,8 @@ void pys_list_reverse(List *l) { rev(l->a, l->len); }
    the merge noted them last (KEEP, before each comparison that may raise), undoes reverse='s
    reversal and gives the list its array back. What it needs is in a record on the heap (Undo),
    so that it can run when the sort's frame is gone, and the merges find it in a static (keep_u),
-   not in the MS: a program without try (eh 0) keeps the sort it had, instruction for
-   instruction. In one with a try, the notes (3 stores a comparison) cost a sort of objects a
+   not in the MS: a program without try or with (eh 0) keeps the sort it had, instruction for
+   instruction. In one with either, the notes (3 stores a comparison) cost a sort of objects a
    few percent. Speed: the common item types compare inline, and binary insertion and the
    one-at-a-time merging of ints and floats use selects, as random data makes their branches
    unpredictable (merging strings or objects keeps the branches, which let the CPU fetch their
@@ -1198,7 +1222,7 @@ static I *getmem(MS *ms, I need) {                  /* merge_getmem, growing geo
 /* The merges, written once (MERGES) and compiled twice: merge_lo and merge_hi, where NOTE notes
    nothing, are those merge_at calls for a sort that needs no Undo, the code they had before;
    merge_lo_k and merge_hi_k, where NOTE is KEEP, those it calls (by merge_keep) when eh and
-   keep_u: a program without try does not keep them */
+   keep_u: a program without try or with does not keep them */
 #define MERGES(SFX, NOTE) \
 static void merge_lo##SFX(MS *ms, I *a, I na, I *b, I nb) {   /* na <= nb: a goes to the buffer, merge from the left */ \
   I *d = a, *pa = memcpy(getmem(ms, na), a, na * 8), *pb = b, k, mg = ms->min_gallop;                                   \
@@ -1850,7 +1874,8 @@ __attribute__((minsize)) void pys_init(int argc, char **argv, char *sb, I **root
   std_err.f = stderr; std_err.wr = 1; std_err.std = 1;
   struct stat st;
   if (!isatty(1) && !fstat(1, &st)) setbuf1(&std_out, st.st_blksize > 1 ? st.st_blksize : 8192);
-  signal(SIGPIPE, SIG_IGN);            /* as CPython: a closed pipe is an error, not a signal */
+  signal(SIGPIPE, SIG_IGN);            /* as CPython: a closed pipe is an error, not a signal, */
+  signal(SIGXFSZ, SIG_IGN);            /* and so is a write past the file-size limit (EFBIG) */
   struct sigaction sa;                 /* and Ctrl-C is KeyboardInterrupt, unless SIGINT is ignored */
   if (!sigaction(SIGINT, 0, &sa) && sa.sa_handler != SIG_IGN) {
     memset(&sa, 0, sizeof sa); sa.sa_handler = on_sigint; sigemptyset(&sa.sa_mask);
@@ -2091,7 +2116,7 @@ Str *pys_path_join(Str *a, Str *b) {     /* os.path.join(a, b), as posixpath.joi
 Str *pys_getenv(Str *k, Str *dflt) { char *v = nul(k) ? 0 : getenv(k->s); return v ? cstr(v) : dflt; }
 
 /* ---------- exceptions: table-driven unwinding (the Itanium C++ ABI's) ----------
-   A program that has a try calls pys_eh_on when it starts. From then on a raise (pys_fail,
+   A program that has try or with calls pys_eh_on when it starts. From then on a raise (pys_fail,
    pys_raise, sys.exit, pys_throw) makes an Exc, which begins with the unwinder's header,
    notes it (a root of the collector) and calls _Unwind_ForcedUnwind, which asks
    pys_personality, the personality routine of every compiled function with landing pads,
@@ -2106,9 +2131,10 @@ Str *pys_getenv(Str *k, Str *dflt) { char *v = nul(k) ? 0 : getenv(k->s); return
    message, a KeyboardInterrupt's death by SIGINT, a user exception object as "disp: str(e)"
    ("disp" when that is empty, "<exception str() failed>" when its __str__ raises, as
    CPython's). Before pys_eh_on every raise ends the program that way at once. Code that does
-   not raise pays nothing, a try included, but for list.sort of objects, whose merges note where
-   their items are (a few percent; see list.sort); a raise costs about a microsecond. A program
-   without try keeps none of this: the funnels reach it through xthrow, and what else tests
+   not raise pays nothing for a try, but a with registers and forgets its cleanup action and
+   list.sort of objects notes where its items are (a few percent; see list.sort); a raise costs
+   about a microsecond. A program
+   without try or with keeps none of this: the funnels reach it through xthrow, and what else tests
    eh (the unwind actions below) folds away, as only pys_eh_on stores either. It links
    pys_throw and the report only when it raises a user exception object.
    Compiled code's side. A function with landing pads names `personality ptr @pys_personality`;

@@ -35,7 +35,7 @@ flowchart TD
 |---|---:|---|
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
 | `runtime.c` | 2,920 | garbage collector, string, list and dict memory, timsort, dict tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
-| `runtime.py` | 1,276 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
+| `runtime.py` | 1,277 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
@@ -169,7 +169,7 @@ one cold block per function and message (and `try` statement around it). `self` 
 
 ### Exceptions by table-driven unwinding
 
-A program whose modules hold a `try` (decided before code generation; any other keeps its code)
+A program whose modules hold `try` or `with` (decided before code generation; any other keeps its code)
 calls `pys_eh_on` as it starts. From then on the runtime's error funnels (`pys_fail`,
 `pys_raise`, `sys.exit`) build an exception and unwind with the Itanium ABI's
 `_Unwind_ForcedUnwind`, in one phase (every landing pad catches everything, so the first one
@@ -191,9 +191,10 @@ more for each frame with a `try` it passes through.
 `finally` of its own is compiled once, where each way out stores its index and jumps, so that
 nested ones grow linearly, not as 3^depth. What a raise leaves half done in the runtime (a list
 being sorted, a `with` block's open file) is put right by unwind actions that the landing pad
-runs; none raises: a `with` block's file whose close fails notes its `OSError`, which then takes
-the place of the exception the landing handles (CPython's `__exit__` raises it inside the
-`try`).
+runs, or that run before reporting an uncaught exception. A `with` needs no `try` to close its
+files on an exceptional exit; cleanup runs innermost first. No action raises: a `with` block's
+file whose close fails notes its `OSError`, which then takes the place of the exception being
+propagated, including `SystemExit` (CPython's `__exit__` raises it inside the `try`, if any).
 
 A module's code runs in the region of a landing block that marks the module not run and throws
 again; a read through a name that an import in a `try` statement binds checks that mark.
@@ -312,7 +313,8 @@ against CPython's own str methods, `math` and `format()`.
 ORC JIT compilation linked against a cached, precompiled runtime `.o`. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags
-(such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set.
+(such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set (and per
+set of optimizations that `PYSTACHY_OPT` turns off, since `runtime.py` goes through them too).
 Sanitizer flags reach only the runtime's compilation and the final link, so runtime.c is
 instrumented once (`runtime.py`'s code is not: its primitives check its accesses, and ASan's
 interceptors still see the `memchr`/`memcmp`/`memmove` calls they make); `pystachy run` then

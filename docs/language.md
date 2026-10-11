@@ -660,6 +660,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 
 ### Templates and empty containers
 
+- types whose serialized representation exceeds 65,536 bytes, a template signature exceeding
+  1,048,576 bytes, or active template signatures totaling more than 1,048,576 bytes; these
+  compiler resource limits are checked before constructing the oversized strings (including
+  tuple repetition), alongside the existing limit of 100 nested template compilations.
+  Type-changing recursion is supported when it reaches a finite set of specializations within
+  these bounds. Large argument types in diagnostic call contexts are summarized.
 - an empty container whose first use stores an empty `[]` or `{}` into it (`d[k] = []`)
 - an empty `[]` or `{}` that nothing gives a type (`{}["k"]` alone)
 - an empty list or dict that a template's function returns empty, used where the `list[int]` /
@@ -696,6 +702,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class, which CPython calls anyway
 - a constant tuple index out of range (CPython raises `IndexError` where it runs)
+- `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
+  is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
+  `sum(iterable, int(start))` for a numeric result, including on empty inputs.
 
 ### Classes, dataclasses and NamedTuples
 

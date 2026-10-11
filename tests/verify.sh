@@ -27,8 +27,14 @@
 #                  math functions give on random inputs
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
+#   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
+#                  empty operations/reuse preserve sort's sentinel, without allocation in clear
+#   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
+#                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
+#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types under
+#                  256 MiB / ten CPU seconds, with short diagnostics; finite controls still compile
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
@@ -47,6 +53,11 @@ cp runtime.c runtime.py "$V/ubsan-home/"
 cp -R lib "$V/home/"
 cp -R lib "$V/ubsan-home/"
 export PYSTACHY_HOME="$ROOT"
+# The steps set the knobs they test themselves: one left in the caller's environment would weaken a
+# step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they
+# are dropped, and the report lists them (PYSTACHY_LLVM and PYSTACHY_JOBS are kept)
+ign=$(env | sed -nE 's/^(PYSTACHY_(PATH|CFLAGS|GC|GC_STRESS|GC_STRESS_PROGRAM|IRCHECK|IRFX|OPT|ARGV0))=.*$/\1/p' | sort -u)
+for e in $ign; do echo "verify: ignoring $e=$(printenv "$e")"; unset "$e"; done
 LLVM=${PYSTACHY_LLVM:+${PYSTACHY_LLVM%/}/}
 
 now() { date +%s.%N; }
@@ -98,9 +109,23 @@ x=""
   "$(lines "$V/stage1.ll")" "$(sha "$V/stage1.ll")" "$(wc -c < "$V/pystachy2" | tr -d ' ')" "$(secs "$t0" "$t1")" "$(secs "$t2" "$t3")")
 step bootstrap $r "$s" "$L" "$x"
 
+# gc-stress's self-compile keeps one core busy for a minute or more: it runs now, beside the test
+# runs below, and that step waits for it. Ctrl-C or TERM kills it ($! is the compiler itself: a
+# simple command run in the background is exec'd, with no shell around it to kill instead)
+gcpid=
+trap '[ -z "$gcpid" ] || kill $gcpid 2> /dev/null; exit 130' INT TERM
+if [ -x "$V/pystachy2" ]; then
+  PYSTACHY_GC_STRESS=1000 "$V/pystachy2" ir pystachy.py -o "$V/stage-gc.ll" > "$V/gc-self.log" 2>&1 &
+  gcpid=$!
+fi
+
 # ---- differential tests with both compilers
+# (the CPython-hosted compiler runs as a module, whose bytecode CPython caches, where it compiles a
+# script's 16k lines again at every start; the cache is checked against pystachy.py's hash, as an
+# edit within the same second may keep its mtime and size)
 L=$V/tests-cpython.log; s=$(now)
-tests/run.sh "$PY pystachy.py" > "$L" 2>&1
+{ $PY -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)' &&
+  tests/run.sh "$PY -m pystachy"; } > "$L" 2>&1
 x=$(tests "$L") && r=pass || r=fail
 step tests-cpython $r "$s" "$L" ', "compiler": "CPython-hosted", "modes": ["jit", "aot"]'"$x"
 L=$V/tests-native.log; s=$(now)
@@ -108,6 +133,7 @@ tests/run.sh "$V/pystachy2" > "$L" 2>&1
 x=$(tests "$L") && r=pass || r=fail
 step tests-native $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"]'"$x"
 L=$V/tests-opt-off.log; s=$(now); logs=""; offs=""
+# shellcheck disable=SC2043 # (a list of one, for now)
 for o in all; do
   PYSTACHY_OPT=-$o tests/run.sh "$V/pystachy2" > "$V/tests-opt-off-$o.log" 2>&1
   logs="$logs $V/tests-opt-off-$o.log"; offs="$offs, \"-$o\""
@@ -179,14 +205,14 @@ step check-ir $r "$s" "$L" "$(sed -n 's/^the IR check and llvm-as accept the IR 
 # ---- runtime-table: the runtime functions the compiler declares, as runtime.c and runtime.py define them
 L=$V/runtime-table.log; s=$(now); r=fail
 $PY tools/check_runtime.py > "$L" 2>&1 && r=pass
-step runtime-table $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) RUNTIME entries: .*$/, "entries": \1/p' "$L")"
+step runtime-table $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) RUNTIME entries, \([0-9]*\) exception classes: .*$/, "entries": \1, "exception_classes": \2/p' "$L")"
 
 # ---- gc-stress: collections far more often than the collector would run them
 L=$V/gc-stress.log; s=$(now); r=fail
 {
   # (every 1000, not 100: the compiler keeps each function's IR until the program is built, and at
-  # every 100 its collections, which mark all of it, take minutes)
-  PYSTACHY_GC_STRESS=1000 "$V/pystachy2" ir pystachy.py -o "$V/stage-gc.ll" &&
+  # every 100 its collections, which mark all of it, take minutes; started after the bootstrap)
+  [ -n "$gcpid" ] && wait $gcpid && gcpid= && cat "$V/gc-self.log" &&
     cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 1000 allocations emits the stage1 IR" && r=pass
   PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1
   echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
@@ -221,12 +247,33 @@ L=$V/rt-abi.log; s=$(now); r=fail
 $PY tools/rtabi.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-9]*\) uses in runtime.c and \([0-9]*\) programs, \([0-9]*\) mismatches$/, "functions": \1, "uses": \2, "programs": \3, "mismatches": \4/p' "$L")"
 
+# ---- list-storage: deterministic capacity and live-byte checks for reachable empty lists
+L=$V/list-storage.log; s=$(now); r=fail
+{ "${LLVM}clang" -O2 -S -emit-llvm tools/listprobe.c -o "$V/listprobe.ll" &&
+  "${LLVM}llvm-link" "$V/rt1.ll" "$V/listprobe.ll" -o "$V/listprobe.bc" &&
+  "${LLVM}clang" -O2 "$V/listprobe.bc" -o "$V/listprobe" -lm &&
+  "$V/listprobe" && PYSTACHY_GC_STRESS=1 "$V/listprobe" && r=pass; } > "$L" 2>&1
+step list-storage $r "$s" "$L" ', "lists": 64, "historical_slots_per_list": 65536, "live_byte_limit": 1048576'
+
+# ---- container-eq: bounded comparisons for small DAGs with exponentially many logical leaves
+L=$V/container-eq.log; s=$(now); r=fail
+{ "${LLVM}clang" -O2 -S -emit-llvm tools/eqprobe.c -o "$V/eqprobe.ll" &&
+  "${LLVM}llvm-link" "$V/rt1.ll" "$V/eqprobe.ll" -o "$V/eqprobe.bc" &&
+  "${LLVM}clang" -O2 "$V/eqprobe.bc" -o "$V/eqprobe" -lm &&
+  "$V/eqprobe" && PYSTACHY_GC_STRESS=1 "$V/eqprobe" && r=pass; } > "$L" 2>&1
+step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
+
 # ---- dict-probes: table slots per dict lookup for colliding keys, sequential keys the control
 L=$V/dict-probes.log; s=$(now); r=fail
 { "$V/pystachy2" rt runtime.py -o "$V/dictprobe-rt.ll" && "${LLVM}clang" -O2 -S -emit-llvm tools/dictprobe.c -o "$V/dictprobe.ll" &&
   "${LLVM}llvm-link" "$V/dictprobe-rt.ll" "$V/dictprobe.ll" -o "$V/dictprobe.bc" && "${LLVM}clang" -O2 "$V/dictprobe.bc" -o "$V/dictprobe" -lm &&
   "$V/dictprobe" && r=pass; } > "$L" 2>&1
 step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per lookup (limit \([0-9.]*\))$/, "worst_average_slots": \1, "limit": \2/p' "$L")"
+
+# ---- compile limits: small sources must receive bounded source diagnostics, not exhaust memory
+L=$V/compile-limits.log; s=$(now); r=fail
+$PY tools/compilelimits.py -c "hosted=$PY pystachy.py" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
+step compile-limits $r "$s" "$L" ', "address_space_mib": 256, "cpu_seconds": 10, "modes": ["ir", "run", "build"]'
 
 # ---- scaling: compile time grows linearly with generated programs (counts need Python 3.12+)
 L=$V/scaling.log; s=$(now); r=fail
@@ -241,6 +288,7 @@ ver() { "$@" 2>&1 | head -1; }
   printf '  "timestamp_utc": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if c=$(git rev-parse HEAD 2>/dev/null); then d=$([ -z "$(git status --porcelain)" ] && echo false || echo true); else c=unknown; d=null; fi
   printf '  "git": {"commit": %s, "dirty": %s},\n' "$(js "$c")" "$d"
+  printf '  "ignored_env": [%s],\n' "$(for e in $ign; do printf ', %s' "$(js "$e")"; done | sed 's/^, //')"
   printf '  "platform": {"system": %s, "machine": %s, "os": %s, "cpu": %s},\n' "$(js "$(uname -sr)")" "$(js "$(uname -m)")" \
     "$(js "$(sed -n 's/^PRETTY_NAME="*\([^"]*\)"*$/\1/p' /etc/os-release 2>/dev/null)")" \
     "$(js "$("${LLVM}opt" --version 2>&1 | sed -n 's/^ *Host CPU: //p')")"
