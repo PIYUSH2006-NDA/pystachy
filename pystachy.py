@@ -15090,6 +15090,9 @@ class Gen:
             return self.arith(op, b, a)
         if op == "+" and is_list(a.t) and is_list(b.t):
             self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
+        if op == "%" and a.t == "str":
+            # CPython formats with any str on the left; only a literal format is compiled (percent)
+            self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
         # CPython's TypeError, at compile time
         an = tname(a.t)
         bn = tname(b.t)

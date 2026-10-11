@@ -384,7 +384,8 @@ with every escape except `\N{...}`, raw and triple-quoted strings, implicit
 concatenation), f-strings with `!r`, `!s`, `!a`, `=`, nested format specs and CPython's
 complete format-spec mini-language, `%` formatting with a constant format string
 (`"%-5s %05.2f" % (a, b)`: the conversions `s r a d i u x X o e E f F g G c` with their flags,
-widths and precisions, but not `%(name)s`, `*` or a precision on integers), arithmetic with Python semantics (`//` and `%` floor,
+widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
+that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
 chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
