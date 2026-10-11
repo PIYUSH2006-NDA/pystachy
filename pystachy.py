@@ -3162,8 +3162,8 @@ def builtin_module(path: str) -> bool:
 
 
 def known_path(p: str) -> bool:
-    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, or
-    # a function builtin() handles itself
+    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
+    # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
     if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "sys.float_info" or p == "os.fspath" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
