@@ -3097,6 +3097,7 @@ class Mod:
         self.rebound: dict[str, bool] = {}  # the names it binds other than as os, sys, TYPE_CHECKING (rebound())
         self.spec: dict[str, str] = {}  # and those it binds so (specials()): the module, or "" if two differ
         self.specat: dict[str, int] = {}  # the top-level statement that first does
+        self.falseat = -1  # the top-level TYPE_CHECKING = False, if nothing else binds it (false_flag())
         self.fails = ""  # the exception its top-level code surely raises, ImportError or ModuleNotFoundError
         # a package's names that an import of the submodule of that name rebinds at a time Pystachy
         # cannot tell (Loader.submodules()); True if that may happen while its own code runs
@@ -3372,6 +3373,30 @@ def rebound(body: list[Node], special: bool) -> dict[str, bool]:
                     if nm in asg:
                         out[nm] = True
     return out
+
+
+def false_flag(body: list[Node]) -> int:
+    # the index of module code body's top-level TYPE_CHECKING = False (the idiom that spares
+    # importing typing), if no other statement binds or deletes TYPE_CHECKING, no star import may
+    # and no global statement names it (no function rebinds it): module code after it tests a
+    # constant False there (Loader.decide()); else -1. Another module's code may not assign it
+    # (Gen.store_name())
+    at = -1
+    for i in range(len(body)):
+        st = body[i]
+        if at < 0 and st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s == "TYPE_CHECKING" and st.kids[1].kind == "False":
+            at = i
+    names: dict[str, bool] = {}
+    binds(body[:at] + body[at + 1 :] if at >= 0 else [], names, True)
+    return at if at >= 0 and "TYPE_CHECKING" not in names and "*" not in names and not declares(body, "TYPE_CHECKING") else -1
+
+
+def declares(body: list[Node], name: str) -> bool:
+    # does a global statement in body, also in the functions and classes it defines, name name
+    for st in body:
+        if (st.kind == "global" and refers(st, name)) or declares(st.kids, name):
+            return True
+    return False
 
 
 def own_specials(d: Node) -> Mod:
@@ -4018,8 +4043,8 @@ class Loader:
 
     def static_if(self, m: Mod, st: Node, scope: dict[str, bool], out: list[Node]) -> bool:
         # an if statement CPython decides at import time, as Pystachy does at compile time: a test of
-        # the platform, of TYPE_CHECKING or in an imported module of __name__ == "__main__"
-        # (decide()). Appends what runs to out; False if st is none of these
+        # the platform, of TYPE_CHECKING, in an imported module of __name__ == "__main__" or in module
+        # code of False or 0 (decide()). Appends what runs to out; False if st is none of these
         if st.kind != "if":
             return False
         pre: list[Node] = []
@@ -4488,10 +4513,10 @@ class Loader:
     def decide(self, m: Mod, e: Node, scope: dict[str, bool], pre: list[Node]) -> int:
         # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
         # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), os.name ==
-        # "nt", sys.platform in ("win32", ...)), TYPE_CHECKING or an imported module's __name__ ==
-        # "__main__" (false), also under not/and/or: 1 or 0, after appending to pre what still runs
-        # for the other operands, in CPython's order ("if x: pass" for an operand x that is
-        # evaluated and tested); -1 if e is undecided
+        # "nt", sys.platform in ("win32", ...)), TYPE_CHECKING, an imported module's __name__ ==
+        # "__main__" or, in module code, False and 0 (false), also under not/and/or: 1 or 0, after
+        # appending to pre what still runs for the other operands, in CPython's order ("if x: pass"
+        # for an operand x that is evaluated and tested); -1 if e is undecided
         if e.kind == "unary" and e.s == "not":
             r = self.decide(m, e.kids[0], scope, pre)
             return 1 - r if r >= 0 else -1
@@ -4517,6 +4542,10 @@ class Loader:
             return 0
         if e.kind == "name" and self.special(m, e.s, scope) == "typing.TYPE_CHECKING":
             return 0
+        if e.kind == "name" and e.s == "TYPE_CHECKING" and e.s not in scope and m.falseat >= 0 and m.falseat < self.pos:
+            return 0  # (module code after TYPE_CHECKING = False: false_flag())
+        if (e.kind == "False" or (e.kind == "int" and e.s.strip("0") == "")) and self.pos >= 0:
+            return 0  # (in module code: in a function, what the branch binds is still local)
         if m.name != "" and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
             return 0  # (in an imported module)
         other = "win32 cygwin msys nt java emscripten wasi ios android"
@@ -4557,9 +4586,11 @@ class Loader:
     def prescan(self, m: Mod) -> None:
         # what simplify() needs to know of m's code first: the names it binds other than by the
         # imports special_import() recognizes (rebound()), and the names those imports bind
-        # (Mod.spec). A star import that binds such a name otherwise is an error (bind()).
+        # (Mod.spec). A star import that binds such a name otherwise is an error (bind()). And its
+        # TYPE_CHECKING = False, if that is a constant (false_flag())
         m.rebound = rebound(m.body.kids, False)
         specials(m, m.body.kids, -1)
+        m.falseat = false_flag(m.body.kids)
 
     def imports(self, m: Mod, blk: Node, infn: bool) -> None:
         # load the user modules that the import statements in blk name, and rewrite those
@@ -6981,6 +7012,7 @@ class Gen:
         self.chooks: dict[int, str] = {}
         self.flagged: dict[str, bool] = {}  # globals whose "is assigned" flag effect() reads
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
+        self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
         # code calling back into the module
@@ -9468,6 +9500,8 @@ class Gen:
                 self.err(f"'{name}' is None in its module's code: giving it a {v.t} elsewhere (a function or another module) is not supported")
             return
         if self.is_global(name):
+            if name in self.falseflags and owner(name) != self.curfn.mod:
+                self.err(f"assigning '{owner(name)}.TYPE_CHECKING' is not supported: its module assigns it False once, so its tests of it are decided at compile time")
             if name not in self.gtypes:
                 t0 = self.none_type(name) if v.t == "None" and self.modlevel else ""
                 if v.t == "None" and t0 == "":
@@ -10968,6 +11002,8 @@ class Gen:
                         nones = False
                 if nones and nm not in self.gflag and nm in self.mvars and (m.name != "" or nm not in m.fnglobal):
                     self.noneglobals[nm] = True
+            if m.falseat >= 0:
+                self.falseflags[m.q + "TYPE_CHECKING"] = True
         for m in mods:
             for st in m.body.kids if m.name != "" else []:
                 # an imported module's constants (NAME = literal) are typed before any module code

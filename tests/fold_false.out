@@ -1,0 +1,11 @@
+helper loaded
+name 'TYPE_CHECKING' is not defined
+not False
+not TYPE_CHECKING 8
+note a
+note b
+else b
+i 1
+False yes no False
+runtime True 3 True
+[exit 0]
