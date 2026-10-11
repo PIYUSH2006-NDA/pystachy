@@ -44,6 +44,16 @@ where ports/iniconfig/PORT.md lists (each edit is marked "Pystachy port:"). inic
 under the MIT License, whose text and copyright notice ("Copyright (c) 2010 - 2023 Holger Krekel
 and others") are in ports/iniconfig/LICENSE.
 
+qrcode (ports/qrcode/)
+----------------------
+
+ports/qrcode/__init__.py, base.py, constants.py, exceptions.py, LUT.py, main.py and util.py are
+qrcode 8.2's modules, edited where ports/qrcode/PORT.md lists (each edit is marked "Pystachy
+port:"). qrcode is used under the BSD 3-Clause License, whose text and copyright notice
+("Copyright (c) 2011, Lincoln Loop") are in ports/qrcode/LICENSE, the sdist's LICENSE file; it
+also holds the MIT License notice of pyqrnative, the code qrcode was forked from ("Copyright (c)
+2009 Kazuhiko Arase").
+
 CPython's list sort (runtime.c)
 -------------------------------
 
