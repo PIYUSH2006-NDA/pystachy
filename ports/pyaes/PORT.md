@@ -8,9 +8,9 @@ It is rank 2,018 on PyPI in October 2026, and deps.dev lists 260 packages on PyP
 pyaes 1.6.1 directly (901 in all). Its users take it as the AES that works where nothing faster
 is installed: Telethon, the Telegram client library, requires it, and builds Telegram's AES-IGE
 mode from `pyaes.AES`'s `encrypt` and `decrypt` of one block, a list of ints, when neither
-`cryptg` nor OpenSSL's libssl is available (`telethon/crypto/aes.py`); Electrum, the Bitcoin
-wallet, accepts it as one of its three AES backends, through `AESModeOfOperationCBC` and the
-stream API.
+`cryptg` nor OpenSSL's libssl is available (`telethon/crypto/aes.py`, in 1.45.0 too). Electrum,
+the Bitcoin wallet, keeps it as the last of its three AES backends (`AESModeOfOperationCBC` and
+the stream API), after pycryptodomex and `cryptography`, one of which it now requires.
 
 This port is the block cipher, `pyaes.AES`, the part Telethon calls: the key expansion for the
 three key sizes, and `encrypt` and `decrypt` of one block of 16 ints. Keys and blocks are lists
@@ -77,7 +77,8 @@ renamed lines with `# Pystachy port: xrange` at its end, and `diff -u` against t
    assigns its functions to the mode classes' attributes as it is imported
    (`AESBlockModeOfOperation._can_consume = _block_can_consume`: `function
    'pyaes.blockfeeder._block_can_consume' cannot be used as a value`), and its buffers are
-   `bytes` (M7). `util.py`, which it imports, has the same `xrange` shim as `aes.py`.
+   `bytes` (M7). `util.py`, which it imports, has a shim of the same kind: a feature test that
+   reads `xrange`, and `def`s that bind its two helpers again in the `except` block.
 
 **Native standard-library hubs ([#11](https://github.com/den-run-ai/pystachy/issues/11), M6).**
 
@@ -122,6 +123,13 @@ unannotated module-level function (a template); the methods' docstrings; and in 
 - `bytes`: `pyaes.AES(b"0123456789abcdef")` is a compile-time error (`bytes literals are not
   supported (there is no bytes type)`). Under CPython, the port's `AES` takes a `bytes` key as
   well as a list of ints.
+- The range that `bytes` gives a key's ints, 0 to 255: the port does not check it. Upstream's
+  key must be `bytes`, which cannot hold other ints (`bytes([256] * 16)` raises `ValueError:
+  bytes must be in range(0, 256)`), but a list can, and the port's `AES` takes it without an
+  error, here as under CPython. Its round keys then hold more than 32 bits, and such a key can
+  act as another: `AES([2 ** 31] + [0] * 15)` encrypts and decrypts as `AES([0] * 16)` does. An
+  int of 2**39 or more first in a word of the key overflows here, as in a block (below). Blocks
+  are not affected: upstream's `encrypt` and `decrypt` take lists of any ints too.
 - Under CPython, the port's modes of operation no longer take `bytes`. Without the shim,
   `aes.py` keeps its Python 2 helpers, which take and give `str` (`_string_to_bytes` is
   `list(ord(c) for c in text)`), so `AESModeOfOperationCTR(key).encrypt(b"hello")` raises
@@ -136,8 +144,9 @@ unannotated module-level function (a template); the methods' docstrings; and in 
   such an int of 2**39 or more, or below -2**39, overflows: `AES([0] * 16).encrypt([2 ** 39] *
   16)` raises `OverflowError: integer result does not fit in 64 bits` here, where CPython
   returns the encryption of a zero block, `[102, 233, 75, 212, ...]`, as no bit above the 32nd
-  reaches the result. The test's blocks of 256, -1, 2**31, 2**39 - 1 and -129 give the same in
-  both.
+  reaches the result. The second int of a word overflows at 2**47 and the third at 2**55; the
+  last is not shifted. The test's blocks of 256, -1, 2**31, 2**39 - 1 and -129, and of ints just
+  inside those limits in each place (2**63 - 1 and -2**63 in the last), give the same in both.
 - **`str` is UTF-8 bytes.** The cipher takes no strings, but a program that makes a key or a
   block of text does: iterating a `str` gives its UTF-8 bytes here, so `[ord(c) for c in
   "0123456789abcdé"]` holds 16 ints, ending `195, 169`, and `AES()` takes it as a 128-bit key,
@@ -154,11 +163,14 @@ FIPS-197's Appendix A examples, with the last round key of each expansion as App
 it and the first as signed words (`8e73b0f7` is -1905020681, as `struct.unpack('>i')` reads it).
 Then it encrypts a block 20 times over and decrypts it back, for nine keys of the three sizes;
 keys whose words read as -1, -2139062144, 2**31 - 1, -2**31 and 0 (the edges of edit 8); blocks
-of ints outside 0..255 (256, -1, 2**31, 2**39 - 1 and -129), which the cipher takes as
-upstream's does; counter mode built on `AES`, on the README's example; and the `ValueError`s
-for keys of 0, 15, 17 and 33 ints and blocks of 0, 15 and 17. The known answers are the
-standards' values, and OpenSSL (through CPython's `cryptography`) gives the same ciphertexts.
-pyaes's own tests compare it with PyCrypto on random data, which the port cannot run.
+of ints outside 0..255 (256, -1, 2**31, 2**39 - 1 and -129, and ints just inside the 64-bit
+limits of each place in a word), which the cipher takes as upstream's does; a key list changed
+after `AES()` has read it; counter mode built on `AES`, on the README's example; Telethon's
+AES-IGE, on OpenSSL's IGE test vector (`test/igetest.c`) and with a 256-bit key; and the
+`ValueError`s for keys of 0, 15, 17 and 33 ints and blocks of 0, 15 and 17. The known answers
+are the standards' values, and OpenSSL (through CPython's `cryptography`) gives the same
+ciphertexts. pyaes's own tests compare it with PyCrypto on random data, which the port cannot
+run.
 
 `tests/run.sh` compares what it prints with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package, with `AES.__init__` handed `bytes(key)` (upstream reads its key
@@ -167,15 +179,15 @@ what it prints against this port. It passes JIT and AOT with `PYSTACHY_IRCHECK=1
 CPython-hosted compiler and with `PYSTACHY_OPT=-all`.
 
 It is one program rather than two because of its AOT build: building any program that uses
-`pyaes.aes` takes 8.6 to 9.1 s of CPU time, where `print("hello")` takes 0.15 s and
-`tests/port_iniconfig_api.py` 1.1 s. The time is clang's `-O2` over the module's code that
-makes the 15 tables, one function of 3,614 list appends: `pystachy ir` takes 0.04 s, and a
-class of the tables alone takes 8.2 s to build. The JIT run takes 0.27 s of CPU time, and the
-executable 0.002 s. Under `make verify`'s gc-stress stage (the compiler collecting every 1,000
-allocations, the program at every allocation), the JIT run takes 0.44 s and the AOT build and
-run 8.8 s and 0.06 s: 9.3 s of CPU time in all. On this 4-core VM, running other jobs at a load
-of 10 to 11, the three steps took 9.2 s and 15.2 s of wall-clock time in two runs, almost all of
-it the AOT build.
+`pyaes.aes` takes 8.2 to 9.1 s of CPU time, where `print("hello")` takes 0.14 s and
+`tests/port_iniconfig_api.py` 1.0 s. The time is clang's `-O2` over the module's code that
+makes the 15 tables, one function of 3,614 list appends: `pystachy ir` takes 0.02 s, and a
+class of the tables alone takes 7.5 to 8.2 s to build. The JIT run takes 0.26 to 0.28 s of CPU
+time, and the executable 0.002 s. Under `make verify`'s gc-stress stage (the compiler collecting
+every 1,000 allocations, the program at every allocation), the JIT run takes 0.37 to 0.44 s and
+the AOT build and run 8.5 to 8.8 s and 0.06 s: 8.9 to 9.3 s of CPU time in all. On this 4-core
+VM, running other jobs at a load of 10 to 14, the three steps took 9.2 to 16.3 s of wall-clock
+time in four runs, almost all of it the AOT build.
 
 ## Speed
 
@@ -192,8 +204,9 @@ row). Median of 3 runs, with process start-up, on a 4-core x86-64 VM:
 | CPython 3.13.16, `cryptography` 50.0.1 (OpenSSL), one block per call | 0.484 s | 0.394 s |
 
 That is 44 times faster than CPython on upstream in CPU time, and 34 times in wall-clock time;
-a second set of runs gave 0.285 s and 12.451 s of CPU time (44 times). The VM was running other
-jobs (a load of 6 to 10 on its 4 cores), which spreads the wall-clock times; an earlier
+a second set of runs gave 0.285 s and 12.451 s of CPU time (44 times), and a third, with the
+compiler of main at 4dc548a, 0.281 s and 12.190 s (43 times). The VM was running other jobs (a
+load of 6 to 14 on its 4 cores), which spreads the wall-clock times; an earlier
 measurement of a draft of this port on a quieter VM gave 0.32 s and 12.23 s of wall-clock time
 (38 times). pyaes has no C extension: CPython runs it as Python everywhere, and programs that
 need fast AES on CPython use a C library instead, such as `cryptography` or `pycryptodome`. For

@@ -2,7 +2,8 @@
 # 00 01 02 ... for each key size) and of NIST SP 800-38A F.1 (ECB, four blocks for each key
 # size, with the keys whose expansion FIPS-197 Appendix A lists), chains of blocks there and
 # back, keys whose words are at the edges of a signed 32-bit int, blocks of ints outside
-# 0..255, counter mode built on the cipher, and the errors for wrong key and block sizes.
+# 0..255 (up to the edges of a 64-bit int), a key changed after use, counter mode and
+# Telethon's AES-IGE built on the cipher, and the errors for wrong key and block sizes.
 # One program, as each AOT build of pyaes's tables takes seconds.
 # The key is a list of ints here, where upstream takes bytes (Pystachy has no bytes yet).
 import pyaes
@@ -77,6 +78,18 @@ block = [256, -1] * 8
 print(aes.encrypt(block), block)
 print(aes.encrypt([2 ** 31] * 16))
 print(aes.decrypt([2 ** 39 - 1, -129] * 8))
+# and at the edges of a 64-bit int, where _compact_word's shifts of them still fit
+for blk in [[0, 0, 0, 9223372036854775807] * 4, [0, 0, 0, -9223372036854775807 - 1] * 4,
+            [0, 0, 2 ** 55 - 1, 0] * 4, [0, -2 ** 47 + 0x1234, 0, 0] * 4,
+            [-2 ** 39 + 0x5A, 0, 0, 0] * 4]:
+    print(aes.encrypt(blk)[:6], aes.decrypt(blk)[:6])
+
+# the key is read, not kept: changing the list afterwards changes nothing
+key16 = list(range(16))
+aes = AES(key16)
+before = aes.encrypt([0] * 16)
+key16[0] = 0xFF
+print(aes.encrypt([0] * 16) == before)
 
 
 # counter mode by hand, as AESModeOfOperationCTR does it with its default Counter (from 1)
@@ -98,6 +111,52 @@ text = "Text may be any length you wish, no padding is required"
 ct = ctr(aes, [ord(c) for c in text])
 print(len(ct), hx(ct))
 print("".join([chr(b) for b in ctr(aes, ct)]))
+
+
+# AES-IGE as Telethon builds it on pyaes.AES (telethon/crypto/aes.py), whose decrypt passes the
+# same list for every block, on the IGE test vector of OpenSSL's test/igetest.c
+def encrypt_ige(plain: list[int], key: list[int], iv: list[int]) -> list[int]:
+    iv1 = iv[:16]
+    iv2 = iv[16:]
+    aes = AES(key)
+    out: list[int] = []
+    for b in range(len(plain) // 16):
+        block = list(plain[b * 16:b * 16 + 16])
+        for i in range(16):
+            block[i] ^= iv1[i]
+        c = aes.encrypt(block)
+        for i in range(16):
+            c[i] ^= iv2[i]
+        iv1 = c
+        iv2 = plain[b * 16:b * 16 + 16]
+        out.extend(c)
+    return out
+
+
+def decrypt_ige(cipher: list[int], key: list[int], iv: list[int]) -> list[int]:
+    iv1 = iv[:16]
+    iv2 = iv[16:]
+    aes = AES(key)
+    out: list[int] = []
+    block = [0] * 16
+    for b in range(len(cipher) // 16):
+        for i in range(16):
+            block[i] = cipher[b * 16 + i] ^ iv2[i]
+        p = aes.decrypt(block)
+        for i in range(16):
+            p[i] ^= iv1[i]
+        iv1 = cipher[b * 16:b * 16 + 16]
+        iv2 = p
+        out.extend(p)
+    return out
+
+
+ct = encrypt_ige([0] * 32, list(range(16)), list(range(32)))
+print("IGE", hx(ct), hx(ct) == "1a8519a6557be652e9da8e43da4ef4453cf456b4ca488aa383c79c98b34797cb",
+      decrypt_ige(ct, list(range(16)), list(range(32))) == [0] * 32)
+msg = [ord(c) for c in "The quick brown fox jumps over the lazy dog, twice."[:48]]
+ct = encrypt_ige(msg, list(range(32)), [0xA5] * 32)
+print("IGE", len(ct), hx(ct[32:]), decrypt_ige(ct, list(range(32)), [0xA5] * 32) == msg)
 
 for bad in [0, 15, 17, 33]:
     try:
