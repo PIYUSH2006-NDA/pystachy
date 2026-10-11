@@ -12,15 +12,15 @@ license (`LICENSE`).
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `abd7f780829ad3ef0dd4f4eeb01ccd048e4dead3bc73a646f0fa5a8461e12463` | none |
+| `__init__.py` | `abd7f780829ad3ef0dd4f4eeb01ccd048e4dead3bc73a646f0fa5a8461e12463` | 2 regions (the three aliases) |
 | `classic.py` | `b2205250a290e2cf7f125e127bec28c1ea0f7a7387ad3559a841fec40a25d248` | none |
 | `recursive.py` | `759d2d7ccbf4205ff0c6e946296d8f8c2eb0a7db503ac3a666f36066087e9088` | 1 line |
 | `wf.py` | `160773704d0cee4715faddacb57b35e25bd28a72bbbd4726e11a1eebbf0caef1` | 2 regions (the Python 2 shim) |
 | `damerau.py` | `c7e613589dd646f9587fcdcc3301a656bb49db61ea719ddfb3e84a70aced72d9` | 2 regions (the Python 2 shim) |
 
-The rest of the sdist is packaging (`setup.py`, `setup.cfg`, `pyproject.toml`, `bench.sh`, the
-README). Every edit is marked `# Pystachy port:` in the source, and `diff -ru` against the
-sdist's `pylev/` shows them all.
+The rest of the sdist is packaging (`setup.py`, `setup.cfg`, `pyproject.toml`, `MANIFEST.in`,
+`PKG-INFO`, `pylev.egg-info/`, `bench.sh`, the README). Every edit is marked `# Pystachy port:`
+in the source, and `diff -ru` against the sdist's `pylev/` shows them all.
 
 ## The edits, and the feature each one stands in for
 
@@ -38,13 +38,14 @@ if PY2:
   rejects `sys.version_info` (`unsupported module attribute sys.version_info`). M1's item 3
   folds `sys.version_info` tests at load time, as `sys.platform` tests are folded now.
 - **3, 4.** The `if PY2:` block is commented out, in both files. Pystachy compiles the branch
-  of a module-level `if` on a flag (and even of `if False:`), and this branch reads `xrange`,
+  of a module-level `if` on a flag (and even of `if False:`,
+  [#116](https://github.com/den-run-ai/pystachy/issues/116)), and this branch reads `xrange`,
   which is not defined (`name 'xrange' is not defined`). M1's item 4, module-level bool flags
   as constants, drops the dead branch.
 
 With these four edits, four of the five variants compile: `wf_levenshtein`, `wfi_levenshtein`
-(and its aliases `levenshtein` and `levenschtein`), `damerau_levenshtein` and
-`classic_levenshtein`.
+(and its aliases `levenshtein` and `levenschtein`, read as `pylev.levenshtein`),
+`damerau_levenshtein` and `classic_levenshtein`.
 
 **Templates and empty containers ([#17](https://github.com/den-run-ai/pystachy/issues/17)),
 outside the milestones.**
@@ -70,23 +71,46 @@ outside the milestones.**
   This is rejected with the same message, and it compiles when the fill is
   `memo[n] = n * 3`.
 
+**An alias of a from-imported function, from-imported in turn: a bug of the loader, outside
+the milestones.**
+
+- **6, 7.** `__init__.py`: `levenshtein = wfi_levenshtein`,
+  `classic_levenschtein = classic_levenshtein` and `levenschtein = levenshtein` become
+  `from .wf import wfi_levenshtein as levenshtein`,
+  `from .classic import classic_levenshtein as classic_levenschtein` and
+  `from .wf import wfi_levenshtein as levenschtein`: the same functions under the same names.
+  As upstream writes them, `pylev.levenshtein(...)` works, but `from pylev import levenshtein`,
+  the import clikit and cleo write, and `from pylev import *` fail with
+  `name 'levenshtein' is not defined`. `name = f` is an alias (docs/language.md, "Module
+  scope"), but where `f` is itself from-imported the loader makes it one only after every import
+  statement of the program has been resolved (`Loader.late_aliases()`), and by then another
+  module's `from pylev import levenshtein` has taken `levenshtein` as a variable, which the
+  alias leaves unassigned. A module and a program that imports it show it:
+
+  ```python
+  # m.py (sub.py: def f(x): return x + 1)
+  from sub import f
+  g = f
+  # main.py: rejected with name 'g' is not defined, where import m and m.g(1) work
+  from m import g
+  ```
+
 ## What compiles as it is
 
 Every function of pylev is unannotated, so each one is a template, compiled once for each set
 of argument types a program calls it with: `str`, and also `list[str]` or `list[int]`, since the
-code indexes and compares any sequence. As they are: the from-imports and aliases of
-`__init__.py` (`levenshtein = wfi_levenshtein`, `classic_levenschtein = classic_levenshtein`),
-`__all__`, the `__version__` tuple; `None` defaults that the body replaces with an `int` or a
-dict (`if len_1 is None: len_1 = len(string_1)`), given by keyword too, and passed on by the
-recursion; the swap of the two arguments by tuple assignment
+code indexes and compares any sequence. As they are: the from-imports of `__init__.py`,
+`__all__` (which `from pylev import *` reads), the `__version__` tuple; `None` defaults that the
+body replaces with an `int` or a dict (`if len_1 is None: len_1 = len(string_1)`), given by
+keyword too, and passed on by the recursion; the swap of the two arguments by tuple assignment
 (`string_2, string_1 = string_1, string_2`) and the three-way rotation of the rows
 (`dprev, d0, d1 = d0, d1, dprev`); list comprehensions, `[0] * n`, `d0[:]`, `d[-1]`, `min()` of
 three values, and string keys built by `",".join([str(...), ...])`.
 
 ## What the port leaves out
 
-Nothing of the modules' code. Two kinds of argument that CPython accepts are rejected at
-compile time:
+Nothing of the modules' code. These arguments, which CPython accepts, are rejected at compile
+time:
 
 - tuples: `levenshtein((1, 2, 3), (1, 2, 4))` fails with `tuple index must be an integer
   constant`. M1's item 8 (#6) indexes tuples of one item type by a variable.
@@ -96,20 +120,49 @@ compile time:
   arguments, and the swap needs a variable that holds either type: dynamic values, M4
   ([#9](https://github.com/den-run-ai/pystachy/issues/9)). `wf_levenshtein`,
   `recursive_levenshtein` and `classic_levenshtein` take such pairs and agree with CPython.
+- sequences whose items cannot be compared: `wf_levenshtein([1, 2], ["1", "2"])` fails with
+  `cannot compare int == str` (CPython gives 2, as an int never equals a str).
+- `bytes` and `range` objects (`levenshtein(b"ab", b"ba")`, `levenshtein(range(3), range(1, 4))`):
+  Pystachy has no `bytes` type, and takes `range()` only in a loop and as the argument of a few
+  builtins.
+- an empty dict without a type as `recursive_levenshtein`'s `memo`:
+  `recursive_levenshtein("flaw", "lawn", memo={})` fails with `cannot infer the type of an empty
+  dict; add a type annotation`, and so does `m = {}` passed as `memo=m` (`cannot infer the type
+  of 'm', an empty dict so far`). The function that fills it is a template, and its fill does
+  not type the caller's dict (#17). `m: dict[str, int] = {}` works, as the tests pass it.
+
+`pylev.__version__ >= (1, 3)` is rejected too (`cannot compare tuple[int,int,int] >=
+tuple[int,int]`): tuples of different lengths do not compare. `pylev.__version__ >= (1, 3, 0)`
+works.
 
 ## Deviations it hits
 
-- **`str` is UTF-8 bytes** ([docs/language.md](../../docs/language.md#deviations-from-cpython)).
+- **`str` is UTF-8 bytes** ([docs/language.md](../../docs/language.md#deviations-from-cpython),
+  [#120](https://github.com/den-run-ai/pystachy/issues/120)).
   pylev counts edits of what `len()` and indexing count, so on non-ASCII text its distances
   are byte edit distances: `levenshtein("café", "cafe")` is 2 (CPython: 1), and
   `levenshtein("中文", "中文字")` is 3 (CPython: 1). They agree where the edits touch only
   ASCII characters (`levenshtein("naïve", "naïf")` is 2 in both) or replace one character with
   another that differs from it in one byte (`levenshtein("é", "è")` is 1 in both). All five
   variants behave alike. ASCII text, and sequences of words or numbers, are not affected.
-- **`int` is 64-bit.** pylev's own arithmetic is on lengths and distances, far inside 64 bits.
-  Items of an `int` sequence are compared, never computed on; the tests use 2**63 - 1 and
-  -(2**63 - 1) as items, and a program cannot make a bigger item (computing one raises
-  `OverflowError`).
+- **`int` is 64-bit.** pylev's own arithmetic is on lengths and distances, far inside 64 bits
+  for any sequence a program can hold. Items of an `int` sequence are compared, never computed
+  on; the tests use 2**63 - 1 and -(2**63 - 1) as items, and a program cannot make a bigger
+  item (computing one raises `OverflowError`). Only a length near 2**63 given to
+  `recursive_levenshtein` reaches the limit: `recursive_levenshtein("a", "b", 1, 2**63 - 1)`
+  raises `OverflowError` where it adds 1 to the distance 2**63 - 1, and CPython goes on to raise
+  `IndexError: string index out of range`.
+- **Recursion is bounded by the native stack, not at 1,000 calls.** `recursive_levenshtein`
+  recurses up to `len_1 + len_2` calls deep. CPython raises `RecursionError` once that passes
+  about 1,000: `recursive_levenshtein("a" * 1000, "b")` raises it, and Pystachy returns 1000.
+  Pystachy goes on to about 50,000 calls (AOT, with an 8 MiB stack), past which the program dies
+  with `SIGSEGV`. `classic_levenshtein` recurses as deep, but its exponential time stops it long
+  before.
+- **A NaN has no identity.** `levenshtein`, `wfi_levenshtein` and `damerau_levenshtein` start
+  with `string_1 == string_2`, and CPython's list equality counts an item that is the same
+  object on both sides as equal: for `x = [float("nan")]`, `levenshtein(x, x)` is 0 in CPython
+  and 1 here, and so are two distinct lists that hold the same NaN object. The items' own
+  comparisons agree: `wf_levenshtein(x, x)` is 1 in both.
 
 ## Tests
 
@@ -121,11 +174,14 @@ above where the byte and character distances agree. `tests/port_pylev_sequences.
 variants on lists of words and of 64-bit ints, and `recursive_levenshtein` with explicit
 lengths and offsets (positional and keyword) and with a memo shared between calls, whose keys
 do not name the strings (a second call with other strings reads the first one's results, as
-upstream does). `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under
-CPython against the unmodified upstream package, both print exactly what they print against
-this port. Both are small: under `make verify`'s gc-stress stage (the compiler collecting
-every 1,000 allocations, the program at every allocation), each takes about 0.9 s for the JIT
-run and the AOT build and run together.
+upstream does). `tests/port_pylev_imports.py` imports pylev as its users do: a function that
+suggests the commands closest to a mistyped name, as clikit's and cleo's do, through
+`from pylev import levenshtein`; then the misspelled aliases, `from pylev import *` and the
+submodules. `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under
+CPython against the unmodified upstream package, all three print exactly what they print
+against this port. All three are small: under `make verify`'s gc-stress stage (the compiler
+collecting every 1,000 allocations, the program at every allocation), each takes about 1 s
+for the JIT run and the AOT build and run together.
 
 ## Speed
 
