@@ -1,4 +1,4 @@
-345 words, 0 stemmed otherwise
+384 words, 0 stemmed otherwise
 ['the', 'runner', 'were', 'run', 'faster', 'than', 'the', 'other', 'runner', 'ran']
 ['the', 'runner', 'were', 'run', 'faster', 'than', 'the', 'other', 'runner', 'ran']
 '' '' ''
@@ -100,6 +100,7 @@
 'succeed' 'succeed' 'succe'
 'proceeding' 'proceed' 'proceed'
 'exceedingly' 'exceed' 'exceedingli'
+'reproceed' 'reproce' 'reproce'
 'gener' 'gener' 'gener'
 'general' 'general' 'gener'
 'generate' 'generat' 'gener'

@@ -36,6 +36,8 @@ Inheritance and unannotated methods (M2, [#7](https://github.com/den-run-ai/pyst
    `find_among(self, v: list[Among]) -> int`, `slice_to(self) -> str`, ...), with
    `from .among import Among` for the annotation, and so is `Among.__init__`: a method's
    parameters must be annotated, and a method without a return annotation returns `None`.
+   `stemWords` therefore takes a `list[str]`, where upstream takes any iterable of words (a
+   tuple or a generator is a compile error), and `copy_from` a stemmer of its own class.
 3. The generated methods (`__r_Step_1a(self)` and the others, and `_stem(self)`) get
    `-> bool`, 15 in english and 12 in porter, for the same reason.
 4. `BaseStemmer` declares the six fields that `set_current()` assigns (`current: str`,
@@ -139,19 +141,25 @@ the standard library, so it needs none of the native stdlib hubs
 
 - `str` is a byte string holding UTF-8 ([docs/language.md](../../docs/language.md)): Snowball's
   cursor moves one character at a time in CPython and one byte at a time in Pystachy, so a word
-  with non-ASCII letters can stem differently where a rule counts letters or looks at the one
-  before the cursor. Words of ASCII letters stem as in CPython. In Porter2, `éies` stems to
-  `éie` in CPython and `éi` in Pystachy (step 1a keeps `ie` after one letter, and `é` is two
-  bytes), `éy` to `éy` and `éi` (step 1c turns `y` into `i` after a non-vowel that is not the
-  first letter), `aéing` to `aée` and `aé`, and `eïed` to `eïe` and `eï`. With `€ies` and `ñy`,
-  these were 6 of the 50 non-ASCII words that the evaluation and its verifier tried, all in
-  Porter2; the others, and all 50 in Porter, stem as in CPython (`naïvely` to `naïv`, `cafés`
-  to `café`, `résumés` to `résumé`), and every stem was valid UTF-8.
+  with non-ASCII letters can stem differently where a rule counts letters or looks at more than
+  one letter before the cursor. Words of ASCII letters stem as in CPython. In both algorithms,
+  step 1b adds an `e` after taking `ed` or `ing` off a short stem that ends in a non-vowel, a
+  vowel and a non-vowel, and it reads a non-ASCII last letter as non-vowel bytes: `boñing`
+  stems to `boñe` in CPython and `boñ` in Pystachy, in Porter2 and Porter alike (so do `boñed`,
+  `hoéed`, `piñing` and `taçing`). In Porter2 alone, `éies` stems to `éie` in CPython and `éi`
+  in Pystachy (step 1a keeps `ie` after one letter, and `é` is two bytes), `ﬂying` to `ﬂie` and
+  `ﬂi` (`ying` after one letter becomes `ie`, as in `dying`), `éy` to `éy` and `éi` (step 1c
+  turns `y` into `i` after a non-vowel that is not the first letter), and `aéing` to `aée` and
+  `aé` and `eïed` to `eïe` and `eï` (Porter2's short syllable can also be a vowel that begins
+  the word and a non-vowel). With `€ies`, `ıies`, `ñy`, `a😀ing` and `o😀ed`, these are 15 of the
+  125 non-ASCII words that the evaluation, its verifier and a review tried, 5 of them in Porter
+  too; the others stem as in CPython (`naïvely` to `naïv`, `cafés` to `café`, `résumés` to
+  `résumé`), and every stem was valid UTF-8.
 - 64-bit `int`: not hit; the integers are positions in the word.
 
 ## Tests
 
-`tests/port_snowballstemmer_stem.py` stems 345 English words, chosen for the suffixes each step
+`tests/port_snowballstemmer_stem.py` stems 384 English words, chosen for the suffixes each step
 of the two algorithms removes or rewrites, and holds each one's Porter2 and Porter stems (as the
 upstream package stems them under CPython): it prints any word that stems otherwise, and then
 the stems of the edge cases the evaluation and its verifier tried: the empty word and short
@@ -164,25 +172,33 @@ upstream: it prints whether `english` and `porter` are among them) and the non-A
 the deviation above. Run under CPython against the unmodified upstream package, it prints
 exactly what it prints against this port. The evaluation's and its verifier's longer drivers,
 run against this port, print what CPython prints against the upstream package too: 106 words
-(21 of them not in the test), a word of 30,003 letters and 30,000 pseudo-random words.
+(21 of them not in the test), a word of 30,003 letters and 30,000 pseudo-random words. So do
+a review's 61,162 distinct tokens of letters and apostrophes, in any case, from the English
+text on its machine (docstrings, comments and documentation), and 114,529 words: every word of
+up to four of 17 characters (letters, `Y` and the apostrophe), and every word of up to two
+followed by one of 84 suffixes. Changed one at a time, in its string or in its result (366
+changes), every `Among` entry of the two stemmers whose change alters the stem of one of the
+34,382 lower-case words among those tokens also changes what the test prints, except the `bl`
+entries and Porter2's `ical` result, which only made-up words reach.
 
-The test runs in 0.46 s JIT, and its AOT build takes 3.1 s (the executable then runs in
+The test runs in 0.42 s JIT, and its AOT build takes 2.7 s (the executable then runs in
 0.01 s). Collecting at every allocation (`PYSTACHY_GC_STRESS_PROGRAM=1`, compiled with
-`PYSTACHY_GC_STRESS=1000`), it runs in 1.2 s JIT and in 3.8 s AOT, build included. These are
-wall-clock medians of 3, taken while other jobs kept this 4-core VM's load average near 13, so
-they are upper bounds.
+`PYSTACHY_GC_STRESS=1000`), it runs in 1.0 s JIT and in 3.3 s AOT, build included. These are
+wall-clock medians of 3, taken while other jobs kept this 4-core VM's load average between 5
+and 7, so they are upper bounds.
 
 ## Speed
 
 The evaluation's workload: 1,000 words (40 roots with 25 suffixes each) stemmed 200 times by
 both stemmers, 400,000 stems, which prints a checksum and the first 12 stems (CPython prints the
-same). Built AOT against this port it takes 0.54 s, and CPython 3.13 takes 6.62 s on the
-unmodified upstream package: 12.2 times as long. These are user and system CPU time, median of
-3, on this 4-core x86-64 VM, which other jobs kept busy at the time (load average near 14): wall
-clock, the runs took 0.76 s and 8.98 s. CPU time is the fairer measure here: the string
-groupings that edit 8 turns down take 0.41 s of it, and the evaluation measured 0.426 s wall
-clock for them on a quiet VM, against 6.565 s for CPython (15.4 times). So the list groupings
-cost about a third more than strings would, the price of exact grouping tests.
+same). Built AOT against this port it takes 0.53 s, and CPython 3.13 takes 6.84 s on the
+unmodified upstream package: 12.9 times as long. These are wall-clock medians of 5 on this
+4-core x86-64 VM at a load average between 2 and 3, where each run's user and system CPU time
+came within 0.03 s of its wall-clock time. With the string groupings that edit 8 turns down it
+takes 0.40 s (17.2 times); the evaluation measured 0.426 s for them, against 6.565 s for
+CPython (15.4 times). So the list groupings cost about a third more than strings would. For
+these groupings, all ASCII letters, strings would stem exactly as lists do; lists keep the
+flattening one rule that is exact for every language's groupings.
 `snowballstemmer.stemmer()` returns PyStemmer's stemmers, a C extension, when that is installed;
 it is not installed here (`import Stemmer` fails), and the workload makes the pure-Python classes
 itself in any case.

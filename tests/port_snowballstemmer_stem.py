@@ -1,4 +1,4 @@
-# snowballstemmer's English (Porter2) and Porter stemmers (ports/snowballstemmer): 345 English
+# snowballstemmer's English (Porter2) and Porter stemmers (ports/snowballstemmer): 384 English
 # words, chosen for the suffixes each step of the two algorithms removes or rewrites, each with
 # its Porter2 stem and its Porter stem (WORDS: "word porter2 porter", as the upstream package
 # stems them under CPython; the program prints any word that stems otherwise), then edge cases:
@@ -124,6 +124,24 @@ WORDS = [
     "generic generic gener", "argue argu argu", "argued argu argu", "argues argu argu",
     "arguing argu argu", "argus argus argu", "argument argument argument",
     "arguments argument argument",
+    # rules and table entries the words above leave untested: Porter2 keeps a double letter
+    # after a, e or o that begins the word (adding), the doubles bb, dd, ff and rr, -ogist,
+    # step 3's -tional and -ational, -ion after a letter other than s or t, a y after a first
+    # letter that is not a vowel (dyed), the prefix later, the exception evening, and words
+    # that only begin as an exception does (however, newsgroups)
+    "adding add ad", "added add ad", "ebbing ebb eb", "egged egg eg", "offing off of",
+    "padding pad pad", "rubbing rub rub", "stuffed stuf stuf", "stirred stir stir",
+    "beginning begin begin", "winning win win", "accelerated acceler acceler",
+    "capitalized capit capit", "organizing organiz organ", "dyed dy dy",
+    "vacancy vacanc vacanc", "probably probabl probabl", "actually actual actual",
+    "currently current current", "personality person person", "conventional convent convent",
+    "federalism feder feder", "initializer initi initi", "accumulator accumul accumul",
+    "biologist biolog biologist", "geologists geolog geologist", "laterally lateral later",
+    "additionally addit addition", "functionality function function",
+    "operationally oper operation", "educationally educ education", "eligible elig elig",
+    "disagreement disagr disagr", "opinion opinion opinion", "companion companion companion",
+    "criterion criterion criterion", "evening evening even", "however howev howev",
+    "newsgroups newsgroup newsgroup",
 ]
 
 CASES = [
@@ -140,9 +158,9 @@ CASES = [
     # Porter2's exceptions, and the prefixes it gives a region of their own
     "skis", "skies", "sky", "idly", "gently", "ugly", "early", "only", "singly", "news", "howe",
     "atlas", "cosmos", "bias", "andes", "inning", "innings", "outing", "canning", "herring",
-    "earring", "proceed", "exceed", "succeed", "proceeding", "exceedingly", "gener", "general",
-    "generate", "commun", "community", "arsenal", "arsen", "emerge", "emergency", "inter",
-    "interest", "past", "pasted", "universe", "universal", "universities",
+    "earring", "proceed", "exceed", "succeed", "proceeding", "exceedingly", "reproceed", "gener",
+    "general", "generate", "commun", "community", "arsenal", "arsen", "emerge", "emergency",
+    "inter", "interest", "past", "pasted", "universe", "universal", "universities",
     # input the algorithms do not expect: they want lower-case letters
     "1990s", "a1b2c3ing", "co-op", "re-entering", "ABCDEFING", "RUNNING", "Running", "\t", " ",
     "a b", "word\nnewline", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaing",

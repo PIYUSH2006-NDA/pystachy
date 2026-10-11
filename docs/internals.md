@@ -40,7 +40,7 @@ flowchart TD
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
 | `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter and the stdlib census |
-| `ports/` | 1 package | iniconfig 2.3.1, pytest's INI parser, with the few edits it needs to compile ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); `tests/port_iniconfig_*.py` run its own test cases |
+| `ports/` | 2 packages | iniconfig 2.3.1, pytest's INI parser, and snowballstemmer 3.1.1's English (Porter2) and Porter stemmers, Sphinx's search-index stemmers, with the edits they need to compile ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md), [`ports/snowballstemmer/PORT.md`](../ports/snowballstemmer/PORT.md)); `tests/port_iniconfig_*.py` run iniconfig's own test cases, `tests/port_snowballstemmer_stem.py` real words and edge cases |
 
 ## Environment variables
 
