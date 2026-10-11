@@ -1,0 +1,70 @@
+SortedList([]) SortedList([1, 2, 3, 4, 5])
+SortedList([1, 2, 3])
+SortedList([1, 2, 3])
+True False
+True
+ValueError: 0 not in list
+SortedList([1, 2, 4, 5]) 2 5
+[3, 4, 5, 6] [3, 4, 5, 6]
+2 3 3
+3
+5 3 SortedList([1, 2, 4])
+2
+ValueError: 26 is not in list
+SortedList([1, 1, 2, 3, 20, 20])
+SortedList([1, 1, 2, 3, 20, 20]) SortedList([1, 1, 1, 2, 2, 2, 3, 3, 3])
+SortedList([1, 1, 1, 2, 2, 2, 3, 3, 3])
+empty: SortedList([]) 0 False True False 0 0 0
+empty ranges: [] [] [] []
+pop IndexError: pop index out of range
+remove ValueError: 3 not in list
+getitem IndexError: list index out of range
+index ValueError: 3 is not in list
+del IndexError: list index out of range
+after discard: SortedList([]) True True
+SortedList([-9223372036854775808, -9223372036854775808, -7, 0, 1, 2, 2, 3, 3, 3, 5, 10, 9223372036854775807, 9223372036854775807]) 14
+count: 3 2 2 2 0
+in: True False True True False False
+index: 7 12 0 7 7
+bisect: 7 10 10 2 12 14
+getitem: -9223372036854775808 -9223372036854775808 9223372036854775807 9223372036854775807 3 -9223372036854775808
+irange: [0, 1, 2, 2, 3, 3, 3, 5] [1, 2, 2, 3, 3, 3] [] []
+irange reverse: [3, 3, 3, 2, 2, 1, 0] [] [9223372036854775807, 9223372036854775807] []
+irange open: [-9223372036854775808, -9223372036854775808, -7, 0] [3, 3, 3, 5, 10, 9223372036854775807, 9223372036854775807] [-9223372036854775808, -9223372036854775808] []
+islice: [-7, 0, 1, 2] [2, 1, 0, -7] [10, 9223372036854775807, 9223372036854775807] [-9223372036854775808, -9223372036854775808, -7]
+islice out of range: [-9223372036854775808, -9223372036854775808] [9223372036854775807, 9223372036854775807] [] []
+ValueError: 9223372036854775806 not in list
+ValueError: -9223372036854775807 not in list
+ValueError: 4 not in list
+index 7 3 ValueError: 3 is not in list
+index 0 3 ValueError: 3 is not in list
+index -2 None ValueError: 3 is not in list
+getitem 14 IndexError: list index out of range
+pop 14 IndexError: list index out of range
+del 14 IndexError: list index out of range
+getitem -15 IndexError: list index out of range
+pop -15 IndexError: list index out of range
+del -15 IndexError: list index out of range
+getitem 9223372036854775807 IndexError: list index out of range
+pop 9223372036854775807 IndexError: list index out of range
+del 9223372036854775807 IndexError: list index out of range
+getitem -9223372036854775807 IndexError: list index out of range
+pop -9223372036854775807 IndexError: list index out of range
+del -9223372036854775807 IndexError: list index out of range
+pop: 9223372036854775807 -9223372036854775808 0 10 SortedList([-9223372036854775808, -7, 1, 2, 2, 3, 3, 3, 5, 9223372036854775807])
+after removals: SortedList([-7, 1, 2, 2, 3, 3, 5]) 7
+copy: SortedList([-7, 1, 2, 2, 3, 3, 5, 100]) SortedList([-7, 1, 2, 2, 3, 3, 5]) True False False
+operators: SortedList([-7, -3, 1, 2, 2, 3, 3, 5, 7]) SortedList([]) SortedList([]) SortedList([-7, -7, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5]) SortedList([-7, 1, 2, 2, 3, 3, 5, 9]) SortedList([-7, -7, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5])
+in place: SortedList([-7, 1, 2, 2, 3, 3, 4, 5]) False SortedList([-7, 1, 2, 2, 3, 3, 4, 5]) [SortedList([-7, 1, 2, 2, 3, 3, 4, 5])]
+setitem NotImplementedError: use ``del sl[index]`` and ``sl.add(value)`` instead
+append NotImplementedError: use ``sl.add(value)`` instead
+extend NotImplementedError: use ``sl.update(values)`` instead
+insert NotImplementedError: use ``sl.add(value)`` instead
+reverse NotImplementedError: use ``reversed(sl)`` instead
+==: True False True False True False True
+<: True True False False True True False True True True
+in lists: True False 1 1 True
+sorted: [SortedList([]), SortedList([1, 2]), SortedList([1, 2, 3]), SortedList([1, 2, 4])] SortedList([1, 2]) SortedList([1, 2, 4])
+with None: 1 True 1 True False True
+iterated: [1, 2, 3] [-14, 2, 4, 4, 6, 6, 10] 9 [5, 3, 3, 2, 2, 1, -7] 5
+[exit 0]
