@@ -33,6 +33,9 @@ class Holder:
 
 
 class Fact:
+    def __init__(self) -> None:
+        self.one = self(1)  # (typed by what __call__ returns, as self.m(...) is by m)
+
     def __call__(self, n: int) -> int:
         return 1 if n <= 1 else n * self(n - 1)
 
@@ -95,7 +98,7 @@ h = Holder(Scale(5))
 print(h.apply(2), h.f(3), Holder.k(1), h.k(2))
 print([Scale(2), Scale(4)][1](10), {"a": Scale(9)}["a"](2), Scale(7)(1), Make()(3)(4))
 print((Scale(1) if h.f.k > 5 else Scale(2))(3), (h.g or Scale(6))(1))
-print(Fact()(10), Add(4)(1), Mul(5)(2), Err()(1))
+print(Fact()(10), Fact().one, Add(4)(1), Mul(5)(2), Err()(1))
 log = Log()
 print(log("a"))
 log()

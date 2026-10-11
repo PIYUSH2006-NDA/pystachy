@@ -1,4 +1,7 @@
 NameError: name 'tripler' is not defined
+NameError: name 'quad' is not defined
+NameError: name 'quad' is not defined
+4 8
 6 6
 UnboundLocalError: cannot access local variable 'g' where it is not associated with a value
 AttributeError: 'Early' object has no attribute 'k'

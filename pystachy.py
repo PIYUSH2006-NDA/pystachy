@@ -8504,6 +8504,9 @@ class Gen:
             ms = self.classes[f.cls].methods
             m = e.kids[0].s
             return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
+        if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
+            return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
         if k == "cmp" or (k == "unary" and e.s == "not"):
             return "bool"
         if k == "ifexp":
@@ -15403,7 +15406,7 @@ class Gen:
                 self.call_fn(self.classes[f.s].methods["__init__"], [o], args)
                 return o
             if f.s in self.mvars:
-                self.not_callable(f.s, self.gtypes.get(f.s, ""))
+                self.not_callable(f.s, self.gtype(f.s))
                 return self.obj_call(self.expr(f, ""), args, want)
             if f.s in self.unsupported:
                 self.err(self.unsupported[f.s])

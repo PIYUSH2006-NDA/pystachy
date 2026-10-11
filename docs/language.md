@@ -171,11 +171,11 @@ imports `annotations` from `__future__`.
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method or function call, or a list, tuple or dict display of those (by its first
-  item), `[x] * n`, `list(range(n))`, `list(xs)` or `sorted(xs)` (not a call of a template,
-  whose result type is known only once it is compiled, nor of a function that returns `None`:
-  annotate the field). An exception class (below) also has its base's fields, and an object
-  of it is an object of its bases too.
+  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
+  `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
+  nor of a function that returns `None`: annotate the field). An exception class (below) also
+  has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
