@@ -15911,10 +15911,11 @@ class Gen:
             return self.listcomp(g, "", name)
         base = [a.kids[0] for a in args if a.kind == "kw" and a.s == "base"] if name == "int" else []
         if len(base) > 0:
-            # int(x, base=b) is int(x, b)
-            if args[0].kind == "kw":
+            # int(x, base=b) is int(x, b) (x is positional only: int(x=s) is an unknown keyword)
+            args = [a for a in args if a.kind != "kw" or a.s != "base"]
+            if len(args) == 0:
                 self.err("int() missing string argument")
-            args = [a for a in args if a.kind != "kw" or a.s != "base"] + base
+            args = args + base
         npos = 0
         for a in args:
             if a.kind != "kw":
@@ -15972,6 +15973,14 @@ class Gen:
             vals[1] = self.coerce(Val(self.optint(vals[1], "0"), "int"), "int")
         elif name == "round" and len(vals) == 2 and is_opt(vals[1].t):
             self.err(f"round() with an ndigits that may be None ({typestr(vals[1].t)}) is not supported: it returns an int where ndigits is None, else a float; test it with 'is not None' first")
+        if name == "int" and len(vals) == 2:
+            # CPython checks the base before x: its type (a bool is an int), then its range (as
+            # pys_int_str does first; checked here too where x may be None, tested before the call)
+            vals[1] = self.as_int(self.unwrap(vals[1], "TypeError: " + NONEARG["chr"]))
+            nb = vals[1].v
+            if is_opt(vals[0].t) and vals[1].t == "int" and not (nb.isdigit() and int(nb) <= 36 and nb != "1"):
+                out = self.ins(f"icmp ugt i64 {self.ins(f'sub i64 {nb}, 2')}, 34")
+                self.guard(self.ins(f"and i1 {out}, {self.ins(f'icmp ne i64 {nb}, 0')}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
         for i in range(len(vals)):
             if vals[i].t == "None" and name in NONERET and len(vals) == 1:
                 # None itself (a template's parameter whose argument is None): CPython's error
@@ -15981,7 +15990,7 @@ class Gen:
                 continue
             bad = NONEARG[name] if name in NONEARG else ""
             if name == "int" and len(vals) == 2:
-                bad = "int() can't convert non-string with explicit base" if i == 0 else NONEARG["chr"]
+                bad = "int() can't convert non-string with explicit base"
             elif name == "sum" and i == 0:
                 bad = "'NoneType' object is not iterable"
             if bad != "":
@@ -16120,6 +16129,8 @@ class Gen:
             self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), sorted(), sum(), min(), max(), any(), all() or str.join()")
         if name in self.gtypes or name in self.ltype:
             self.err(f"'{name}' is not callable")
+        if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:
+            self.err(f"{name}() of an object is not supported: Pystachy does not call __index__")
         if t in self.classes and name in NONEARG:
             self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
         if name == "hex" or name == "oct" or name == "bin":

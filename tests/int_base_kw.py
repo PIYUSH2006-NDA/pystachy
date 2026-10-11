@@ -27,3 +27,19 @@ try:
 except TypeError as e:
     print("TypeError:", e)
 print(int(text("101", False), base=2))
+# the base is checked first, its type and then its range, also where x may be None; a bool base is an int
+for sn, b, bn in [(True, 10, True), (True, 37, False), (True, 1, False), (True, 0, False), (False, -2, True)]:
+    try:
+        print(int(text("7", sn), base=maybe(b, bn)))
+    except (TypeError, ValueError) as e:
+        print(type(e).__name__ + ":", e)
+for k in range(2):
+    try:
+        print(int(text("7", True), base=37) if k == 0 else int(text("7", True), 36))
+    except (TypeError, ValueError) as e:
+        print(type(e).__name__ + ":", e)
+for v in [False, True]:
+    try:
+        print(int("10", base=v), int("11", v))
+    except ValueError as e:
+        print("ValueError:", e)
