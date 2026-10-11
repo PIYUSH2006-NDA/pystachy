@@ -13751,8 +13751,8 @@ class Gen:
         elif k == "cmp" and n.kids[1].kind == "None" and n.kids[0].kind == "name" and (n.s == "is not" or n.s == "!=" or n.s == "is" or n.s == "==") and self.narrowable(n.kids[0].s):
             if (n.s == "is not" or n.s == "!=") == truth:
                 out.append(n.kids[0].s)
-        elif k == "call" and truth and len(n.kids) == 3 and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and n.kids[1].kind == "name" and self.narrowable(n.kids[1].s):
-            if not self.bound("isinstance") and self.isinst(unopt(self.ltype[n.kids[1].s]), n.kids[2]) == 1:
+        elif k == "call" and len(n.kids) == 3 and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and n.kids[1].kind == "name" and self.narrowable(n.kids[1].s):
+            if not self.bound("isinstance") and self.isinst(self.ltype[n.kids[1].s], n.kids[2]) == (-2 if truth else -3):
                 out.append(n.kids[1].s)
 
     def narrowable(self, name: str) -> bool:
@@ -13816,7 +13816,7 @@ class Gen:
         if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and not self.bound("isinstance") and len(n.kids) == 3:
             t = self.static_type(n.kids[1], True)
             r = self.isinst(t, n.kids[2]) if t != "" else -1
-            return 1 if r < 0 and self.knownobj(n.kids[1]) and self.only_class(t, n.kids[2]) else r
+            return r if r >= 0 else (1 if r == -2 else 0) if r < -1 and self.knownobj(n.kids[1]) else -1
         return -1
 
     def knownobj(self, n: Node) -> bool:
@@ -13870,46 +13870,42 @@ class Gen:
             return "None"
         if n.s in self.ltype:
             t = self.ltype[n.s]
+            if typed and t == NONEVAR:
+                # (a local that only None has been assigned so far may hold another value on a
+                # loop's later passes, unless None is all that its function assigns it)
+                body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
+                return "None" if only_none(body, n.s) else ""
             return unopt(t) if n.s in self.narrowed and is_opt(t) and t != NONEVAR else t
         if self.is_global(n.s) and n.s in self.gtypes and n.s not in self.gflag:
             return self.gtypes[n.s]
         return ""
 
-    def only_class(self, t: str, c: Node) -> bool:
-        # isinstance(x, c) for an object x of class t is "x is not None": c names t, alone or with
-        # types x cannot have
-        if c.kind == "binop" and c.s == "|":
-            return self.only_class(t, mk("tuple", "", c.line, c.kids))
-        if c.kind == "name" or c.kind == "attr":
-            # (or tuple and Sequence for a NamedTuple)
-            return (c.kind == "name" and c.s == t) or (t in self.nts and (c.s == "tuple" or c.s == "Sequence") and self.isinst(t, c) < 0)
-        if c.kind != "tuple":
-            return False
-        n = 0
-        for x in c.kids:
-            if x.kind == "name" and x.s == t:
-                n += 1
-            elif self.isinst(t, x) != 0:
-                return False
-        return n > 0
-
     def isinst(self, t: str, c: Node) -> int:
-        # isinstance(x, c) for x of static type t: 1, 0, or -1 when x's value decides (an object,
-        # which may be None) or c is not a type Pystachy knows
+        # isinstance(x, c) for x of static type t: 1, 0, -2 for "x is not None" and -3 for "x is
+        # None" (an optional value, or an object), or -1 when x's value decides otherwise or c is
+        # not a type Pystachy knows
         if c.kind == "binop" and c.s == "|":
-            return self.isinst(t, mk("tuple", "", c.line, c.kids))
+            # (a union, where None is NoneType; None | None raises, and so does a tuple in it)
+            if (c.kids[0].kind == "None" and c.kids[1].kind == "None") or c.kids[0].kind == "tuple" or c.kids[1].kind == "tuple":
+                return -1
+            return self.isinst(t, mk("tuple", "|", c.line, c.kids))
         if is_opt(t):
+            # by whether it is None
             r = self.isinst(unopt(t), c)
-            return -1 if r == 1 else r  # (unless it is None)
+            n = self.isinst("None", c)
+            return r if r == n else -2 if r == 1 and n == 0 else -3 if r == 0 and n == 1 else -1
         if c.kind == "tuple":
+            # one of them, tested in order: CPython stops at a match, and raises at an item that is
+            # not a type (anywhere in a union, which checks them all when it is built)
             r = 0
             for x in c.kids:
-                y = self.isinst(t, x)
-                if y == 1:
-                    return 1
-                if y < 0:
-                    r = -1
+                y = self.isnone(t) if x.kind == "None" and c.s == "|" else self.isinst(t, x)
+                if y == -1 or (y == 1 and c.s == ""):
+                    return y
+                r = y if r == 0 else r if y == 0 or y == r else 1  # (None or not None: true)
             return r
+        if c.kind == "call" and len(c.kids) == 2 and c.kids[0].kind == "name" and c.kids[0].s == "type" and c.kids[1].kind == "None" and not self.bound("type"):
+            return self.isnone(t)
         abc = self.typing_ref(c) if c.kind == "attr" or (c.kind == "name" and c.s not in self.classes and self.imported(c.s) != "") else ""
         if abc == "Sequence" or abc == "MutableSequence" or abc == "Mapping" or abc == "MutableMapping":
             # (collections.abc's: str and tuple, also a NamedTuple, are Sequences, list is a mutable one)
@@ -13917,13 +13913,13 @@ class Gen:
                 return 1 if is_dict(t) else 0
             if is_list(t) or (abc == "Sequence" and (t == "str" or is_tuple(t))):
                 return 1
-            return -1 if abc == "Sequence" and t in self.nts else 0
+            return -2 if abc == "Sequence" and t in self.nts else 0
         if c.kind != "name":
             return -1
         if c.s in self.classes:
             # (an exception of class t, or of a builtin one, may be an object of a class deriving from t)
             xc = self.classes[c.s].exc != "" and (t == "exc" or (t in self.classes and (self.derives(t, c.s) or self.derives(c.s, t))))
-            return -1 if t == c.s or xc else 0
+            return -2 if t == c.s else -1 if xc else 0
         if self.bound(c.s):
             return -1
         if c.s == "object":
@@ -13933,12 +13929,16 @@ class Gen:
         if c.s == "bool" or c.s == "float" or c.s == "str":
             return 1 if t == c.s else 0
         if c.s == "tuple" and t in self.nts:
-            return -1  # (a tuple, unless it is None)
+            return -2  # (a tuple, unless it is None)
         if c.s == "list" or c.s == "dict" or c.s == "tuple":
             return 1 if t.startswith(c.s + "[") else 0
         if c.s in "bytes bytearray memoryview set frozenset complex range slice type".split():
             return 0
         return -1
+
+    def isnone(self, t: str) -> int:
+        # isinstance(x, type(None)) for x of static type t, not an optional one (see isinst)
+        return 1 if t == "None" else -3 if t in self.classes else 0
 
     # ---- expressions
     def cond(self, n: Node) -> str:
@@ -15891,13 +15891,13 @@ class Gen:
                 return Val(self.ins(f"icmp ne ptr {hv.v}, null"), "bool")
             return Val("true" if hy == 1 else "false", "bool")
         if name == "isinstance" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw":
-            # decided by the static types, or for an object by whether it is None
+            # decided by the static types, or by whether it is None (an optional value, an object)
             v = self.expr(args[0], "")
             if (v.t == "exc" or (v.t in self.classes and self.classes[v.t].exc != "")) and self.exc_classes(args[1]):
                 return self.exc_isinst(v, args[1])
             known = self.isinst(v.t, args[1])
-            if known < 0 and ((v.t in self.classes and self.only_class(v.t, args[1])) or (is_opt(v.t) and self.isinst(unopt(v.t), args[1]) == 1)):
-                return Val(self.ins(f"icmp ne ptr {v.v}, null"), "bool")
+            if known < -1:
+                return Val(self.ins(f"icmp {'ne' if known == -2 else 'eq'} ptr {v.v}, null"), "bool")
             if known < 0:
                 self.err("isinstance() is only supported with the builtin types and classes as its second argument")
             return Val("true" if known == 1 else "false", "bool")
