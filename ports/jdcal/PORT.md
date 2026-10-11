@@ -68,13 +68,13 @@ as results. `jd2gcal` and `jd2jcal` take ints as well as floats.
 Nothing of the module's code. Two kinds of call that CPython accepts are rejected at compile
 time:
 
-- float and str dates. `gcal2jd` and `jcal2jd` begin with `year = int(year)`, and the same for
-  `month` and `day`, which rebinds the parameter to an int: with an int argument that keeps its
-  type, but with a float or a string it does not. `gcal2jd(1996, 4, 3.5)`, which upstream's
-  `test_gcal2jd_is_for_mid_night_of_given_day` uses, is rejected with `expected float, got int`
-  at `day = int(day)`, and `jcal2jd("2000", "1", "1")` with `expected str, got int` (M4,
-  [#9](https://github.com/den-run-ai/pystachy/issues/9)). The docstrings ask for ints; a caller
-  passes `int(3.5)`.
+- float, str and bool dates. `gcal2jd` and `jcal2jd` begin with `year = int(year)`, and the same
+  for `month` and `day`, which rebinds the parameter to an int: with an int argument that keeps
+  its type, but with a float, a string or a bool it does not. `gcal2jd(1996, 4, 3.5)`, which
+  upstream's `test_gcal2jd_is_for_mid_night_of_given_day` uses, is rejected with `expected
+  float, got int` at `day = int(day)`, and `jcal2jd("2000", "1", "1")` with `expected str, got
+  int` (M4, [#9](https://github.com/den-run-ai/pystachy/issues/9)). The docstrings ask for
+  ints; a caller passes `int(3.5)`.
 - `jd2gcal(*gcal2jd(2000, 1, 1))`, the docstrings' idiom: `star arguments are not supported`
   (the `f(*args)` form of M3, [#8](https://github.com/den-run-ai/pystachy/issues/8)).
   `g = gcal2jd(2000, 1, 1)` and `jd2gcal(g[0], g[1])` do the same.
@@ -85,11 +85,15 @@ time:
   `jd2gcal` and `jd2jcal` return the year as an `int`, and from a Julian date beyond about
   3.4e21 days (a year past 2**63) Pystachy raises `OverflowError: float too large for a 64-bit
   int` where CPython returns a big int: `jd2gcal(1e300, 0.0)` gives a year of 298 digits in
-  CPython. `jcal2jd` multiplies `367 * year` in ints, so beyond |year| = 2.51e16 it raises
-  `OverflowError: integer result does not fit in 64 bits`: `jcal2jd(26 * 10**15, 1, 1)` is
-  `(2400000.5, 9.496499999999322e+18)` in CPython. `gcal2jd` computes in floats and takes any
-  64-bit year. Such dates are far beyond any calendar; the tests go up to Julian dates of 1e18
-  days and years of 2.5e16, and agree with CPython there.
+  CPython. `jcal2jd` multiplies `367 * year` and `275 * month` in ints, so beyond |year| =
+  2.51e16 or |month| = 3.35e16 it raises `OverflowError: integer result does not fit in 64
+  bits`: `jcal2jd(26 * 10**15, 1, 1)` is `(2400000.5, 9.496499999999322e+18)` in CPython.
+  `gcal2jd` computes in floats after `year + 4800`, `year + 4900` and `month - 14`, so it raises
+  the same only for a year above 2**63 - 4901 or a month below -2**63 + 14. Every such
+  overflow raises; none wraps around. Such dates are far beyond any calendar; the tests take
+  each function to the last values that fit (years just inside ±2**63 from `jd2gcal` and
+  `jd2jcal`, `gcal2jd(2**63 - 4901, 6, 30)`, and `jcal2jd` with a year of ±`(2**63 - 1) // 367`
+  and with a month of ±`(2**63 - 1) // 275`), and agree with CPython there.
 - **`str` is UTF-8 bytes**: jdcal handles no text, so this deviation does not arise.
 
 ## Tests
@@ -105,14 +109,15 @@ congruential generator instead of `random`. It leaves out the comparison with ER
 which needs astropy and numpy, and passes `int(3.5)` where the suite passes 3.5 (above).
 `tests/port_jdcal_extremes.py` runs the edge cases an independent check of the port added:
 Julian dates up to 1e18 days and down to -1e15, `-0.0`, fractions next to 0.5 and of 1e-300,
-years of ±10**9, 10**12, ±2**52 and 2.5e16 in both calendars, int arguments to `jd2gcal` and
-`jd2jcal`, NaN and both infinities (`ValueError: cannot convert float NaN to integer`), and
-`is_leap` of negative years, ±2**62 and floats. `tests/run.sh` compares what they print with
+years of ±10**9, 10**12, ±2**52 and 2.5e16 in both calendars, the last values each function
+takes before a 64-bit int overflows (above), int arguments to `jd2gcal` and `jd2jcal`, NaN and
+both infinities (`ValueError: cannot convert float NaN to integer`), and `is_leap` of negative
+years, ±2**62, 2**63 - 1, -2**63 and floats. `tests/run.sh` compares what they print with
 CPython's, JIT and AOT. Run under CPython against the unmodified upstream module, both print
 exactly what they print against this port. Both are small: under `make verify`'s gc-stress
 stage (the compiler collecting every 1,000 allocations, the program at every allocation), each
-takes 0.8 to 1.6 s for the JIT run and the AOT build and run together, and each AOT build
-0.6 to 1.2 s.
+takes 0.6 to 1.6 s for the JIT run and the AOT build and run together, and each AOT build
+0.5 to 1.2 s, by the machine's load (a load average of 3 to 17 on 4 cores).
 
 ## Speed
 
