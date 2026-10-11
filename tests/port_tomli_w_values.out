@@ -17,6 +17,8 @@ ok-key_1 = "bare"
 c1 = " ÿ"
 bs = "\b\f\r\n\u001b"
 
+"߿ࠀ" = "\u007f߿ࠀ￿𐀀  "
+
 ml_string = """
 This is longer than threshold!
 Should be formatted as a multiline basic string"""

@@ -34,6 +34,14 @@ print(tomli_w.dumps({"rows": [{"k": LONG}, {"k": "short"}]}))
 print(tomli_w.dumps({"tup": ({"k": LONG}, {"k": "w"})}))
 print(tomli_w.dumps({"aot": [{"multiline_string": "line1\nline2"}]}, multiline_strings=True))
 print(tomli_w.dumps({"aot": [{"multiline_string": "line1\nline2"}]}))
+# the 100 characters include the indent of the line (indent=): `{ k = "a...a" },` is n + 11
+# characters, so 89 a's stay inline at indent=0 and 87 at indent=2, and none at indent=8
+for indent in [0, 2, 8]:
+    for n in [87, 88, 89, 90]:
+        out = tomli_w.dumps({"t": [{"k": "a" * n}, {"k": "b"}]}, indent=indent)
+        print(indent, n, "[[t]]" in out, len(out))
+print(tomli_w.dumps({"t": [{"k": "a" * 89}]}, indent=0))
+print(tomli_w.dumps({"t": [{"k": "a" * 90}]}, indent=0))
 
 # arrays of tables nested in tables and in arrays of tables (test_array_of_tables_containing_lists,
 # test_example_issue_12, test_non_trivial_nesting)
@@ -46,3 +54,50 @@ print(tomli_w.dumps({"a": [{"b": [{"c": LONG}]}]}))
 print(tomli_w.dumps({"top": {"rows": [{"k": LONG}], "more": [{"k": LONG}, {"k": "z"}]}}))
 empty_aot: dict[str, dict[str, list[dict[str, str]]]] = {"table": {"array": []}}
 print(tomli_w.dumps(empty_aot))
+
+# the order of the keys after one is deleted and set again, and another set again
+order = {"a": {"x": 1}, "b": {"x": 2}, "c": {"x": 3}}
+del order["a"]
+order["a"] = {"x": 4}
+order["b"] = {"x": 5}
+print(tomli_w.dumps(order))
+
+# 200 documents of random shapes (a linear congruential generator): tables of arrays of tables
+# of ints, empty or not, inline or not, with keys that need quotes, at indents 0 to 5. Prints a
+# checksum of their text and two of them.
+state = 777
+
+
+def rnd(n: int) -> int:
+    global state
+    state = (state * 1103515245 + 12345) % 2147483648
+    return state % n
+
+
+ALPH = 'abcxyz09-_ "\\\n.\t'
+
+
+def rstr(maxlen: int) -> str:
+    return "".join(ALPH[rnd(len(ALPH))] for _ in range(rnd(maxlen)))
+
+
+check = 0
+for it in range(200):
+    doc: dict[str, dict[str, list[dict[str, int]]]] = {}
+    for i in range(rnd(4)):
+        sub: dict[str, list[dict[str, int]]] = {}
+        for j in range(rnd(4)):
+            tables: list[dict[str, int]] = []
+            for q in range(rnd(4)):
+                tb: dict[str, int] = {}
+                for z in range(rnd(6)):
+                    tb[rstr(25)] = rnd(1000000) - 500000
+                tables.append(tb)
+            sub[rstr(8)] = tables
+        doc[rstr(6)] = sub
+    out = tomli_w.dumps(doc, indent=rnd(6))
+    for c in out:
+        check = (check * 31 + ord(c)) % 1000000007
+    if it == 3 or it == 150:
+        print(out)
+print(check)

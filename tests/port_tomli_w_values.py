@@ -12,6 +12,8 @@ print(tomli_w.dumps({"title": 'TOML "example"', "path": "C:\\dir", "ctrl": "tab\
 print(tomli_w.dumps({"k\x00ey": "v\x1f", "\x7f": "  \ufeff", "tab\tkey": 'a\\b"c', "\u00e9": "\U0010ffff"}))
 print(tomli_w.dumps({"n\u00e9v": "Zo\u00eb \u20ac \U0001f600", "a b": "space", "": "empty key", "ok-key_1": "bare"}))
 print(tomli_w.dumps({"c1": "\x80\x9f\xa0\xff", "bs": "\x08\x0c\r\n\x1b"}))
+# the first and last characters of each length in UTF-8, NEL and the line and paragraph separators
+print(tomli_w.dumps({"߿ࠀ": "\x7f\x80߿ࠀ￿\U00010000\x85  "}))
 
 # multiline strings (upstream's test_multiline), and the same text without the option
 ml = "This is longer than threshold!\nShould be formatted as a multiline basic string"

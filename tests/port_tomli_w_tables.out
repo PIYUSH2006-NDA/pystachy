@@ -87,6 +87,25 @@ aot = [
     { multiline_string = "line1\nline2" },
 ]
 
+0 87 False 120
+0 88 False 121
+0 89 False 122
+0 90 True 118
+2 87 False 124
+2 88 True 116
+2 89 True 117
+2 90 True 118
+8 87 True 115
+8 88 True 116
+8 89 True 117
+8 90 True 118
+t = [
+{ k = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+
+[[t]]
+k = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 [[aot]]
 a = [
     0,
@@ -148,4 +167,81 @@ k = "z"
 [table]
 array = []
 
+[b]
+x = 5
+
+[c]
+x = 3
+
+[a]
+x = 4
+
+["y\nc"]
+"." = []
+-b0 = [
+   { "\"-b09y" = 163637, "xa_.	\\z \"-b0" = -219155 },
+   { "cxa_.	\\z " = -473932 },
+   { "" = 221112, "y\ncxa_.	\\" = 322614, "\"-b09y\ncxa_.	\\z " = 54917 },
+]
+
+[["y\nc"." \"-b0"]]
+"xa_.	\\z \"-" = 16749
+"9y\ncxa_.	\\z \"" = -356191
+"09y\ncxa_.	\\" = -188552
+"\"-b09y\ncxa_.	\\z" = 386437
+
+[["y\nc"." \"-b0"]]
+"b09y\ncx" = 498491
+".	" = -447248
+
+[["y\nc"." \"-b0"]]
+
+["."]
+0 = []
+
+[["."."\\z \"-b0"]]
+"xa_.	\\z \"-b09y\nc" = -114963
+"_.	\\" = -198365
+"\"-b09y\ncxa_." = 138453
+"z \"-b09" = 476591
+
+[["."."\\z \"-b0"]]
+"xa_.	\\z \"-b09y\ncxa_.	\\z " = 294845
+"b09y\ncx" = -196373
+"" = 407264
+"\\z \"-" = 65438
+
+[["."."\\z \"-b0"]]
+"y\ncxa" = -372362
+"	\\z \"-b09y\n" = 266889
+a = -375886
+"	\\z" = -68871
+"-b09y\ncxa_." = 81546
+
+[["."."\ncxa"]]
+"xa_.	\\z \"-b09" = 434269
+"cxa_.	\\z \"-b09y" = -421020
+x = -10627
+".	\\z \"-b09y\ncxa_.	\\z \"-" = 64832
+
+[["."."\ncxa"]]
+"y\ncxa_.	\\" = 31238
+"\"-b09y\ncxa_.	\\z \"-b09y\nc" = 207765
+"_.	\\z" = -278141
+
+[["."."\ncxa"]]
+"b09y\ncxa_.	\\" = 113147
+"\"-b09" = -326939
+
+[y]
+" \"-b0" = [
+   { "z \"-b09" = 372991, "cxa_.	\\z \"-b09y\ncxa_.	\\" = -274652 },
+]
+"" = [
+   {},
+   { "a_.	\\z \"-b09y\ncxa_" = 24322 },
+   { "z \"-b09y\ncxa_.	\\z" = 473503, "-b09y\ncx" = 405050 },
+]
+
+645040225
 [exit 0]
