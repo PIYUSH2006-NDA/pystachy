@@ -36,18 +36,31 @@ _VS16_NW_TABLE = list(VS16_NARROW_TO_WIDE['9.0.0'])
 _VS15_WN_TABLE = list(VS15_WIDE_TO_NARROW['9.0.0'])
 
 # Pystachy port: added. Indexing a str gives bytes of its UTF-8 (docs/language.md, "Deviations from
-# CPython"), so wcswidth() indexes the list of characters this returns: each is as long as its lead
-# byte says, and ord() of it is its code point. Under CPython _UTF8_STR is False: one per item.
+# CPython"), so wcswidth() indexes the list of characters this returns, each as ord() reads one: a
+# well-formed UTF-8 sequence, whose ord() is its code point, else one byte, whose ord() is its value
+# (chr() below 256, and text cut inside a character); the first `limit` of them, at most. Under
+# CPython _UTF8_STR is False: one per item.
 _UTF8_STR = len('\u00e9') == 2
 
 
-def _split_chars(text: str) -> list[str]:
+def _split_chars(text: str, limit: int) -> list[str]:
     chars: list[str] = []
     i = 0
     size = len(text)
-    while i < size:
+    # a str has no more characters than bytes: a limit of at least its size is none
+    while i < size and (limit >= size or len(chars) < limit):
+        step = 1
         lead = ord(text[i])
-        step = 1 if lead < 0xC0 or not _UTF8_STR else 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+        if _UTF8_STR and 0xC2 <= lead <= 0xF4:
+            k = 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+            # the second byte's range excludes overlong forms and code points above 0x10FFFF
+            lo = 0xA0 if lead == 0xE0 else 0x90 if lead == 0xF0 else 0x80
+            hi = 0x8F if lead == 0xF4 else 0xBF
+            if i + k <= size and lo <= ord(text[i + 1]) <= hi:
+                step = k
+                for j in range(i + 2, i + k):
+                    if not 0x80 <= ord(text[j]) <= 0xBF:
+                        step = 1
         chars.append(text[i:i + step])
         i += step
     return chars
@@ -128,7 +141,8 @@ def wcswidth(
     # Pystachy port: no lambda (M3, #8): the loop calls wcwidth(char, 'auto', ambiguous_width).
     # _wcwidth = wcwidth if ambiguous_width == 1 else lambda c: wcwidth(c, 'auto', ambiguous_width)
 
-    _chars = _split_chars(pwcs)  # Pystachy port: _chars[i] for pwcs[i], len(_chars) for len(pwcs)
+    # Pystachy port: _chars[i] for pwcs[i], len(_chars) for len(pwcs); the first n characters
+    _chars = _split_chars(pwcs, len(pwcs) if n is None else n)
     end = len(_chars) if n is None else min(n, len(_chars))
     total_width = 0
     idx = 0

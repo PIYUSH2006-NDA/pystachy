@@ -2,8 +2,10 @@
 # of every range of the tables wcwidth() searches, a sample of all code points, text whose UTF-8
 # has bytes 0x80-0x9F (the C1 controls' values, which wcswidth() took for controls when it indexed
 # bytes), controls, grapheme clusters, n= at and around their boundaries, ambiguous_width
-# clamped from the extremes of 64-bit ints, long text, and a wcwidth() of two characters.
+# clamped from the extremes of 64-bit ints, long text, a wcwidth() of two characters, text of
+# chr() bytes and the names of `from wcwidth import *`.
 # "%c" % cp makes the character cp (chr(cp) below 256 is a byte in Pystachy).
+from wcwidth import *
 from wcwidth import wcswidth, wcwidth
 from wcwidth._constants import _AMBIGUOUS_TABLE, _WIDE_EASTASIAN_TABLE, _ZERO_WIDTH_TABLE
 
@@ -81,3 +83,15 @@ for s in ["ab", "\u4e2dx", "\u00e9\u00e9"]:
         print(wcwidth(s))
     except TypeError as e:
         print("TypeError", e)
+
+# chr(i) below 256 is one byte in Pystachy, the code point i in CPython: in text, a byte that does
+# not start a well-formed UTF-8 sequence is one character, which ord() reads as the code point i
+for bs in [[0xE9], [0xE9, 0x61, 0x62], [0xC0, 0x61], [0xC3, 0x41], [0xF0, 0x41, 0x42, 0x43],
+           [0xE0, 0x80, 0x80], [0xE0, 0x9F, 0xBF], [0xF4, 0x90, 0x80, 0x80], [0xF5, 0xA0],
+           [0xE4, 0xB8], [0xE4, 0xB8, 0x41], [0xA1, 0xD7, 0xF7], [0x85, 0x41], [0xFF, 0xFE]]:
+    s = "".join([chr(b) for b in bs])
+    print("bytes", bs, wcswidth(s), wcswidth("x" + s + "\u4e2d"), wcswidth(s, 1),
+          wcswidth(s, None, "auto", 2))
+
+# from wcwidth import * takes the names of __all__
+print("star", wcswidth("\u4e2d\u00e9"), wcwidth("\u00a1", "auto", 2), list_versions())

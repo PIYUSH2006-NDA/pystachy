@@ -14,7 +14,7 @@ which also has the notice of Markus Kuhn's C code that wcwidth derives from).
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `646c6b7a3dc93d36475da57f1da58b83879ca323f97c8d7b0345614de51ad9cc` | 11 regions: imports, `os.environ`, the C extension's branch |
+| `__init__.py` | `646c6b7a3dc93d36475da57f1da58b83879ca323f97c8d7b0345614de51ad9cc` | 12 regions: imports, `os.environ`, the C extension's branch, `__all__` |
 | `_wcwidth.py` | `d90e01620d4bacb231cc15584cd20c36f36bd1084894d93c5e26eec06fc0e688` | 4 regions: `lru_cache` |
 | `_wcswidth.py` | `674f1420fce6114b02b7e371fc574c4553776efa5b7b0982df5fcaef93e40b4e` | 9 regions |
 | `_constants.py` | `04425f05bce4197bac837bbb40c07e10e070da21fc1dd39c28be0f6052425a68` | 11 regions |
@@ -32,7 +32,7 @@ The rest of the package is left out: the modules of the API beyond `wcwidth()` a
 (see below), the per-terminal tables that only `wcstwidth()` reads (`table_overrides.py`,
 `table_term_programs.py`, `table_grapheme_overrides/`), the legacy module `wcwidth/wcwidth.py` and
 the C extension (`_wcwidth_c.c`, `libwcwidth/`). Every edit is marked `# Pystachy port:` in the
-source, 40 regions in 7 files, and `diff -ru` against the sdist's `wcwidth/` shows them all. Code
+source, 41 regions in 7 files, and `diff -ru` against the sdist's `wcwidth/` shows them all. Code
 is commented out rather than deleted, but for the tables of `table_grapheme.py`.
 
 ## The edits, and the feature each one stands in for
@@ -80,7 +80,10 @@ stdlib hubs ([#11](https://github.com/den-run-ai/pystachy/issues/11)).** `_wcswi
 import `table_grapheme_overrides`, which loads one module per terminal with
 `importlib.import_module` and `getattr()`; only `wcstwidth()` reads it. `__init__.py` does not
 import the modules of the rest of the API, which need `re`, `enum`, `textwrap` and `itertools`
-(below), nor the legacy module `wcwidth/wcwidth.py`, which imports them all.
+(below), nor the legacy module `wcwidth/wcwidth.py`, which imports them all. Its `__all__`
+names only what it imports, `wcwidth`, `wcswidth`, `wcstwidth`, `list_versions` and
+`list_term_programs`, so that `from wcwidth import *` compiles: with upstream's 21 names, it
+looked for the missing `width` as a module (`module 'wcwidth.width' is not supported`).
 
 **M7, the long tail ([#12](https://github.com/den-run-ai/pystachy/issues/12)).**
 
@@ -101,13 +104,18 @@ error, but wrong widths, since the bytes 0x80-0x9F of a UTF-8 sequence have the 
 controls. Before this edit `wcswidth("é")` was 2 (CPython: 1), `wcswidth("café")` 5 (4) and
 `wcswidth("Ред")` 6 (3), while `wcswidth("中文")`, `wcswidth("€")`, `wcswidth("😀")` and
 `wcswidth("❤️")` were -1. `_split_chars()`, added to `_wcswidth.py`, returns the characters of a
-`str`, each as long as its UTF-8 lead byte says (`ord()` of a whole character is its code point),
-and `wcswidth()` reads that list where it read `pwcs`: `_chars[idx]` for `pwcs[idx]`, twice, and
-`len(_chars)` for `len(pwcs)`. So `n=` counts characters, as in CPython. The helper tests
-`_UTF8_STR = len('\u00e9') == 2`, so under CPython each item is one character and the edited
-module prints what upstream prints. `wcwidth()` needs no edit: it takes one character, and `ord()`
-of a string of two characters raises CPython's `TypeError` (`ord() expected a character, but
-string of length 2 found`).
+`str` as `ord()` reads them (runtime.c's `u8char()`): a well-formed UTF-8 sequence is one
+character, whose `ord()` is its code point, and any other byte is one, whose `ord()` is its value.
+Such bytes come from `chr()` below 256, which is one byte in Pystachy, and from text cut inside a
+character; splitting by the lead byte alone took the bytes after them into one item, and `ord()`
+of that raised `TypeError` (`wcswidth(chr(0xE9) + "ab")`: CPython 3). `wcswidth()` reads that list
+where it read `pwcs`: `_chars[idx]` for `pwcs[idx]`, twice, and `len(_chars)` for `len(pwcs)`. So
+`n=` counts characters, as in CPython, and only the first `n` are split: 200 calls of
+`wcswidth(text, 3)` on 100,000 characters take 0.002 s of CPU, where splitting all of them took
+0.35 s (CPython: 0.04 s). The helper tests `_UTF8_STR = len('\u00e9') == 2`, so under CPython
+each item is one character and the edited module prints what upstream prints. `wcwidth()` needs
+no edit: it takes one character, and `ord()` of a string of two characters raises CPython's
+`TypeError` (`ord() expected a character, but string of length 2 found`).
 
 **Outside the roadmap: `operator.index()`.** `_clamp_ambiguous_width()` called
 `operator.index(ambiguous_width)`, which rejects a `float`; Pystachy's `lib/operator.py` calls
@@ -122,7 +130,7 @@ leaves out the other 16 (2,038 ranges), in 3 regions; `_wcswidth.py` no longer i
 `GRAPHEME_EXTEND`, read only by `_scan_zwj_cluster_end()` for `wcstwidth()`. Pystachy builds each
 table at import with straight-line code, one allocation per range, which the AOT build's
 `clang -O2` takes long to compile: with the whole file, building a program that imports `wcwidth`
-takes 6.2 s of CPU, against 3.3 s with these 4 tables (see Speed).
+takes 5.8 s of CPU, against 3.2 s with these 4 tables (see Speed).
 
 ## What compiles as it is
 
@@ -132,8 +140,8 @@ comparisons, the virama, ZWJ, VS15/VS16, regional indicator and Fitzpatrick stat
 `n: Optional[int] = None` with `min(n, len(...))`, and the `unicode_version` parameter, accepted
 and ignored. Also as they are: six of the seven table modules, dicts keyed by the Unicode version
 whose values are tuples of up to 343 `(int, int)` pairs, and the import of each name from them;
-`from __future__ import annotations`; `__lazy_modules__` lists and `__all__` tuples that name
-modules and functions the port leaves out; the `try`/`except ImportError`/`else` that looks for
+`from __future__ import annotations`; `__lazy_modules__` lists that name modules the port leaves
+out, and `_constants.py`'s `__all__`; the `try`/`except ImportError`/`else` that looks for
 the C extension; `_clamp_ambiguous_width()`'s clamp to 1 or 2; the re-exports of `__init__.py`
 (`ZERO_WIDTH`, `WIDE_EASTASIAN`, `AMBIGUOUS_EASTASIAN`, `VS16_NARROW_TO_WIDE`, `_bisearch`,
 `list_versions`, `_wcmatch_version`) and `__version__`. Functions that use what the port leaves
@@ -159,7 +167,8 @@ out stay in the source, unedited: Pystachy compiles a function only where a prog
 - Arguments that CPython accepts and Pystachy rejects at compile time: a `bool` `ambiguous_width`
   (`wcswidth("¡x", ambiguous_width=True)` is 2 in CPython, whose `operator.index()` takes a
   `bool`; Pystachy: `expected int, got bool`), and a `float` one, which upstream rejects at run
-  time with `TypeError` (Pystachy: `expected int, got float`).
+  time with `TypeError` (Pystachy: `expected int, got float`); a `bool` `n`
+  (`wcswidth("abc", True)` is 1 in CPython; Pystachy: `expected int | None, got bool`).
 
 ## Deviations it hits
 
@@ -169,7 +178,13 @@ out stay in the source, unedited: Pystachy compiles a function only where a prog
   `len()` (`wcswidth("中文", len("中"))` is 4, CPython: 2, since `len("中")` is 3), and the characters
   of a `for` loop over a `str`, as in upstream's tests' `map(wcwidth, phrase)`:
   `[wcwidth(c) for c in "€"]` is `[1, -1, 1]` (CPython: `[1]`), the widths of the bytes 0xE2, 0x82
-  and 0xAC read as Latin-1 characters. Text that is all ASCII is not affected.
+  and 0xAC read as Latin-1 characters. Text cut inside a character by a slice keeps the bytes
+  left over, each read the same way, 0x80-0x9F as C1 controls: `wcswidth("中文"[:4])` is 3
+  (CPython: 4), the width of "中" and of the lead byte 0xE6 as "æ", and `wcswidth("中文"[4:])` is
+  -1 (CPython: 0). `chr()` below 256 makes one byte, measured as CPython measures that code point
+  (`wcswidth(chr(0xE9) + "ab")` is 3 in both), unless such bytes make a UTF-8 sequence:
+  `chr(0xC3) + chr(0xA9)` is "é" in Pystachy, 1 cell, and "Ã©" in CPython, 2. Text that is all
+  ASCII is not affected.
 - **`int` is 64-bit.** The arithmetic is on code points, at most 0x10FFFF, and widths. `n` and
   `ambiguous_width` are compared, never computed on; the tests pass 2**63 - 1 and -(2**63 - 1) for
   both. A program cannot make a bigger argument: `wcswidth("abc", 2 ** 63)` is 3 in CPython, and
@@ -191,19 +206,21 @@ and a checksum); every C0 and C1 control, alone, and some in text; text whose UT
 0x80-0x9F, which `wcswidth()` took for controls before the edit; grapheme clusters (VS15 and VS16
 without a base, odd and even runs of regional indicators, a tag sequence, ZWJ after a non-emoji,
 Thai); `n=` at and around the boundaries of a ZWJ family, past the end, negative and 2**63 - 1;
-`ambiguous_width` from -(2**63 - 1) to 2**63 - 1; 1,001 characters of text; and `wcwidth()` of two
-characters, which raises `TypeError`.
+`ambiguous_width` from -(2**63 - 1) to 2**63 - 1; 1,001 characters of text; `wcwidth()` of two
+characters, which raises `TypeError`; text of `chr()` bytes below 256, alone and around other
+characters, among them bytes that start no well-formed UTF-8 sequence (cut short, overlong, above
+0x10FFFF), where the split by lead byte alone raised `TypeError`; and the names that
+`from wcwidth import *` binds.
 
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against the
 unmodified upstream package (where the C extension is not built), both print exactly what they
 print against this port. Both pass JIT and AOT with the native compiler and the CPython-hosted
-one, and with `PYSTACHY_OPT=-all`, and `tests/run.sh` passes as a whole (1,929 passed, 0 failed).
+one, and with `PYSTACHY_OPT=-all`, and `tests/run.sh` passes as a whole (1,935 passed, 0 failed).
 They stay small under `make verify`'s gc-stress stage (the compiler collecting every 1,000
 allocations, the program at every allocation): the JIT run and the AOT build and run of
-`port_wcwidth_core` take 5.0 s of CPU together (0.8 s JIT, 4.2 s build, 0.05 s run), and those of
-`port_wcwidth_edges` 6.9 s (1.8 s, 4.2 s, 1.0 s); in wall clock, 6.5 s and 10.3 s on a VM that was
-running other jobs (load 13 to 14 on its 4 cores), 5.0 s and 7.0 s at load 9 to 10. Without
-gc-stress, each JIT run takes 0.4 s of CPU.
+`port_wcwidth_core` take 4.9 s of CPU together (0.8 s JIT, 4.0 s build, 0.04 s run), and those of
+`port_wcwidth_edges` 6.9 s (1.7 s, 4.2 s, 1.0 s), about as long in wall clock on a 4-core VM at
+load 5 to 8. Without gc-stress, each JIT run takes 0.4 s of CPU.
 
 ## Speed
 
@@ -212,29 +229,31 @@ lines of mixed text (CJK, a ZWJ family, a heart with VS16, a flag, a skin tone, 
 fullwidth Latin, a Devanagari conjunct, Thai, ambiguous characters, Cyrillic, Hebrew, accented
 Latin), then `wcwidth()` of each code point from 0x100 to 0x2FFFF (checksum `5320000 312269` in
 both). Median of 3 runs, wall clock with process start-up and CPU time, on a 4-core x86-64 VM that
-was running other jobs (load 13):
+was running other jobs (load 7 to 8):
 
 | | wall clock | CPU |
 |---|---:|---:|
-| Pystachy AOT executable, this port | 0.192 s | 0.131 s |
-| CPython 3.13.16, unmodified wcwidth 0.9.2, pure Python | 2.158 s | 1.512 s |
+| Pystachy AOT executable, this port | 0.148 s | 0.148 s |
+| CPython 3.13.16, unmodified wcwidth 0.9.2, pure Python | 1.522 s | 1.506 s |
 
-That is 11.2 times faster in wall clock and 11.5 times in CPU time. Five more sets of runs, at
-loads from 6 to 13, gave wall-clock ratios from 8.9 to 12.5 (0.135 s against 1.679 s at the
-lightest load), and the three of them that measured CPU time 11.4 to 11.6. CPython runs upstream's
-Python code here, `lru_cache` on `wcwidth()` included. But wcwidth also has a C extension,
-`wcwidth._wcwidth_c` (`libwcwidth/`): its `setup.py` makes the extension mandatory in the release
-wheels that cibuildwheel builds, and compiles it, when it can, in an install from the sdist, so a
-typical CPython install runs C for both functions. The runs above import the sdist's source tree,
-where it is not built (`HAS_C_EXTENSION` is `False`); building it takes running the sdist's
-`setup.py`, and this does not compare it.
+That is 10.3 times faster in wall clock and 10.2 times in CPU time; a second set gave 10.0 and
+10.1. About 0.02 s of the AOT time is `_split_chars()` checking that the bytes of each character
+are well formed: splitting by the lead byte alone, which raised `TypeError` on other bytes, took
+0.123 s of CPU. CPython runs upstream's Python code here, `lru_cache` on `wcwidth()` included. But
+wcwidth also has a C extension, `wcwidth._wcwidth_c` (`libwcwidth/`): PyPI has wheels with it
+(`abi3` for CPython 3.10 and later, and free-threaded 3.14t and 3.15t ones, for Linux, macOS and
+Windows) besides a pure-Python `py3-none-any` one, and its `setup.py` compiles it, when it can, in
+an install from the sdist, so a typical CPython install runs C for both functions. The runs above
+import the sdist's source tree, where it is not built (`HAS_C_EXTENSION` is `False`); this does not
+compare the C extension, which would mean running a downloaded binary wheel or the sdist's
+`setup.py`.
 
 **Build time.** `pystachy build` of a program that imports `wcwidth` and calls `wcwidth()` once
-takes 3.3 s of CPU (4.9 s of wall clock on the loaded VM), against 0.15 s for `print(1)`;
-`tests/port_wcwidth_core.py` takes 3.8 s and `tests/port_wcwidth_edges.py` 3.6 s (medians of 3;
-3.6 to 4.1 s of wall clock; 4.0 and 4.1 s of CPU with the compiler collecting every 1,000
+takes 3.2 s of CPU (3.2 s of wall clock, at load 5 to 6), against 0.15 s for `print(1)`;
+`tests/port_wcwidth_core.py` takes 3.6 s and `tests/port_wcwidth_edges.py` 3.7 s (medians of 3,
+wall clock about the same; 4.0 and 4.2 s of CPU with the compiler collecting every 1,000
 allocations). Of the 20,000 lines of LLVM IR of a test, 10,200 build the port's tables (1,245
 ranges) at import, and 5,700 are `_constants.py`'s import, where `list()` of a tuple and a `for`
 over one copy the tuple's items with one call each (1,040 calls). With `table_grapheme.py` as
-upstream ships it (3,283 ranges in all), the program above and `port_wcwidth_edges` take 6.2 s and
-6.4 s of CPU to build. `pystachy ir` alone takes 0.1 s of CPU.
+upstream ships it (3,283 ranges in all), the program above and `port_wcwidth_edges` take 5.8 s and
+6.2 s of CPU to build. `pystachy ir` alone takes 0.1 s of CPU.

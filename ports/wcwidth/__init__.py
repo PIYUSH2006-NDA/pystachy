@@ -97,11 +97,13 @@ from ._wcwidth import _wcmatch_version, _wcversion_value  # isort:skip  # pylint
 
 # The __all__ attribute defines the items exported from statement,
 # 'from wcwidth import *', but also to say, "This is the public API".
-__all__ = ('wcwidth', 'wcswidth', 'wcstwidth', 'width', 'iter_sequences', 'iter_graphemes',
-           'iter_graphemes_reverse', 'grapheme_boundary_before',
-           'ljust', 'rjust', 'center', 'wrap', 'clip', 'strip_sequences',
-           'list_versions', 'list_term_programs', 'propagate_sgr',
-           'Hyperlink', 'HyperlinkParams', 'TextSizing', 'TextSizingParams')
+# Pystachy port: only the names imported above, so that `from wcwidth import *` finds each one.
+# __all__ = ('wcwidth', 'wcswidth', 'wcstwidth', 'width', 'iter_sequences', 'iter_graphemes',
+#            'iter_graphemes_reverse', 'grapheme_boundary_before',
+#            'ljust', 'rjust', 'center', 'wrap', 'clip', 'strip_sequences',
+#            'list_versions', 'list_term_programs', 'propagate_sgr',
+#            'Hyperlink', 'HyperlinkParams', 'TextSizing', 'TextSizingParams')
+__all__ = ('wcwidth', 'wcswidth', 'wcstwidth', 'list_versions', 'list_term_programs')
 
 # Version is stamped by code generation (bin/update-tables.py) from pyproject.toml.
 __version__ = '0.9.2'
