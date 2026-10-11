@@ -3,17 +3,21 @@
 # garbage-collector stress stage, the benchmarks, the dict probe counts and the compile-time scaling
 # check (see tests/verify.sh). build/verification.json is uploaded even when a step fails.
 #
-# One run per commit: a push to a pull request's branch runs once, and its check shows on the pull
-# request (a pull_request trigger ran the same commit a second time). A newer push to the same branch
-# cancels the older run; on main every commit runs to the end.
+# One run per commit. A pull request, from this repository or a fork, runs on pull_request, which
+# tests its branch merged with main as it is then; a push runs only on main, the verification after
+# a merge (a push trigger on every branch ran each pull request's commits a second time). A newer
+# push to a pull request cancels its older run; on main every commit runs to the end. A branch
+# without a pull request runs on demand (workflow_dispatch).
 name: CI
 
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && github.sha || github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
