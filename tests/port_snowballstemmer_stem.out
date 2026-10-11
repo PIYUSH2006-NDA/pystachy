@@ -1,0 +1,197 @@
+345 words, 0 stemmed otherwise
+['the', 'runner', 'were', 'run', 'faster', 'than', 'the', 'other', 'runner', 'ran']
+['the', 'runner', 'were', 'run', 'faster', 'than', 'the', 'other', 'runner', 'ran']
+'' '' ''
+'a' 'a' 'a'
+'is' 'is' 'i'
+'as' 'as' 'a'
+'by' 'by' 'by'
+'at' 'at' 'at'
+'on' 'on' 'on'
+'us' 'us' 'u'
+'ss' 'ss' 'ss'
+'s' 's' ''
+'e' 'e' 'e'
+'u' 'u' 'u'
+'i' 'i' 'i'
+'x' 'x' 'x'
+'ed' 'ed' 'ed'
+'ing' 'ing' 'ing'
+'ly' 'ly' 'ly'
+'ies' 'ie' 'i'
+'sses' 'ss' 'ss'
+'eed' 'eed' 'eed'
+'eedly' 'eed' 'eedli'
+'ingly' 'ing' 'ingli'
+'ied' 'ie' 'i'
+'tied' 'tie' 'ti'
+'cries' 'cri' 'cri'
+'die' 'die' 'die'
+'dies' 'die' 'di'
+'lie' 'lie' 'lie'
+'lies' 'lie' 'li'
+'bli' 'bli' 'bli'
+'ogi' 'ogi' 'ogi'
+'li' 'li' 'li'
+'tional' 'tional' 'tional'
+'ational' 'ation' 'ation'
+'ization' 'izat' 'izat'
+'fulness' 'ful' 'ful'
+'alism' 'alism' 'alism'
+'iviti' 'iviti' 'iviti'
+"'quoted'" 'quot' "'quoted'"
+"dog's" 'dog' "dog'"
+"dogs'" 'dog' "dogs'"
+"'" "'" "'"
+"''" "''" "''"
+"'''s" "'" "'''"
+"'s'" 's' "'s'"
+"'s" "'s" "'"
+"''s'" '' "''s'"
+"o'clock" "o'clock" "o'clock"
+"can't" "can't" "can't"
+"won't" "won't" "won't"
+"it's" 'it' "it'"
+"rock'n'roll" "rock'n'rol" "rock'n'rol"
+'Yay' 'yay' 'yai'
+'y' 'y' 'y'
+'Y' 'Y' 'Y'
+'yy' 'yy' 'yy'
+'yyy' 'yyy' 'yyi'
+'Yyyy' 'yyyi' 'yyyi'
+'ay' 'ay' 'ai'
+'aye' 'aye' 'ay'
+'sayyid' 'sayyid' 'sayyid'
+'eyy' 'eyi' 'eyi'
+'yes' 'yes' 'ye'
+'toy' 'toy' 'toi'
+'toying' 'toy' 'toi'
+'boyish' 'boyish' 'boyish'
+'employ' 'employ' 'emploi'
+'employing' 'employ' 'emploi'
+'obeying' 'obey' 'obei'
+'yelling' 'yell' 'yell'
+'sayings' 'say' 'sai'
+'youth' 'youth' 'youth'
+'royalty' 'royalti' 'royalti'
+'skis' 'ski' 'ski'
+'skies' 'sky' 'ski'
+'sky' 'sky' 'sky'
+'idly' 'idl' 'idli'
+'gently' 'gentl' 'gentli'
+'ugly' 'ugli' 'ugli'
+'early' 'earli' 'earli'
+'only' 'onli' 'onli'
+'singly' 'singl' 'singli'
+'news' 'news' 'new'
+'howe' 'howe' 'how'
+'atlas' 'atlas' 'atla'
+'cosmos' 'cosmos' 'cosmo'
+'bias' 'bias' 'bia'
+'andes' 'andes' 'and'
+'inning' 'inning' 'in'
+'innings' 'inning' 'in'
+'outing' 'outing' 'out'
+'canning' 'canning' 'can'
+'herring' 'herring' 'her'
+'earring' 'earring' 'ear'
+'proceed' 'proceed' 'proce'
+'exceed' 'exceed' 'exce'
+'succeed' 'succeed' 'succe'
+'proceeding' 'proceed' 'proceed'
+'exceedingly' 'exceed' 'exceedingli'
+'gener' 'gener' 'gener'
+'general' 'general' 'gener'
+'generate' 'generat' 'gener'
+'commun' 'commun' 'commun'
+'community' 'communiti' 'commun'
+'arsenal' 'arsenal' 'arsen'
+'arsen' 'arsen' 'arsen'
+'emerge' 'emerg' 'emerg'
+'emergency' 'emergenc' 'emerg'
+'inter' 'inter' 'inter'
+'interest' 'interest' 'interest'
+'past' 'past' 'past'
+'pasted' 'paste' 'past'
+'universe' 'univers' 'univers'
+'universal' 'universal' 'univers'
+'universities' 'universiti' 'univers'
+'1990s' '1990s' '1990'
+'a1b2c3ing' 'a1b2c3' 'a1b2c3'
+'co-op' 'co-op' 'co-op'
+'re-entering' 're-ent' 're-ent'
+'ABCDEFING' 'ABCDEFING' 'ABCDEFING'
+'RUNNING' 'RUNNING' 'RUNNING'
+'Running' 'Run' 'Run'
+'\t' '\t' '\t'
+' ' ' ' ' '
+'a b' 'a b' 'a b'
+'word\nnewline' 'word\nnewlin' 'word\nnewlin'
+'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaing' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+3003 2991 2991 ationalizationnation ationalizationnation
+a a
+[True, True]
+[] ['']
+['we', 'are', 'the', 'world']
+hopefulness 0 11 0
+ful hopefulness
+hopeeness 4 5 9
+another 2 7 7 other
+naïvely naïv naïv
+cafés café café
+résumés résumé résumé
+jalapeños jalapeño jalapeño
+über über über
+日本 日本 日本
+ped:ped:ped nyxuksfjiveness:nyxuksfj:nyxuksfj yxaihmm'er:yxaihmm'er:yxaihmm'er 'vhsz'hxies:vhsz'hxi:'vhsz'hxi irtetable:irtet:irtet azboyikyfy:azboyikyfi:azboyikyfi
+smmfmies:smmfmi:smmfmi uu'zikaxcization:uu'zikaxc:uu'zikaxc ovy:ovi:ovi s'ohiveness:s'ohiv:s'ohiv kest:kest:kest gpzvjmcing:gpzvjmcing:gpzvjmcing
+ghvnsiciti:ghvnsiciti:ghvnsiciti xwatupg's:xwatupg:xwatupg' oaav'dcky:oaav'dcki:oaav'dcki nry:nri:nry ecniaxfs:ecniaxf:ecniaxf btdping:btdping:btdping
+vo:vo:vo jvxfaby:jvxfabi:jvxfabi k''oiies:k''oii:k''oii bzsyness:bzsyness:bzsyness pxucgorkiement:pxucgorki:pxucgorki iyn'd'jational:iyn'd'jat:iyn'd'jat
+iynjxby:iynjxbi:iynjxbi ties:tie:ti fy:fy:fy u'curzccyed:u'curzcci:u'curzcci iecgfepvlable:iecgfepvl:iecgfepvl ukest:ukest:ukest
+spkuxed:spkux:spkux ryinaficiti:ryinaf:ryinaf speekhppable:speekhppabl:speekhppabl ytxfxppy:ytxfxppi:ytxfxppy vjip'rwiveness:vjip'rwiv:vjip'rwiv tness:tness:tness
+tctd'est:tctd'est:tctd'est jiuyhaziable:jiuyhazi:jiuyhazi iuiness:iuiness:iuiness mvs:mvs:mv kbzypness:kbzyp:kbzyp ahdzdztz's:ahdzdztz:ahdzdztz'
+dnukxvbksization:dnukxvbksiz:dnukxvbksiz ua'kdied:ua'kdi:ua'kdi nwbjgkurational:nwbjgkurat:nwbjgkurat j'lpanseed:j'lpanse:j'lpanse nukd'iveness:nukd'iv:nukd'iv xsxeakehization:xsxeakeh:xsxeakeh
+hlable:hlabl:hlabl rnr:rnr:rnr xbsily:xbsili:xbsili fver:fver:fver llkpization:llkpizat:llkpizat civeness:cive:cive
+lols:lol:lol twcxugtaable:twcxugtaabl:twcxugtaabl vsesness:vses:vses gdlnjofulness:gdlnjoful:gdlnjoful zmiswgcization:zmiswgciz:zmiswgciz aya'eed:aya'e:aya'e
+xjkhtyxniciti:xjkhtyxnic:xjkhtyxnic ripu'fulness:ripu':ripu' hpvwjit's:hpvwjit:hpvwjit' lzcational:lzcation:lzcation lakxgsdows:lakxgsdow:lakxgsdow dness:dness:dness
+xcsjehelies:xcsjehe:xcsjehe wies:wie:wi anawies:anawi:anawi pneement:pneement:pneement bibable:bibabl:bibabl j:j:j
+lueization:lueizat:lueizat kfhtvavsueed:kfhtvavsue:kfhtvavsue f'knghxv'eed:f'knghxv'eed:f'knghxv'eed hfowjljmlness:hfowjljml:hfowjljml aafulness:aaful:aaful mapyeed:mapye:mapye
+yomved:yomv:yomv pational:pation:pation nxization:nxizat:nxizat mgyyar'hyism:mgyyar'hy:mgyyar'hy vhxejyoj:vhxejyoj:vhxejyoj rcr'yest:rcr'yest:rcr'yest
+wfational:wfation:wfation kaaization:kaaizat:kaaizat wuuhfulness:wuuh:wuuh dational:dation:dation rxcrovyest:rxcrovyest:rxcrovyest w'axys:w'axi:w'axi
+lef'est:lef'est:lef'est jtyjymiveness:jtyjym:jtyjym prsvxniveness:prsvxnive:prsvxnive csxyxujnuer:csxyxujnu:csxyxujnu vfulness:vful:vful pegydvbkement:pegydvbk:pegydvbk
+'b'ghwkbing:b'ghwkbing:'b'ghwkbing bvlwxzd'fulness:bvlwxzd'ful:bvlwxzd'ful oklly:oklli:oklli fyization:fyizat:fyizat gkxxeaifulness:gkxxeaiful:gkxxeaiful aycoxjnhly:aycoxjnh:aycoxjnhli
+rable:rabl:rabl cfulness:cful:cful kurzmggiv:kurzmggiv:kurzmggiv seest:seest:seest xk'ybement:xk'ybement:xk'ybement gv'mization:gv'mizat:gv'mizat
+jepiveness:jepiv:jepiv 'xs:xs:'x vwbiklxriciti:vwbiklxric:vwbiklxric 'wtly:wtli:'wtly mpgttest:mpgttest:mpgttest nnbjcpp'iveness:nnbjcpp'ive:nnbjcpp'ive
+dnhxpness:dnhxpness:dnhxpness sized:size:size abarational:abar:abar gsmyre'd'eed:gsmyre'd'e:gsmyre'd'e fetgifging:fetgifg:fetgifg ancatyxbxization:ancatyxbx:ancatyxbx
+gism:gism:gism xmnable:xmnabl:xmnabl j:j:j gcs:gcs:gc ew'ecdo'wfulness:ew'ecdo'w:ew'ecdo'w rizmxfwouiveness:rizmxfwouiv:rizmxfwouiv
+folzjlvest:folzjlvest:folzjlvest nmbrdable:nmbrdabl:nmbrdabl vdagest:vdagest:vdagest raulwjyeed:raulwjye:raulwjye ykdbgljzhies:ykdbgljzhi:ykdbgljzhi tcdsbwing:tcdsbwing:tcdsbwing
+ygies:ygi:ygi cagctpcrkational:cagctpcrkat:cagctpcrkat fvineed:fvine:fvine zement:zement:zement fpnlabfh's:fpnlabfh:fpnlabfh' sztznhotmness:sztznhotm:sztznhotm
+ul's:ul:ul' pippebxhed:pippebxh:pippebxh ezzjable:ezzjabl:ezzjabl wness:wness:wness wcmz'zlrement:wcmz'zlrement:wcmz'zlrement fgtness:fgtness:fgtness
+blyed:bli:bly syhrxbiciti:syhrxbic:syhrxbic dlyc'fulness:dlyc':dlyc' ties:tie:ti fkdfpke's:fkdfpke:fkdfpke' bdsuvstjus:bdsuvstjus:bdsuvstju
+afceh'ism:afceh':afceh' 'ypoiwb'ational:ypoiwb'at:'ypoiwb' xed:xed:xed fuer:fuer:fuer spable:spabl:spabl vyevbement:vyevbement:vyevbement
+gjsiorxkiveness:gjsiorxkiv:gjsiorxkiv lsegfbational:lsegfbat:lsegfbat zwlbpwism:zwlbpwism:zwlbpwism mngkmbv'ceed:mngkmbv'ceed:mngkmbv'ceed uencfagzeed:uencfagze:uencfagze veudnyies:veudnyi:veudnyi
+psbing:psbing:psbing mpsuipkoffulness:mpsuipkof:mpsuipkof znnbz's:znnbz:znnbz' fyyoweuiciti:fyyoweu:fyyoweu enfhy:enfhi:enfhi bization:bizat:bizat
+cneygfarable:cneygfar:cneygfar zcwnysdxzing:zcwnysdxz:zcwnysdxz ruz:ruz:ruz mpbdy:mpbdi:mpbdy weed:weed:weed kxrdeed:kxrdeed:kxrdeed
+pgv'ykgiveness:pgv'ykgiv:pgv'ykgiv lneiism:lneiism:lneiism ojfulness:oj:oj sped:sped:sped syhwgxrypest:syhwgxrypest:syhwgxrypest mrxsiciti:mrxsiciti:mrxsiciti
+ociest:ociest:ociest llgmbvwdization:llgmbvwdizat:llgmbvwdizat znubmy:znubmi:znubmi wjuprr's:wjuprr:wjuprr' svkobedaeies:svkobedaei:svkobedaei izest:izest:izest
+gzrgggled:gzrgggled:gzrgggled gyfobly:gyfobl:gyfobli jvugness:jvug:jvug gawkny:gawkni:gawkni iafggpfgeed:iafggpfge:iafggpfge zlkhing:zlkhing:zlkhing
+dvikkable:dvikkabl:dvikkabl e'ked:e'k:e'k yvu'ed:yvu'e:yvu'e zyuag'fy:zyuag'fi:zyuag'fi cgi:cgi:cgi xwbtbcfulness:xwbtbcful:xwbtbcful
+dstaism:dstaism:dstaism d'jlwher:d'jlwher:d'jlwher zwagged:zwag:zwag my:my:my jrdrbzmement:jrdrbzmement:jrdrbzmement n'bednony:n'bednoni:n'bednoni
+'nvudcnsher:nvudcnsher:'nvudcnsher ptfcgnly:ptfcgnli:ptfcgnly fzgcoyuest:fzgcoyuest:fzgcoyuest dfsbukness:dfsbuk:dfsbuk gwcfbs:gwcfbs:gwcfb mwrramdiveness:mwrramdiv:mwrramdiv
+hable:habl:habl mybpgutrlfulness:mybpgutrl:mybpgutrl i:i:i ei'gaigbization:ei'gaigb:ei'gaigb zkxga'ing:zkxga'e:zkxga'e yefbkgyvjiveness:yefbkgyvj:yefbkgyvj
+ofxunexs:ofxunex:ofxunex bpooxwly:bpooxwli:bpooxwli dsnovtlt:dsnovtlt:dsnovtlt wehymable:wehym:wehym xmec'agization:xmec'ag:xmec'ag zry:zri:zry
+kdiescbx'ies:kdiescbx'i:kdiescbx'i ouy:ouy:oui zlvily:zlvili:zlvili x'wrer:x'wrer:x'wrer facagcrbness:facagcrb:facagcrb fnlzies:fnlzi:fnlzi
+dhouf'ational:dhouf'at:dhouf'at wnkgpclfulness:wnkgpclful:wnkgpclful yeheism:yeheism:yeheism gxwmcxb'lational:gxwmcxb'lation:gxwmcxb'lation pndmhpxvk's:pndmhpxvk:pndmhpxvk' bzgkvheement:bzgkvheement:bzgkvheement
+tegezxzable:tegezxz:tegezxz ahzcbness:ahzcb:ahzcb ksdmabpzbiciti:ksdmabpzbic:ksdmabpzbic diveness:dive:dive dmgyfing:dmgyfe:dmgyfe txcy:txci:txcy
+daopnp:daopnp:daopnp os:os:o pement:pement:pement gexxism:gexxism:gexxism czttvzaaness:czttvzaaness:czttvzaaness siciti:siciti:siciti
+ocmfev's:ocmfev:ocmfev' ereyheed:ereyhe:ereyhe dpczed:dpczed:dpczed oly:oli:oli vijbational:vijbat:vijbat karmness:karm:karm
+trnhhrzed:trnhhrzed:trnhhrzed 'dwarmational:dwarmat:'dwarmat etkbikoyly:etkbikoyli:etkbikoyli 'ldntization:ldntizat:'ldntizat ajiization:ajiiz:ajiiz p'ism:p'ism:p'ism
+eebeness:eeb:eeb yozznedawly:yozznedawli:yozznedawli ydafulness:ydaful:ydaful r'jyulc'est:r'jyulc'est:r'jyulc'est tsnkpies:tsnkpi:tsnkpi 'mism:mism:'mism
+vkkupoaled:vkkupoal:vkkupoal nifulness:niful:niful misajeest:misajeest:misajeest uitnxhvness:uitnxhv:uitnxhv jiciti:jiciti:jiciti ftyable:ftyabl:ftyabl
+tvhing:tvhing:tvhing dgdgopfhing:dgdgopfh:dgdgopfh dwest:dwest:dwest bmbszped:bmbszped:bmbszped wzvroryed:wzvrori:wzvrori jty:jti:jty
+'pzmvu'kgement:pzmvu'kgement:'pzmvu'kgement ryalk'yjjy:ryalk'yjji:ryalk'yjji vxism:vxism:vxism fruugly:fruug:fruugli tczyuzy:tczyuzi:tczyuzi 'iyhxiing:iyhxi:'iyhxi
+'uklabriiciti:uklabri:'uklabri nzsvly:nzsvli:nzsvly ruer:ruer:ruer jhtuvctlveed:jhtuvctlve:jhtuvctlve xf'zpryed:xf'zpri:xf'zpry rxization:rxizat:rxizat
+'lrhexmbing:lrhexmb:'lrhexmb hxed:hxed:hxed rjfu'yer:rjfu'yer:rjfu'yer uccakhed:uccakh:uccakh peed:peed:peed xked:xked:xked
+lgism:lgism:lgism rzest:rzest:rzest mhrjkpcrcism:mhrjkpcrcism:mhrjkpcrcism p'iveness:p'ive:p'ive knihy:knihi:knihi jpvrlgvfulness:jpvrlgvful:jpvrlgvful
+300 pseudo-random words
+[exit 0]

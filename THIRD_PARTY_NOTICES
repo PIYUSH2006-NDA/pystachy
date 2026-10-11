@@ -44,6 +44,16 @@ where ports/iniconfig/PORT.md lists (each edit is marked "Pystachy port:"). inic
 under the MIT License, whose text and copyright notice ("Copyright (c) 2010 - 2023 Holger Krekel
 and others") are in ports/iniconfig/LICENSE.
 
+snowballstemmer (ports/snowballstemmer/)
+----------------------------------------
+
+ports/snowballstemmer/__init__.py, among.py, basestemmer.py, english_stemmer.py and
+porter_stemmer.py are snowballstemmer 3.1.1's modules, edited where
+ports/snowballstemmer/PORT.md lists (each edit is marked "Pystachy port:"). snowballstemmer is
+used under the BSD 3-Clause License, whose text and copyright notices ("Copyright (c) 2001, Dr
+Martin Porter", "Copyright (c) 2004,2005, Richard Boulton", "Copyright (c) 2013, Yoshiki
+Shibukawa" and "Copyright (c) 2006-2025, Olly Betts") are in ports/snowballstemmer/LICENSE.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
