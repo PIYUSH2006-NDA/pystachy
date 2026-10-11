@@ -12852,19 +12852,31 @@ class Gen:
         a = self.getfield(o, self.field(o, " args"), " args")
         return Val(self.rt("pys_exc_brepr", "ptr", [f"ptr {o.v}", f"ptr {a.v}"]), "str")
 
-    def super_call(self, sc: Node, m: str, args: list[Node]) -> Val:
-        # super().m(args) in a method of an exception class: the base's method m, or what
-        # BaseException's __init__ (keep the args), __str__ and __repr__ do
+    def super_call(self, sc: Node, m: str, args: list[Node], based: bool = False) -> Val:
+        # super().m(args) in a method of an exception class (based: Base.m(self, args), for its
+        # base): the base's method m, or what BaseException's __init__ (keep the args), __str__ and
+        # __repr__ do
         cls = self.curfn.cls
-        me0 = self.curfn.params[0] if cls != "" else ""
-        # (super(C, self), in a method of class C, is super())
-        same = len(sc.kids) == 3 and sc.kids[1].kind == "name" and sc.kids[1].s == shown(cls) and sc.kids[2].kind == "name" and sc.kids[2].s == me0
+        # the object super() binds: the method's first parameter, self (a static method's first
+        # argument); none in a class method, whose super() binds cls, the class
+        me0 = self.curfn.params[0] if cls != "" and len(self.curfn.params) > 0 and (based or len(sc.kids) > 1 or self.curfn.deco != "classmethod") else ""
+        # (super(C, self), in a method of class C, is super(): C as the loader qualifies it, m$C in
+        # module m, and read as the module's name, not a local's)
+        same = len(sc.kids) == 3 and sc.kids[1].kind == "name" and sc.kids[1].s == cls and self.globread(cls) and sc.kids[2].kind == "name" and sc.kids[2].s == me0
         if (len(sc.kids) > 1 and not same) or cls == "" or self.classes[cls].exc == "":
             self.err("super() is only supported without arguments, in the methods of exception classes (super(C, self) in a method of C is super())")
-        me = self.expr(mk("name", self.curfn.params[0], sc.line, []), "")
+        if me0 == "":
+            self.err("super() in a class method (which binds cls, the class) or a static method without parameters is not supported")
+        me = self.expr(mk("name", me0, sc.line, []), "")
         b = self.classes[cls].base
         if b in self.classes and m in self.classes[b].methods:
-            return self.call_fn(self.classes[b].methods[m], [me], args)
+            bm = self.classes[b].methods[m]
+            if bm.deco != "" and not based:
+                # a static or class method of the base gets no object (Base.m(self, ...) passes
+                # self as its first argument), and a class method's cls would be the object's class
+                self.cls_bound(bm, cls, True)
+                return self.call_fn(bm, [], args)
+            return self.call_fn(bm, [me], args)
         if m == "__init__":
             self.exc_kw(b, args, f"{short(b)}.__init__()")
             vals = self.exc_vals(args)
@@ -15413,11 +15425,11 @@ class Gen:
             return self.builtin(f.s, args, want)
         if f.kind == "attr":
             c = self.curfn.cls
-            if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
+            if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and len(self.curfn.params) > 0 and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
                 # Base.m(self, args) in a method of an exception class: super().m(args) for its base
                 if f.kids[0].s != self.classes[c].base and not (self.classes[c].base == "OSError" and (f.kids[0].s == "IOError" or f.kids[0].s == "EnvironmentError")):
                     self.err(f"{f.kids[0].s}.{f.s}(self, ...) in a method of {short(c)} is supported only for its base, {short(self.classes[c].base)} (as super().{f.s}(...))")
-                return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:])
+                return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:], True)
             path = self.dotted(f)
             if path != "" and path[: path.rfind(".")] not in MODATTRS:
                 return self.builtin(path, args, want)

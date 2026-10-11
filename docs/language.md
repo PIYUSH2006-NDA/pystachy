@@ -820,7 +820,10 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   a field of the base unassigned where the base's code reads it (call `super().__init__()` first),
   keyword arguments where no class of its line has an `__init__` (but those its builtin base's
   takes, such as `ImportError`'s `name` and `path`), more than three arguments for one deriving
-  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes
+  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes,
+  in a static method without parameters, without arguments in a class method (where it binds the
+  class), or with arguments other than the method's own class and `self` (`super(Base, self)`, or a
+  local that hides the class's name), or calling a class method of the base that uses `cls`
 
 ### Builtins
 
