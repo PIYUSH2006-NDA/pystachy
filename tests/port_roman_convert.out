@@ -1,0 +1,41 @@
+0 N 0 0 True
+1 I 1 1 True
+3 III 3 3 True
+4 IV 4 4 True
+9 IX 9 9 True
+14 XIV 14 14 True
+19 XIX 19 19 True
+24 XXIV 24 24 True
+40 XL 40 40 True
+49 XLIX 49 49 True
+90 XC 90 90 True
+99 XCIX 99 99 True
+400 CD 400 400 True
+490 CDXC 490 490 True
+499 CDXCIX 499 499 True
+900 CM 900 900 True
+990 CMXC 990 990 True
+998 CMXCVIII 998 998 True
+999 CMXCIX 999 999 True
+2013 MMXIII 2013 2013 True
+100000 OutOfRangeError: number out of range (must be 0..4999)
+-1 OutOfRangeError: number out of range (must be 0..4999)
+5000 OutOfRangeError: number out of range (must be 0..4999)
+9223372036854775807 OutOfRangeError: number out of range (must be 0..4999)
+-9223372036854775807 OutOfRangeError: number out of range (must be 0..4999)
+-9223372036854775808 OutOfRangeError: number out of range (must be 0..4999)
+'' InvalidRomanNumeralError: Input cannot be blank
+'Q12' InvalidRomanNumeralError: Invalid Roman numeral: Q12
+'n' special_case=False: Invalid Roman numeral: N
+'N' True 0 0
+'N' False InvalidRomanNumeralError: 'Invalid Roman numeral: N'
+'n' True 0 0
+'n' False InvalidRomanNumeralError: 'Invalid Roman numeral: N'
+'N\n' True InvalidRomanNumeralError: 'Invalid Roman numeral: N\n'
+'N\n' False InvalidRomanNumeralError: 'Invalid Roman numeral: N\n'
+OutOfRangeError True True number out of range (must be 0..4999)
+MMMMCMXCIX MMMMCMXCIX
+NotIntegerError True False decimals cannot be converted
+InvalidRomanNumeralError True False
+round trips 1..4999: 40000 characters, the longest MMMMDCCCLXXXVIII 4888
+[exit 0]

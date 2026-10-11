@@ -1,0 +1,54 @@
+'MCMXCIX' 1999
+'MMMMCMXCIX' 4999
+'MMMMDCCCLXXXVIII' 4888
+'MDCLXVI' 1666
+'CMXCIX' 999
+'CDXLIV' 444
+'mmxxiv' 2024
+'Mi' 1001
+'cccxxxiii' 333
+'MMMMM' InvalidRomanNumeralError: 'Invalid Roman numeral: MMMMM'
+'IIII' InvalidRomanNumeralError: 'Invalid Roman numeral: IIII'
+'VX' InvalidRomanNumeralError: 'Invalid Roman numeral: VX'
+'IC' InvalidRomanNumeralError: 'Invalid Roman numeral: IC'
+'MCMC' InvalidRomanNumeralError: 'Invalid Roman numeral: MCMC'
+'CMCM' InvalidRomanNumeralError: 'Invalid Roman numeral: CMCM'
+'DCCCC' InvalidRomanNumeralError: 'Invalid Roman numeral: DCCCC'
+'LXL' InvalidRomanNumeralError: 'Invalid Roman numeral: LXL'
+'XCX' InvalidRomanNumeralError: 'Invalid Roman numeral: XCX'
+'CDC' InvalidRomanNumeralError: 'Invalid Roman numeral: CDC'
+'IXI' InvalidRomanNumeralError: 'Invalid Roman numeral: IXI'
+'VIV' InvalidRomanNumeralError: 'Invalid Roman numeral: VIV'
+'IIIV' InvalidRomanNumeralError: 'Invalid Roman numeral: IIIV'
+'DCD' InvalidRomanNumeralError: 'Invalid Roman numeral: DCD'
+'MCD' 1400
+'CCCM' InvalidRomanNumeralError: 'Invalid Roman numeral: CCCM'
+'XM' InvalidRomanNumeralError: 'Invalid Roman numeral: XM'
+'IM' InvalidRomanNumeralError: 'Invalid Roman numeral: IM'
+'VL' InvalidRomanNumeralError: 'Invalid Roman numeral: VL'
+'LC' InvalidRomanNumeralError: 'Invalid Roman numeral: LC'
+'DM' InvalidRomanNumeralError: 'Invalid Roman numeral: DM'
+'MMMMMCM' InvalidRomanNumeralError: 'Invalid Roman numeral: MMMMMCM'
+'MDCLXVIX' InvalidRomanNumeralError: 'Invalid Roman numeral: MDCLXVIX'
+'NN' InvalidRomanNumeralError: 'Invalid Roman numeral: NN'
+'ABC' InvalidRomanNumeralError: 'Invalid Roman numeral: ABC'
+'%s' InvalidRomanNumeralError: 'Invalid Roman numeral: %S'
+'M%dM' InvalidRomanNumeralError: 'Invalid Roman numeral: M%DM'
+'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM' InvalidRomanNumeralError: 'Invalid Roman numeral: MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM'
+'X\n' 10
+'\n' 0
+'X\n\n' InvalidRomanNumeralError: 'Invalid Roman numeral: X\n\n'
+'\nX' InvalidRomanNumeralError: 'Invalid Roman numeral: \nX'
+'X\r\n' InvalidRomanNumeralError: 'Invalid Roman numeral: X\r\n'
+'XC\n' 90
+'VIII\n' 8
+'mmxxiv\n' 2024
+' X' InvalidRomanNumeralError: 'Invalid Roman numeral:  X'
+'X ' InvalidRomanNumeralError: 'Invalid Roman numeral: X '
+'N ' InvalidRomanNumeralError: 'Invalid Roman numeral: N '
+'\t' InvalidRomanNumeralError: 'Invalid Roman numeral: \t'
+'X\x00' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x00'
+'Ⅻ' InvalidRomanNumeralError: 'Invalid Roman numeral: Ⅻ'
+'X中' InvalidRomanNumeralError: 'Invalid Roman numeral: X中'
+checked 2800 valid 347 acc 547705469
+[exit 0]
