@@ -27,6 +27,7 @@
 #                  math functions give on random inputs
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
+#   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
 #   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
 #   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
@@ -247,6 +248,11 @@ step rtcheck $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) cases, \([0-9]*\) failed$/, "
 L=$V/rt-abi.log; s=$(now); r=fail
 $PY tools/rtabi.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-9]*\) uses in runtime.c and \([0-9]*\) programs, \([0-9]*\) mismatches$/, "functions": \1, "uses": \2, "programs": \3, "mismatches": \4/p' "$L")"
+
+# ---- inherited ASTs: declaration headers grow linearly; unused method bodies are shared
+L=$V/inherited-ast.log; s=$(now); r=fail
+$PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
+step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
 
 # ---- list-storage: deterministic capacity and live-byte checks for reachable empty lists
 L=$V/list-storage.log; s=$(now); r=fail
