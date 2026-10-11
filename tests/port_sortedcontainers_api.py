@@ -159,4 +159,20 @@ print("in lists:", b in [a], b in [d, f], [a, f].count(b), [f, a].index(b), [d, 
 print("sorted:", sorted([f, a, d, e]), min([f, a, d]), max([d, a, f]))
 opt: list[SortedList | None] = [None, a]
 print("with None:", opt.index(b), b in opt, opt.count(b), None in opt, a == None, a != None)
+print("in tuples and dicts:", (a, 1) == (b, 1), (a, 1) != (f, 1), (a,) < (f,), (f, 0) <= (a, 9),
+      [a] < [f], {"k": a} == {"k": b}, {"k": a} == {"k": f}, b in (d, a))
+ys: list[SortedList | None] = [None, b, None]
+ys.remove(None)
+ys.remove(a)
+print("optional lists:", opt == [None, b], opt == [b, None], ys, opt != ys)
+
+# keyword arguments, by the names of upstream's methods and of the aliases written as defs
+k = SortedList(iterable=[4, 1, 3, 1, 5, 9, 2, 6])
+k.add(value=7)
+k.update(iterable=[0, 8])
+k._update(iterable=[10])
+print("keywords:", k.count(value=1), k.bisect(value=3), k._bisect_right(value=3),
+      k.index(value=6, start=1, stop=-1), list(k.irange(minimum=2, maximum=6,
+      inclusive=(False, True), reverse=True)), list(k.islice(start=1, stop=-2, reverse=True)),
+      k.pop(index=0), k._getitem(index=-1), k.__radd__(other=[1]), k.__rmul__(num=0))
 print("iterated:", list(a), [x * 2 for x in s], sum(s), sorted(s, reverse=True), max(s))

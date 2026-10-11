@@ -66,5 +66,8 @@ reverse NotImplementedError: use ``reversed(sl)`` instead
 in lists: True False 1 1 True
 sorted: [SortedList([]), SortedList([1, 2]), SortedList([1, 2, 3]), SortedList([1, 2, 4])] SortedList([1, 2]) SortedList([1, 2, 4])
 with None: 1 True 1 True False True
+in tuples and dicts: True True True False True True False True
+optional lists: True False [None] True
+keywords: 2 5 5 7 [6, 5, 4, 3] [8, 7, 6, 5, 4, 3, 2, 1, 1] 0 10 SortedList([1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) SortedList([])
 iterated: [1, 2, 3] [-14, 2, 4, 4, 6, 6, 10] 9 [5, 3, 3, 2, 2, 1, -7] 5
 [exit 0]

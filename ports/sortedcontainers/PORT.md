@@ -69,7 +69,10 @@ class where a program uses it (inheritance, M2).
   `_getitem = __getitem__`, `bisect = bisect_right`, `_bisect_right = bisect_right`,
   `__copy__ = copy`, `__radd__ = __add__` and `__rmul__ = __mul__`) become two-line defs that
   call the method: Pystachy rejects a class attribute bound to a function ("cannot infer the
-  type of class attribute").
+  type of class attribute"). The defs call through `self`, so a subclass's override of
+  `update` or `bisect_right` would reach `_update` or `bisect`, where upstream's aliases keep
+  `SortedList`'s methods; no subclass compiles here (inheritance, M2), and Pystachy rejects
+  `SortedList.update(self, ...)`.
 - Bound methods kept in locals (`_add = self.add` in `update`, `_pos = self._pos` in `islice`)
   are called through `self`.
 - `__init__` loses `key=` (and `assert key is None`): a key function is a function as a value,
@@ -114,7 +117,8 @@ class where a program uses it (inheritance, M2).
   (`'{0!r} not in list'.format(value)` is `'%r not in list' % (value,)`).
 - `irange`, `islice` and `_islice` return a `list[int]` instead of an iterator (Pystachy takes
   `Iterator[T]` only as what `__iter__` returns), and their `return iter(())` are `return []` (6
-  places). `list()`, `for` and `sum()` of what they return see the same values.
+  places). `list()`, `for` and `sum()` of what they return see the same values, once (see the
+  deviation below).
 - `del xs[:]` and `del xs[a:]` (8 places, 6 marks) become `xs.clear()` or a slice of the part
   kept; `self._index[:] = row` (2 places in `_build_index`) becomes `clear()` and `extend()`, in
   place, as `_pos` holds `self._index` across the call; and `slice(start, stop).indices(len)` in
@@ -148,7 +152,9 @@ import in its `try`/`except ImportError`, the `operator` import, generator expre
 - `key=`, `SortedKeyList` and `SortedListWithKey` (rejected where used: class inheritance),
   `SortedDict` and `SortedSet`, and so `from sortedcontainers import *`, as `__all__` still
   names them.
-- Slices (`sl[a:b]`, `del sl[a:b]`), `reversed(sl)`, `next()` of what `irange` and `islice`
+- Slices (`sl[a:b]`, `del sl[a:b]`), `reversed(sl)`, `iter(sl)`, `tuple(sl)` and `set(sl)`
+  (`for`, comprehensions, unpacking, `list()`, `sorted()`, `sum()`, `min()`, `max()`,
+  `enumerate()` and `zip()` step through a sorted list), `next()` of what `irange` and `islice`
   return, and the reflected operators `[1] + sl` and `2 * sl`, which Pystachy does not send to
   `__radd__` and `__rmul__` (calling those works): each is rejected at compile time.
 - `_check()`, whose error report prints with `traceback` (`name 'traceback' is not defined`,
@@ -180,9 +186,20 @@ import in its `try`/`except ImportError`, the `operator` import, generator expre
 
   `out` is `[1, 2, 3, 4, 5]` here and `[1, 2, 3, 4, 5, 100]` under CPython. Upstream's docstring
   says that iterating while adding or deleting values "may raise a RuntimeError or fail to
-  iterate over all values", so a program should not rely on either. `irange()` and `islice()`
-  likewise return lists made when they are called, and `len()` of what they return works here
-  (CPython: `TypeError: object of type 'map' has no len()`).
+  iterate over all values", so a program should not rely on either.
+- **`irange()` and `islice()` return lists**, made when they are called, where upstream returns
+  iterators (M7 above): Pystachy has no other way for a method to return an iterator. A program
+  that takes their values once, with `list()`, `for` or `sum()`, sees the same values. One that
+  does more sees other results, without an error:
+  - A second pass over the result sees the values again, where upstream's iterator is used up
+    and gives none: after `r = sl.irange(2, 4)` on `SortedList([1, 2, 3, 4, 5])`,
+    `sum(r), sum(r)` is `(9, 9)` here and `(9, 0)` under CPython. Likewise, a loop that leaves
+    the result with `break` and a later loop over it start again at the first value, where
+    upstream's second loop goes on after the last value the first one took.
+  - An empty result is false (`if sl.irange(lo, hi):`) and equals `[]`; an iterator is always
+    true and equals no list.
+  - `len()`, indexing, `reversed()` and the list's methods work on the result, where CPython
+    raises `TypeError` (`object of type 'map' has no len()`) or `AttributeError`.
 - **Ordering against `None`** raises another message: `sl < None` raises
   `TypeError: 'NoneType' object is not iterable`, where CPython raises
   `TypeError: '<' not supported between instances of 'SortedList' and 'NoneType'`.
@@ -197,7 +214,9 @@ form of `irange`, `islice` with negative and out-of-range bounds, indices out of
 and at 2**63 - 1 and -(2**63 - 1), copies, `+`, `+=`, `*` (by 0 and by -3), `*=`, the methods
 that raise `NotImplementedError`, and the comparisons: `==` and `!=` of copies, ordering by item
 and by length, `in`, `count()` and `index()` of lists of sorted lists, also with `None` among
-them, and `sorted()`, `min()` and `max()` of sorted lists.
+them, `sorted()`, `min()` and `max()` of sorted lists, sorted lists inside tuples and dicts, and
+`==` and `remove()` of lists of optional sorted lists; then the methods called with keyword
+arguments, by upstream's parameter names, also through the aliases written as defs.
 `tests/port_sortedcontainers_index.py` gives about 200 values a load factor of 4 (`_reset(4)`),
 so they split into dozens of sublists: it prints the sublists' sizes, `_offset` and the index
 tree, and checks `SortedList._check`'s invariants, after positional reads, adds that split
@@ -207,10 +226,11 @@ adds at the default load factor, which split one sublist.
 
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package, both print exactly what they print against this port. Both are
-small: with the native compiler, the JIT runs take 0.3 s each and the AOT builds 1.5 s and 1.6 s
-(the executables run in under 0.01 s); under `make verify`'s gc-stress stage (the compiler
-collecting every 1,000 allocations, the program at every allocation: 1,598 and 2,660
-collections), the JIT run and the AOT build and run take 2.4 s and 1.7 s in all.
+small: with the native compiler, the JIT runs take 0.3 s each and the AOT builds 1.6 s and 1.1 s
+of CPU time (the executables run in under 0.01 s); under `make verify`'s gc-stress stage (the
+compiler collecting every 1,000 allocations, the program at every allocation: 1,853 and 2,660
+collections), the JIT run and the AOT build and run take 2.2 s and 1.5 s of CPU time in all
+(2.9 s and 2.1 s by the clock, medians of 3 on the VM below at a load average of 10 to 15).
 
 ## Speed
 
