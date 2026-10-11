@@ -78,12 +78,21 @@ dropped in an imported module, as CPython skips it.
 - `roman.romanNumeralPattern`, the compiled pattern: `module 'roman' has no attribute
   'romanNumeralPattern'`. Its stand-in returns a `bool`, where `search()` returned a match
   object or `None`.
-- Arguments of other types than `int`. `toRoman(1.5)` and `toRoman("1")` are compile-time errors
-  (`expected int, got float`), where CPython raises `NotIntegerError("decimals cannot be
-  converted")`; and `toRoman(True)` is rejected too (`expected int, got bool`), where CPython
-  returns `'I'`. A variable that holds an `int` or another type needs dynamic values, M4
-  ([#9](https://github.com/den-run-ai/pystachy/issues/9)). `NotIntegerError` itself is there,
-  and a program can raise and catch it.
+- Arguments of other types than the annotated ones (`n: int`, `s: str`, `special_case: bool`).
+  `toRoman(1.5)` and `toRoman("1")` are compile-time errors (`expected int, got float`), where
+  CPython raises `NotIntegerError("decimals cannot be converted")`; and `toRoman(True)` is
+  rejected too (`expected int, got bool`), where CPython returns `'I'`. So are
+  `fromRoman(None)` (`expected str, got None`), which CPython reports as
+  `InvalidRomanNumeralError("Input cannot be blank")`, and `fromRoman("X", 1)` (`expected bool,
+  got int`), which CPython answers with 10. A variable that holds an `int` or another type needs
+  dynamic values, M4 ([#9](https://github.com/den-run-ai/pystachy/issues/9)). `NotIntegerError`
+  itself is there, and a program can raise and catch it.
+- `romanNumeralMap` as a whole value. A program can index it, take its `len()`, iterate over it,
+  test `in` and make a `list()` or `sorted()` of it, but it holds 13 pairs, and a tuple of more
+  than 9 items ([docs/language.md](../../docs/language.md#types)) cannot be printed or compared
+  (`tuples are limited to 9 elements`). `dict(roman.romanNumeralMap)` and slices of it are
+  compile-time errors too (`unsupported call dict(...)`, `... cannot be sliced`), as they are
+  for any tuple here. CPython does all of these.
 
 ## Deviations it hits
 
@@ -113,39 +122,42 @@ sdist) as a program: the 20 pairs of its `TEST_MAP` both ways and in lower case,
 (100000 out of range, `''` and `'Q12'` invalid, `'n'` with `special_case=False`). Then it runs
 the range's edges (-1, 5000, 2**63 - 1, -(2**63 - 1), -2**63), `N` and `n` and `'N\n'` with
 `special_case` given by position and by keyword, the exception hierarchy (`isinstance()`,
-`type(e).__name__`, a `NotIntegerError` raised by the program), and every number from 1 to 4999
-there and back, in upper and lower case. `tests/port_roman_validate.py` runs the validation that
-edit 2 replaces: 52 strings at the pattern's edges (a group's alternative followed by the
-letter another one would leave, as in `CMCM`, `CDC`, `XCX` and `IXI`; too many letters of a kind;
-`$` before a final newline and not before two or before `\r\n`; a leading newline, spaces, a
-tab, NUL, `%` signs, 50 M's, and two non-ASCII strings without a case), then every string of one
-to four numeral letters, 2,800 strings of which 347 are valid, with a checksum of their values.
-They leave out what the edits remove (the command line, which upstream's tests drive through
-`sys.argv` and `StringIO`) and `toRoman('1')`, which Pystachy rejects at compile time.
+`type(e).__name__`, a `NotIntegerError` raised by the program), every number from 1 to 4999
+there and back, in upper and lower case, other call forms (`import roman as rm`,
+`toRoman as to_roman`, every argument by keyword and in either order), `__author__`,
+`__copyright__` and the uses of `romanNumeralMap` that compile, and last an `OutOfRangeError`
+that escapes, whose report must match CPython's last line of stderr.
+`tests/port_roman_validate.py` runs the validation that edit 2 replaces: 59 strings at the
+pattern's edges (a group's alternative followed by the letter another one would leave, as in
+`CMCM`, `CDC`, `XCX` and `IXI`; too many letters of a kind; `$` before a final newline and not
+before two, before `\r\n` or before another line break such as `\r`, `\x0b`, `\x85` and
+`\u2028`; a leading newline, spaces, a tab, NUL, `%` signs, 50 M's, and four strings with
+characters outside ASCII that have no case), then every string of one to four numeral letters,
+2,800 strings of which 347 are valid, with a checksum of their values. They leave out what the
+edits remove (the command line, which upstream's tests drive through `sys.argv` and `StringIO`)
+and `toRoman('1')`, which Pystachy rejects at compile time.
 
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package, both print exactly what they print against this port. Both
 are small: under `make verify`'s gc-stress stage (the compiler collecting every 1,000
 allocations, the program at every allocation), the JIT run and the AOT build and run take about
-2-4 s together for each of them, on a 4-core VM that was running other jobs; each AOT build
-takes 0.6-1.2 s.
+2-3 s together for each of them, on a 4-core VM that was running other jobs; each AOT build
+takes 0.7-1.5 s.
 
 ## Speed
 
 The headline workload: 200 round trips `fromRoman(toRoman(n))` for every `n` from 1 to 4999,
-about a million conversions each way (checksum 2499500000 in all three). Median of 3 runs, with
-process start-up, on a 4-core x86-64 VM:
+about a million conversions each way (checksum 2499500000 in all three). Median of 5 runs, with
+process start-up, on a 4-core x86-64 VM that was running other jobs (load average 5-7):
 
 | | wall clock | CPU time |
 |---|---:|---:|
-| Pystachy AOT executable, this port | 1.396 s | 0.667 s |
-| CPython 3.13.16, unmodified roman 5.2 | 4.884 s | 2.273 s |
-| CPython 3.13.16, this port | 6.136 s | 2.916 s |
+| Pystachy AOT executable, this port | 0.631 s | 0.621 s |
+| CPython 3.13.16, unmodified roman 5.2 | 2.353 s | 2.350 s |
+| CPython 3.13.16, this port | 2.948 s | 2.940 s |
 
-That is 3.4 times faster in CPU time and 3.5 times in wall-clock time; a second set of runs gave
-0.628 s and 2.262 s of CPU time (3.6 times). The VM was running other jobs, with a load average
-near 20 on its 4 cores, which about doubled the wall-clock times; the CPU times match the
-wall-clock times of an earlier measurement on a quieter VM, 0.646 s and 2.181 s (3.4 times).
-roman has no C extension, but CPython checks each numeral in its C regex engine:
-under CPython the port, whose check is the Python function of edit 2, is slower than upstream,
-so the executable runs the code of this port 4.4 times faster (in CPU time) than CPython does.
+That is 3.7 times faster. Two more sets of 5 runs gave the same in CPU time (0.629 s against
+2.331 s and 2.319 s), and an earlier measurement, median of 3, gave 0.646 s against 2.181 s of
+wall-clock time (3.4 times). roman has no C extension, but CPython checks each numeral in its C
+regex engine: under CPython the port, whose check is the Python function of edit 2, is slower
+than upstream, so the executable runs the code of this port 4.7 times faster than CPython does.

@@ -1,12 +1,14 @@
 # roman's toRoman and fromRoman: the cases of its own test suite (src/tests.py of roman 5.2),
 # run as a program instead of under unittest, then the edges of both directions
 import roman
+import roman as rm
 from roman import InvalidRomanNumeralError
 from roman import NotIntegerError
 from roman import OutOfRangeError
 from roman import RomanError
 from roman import fromRoman
 from roman import toRoman
+from roman import toRoman as to_roman
 
 TEST_MAP = ((0, 'N'), (1, 'I'), (3, 'III'), (4, 'IV'), (9, 'IX'), (14, 'XIV'),
             (19, 'XIX'), (24, 'XXIV'), (40, 'XL'), (49, 'XLIX'), (90, 'XC'),
@@ -68,3 +70,22 @@ for n in range(1, 5000):
     if len(r) > len(longest):
         longest = r
 print("round trips 1..4999:", total, "characters, the longest", longest, fromRoman(longest))
+
+# other call forms: an alias, every argument by keyword (in either order), the module's strings
+# and its table as a program can use it (ports/roman/PORT.md)
+print(to_roman(n=1999), rm.fromRoman(s="mcmxcix"), rm.fromRoman(special_case=True, s="n"))
+try:
+    rm.fromRoman(special_case=False, s="N")
+except rm.InvalidRomanNumeralError as e:
+    print("special_case=False first:", e)
+print(rm.__author__)
+print(rm.__copyright__.splitlines()[0])
+print(len(rm.romanNumeralMap), rm.romanNumeralMap[1], rm.romanNumeralMap[-1][1],
+      ("D", 500) in rm.romanNumeralMap)
+print(list(rm.romanNumeralMap)[:3], sorted(rm.romanNumeralMap)[0])
+for numeral, value in rm.romanNumeralMap:
+    if fromRoman(numeral) != value or toRoman(value) != numeral:
+        print("table mismatch", numeral, value)
+
+# the error escapes as CPython reports it
+toRoman(5000)

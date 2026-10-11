@@ -38,4 +38,10 @@ MMMMCMXCIX MMMMCMXCIX
 NotIntegerError True False decimals cannot be converted
 InvalidRomanNumeralError True False
 round trips 1..4999: 40000 characters, the longest MMMMDCCCLXXXVIII 4888
-[exit 0]
+MCMXCIX 1999 0
+special_case=False first: Invalid Roman numeral: N
+Mark Pilgrim (f8dy@diveintopython.org)
+Copyright (c) 2001 Mark Pilgrim
+13 ('CM', 900) 1 True
+[('M', 1000), ('CM', 900), ('D', 500)] ('C', 100)
+[exit 1]

@@ -48,6 +48,13 @@
 'N ' InvalidRomanNumeralError: 'Invalid Roman numeral: N '
 '\t' InvalidRomanNumeralError: 'Invalid Roman numeral: \t'
 'X\x00' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x00'
+'MCMXCIXM' InvalidRomanNumeralError: 'Invalid Roman numeral: MCMXCIXM'
+'X\r' InvalidRomanNumeralError: 'Invalid Roman numeral: X\r'
+'X\x0b' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x0b'
+'X\x0c' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x0c'
+'X\x1c' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x1c'
+'X\x85' InvalidRomanNumeralError: 'Invalid Roman numeral: X\x85'
+'X\u2028' InvalidRomanNumeralError: 'Invalid Roman numeral: X\u2028'
 'Ⅻ' InvalidRomanNumeralError: 'Invalid Roman numeral: Ⅻ'
 'X中' InvalidRomanNumeralError: 'Invalid Roman numeral: X中'
 checked 2800 valid 347 acc 547705469
