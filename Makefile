@@ -63,6 +63,10 @@ eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	build/eqprobe
 	PYSTACHY_GC_STRESS=1 build/eqprobe
 
+# Inspect the bitcode passed to lli, then run it: dead functions must not reach code generation.
+jitprobe: pystachy
+	$(PY) tools/jitprobe.py
+
 # Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
 # scaling) -> build/verification.json
 verify:
@@ -114,4 +118,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench dictprobe listprobe eqprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py bench dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
