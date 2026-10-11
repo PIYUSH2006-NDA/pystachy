@@ -1,14 +1,16 @@
-# make lint on every push: ruff (findings only), shellcheck of the scripts as POSIX sh, and clang's
-# warnings on runtime.c and tools/dictprobe.c, with the versions of tools/requirements-dev.txt.
-# A minute, beside CI's make verify.
+# make lint: ruff (findings only), shellcheck of the scripts as POSIX sh, and clang's warnings on
+# runtime.c and tools/dictprobe.c, with the versions of tools/requirements-dev.txt. A minute, beside
+# CI's make verify, on the same events: pull requests (forks too), pushes to main, and on demand.
 name: Lint
 
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: lint-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  group: lint-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || (github.ref == 'refs/heads/main' && github.sha || github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:

@@ -5462,6 +5462,9 @@ LOOKUPS = 32
 # exponential width growth such as f((x, x)). These are compiler resource limits.
 TYPE_SIZE = 65536
 TEMPLATE_BYTES = 1048576
+# Completed instances retain their FnInfo and IR too: branching on short types can
+# grow exponentially without reaching either active limit. Count across all templates.
+TEMPLATE_INSTANCES = 4096
 # Effect letters: R may raise (in a program that has try or with, a raise allocates its exception, so a
 # collection may run before a handler takes it; if none does, the raise prints its message, flushes
 # stdout and exits); N never returns; A allocates on the way to returning (a collection may run, and
@@ -6971,6 +6974,7 @@ class Gen:
         self.branch = 0  # how many if branches and loop bodies enclose the code being compiled
         self.making: list[str] = []  # the template functions being compiled, each with its call site
         self.template_bytes = 0  # bytes in the signatures of the active instance() calls
+        self.template_instances = 0  # retained instances in this compilation, including completed ones
         self.unsupported: dict[str, str] = {}  # classes of imported modules that cannot be compiled: why
         self.cnodes: dict[int, Node] = {}  # every module-level class or subclass statement, by line
         self.hooks: dict[str, str] = {}  # see hook()
@@ -15757,6 +15761,8 @@ class Gen:
             self.err(f"{short(f.name)}() needs more than 100 nested template functions; annotate its parameters")
         if self.template_bytes + size > TEMPLATE_BYTES:
             self.err(f"active template signatures exceed {TEMPLATE_BYTES} bytes; annotate template parameters")
+        if self.template_instances >= TEMPLATE_INSTANCES:
+            self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
         g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, "")
         g.params = f.params
         g.ptypes = ts
@@ -15774,6 +15780,7 @@ class Gen:
         for x in nnp:
             g.nnp[x] = True
         f.insts[key] = g
+        self.template_instances += 1
         maybe = [f.params[j] for j in range(len(ts)) if ts[j] in self.classes and f.params[j] not in g.nnp and self.dispatches(f, f.params[j])]
         why = f", where {' and '.join(maybe)} may be None: only a new object or self is known not to be None, which decides isinstance(), hasattr() and 'is None' at compile time" if len(maybe) > 0 else ""
         args = ", ".join(ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"

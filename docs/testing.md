@@ -119,6 +119,11 @@ versions, platform, git commit and a timestamp:
 - **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
+- **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
+  active signatures and branching template specializations fail with bounded source diagnostics
+  in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
+  seconds. Finite controls check active-budget release and reuse of completed instances at the
+  compilation-wide limit of 4,096 specializations;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
@@ -160,6 +165,9 @@ the two agree everywhere except 19 valid files Pystachy cannot parse (tabs in in
 
 ## Continuous integration
 
-`.github/workflows/ci.yml`
-runs `make verify` on every push and pull request (ubuntu-24.04, LLVM 18 from apt,
-Python 3.13), within a 45-minute time limit, and uploads the report as an artifact.
+`.github/workflows/ci.yml` runs `make verify` once per commit: on each pull request, from this
+repository or a fork, with its branch merged with `main` as it is then; on each push to `main`;
+and on demand for any branch. A newer push to a pull request cancels its older run; on `main`
+every commit runs to the end. It runs on ubuntu-24.04 with LLVM 18, which `tools/setup.sh`
+installs where the runner image lacks it, and the CPython of `.python-version`, within a
+45-minute time limit, and uploads the report as an artifact.
