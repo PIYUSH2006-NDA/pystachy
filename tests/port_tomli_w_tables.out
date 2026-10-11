@@ -1,0 +1,151 @@
+''
+'[a]\n\n[b]\n'
+'[outer.inner]\n'
+'[tab1.tab2.tab3]\n'
+[server]
+host = "localhost"
+port = "8080"
+
+[client]
+name = "demo"
+
+[a.b]
+c = "deep"
+
+["".""]
+"" = 1
+
+["a b"."c.d"]
+"é" = 2
+
+[x.y]
+z = 3
+
+fruit = [
+    { name = "apple" },
+    { name = "banana" },
+]
+
+[table]
+nested-array = [
+    { aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 0 },
+    { b = 1 },
+    { c = 2 },
+]
+
+rows = [
+    { k0 = "value number 0", k1 = "value number 1", k2 = "value number 2" },
+    { k0 = "value number 0", k1 = "value number 1", k2 = "value number 2" },
+]
+
+points = [
+    { pos = { x = 1, y = 2 } },
+    { pos = { x = 3, y = 4 } },
+]
+
+rows = [
+    {},
+    {},
+]
+
+tup = [
+    { k = "v" },
+    { k = "w" },
+]
+
+arrays = [
+    [
+        { a = "b" },
+    ],
+    [],
+]
+
+[[table.nested-array]]
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 0
+
+[[table.nested-array]]
+b = 1
+
+[[rows]]
+k = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[rows]]
+k = "short"
+
+[[tup]]
+k = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[tup]]
+k = "w"
+
+[[aot]]
+multiline_string = """
+line1
+line2"""
+
+aot = [
+    { multiline_string = "line1\nline2" },
+]
+
+[[aot]]
+a = [
+    0,
+    1,
+    2,
+    3,
+]
+
+[[a.nested.aot]]
+a = [
+    0,
+    1,
+    2,
+    3,
+]
+
+[[table.nested_table]]
+array_options = [
+    1,
+    2,
+    3,
+]
+
+[[table.nested_table]]
+another_array = [
+    1,
+    2,
+]
+
+[[table.nested_table]]
+c = [
+    3,
+]
+
+[[rows]]
+
+[rows.sub]
+k = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[rows]]
+
+[rows.sub]
+k = "y"
+
+[[a]]
+
+[[a.b]]
+c = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[top.rows]]
+k = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[top.more]]
+k = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[top.more]]
+k = "z"
+
+[table]
+array = []
+
+[exit 0]

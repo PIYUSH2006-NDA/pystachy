@@ -44,6 +44,16 @@ where ports/iniconfig/PORT.md lists (each edit is marked "Pystachy port:"). inic
 under the MIT License, whose text and copyright notice ("Copyright (c) 2010 - 2023 Holger Krekel
 and others") are in ports/iniconfig/LICENSE.
 
+tomli-w (ports/tomli_w/)
+------------------------
+
+ports/tomli_w/__init__.py and _writer.py are tomli-w 1.2.0's modules, edited where
+ports/tomli_w/PORT.md lists (each edit is marked "Pystachy port:"). tomli-w is used under the MIT
+License, whose text and copyright notice ("Copyright (c) 2021 Taneli Hukkinen") are in
+ports/tomli_w/LICENSE. tests/port_tomli_w_values.py and tests/port_tomli_w_tables.py adapt cases
+of tomli-w's own tests (tests/test_style.py and tests/test_types.py of its repository at tag
+1.2.0), under the same license.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
