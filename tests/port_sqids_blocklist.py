@@ -45,6 +45,15 @@ print(Sqids().encode([63]), Sqids().encode([1]))
 s = Sqids(blocklist=["UKK", "Uk1", "1uk", "ñañ", "éé1", "ab", "XYZ1", "zz9z"])
 print(s.encode([63]), s.encode([1]), s.decode(s.encode([63])))
 
+# a word given twice or in other cases, which upstream's sets hold once and the port's lists
+# as often as given, and words of spaces or of nothing: the same ids
+plain62 = [Sqids(blocklist=[]).encode([n]) for n in range(70)]
+for bl in [["UKP", "ukp", "Ukp", "ukp"], ["bnn", "BNN", "gXZ", "gxz", "gxz"], ["", "   ", "a b"]]:
+    s = Sqids(blocklist=bl)
+    ids = [s.encode([n]) for n in range(70)]
+    print(bl, [(n, ids[n]) for n in range(70) if ids[n] != plain62[n]],
+          all(s.decode(ids[n]) == [n] for n in range(70)))
+
 # test_max_encoding_attempts, test_small_words_are_ignored
 s = Sqids("abc", 3, ["cab", "abc", "bca"])
 try:
@@ -55,15 +64,19 @@ print(Sqids().encode([0]), Sqids(blocklist=["bM"]).encode([0]))
 
 # ids the default blocklist blocks: a word at the start or the end (with a digit), a word
 # anywhere, two numbers; the same with the blocklist filtered by the constructor (a copy of
-# the default blocklist), and with a minimum length
+# the default blocklist, or the default alphabet as another str equal to it), and with a
+# minimum length
 blocked = [[21606], [152540], [15583], [125256], [3465, 42]]
+alphabet_copy = "".join(list(DEFAULT_ALPHABET))
 for min_length in [0, 8]:
     a = Sqids(min_length=min_length)
     b = Sqids(min_length=min_length, blocklist=list(DEFAULT_BLOCKLIST))
     c = Sqids(min_length=min_length, blocklist=[])
+    d = Sqids(alphabet_copy, min_length)
     for numbers in blocked:
         x = a.encode(numbers)
-        print(min_length, numbers, c.encode(numbers), x, x == b.encode(numbers), a.decode(x))
+        same = x == b.encode(numbers) and x == d.encode(numbers)
+        print(min_length, numbers, c.encode(numbers), x, same, a.decode(x))
 
 # test_round_trip.py's property: an id decodes to its numbers, and blocking it gives another
 # id that does too

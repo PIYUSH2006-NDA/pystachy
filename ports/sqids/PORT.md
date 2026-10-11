@@ -128,6 +128,10 @@ unions, so it needs nothing from M2 ([#7](https://github.com/den-run-ai/pystachy
 - A `min_length` that is not an `int`. For `"bogus"`, `{}` or `True`, CPython raises
   `TypeError: Minimum length must be an int` at run time, and Pystachy rejects the call at
   compile time (`expected int, got bool`).
+- `encode()` of a tuple or a `range`, which upstream's `Sequence[int]` takes. A Pystachy
+  `Sequence[int]` is a `list[int]` ([docs/language.md](../../docs/language.md)), so
+  `encode((1, 2, 3))` is a compile-time error (`expected list[int], got
+  tuple[int,int,int]`), and so is `encode([True, False])`, which CPython encodes as `[1, 0]`.
 - Reading the private fields from outside the class, as upstream's
   `test_alphabet_is_not_superset_of_blocklist_word_characters` does
   (`sqids._Sqids__blocklist_exact_match`). Pystachy does not mangle private names, so it
@@ -139,14 +143,19 @@ unions, so it needs nothing from M2 ([#7](https://github.com/den-run-ai/pystachy
 
 - **`int` is 64-bit** ([docs/language.md](../../docs/language.md#deviations-from-cpython)).
   `encode` takes numbers from 0 to `sys.maxsize` (2**63 - 1) as upstream does, and every id that
-  `encode` makes decodes back. Two of upstream's cases go further:
+  `encode` makes decodes back. Two cases go further:
   - Upstream's test of out-of-range numbers computes `sys.maxsize + 1`. Here that raises
     `OverflowError: integer result does not fit in 64 bits` before `encode` is called. In
     CPython, `encode` raises `ValueError: Encoding supports numbers between 0 and
     9223372036854775807`.
   - `decode` of a string that `encode` did not make can hold a chunk worth 2**63 or more. That
     raises the same `OverflowError` here: `Sqids().decode("Abcdefghijklmnopqrs")` is
-    `[318301136152884387737588878647]` in CPython.
+    `[318301136152884387737588878647]` in CPython. So does a chunk longer than `sys.maxsize`'s,
+    11 characters with the default alphabet, whatever it is worth, because `__to_number`
+    raises the alphabet's length to the power of each character's place:
+    `Sqids().decode("fFFFFFFFFFFF5")`, 11 characters that stand for zeros and a 7, is `[7]` in
+    CPython. A chunk of 11 characters or fewer that is worth less than 2**63 decodes as in
+    CPython.
 
   The tests keep to 64-bit numbers, with `-sys.maxsize - 1` as the negative edge.
 - **`str` is UTF-8 bytes.** sqids rejects an alphabet with a character above 127
@@ -169,13 +178,15 @@ unions, so it needs nothing from M2 ([#7](https://github.com/den-run-ai/pystachy
 - round trips of 11 numbers up to `sys.maxsize`, of `range(100)`, and of numbers at 2**62 and
   2**63 - 1;
 - the empty list, and strings that are not ids: `""`, `"*"`, a separator alone or first,
-  characters outside the alphabet, and a trailing newline;
+  characters outside the alphabet, a trailing newline, and chunks of 11 characters, the longest
+  that can decode here (the 64-bit deviation above);
 - the out-of-range errors;
 - minimum lengths 6 to 13 and 62 to 65, four of the 62-character vectors, five lists at each of
   six minimum lengths up to 255, and the errors for -1 and 256;
 - custom alphabets: hexadecimal; `abc`, also with a minimum length of 255; upstream's
-  92-character alphabet of letters, digits, punctuation and quotes; and one of control
-  characters. Five alphabets raise errors.
+  92-character alphabet of letters, digits, punctuation and quotes; one of control
+  characters; and all 128 ASCII characters, the longest alphabet. Seven alphabets raise
+  errors, two of them the 128 characters with one character twice (edit 3).
 
 `tests/port_sqids_blocklist.py` runs `tests/test_blocklist.py`, with lists where it passes sets:
 
@@ -185,9 +196,12 @@ unions, so it needs nothing from M2 ([#7](https://github.com/den-run-ai/pystachy
 - the filter, on a lowercase word in an uppercase alphabet, on words with characters outside
   the alphabet, and on words shorter than three characters;
 - the verifier's words: upper case, with digits, and non-ASCII;
+- words given twice or in other cases, which the lists of edit 5 hold as often as given, and
+  words of spaces or of nothing;
 - five ids that the default blocklist blocks, by a word at an end and by a word anywhere. Each
   is encoded with both ways of filtering the default blocklist: the filtered lists of edits 1
-  and 4, and edit 5's filter on a copy of `DEFAULT_BLOCKLIST`. They agree.
+  and 4, and edit 5's filter on a copy of `DEFAULT_BLOCKLIST` or with a copy of
+  `DEFAULT_ALPHABET`. They agree.
 - the property of `tests/test_round_trip.py`, which hypothesis checks on random inputs, on 40
   fixed ones: an id decodes to its numbers, and when an id of three characters or more is
   blocked, sqids makes another id that also decodes to them.
@@ -204,9 +218,9 @@ blocklist filtered both ways over 28,572 numbers.
 Each test takes about 0.19 s to run JIT. Its AOT build takes 3.2 s, and the executable then
 runs in under 0.01 s. In the gc-stress form, the compiler collects every 1,000 allocations
 (`PYSTACHY_GC_STRESS=1000`) and the program collects at every allocation
-(`PYSTACHY_GC_STRESS_PROGRAM=1`). There the JIT runs take 0.31 s and 0.32 s, and the AOT builds
-and runs take 3.4 s and 3.3 s: 3.7 s and 3.6 s per test in all. These are wall-clock medians of
-3, at a load average near 5 on this 4-core VM.
+(`PYSTACHY_GC_STRESS_PROGRAM=1`). There the JIT runs take 0.31 s and 0.36 s, and the AOT builds
+and runs take 3.5 s and 3.2 s: 3.8 s and 3.6 s per test in all. These are wall-clock medians of
+3 or 5, at a load average near 4 on this 4-core VM.
 
 ## Speed
 

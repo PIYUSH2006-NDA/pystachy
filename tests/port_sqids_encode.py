@@ -36,6 +36,9 @@ for numbers in [
 # alphabet, a newline at the end
 print(repr(sqids.encode([])), sqids.decode(""), sqids.decode("*"), sqids.decode("a*"))
 print(sqids.decode("Ab"), sqids.decode("AAAA"), sqids.decode("été"), sqids.decode("bM\n"))
+# a chunk of 11 characters, the most a 64-bit number takes: sys.maxsize's, and 10 characters
+# that stand for zeros before a 7 (a 12th character raises OverflowError here, PORT.md)
+print(sqids.decode("fRhxlG4QkEo5"), sqids.decode("fFFFFFFFFFF5"), sqids.encode([7]))
 
 # test_encode_out_of_range_numbers (sys.maxsize + 1 is not an int here: 64-bit ints)
 for numbers in [[-1], [sys.maxsize, -5], [1, 2, -sys.maxsize - 1]]:
@@ -96,3 +99,17 @@ for alphabet in ["ë1092", "aabcdefg", "ab", "abcdefa", "abcé"]:
         print("no error")
     except ValueError as e:
         print(repr(alphabet), "ValueError:", e)
+
+# the longest alphabet, all 128 ASCII characters, and the same with one of them twice (the
+# uniqueness check counts each character instead of making a set)
+ascii128 = "".join(chr(i) for i in range(128))
+s = Sqids(alphabet=ascii128, min_length=20)
+for numbers in [[0], [1, 2, 3], [sys.maxsize, 127, 128]]:
+    id_str = s.encode(numbers)
+    print(len(id_str), repr(id_str[:12]), s.decode(id_str))
+for alphabet in [ascii128 + "~", "\x00" + ascii128]:
+    try:
+        Sqids(alphabet=alphabet)
+        print("no error")
+    except ValueError as e:
+        print(len(alphabet), "ValueError:", e)

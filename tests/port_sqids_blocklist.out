@@ -16,6 +16,9 @@ BBC False [2]
 abab False [10]
 UkK Uk
 Gpk Uk [63]
+['UKP', 'ukp', 'Ukp', 'ukp'] [(61, 'GpL')] True
+['bnn', 'BNN', 'gXZ', 'gxz', 'gxz'] [(62, 'XMM'), (64, '6Vb')] True
+['', '   ', 'a b'] [] True
 ValueError: Reached max attempts to re-generate the ID
 bM bM
 0 [21606] M1st ZTAa True [21606]

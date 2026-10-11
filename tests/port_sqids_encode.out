@@ -35,6 +35,7 @@
 3 26 TtBzZ7eJ4WcJ1onLzOp2r7s8yY True
 '' [] [] []
 [8] [226980] [] []
+[9223372036854775807] [7] AX
 ValueError: Encoding supports numbers between 0 and 9223372036854775807
 ValueError: Encoding supports numbers between 0 and 9223372036854775807
 ValueError: Encoding supports numbers between 0 and 9223372036854775807
@@ -102,4 +103,9 @@ ValueError: Minimum length has to be between 0 and 255
 'ab' ValueError: Alphabet length must be at least 3
 'abcdefa' ValueError: Alphabet must contain unique characters
 'abcé' ValueError: Alphabet cannot contain multibyte characters
+20 '\x7f}\x00\x7f\x16Cpn\tghI' [0]
+20 '\x07DH[W \x05^jF\x07~' [1, 2, 3]
+20 '\x16\x01F P\x16\x16P F\x13k' [9223372036854775807, 127, 128]
+129 ValueError: Alphabet must contain unique characters
+129 ValueError: Alphabet must contain unique characters
 [exit 0]
