@@ -4,7 +4,8 @@ This is a minimally-edited copy of "sgp4io.cpp".
 
 """
 # Pystachy port: re and datetime are not Pystachy modules (#11). re only compiles INT_RE and
-# FLOAT_RE, which nothing uses; datetime only builds the legacy satrec.epoch (below).
+# FLOAT_RE, which nothing uses; datetime only builds the legacy satrec.epoch, and
+# _check_datetime() makes its checks (below).
 # import re
 # from datetime import datetime
 from math import pi, pow
@@ -100,6 +101,32 @@ with an N where each digit should go, followed by the line you provided:
 *    vallado, crawford, hujsak, kelso  2006
   --------------------------------------------------------------------------- */
 """
+
+# Pystachy port: the checks that datetime(year, month, day, hour, minute, second, microsecond)
+# makes, with its errors, for twoline2rv() below (datetime is not a Pystachy module, #11)
+def _check_datetime(year, month, day, hour, minute, second, microsecond):
+    for n in [year, month, day, hour, minute, second, microsecond]:  # each a C int
+        if n > 9223372036854775807 or n < -9223372036854775807 - 1:
+            raise OverflowError('Python int too large to convert to C long')
+        if n > 2147483647:
+            raise OverflowError('signed integer is greater than maximum')
+        if n < -2147483648:
+            raise OverflowError('signed integer is less than minimum')
+    if year < 1 or year > 9999:
+        raise ValueError('year %i is out of range' % year)
+    if month < 1 or month > 12:
+        raise ValueError('month must be in 1..12')
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    if day < 1 or day > [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]:
+        raise ValueError('day is out of range for month')
+    if hour < 0 or hour > 23:
+        raise ValueError('hour must be in 0..23')
+    if minute < 0 or minute > 59:
+        raise ValueError('minute must be in 0..59')
+    if second < 0 or second > 59:
+        raise ValueError('second must be in 0..59')
+    if microsecond < 0 or microsecond > 999999:
+        raise ValueError('microsecond must be in 0..999999')
 
 def twoline2rv(longstr1, longstr2, whichconst, opsmode='i', satrec=None):
     """Return a Satellite imported from two lines of TLE data.
@@ -234,17 +261,19 @@ def twoline2rv(longstr1, longstr2, whichconst, opsmode='i', satrec=None):
 
     satrec.epochyr = year
     satrec.jdsatepoch = jday(year,mon,day,hr,minute,sec);
-    # Pystachy port: the legacy satrec.epoch, a datetime (#11), is not set; Satrec.twoline2rv()
-    # deletes it.
-    # try:
-    #     satrec.epoch = datetime(year, mon, day, hr, minute, int(sec_whole),
-    #                             int(sec_fraction * 1000000.0 // 1.0))
-    # except ValueError:
-    #     # Sometimes a TLE says something like "2019 + 366.82137887 days"
-    #     # which would be December 32nd which causes a ValueError.
-    #     year, mon, day, hr, minute, sec = invjday(satrec.jdsatepoch)
-    #     satrec.epoch = datetime(year, mon, day, hr, minute, int(sec_whole),
-    #                             int(sec_fraction * 1000000.0 // 1.0))
+    try:
+        # Pystachy port: the legacy satrec.epoch, a datetime (#11), is not set (Satrec.twoline2rv()
+        # deletes it), but its date is checked as datetime() checks it, so that an epoch that
+        # datetime() rejects raises the same error
+        _check_datetime(year, mon, day, hr, minute, int(sec_whole),
+                        int(sec_fraction * 1000000.0 // 1.0))
+    except ValueError:
+        # Sometimes a TLE says something like "2019 + 366.82137887 days"
+        # which would be December 32nd which causes a ValueError.
+        year, mon, day, hr, minute, sec = invjday(satrec.jdsatepoch)
+        # Pystachy port: the same check, as above
+        _check_datetime(year, mon, day, hr, minute, int(sec_whole),
+                        int(sec_fraction * 1000000.0 // 1.0))
 
     #  ---------------- initialize the orbit at sgp4epoch -------------------
     sgp4init(whichconst, opsmode, satrec.satnum_str, satrec.jdsatepoch-2433281.5, satrec.bstar,

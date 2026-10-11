@@ -27,7 +27,7 @@ installed), `sgp4.api` falls back to the pure-Python modules ported here, and
 
 The other modules of the sdist are left out (below). The table counts the edits listed below
 once for each file they change, and each message of edits 17 and 18. Every edit is marked
-`# Pystachy port:` in the source, on each region it changes (38 places), and `diff -ru` against
+`# Pystachy port:` in the source, on each region it changes (40 places), and `diff -ru` against
 the sdist's `sgp4/` shows them all. The largest is one block of 125 annotated fields; the 2,069
 lines of SGP4 and SDP4 in `propagation.py` need 6 edits of a line or two each.
 
@@ -38,7 +38,8 @@ lines of SGP4 and SDP4 in `propagation.py` need 6 edits of a line or two each.
 
 1. `model.py`: `gravity_constants = wgs72old, wgs72, wgs84` is a list, which
    `Satrec.twoline2rv()` and `Satrec.sgp4init()` index with `whichconst` (`WGS72OLD`, `WGS72` or
-   `WGS84`, the ints 0 to 2).
+   `WGS84`, the ints 0 to 2). A `whichconst` out of range raises `IndexError: list index out of
+   range` where upstream's says `tuple`.
 2. `ext.py`, `rv2coe()`: `for i in range(0, 3): ebar[i] = (c1*r[i] - rdotv*v[i])/mu` is unrolled
    into three lines, as `r` and `v` are the tuples that `sgp4()` returns.
 
@@ -60,6 +61,8 @@ lines of SGP4 and SDP4 in `propagation.py` need 6 edits of a line or two each.
    annotated (`parameter 'line1' of method twoline2rv() has no type annotation`), and the results
    of `twoline2rv()` (`'Satrec'`), `sgp4()` and `sgp4_tsince()` (`tuple[int, tuple[float, float,
    float], tuple[float, float, float]]`): a method without a return annotation returns `None`.
+   Where they take a `float`, an `int` argument is a compile-time error (`sat.sgp4(2458827, 0)`:
+   `expected float, got int`), which upstream would accept.
 8. `model.py`: `sgp4_array()`, which takes NumPy arrays and builds its results with
    `numpy.array`, is commented out: unannotated, it makes the class unsupported (edit 7), and
    annotated, it would be compiled, with its `from numpy import array` and `self.array`.
@@ -78,7 +81,9 @@ variable, a field or a list that holds values of two types in CPython.
     in `satrec.ephtype` and `satrec.revnum`, and `Satrec.twoline2rv()` converts both to ints as
     soon as it returns. The port keeps the text in two locals and makes the same conversions,
     with the same expressions, at the end of `io.twoline2rv()`: after `sgp4init()`, as upstream,
-    so that a field that is not a number raises the same `ValueError` at the same point.
+    so that a field that is not a number raises the same `ValueError` at the same point. Called
+    directly with a `Satrec`, `io.twoline2rv()` therefore leaves ints in the two fields where
+    upstream's leaves the text.
 12. `io.py`: the legacy default `if satrec is None: satrec = Satellite()` is left out: `satrec`
     would be a `Satrec` or a `Satellite`, whose unannotated `propagate()` does not compile (M2).
     `Satrec.twoline2rv()` always passes its `Satrec`.
@@ -110,16 +115,21 @@ variable, a field or a list that holds values of two types in CPython.
 
 19. `earth_gravity.py`: `EarthGravity = namedtuple('EarthGravity', 'tumin mu radiusearthkm xke
     j2 j3 j4 j3oj2')` is the same tuple as a `typing.NamedTuple` class with eight float fields
-    (the same fields, indexing and `repr()`).
+    (the same fields, indexing, unpacking, `==` and `repr()`). Pystachy does not compile a slice
+    of it, `hash()`, `tuple()` or its `index()` and `count()`, which nothing in sgp4 uses.
 20. `io.py`: `import re` is commented out with the two regular expressions it compiles,
     `INT_RE` and `FLOAT_RE`, which nothing uses.
-21. `io.py` and `model.py`: `from datetime import datetime` is commented out with the block of
-    `io.twoline2rv()` that sets the legacy `satrec.epoch` to a `datetime`, and so is
-    `Satrec.twoline2rv()`'s `del self.epoch`, which deletes it as soon as `io.twoline2rv()`
-    returns: a `Satrec` never has it, upstream or here. The block catches the `ValueError` of
-    a date such as day 366 of a common year and tries again with `invjday()`'s date, which
-    raised for none of 1.2 million epochs that a TLE can give (every two-digit year, days 0 to
-    999.99999999), so leaving it out changes nothing else.
+21. `io.py` and `model.py`: `from datetime import datetime` is commented out, and so is
+    `Satrec.twoline2rv()`'s `del self.epoch`: `io.twoline2rv()` does not set the legacy
+    `satrec.epoch`, a `datetime`, which `Satrec.twoline2rv()` deletes as soon as it returns. The
+    block that set it stays, with its `try`: it catches the `ValueError` of a date such as day
+    366 of a common year and tries again with `invjday()`'s date, and its two `datetime(year,
+    mon, ...)` calls become `_check_datetime(year, mon, ...)`, a new function that makes the
+    checks `datetime()` makes of its seven ints, with its errors (`OverflowError` beyond a C
+    `int`, `ValueError` out of range: 300,000 random and boundary cases raise what `datetime()`
+    raises). `float()` reads an epoch field that no TLE writes but the format check lets through,
+    such as `999.99e+5` days, and upstream rejects its date (`ValueError: year 274990 is out of
+    range`, with the ISS's other fields): so does the port.
 
 ## What compiles as it is
 
@@ -159,7 +169,9 @@ variable, a field or a list that holds values of two types in CPython.
   (M7). `twoline2rv()` does not check the checksums.
 - `__slots__`'s lock-down: under CPython, the port's `Satrec` takes an attribute that is not one
   of its fields (`sat.no_kozia = 0.06`), where upstream's raises `AttributeError`; Pystachy
-  rejects it at compile time (`'sgp4.model.Satrec' object has no attribute 'no_kozia'`).
+  rejects it at compile time (`'sgp4.model.Satrec' object has no attribute 'no_kozia'`). A field
+  read before anything sets it (`Satrec().error`) raises `AttributeError` in both, but the
+  message names the class `'Satrec'` where upstream's slot names `'sgp4.model.Satrec'`.
 
 ## Deviations it hits
 
@@ -169,9 +181,17 @@ variable, a field or a list that holds values of two types in CPython.
   CPython goes on with a big int. `days2mdhms(2000, 1e16)` is
   `(327868852459017, 12, 0, 0, 0.0)` in CPython, and `invjday(1e22)` is
   `(27378507871321007979, 0, 30, 0, 0, -8.64e-07)`. A TLE's epoch is less than 1,000 days into
-  its year; the tests go up to `days2mdhms(2024, 366.99999999999)`, `invjday(1e9)` and times of
-  `1e15` minutes and `2**62` days from the epoch (floats, which give error 1 or NaN), and agree
+  its year, unless its field is written with an exponent: an epoch of `999.9999e+15` days raises
+  `OverflowError` in both, but Pystachy's message is its own. The tests go up to
+  `days2mdhms(2024, 366.99999999999)`, `invjday(1e9)`, an epoch of `999.9999e+9` days and times
+  of `1e15` minutes and `2**62` days from the epoch (floats, which give error 1 or NaN), and agree
   with CPython there.
+- **A negative float to a fractional power is a `ValueError`**
+  ([docs/language.md](../../docs/language.md#deviations-from-cpython)), where CPython returns a
+  complex. A negative mean motion, from `sgp4init()` or a TLE whose field reads `-5.50103472`,
+  makes `_initl()`'s `pow(xke / no, x2o3)` a complex in CPython, which then raises `TypeError:
+  '<' not supported between instances of 'complex' and 'float'`; Pystachy raises `ValueError: a
+  negative number to a fractional power has a complex result (not supported)` at the `pow()`.
 - **`str` is UTF-8 bytes** ([docs/language.md](../../docs/language.md#deviations-from-cpython)).
   `twoline2rv()` rejects a line with any non-ASCII character before it measures or indexes it,
   so it reads the same columns as CPython, and its message, which shows the lines with `repr()`,
@@ -187,19 +207,21 @@ variable, a field or a list that holds values of two types in CPython.
 satellites of `SGP4-VER.TLE`, 16 of the 700 lines that Vallado's C++ SGP4 wrote to
 `tcppver.out`, which it embeds, and 2 of the 7 errors that `tests.py` expects: 00005 (SGP4),
 08195 (SDP4, a Molniya orbit in 12-hour resonance), 28626 (SDP4, geosynchronous), 28872 (SGP4
-with a low perigee, which decays: error 6 at 55 minutes) and 33334 (error 3 at its epoch). It prints each line it computes with
-`Satrec.twoline2rv()`, `Satrec.sgp4(jd, fr)`, `invjday()` and `rv2coe()`, and compares it with
-the official one as the suite does: positions and velocities to 2e-7, the other fields as text.
+with a low perigee, which decays: error 6 at 55 minutes) and 33334 (error 3 at its epoch). It
+prints each line it computes with `Satrec.twoline2rv()`, `Satrec.sgp4(jd, fr)`, `invjday()` and
+`rv2coe()`, and compares it with the official one as the suite does: positions and velocities to
+2e-7, the other fields as text.
 `tests/port_sgp4_api.py` runs the cases of an evaluation of the port and of an independent check
 of it: the fields of the ISS's TLE, `sgp4(jd, fr)` and `sgp4_tsince()`, the three gravity
 models, times far from the epoch (error 1, NaN), a satellite that decays (`SGP4_ERRORS`),
 `Satrec.sgp4init()` in both operation modes, Alpha-5 numbers up to 339999 and the
 `ValueError` beyond, malformed TLEs with their complete messages (braces in a line, short and
 empty lines, mismatched satellite numbers, non-ASCII characters, a revnum or an ephtype that is
-not a number), `jday()`, `days2mdhms()` and `invjday()` at the edges, and `rv2coe()` on
-degenerate orbits; it ends with a `ValueError` that nothing catches. `tests/run.sh` compares what
-they print with CPython's, JIT and AOT. Run under CPython against the unmodified upstream package,
-both print exactly what they print against this port.
+not a number), epoch fields that `datetime()` rejects (edit 21), `jday()`, `days2mdhms()` and
+`invjday()` at the edges, and `rv2coe()` on degenerate orbits; it ends with a `ValueError` that
+nothing catches. `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under
+CPython against the unmodified upstream package, both print exactly what they print against this
+port.
 
 Outside the tests, the evaluation's program for the whole verification regenerates all 700 lines
 of `tcppver.out` from `SGP4-VER.TLE` with this port: 0 mismatches, the errors `[1, 1, 6, 6, 4,
@@ -214,17 +236,16 @@ load of 11 to 18.
 The headline workload, the evaluation's: the ISS (SGP4) and a Molniya orbit (08195, SDP4)
 propagated every second for 3 days with `Satrec.sgp4(jd, fr)`, 518,400 propagations, summing
 the positions (the same sum in both). Wall clock with process start-up, and the CPU time (user
-+ system), median of 3 runs, on a 4-core x86-64 VM that was running other jobs (a load average
++ system), median of 5 runs, on a 4-core x86-64 VM that was running other jobs (a load average
 of 10 to 13):
 
 | | wall clock | CPU time |
 |---|---:|---:|
-| Pystachy AOT executable, this port | 0.533 s | 0.356 s |
-| CPython 3.13.16, unmodified sgp4 2.27 (pure Python) | 4.388 s | 3.062 s |
+| Pystachy AOT executable, this port | 0.439 s | 0.355 s |
+| CPython 3.13.16, unmodified sgp4 2.27 (pure Python) | 3.557 s | 3.007 s |
 
-That is 8.2 times faster (8.6 in CPU time); a second set of runs gave 0.489 s and 3.513 s (7.2
-times; CPU time 0.355 s and 3.022 s, 8.5 times), and the evaluation of the port, on the same VM
-two days before, 0.352 s and 3.033 s (8.6 times). CPython runs sgp4's pure-Python modules here,
-as it does where the C++ extension is missing; with the extension of sgp4's wheels
-(`accelerated` is `True`), CPython propagates with Vallado's compiled C++ code instead, which
-this does not compare.
+That is 8.1 times faster (8.5 in CPU time); earlier sets of runs gave 7.2 to 8.2 times (8.5 to
+8.6 in CPU time), and the evaluation of the port, on the same VM two days before, 0.352 s and
+3.033 s (8.6 times). CPython runs sgp4's pure-Python modules here, as it does where the C++
+extension is missing; with the extension of sgp4's wheels (`accelerated` is `True`), CPython
+propagates with Vallado's compiled C++ code instead, which this does not compare.

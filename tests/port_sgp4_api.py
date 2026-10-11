@@ -2,7 +2,8 @@
 # an evaluation of the port and of an independent check of it: a TLE's fields, propagation by
 # Julian date and by minutes since the epoch, the three gravity models, Satrec.sgp4init() in both
 # operation modes, Alpha-5 satellite numbers, malformed and non-ASCII TLEs, times far from the
-# epoch, and rv2coe() on degenerate orbits. It ends with an error that nothing catches.
+# epoch, epoch fields that datetime() rejects, and rv2coe() on degenerate orbits. It ends with an
+# error that nothing catches.
 from sgp4.alpha5 import from_alpha5, to_alpha5
 from sgp4.api import SGP4_ERRORS, WGS72, WGS72OLD, WGS84, Satrec, accelerated, days2mdhms, jday
 from sgp4.earth_gravity import wgs72, wgs84
@@ -71,6 +72,16 @@ for l1, l2 in [(s[:60] + '{0}{1}', t), (s, t[:50] + '{2}'), (s[:40], t), ('', ''
         print("parsed", x.revnum, x.ephtype)
     except ValueError as ex:
         print("ValueError:", ex)
+
+# epoch fields that float() reads but no TLE writes (negative, an exponent, an infinity): the
+# checks datetime() makes of the legacy epoch's date reject the dates it cannot hold
+for f in ['-99.99999999', '999.99e+5   ', '-99.9e+4    ', '999.9999e+9 ', '-99.999e+9  ',
+          '999.9999e999']:
+    try:
+        x = Satrec.twoline2rv(s[:20] + f + s[32:], t)
+        print(repr(f), x.epochyr, repr(x.epochdays), repr(x.jdsatepoch), repr(x.jdsatepochF))
+    except (ValueError, OverflowError) as ex:
+        print(repr(f), type(ex).__name__ + ":", ex)
 
 # dates
 print(jday(-4712, 1, 1, 12, 0, 0), jday(9999, 12, 31, 23, 59, 59.999999))

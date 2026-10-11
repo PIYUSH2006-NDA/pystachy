@@ -79,6 +79,12 @@ ValueError: your TLE lines are broken because they contain non-ASCII characters:
 ValueError: invalid literal for int() with base 10: 'ABCDE'
 ValueError: invalid literal for int() with base 10: 'X'
 parsed 7 0
+'-99.99999999' 19 -99.99999999 2458383.5 1e-08
+'999.99e+5   ' ValueError: year 274990 is out of range
+'-99.9e+4    ' ValueError: year -709 is out of range
+'999.9999e+9 ' OverflowError: signed integer is greater than maximum
+'-99.999e+9  ' OverflowError: signed integer is less than minimum
+'999.9999e999' ValueError: cannot convert float NaN to integer
 (-13.5, 0.5) (5373543.5, 0.999999999988426)
 (1, 1, 0, 0, 0.0) (2, 1, 0, 0, 0.0) (12, 31, 0, 0, 0.0)
 (12, 31, 23, 59, 59.999999) (0, 30, 0, 0, 0.0) (0, 30, 0, 0, 8.639999999999999e-08)
