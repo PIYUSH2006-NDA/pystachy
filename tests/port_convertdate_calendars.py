@@ -162,6 +162,18 @@ def weekdays(jd0):  # a float Julian day gives floats, an int one ints
 weekdays(2460000.5)
 weekdays(2460000)
 
+# int Julian days, as upstream's own tests pass them (ranges of ints): julian, hebrew, islamic and
+# indian_civil rebind jd to a float, which the port does under another name (PORT.md)
+for ij in range(113957, 1574957, 182500):
+    j = julian.from_jd(ij)
+    print(ij, j, julianday.to_julian(ij), julian.to_jd(j[0], j[1], j[2]))
+for ij in range(2159677, 2488395, 32000):
+    h = hebrew.from_jd(ij)
+    i = islamic.from_jd(ij)
+    n = indian_civil.from_jd(ij)
+    print(ij, h, i, n, hebrew.to_jd(h[0], h[1], h[2]), islamic.to_jd(i[0], i[1], i[2]),
+          indian_civil.to_jd(n[0], n[1], n[2]), julian.from_jd(ij))
+
 
 # error paths
 try:

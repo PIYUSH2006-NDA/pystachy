@@ -63,8 +63,9 @@ def legal_date(year, month, day):
 
 def from_jd(jd):
     '''Calculate Julian calendar date from Julian day'''
-    jd += 0.5
-    a = floor(jd)
+    # Pystachy port: floor(jd + 0.5) for jd += 0.5 and floor(jd): a parameter keeps its argument's
+    # type, an int for an int Julian day (M4, #9)
+    a = floor(jd + 0.5)
     b = a + 1524
     c = floor((b - 122.1) / 365.25)
     d = floor(365.25 * c)

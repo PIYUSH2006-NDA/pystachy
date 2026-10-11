@@ -163,25 +163,27 @@ def to_jd(year, month, day) -> float:  # Pystachy port: annotated, as year_days 
 
 
 def from_jd(jd):
-    jd = floor(jd) + 0.5
-    count = floor(((jd - EPOCH) * 98496.0) / 35975351.0)
+    # Pystachy port: wjd for the rebound jd, as a parameter keeps its argument's type, an int for an
+    # int Julian day (M4, #9)
+    wjd = floor(jd) + 0.5
+    count = floor(((wjd - EPOCH) * 98496.0) / 35975351.0)
     year = count - 1
     i = count
-    while jd >= to_jd(i, TISHRI, 1):
+    while wjd >= to_jd(i, TISHRI, 1):
         i += 1
         year += 1
 
-    if jd < to_jd(year, NISAN, 1):
+    if wjd < to_jd(year, NISAN, 1):
         first = 7
     else:
         first = 1
 
     month = i = first
-    while jd > to_jd(year, i, month_days(year, i)):
+    while wjd > to_jd(year, i, month_days(year, i)):
         i += 1
         month += 1
 
-    day = int(jd - to_jd(year, month, 1)) + 1
+    day = int(wjd - to_jd(year, month, 1)) + 1
     return (year, month, day)
 
 

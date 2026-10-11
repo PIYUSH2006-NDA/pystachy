@@ -89,6 +89,11 @@ IndexError: Nth day of month must be 0-5. Received: -1
 IndexError: No 5th day of month 2
 IndexError: bad month number 13; must be 1-12
 IndexError: bad month number 0; must be 1-12
+(2023.0, 1, 1) (2022.0, 12, 25) (2021.0, 7, 4)
+TypeError: 'float' object cannot be interpreted as an integer
+TypeError: 'float' object cannot be interpreted as an integer
+TypeError: 'float' object cannot be interpreted as an integer
+TypeError: 'float' object cannot be interpreted as an integer
 ValueError: Unknown value for 'church'
 NotImplementedError: Unsupported argument for country
 DeprecationWarning: columbus_day will be removed in a future release, use indigenous_peoples_day instead

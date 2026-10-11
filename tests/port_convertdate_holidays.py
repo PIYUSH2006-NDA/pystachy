@@ -2,7 +2,7 @@
 # years, Easter in the three churches over many years, utils.nth_day_of_month, and the weekdays
 # of the calendar stand-in, also for years outside 1..9999.
 import convertdate
-from convertdate import holidays, utils
+from convertdate import gregorian, holidays, utils
 
 print("convertdate", convertdate.__version__)
 for y in (1939, 1940, 1941, 1999, 2000, 2021, 2022, 2023, 2024, 2100):
@@ -63,6 +63,25 @@ for n, wd, mo in ((5, 3, 4), (6, 2, 4), (1, 7, 4), (-1, 0, 4), (5, 6, 2), (1, 0,
         print(utils.nth_day_of_month(n, wd, mo, 2014))
     except IndexError as e:  # also CPython's calendar.IllegalMonthError, for months 13 and 0
         print("IndexError:", e)
+# a float year: calendar.weekday builds a datetime.date, which takes ints only; without the
+# observed day, the year passes through
+print(holidays.new_years(2023.0), holidays.christmas(2022.0), holidays.independence_day(2021.0))
+try:
+    holidays.new_years(2023.0, True)
+except TypeError as e:
+    print("TypeError:", e)
+try:
+    holidays.thanksgiving(2024.0)
+except TypeError as e:
+    print("TypeError:", e)
+try:
+    utils.nth_day_of_month(1, 0, 2, 2024.0)
+except TypeError as e:
+    print("TypeError:", e)
+try:
+    gregorian.month_length(2024.0, 2)
+except TypeError as e:
+    print("TypeError:", e)
 try:
     holidays.easter(2024, "coptic")
 except ValueError as e:

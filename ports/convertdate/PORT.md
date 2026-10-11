@@ -22,12 +22,12 @@ the sdist's).
 | `coptic.py` | `708c59f6ded28f4203e13c673ab9eede2f37df8370c3133e05f3a2b7d27443a2` | none |
 | `daycount.py` | `4a27c7e2fd2c0a95187364fd3b535ea622d1671bee08da55fbfbf7a3d1880b32` | none |
 | `gregorian.py` | `5d64d4f49fc4136226de04f6e743989aaaad05d86ba90fb7a7d8d16417a343f4` | 3 |
-| `hebrew.py` | `bb313d4fc99844a0dd86d4330cb155d59a606ca012acb4a1d02ef53047d7b3b9` | 6 |
+| `hebrew.py` | `bb313d4fc99844a0dd86d4330cb155d59a606ca012acb4a1d02ef53047d7b3b9` | 7 |
 | `holidays.py` | `a41e4a1e52bf094413fb3a95ff391be715a9a2c2bb6276ff97303aa357ec4e93` | 3 |
-| `indian_civil.py` | `a552ddac630ff4414d1251c8e1b4b5dee1ac445bff6c50f28dea9da7f344d16e` | 1 |
-| `islamic.py` | `07ed8f5cebab7eda274153f28f32fc572469444fcf71e28f2d4ef41303813871` | none |
+| `indian_civil.py` | `a552ddac630ff4414d1251c8e1b4b5dee1ac445bff6c50f28dea9da7f344d16e` | 2 |
+| `islamic.py` | `07ed8f5cebab7eda274153f28f32fc572469444fcf71e28f2d4ef41303813871` | 1 |
 | `iso.py` | `e0275328f1b3c3f59236b28d17cfc18a8336d2c0aff117bfbde1384d50c3ac9c` | 2 |
-| `julian.py` | `7d80a2e7d892d2227f19b525e925c639b35eb0cefffdc411c667b9a38c2f1897` | 2 |
+| `julian.py` | `7d80a2e7d892d2227f19b525e925c639b35eb0cefffdc411c667b9a38c2f1897` | 3 |
 | `julianday.py` | `46eb3e618a0e5932acfe32b3861a95f9c354c19e9bd85d49943ae1c9902bbd0a` | 1 |
 | `mayan.py` | `c27e20a1352832aec78172fb2d8b1c10b7be6e65868ddc6c70a9f9f97654e02d` | 1 |
 | `ordinal.py` | `3d0edd000322c4bd5dea6227b51f7618955352117eb2fe047ca63914bd558008` | 1 |
@@ -37,7 +37,7 @@ the sdist's).
 | `data/positivist.py` | `1008b71b7ce4d8f910dbb5ac075a100d6f7f9ff145a0b41496c49a1a8fb87df2` | none |
 | `_calendar.py` | not convertdate's: the stand-in for `calendar` below | |
 
-That is 33 edits in 13 files, most of them one line; every edit is marked `# Pystachy port:` in
+That is 37 edits in 14 files, most of them one line; every edit is marked `# Pystachy port:` in
 the source, and `diff -ru convertdate-2.5.1/src/convertdate ports/convertdate` shows them all.
 The package leaves out `bahai.py`, `french_republican.py`, `persian.py` and `dublin.py` (below)
 and `data/french_republican_days.py`, which only `french_republican` reads; the rest of the
@@ -60,7 +60,13 @@ and `itertools`.
    changes:
    - `weekday()` counts the days with `_ymd2ord` instead of building a `datetime.date`, and
      returns an `int` where CPython returns a `calendar.Day`, an `IntEnum` equal to it;
-     convertdate only computes with it (`weekday == SAT`, `(weekday - firstday) % 7`).
+     convertdate only computes with it (`weekday == SAT`, `(weekday - firstday) % 7`). It first
+     checks its arguments as `datetime.date()` does, with the messages of CPython's C
+     `_datetime`, so that a float year raises `TypeError: 'float' object cannot be interpreted
+     as an integer` as in CPython: `holidays.thanksgiving(2024.0)`, `holidays.new_years(2023.0,
+     True)`, `utils.nth_day_of_month(1, 0, 2, 2024.0)` and `gregorian.month_length(2024.0, 2)`
+     (without the checks, they returned dates such as `(2024.0, 11, 28.0)`). Its result is
+     annotated `-> int`, as a call with a float year always raises.
    - `FEBRUARY` is 2 instead of `calendar.Month.FEBRUARY`, an `IntEnum` equal to 2.
    - `IllegalMonthError` derives from `IndexError` alone. CPython 3.13's derives from
      `ValueError` and `IndexError`, and an exception class takes one base until M2
@@ -87,7 +93,7 @@ warnings that `__main__` causes) and the port prints nothing; called from conver
 eastern church; the port unpacks the tuple into `jy, jm, jd` first. Star arguments in calls are
 #8's `f(*args)`.
 
-**M4, dynamic values ([#9](https://github.com/den-run-ai/pystachy/issues/9)), 5 edits.** Each
+**M4, dynamic values ([#9](https://github.com/den-run-ai/pystachy/issues/9)), 9 edits.** Each
 one is a variable or a list that holds values of two types in CPython, where Pystachy gives it
 one type.
 
@@ -111,6 +117,14 @@ one type.
    `None`, the days, and 7 times `None`.
 5. `hebrew.to_jd_gregorianyear()`: `jd` is a float, then `None` (`jd = None` in the loop), so
    the port declares `jd: float | None = None` before the loop.
+6. to 9. `julian.from_jd()`, `hebrew.from_jd()`, `islamic.from_jd()` and
+   `indian_civil.from_jd()` rebind their parameter to a float (`jd += 0.5`, `jd = floor(jd) +
+   0.5`), and a parameter keeps the type of its argument: an int Julian day, which upstream's
+   own tests pass (`range(113957, 1574957, 365)`, `range(2159677, 2488395, 2000)`), was rejected
+   (`expected int, got float`), and with it `julianday.to_julian()` of an int. `julian` takes
+   `floor(jd + 0.5)` at once; the other three name the float `wjd` (the name
+   `gregorian.from_jd()` gives it), 3 to 6 lines each. The values and their types are
+   unchanged, for an int and a float Julian day.
 
 **M7, the long tail ([#12](https://github.com/den-run-ai/pystachy/issues/12)), 6 edits.** The
 error messages built with `str.format()` become f-strings, with the same text (both call
@@ -141,7 +155,7 @@ package's `from . import (...)`; `__all__` still names them.
 
 ## What compiles as it is
 
-`coptic.py`, `islamic.py`, `daycount.py` and `data/` are unmodified, and the rest compiles
+`coptic.py`, `daycount.py` and `data/` are unmodified, and the rest compiles
 around the edits: unannotated functions everywhere, each a template compiled for the types of
 each call (a Julian day count may be an `int` or a `float`); `math.floor`, `ceil` and `trunc`
 returning ints; ints and floats mixed in arithmetic and compared; tuples of three ints as
@@ -183,12 +197,26 @@ compiles and runs as under CPython.
   `jd = jd = 1` (meant as `jd - 1`) rebinds the float `jd` to the int 1, which is rejected
   (`expected float, got int`, M4); CPython returns `gregorian.from_jd(1)`, `(-4713, 11, 25)`,
   whatever the year. Without `eve`, the four compile.
+- A float where convertdate takes an int, in five places where CPython computes with it, as a
+  value would have two types (M4, [#9](https://github.com/den-run-ai/pystachy/issues/9)):
+  `holidays.easter(2024.0)` (the western church's date has the float year, the Julian churches'
+  ints), a float month in `indian_civil.to_jd()`, `to_gregorian()` and `monthcalendar()`
+  (`min(month - 2, 5)` is an int or a float), a float month or day in `positivist.festival()`
+  (the dict's keys are pairs of ints), a float `b` in `utils.amod()` (`b if modded == 0 else
+  modded`) and a float `n` in `utils.nth_day_of_month()` (`n = 5`). Where CPython raises
+  `TypeError` for a float (a float month in `hebrew`, `gregorian.month_length()` or
+  `utils.nth_day_of_month()`, or in the arguments of `utils.monthcalendarhelper()`), the port
+  rejects it at compile time; a float year, which CPython takes up to `calendar.weekday()`,
+  raises the same `TypeError` (above).
 
 Two behaviours differ, because of the edits: `IllegalMonthError` is no `ValueError`, so
 `gregorian.month_length(2023, 13)` inside `try`/`except ValueError` stops the program with
 `convertdate._calendar.IllegalMonthError: bad month number 13; must be 1-12`, where CPython
-catches it (up to 3.11, its `IllegalMonthError` was a `ValueError` alone); and `month_days()`
-warns no more.
+catches it. Up to 3.12, CPython's `IllegalMonthError` was a `ValueError` alone (3.13 added
+`IndexError`), and the `month_length()` of `hebrew`, `coptic` and `armenian` raise `ValueError`
+for a month past their last, so `except ValueError` is the clause a program written for
+convertdate is the more likely to have; exception classes of two bases (M2, #7) will give it
+both again. And `month_days()` warns no more.
 
 ## Deviations it hits
 
@@ -224,16 +252,19 @@ year 1 to 2999 through seven, and Armenian (in both methods) and Positivist from
 (0 mismatches). It prints month lengths, leap years and month calendars of seven calendars,
 the Mayan haab and tzolk'in, ISO weeks (years of 52 and 53), ordinal dates, `julianday`, the
 weekday helpers of `utils` with a float and an int Julian day (the verifier's `n_weeks()` case:
-an int stays an int), and 14 error paths, among them a bad month caught by `except IndexError`
-and `except LookupError` (the verifier's `IllegalMonthError` case).
+an int stays an int), int Julian days through `julian`, `hebrew`, `islamic` and `indian_civil`
+(M4's edits 6 to 9) and `julianday.to_julian()`, and 14 error paths, among them a bad month
+caught by `except IndexError` and `except LookupError` (the verifier's `IllegalMonthError` case).
 
 `tests/port_convertdate_holidays.py` prints every holiday function for 10 years (1939 to 1941,
 when US Thanksgiving moved, and 7 years from 1999 to 2100), with `observed=True`, `eve=True` and
 the Canadian and Mexican variants; Easter in the three churches every third year from 1 to 2998;
 observed holidays of years outside 1..9999, which `calendar.weekday` counts modulo 400;
 `utils.nth_day_of_month()` with the last weekday (`n=0`) and 7 calls that raise `IndexError`;
-and the `ValueError`, `NotImplementedError` and `DeprecationWarning` that `easter()`,
-`thanksgiving()` and `columbus_day()` raise.
+a float year, which `new_years(2023.0)` keeps and with which `new_years(2023.0, True)`,
+`thanksgiving(2024.0)`, `utils.nth_day_of_month()` and `gregorian.month_length()` raise
+`TypeError` from `calendar.weekday()`; and the `ValueError`, `NotImplementedError` and
+`DeprecationWarning` that `easter()`, `thanksgiving()` and `columbus_day()` raise.
 
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package (with PyMeeus 0.5.12 on the path, as its `__init__.py` imports
@@ -252,11 +283,12 @@ Wall clock with process start-up, and the CPU time (user + system), median of 3 
 
 | | wall clock | CPU time |
 |---|---:|---:|
-| Pystachy AOT executable, this port | 0.231 s | 0.203 s |
-| CPython 3.13.16, unmodified convertdate 2.5.1 | 6.140 s | 5.149 s |
+| Pystachy AOT executable, this port | 0.211 s | 0.210 s |
+| CPython 3.13.16, unmodified convertdate 2.5.1 | 5.241 s | 5.200 s |
 
-That is 26.6 times faster (25.4 in CPU time); a second set of runs, at a load average of 9,
-gave 0.254 s and 6.184 s (24.3 times; CPU time 0.208 s and 5.038 s, 24.2 times), and the
-evaluation of the port, on the same VM two days before, 0.212 s and 4.940 s (23 times).
+That is 24.8 times faster (24.8 in CPU time). Two more sets of runs, at load averages of 3 to 4,
+gave 0.220 s and 5.176 s (23.5 times) and 0.213 s and 5.089 s (23.9 times); runs of the port
+before M4's edits 6 to 9, at load averages of 4 to 9, gave 24 to 27 times, and the evaluation of
+the port, on the same VM two days before, 0.212 s and 4.940 s (23 times).
 convertdate has no C extension, so CPython runs it in the interpreter; about 0.1 s of CPython's
 time is the import of convertdate and PyMeeus.

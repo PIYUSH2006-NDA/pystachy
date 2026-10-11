@@ -56,7 +56,8 @@ module, copies functions and constants of CPython 3.13.16's Lib/calendar.py and 
 which are part of Python and are used under the Python Software Foundation License Version 2,
 reproduced below. Summary of the changes made to them (clause 3 of the license): IllegalMonthError
 derives from IndexError alone and its methods are annotated, FEBRUARY is the int 2, and weekday()
-counts the days with _pydatetime's _ymd2ord instead of building a datetime.date, and returns an int.
+checks its arguments as datetime.date() does, counts the days with _pydatetime's _ymd2ord instead
+of building a datetime.date, and returns an int.
 
 CPython's list sort (runtime.c)
 -------------------------------

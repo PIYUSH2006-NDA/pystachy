@@ -10,7 +10,10 @@
 # - FEBRUARY is 2, not calendar.Month.FEBRUARY, an IntEnum equal to 2.
 # - weekday() counts the days with _pydatetime's _ymd2ord (below) instead of building a
 #   datetime.date (#11), and returns an int where CPython returns a calendar.Day, an IntEnum equal
-#   to it (convertdate only computes with it).
+#   to it (convertdate only computes with it). It first checks its arguments as datetime.date()
+#   does, with the messages of CPython's C _datetime, so that a float year
+#   (holidays.thanksgiving(2024.0), gregorian.month_length(2024.0, 2)) raises TypeError as in
+#   CPython; its result is annotated, as a call with a float always raises.
 
 # Lib/calendar.py
 
@@ -32,10 +35,17 @@ def isleap(year):
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 
-def weekday(year, month, day):
+def weekday(year, month, day) -> int:
     """Return weekday (0-6 ~ Mon-Sun) for year, month (1-12), day (1-31)."""
     if not MINYEAR <= year <= MAXYEAR:
         year = 2000 + year % 400
+    # what datetime.date(year, month, day) checks
+    if not isinstance(year, int) or not isinstance(month, int) or not isinstance(day, int):
+        raise TypeError("'float' object cannot be interpreted as an integer")
+    if not 1 <= month <= 12:
+        raise ValueError("month must be in 1..12")
+    if not 1 <= day <= _days_in_month(year, month):
+        raise ValueError("day is out of range for month")
     return (_ymd2ord(year, month, day) + 6) % 7
 
 
