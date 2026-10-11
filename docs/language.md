@@ -402,7 +402,9 @@ their own methods, as CPython calls them: lists and tuples compare their items w
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
 `__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
 
-The container protocol is resolved statically too: `o[k]` calls `__getitem__`, `o[k] = v`
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls
+`__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
+a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
 `__iter__` steps through. An `__iter__` annotated `-> Iterator[T]` (or `Iterable[T]`) that
@@ -411,8 +413,9 @@ list's iterator does, wherever the object is iterated: `for` loops, comprehensio
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
 `str.join()` and `list.extend()`; `list()`, `sorted()` and `list.extend()` then call its
 `__len__`, if it has one, as CPython's length hint. A method the operation needs and the class
-does not define is an error with CPython's message (`'C' object is not subscriptable`), and an
-object that is `None` raises CPython's error when it runs.
+does not define is an error with CPython's message (`'C' object is not subscriptable`,
+`'C' object is not callable`), and an object that is `None` raises CPython's error when it
+runs.
 
 ## Builtins and library modules
 

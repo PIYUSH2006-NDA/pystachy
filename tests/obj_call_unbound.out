@@ -1,0 +1,5 @@
+NameError: name 'tripler' is not defined
+6 6
+UnboundLocalError: cannot access local variable 'g' where it is not associated with a value
+AttributeError: 'Early' object has no attribute 'k'
+[exit 1]
