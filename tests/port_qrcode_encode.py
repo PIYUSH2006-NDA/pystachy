@@ -186,8 +186,14 @@ for s in ["", "1", "12", "A", "a", "123\n", "1234\n5", "HELLO\n\n", "\n", "12345
           "ABC" + "1" * 30 + "abc" + "XYZ" * 10 + "~", "e\u0301\u0301 123456"]:
     print(repr(s), "|", chunks(s, 1), "|", chunks(s, 4), "|", chunks(s, 20), "|",
           util.optimal_mode(util.to_bytestring(s)))
-# a negative minimum makes upstream's regexes end in the literal text "{-1,}": no chunks
-print("minimum -1:", chunks("a12345bcd", -1), "|", chunks("12", -1), "|", chunks("", -1))
+# a negative minimum makes upstream's regexes end in the literal text "{-1,}", not a repeat:
+# a chunk is one character of the class followed by that text
+print("minimum -1:", chunks("a12345bcd", -1), "|", chunks("12", -1), "|", chunks("", -1), "|",
+      chunks("x5{-1,}yA{-1,}{-1,}", -1), "|", chunks("1{-2,}B{-2,}", -2), "|", chunks("A{-1,}", -2))
+qr = qrcode.QRCode(mask_pattern=0)
+qr.add_data("zzA{-1,}", optimize=-1)
+qr.make()
+print("optimize -1:", [c.mode for c in qr.data_list], digest(qr))
 # pseudo-random strings of runs of each class (lists of characters: indexing a str counts
 # UTF-8 bytes in Pystachy, a documented deviation)
 CLASSES = [list("0123456789"), list("ABCXYZ $%*+-./:"), list("abc~\n"), ["\u00e9", "\u20ac", "\U0001f600"]]

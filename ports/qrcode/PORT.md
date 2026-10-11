@@ -6,8 +6,8 @@ Reed-Solomon error correction over GF(256), lays out the modules (finder, timing
 patterns, format and version information), picks the best of the 8 masks by ISO/IEC 18004's
 penalty rules, and then gives the matrix, prints it in a terminal, or draws it as an image
 through its PIL, PyPNG and SVG factories. It is rank 593 on PyPI in October 2026 (30.2 million
-downloads in 30 days), and deps.dev lists 1,308 packages on PyPI that depend on qrcode 8.2
-directly (1,989 in all). Its best-known users show the QR code that enrolls an authenticator app
+downloads in 30 days), and deps.dev lists 1,310 packages on PyPI that depend on qrcode 8.2
+directly (1,995 in all). Its best-known users show the QR code that enrolls an authenticator app
 in two-factor login: django-allauth (its `mfa` extra requires `qrcode>=7.0.0,<9`),
 django-two-factor-auth (`qrcode<9`) and Flask-Security (its `mfa` extra, `qrcode>=8.2`); pretix,
 the ticket shop, pins `qrcode==8.2`. They draw the codes as SVG or PNG images, which this port
@@ -103,7 +103,8 @@ classes as values, 5.
     a list of the tuples would hold two tuple types (`expected tuple[int,int,int], got
     tuple[int,int,int,int,int,int]`). Tuples of one item type indexed by a variable are M1's
     item 8; rows of two lengths in one table also need M4's mixed containers. An AST
-    comparison shows that the values are the same.
+    comparison shows that the values are the same. `base.rs_blocks()` called with a version
+    past 40 raises `IndexError: list index out of range`, where upstream's says `tuple`.
 
 **Functions as values (M3, [#8](https://github.com/den-run-ai/pystachy/issues/8)).**
 
@@ -166,11 +167,15 @@ M7's generators and iterators, sets and `bytes` would undo 19 to 22.
     finds what `re.search()` found: the first run of at least `minimum` of the characters,
     which the regex takes whole, or, anchored, the run at the start if it reaches the end or a
     final `"\n"`, before which `$` matches too. A negative `minimum` (`add_data(data,
-    optimize=-1)`) makes upstream's regex end in the literal text `{-1,}`, so `_search()`
-    finds nothing there. Under CPython, the chunker gives upstream's chunks for 245,128 cases:
-    every string of up to 4 bytes over `1`, `9`, `A`, `$`, space, `a`, `"\n"` and the bytes
-    `0xC3` and `0xA9`, every string of 5 of the first 7 of them, each with `minimum` 1 to 6,
-    and 20,000 random strings of runs of up to 80 bytes with `minimum` 1, 3, 8, 20 and 50.
+    optimize=-1)`) makes upstream's regex end in the literal text `{-1,}`, not a repeat, and
+    `_search()` then finds one of the characters followed by that text, as the regex does.
+    Under CPython, the chunker gives upstream's chunks for 245,128 cases: every string of up
+    to 4 bytes over `1`, `9`, `A`, `$`, space, `a`, `"\n"` and the bytes `0xC3` and `0xA9`,
+    every string of 5 of the first 7 of them, each with `minimum` 1 to 6, and 20,000 random
+    strings of runs of up to 80 bytes with `minimum` 1, 3, 8, 20 and 50; and for 48,086 more
+    with `minimum` -2 and -1 among them: every string of up to 4 of `1`, `A`, `a`, `"\n"`,
+    `{`, `-`, `,` and `}`, and 20,000 random strings with the texts `{-1,}`, `{-2,}` and
+    `{1,}` among their runs.
 24. The cp437 decoding of 22 needs `_codecs`; and the image factories need PIL, or pypng (whose
     PNG writer needs `zlib` and `struct`), or `decimal` and `xml.etree` for SVG, besides M2's
     inheritance (`class PilImage(qrcode.image.base.BaseImage)`) and `abc`: `__init__.py` and
@@ -220,7 +225,9 @@ compile time; `copy_2d_array()`; the `ActiveWithNeighbors` `NamedTuple` with `__
 - Data other than `str`: `add_data()` takes a `str` (`add_data(12345)`: `expected str, got
   int`; `add_data(util.QRData("x"))`: `expected str, got QRData`), where upstream also takes
   `bytes`, other values (through `str()`) and `QRData` objects, and `util.QRData()` takes a
-  `str`.
+  `str`. A `bool` where an `int` goes is rejected too (`QRCode(mask_pattern=True)`: `expected
+  int | None, got bool`; `add_data(s, optimize=True)`: `expected int, got bool`), where
+  upstream takes it as 1.
 - The setters' timing (3): upstream raises as the bad value is assigned, the port when
   `make()` runs next. A program that assigns a bad value and calls no `make()` (or calls
   `print_ascii()` or `get_matrix()` on a code already made, which do not make it again) gets
@@ -228,8 +235,12 @@ compile time; `copy_2d_array()`; the `ActiveWithNeighbors` `NamedTuple` with `__
   gives `None`, where upstream's getter fits a version and gives it (1 for a `QRCode()`
   without data).
 - `print_ascii(tty=True)` on a terminal (25), and `out` defaults to the `sys.stdout` of when
-  the module was imported, where upstream reads `sys.stdout` at each call.
-- `repr()` of a `QRData` shows a `str`, `'HELLO'`, where upstream's shows `b'HELLO'`; and
+  the module was imported, where upstream reads `sys.stdout` at each call. `out` is
+  `sys.stdout`, `sys.stderr` or a file from `open()`: Pystachy has no `io.StringIO`, which
+  upstream's own tests print to.
+- `repr()` of a `QRData` shows a `str`, `'HELLO'`, where upstream's shows `b'HELLO'` (so
+  does the `ValueError` of `int()` on a numeric chunk that is not digits, which only a
+  negative `optimize` makes: `'5{-'` for `b'5{-'`); and
   `util.optimal_data_chunks()` returns a list, where upstream returns a generator (both
   iterate the same; `len()` works on the port's, `next()` on upstream's).
 - `util.mask_func()` (14), which compiles where it is not called.
@@ -244,7 +255,7 @@ compile time; `copy_2d_array()`; the `ActiveWithNeighbors` `NamedTuple` with `__
   same version-4 code in both (the test prints it), and every non-ASCII input the evaluation
   and its verifier tried (Cyrillic, `€`, `é`, CJK, emoji, combining marks) gave upstream's
   modules. The `isdigit()` of `optimal_mode()` knows only ASCII here, as `bytes.isdigit()` does
-  upstream. Three things differ:
+  upstream. Four things differ:
   - A program's own `len()` of the text: `len("https://example.com/путь?q=€")` is 28 in
     CPython and 34 here; `sum(len(c) for c in qr.data_list)`, the bytes the library counts, is
     34 in both, and the test prints that.
@@ -252,6 +263,10 @@ compile time; `copy_2d_array()`; the `ActiveWithNeighbors` `NamedTuple` with `__
     `to_bytestring()` returns: `optimal_mode("٣")` (ARABIC-INDIC DIGIT THREE) is 1 (numeric) in
     CPython, whose `str.isdigit()` is true for it, and 4 (bytes) here. Through `add_data()` and
     `QRData()` it is 4 in both.
+  - Text a program builds with `chr()` of 128 to 255, which is that one byte here (UTF-8 above
+    255): `add_data(chr(233))` writes the byte `0xE9`, where upstream encodes `"é"` as the two
+    bytes `0xC3 0xA9`. The literal `"é"` or `"\u00e9"`, and `chr()` of a larger code point,
+    give upstream's code.
   - A lone surrogate: `qr.add_data(chr(0xD800))` makes a version-1 code of its three-byte
     form here (and under CPython from the port, whose `_utf8_bytes()` encodes it), where
     upstream's `make()` raises `UnicodeEncodeError: 'utf-8' codec can't encode character
@@ -283,7 +298,8 @@ tries again); `get_matrix()` with and without a border, and the aliasing of its 
 `add_data()` calls and a second `make()`; `make(fit=False)` without a version; and the chunk
 optimizer on 16 edge cases (each class of character, `$` before a final `"\n"` in the anchored
 form, non-ASCII bytes between runs, NUL, combining marks) with `minimum` 1, 4 and 20, a
-negative `minimum`, and 60 pseudo-random strings, and `optimal_mode()`. `tests/run.sh`
+negative `minimum` (with and without the literal text `{-1,}` in the data, and a code made
+with `optimize=-1`), and 60 pseudo-random strings, and `optimal_mode()`. `tests/run.sh`
 compares what it prints with CPython's, JIT and AOT. Run under CPython against the unmodified
 upstream package, it prints exactly what it prints against this port.
 

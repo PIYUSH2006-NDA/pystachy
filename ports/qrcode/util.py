@@ -434,10 +434,16 @@ def _optimal_split(data, chars, minimum, anchored):
 # Pystachy port: the start and end of the match of the pattern (see optimal_data_chunks) in
 # `data`, or -1, -1 for no match (#11: re): the first run of `minimum` or more characters
 # of `chars`, which the regex takes whole; or, `anchored` ("^[chars]+$"), the run at the
-# start if it goes to the end or to a final "\n", before which `$` matches too
+# start if it goes to the end or to a final "\n", before which `$` matches too. A negative
+# `minimum` makes the regex's "{-1,}" (or the like) literal text, not a repeat: one of the
+# characters followed by that text.
 def _search(data, chars, minimum, anchored):
     if minimum < 0:
-        return -1, -1  # the regex then ends in the text "{-1,}" (or the like), not a repeat
+        text = "{" + str(minimum) + ",}"
+        for i in range(len(data) - len(text)):
+            if data[i] in chars and data[i + 1 : i + 1 + len(text)] == text:
+                return i, i + 1 + len(text)
+        return -1, -1
     start = 0
     while start < len(data):
         end = start
