@@ -397,14 +397,15 @@ class FigletFont(object):
             chars.append(line)
         return width, chars
 
-    def __str__(self):
+    def __str__(self) -> str:  # Pystachy port: a return annotation (M2, #7)
         return '<FigletFont object: %s>' % self.font
 
 
 # Pystachy port: string functions in place of the regular expressions (re: #11), and _chars(),
 # the characters of a str: iterating a str steps through its UTF-8 bytes in Pystachy
-# (docs/language.md, "Deviations from CPython"), so each item is as long as its lead byte says,
-# and ord() of it is its code point. Under CPython _UTF8_STR is False: one character per item.
+# (docs/language.md, "Deviations from CPython"), so each item is one character as ord() reads
+# it: a well-formed UTF-8 sequence, whose ord() is its code point, else one byte, whose ord() is
+# its value (chr() below 256 is that byte). Under CPython _UTF8_STR is False: one per item.
 _UTF8_STR = len('\u00e9') == 2
 
 
@@ -441,8 +442,18 @@ def _chars(text: str) -> list[str]:
     i = 0
     size = len(text)
     while i < size:
+        step = 1
         lead = ord(text[i])
-        step = 1 if lead < 0xC0 or not _UTF8_STR else 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+        if _UTF8_STR and 0xC2 <= lead <= 0xF4:
+            k = 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+            # the second byte's range excludes overlong forms and code points above 0x10FFFF
+            lo = 0xA0 if lead == 0xE0 else 0x90 if lead == 0xF0 else 0x80
+            hi = 0x8F if lead == 0xF4 else 0xBF
+            if i + k <= size and lo <= ord(text[i + 1]) <= hi:
+                step = k
+                for j in range(i + 2, i + k):
+                    if not 0x80 <= ord(text[j]) <= 0xBF:
+                        step = 1
         chars.append(text[i:i + step])
         i += step
     return chars

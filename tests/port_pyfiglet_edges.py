@@ -3,10 +3,11 @@
 # '@' glyph's own characters), justification and direction, among them a direction pyfiglet does
 # not know (Figlet.justify() then returns None), wrapping at blanks and inside words at widths
 # around a glyph's, widths too small for a glyph, 2**63 - 1, new lines, tabs and returns, text
-# with Latin-1 and Latin Extended-A letters (str holds UTF-8 in Pystachy) and characters the
-# fonts lack, a missing font, and that error escaping as CPython reports it. Each part is a
-# function, so that the fonts it loads are garbage when it returns: make verify's gc-stress stage
-# collects at every allocation, and each collection scans what is live.
+# with Latin-1 and Latin Extended-A letters (str holds UTF-8 in Pystachy), text made with chr()
+# (below 256 one byte in Pystachy) and characters the fonts lack, str() of a font, a missing font,
+# and that error escaping as CPython reports it. Each part is a function, so that the fonts it
+# loads are garbage when it returns: make verify's gc-stress stage collects at every allocation,
+# and each collection scans what is live.
 from pyfiglet import (DEFAULT_FONT, CharNotPrinted, Figlet, FigletFont, FontNotFound,
                       __version__, figlet_format)
 
@@ -30,7 +31,7 @@ def parsed_fonts() -> None:
         print("  ", ff.comment[:40])
         print("  ", [c in ff.chars
                      for c in [196, 214, 220, 228, 246, 252, 223, 0x104, 0x17E, 0xCA0]])
-        print("  ", ff.width[64], ff.chars[64])
+        print("  ", ff.width[64], ff.chars[64], str(ff), "%s" % ff)
 
 
 def justify_and_direction() -> None:
@@ -82,6 +83,18 @@ def letters() -> None:
     show("not in font", figlet_format("a€b\U0001F600日本c", font="slant"))
 
 
+def chr_text() -> None:
+    # text made with chr(), which below 256 is one byte in Pystachy: every glyph the standard font
+    # has above '~', and bytes that start no UTF-8 sequence (Latin-1 lead bytes before ASCII, a
+    # lead byte before another, cut short at the end, C1 and continuation bytes, above 0xF4)
+    f = Figlet(width=300)
+    art = f.renderText("".join([chr(c) for c in sorted(f.Font.chars.keys()) if c > 126]))
+    print("chr extended", art.count("\n"), len(art), art.count("|"), art.count("/"), art.count("_"))
+    text = ("a" + chr(0xC4) + "b" + chr(0xFC) + chr(0xDF) + chr(0xE0) + "c" + chr(0x85) +
+            chr(0xA0) + chr(0xE4) + chr(0xF6) + chr(0xF4))
+    show("chr bytes", f.renderText(text))
+
+
 def printable_ascii() -> None:
     # every printable ASCII character, each font
     text = "".join([chr(i) for i in range(32, 127)])
@@ -116,6 +129,7 @@ justify_and_direction()
 wrapping()
 text_without_glyphs()
 letters()
+chr_text()
 printable_ascii()
 set_font()
 missing_font()
