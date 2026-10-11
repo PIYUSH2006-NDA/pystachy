@@ -48,6 +48,7 @@ class P(NamedTuple):
 print(val(1) == None, None == val(2), val(3) != None, None != val(4))
 print(fl() == None, None != fl())
 print(True == None, None == False, 1.5 != None, None == 3, 3 == None, 0 != None)
+print(9223372036854775807 == None, None != -9223372036854775807 - 1, float("nan") == None, "é☃𝄞" != None)
 xs = [1]
 print("" == None, None != "a", xs == None, None == {1: 2}, () != None, (1, "a") == None)
 print(1 < val(5) == None, None == val(6) < 9, None != val(7) < 9, val(8) != None != val(9))
@@ -78,3 +79,12 @@ print(e == None, None == e, e != None, None != e)
 q = Ne()
 print(q == None, None == q, q != None, None != q)
 print(D(1) == None, None != D(2), P(1, 2) == None, None != P(3, 4))
+# outside a template's parameters == None compares (the branch it fails still gives the types)
+names = ["a", "é"]
+print([c for c in names if c == None], sum(1 for c in names if None == c), sum(1 for v in xs if v == None))
+print([v for v in xs if v != None], [c for c in names if None is c])
+out = []
+for c in names:
+    if c == None:
+        out.append(c)
+print(out)

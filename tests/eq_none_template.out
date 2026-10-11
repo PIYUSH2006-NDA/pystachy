@@ -4,4 +4,8 @@
 Q.__eq__
 obj obj alt none
 1 2 None
+3 6 2 1 [2] [0, 4]
+Q.__eq__
+Q.__eq__
+v3 v4 0 object none object object
 [exit 0]

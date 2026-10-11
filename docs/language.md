@@ -79,11 +79,12 @@ imports `annotations` from `__future__`.
   keeps its type), and its first `return` with a value decides what it returns. It is
   compiled only when a call needs it, so what Pystachy cannot compile in it is an error only
   then. In it, `isinstance(x, T)` (also with a tuple of types or `T | U`), `hasattr(x, "a")`
-  (the builtin types have CPython 3.13's attributes) and `x is None` (also `x == None`, but for
-  an object whose class defines `__eq__` or `__ne__`), when `x`'s type decides them (for an
-  object, which may be `None`, when its argument is known not to be: a new object or `self`),
-  are constants: only the branch that runs is compiled (in `if`, `while`, `assert`, `and`/`or`
-  and conditional expressions), and nothing after a `return`. A parameter whose
+  (the builtin types have CPython 3.13's attributes) and `x is None` (for a parameter `x` also
+  `None is x` and `x == None`, but not for an exception or an object whose class defines
+  `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
+  its argument is known not to be: a new object or `self`), are constants: only the branch that
+  runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
+  nothing after a `return`. A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
