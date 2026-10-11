@@ -3379,8 +3379,9 @@ def false_flag(body: list[Node]) -> int:
     # the index of module code body's top-level TYPE_CHECKING = False (the idiom that spares
     # importing typing), if no other statement binds or deletes TYPE_CHECKING, no star import may
     # and no global statement names it (no function rebinds it): module code after it tests a
-    # constant False there (Loader.decide()); else -1. Another module's code may not assign it
-    # (Gen.store_name())
+    # constant False there (Loader.decide()); else -1. Code that assigns it through the module, as
+    # another module's or its own after it imports itself, may assign only False (Gen.store_name())
+    # and may not delete it (Gen.del_name())
     at = -1
     for i in range(len(body)):
         st = body[i]
@@ -9500,8 +9501,10 @@ class Gen:
                 self.err(f"'{name}' is None in its module's code: giving it a {v.t} elsewhere (a function or another module) is not supported")
             return
         if self.is_global(name):
-            if name in self.falseflags and owner(name) != self.curfn.mod:
-                self.err(f"assigning '{owner(name)}.TYPE_CHECKING' is not supported: its module assigns it False once, so its tests of it are decided at compile time")
+            if name in self.falseflags and v.v != "false":
+                # (through the module, m.TYPE_CHECKING = x, also after its own import of itself:
+                # false_flag() leaves no other store)
+                self.err(f"assigning '{owner(name)}.TYPE_CHECKING' anything but the literal False is not supported: its module assigns it False once, so its tests of it are decided at compile time")
             if name not in self.gtypes:
                 t0 = self.none_type(name) if v.t == "None" and self.modlevel else ""
                 if v.t == "None" and t0 == "":
@@ -13302,6 +13305,8 @@ class Gen:
             self.err(f"del of the global '{name}' in a function is not supported")
         if owner(name) != self.curfn.mod:
             self.err(f"del of module {owner(name)}'s attribute '{short(name)}' is not supported")
+        if name in self.falseflags and self.is_global(name):
+            self.err(f"del of '{owner(name)}.TYPE_CHECKING' is not supported: its module assigns it False once, so its tests of it are decided at compile time")
         self.nonecmp = True  # (a local only None was assigned to may be deleted)
         self.read(n)  # del of a name that is not bound raises as its read does
         self.nonecmp = False

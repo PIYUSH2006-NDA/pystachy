@@ -323,8 +323,8 @@ too, and so are `if TYPE_CHECKING:` blocks after a top-level `TYPE_CHECKING = Fa
 idiom that spares importing `typing`) where the module binds the name nowhere else: no other
 assignment, `del` or import of it, no star import and no `global` statement naming it.
 Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()`, `in` a tuple
-or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
-test also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
+or list of Windows names) and of `os.name` are decided for POSIX, these and the tests above
+also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
 hides them, and a name a function binds only in code dropped this way (also by `:=`, a `match` capture or
@@ -647,8 +647,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
 - `del` of another module's attribute
-- an assignment to another module's `TYPE_CHECKING` where that module's `TYPE_CHECKING = False`
-  makes its tests of it decided at compile time (above)
+- an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
+  module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time (above): from
+  another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code (above) that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
   builtin, such as `sorted(xs, key=C.m)`; any other decorator; a metaclass; a base that defines

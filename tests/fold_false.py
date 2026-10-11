@@ -3,7 +3,7 @@
 # typing) tested after it, also under not/and/or and with elif and else. Their imports are never
 # loaded (tests/loader/never.py has a syntax error), their defs and classes never compiled. A test
 # before the assignment raises NameError; functions read the global; a flag that something
-# rebinds is not a constant (tests/loader/tcset.py).
+# rebinds is not a constant (tests/loader/tcset.py). Another module may assign the flag False.
 import loader.tcflag
 import loader.tcset
 
@@ -62,4 +62,5 @@ def shadow(TYPE_CHECKING: bool) -> str:
 
 
 print(read(), shadow(True), shadow(False), TYPE_CHECKING)
+loader.tcflag.TYPE_CHECKING = False
 print(loader.tcflag.mode(), loader.tcflag.local(), loader.tcflag.Box(3).get(), loader.tcset.TYPE_CHECKING)
