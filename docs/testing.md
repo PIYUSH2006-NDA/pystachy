@@ -114,6 +114,11 @@ versions, platform, git commit and a timestamp:
 - **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
+- **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
+  active signatures and branching template specializations fail with bounded source diagnostics
+  in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
+  seconds. Finite controls check active-budget release and reuse of completed instances at the
+  compilation-wide limit of 4,096 specializations;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with

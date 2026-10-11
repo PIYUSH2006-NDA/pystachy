@@ -33,8 +33,9 @@
 #                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
-#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types under
-#                  256 MiB / ten CPU seconds, with short diagnostics; finite controls still compile
+#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types and
+#                  specialization breadth under 256 MiB / ten CPU seconds, with short diagnostics;
+#                  finite controls and reuse at the retained-instance boundary still compile
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or

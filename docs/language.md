@@ -666,6 +666,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   tuple repetition), alongside the existing limit of 100 nested template compilations.
   Type-changing recursion is supported when it reaches a finite set of specializations within
   these bounds. Large argument types in diagnostic call contexts are summarized.
+- more than 4,096 template specializations in one compilation, across all functions and
+  imported modules. Completed specializations still retain their generated code and count
+  toward this bound; calls reusing an existing specialization do not. This bounds branching
+  over many small type combinations, even when active signatures and nesting remain small.
+  Exceeding it reports a source error before allocating the next specialization; annotate
+  template parameters or reduce the distinct type combinations.
 - an empty container whose first use stores an empty `[]` or `{}` into it (`d[k] = []`)
 - an empty `[]` or `{}` that nothing gives a type (`{}["k"]` alone)
 - an empty list or dict that a template's function returns empty, used where the `list[int]` /

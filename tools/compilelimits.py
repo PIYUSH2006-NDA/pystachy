@@ -4,8 +4,9 @@ usage: python3 tools/compilelimits.py [-c LABEL=COMMAND]...
 Default commands are the CPython-hosted compiler and ./pystachy. Each ir/run/build
 rejection must complete under 256 MiB address space and ten CPU seconds, without
 executing the program or creating an AOT output, and report a short source error.
-The generated controls exercise finite specializations and release of the active
-signature budget. Linux/POSIX resource limits are intentional, as in verify.sh.
+The generated controls exercise finite specializations, reuse at the retained-instance
+boundary, and release of the active signature budget. Linux/POSIX resource limits
+are intentional, as in verify.sh.
 """
 import argparse
 import os
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TYPE_ERROR = "type representation exceeds 65536 bytes"
 SIGNATURE_ERROR = "template signature exceeds 1048576 bytes"
 ACTIVE_ERROR = "active template signatures exceed 1048576 bytes"
+INSTANCES_ERROR = "compilation needs more than 4096 template specializations"
 
 
 def limits():
@@ -39,6 +41,18 @@ def wide_calls(params, depth):
         src.append(f"def f{i}({', '.join(names)}) -> int:")
         src.append(f"    return f{i + 1}({', '.join(names)})" if i + 1 < depth else "    return 7")
     src.append(f"print(f0({', '.join(['x12'] * params)}))")
+    return "\n".join(src) + "\n"
+
+
+def branching_calls(depth):
+    # Source, active nesting and individual types grow linearly, but each function
+    # calls the next with two different types: 2**(depth + 1) - 1 retained instances.
+    src = []
+    for i in range(depth):
+        src += [f"def f{i}(x, choose: bool) -> int:", "    if choose:",
+                f"        return f{i + 1}((x, 1), choose)",
+                f'    return f{i + 1}((x, ""), choose)']
+    src += [f"def f{depth}(x, choose: bool) -> int:", "    return 1", "print(f0(0, True))"]
     return "\n".join(src) + "\n"
 
 
@@ -66,7 +80,8 @@ def main():
         for name in ("template_type_growth", "template_type_growth_mutual", "template_type_growth_expression", "tuple_repeat_type_size"):
             sources.append((name, ROOT / "tests" / "errors" / f"{name}.py", TYPE_ERROR))
         for name, src, error in (("wide_signature", wide_calls(24, 1), SIGNATURE_ERROR),
-                                 ("active_signatures", wide_calls(12, 2), ACTIVE_ERROR)):
+                                 ("active_signatures", wide_calls(12, 2), ACTIVE_ERROR),
+                                 ("branching_instances", branching_calls(16), INSTANCES_ERROR)):
             source = temp / f"{name}.py"
             source.write_text(src)
             sources.append((name, source, error))
@@ -77,6 +92,16 @@ def main():
             control += f"print(f0({', '.join([f'x{i}'] * 8)}))\n"
         control_path = temp / "released_signatures.py"
         control_path.write_text(control)
+        # 4,095 instances across twelve templates, then one more reaches the limit.
+        # Reusing both completed signatures at the limit must remain valid, while
+        # a new signature must fail. This also checks accounting is compilation-wide.
+        boundary = branching_calls(11) + "def extra(x) -> int:\n    return 2\nprint(extra(1))\n"
+        boundary += "print(f0(0, False))\nprint(extra(1))\n"
+        boundary_path = temp / "instance_boundary.py"
+        boundary_path.write_text(boundary)
+        overflow_path = temp / "instance_boundary_overflow.py"
+        overflow_path.write_text(boundary + 'print(extra(""))\n')
+        sources.append(("instance_boundary_overflow", overflow_path, INSTANCES_ERROR))
         for spec in commands:
             label, command = spec.split("=", 1)
             cmd = shlex.split(command)
@@ -93,13 +118,17 @@ def main():
                     else:
                         failed += 1
                         print(f"FAIL {label} {mode} {name}: {result.stderr[-1000:] if result else 'timeout'}")
-            # IR compilation of this large, valid control stays under the same process limits.
-            result = invoke(cmd, "ir", control_path, temp / "unused.exe")
-            if result is not None and result.returncode == 0 and result.stderr == b"" and b"define" in result.stdout:
-                passed += 1
-            else:
-                failed += 1
-                print(f"FAIL {label} released_signatures: {result.stderr[-1000:] if result else 'timeout'}")
+            # IR compilation of these large, valid controls stays under the same process limits.
+            for path in (control_path, boundary_path):
+                result = invoke(cmd, "ir", path, temp / "unused.exe")
+                ok = result is not None and result.returncode == 0 and result.stderr == b"" and b"define" in result.stdout
+                if ok and path == boundary_path:
+                    ok = result.stdout.count(b"define internal i64 @f.") == 4096
+                if ok:
+                    passed += 1
+                else:
+                    failed += 1
+                    print(f"FAIL {label} {path.stem}: {result.stderr[-1000:] if result else 'timeout'}")
     print(f"{passed} passed, {failed} failed (256 MiB address space, 10 CPU seconds, 30 seconds wall time)")
     return 1 if failed else 0
 
