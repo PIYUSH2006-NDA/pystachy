@@ -44,4 +44,21 @@ True 0 2 False
 ['pear', 'fig', 'apple', 'kiwi'] [(0, 'pear'), (1, 'fig'), (2, 'apple'), (3, 'kiwi')] ['apple', 'fig', 'kiwi', 'pear'] apple pear pear, fig, apple, kiwi [('pear', 'pear'), ('fig', 'fig'), ('apple', 'apple'), ('kiwi', 'kiwi')]
 16 ['pear', 'fig', 'apple', 'kiwi'] True True [] 3
 dedupe: 824 1278379 939394 k590 k564 500 823
+OrderedSet(['\xa0', '\xad', '\u2028', '\x85', '\u0378', 'é', '\x1b', '\r', '\ufeff', '\U0010ffff', '\x80', '\u3000', '🇺🇸', 'a\'b"c', '%s', '%%']) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+4 OrderedSet(['a\x00b', 'a', 'a\x00', '\x00\x00']) [0, 1, 2, 3] False True {'a\x00b': 0, 'a': 1, 'a\x00': 2, '\x00\x00': 3}
+2 1 True 10001
+['a', 'b', 'd', 'f'] OrderedSet(['a', 'c', 'e', 'f']) {'a': 0, 'c': 1, 'e': 2, 'f': 3}
+['a', 'c', 'e', 'f', 'aa', 'cc'] OrderedSet(['a', 'c', 'e', 'f', 'aa', 'cc'])
+['a'] OrderedSet() 0
+RuntimeError: dictionary changed size during iteration
+OrderedSet(['b', 'c']) {'b': 0, 'c': 1}
+a 2 {'b': 1, 'c': 2, 'd': 2} 2 d
+OrderedSet(['b', 'c']) {'b': 1, 'd': 1}
+2 OrderedSet(['b', 'c', 'c']) {'b': 1, 'd': 1, 'c': 2}
+F T F OrderedSet(['y'])
+3 0 2 a False True
+4 OrderedSet(['b', 'c', 'd', 'e']) OrderedSet()
+OrderedSet() {}
+OrderedSet(['p', 'q']) OrderedSet(['p', 'q', 'z']) False False
+[0, 1, 2, 3, 0, 4, 0, 5] the cat sat on the mat the end OrderedSet(['the', 'cat', 'sat', 'on', 'mat', 'end'])
 [exit 0]

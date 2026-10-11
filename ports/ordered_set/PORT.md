@@ -100,11 +100,18 @@ The rest of the module: `add`, which returns the new or existing index; `update`
 after the one removed while it iterates; `clear`; `__iter__`, which returns `iter(self.items)`;
 `__repr__`'s `%r` of a list; `issubset` and `issuperset`, with their length test and `all()`
 over generator expressions that iterate the set; `symmetric_difference_update`; `__and__`; the
-`@overload` stubs; the `typing` imports and `T = TypeVar("T")`; `_is_atomic` (nothing calls it
-now); `__getstate__` and `__setstate__` (Pystachy has no `pickle`); and the docstrings. A
-program can take the truth of a set (by `__len__`), test `in`, and iterate it in `for` loops,
+`@overload` stubs; the `typing` imports and `T = TypeVar("T")`; and the docstrings. A program
+can take the truth of a set (by `__len__`), test `in`, and iterate it in `for` loops,
 comprehensions, `list()`, `sorted()`, `min()`, `max()`, `enumerate()`, `zip()`, `str.join()` and
 `list.extend()`, and `==`, `!=`, `in`, `index()` and `count()` of lists of sets call `__eq__`.
+
+`_is_atomic`, `__getstate__` and `__setstate__` are as upstream wrote them too (`__setstate__`
+with the annotation above), but they compile only because nothing calls them: Pystachy compiles
+a method's body where a program calls it. A program that calls one is rejected: `_is_atomic`
+takes `Any` ("parameter 'obj': unsupported type annotation"), `__getstate__` returns `(None,)`
+or a list ("returning a value from a function without a return annotation"), and
+`__setstate__` tests `state == (None,)` ("cannot compare list[str] == tuple[None]"). Only
+pickling calls the last two, and Pystachy has no `pickle`.
 
 That includes a bug of 4.1.0: `pop(i)` for an `i` before the last item deletes it from `items`
 and `map` but leaves the indices in `map` of the items after it as they were, where `discard()`
@@ -118,20 +125,28 @@ then no longer finds, and `c.pop()` raises `KeyError: 's'` after it has removed 
 - Items that are not `str`: `OrderedSet([1, 2])` is rejected (`expected str, got int`).
 - Arguments that are not a `list[str]`, where upstream takes any iterable, set or sequence:
   `OrderedSet("abc")` (`expected list[str] | None, got str`; pass `list("abc")`, but see the
-  deviation below), `OrderedSet(other)` and `a.union(b)` of an `OrderedSet` `b`
-  (`expected list[str], got OrderedSet`; pass `list(b)`), sets, tuples and generators. `union`,
-  `intersection`, `difference` and `difference_update` take exactly one list: chain the calls
-  for more, and use `copy()` for none.
+  deviation below), `OrderedSet(b)` and `a.union(b)` of an `OrderedSet` `b`
+  (`expected list[str] | None, got OrderedSet` and `expected list[str], got OrderedSet`; pass
+  `list(b)`), sets, tuples and generators. `union`, `intersection`, `difference` and
+  `difference_update` take exactly one list: chain the calls for more, and use `copy()` for none.
 - What the `MutableSet` and `Sequence` bases supplied: `remove()`
   (`'ordered_set.OrderedSet' object has no method 'remove'`), `isdisjoint()`, `count()`, the
   operators `|`, `-`, `^`, `<`, `<=`, `>` and `>=` and the in-place `|=`, `&=`, `-=` and `^=`,
   and `isinstance()` against those ABCs. The class defines `__and__`, but Pystachy does not send
   `&` to an object's method yet (`unsupported operand type(s) for &: 'OrderedSet' and 'list'`):
   call `a.intersection(b)` or `a.__and__(b)`.
-- `==` with a list, tuple or set (`expected OrderedSet, got list[str]`): compare `list(s)`.
-- Slices and lists of indices (`s[1:3]`, `s[[1, 2]]`: "slicing an object is not supported"),
-  `index()` of a list of keys (`expected str, got list[str]`), `reversed(s)` (Pystachy rejects
-  `reversed()` of an object; `reversed(list(s))` works), and pickling.
+- `==` and `!=` with anything but an `OrderedSet` or `None`, such as a list, tuple, set, `str` or
+  `int` (`expected OrderedSet, got list[str]`, or `cannot compare list[str] ==
+  ordered_set.OrderedSet` with the set on the right): compare `list(s)`.
+- Slices (`s[1:3]`: "slicing an object is not supported") and lists of indices (`s[[1, 2]]`:
+  `expected int, got list[int]`), `index()`, `get_loc()` and `get_indexer()` of a list of keys
+  (`expected str, got list[str]`), `reversed(s)` and `s.__reversed__()` (Pystachy rejects
+  `reversed()` of an object; `reversed(list(s))` works), `iter(s)` and `s.__iter__()` (Pystachy
+  takes no `iter()` of a value: iterate the set in a loop), and pickling (above).
+- Subclasses: Pystachy rejects a class with a base ("class inheritance is not supported (only an
+  exception class may have a base)"). Once it takes one (M2), a subclass's `copy()`, set algebra
+  and repr will make and name an `OrderedSet` where upstream's `self.__class__` keeps the
+  subclass, and the edits that put `OrderedSet` in its place will need undoing.
 
 ## Deviations it hits
 
@@ -175,38 +190,44 @@ return; `pop(1)` and what `index()`, `discard()`, `s[i]` and `pop()` do after it
 `symmetric_difference_update()` with a duplicate puts it in `items` twice); `==` and `!=` with
 copies, reorderings and `None`, and `in`, `index()` and `count()` of lists of sets; iteration in
 the forms listed above; and 3,000 tokens deduplicated, with `index()` of each, 143 `discard()`s
-and the lookups again.
+and the lookups again. The port's review added more items that `repr()` escapes or keeps (a
+no-break space, a soft hyphen, U+2028, an unassigned code point, a combining accent, a byte order
+mark, U+10FFFF, a flag of two code points, `%s`), items that differ only after a NUL, items of
+10,001 characters, sets changed while a `for` loop iterates them (it steps on through `items` as
+CPython's list iterator does, and changing the size of `map` while iterating it raises CPython's
+`RuntimeError`), `add()` after `pop(0)` (it gives the new item the stale index of the last
+one), the truth of an `OrderedSet | None`, keyword arguments, sets given their own `items`, and a
+set as another class's field.
 
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package, both print exactly what they print against this port. Both
 pass JIT and AOT with `PYSTACHY_IRCHECK=1`, with the native compiler (also with
 `PYSTACHY_OPT=-all`) and with the CPython-hosted one; `tools/check_ir.sh` accepts their IR, and
 `tests/run.sh` passes as a whole (1,935 passed, 0 failed). They are small: with the native
-compiler, each JIT run takes 0.2 s (0.12 s of CPU), the AOT builds 1.3 s and 1.4 s (1.0 s and
-1.1 s of CPU), and the executables run in 0.005 s. In `make verify`'s gc-stress form (the
-compiler collecting every 1,000 allocations, the program at every allocation), the JIT run and
-the AOT build and run of `port_ordered_set_api` take 1.7 s in all (1.3 s of CPU), and those of
-`port_ordered_set_edges` 3.5 s (1.5 s of CPU): medians of 3 on a VM that was running other jobs
-(load 9 to 13 on its 4 cores).
+compiler, the JIT runs take 0.12 s and 0.16 s, the AOT builds 1.0 s and 1.4 s, and the
+executables run in 0.003 s. In `make verify`'s gc-stress form (the compiler collecting every
+1,000 allocations, the program at every allocation), the JIT run and the AOT build and run of
+`port_ordered_set_api` take 1.4 s in all, and those of `port_ordered_set_edges` 1.8 s: medians
+of 3, wall clock, on a 4-core VM at load 1 to 2, where CPU time was within 0.02 s of it.
 
 ## Speed
 
 The headline workload: 600,000 tokens from a linear congruential generator (`"tok%d"` of 60,000
 values) deduplicated into an `OrderedSet` of 59,998, `index()` of each of the 600,000, 200
 `discard()`s (each walks the 59,998 entries of `map` to decrement the indices after the one it
-removes), then `in` and `index()` of each token again. Median of 3 runs, wall clock with process
-start-up and CPU time, on a 4-core x86-64 VM that was running other jobs (load 13):
+removes), then `in` of each token again and `index()` of the 598,031 still in the set. Median of
+5 runs, wall clock with process start-up and CPU time, on a 4-core x86-64 VM (load 1):
 
 | | wall clock | CPU |
 |---|---:|---:|
-| Pystachy AOT executable, this port | 0.448 s | 0.307 s |
-| CPython 3.13.16, unmodified ordered-set 4.1.0 | 2.395 s | 1.704 s |
-| CPython 3.13.16, this port | 1.906 s | 1.294 s |
+| Pystachy AOT executable, this port | 0.309 s | 0.308 s |
+| CPython 3.13.16, unmodified ordered-set 4.1.0 | 1.634 s | 1.634 s |
+| CPython 3.13.16, this port | 1.261 s | 1.258 s |
 
-All three print the same checksums. The executable is 5.6 times faster than CPython on upstream
-in CPU time (5.3 times in wall clock), and 4.2 times faster than CPython on the same edited code.
-A second set of runs, at load 14, took 0.297 s, 1.638 s and 1.287 s of CPU (0.608 s, 2.563 s and
-1.984 s of wall clock).
+All three print the same checksums. The executable is 5.3 times faster than CPython on upstream,
+and 4.1 times faster than CPython on the same edited code. Another set of 5, at load 3, took
+0.293 s, 1.618 s and 1.281 s of CPU; the first runs, while the VM ran other jobs (load 13 and
+14), took 0.297 to 0.307 s, 1.638 to 1.704 s and 1.287 to 1.294 s of CPU.
 
 Part of the difference comes from an edit: upstream's `index()` first tests
 `isinstance(key, Iterable)` against typing's ABC, 1.2 million times here, and the port drops
