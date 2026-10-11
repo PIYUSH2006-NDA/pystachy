@@ -1,0 +1,47 @@
+empty: OrderedSet() OrderedSet() 0 False True False []
+KeyError: 'Set is empty' KeyError('Set is empty')
+KeyError: ''
+IndexError: list index out of range
+empty: OrderedSet() OrderedSet() OrderedSet() OrderedSet()
+empty: True True True True {}
+OrderedSet(["it's", 'say "hi"', 'tab\there', 'nl\n', '\x00', '\x7f', 'é', '€', '😀', '\u200b', '\\', 'Ω≈ç', ''])
+13 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] [True, True, True, True, True, True, True, True, True, True, True, True, True] 😀 True 😀
+KeyError: 'ünï' KeyError('ünï')
+KeyError: '😀😀' KeyError('😀😀')
+KeyError: "'" KeyError("'")
+KeyError: '"' KeyError('"')
+KeyError: 'e' KeyError('e')
+KeyError: ' ' KeyError(' ')
+True True True
+IndexError: list index out of range
+IndexError pop: list index out of range
+IndexError: list index out of range
+IndexError pop: list index out of range
+IndexError: list index out of range
+IndexError pop: list index out of range
+IndexError: list index out of range
+IndexError pop: list index out of range
+IndexError: list index out of range
+IndexError pop: list index out of range
+OrderedSet(['x', 'y', 'z']) [0, 1, 2] x z 2 0
+add: 3 0 3 4 OrderedSet(['x', 'y', 'z', 'w', 'v'])
+update: 0 0 0 2 6 OrderedSet(['x', 'y', 'z', 'w', 'v', 'u', 't'])
+pop(1): q 2 4 {'p': 0, 'r': 2, 's': 3, 't': 4}
+discard: OrderedSet(['p', 'r', 's']) {'p': 0, 'r': 2, 't': 3} False ['p', 'r', 's']
+IndexError: list index out of range
+KeyError: 's'
+after: OrderedSet(['p', 'r']) {'p': 0, 'r': 2, 't': 3} 2
+pop: p r 0 {'t': 3}
+discard: OrderedSet(['a', 'c', 'd']) [0, 1, 2] {'a': 0, 'c': 1, 'd': 2}
+True False False True
+OrderedSet(['a', 'b', 'd']) OrderedSet(['a', 'b', 'c', 'e']) OrderedSet(['a', 'c']) OrderedSet(['b', 'c']) OrderedSet(['b'])
+OrderedSet(['b', 'c']) {'b': 0, 'c': 1}
+OrderedSet(['b', 'c']) {'b': 0, 'c': 1}
+OrderedSet(['c', 'd', 'd']) {'c': 0, 'd': 2} 3
+OrderedSet(['a', 'b', 'c']) {'a': 0, 'b': 1, 'c': 2}
+False True True False False True
+True 0 2 False
+['pear', 'fig', 'apple', 'kiwi'] [(0, 'pear'), (1, 'fig'), (2, 'apple'), (3, 'kiwi')] ['apple', 'fig', 'kiwi', 'pear'] apple pear pear, fig, apple, kiwi [('pear', 'pear'), ('fig', 'fig'), ('apple', 'apple'), ('kiwi', 'kiwi')]
+16 ['pear', 'fig', 'apple', 'kiwi'] True True [] 3
+dedupe: 824 1278379 939394 k590 k564 500 823
+[exit 0]
