@@ -44,6 +44,31 @@ where ports/iniconfig/PORT.md lists (each edit is marked "Pystachy port:"). inic
 under the MIT License, whose text and copyright notice ("Copyright (c) 2010 - 2023 Holger Krekel
 and others") are in ports/iniconfig/LICENSE.
 
+jdcal (ports/jdcal/)
+--------------------
+
+ports/jdcal/__init__.py is jdcal 1.4.1's module jdcal.py, edited where ports/jdcal/PORT.md lists
+(each edit is marked "Pystachy port:"). jdcal is used under the 2-clause BSD License, whose text
+and copyright notice ("Copyright (c) 2011, Prasanth Nair") are in ports/jdcal/LICENSE.
+
+pylev (ports/pylev/)
+--------------------
+
+ports/pylev/__init__.py, classic.py, damerau.py, recursive.py and wf.py are pylev 1.4.0's
+modules, edited where ports/pylev/PORT.md lists (each edit is marked "Pystachy port:"). pylev
+is used under the 3-clause BSD License, whose text and copyright notice ("Copyright (c) 2012,
+Daniel Lindsley") are in ports/pylev/LICENSE.
+
+qrcode (ports/qrcode/)
+----------------------
+
+ports/qrcode/__init__.py, base.py, constants.py, exceptions.py, LUT.py, main.py and util.py are
+qrcode 8.2's modules, edited where ports/qrcode/PORT.md lists (each edit is marked "Pystachy
+port:"). qrcode is used under the BSD 3-Clause License, whose text and copyright notice
+("Copyright (c) 2011, Lincoln Loop") are in ports/qrcode/LICENSE, the sdist's LICENSE file; it
+also holds the MIT License notice of pyqrnative, the code qrcode was forked from ("Copyright (c)
+2009 Kazuhiko Arase").
+
 CPython's list sort (runtime.c)
 -------------------------------
 
