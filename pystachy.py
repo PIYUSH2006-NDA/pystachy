@@ -7211,6 +7211,9 @@ class FnInfo:
         # a template's function: the parameters whose arguments are objects known not to be None
         # (a new object, self), which its isinstance(), hasattr() and "is None" tests read as such
         self.nnp: dict[str, bool] = {}
+        # the parameters annotated Callable[[A, B], C] with C a class template: an argument that is
+        # a function is that Callable of the specialization it returns (see pat_arg)
+        self.pats: dict[int, Node] = {}
         self.clo = -1  # a closure's function (a def or lambda inside a function): its Gen.closures position
 
 
@@ -7746,6 +7749,7 @@ class Gen:
         self.clokeys: dict[str, int] = {}
         self.cells: dict[str, str] = {}  # the function's variables that closures take: the cell of each (a pointer)
         self.adapters: dict[str, str] = {}  # "<function value type> <Callable type>" -> its adapter's symbol (Gen.adapter)
+        self.adrets: dict[str, str] = {}  # "<function value type> <parameter types>" -> what it returns (Gen.adapter_ret)
         self.decorated: dict[str, bool] = {}  # the defs of a module's top level that bind what their decorators give (decorate)
         self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
@@ -8969,6 +8973,8 @@ class Gen:
                 f.ptypes.append("")
             elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):
                 f.ptypes.append("")  # (it names a class template: any of its specializations, see tmpl_ann)
+                if self.callable_pat(p.kids[0]) != "":
+                    f.pats[len(f.params) - 1] = p.kids[0]
             elif self.lib and self.ann_problem(p.kids[0], False) != "":
                 bad = f"{cls + '.' if cls != '' else ''}{d.s}() is not supported: parameter '{p.s}': {self.ann_problem(p.kids[0], False)}"
                 f.ptypes.append("")  # (any type: the def statement evaluates its default, see hoist)
@@ -17672,6 +17678,79 @@ class Gen:
         self.making.pop()
         return ll
 
+    def callable_pat(self, a: Node) -> str:
+        # the class template C of annotation a when it is Callable[[A, B], C] (C named alone, A and B
+        # no class template's), else ""
+        if a.kind == "str":
+            return self.callable_pat(self.parse_expr(a.s))
+        if a.kind != "index" or (a.kids[0].kind != "name" and a.kids[0].kind != "attr"):
+            return ""
+        base = self.typing_attr(a.kids[0]) if a.kids[0].kind == "attr" else self.typing_name(a.kids[0].s)
+        if base != "Callable" or a.kids[1].kind != "tuple" or len(a.kids[1].kids) != 2 or a.kids[1].kids[0].kind != "list":
+            return ""
+        r = a.kids[1].kids[1]
+        for x in a.kids[1].kids[0].kids:
+            if self.tmpl_ann(x):
+                return ""
+        if r.kind == "str":
+            r = self.parse_expr(r.s)
+        return r.s if r.kind == "name" and r.s in self.tmpl else ""
+
+    def pat_arg(self, v: Val, a: Node) -> Val:
+        # an argument for a parameter annotated Callable[[A, B], C], C a class template: a function
+        # (or such a Callable) that returns an object of a specialization S of C, given A and B, as
+        # the Callable[[A, B], S], so that one type holds the functions that return S (a field of
+        # it, one specialization of the class that has the field); another is left as it is
+        c = self.callable_pat(a)
+        if a.kind == "str":
+            a = self.parse_expr(a.s)
+        ps = [self.vtype(x) for x in a.kids[1].kids[0].kids]
+        if is_callable(v.t):
+            r = targs(v.t)[0]
+            if targs(v.t)[1:] != ps:
+                return v
+        elif is_fn(v.t):
+            r = self.adapter_ret(v.t, ps)
+        else:
+            return v
+        if self.tmpl_of(unopt(r)) != c:
+            return v
+        return self.coerce(v, self.ctype("callable", [r] + ps))
+
+    def adapter_ret(self, ft: str, ps: list[str]) -> str:
+        # what function value type ft returns, called with arguments of types ps: the adapter of a
+        # Callable of those parameters (see adapter), compiled with its return type left to its
+        # return statement, and kept for the Callable that returns that
+        key = ft + " " + ",".join(ps)
+        if key in self.adrets:
+            return self.adrets[key]
+        line = self.line
+        ll = f"@cv.{len(self.adapters)}"
+        f = FnInfo("<callable>", ll, mk("def", "<callable>", line, []), "")
+        f.params = ["_f"] + [f"_a{j}" for j in range(len(ps))]
+        f.ptypes = [ft] + ps
+        for _ in f.params:
+            f.defaults.append(mk("noann", "", line, []))
+            f.dglob.append("")
+            f.dtypes.append("")
+        f.ret = ""  # (decided by its return statement, as a template's)
+        f.infer = True
+        f.inst = True
+        f.mod = self.curfn.mod
+        call = mk("call", "", line, [mk("name", p, line, []) for p in f.params])
+        body = [mk("return", "", line, [call])]
+        f.node.kids = [mk("params", "-1,-1", line, []), mk("noann", "", line, []), mk("block", "", line, body)]
+        self.making.append(f"making a Callable of {typestr(ft)} at {where(line)}")
+        fr = self.save()
+        self.modlevel = False
+        self.lenient = False
+        self.function(f, body)
+        self.restore(fr)
+        self.making.pop()
+        self.adrets[key] = f.ret
+        self.adapters[ft + " " + self.ctype("callable", [f.ret] + ps)] = ll
+        return f.ret
+
     def call_callable(self, o: Val, args: list[Node]) -> Val:
         # o(args), o a Callable (callable[R,A,B]): its code, with its env and the arguments, which
         # the Callable's parameter types type (they are positional: its function's names are not known).
@@ -17999,6 +18078,8 @@ class Gen:
             else:
                 pos += 1
             vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
+            if j in f.pats:
+                vals[j] = self.pat_arg(vals[j], f.pats[j])
         if f.vararg >= 0:
             vals[f.vararg] = self.tuple_(extra)
         if f.kwarg >= 0:

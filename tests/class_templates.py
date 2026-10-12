@@ -200,3 +200,46 @@ class Tree:
 
 
 print(Chain(3).count(), Chain(0).count(), len(Tree("x", 2).kids), Tree(1.5, 1).kids[0].v)
+
+
+class Scaled:
+    # verbose is the constructor's alone: it changes no field's type, so it makes no layout
+    def __init__(self, v, verbose):
+        self.v = v
+        if verbose:
+            print("made", v)
+
+
+objs = [Scaled(1, True), Scaled(2, 0), Scaled(3, "")]
+print([o.v for o in objs])
+
+
+class Builder:
+    def __init__(self, sep):
+        self.sep = sep
+        self.parts: list[str] = []
+
+    def add(self, x):
+        self.parts.append(str(x))
+        return self
+
+    def build(self) -> str:
+        return self.sep.join(self.parts)
+
+
+print(Builder(", ").add(1).add("b").add(2.5).build(), Builder("-").add("x").build())
+
+
+class Tally:
+    # a default value is evaluated once, when the def runs: the objects of every specialization
+    # share the list
+    def __init__(self, v, seen: list[int] = []):
+        seen.append(1)
+        self.v = v
+        self.seen = seen
+
+
+t1 = Tally(1)
+t2 = Tally("s")
+t3 = Tally(2)
+print(len(t1.seen), len(t2.seen), t1.seen is t3.seen, t1.seen is t2.seen)

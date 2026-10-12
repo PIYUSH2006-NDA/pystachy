@@ -165,6 +165,11 @@ special methods compiled when it is made (`Gen` saved and restored as for an ins
 `fglob`). `isinst` takes it for `C`; `short()` and `shown()`, which give CPython's names, drop
 its number, and `typestr()` shows its fields' types (`SPECSHOW`: `Box[int]`), so that messages
 can tell two specializations apart. Each specialization counts towards `TEMPLATE_INSTANCES`.
+A parameter annotated `Callable[[A, B], C]`, `C` a class template, is a template's (`FnInfo.pats`),
+but `pat_arg` gives a function argument the Callable type of what it returns: `adapter_ret`
+compiles the adapter of `to_callable` with its return type left to its return statement, and
+that adapter then serves the Callable `callable[S,A,B]` of the specialization `S` it returns, so a
+field that holds such functions specializes its class by `S` alone.
 
 ### Functions as values and closures
 

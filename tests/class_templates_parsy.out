@@ -1,0 +1,4 @@
+5 None + None
+3 None ['a', 'b', 'b', 'a'] []
+digits '-' | '+' '(' digits ',' digits ')' 'a' | 'b'*
+[exit 0]

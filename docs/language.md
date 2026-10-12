@@ -154,7 +154,10 @@ imports `annotations` from `__future__`.
   return is a template), but in the class's own methods and fields, where it names the
   specialization, as `typing.Self` does (`self.next: "Node | None" = next`). A function passed for
   an unannotated parameter gives a specialization per function, each having its own type: a
-  `Callable[[A], R]` annotation makes one for every function of that shape. Specializations count
+  `Callable[[A], R]` annotation makes one for every function of that shape, also where `R` names a
+  class template (a parameter `fn: Callable[[str, int], Result]`): a function is then the
+  `Callable` of the specialization it returns, so parsers that hold different closures returning
+  one `Result` specialization share a layout. Specializations count
   towards the 4,096 template specializations of a compilation (*Rejected rather than
   miscompiled*).
 - Each variable has one type for its lifetime, fixed by its annotation or first assignment.
