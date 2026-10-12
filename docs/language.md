@@ -173,11 +173,11 @@ imports `annotations` from `__future__`.
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method or function call, or a list, tuple or dict display of those (by its first
-  item), `[x] * n`, `list(range(n))`, `list(xs)` or `sorted(xs)` (not a call of a template,
-  whose result type is known only once it is compiled, nor of a function that returns `None`:
-  annotate the field). An exception class (below) also has its base's fields, and an object
-  of it is an object of its bases too.
+  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
+  `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
+  nor of a function that returns `None`: annotate the field). An exception class (below) also
+  has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
@@ -408,7 +408,9 @@ their own methods, as CPython calls them: lists and tuples compare their items w
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
 `__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
 
-The container protocol is resolved statically too: `o[k]` calls `__getitem__`, `o[k] = v`
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls
+`__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
+a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
 `__iter__` steps through. An `__iter__` annotated `-> Iterator[T]` (or `Iterable[T]`) that
@@ -417,8 +419,9 @@ list's iterator does, wherever the object is iterated: `for` loops, comprehensio
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
 `str.join()` and `list.extend()`; `list()`, `sorted()` and `list.extend()` then call its
 `__len__`, if it has one, as CPython's length hint. A method the operation needs and the class
-does not define is an error with CPython's message (`'C' object is not subscriptable`), and an
-object that is `None` raises CPython's error when it runs.
+does not define is an error with CPython's message (`'C' object is not subscriptable`,
+`'C' object is not callable`), and an object that is `None` raises CPython's error when it
+runs.
 
 ## Builtins and library modules
 

@@ -8523,6 +8523,18 @@ class Gen:
         if k == "name" and e.s in f.params:
             t = f.ptypes[f.params.index(e.s)]
             return t if t != "" or f.bad == "" else "!" + f.bad  # (a parameter whose annotation failed)
+        # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
+        # import or builtin of its name
+        me = f.params[0] if takes_self(f) else ""
+        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            return self.classes[f.cls].ftypes.get(e.s, "")
+        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
+            ms = self.classes[f.cls].methods
+            m = e.kids[0].s
+            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
+        if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
+            return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
         if k == "call" and len(e.kids) == 2 and self.imported_ref(e.kids[0]) == "os.fspath" and unopt(self.guess(e.kids[1], f)) == "str":
             return "str"  # (a str path is its own file system path)
         if k == "call" and e.kids[0].kind == "name":
@@ -8542,13 +8554,6 @@ class Gen:
         if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s in self.classes:
             ms = self.classes[e.kids[0].kids[0].s].methods  # C.m(...): a static or class method
             return ms[e.kids[0].s].ret if e.kids[0].s in ms and ms[e.kids[0].s].deco != "" else ""
-        me = f.params[0] if takes_self(f) else ""
-        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
-            return self.classes[f.cls].ftypes.get(e.s, "")
-        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
-            ms = self.classes[f.cls].methods
-            m = e.kids[0].s
-            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
         if k == "cmp" or (k == "unary" and e.s == "not"):
             return "bool"
         if k == "ifexp":
@@ -11675,9 +11680,9 @@ class Gen:
             c = e.kids[0]
             if c.kind == "attr":
                 self.fl_expr(fl, c.kids[0])
-            elif c.kind != "name":
-                self.fl_expr(fl, c)
-            elif (c.s in self.funcs or c.s in self.classes) and c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
+            elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes) or c.s == fl.me:
+                self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called; self shadows a function or class)
+            elif c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
                 c.chk = True
                 fl.marks[c.s] = True
             # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
@@ -14368,6 +14373,8 @@ class Gen:
     def class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
         # C.m(...): a static or class method called through its class (cls.m(...) in a class method)
         ci = self.class_ready(cn)
+        if m not in ci.methods and m in ci.fdefault and cn.s not in self.nts:
+            return self.obj_call(self.class_attr(cn, m), args, want)  # (C.k(args) of a class attribute k)
         if m not in ci.methods:
             self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
         f = ci.methods[m]
@@ -15479,7 +15486,8 @@ class Gen:
                 self.call_fn(self.classes[f.s].methods["__init__"], [o], args)
                 return o
             if f.s in self.mvars:
-                self.not_callable(f.s, self.gtypes.get(f.s, ""))
+                self.not_callable(f.s, self.gtype(f.s))
+                return self.obj_call(self.expr(f, ""), args, want)
             if f.s in self.unsupported:
                 self.err(self.unsupported[f.s])
             if f.s in EXCEPTIONS and EXCEPTIONS[f.s] != "-":
@@ -15514,17 +15522,22 @@ class Gen:
             return r
         if f.kind == "name":
             self.not_callable(f.s, self.ltype[f.s])
-        self.err("only functions, classes and methods can be called")
-        return Val("", "")
+        return self.obj_call(self.expr(f, ""), args, want)
 
     def not_callable(self, name: str, t: str) -> None:
         # a call of variable name's value (c() for an object c), of type t: CPython's TypeError,
         # unless it has __call__; a builtin's name bound as a variable is rejected as such
         if short(name) in PYBUILTINS or t == "":
             self.err(f"'{name}' is a variable, so it cannot be called")
-        if t in self.classes and "__call__" in self.classes[t].methods:
-            self.err(f"calling an object ({short(t)}.__call__) is not supported")
-        self.err(f"'{tname(unopt(t))}' object is not callable")
+        if t not in self.classes or "__call__" not in self.classes[t].methods:
+            self.err(f"'{tname(unopt(t))}' object is not callable")
+
+    def obj_call(self, o: Val, args: list[Node], want: str) -> Val:
+        # o(args), o already evaluated: o.__call__(args) where o's class defines it, else CPython's
+        # TypeError; an o that is None raises its TypeError once the arguments are evaluated
+        if o.t not in self.classes or "__call__" not in self.classes[o.t].methods:
+            self.err(f"'{tname(unopt(o.t))}' object is not callable")
+        return self.call_fn(self.classes[o.t].methods["__call__"], [o], args, want, "TypeError: 'NoneType' object is not callable")
 
     def bound(self, s: str) -> bool:
         # a builtin's name that the program binds (a local, def, class or module-level variable)
@@ -15606,6 +15619,8 @@ class Gen:
             ci = self.classes[o.t]
             if m not in ci.methods and ci.exc != "" and m in HASATTR["any"].split() + ["add_note", "with_traceback"]:
                 self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
+            if m not in ci.methods and m in ci.ftypes:
+                return self.obj_call(self.getfield(o, self.field(o, m), m), args, "")  # (o.f(args) of a field f)
             if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
                 self.err(f"'{o.t}' object has no method '{m}'")
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
@@ -15668,7 +15683,8 @@ class Gen:
             what = f"argument {j if takes_self(f) else j + 1} of {short(f.name)}()" if j < f.npos else f"argument '{f.params[j]}' of {short(f.name)}()"
         return self.coerce(v, t, what)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "") -> Val:
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "") -> Val:
+        # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
         if f.bad != "":
             self.err(f.bad)  # (before its arguments, whose types may be placeholders')
         if f.ll not in self.called and f.ll in self.lazyat:
@@ -15699,6 +15715,8 @@ class Gen:
             vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
         if f.vararg >= 0:
             vals[f.vararg] = self.tuple_(extra)
+        if none != "":
+            self.notnone(pre[0], none)  # (CPython calls o once it has evaluated the arguments)
         for j in range(np):
             if vals[j].t == "":
                 t = f.ptypes[j]
