@@ -17508,8 +17508,14 @@ def main() -> None:
     rcb = tmp + "/runtime-c.bc"
     rpl = tmp + "/rtpy.ll"
     lnk = tmp + "/runtime-l.bc"
-    part = f"{rtb}.{os.getpid()}"  # renamed over the cache only once complete
     rto = rtb[:-3] + ".o"  # the runtime as machine code, for the JIT tier
+    # the runtime's bitcode and machine code are written to names of this process's own in the
+    # cache's directory, then renamed over the cache once complete (in one file system, so that the
+    # rename is atomic). The process ID alone is no such name: processes in separate PID namespaces
+    # share it (each container's first process is 1), so tmp's random name is in it too
+    own = tmp[tmp.rfind("/") + 1 :]
+    part = f"{rtb}.{os.getpid()}.{own}"
+    parto = f"{rto}.{os.getpid()}.{own}"
     f = open(ll, "w", encoding="latin-1")
     f.write(ir)
     f.close()
@@ -17524,7 +17530,7 @@ def main() -> None:
         code = sh(f"{llvm}clang -O2 -S -emit-llvm {q(rtc)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(rcb)} && {llvm}llvm-link {q(rpl)} {q(rcb)} -o {q(lnk)} && {llvm}opt -O2 {q(lnk)} -o {q(part)} && mv -f {q(part)} {q(rtb)}")
     if code == 0 and cmd == "run":
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
-        code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(part)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(part)} {q(rto)})")
+        code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(parto)} {q(rto)})")
     link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
     libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
     if code != 0:
@@ -17546,14 +17552,14 @@ def main() -> None:
             # PYSTACHY_GC_STRESS_PROGRAM: the program's own collection interval, apart from the
             # compiler's (PYSTACHY_GC_STRESS), so that the tests can stress programs without stressing
             # their compilation
-            for p in [ll, obj, rll, rsl, rcb, rpl, lnk, part]:
+            for p in [ll, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
                 if os.path.exists(p):
                     os.remove(p)
             gsp = os.getenv("PYSTACHY_GC_STRESS_PROGRAM", "")
             env = f"PYSTACHY_GC_STRESS={q(gsp)} " if gsp != "" else ""
             run = f"{env}PYSTACHY_ARGV0={q(SRC)} exec {llvm}lli -extra-object={q(rto)} /dev/fd/9 {' '.join([q(a) for a in rest])}"
             os.execv("/bin/sh", ["sh", "-c", f"exec 9< {q(bc)} && rm -f {q(bc)} && rmdir {q(tmp)} && {run}"])
-    for p in [ll, bc, obj, rll, rsl, rcb, rpl, lnk, part]:
+    for p in [ll, bc, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
         if os.path.exists(p):
             os.remove(p)
     os.rmdir(tmp)
