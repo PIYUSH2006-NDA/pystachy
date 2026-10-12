@@ -243,3 +243,37 @@ t1 = Tally(1)
 t2 = Tally("s")
 t3 = Tally(2)
 print(len(t1.seen), len(t2.seen), t1.seen is t3.seen, t1.seen is t2.seen)
+
+
+class Den:
+    # (no parameter: a template only because it makes an object of one, with no arguments)
+    def __init__(self):
+        self.box = Box(1)
+
+
+class Room:
+    def __init__(self, n):
+        self.n = n
+        self.den = Den()
+
+
+print(Room(3).den.box.v, Room("x").n, Room(2.5).den.box.v + 1)
+
+
+class Ping:
+    # templates that make objects of each other with the same argument types: one Ping[int] and one
+    # Pong[int], each holding the other's
+    def __init__(self, v, depth):
+        self.v = v
+        self.pong = Pong(v, depth)
+
+
+class Pong:
+    def __init__(self, v, depth):
+        self.v = v
+        self.ping = Ping(v, depth - 1) if depth > 0 else None
+
+
+pi = Ping(1, 2)
+ps = Ping("s", 1)
+print(pi.v, pi.pong.v, pi.pong.ping.pong.v, pi.pong.ping.pong.ping.pong.ping is None, ps.pong.ping.v, ps.pong.ping.pong.ping)

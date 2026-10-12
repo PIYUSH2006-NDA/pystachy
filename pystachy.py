@@ -7639,6 +7639,7 @@ class Gen:
         self.tmpl: dict[str, bool] = {}  # the class templates (an __init__ parameter without an annotation)
         self.compiling = False  # every declaration is made: code is being compiled (see guess)
         self.specing: dict[str, str] = {}  # the specializations being made, by template and argument types
+        self.specdone: dict[str, str] = {}  # and those made, which the same call gets again
         self.selfcls = ""  # the class whose method or fields are being declared: what typing.Self is
         self.funcs: dict[str, FnInfo] = {}
         self.aliases: dict[str, str] = {}
@@ -9343,23 +9344,23 @@ class Gen:
 
     def guess_args(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
         # the types of the arguments (but self) that the call of class template __init__ init with
-        # args passes, as guess infers them; [] where it cannot (a keyword or star argument, *args,
-        # a type it cannot infer)
+        # args passes, as guess infers them ([] for none); ["!"] where it cannot (a keyword or
+        # star argument, *args, a type it cannot infer)
         ts: list[str] = []
         if init.vararg >= 0 or init.kwarg >= 0 or len(args) > len(init.params) - 1:
-            return []
+            return ["!"]
         for i in range(1, len(init.params)):
             if i - 1 < len(args):
                 a = args[i - 1]
                 if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
-                    return []
+                    return ["!"]
                 t = self.guess(a, f)
             elif init.defaults[i].kind == "noann":
-                return []
+                return ["!"]
             else:
                 t = "None" if init.defaults[i].kind == "None" else self.guess(init.defaults[i], FnInfo("", "", init.node, ""))
             if t == "" or t.startswith("!"):
-                return []
+                return ["!"]
             ts.append(t)
         return ts
 
@@ -9417,8 +9418,8 @@ class Gen:
             if c in self.tmpl:
                 # a class template's object: of the specialization its arguments' types pick, once
                 # code is being compiled (a specialization compiles its special methods)
-                ts = self.guess_args(self.classes[c].methods["__init__"], e.kids[1:], f) if self.compiling else []
-                return self.specialize(c, ts) if len(ts) > 0 else ""
+                ts = self.guess_args(self.classes[c].methods["__init__"], e.kids[1:], f) if self.compiling else ["!"]
+                return self.specialize(c, ts) if "!" not in ts else ""
             if c in self.classes or c in self.unsupported:
                 return c if c in self.classes else "!" + self.unsupported[c]
             if c in self.funcs:
@@ -18251,6 +18252,10 @@ class Gen:
         # (an annotated parameter's argument has its type, as call_fn coerces it)
         ts = [init.ptypes[i + 1] if i + 1 < len(init.ptypes) and init.ptypes[i + 1] != "" else ts[i] for i in range(len(ts))]
         doing = c + "(" + ",".join(ts) + ")"
+        if doing in self.specdone:
+            # (the same argument types make the same fields: also where templates make objects of
+            # each other, A's __init__ making a B whose __init__ makes an A, which gets the A made)
+            return self.specdone[doing]
         if doing in self.specing:
             # (its __init__ makes another object of these types, self.next = Node(n - 1): the one
             # being made, as a recursive call of a template is)
@@ -18288,6 +18293,7 @@ class Gen:
             del self.classes[name]
             self.selfcls = sel
             self.making.pop()
+            self.specdone[doing] = t.specs[key]
             return t.specs[key]
         if s.bad != "":
             self.err(s.bad)  # (an imported module's class: where the program makes an object of it)
@@ -18295,6 +18301,7 @@ class Gen:
             self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
         self.template_instances += 1
         t.specs[key] = name
+        self.specdone[doing] = name
         SPECSHOW[name] = f"{short(c)}[{', '.join([typestr(s.ftypes[x]) for x in s.fields if x not in t.ftypes])}]"
         for d in t.node.kids[0].kids:
             if d.kind == "def":
