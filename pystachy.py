@@ -14271,12 +14271,15 @@ class Gen:
 
     def isinst_reads(self, c: Node) -> None:
         # c, isinstance's second argument, is built before the test, all of a tuple's or union's
-        # items too: a class it names whose class statement may not have run yet raises there
+        # items too: a class it names whose class statement may not have run yet raises there,
+        # and so does one read through a module whose import raised (modchk)
         if c.kind == "tuple" or (c.kind == "binop" and c.s == "|"):
             for x in c.kids:
                 self.isinst_reads(x)
-        elif c.kind == "name" and (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
-            self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
+        elif c.kind == "name":
+            self.modchk(c)
+            if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
+                self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
 
     def puretype(self, c: Node, u: bool) -> bool:
         # can c, isinstance's second argument, be built without running code or raising, as
