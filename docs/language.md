@@ -442,8 +442,9 @@ result counts as its truth does; without `__contains__`, `x in o` looks for `x` 
 returns `iter(xs)` of a list, a tuple, a `str` or another such object steps through `xs` as a
 list's iterator does, wherever the object is iterated: `for` loops, comprehensions, unpacking,
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
-`math.fsum()`, `math.prod()`, `str.join()` and `list.extend()`; `list()`, `sorted()` and
-`list.extend()` then call its `__len__`, if it has one, as CPython's length hint. A method the
+`math.fsum()`, `math.prod()`, `math.dist()`, `str.join()` and `list.extend()`; `list()`,
+`sorted()` and `list.extend()` then call its `__len__`, if it has one, as CPython's length
+hint. A method the
 operation needs and the class does not define is an error with CPython's message (`'C' object
 is not subscriptable`, `'C' object is not callable`), and an object that is `None` raises
 CPython's error when it runs.
@@ -471,9 +472,12 @@ are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/ma
 `os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
-constants, which raise CPython's domain and range errors, with `fsum` and `prod` (and its
-`start=`) computed as CPython computes them (they take what `sum()` takes, and `fsum` a tuple
-of ints and floats too); `dist`, `gamma`, `isclose`, `lgamma` and `sumprod` are rejected.
+constants, which raise CPython's domain and range errors, with `fsum`, `prod` (and its
+`start=`) and `dist` computed as CPython computes them (`fsum` and `prod` take what `sum()`
+takes, and `fsum` a tuple of ints and floats too; `dist` takes two lists or tuples of
+numbers, NamedTuples or objects with `__iter__`, and copies the first point's items before it
+iterates the second, as its `tuple(p)` does); `gamma`, `isclose`, `lgamma` and `sumprod` are
+rejected.
 
 ## Removed on purpose
 

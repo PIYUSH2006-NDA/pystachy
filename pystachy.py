@@ -5320,7 +5320,7 @@ CALLS: dict[str, str] = {
     "math.isfinite(float)": "pys_m_isfinite:bool", "math.isinf(float)": "pys_m_isinf:bool", "math.isnan(float)": "pys_m_isnan:bool",
     "math.log(float,float)": "pys_m_logb:float", "math.fsum(list[float])": "pys_m_fsum:float",
     "math.prod(list[int],int)": "pys_m_prod_int:int", "math.prod(list[bool],int)": "pys_m_prod_int:int",
-    "math.prod(list[float],float)": "pys_m_prod_float:float",
+    "math.prod(list[float],float)": "pys_m_prod_float:float", "math.dist(list[float],list[float])": "pys_m_dist:float",
     "time.time()": "pys_time:float", "time.time_ns()": "pys_time_ns:int", "time.monotonic()": "pys_monotonic:float",
     "time.monotonic_ns()": "pys_monotonic_ns:int", "time.perf_counter()": "pys_monotonic:float",
     "time.perf_counter_ns()": "pys_monotonic_ns:int", "time.process_time()": "pys_process_time:float",
@@ -5772,6 +5772,7 @@ RUNTIME: dict[str, str] = {
     "m.nextafter": "float:float,float||", "m.ulp": "float:float||", "m.remainder": "float:float,float|R|",
     "m.fma": "float:float,float,float|R|", "m.fsum": "float:list[float]|R A rL|", "m.prod_int": "int:list[T],int|R rL|",
     "m.prod_float": "float:list[float],float|rL|", "m.floats": "list[float]:list[T]|A rL|",
+    "m.dist": "float:list[float],list[float]|R A rL|",
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
@@ -16752,6 +16753,17 @@ class Gen:
             vals[1] = self.coerce(Val(self.optint(vals[1], "0"), "int"), "int")
         elif name == "round" and len(vals) == 2 and is_opt(vals[1].t):
             self.err(f"round() with an ndigits that may be None ({typestr(vals[1].t)}) is not supported: it returns an int where ndigits is None, else a float; test it with 'is not None' first")
+        if name == "math.dist":
+            # tuple(p), then tuple(q): p's __iter__ runs before q is found to be None, and q's
+            # __iter__, which may change the list p steps through, after p's items are copied
+            q = unopt(vals[1].t) if len(vals) == 2 else ""
+            for i in range(len(vals)):
+                t = unopt(vals[i].t)
+                v = self.as_list(self.unwrap(vals[i], "TypeError: 'NoneType' object is not iterable") if is_opt(vals[i].t) else vals[i], name)
+                if i == 0 and q in self.classes and q not in self.nts and (is_list(t) or (t in self.classes and t not in self.nts)):
+                    # (p is a list, or the list its __iter__ steps through: not a copy)
+                    v = Val(self.rt("pys_list_copy", "ptr", [f"ptr {v.v}"]), v.t) if v.t == "list[float]" else self.floats(v)
+                vals[i] = v
         if name == "int" and len(vals) == 2:
             # CPython checks the base before x: its type (a bool is an int), then its range (as
             # pys_int_str does first; checked here too where x may be None, tested before the call)
@@ -16815,7 +16827,7 @@ class Gen:
         if key not in CALLS and name == "math.ldexp" and len(vals) == 2:
             vals = [self.as_float(self.as_int(vals[0])), self.as_int(vals[1])]
             key = f"{name}({','.join([v.t for v in vals])})"
-        if key not in CALLS and (name == "math.fsum" or name == "math.prod"):
+        if key not in CALLS and (name == "math.fsum" or name == "math.prod" or name == "math.dist"):
             # CPython makes a float of each int item (in a product, of each item and the start once
             # there is a float)
             fl = [self.floats(v) for v in vals]
@@ -16999,8 +17011,8 @@ class Gen:
             ts = targs(v.t)
             et = ts[0] if len(ts) > 0 else "str" if name == "join" else "int"  # (the empty tuple: no item to type)
             if any(x != et for x in ts):
-                if name == "math.fsum" and all(self.isnum(x) for x in ts):
-                    et = "float"  # (it makes a float of each item: (1, 2.5) too)
+                if (name == "math.fsum" or name == "math.dist") and all(self.isnum(x) for x in ts):
+                    et = "float"  # (they make a float of each item: (1, 2.5) too)
                 else:
                     self.err(f"{name}() of a {v.t} needs items of a single type")
             r = self.rt("pys_list_new", "ptr", [f"i64 {len(ts)}"])
