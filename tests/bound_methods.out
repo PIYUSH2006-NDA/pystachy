@@ -14,4 +14,7 @@ AttributeError: 'Late' object has no attribute 'v'
 20
 Circle(2.0) Circle.__repr__
 ok clicked 2 ok clicked 5
+side
+TypeError: descriptor 'replace' for 'str' objects doesn't apply to a 'NoneType' object
+[3, 2, 1] {'a': 1, 'b': 2}
 [exit 0]

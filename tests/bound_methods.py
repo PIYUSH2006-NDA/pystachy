@@ -99,3 +99,26 @@ class Button:
 
 btn = Button("ok")
 print(btn.on_click(2), btn.on_click(3))
+
+
+def side() -> str:
+    print("side")
+    return "x"
+
+
+# a method read through its type raises for None once the other arguments are evaluated
+maybe_s: str | None = None
+try:
+    print(str.replace(maybe_s, side(), "y"))
+except TypeError as e:
+    print("TypeError:", e)
+# list.sort and dict.update as values too
+nums = [3, 1, 2]
+sorter = nums.sort
+sorter()
+dd = {"a": 1}
+upd = dd.update
+upd({"b": 2})
+srt = list.sort
+srt(nums, reverse=True)
+print(nums, dd)

@@ -5930,6 +5930,12 @@ def is_sopt(t: str) -> bool:
     return t == "opt[int]" or t == "opt[float]" or t == "opt[bool]"
 
 
+def has_method(base: str, m: str) -> bool:
+    # does builtin type base ("str", "list", "dict", "file", ...) have method m that Pystachy
+    # compiles (METHODS, and those Gen.bmethod dispatches itself)
+    return base + "." + m in METHODS or (base == "list" and m == "sort") or (base == "dict" and m == "update")
+
+
 def is_fn(t: str) -> bool:
     # a function as a value, typed by the function it is: fn[f:NAME] the program's function NAME (a
     # def at a module's top level), fn[b:NAME] the builtin NAME (len, math.sqrt), fn[c:N:QUAL] a def
@@ -16709,7 +16715,7 @@ class Gen:
                                                f"i64 {vals['buffering']}"]), "file")
 
     def method(self, o: Val, m: str, args: list[Node]) -> Val:
-        if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and o.t[5:-1] + "." + m in METHODS:
+        if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
             return self.unbound_call(o.t[5:-1], m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
@@ -16749,15 +16755,19 @@ class Gen:
         t = unopt(o.t)
         if ("list" if is_list(t) else "dict" if is_dict(t) else t) != tn:
             self.err(f"descriptor '{m}' for '{tn}' objects doesn't apply to a '{tname(t)}' object")
+        rest = args[1:]
+        if is_opt(o.t):
+            # (an o that may be None raises once the other arguments are evaluated, as CPython's call does)
+            rest = [mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]) if a.kind == "kw" else self.vnode(self.expr(a, "")) for a in rest]
         o = self.unwrap(o, f"TypeError: descriptor '{m}' for '{tn}' objects doesn't apply to a 'NoneType' object")
-        return self.method(o, m, args[1:])
+        return self.method(o, m, rest)
 
     def method_value(self, o: Val, name: str) -> Val:
         # o.name read as a value, where name is a method of o's value and no field: the method bound
         # to it, fn[m:C.name] for an object of class C, fn[d:name:T] for a str, list, dict or file,
         # whose value is the object (a call through it is o.name(...): call_value); else Val("", "")
         t = unopt(o.t)
-        if (t == "fn[b:str]" or t == "fn[b:list]" or t == "fn[b:dict]") and t[5:-1] + "." + name in METHODS:
+        if (t == "fn[b:str]" or t == "fn[b:list]" or t == "fn[b:dict]") and has_method(t[5:-1], name):
             return Val("null", f"fn[u:{t[5:-1]}.{name}]")  # (str.lower: the method, which takes the str first)
         if t in self.classes:
             ci = self.classes[t]
@@ -16771,7 +16781,7 @@ class Gen:
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[m:{t}.{name}]")
         base = "list" if is_list(t) else "dict" if is_dict(t) else t
-        if base + "." + name in METHODS and (t == "str" or t == "file" or is_list(t) or is_dict(t)):
+        if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t)):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[d:{name}:{t}]")
         return Val("", "")
