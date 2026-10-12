@@ -817,13 +817,17 @@ I pys_m_isfinite(double x) { return isfinite(x); }
 I pys_m_isinf(double x) { return isinf(x); }
 I pys_m_isnan(double x) { return isnan(x); }
 I pys_m_trunc(double x) { return pys_f2i(trunc(x)); }
-/* math.gcd, lcm, isqrt, factorial, comb and perm are in runtime.py */
+/* math.gcd, lcm, isqrt, factorial, comb, perm, fsum and prod are in runtime.py */
 I pys_m_gcd(I a, I b);
 I pys_m_lcm(I a, I b);
 I pys_m_isqrt(I n);
 I pys_m_factorial(I n);
 I pys_m_comb(I n, I k);
 I pys_m_perm(I n, I k);
+double pys_m_fsum(List *l);
+I pys_m_prod_int(List *l, I start);
+double pys_m_prod_float(List *l, double start);
+List *pys_m_floats(List *l);
 
 static double pymod(double a, double b, double *q) {   /* CPython's float_divmod */
   double m = fmod(a, b), d = (a - m) / b;
@@ -1537,12 +1541,13 @@ LOOKUP I pys_dict_find(Dict *d, I k) { return entry(d, k); }
 LOOKUP I pys_dict_entry(Dict *d, I k) { I e = entry(d, k); if (e < 0) keyerr(d, k); return e; }
 void pys_dict_entry_set(Dict *d, I e, I v) { d->vals[e] = v; }
 LOOKUP I pys_dict_get(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : d->vals[e]; }
-LOOKUP void pys_dict_set(Dict *d, I k, I v) {
-  uint64_t h = hsh(d, k); I f = -1, i = dfind(d, k, h, &f);
+static void dset(Dict *d, I k, uint64_t h, I v) {   /* d[k] = v, k's hash h */
+  I f = -1, i = dfind(d, k, h, &f);
   if (i >= 0) { d->vals[d->idx[i] - 1] = v; return; }
   if (d->n >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
   d->keys[d->n] = k; d->vals[d->n] = v; d->hs[d->n] = h; d->idx[f] = (int32_t)++d->n; d->len++;
 }
+LOOKUP void pys_dict_set(Dict *d, I k, I v) { dset(d, k, hsh(d, k), v); }
 static I dpop(Dict *d, I k, I dflt, int has) {
   I i = dfind(d, k, hsh(d, k), 0);
   if (i < 0) { if (!has) keyerr(d, k); return dflt; }
@@ -1592,20 +1597,33 @@ List *pys_dict_items(Dict *d) {
    sparse (8 slots, or more items than USABLE_FRACTION(size / 2)) and otherwise inserts the items
    into a table sized for them (estimate_log2_keysize); dict.copy() clones a table with at most a
    third of holes, and otherwise merges the same way */
-static Dict *clone(Dict *d) {                         /* the same table, holes included */
-  Dict *r = pys_dict_new(d->kind, 0); I u = d->size * 2 / 3;
+static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
+  I u = d->size * 2 / 3;
   r->keys = pys_alloc(u * 8); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
-  return r;
 }
+static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
+static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }
 Dict *pys_dict_from(Dict *d) {
-  if (d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len)) return clone(d);
+  if (clean(d)) return clone(d);
   Dict *r = pys_dict_new(d->kind, 0);
   if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
   return r;
 }
 Dict *pys_dict_copy(Dict *d) { return d->len && d->len >= d->n * 2 / 3 ? clone(d) : pys_dict_from(d); }
+/* d.update(o) of a dict of d's type, as CPython 3.13's dict_dict_merge: an empty d takes a clone
+   of o's table where dict(o) would, else d is resized once for both dicts' items (if o has more
+   than d's table could take), then o's items are inserted in order (with the hashes o keeps) */
+void pys_dict_update(Dict *d, Dict *o) {
+  if (o == d || !o->len) return;
+  if (!d->len && clean(o)) { retable(d, o); return; }
+  if ((d->size ? d->size : 8) * 2 / 3 < o->len) build(d, d, keysize(((d->len + o->len) * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], o->vals[e]);
+}
+/* d.update(pairs) of a list of (key, value) tuples: one insertion per item, as
+   PyDict_MergeFromSeq2 makes them */
+void pys_dict_update_pairs(Dict *d, List *l) { for (I i = 0; i < l->len; i++) { I *t = (I *)l->a[i]; pys_dict_set(d, t[0], t[1]); } }
 
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:

@@ -1,0 +1,40 @@
+['levenshtein', 'classic_levenshtein', 'recursive_levenshtein', 'wf_levenshtein', 'wfi_levenshtein', 'damerau_levenshtein']
+(1, 4, 0) Daniel Lindsley New BSD
+classic 3 [3, 3, 3, 3, 3, 3] True
+same 0 [0, 0, 0, 0, 0, 0] True
+empty 0 [0, 0, 0, 0, 0, 0] True
+a 4 [4, 4, 4, 4, 4, 4] True
+b 6 [6, 6, 6, 6, 6, 6] True
+c 6 [6, 6, 6, 6, 6, 6] True
+d 8 [8, 8, 8, 8, 8, 8] True
+2 1 2
+'' 'abc' 3 3 3 3 3 3 3
+  classic 3 3
+'abc' '' 3 3 3 3 3 3 3
+  classic 3 3
+'a' 'b' 1 1 1 1 1 1 1
+  classic 1 1
+'flaw' 'lawn' 2 2 2 2 2 2 2
+  classic 2 2
+'gumbo' 'gambol' 2 2 2 2 2 2 2
+'saturday' 'sunday' 3 3 3 3 3 3 3
+'ab' 'ba' 2 2 2 2 2 1 1
+  classic 2 2
+'ca' 'abc' 3 3 3 3 3 3 3
+  classic 3 3
+'abcdef' 'badcfe' 4 4 4 4 4 3 3
+'aaa' 'aaaaaa' 3 3 3 3 3 3 3
+  classic 3 3
+'aab' 'aba' 2 2 2 2 2 1 1
+  classic 2 2
+'a\x00b' '\x00ab' 2 2 2 2 2 1 1
+  classic 2 2
+'\t\n' '\n\t' 2 2 2 2 2 1 1
+  classic 2 2
+'Levenshtein' 'Lenvinsten' 4 4 4 4 4 4 4
+'The quick brown fox' 'The quack brown fax!' 3 3 3 3 3 3 3
+'xxxxxxxxxxxxxxxxxxxx' 'yyyyyyyyyyyyyyyyyyy' 20 20 20 20 20 20 20
+'abcdefghijabcdefghijabcdefghij' 'abdcefhgijabdcefhgijabdcefhgij' 12 12 12 12 12 6 6
+'naïve' 'naïf' 2 2 2
+'é' 'è' 1 1 1
+[exit 0]
