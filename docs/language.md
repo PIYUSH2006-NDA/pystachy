@@ -79,10 +79,12 @@ imports `annotations` from `__future__`.
   keeps its type), and its first `return` with a value decides what it returns. It is
   compiled only when a call needs it, so what Pystachy cannot compile in it is an error only
   then. In it, `isinstance(x, T)` (also with a tuple of types or `T | U`), `hasattr(x, "a")`
-  (the builtin types have CPython 3.13's attributes) and `x is None`, when `x`'s type decides
-  them (for an object, which may be `None`, when its argument is known not to be: a new object
-  or `self`), are constants: only the branch that runs is compiled (in `if`, `while`, `assert`,
-  `and`/`or` and conditional expressions), and nothing after a `return`. A parameter whose
+  (the builtin types have CPython 3.13's attributes) and `x is None` (for a parameter `x` also
+  `None is x` and `x == None`, but not for an exception or an object whose class defines
+  `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
+  its argument is known not to be: a new object or `self`), are constants: only the branch that
+  runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
+  nothing after a `return`. A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
@@ -388,7 +390,8 @@ complete format-spec mini-language, `%` formatting with a constant format string
 widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
 that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `and`/`or`
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+`None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
 displays, list comprehensions, generator expressions and
@@ -795,8 +798,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `except ... as x` in a function where `x` is a global (the end of the clause deletes it, as `del`
   would), and at a module's top level where `x` is a global of another type that a function reads
   (the function would not see the exception)
-- `==` between exceptions where an exception class defines `__eq__` or `__ne__` (`is` works), but
-  between objects of classes with a base in common
+- `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
+  or `__ne__` (`is` works), but between objects of classes with a base in common
 - an exception that may be `None` (`Exception | None`, `ValueError | None`; an object of an
   exception class may be)
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:

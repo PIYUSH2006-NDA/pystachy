@@ -5847,6 +5847,14 @@ def nones(e: Node) -> bool:
     return True
 
 
+def nonetest(n: Node) -> int:
+    # n is x is None, x is not None, x == None or x != None (or None is x, None == x, ...): the
+    # index of x in n.kids; -1 otherwise
+    if n.kind != "cmp" or (n.s != "is" and n.s != "is not" and n.s != "==" and n.s != "!="):
+        return -1
+    return 0 if n.kids[1].kind == "None" else 1 if n.kids[0].kind == "None" else -1
+
+
 def same_kind(a: str, b: str) -> bool:
     # are types a and b both lists or both dicts (a class may be named listing)
     return (is_list(a) and is_list(b)) or (is_dict(a) and is_dict(b))
@@ -13814,9 +13822,14 @@ class Gen:
     def static(self, n: Node) -> int:
         # 1 or 0 if n is a test whose result the static types decide and that has nothing else to
         # evaluate: isinstance(x, T), x is None and x is not None for a variable x (that is surely
-        # assigned), and not/and/or of those; -1 otherwise. A template's function, compiled for its
-        # argument types, can so dispatch on them as unannotated code does.
+        # assigned), and not/and/or of those; -1 otherwise. A template's function, compiled for
+        # its argument types, can so dispatch on them as unannotated code does, also with None is
+        # x, x == None and x != None for its parameter x (not where x's class defines __eq__ or
+        # __ne__). Elsewhere == runs: the branch it would remove may give a list its item type.
         k = n.kind
+        x = nonetest(n)
+        if x >= 0 and (x == 1 or n.s == "==" or n.s == "!=") and not (self.curfn.inst and n.kids[x].kind == "name" and n.kids[x].s in self.curfn.params and n.kids[x].s not in self.compvars):
+            x = -1
         if k == "name" and self.static_type(n) == "None":
             return 0  # a parameter whose argument is None is false
         if k == "name" and is_tuple(self.static_type(n)):
@@ -13829,10 +13842,12 @@ class Gen:
             if a < 0 or (a == 1) == (n.s == "or"):
                 return a
             return self.static(n.kids[1])
-        if k == "cmp" and (n.s == "is" or n.s == "is not") and n.kids[1].kind == "None":
-            t = self.static_type(n.kids[0])
-            r = -1 if t == "" or (t in self.classes and not self.knownobj(n.kids[0])) or is_opt(t) else 1 if t == "None" else 0
-            return r if r < 0 or n.s == "is" else 1 - r
+        if x >= 0:
+            t = self.static_type(n.kids[x])
+            r = -1 if t == "" or (t in self.classes and not self.knownobj(n.kids[x])) or is_opt(t) else 1 if t == "None" else 0
+            if (n.s == "==" or n.s == "!=") and (t == "exc" or (t in self.classes and ("__eq__" in self.classes[t].methods or "__ne__" in self.classes[t].methods))):
+                r = -1  # (CPython calls x.__eq__ or __ne__; an exception's class may define one)
+            return r if r < 0 or n.s == "is" or n.s == "==" else 1 - r
         if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "hasattr" and not self.bound("hasattr") and len(n.kids) == 3 and n.kids[2].kind == "str":
             t = self.static_type(n.kids[1], True)
             h = self.has(t, n.kids[2].s) if t != "" else -1
@@ -15335,7 +15350,11 @@ class Gen:
                 r = self.select(self.ins(f"icmp eq i64 {r}, 2"), Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
             return Val(self.ins(MIXCMP[op].replace("R", r)), "bool")
         eq = op == "==" or op == "!="
+        if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):
+            return Val("false" if op == "==" else "true", "bool")  # a number or bool never equals None
         if eq and (a.t == "None" or b.t == "None" or (a.t == b.t and a.t in self.classes)) and self.isref(a.t) and self.isref(b.t):
+            if a.t == "exc" or b.t == "exc":
+                self.exc_eq("exc", "between an exception and None")
             return Val(self.ins(f"icmp {ICMP[op]} ptr {a.v}, {b.v}"), "bool")
         # T and T | None (also as items): None == None, None == x is False, and None < x raises
         ct = self.wider(a.t, b.t)
@@ -15747,7 +15766,8 @@ class Gen:
 
     def dispatches(self, f: FnInfo, p: str) -> bool:
         # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
-        # (not) None, and never assign it: then an object known not to be None decides the tests
+        # (not) None (or p == None, see static), and never assign it: then an object known not to
+        # be None decides the tests
         asg: dict[str, bool] = {}
         local_names(f.node.kids[2].kids, asg)
         return p not in asg and self.tests(f.node.kids[2].kids, p)
@@ -15757,7 +15777,8 @@ class Gen:
         for n in ns:
             if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s == "isinstance" or n.kids[0].s == "hasattr") and len(n.kids) == 3 and n.kids[1].kind == "name" and n.kids[1].s == p:
                 return True
-            if n.kind == "cmp" and (n.s == "is" or n.s == "is not") and n.kids[0].kind == "name" and n.kids[0].s == p and n.kids[1].kind == "None":
+            x = nonetest(n)
+            if x >= 0 and n.kids[x].kind == "name" and n.kids[x].s == p:
                 return True
             if self.tests(n.kids, p):
                 return True
