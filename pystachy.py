@@ -5607,6 +5607,7 @@ RUNTIME: dict[str, str] = {
     "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
     # strings
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.rsplit": "list[str]:S,str,int|R A|", "str.splitlines": "list[str]:S,bool|R A|", "str.strip": "str:S,str|A|",
     "str.lstrip": "str:S,str|A|", "str.rstrip": "str:S,str|A|", "str.startswith": "bool:S,str,int,int|R|",
@@ -14567,17 +14568,15 @@ class Gen:
                 self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
             return self.listcomp(n, want)
         if k == "fstr":
-            acc = Val(self.sconst(""), "str")
-            for i in range(len(n.kids)):
-                part = n.kids[i]
+            parts: list[Val] = []
+            for part in n.kids:
                 if part.kind == "fmt":
-                    s = self.format_(self.expr(part.kids[0], ""), part.kids[1])
+                    parts.append(self.format_(self.expr(part.kids[0], ""), part.kids[1]))
                 elif part.kind == "str":
-                    s = Val(self.sconst(part.s), "str")
+                    parts.append(Val(self.sconst(part.s), "str"))
                 else:
-                    s = self.to_str(self.expr(part, ""))  # compiler-written parts (dataclass __repr__)
-                acc = s if i == 0 else Val(self.rt("pys_str_add", "ptr", [f"ptr {acc.v}", f"ptr {s.v}"]), "str")
-            return acc
+                    parts.append(self.to_str(self.expr(part, "")))  # compiler-written parts (dataclass __repr__)
+            return self.concat(parts)
         self.err(f"unsupported expression '{k}'")
         return Val("", "")
 
@@ -14739,7 +14738,7 @@ class Gen:
     def pformat(self, fmt: str, items: list[Val], rtnone: bool) -> Val:
         # fmt % items; rtnone: a None among them that a conversion cannot take raises when it runs
         # (it is a tuple's place, see percent_opt), as CPython's error
-        acc = Val(self.sconst(""), "str")
+        parts: list[Val] = []
         lit: list[str] = []
         used = 0
         i = 0
@@ -14783,18 +14782,18 @@ class Gen:
             v = items[used]
             used += 1
             if len(lit) > 0:
-                acc = self.cat(acc, Val(self.sconst("".join(lit)), "str"))
+                parts.append(Val(self.sconst("".join(lit)), "str"))
                 lit = []
             if rtnone and v.t == "None" and t not in "sra":
                 return self.fmt_error(self.nonefmt(t))
             if is_sopt(v.t) and t not in "sra":
                 v = self.unwrap(v, "TypeError: " + self.nonefmt(t))
-            acc = self.cat(acc, self.conversion(v, flags, width, prec, t))
+            parts.append(self.conversion(v, flags, width, prec, t))
         if used < len(items):
             return self.fmt_error("not all arguments converted during string formatting")
         if len(lit) > 0:
-            acc = self.cat(acc, Val(self.sconst("".join(lit)), "str"))
-        return acc
+            parts.append(Val(self.sconst("".join(lit)), "str"))
+        return self.concat(parts)
 
     def nonefmt(self, t: str) -> str:
         # what %-conversion t (not s, r or a) raises for None
@@ -14812,6 +14811,41 @@ class Gen:
         if a.v == self.sconst(""):
             return b
         return Val(self.rt("pys_str_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), "str")
+
+    def concat(self, parts: list[Val]) -> Val:
+        # the strs parts as one str (an f-string's pieces, a % format's, all made already, in
+        # order), literals next to each other as one: two pieces are a str.add, three to eight a
+        # str.cat, which copies each piece once, and more are joined eight at a time, then those
+        # joins (each piece is copied once per level: three times up to 512 pieces). Adding them
+        # one at a time would copy every prefix again, quadratic in the pieces (a dataclass's
+        # __repr__ has two per field)
+        ps: list[Val] = []
+        run: list[str] = []  # (the literals since the last other piece; the "" at the end ends a run)
+        for v in parts + [Val("", "str")]:
+            if v.v.startswith("@s."):
+                run.append(self.strvals[int(v.v[3:])])
+                continue
+            s = "".join(run)
+            if s != "":
+                ps.append(Val(self.sconst(s), "str"))
+            run = []
+            if v.v != "":
+                ps.append(v)
+        if len(ps) == 0:
+            return Val(self.sconst(""), "str")
+        while len(ps) > 1:
+            out: list[Val] = []
+            for j in range(0, len(ps), 8):
+                g = ps[j : j + 8]
+                if len(g) == 1:
+                    out.append(g[0])
+                elif len(g) == 2:
+                    out.append(Val(self.rt("pys_str_add", "ptr", [f"ptr {g[0].v}", f"ptr {g[1].v}"]), "str"))
+                else:
+                    args = [f"i64 {len(g)}"] + [f"ptr {x.v}" for x in g] + ["ptr null"] * (8 - len(g))
+                    out.append(Val(self.rt("pys_str_cat", "ptr", args), "str"))
+            ps = out
+        return ps[0]
 
     def conversion(self, v: Val, flags: str, width: str, prec: str, t: str) -> Val:
         # one %-conversion of v, as a format() spec: '-' left-aligns, '0' pads numbers with

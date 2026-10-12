@@ -455,6 +455,17 @@ Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
 }
+/* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
+   The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */
+Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, Str *h) {
+  Str *p[8] = {a, b, c, d, e, f, g, h};
+  I len = 0;
+  for (int i = 0; i < 8; i++) len += i < n ? p[i]->len : 0;
+  Str *s = pys_alloc_atomic(sizeof(Str) + len + 1); s->len = len;
+  char *w = s->s;
+  for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
+  return s;
+}
 Str *pys_str_mul(Str *a, I n) {
   if (n < 0 || !a->len) n = 0;
   if (n && a->len > INT64_MAX / n) pys_fail("OverflowError: repeated string is too long");
