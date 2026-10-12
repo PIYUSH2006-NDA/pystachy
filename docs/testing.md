@@ -11,12 +11,15 @@ honest.
 | `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
 | `make test-ffi` | the FFI's tests, JIT and AOT: C calls and the FFI's errors ([ffi.md](ffi.md#tests)) |
+| `make bench-extended-check` | the [extended performance prototype](extended-performance.md)'s runner failure checks and small CPython/JIT/AOT checksum checks; no timing gates |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
+| `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
+| `make jitprobe` | unused functions do not reach `lli`; live calls, defaults, import effects and runtime callbacks match CPython |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
 
 ## Differential tests
@@ -54,7 +57,7 @@ use, loops with `else`, the `lib/` modules (`tests/lib_*.py`), definite assignme
 streams, exceptions and exit statuses, runtime errors (also CPython's wording of the type and argument errors Pystachy reports
 when it compiles), garbage-collector churn, classic
 algorithms, a small interpreter, and 16 programs from Ouro v2. Where `tests/NAME.full`
-exists, the program's stdout is `/dev/full`. Current result: **1886 passed, 0 failed** with
+exists, the program's stdout is `/dev/full`. Current result: **1931 passed, 0 failed** with
 both the CPython-hosted and the self-compiled compiler.
 
 ## `make verify`
@@ -110,7 +113,10 @@ versions, platform, git commit and a timestamp:
   lookups visit for twelve key patterns that defeat a weak hash or probe sequence (`i << 46`,
   spaced ints, str keys sharing a long prefix or suffix, ...) and every shift `i << s`, with
   sequential keys as the control, at 4k to 30k keys, and fails above 3 slots per lookup: the
-  counts are the same on every machine, so no timing is compared with a threshold;
+  counts are the same on every machine, so no timing is compared with a threshold. A test-only
+  wrapper around the real string hash also counts calls and bytes: repeated, alternating,
+  equal-but-distinct and tuple keys retain their caches across lookups, resize and deletion.
+  `--hash-cache` runs those cache checks alone, also with collection at every allocation;
 - **inherited-ast** — `tools/inheritprobe.py` counts retained and cloned AST nodes for an
   unused class method with N statements and N exception subclasses at N = 80, 160 and 320.
   Both counts must stay linear; native ir/run/build also succeed at N = 800 under 256 MiB.
@@ -128,6 +134,10 @@ versions, platform, git commit and a timestamp:
   in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
   seconds. Finite controls check active-budget release and reuse of completed instances at the
   compilation-wide limit of 4,096 specializations;
+- **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
+  35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
+  function's default, import effects and the runtime's object comparison/representation callbacks
+  must still execute as in CPython. The guard has no timing threshold;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with

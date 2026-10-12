@@ -39,6 +39,8 @@
 #   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types and
 #                  specialization breadth under 256 MiB / ten CPU seconds, with short diagnostics;
 #                  finite controls and reuse at the retained-instance boundary still compile
+#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
+#                  still execute as in CPython, with both compilers
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
@@ -281,13 +283,18 @@ step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
 L=$V/dict-probes.log; s=$(now); r=fail
 { "$V/pystachy2" rt runtime.py -o "$V/dictprobe-rt.ll" && "${LLVM}clang" -O2 -S -emit-llvm tools/dictprobe.c -o "$V/dictprobe.ll" &&
   "${LLVM}llvm-link" "$V/dictprobe-rt.ll" "$V/dictprobe.ll" -o "$V/dictprobe.bc" && "${LLVM}clang" -O2 "$V/dictprobe.bc" -o "$V/dictprobe" -lm &&
-  "$V/dictprobe" && r=pass; } > "$L" 2>&1
+  "$V/dictprobe" && PYSTACHY_GC_STRESS=1 "$V/dictprobe" --hash-cache && r=pass; } > "$L" 2>&1
 step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per lookup (limit \([0-9.]*\))$/, "worst_average_slots": \1, "limit": \2/p' "$L")"
 
 # ---- compile limits: small sources must receive bounded source diagnostics, not exhaust memory
 L=$V/compile-limits.log; s=$(now); r=fail
 $PY tools/compilelimits.py -c "hosted=$PY pystachy.py" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step compile-limits $r "$s" "$L" ', "address_space_mib": 256, "cpu_seconds": 10, "modes": ["ir", "run", "build"]'
+
+# ---- JIT dead code: inspect the actual execution module, without a timing threshold
+L=$V/jit-dead-code.log; s=$(now); r=fail
+$PY tools/jitprobe.py -c "hosted=$PY -m pystachy" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
+step jit-dead-code $r "$s" "$L" ', "unused_functions": 35, "compilers": ["CPython-hosted", "stage2"]'
 
 # ---- scaling: compile time grows linearly with generated programs (counts need Python 3.12+)
 L=$V/scaling.log; s=$(now); r=fail

@@ -22,7 +22,7 @@ flowchart TD
     rtpy["runtime.py: str methods, format specs, math, dict hashing, in the subset"] -->|pystachy rt| rtbc
     lower --> ir["LLVM IR"]
     ir --> aot["pystachy build: llvm-link with the runtime bitcode, clang -O2 on the whole module"]
-    ir --> jit["pystachy run: opt (mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
+    ir --> jit["pystachy run: opt (globaldce, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
     rtbc --> aot
     rtbc --> jit
     aot --> exe["native executable"]
@@ -267,7 +267,14 @@ the table is rebuilt, with its sizes and growth, and `dict(d)` merges as CPython
 so deletion is O(1) and a loop that changes its dict, `reversed(d)` included, sees what
 CPython's would. The index follows CPython's probe sequence (each step mixes in five more
 bits of the hash), over a hash that costs one multiply: one round of SplitMix64's mixer
-for an int, FNV-1a with the high half folded into the low for a str; a dict of tuple keys
+for an int, FNV-1a with the high half folded into the low for a str. Each string caches its
+dictionary-normalized hash lazily in an eight-byte header field (zero means uncomputed,
+a raw zero hash is stored as one). Reusing that object hashes its bytes once, including
+when it is a tuple component; newly constructed equal strings still need hashing and
+may need a byte comparison. String bytes stay immutable, but literals occupy writable
+LLVM globals for the cache. The header grows from eight to sixteen bytes, before allocator
+rounding. This internal cache does not change the compiler's semantic effects or the raw
+hash function in `runtime.py`. A dict of tuple keys
 holds their type descriptor, by which a key's hash mixes its items' hashes and keys compare
 as `==` compares the tuples (a `None` item hashes and compares as `None` also where the
 descriptor says `str`, which is how a looked-up tuple whose item may be `None` finds no
@@ -309,8 +316,10 @@ against CPython's own str methods, `math` and `format()`.
 
 ### Two tiers
 
-`run` favors latency: a three-pass pipeline over the program alone, then
-ORC JIT compilation linked against a cached, precompiled runtime `.o`. `build` favors
+`run` favors latency: `globaldce` removes unused internal functions before the three
+function cleanup passes, then ORC JIT compilation links against a cached, precompiled
+runtime `.o`. Frontend checks and definition-time effects still run; the external
+object-dispatch callbacks remain available to the runtime. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags
 (such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set (and per

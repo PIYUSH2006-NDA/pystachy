@@ -26,7 +26,8 @@ disagrees with its entry is an internal error. This tool checks the table itself
     through getelementptr, load (the list's items array, an item), phi, select and casts,
     the locals they are stored in, and the parameters of the runtime functions they are passed
     to (from clang -O1, whose SSA form leaves few locals; a C library function other than
-    READS_ONLY counts as both, and user code as neither: that is U);
+    READS_ONLY counts as both, and user code as neither: that is U). Stores to Str.dict_hash
+    alone are excluded: caching a hash changes neither a string's value nor a container;
   - it has I if its call graph, outside a raise (R: the funnels, which end the program or
     unwind to a handler) and the allocator (A), reads or writes a mutable static of the runtime
     other than NO_STATE's or calls a C library function other than PURE_C's (I/O, the process,
@@ -241,15 +242,25 @@ def params(ll):
     # derived from it), or None for a parameter that is no ptr or i64
     fns = {}
     cur = None
+    cache_layout = "%struct.Str = type { i64, i64, [0 x i8] }" in ll.split("\n")
+    cache_fields = set()
     for line in ll.split("\n"):
         m = re.match(r"define [^@]*@([\w.]+)\((.*)\)[^(]*\{$", line)
         if m:
             cur = ([ssa(p) if p.startswith(("ptr", "i64")) else None for p in split_top(m.group(2))], [])
             fns[m.group(1)] = cur
+            cache_fields = set()
         elif line == "}":
             cur = None
         elif cur is not None and line.startswith("  "):
+            # Only a direct i64 store to Str's second field is an invisible cache write.
+            # Keep its loads, calls, and every other reachable store in the effect analysis.
+            m = re.fullmatch(r"  (%[\w.]+) = getelementptr (?:inbounds )?%struct.Str, ptr %[\w.]+, i64 0, i32 1", line)
+            if cache_layout and m:
+                cache_fields.add(m.group(1))
             x = instruction(line.strip())
+            if x is not None and x[0] == "store" and x[2][1] in cache_fields and line.startswith("  store i64 "):
+                continue
             if x is not None:
                 cur[1].append(x)
     eff = {f: [None if p is None else [False, False, False] for p in fns[f][0]] for f in fns}
@@ -325,6 +336,21 @@ def derived(fns, eff, f, p):
                     D.add(dest)
                     more = True
     return [r, w, ret]
+
+
+# The cache exception must not hide writes to string contents, lengths, or another struct.
+for _struct, _field, _store, _writes in [
+    ("Str", 1, "i64", False), ("Str", 0, "i64", True), ("Str", 2, "i8", True),
+    ("Dict", 1, "i64", True), ("Str", 1, "i32", True),
+]:
+    _probe = f"""%struct.Str = type {{ i64, i64, [0 x i8] }}
+define void @probe(ptr %p) {{
+  %field = getelementptr inbounds %struct.{_struct}, ptr %p, i64 0, i32 {_field}
+  store {_store} 1, ptr %field
+  ret void
+}}
+"""
+    assert params(_probe)["probe"][0][1] is _writes
 
 
 def state(ll):
