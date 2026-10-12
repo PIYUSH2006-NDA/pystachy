@@ -13,5 +13,5 @@ via-print.
 a function is true
 False True
 double len sqrt shout abs add
-30 2 's'
+30 2 's' 4.0 2
 [exit 0]
