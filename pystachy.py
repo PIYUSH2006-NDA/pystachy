@@ -5458,6 +5458,11 @@ for _k in ("abs all any ascii bin bool bytes callable chr complex dict divmod en
            "int isinstance issubclass iter len list map max min object oct ord pow range repr reversed round set slice sorted "
            "str sum tuple zip __pys_repr __pys_str __pys_ascii typing.cast os.getcwd os.getenv os.environ.get").split():
     PURE[_k] = True
+# the builtins whose calls the body of a class Pystachy leaves out still runs: given values of
+# builtin types, they compute what CPython's do and may raise (int("x"), max([])), see Gen.plain
+RAISERS: dict[str, bool] = {}
+for _k in "float int max min".split():
+    RAISERS[_k] = True
 # encoding= names of UTF-8 (1) and Latin-1 (2) as CPython's codec lookup finds them (see codec()):
 # a str holds the file's bytes either way, which is what CPython's str holds for a Latin-1 file
 CODECS: dict[str, int] = {}
@@ -5864,6 +5869,27 @@ def owner(name: str) -> str:
 def short(name: str) -> str:
     # a function's or class's own name, without its module (heapq$heappush: heappush)
     return name[name.rfind("$") + 1 :]
+
+
+def raising_op(op: str) -> bool:
+    # does binary operator op raise on some values of builtin types (1 // 0, 0 ** -1, 1 << -1)
+    return op == "/" or op == "//" or op == "%" or op == "**" or op == "<<" or op == ">>"
+
+
+def raising(e: Node) -> bool:
+    # is expression e an operation that may raise on values of builtin types: a division or
+    # modulo, a power or shift, an index, or a call (int("x"))
+    return (e.kind == "binop" and raising_op(e.s)) or e.kind == "index" or e.kind == "call"
+
+
+def may_raise(e: Node) -> bool:
+    # does expression e hold such an operation
+    if raising(e):
+        return True
+    for x in e.kids:
+        if may_raise(x):
+            return True
+    return False
 
 
 def is_const(e: Node) -> bool:
@@ -7083,6 +7109,7 @@ class Gen:
         self.hooks: dict[str, str] = {}  # see hook()
         self.chooks: dict[int, str] = {}
         self.flagged: dict[str, bool] = {}  # globals whose "is assigned" flag effect() reads
+        self.unraised: dict[str, bool] = {}  # the modules where a class left out held an operation that may raise, not evaluated (left_out)
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
@@ -10930,9 +10957,18 @@ class Gen:
                 self.err(f"unsupported decorator @{short(x.s)}: CPython applies it when module '{self.curfn.mod}' is imported" + (f", and {e}" if e != "" else ""))
         return key
 
-    def class_effect(self, st: Node, why: str) -> None:
+    def left_out(self, st: Node, why: str) -> None:
+        # class statement st of the module's code, which Pystachy leaves out (for the reason why).
+        # After one whose body held an operation that may raise and was not evaluated, CPython may
+        # have raised there, so the later ones evaluate none (see body_effect)
+        m = self.curfn.mod
+        if not self.class_effect(st, why, m not in self.unraised):
+            self.unraised[m] = True
+
+    def class_effect(self, st: Node, why: str, runs: bool = True) -> bool:
         # class statement st, which Pystachy leaves out (for the reason why): CPython evaluates its
-        # decorators and bases, runs its body, creates the class and applies the decorators
+        # decorators and bases, runs its body, creates the class and applies the decorators. runs:
+        # the statement surely runs there (see body_effect, which gives the result)
         c = st.kids[0] if st.kind == "subclass" else st
         does = f"creates class {short(c.s)}"
         self.decorators(c, c.kids[1:], {})
@@ -10947,25 +10983,33 @@ class Gen:
             elif e == "" and b.kind != "kw" and b.kind != "typeparams" and not ("$" not in p and p in PYBUILTINS) and self.imported(p) == "":
                 e = f"its base '{short(p)}' may not be a class"  # (its __mro_entries__ may run)
             self.eager(e if e != "" or b.kind != "index" else self.effect(b.kids[1], {}, 2), why, does)
-        self.body_effect(c.kids[0].kids, {}, why, f"runs this statement of the body of class {short(c.s)}")
+        return self.body_effect(c.kids[0].kids, {}, why, f"runs this statement of the body of class {short(c.s)}", runs)
 
-    def body_effect(self, body: list[Node], local: dict[str, str], why: str, does: str) -> None:
-        # the statements of a class body Pystachy leaves out (local: the names it has bound)
+    def body_effect(self, body: list[Node], local: dict[str, str], why: str, does: str, runs: bool = True) -> bool:
+        # the statements of a class body Pystachy leaves out (local: the names it has bound). Where
+        # they surely run (runs: not in a branch), the operations of their values that may raise
+        # (1 // 0) are compiled in order, so that they raise as CPython's do, up to the first one
+        # Pystachy does not compile (raisers). False if they hold such an operation, uncompiled
+        clear = True
         for b in body:
             self.line = b.line
             k = b.kind
             e = ""
             if k == "def":
                 local[b.s] = "p" if self.decorators(b, b.kids[3:], local) == "property" else "f"
+                clear = clear and not any(may_raise(x) for x in b.kids[3:])
                 for p in b.kids[0].kids:
                     self.eager(self.effect(p.kids[1], local, 0), why, does)
+                    clear = self.raisers(p.kids[1], local, runs and clear) and clear
             elif k == "class" or k == "subclass":
-                self.class_effect(b, "nested classes are not supported")
+                clear = self.class_effect(b, "nested classes are not supported", runs and clear) and clear
                 local[short(b.s)] = "f"
             elif k == "if":
                 self.eager(self.effect(b.kids[0], local, 1), why, does)
-                self.body_effect(b.kids[1].kids, local, why, does)
-                self.body_effect(b.kids[2].kids, local, why, does)
+                clear = self.raisers(b.kids[0], local, runs and clear) and clear
+                yes = self.body_effect(b.kids[1].kids, local, why, does, False)
+                no = self.body_effect(b.kids[2].kids, local, why, does, False)
+                clear = clear and yes and no
             elif k == "assign" or k == "annassign" or k == "augassign" or k == "expr":
                 # (CPython calls a class attribute's __set_name__, each unpacked one's too)
                 ts: list[str] = []
@@ -10977,6 +11021,9 @@ class Gen:
                 e = e if e != "" or k != "augassign" else self.effect(b.kids[0], local, 2)
                 if e == "" and (k != "annassign" or len(b.kids) == 3):
                     e = self.effect(b.kids[-1], local, u)
+                    if e == "":
+                        # (then an unpacking, or an augmented assignment's division, may raise)
+                        clear = self.raisers(b.kids[-1], local, runs and clear) and clear and not (u == 2 and (k != "augassign" or raising_op(b.s)))
                 for nm in ts:
                     local[nm] = ""
                 self.eager(e, why, does)
@@ -10988,6 +11035,72 @@ class Gen:
             elif k != "pass":
                 k = "import" if k.endswith("import") else k
                 self.eager(f"Pystachy does not check what {'an' if k[0] in 'aeiou' else 'a'} '{k}' statement there runs", why, does)
+        return clear
+
+    def raisers(self, e: Node, local: dict[str, str], run: bool) -> bool:
+        # value e of a class body Pystachy leaves out (local: the names it has bound): where it
+        # surely runs (run), its operations that may raise (raising) and that Pystachy computes as
+        # CPython does (plain) are compiled in CPython's order, their values dropped, so that they
+        # raise as CPython's do. False if e holds such an operation that is not compiled: CPython
+        # may raise there first, so nothing after it is compiled
+        if not may_raise(e):
+            return True
+        if not run:
+            return False
+        k = e.kind
+        if raising(e) and self.plain(e, local) != "":
+            self.expr(e, "")
+            return True
+        n = len(e.kids)
+        if k == "ifexp" or k == "boolop" or k == "cmp":
+            n = 2 if k == "cmp" else 1  # (the operands that surely run)
+        elif k not in ["binop", "unary", "index", "slice", "call", "attr", "tuple", "list", "set", "dict", "starred", "dstar"]:
+            return False
+        for x in e.kids[:n]:
+            if not self.raisers(x.kids[0] if x.kind == "kw" else x, local, True):
+                return False
+        return not raising(e) and not any(may_raise(x) for x in e.kids[n:])
+
+    def plain(self, e: Node, local: dict[str, str]) -> str:
+        # the type of value e of a class body Pystachy leaves out (local: the names it has bound) if
+        # Pystachy computes e as CPython does, else "": a literal, a variable of the module of a
+        # builtin type, or one of these operations on them, which may raise but compute no int
+        # beyond 64 bits (where Pystachy's raise OverflowError, see docs/language.md, Deviations):
+        # //, % and / of numbers, an index of a str, list or dict, int() and float() of a number or
+        # str, and min() and max() of a str or list
+        k = e.kind
+        if k == "unary" and e.s == "-" and (e.kids[0].kind == "int" or e.kids[0].kind == "float"):
+            return self.plain(e.kids[0], local)
+        if k == "int":
+            d = e.s[1:] if e.s.startswith("-") else e.s
+            return "int" if len(d) < 19 or (len(d) == 19 and d <= "9223372036854775807") else ""  # (else an error, see expr)
+        if k == "float" or k == "str":
+            return k
+        if k == "name":
+            t = self.gtypes.get(e.s, "")
+            ok = t == "int" or t == "float" or t == "str" or ((is_list(t) or is_dict(t)) and "?" not in t and not self.objects(t, 2))
+            return t if "$" in e.s and ok else ""  # (not a name the body bound, which is not qualified)
+        if k == "binop" and (e.s == "//" or e.s == "%" or e.s == "/"):
+            a = self.plain(e.kids[0], local)
+            b = self.plain(e.kids[1], local)
+            if (a == "int" or a == "float") and (b == "int" or b == "float"):
+                return "float" if e.s == "/" or a == "float" or b == "float" else "int"
+            return ""
+        if k == "index":
+            o = self.plain(e.kids[0], local)
+            i = self.plain(e.kids[1], local)
+            if (o == "str" or is_list(o)) and i == "int":
+                return o if o == "str" else elem(o)
+            return targs(o)[1] if is_dict(o) and i != "" and i == targs(o)[0] else ""
+        if k == "call" and len(e.kids) == 2 and e.kids[0].kind == "name":  # (one argument: not a keyword, see a)
+            f = e.kids[0].s
+            a = self.plain(e.kids[1], local)
+            if f not in RAISERS or f in local or self.bound(f) or a == "":
+                return ""
+            if f == "int" or f == "float":
+                return f if a == "int" or a == "float" or a == "str" else ""
+            return "str" if a == "str" else elem(a) if is_list(a) and (elem(a) == "int" or elem(a) == "float" or elem(a) == "str") else ""
+        return ""
 
     def body_names(self, c: Node) -> dict[str, bool]:
         # the names class statement c's body binds, by assignment or def
@@ -12160,7 +12273,7 @@ class Gen:
                     ci.bad = f"class {shown(ci.name)} is not supported: {why}"
         if ci.bad != "":
             # an imported module's class Pystachy cannot compile: an error only where used
-            self.class_effect(self.cnodes[ci.node.line], ci.bad)
+            self.left_out(self.cnodes[ci.node.line], ci.bad)
             return
         bound: dict[str, bool] = {}
         syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann"  # (a dataclass's)
@@ -13525,7 +13638,7 @@ class Gen:
             if n.s in self.gflag:
                 self.emit(f"store i1 true, ptr @g.{n.s}.def")
         elif k == "lclass":
-            self.class_effect(self.cnodes[n.line], self.unsupported[n.s])
+            self.left_out(self.cnodes[n.line], self.unsupported[n.s])
         elif k == "import":
             for a in n.kids:
                 self.aliases[a.s] = a.kids[0].s

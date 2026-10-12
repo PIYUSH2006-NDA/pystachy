@@ -370,7 +370,13 @@ never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
-compile, and the parts it can compile of the others (the items of a display). What it leaves
+compile, and the parts it can compile of the others (the items of a display). Of a class body,
+it evaluates in order the operations that may raise and that it computes as CPython does, but
+not in the branches of an `if`: `//`, `%` and `/` of numbers, an index of a str, list or dict,
+`int()` and `float()`, and `min()` and `max()` of a str or list, applied to literals and the
+module's variables (`1 // 0`, `TABLE["k"]`, `int(s)`). It stops at the first operation that may
+raise and that it does not evaluate (another call, `**`, `1 // n` of the body's own `n`), and
+evaluates none in the module's later classes. What it leaves
 uncompiled (decorators, default values, bases, a class body) must run no code of the
 program: it may read names, compute with literals and builtin values (`2 ** 31 - 1`,
 `TABLE.get(k)`, `sorted(xs, key=len)`, `math.sqrt(2.0)`, `typing.Optional[int]`), bind and
@@ -592,7 +598,8 @@ In these cases the program compiles but can behave differently from CPython:
   `typing`'s checks of `NamedTuple`, `TypedDict`, `Protocol` and `Generic` classes, `__slots__`
   conflicts, `@dataclass`'s field order and mutable defaults, a base that is not a class or
   cannot be subscripted (but a subscript of a class without bases, above), and an exception
-  that a builtin operation in its body raises. A template's code is compiled per argument
+  that a builtin operation in its body raises where Pystachy does not evaluate it (above), as
+  `1 // n` of the body's own `n`. A template's code is compiled per argument
   types, so a type error in code a program never calls is not reported (syntax errors are), and its
   variables keep one type, so code that rebinds one to another type (`a /= b` on ints) is
   rejected when it is compiled.
