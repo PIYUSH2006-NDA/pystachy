@@ -466,12 +466,18 @@ Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, St
   for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
   return s;
 }
-Str *pys_str_mul(Str *a, I n) {
+Str *pys_str_mul(Str *a, I n) {       /* as CPython's _PyBytes_Repeat: one byte is a memset, else the copied
+                                         prefix doubles, log2(n) memcpys rather than n */
   if (n < 0 || !a->len) n = 0;
   if (n && a->len > INT64_MAX / n) pys_fail("OverflowError: repeated string is too long");
   if (a->len * n > INT64_MAX - 64) pys_fail("MemoryError");
-  Str *s = pys_alloc_atomic(sizeof(Str) + a->len * n + 1); s->len = a->len * n;
-  for (I i = 0; i < n; i++) memcpy(s->s + i * a->len, a->s, a->len);
+  I m = a->len * n, k = a->len, c;
+  Str *s = pys_alloc_atomic(sizeof(Str) + m + 1); s->len = m;
+  if (k == 1) memset(s->s, a->s[0], m);
+  else if (m) {
+    memcpy(s->s, a->s, k);
+    for (; k < m; k += c) { c = k < m - k ? k : m - k; memcpy(s->s + k, s->s, c); }
+  }
   return s;
 }
 I pys_str_eq(Str *a, Str *b) { return a == b || (a->len == b->len && !memcmp(a->s, b->s, a->len)); }
@@ -791,14 +797,14 @@ double pys_m_atan2(double y, double x) { return atan2(y, x); }
 typedef struct { double hi, lo; } DL;
 static DL dl_fast_sum(double a, double b) { double x = a + b; return (DL){x, (a - x) + b}; }
 static DL dl_mul(double x, double y) { double z = x * y; return (DL){z, fma(x, y, -z)}; }
-static double vnorm(double *v, int n, double max) {
+static double vnorm(double *v, I n, double max) {
 #pragma clang fp contract(off)
   double csum = 1.0, frac1 = 0.0, frac2 = 0.0, x, h, scale; DL pr, sm; int e;
   if (max == 0.0 || n <= 1) return max;
   frexp(max, &e);
-  if (e < -1023) { for (int i = 0; i < n; i++) v[i] /= 0x1p-1022; return 0x1p-1022 * vnorm(v, n, max / 0x1p-1022); }
+  if (e < -1023) { for (I i = 0; i < n; i++) v[i] /= 0x1p-1022; return 0x1p-1022 * vnorm(v, n, max / 0x1p-1022); }
   scale = ldexp(1.0, -e);
-  for (int i = 0; i < n; i++) {
+  for (I i = 0; i < n; i++) {
     x = v[i] * scale; pr = dl_mul(x, x); sm = dl_fast_sum(csum, pr.hi);
     csum = sm.hi; frac1 += pr.lo; frac2 += sm.lo;
   }
@@ -1486,6 +1492,16 @@ double pys_sum_float(List *l, double s) { return fsum(l, 0, s); }
 /* an int start: CPython adds the first float to it plainly, then sums the rest compensated */
 double pys_sum_float_int(List *l, I s) { return l->len ? fsum(l, 1, (double)s + dbl(l->a[0])) : (double)s; }
 double pys_sum_int_float(List *l, double s) { for (I i = 0; i < l->len; i++) s += (double)l->a[i]; return s; }   /* ints: not compensated */
+double pys_m_dist(List *p, List *q) {   /* math.dist: hypot's vnorm of the differences of two lists of floats */
+  if (p->len != q->len) pys_fail("ValueError: both points must have the same number of dimensions");
+  double b[16], *v = p->len > 16 ? pys_alloc_atomic(p->len * 8) : b, max = 0.0; int nan = 0;
+  for (I i = 0; i < p->len; i++) {
+    v[i] = fabs(dbl(p->a[i]) - dbl(q->a[i])); nan |= isnan(v[i]);
+    if (v[i] > max) max = v[i];   /* a NaN is never the max */
+  }
+  if (isinf(max)) return max;
+  return nan ? NAN : vnorm(v, p->len, max);
+}
 I pys_range_len(I a, I b, I s) {                     /* len(range(a, b, s)) as an unsigned count */
   if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
   uint64_t d = s > 0 ? (uint64_t)b - (uint64_t)a : (uint64_t)a - (uint64_t)b, st = s > 0 ? (uint64_t)s : -(uint64_t)s;
@@ -1681,9 +1697,17 @@ void pys_dict_update(Dict *d, Dict *o) {
   if ((d->size ? d->size : 8) * 2 / 3 < o->len) build(d, d, keysize(((d->len + o->len) * 3 + 1) / 2));
   for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], o->vals[e]);
 }
-/* d.update(pairs) of a list of (key, value) tuples: one insertion per item, as
-   PyDict_MergeFromSeq2 makes them */
+/* d.update(pairs) of a list of (key, value) tuples, and dict.fromkeys(keys, v) of a list: one
+   insertion per item, as PyDict_MergeFromSeq2 and _PyDict_FromKeys make them */
 void pys_dict_update_pairs(Dict *d, List *l) { for (I i = 0; i < l->len; i++) { I *t = (I *)l->a[i]; pys_dict_set(d, t[0], t[1]); } }
+Dict *pys_dict_fromkeys(I kind, List *l, I v) { Dict *d = pys_dict_new(kind, 0); for (I i = 0; i < l->len; i++) pys_dict_set(d, l->a[i], v); return d; }
+/* dict.fromkeys(o, v) of a dict o: sized for o's keys at once, as dict_dict_fromkeys does */
+Dict *pys_dict_fromkeys_dict(Dict *o, I v) {
+  Dict *d = pys_dict_new(o->kind, 0);
+  build(d, d, keysize((o->len * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], v);
+  return d;
+}
 
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:
