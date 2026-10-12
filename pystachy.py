@@ -3459,6 +3459,7 @@ class Loader:
         self.laterd: list[str] = []
         # what the imports in a function bind (for that function only), by the def's line
         self.fks: dict[str, dict[str, str]] = {}
+        self.fkline: dict[str, int] = {}  # and the line of the first import that binds each name, by "<def's line> <name>"
         self.fgl: dict[str, dict[str, bool]] = {}  # and the names its global statements declare
         self.curdef = ""  # the def whose body imports() is in
         self.fk: dict[str, str] = {}  # the bindings of the function being qualified
@@ -4671,6 +4672,8 @@ class Loader:
             k = f"x:'{name}' is bound by two imports, to different modules, functions or classes (not supported)"
             if not infn:
                 fail(k[2:], line)
+        if infn and name not in ks:
+            self.fkline[f"{self.curdef} {name}"] = line
         ks[name] = k
 
     def import_stmt(self, m: Mod, st: Node, infn: bool, out: list[Node]) -> None:
@@ -5069,6 +5072,13 @@ class Loader:
                         # (a function's import of a Python module binds a local, which CPython reads
                         # unbound before it runs)
                         st.kids[2].kids.insert(0, mk("badimport", f"'{nm}' is read in {st.s}() where Pystachy cannot tell that the import in it that binds '{nm}' has run (where it has not, CPython raises UnboundLocalError): not supported", st.line, []))
+                        break
+                for nm in self.fk:
+                    if nm in inner:
+                        # (one binding per name, as in module code: CPython's import rebinds the
+                        # function's variable, which every read of the name here would read)
+                        at = self.fkline.get(f"{st.line} {nm}", st.line)
+                        st.kids[2].kids.insert(0, mk("badimport", f"'{nm}' is bound both as a variable and by an import (not supported)", at, []))
                         break
                 self.fkey = str(st.line)
                 self.qdef = True
