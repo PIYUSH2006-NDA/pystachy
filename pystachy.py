@@ -5300,7 +5300,7 @@ FCMP: dict[str, str] = {"==": "oeq", "!=": "une", "<": "olt", "<=": "ole", ">": 
 # special methods: "number of parameters (with self):required return type"
 SPECIAL: dict[str, str] = {"__str__": "1:str", "__repr__": "1:str", "__len__": "1:int", "__bool__": "1:bool", "__format__": "2:str",
                            "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool"}
-for _k in "add sub mul truediv floordiv mod iadd isub imul itruediv ifloordiv imod".split():
+for _k in "add sub mul truediv floordiv mod matmul and or xor lshift rshift iadd isub imul itruediv ifloordiv imod imatmul iand ior ixor ilshift irshift".split():
     SPECIAL[f"__{_k}__"] = "2:"
 for _k in "neg pos invert".split():
     SPECIAL[f"__{_k}__"] = "1:"
@@ -5315,6 +5315,7 @@ MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<
 REFL: dict[str, str] = {"<": ">", "<=": ">=", ">": "<", ">=": "<="}  # a < b may run b.__gt__(a)
 ORDOP: dict[str, int] = {"<": 0, "<=": 1, ">": 2, ">=": 3}  # op codes shared with runtime.c
 DUNDER: dict[str, str] = {"+": "__add__", "-": "__sub__", "*": "__mul__", "/": "__truediv__", "//": "__floordiv__", "%": "__mod__",
+                          "@": "__matmul__", "&": "__and__", "|": "__or__", "^": "__xor__", "<<": "__lshift__", ">>": "__rshift__",
                           "==": "__eq__", "!=": "__ne__", "<": "__lt__", "<=": "__le__", ">": "__gt__", ">=": "__ge__"}
 UNARY: dict[str, str] = {"-": "__neg__", "+": "__pos__", "~": "__invert__"}
 # builtin and module functions that are one runtime call: "name(argtypes)": "C function:result type"
@@ -16845,6 +16846,24 @@ class Gen:
             if op == "!=" and self.cmp_method(b.t, "__eq__", "None") != "":
                 return Val(self.ins(f"xor i1 {self.eqcall(bm['__eq__'], True, b, a).v}, true"), "bool")
             return Val("", "")
+        # (two specializations of one class template are one class to CPython)
+        same = a.t == b.t or (self.tmpl_of(a.t) != "" and self.tmpl_of(a.t) == self.tmpl_of(b.t))
+        sh = shown if shown != "" else op
+        if op == "**":
+            # CPython calls a.__ipow__(b) (**=), a.__pow__(b), else b.__rpow__(a) (b of another class)
+            pw = ""
+            for x, n in [(a, "__ipow__" if shown == "**=" else ""), (a, "__pow__"), (b, "__rpow__" if not same else "")]:
+                if pw == "" and x.t in self.classes and n in self.classes[x.t].methods:
+                    pw = f"{tname(x.t)}.{n}"
+            if pw != "":
+                self.err(f"** and pow() of objects are not supported ({tname(unopt(a.t))} {sh} {tname(b.t)} calls {pw})")
+        rm = "__r" + m[2:]
+        if m != "" and op != "==" and op != "!=" and b.t in self.classes and not same and rm in self.classes[b.t].methods and not (op == "%" and a.t == "str"):
+            # CPython calls b.__radd__(a) & co where a's class has no method for the operator, and
+            # first where b's class derives from a's and has the reflected method a's has not (str
+            # % b formats b)
+            if a.t not in self.classes or m not in self.classes[a.t].methods or (self.derives(b.t, a.t) and rm not in self.classes[a.t].methods):
+                self.err(f"reflected operator methods are not supported ({tname(unopt(a.t))} {sh} {tname(b.t)} calls {tname(b.t)}.{rm})")
         if a.t not in self.classes:
             return Val("", "")
         ms = self.classes[a.t].methods
@@ -16867,9 +16886,7 @@ class Gen:
         rm = DUNDER[REFL[op]] if op in REFL else m if op == "==" or op == "!=" else "__r" + m[2:]
         tl = (a.t in self.nts or is_tuple(a.t)) and (b.t in self.nts or is_tuple(b.t))
         if a.t in self.nts and m in self.classes[a.t].methods:
-            if tl and a.t != b.t:
-                self.err(f"{short(a.t)}.{m} with a {typestr(b.t)} operand is not supported")
-            return Val("", "")
+            return Val("", "")  # (CPython calls it first, also with a tuple or another NamedTuple)
         cmp = op in REFL or op == "==" or op == "!="
         if b.t in self.nts and rm in self.classes[b.t].methods and (is_tuple(a.t) if cmp else a.t != b.t):
             # (CPython asks a tuple's subclass first, and b's __radd__ & co where a has no __add__)

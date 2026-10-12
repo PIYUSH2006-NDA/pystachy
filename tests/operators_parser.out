@@ -1,0 +1,6 @@
+12 7 None None
+345 None ['a', 'b', 'c', 'a', 'b'] None
+(((('-' | '+') >> digits) << ';') | ('=' >> digits))
+(((('(' >> digits) << ',') >> digits) << ')') (('a' | 'b') | 'c')*
+(((('a' | 'e') | 'i') | 'o') | 'u') ['a', 'e', 'i', None, 'u']
+[exit 0]
