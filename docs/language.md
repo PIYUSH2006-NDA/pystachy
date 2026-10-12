@@ -93,7 +93,11 @@ imports `annotations` from `__future__`.
   (`return fail("bad")`): the call has the type its context expects. A
   function with `*args` is a template too: each call arity compiles it with `args` a tuple
   of the extra arguments' types (iterating it needs one item type; `()` is the empty
-  tuple), and in `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
+  tuple). A star argument passes a tuple's items as positional arguments, to any function,
+  method, class or Callable (`f(*t)`, and `f(*args)` forwards a function's own), and so does a
+  list or tuple display's (`f(*[a, b])`); `print(*xs)` also prints a list's, a str's or a dict's
+  items. The function is evaluated first (the object of `o.m(*t)`), then the arguments in order,
+  each star's where it is, as in CPython. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a module-level function's parameters and return that mention a
   module-level `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's may not).
   In a template's function, an empty list or dict that nothing fills where the
@@ -547,7 +551,8 @@ rejected.
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
 arguments above, inheritance other than an exception class's, `**kwargs` and
-`*args` in methods, star arguments in calls (`f(*xs)`) and starred targets (`a, *rest = xs`),
+`*args` in methods, `**` arguments in calls (`f(**d)`), star arguments other than a tuple's
+items (or a display's, and a list's in `print()`: see *Typing rules*), starred targets (`a, *rest = xs`),
 sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` (a function is a value
 of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
