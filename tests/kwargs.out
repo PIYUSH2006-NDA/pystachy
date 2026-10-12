@@ -16,4 +16,5 @@ none: 1 none: 3 sum: 7 kw: 5
 lit: 1
 ([('extra', 0), ('p', 1), ('q', 2)], [1, 2])
 (1, {'a': 2}) x ("2 keys: {'n': 1, 's': 's'}", "KeyError 'missing'") KeyError 'missing'
+{'extra': 1} {'a': 2, 'extra': 1}
 [exit 0]

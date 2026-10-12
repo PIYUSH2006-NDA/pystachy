@@ -68,3 +68,13 @@ def fwd(**kw):
 
 
 print(po(1, a=2), keep(a="x")(), fwd(n=1, s="s"), collect())
+
+
+def extended(**kw):
+    # (a copy to change, also of a call without extra keywords)
+    d = dict(kw)
+    d["extra"] = 1
+    return d
+
+
+print(extended(), extended(a=2))

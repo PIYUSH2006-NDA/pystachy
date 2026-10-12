@@ -6871,6 +6871,7 @@ class FnInfo:
         self.vararg = -1  # the index of a template's *args parameter (a tuple of the extra arguments), or -1
         self.varelem = ""  # its annotation (the type of each extra argument), or ""
         self.kwarg = -1  # the position of its **kwargs parameter, which a template's call gives a record of the extra keyword arguments (kw[...])
+        self.kwelem = ""  # its annotation (the type of each extra keyword argument), or ""
         self.export = False  # runtime mode: a pys_* function defined under its C name, for runtime.c and programs
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
@@ -8576,6 +8577,7 @@ class Gen:
                 # **kwargs: each call passes its extra keyword arguments as a record of their names
                 # and types (kw[...]), which the instance for it is compiled with
                 f.kwarg = len(f.params)
+                f.kwelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
                 f.params.append(p.s)
                 f.defaults.append(mk("noann", "", p.line, []))
                 f.dglob.append("")
@@ -14009,6 +14011,8 @@ class Gen:
                 self.err(f"cannot infer the type of '{t0.s}' from None and an empty {val.kind}; annotate it ({t0.s}: {val.kind}[{'T' if val.kind == 'list' else 'K, V'}] | None = None)")
             if len(n.kids) == 2 and t0.kind == "name" and (val.kind == "list" or val.kind == "dict") and len(val.kids) == 0 and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
                 self.assign(t0, self.empty(val.kind, t0.s))
+            elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "call" and len(val.kids) == 2 and val.kids[0].kind == "name" and val.kids[0].s == "dict" and not self.bound("dict") and val.kids[1].kind == "name" and self.static_type(val.kids[1]) == "kw[]" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
+                self.assign(t0, self.empty("dict", t0.s))  # (d = dict(kwargs) of a call without extra keywords: d = {})
             elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "name" and self.is_global(t0.s) and (t0.s not in self.gtypes or self.twin_of.get(t0.s, "-") == self.twin_of.get(val.s, "")) and t0.s not in self.noneglobals and not self.copying and self.globread(val.s) and "?" in self.gtypes.get(val.s, ""):
                 # X = Y between module globals, Y an empty container without a type yet (from m
                 # import Y copies it so): they are twins, which the first use of either types
@@ -17163,8 +17167,11 @@ class Gen:
                 pos += 1
                 continue
             if a.kind == "kw" and f.kwarg >= 0 and (a.s not in f.params or f.params.index(a.s) < f.posonly or f.params.index(a.s) == f.kwarg or f.params.index(a.s) == f.vararg):
+                if a.s in kwn:
+                    # (two of one name, from ** of a record or display: CPython's TypeError)
+                    self.err(f"{f.mod if f.mod != '' else '__main__'}.{self.qualname(f)}() got multiple values for keyword argument '{a.s}'")
                 kwn.append(a.s)  # (an extra keyword argument: **kwargs's)
-                kwv.append(self.expr(a.kids[0], ""))
+                kwv.append(self.pcoerce(self.expr(a.kids[0], f.kwelem), f.kwelem, f, f.kwarg) if f.kwelem != "" else self.expr(a.kids[0], ""))
                 continue
             if a.kind == "kw":
                 j = f.params.index(a.s)
@@ -17345,6 +17352,7 @@ class Gen:
         g.posonly = f.posonly
         g.vararg = f.vararg
         g.kwarg = f.kwarg
+        g.kwelem = f.kwelem
         g.clo = f.clo
         for x in nnp:
             g.nnp[x] = True
