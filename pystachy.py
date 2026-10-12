@@ -5529,6 +5529,7 @@ RUNTIME: dict[str, str] = {
     "dict.items": "list[tuple[K,V]]:S|A rD|", "dict.end": "int:S|rD|", "dict.next": "int:S,int,int,int|R rD|",
     "dict.prev": "int:S,int,int,int|R rD|", "dict.key": "*K:S,int|rD|", "dict.val": "*V:S,int|rD|",
     "dict.find": "int:S,*K|rD|", "dict.entry": "int:S,*K|R A I rD|", "dict.entry_set": "None:S,int,*V|rD wD|",
+    "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
     # strings
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
@@ -9418,7 +9419,7 @@ class Gen:
         o = self.read(n)
         self.allowq = False
         for a in args:
-            if a.kind == "kw":
+            if a.kind == "kw" and m != "update":  # (which takes keywords: below, d's type is asked for)
                 self.err(f"keyword arguments to {'list' if is_list(o.t) else 'dict'}.{m}() are not supported; pass them by position")
         if is_list(o.t) and (m == "append" or m == "extend" or m == "insert") and len(args) == (2 if m == "insert" else 1):
             if empty_display(args[-1]):
@@ -16361,6 +16362,8 @@ class Gen:
                     self.err(f"list.sort({a.s}=...) is not supported" if a.s == "key" else f"sort() got an unexpected keyword argument '{a.s}'")
             self.rt("pys_list_sort_r", "void", [f"ptr {o.v}", f"ptr {self.sconst(self.desc(elem(o.t), '<'))}", f"i64 {rev}"])
             return Val("null", "None")
+        if is_dict(o.t) and m == "update":
+            return self.update(o, args)
         for a in args:
             if a.kind == "kw":
                 self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")
@@ -16525,6 +16528,38 @@ class Gen:
         if slot:
             return self.from_slot(res, rtype)
         return self.rres(res, rtype)
+
+    def update(self, o: Val, args: list[Node]) -> Val:
+        # d.update(x, k=v, ...): x a dict of d's type, merged as CPython merges one (runtime.c), or
+        # a list of (key, value) tuples, set one by one; then the keywords (str keys), merged as
+        # the dict CPython makes of them, which is a display's. The arguments are evaluated first
+        kv = targs(o.t)
+        pairs = self.ctype("list", [self.ctype("tuple", kv)])
+        pos = [a for a in args if a.kind != "kw"]
+        kws: list[Node] = []
+        for a in args:
+            if a.kind == "kw":
+                kws.append(mk("str", a.s, a.line, []))
+                kws.append(a.kids[0])
+        if len(pos) > 1:
+            self.err(f"update expected at most 1 argument, got {len(pos)}")
+        if len(kws) > 0 and kv[0] != "str":
+            self.err(f"dict.update() with keyword arguments adds str keys, which a {typestr(o.t)} cannot hold")
+        x = Val("", "")
+        if len(pos) == 1:
+            x = self.expr(pos[0], pairs if pos[0].kind == "list" or pos[0].kind == "listcomp" else o.t)
+        kw = self.expr(mk("dict", "", self.line, kws), o.t) if len(kws) > 0 else Val("", "")
+        if is_opt(x.t):
+            x = self.unwrap(x, "TypeError: 'NoneType' object is not iterable")
+        if x.t == "int" or x.t == "float" or x.t == "bool" or x.t == "None":
+            self.err(f"'{tname(x.t)}' object is not iterable")  # (CPython's TypeError)
+        if x.t != "" and x.t != o.t and x.t != pairs:
+            self.err(f"dict.update() of a {typestr(o.t)} takes a dict of its type, a {typestr(pairs)} or keyword arguments, not {typestr(x.t)}")
+        if x.t != "":
+            self.rt("pys_dict_update" if x.t == o.t else "pys_dict_update_pairs", "void", [f"ptr {o.v}", f"ptr {x.v}"])
+        if kw.t != "":
+            self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
+        return Val("null", "None")
 
     def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
         # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
