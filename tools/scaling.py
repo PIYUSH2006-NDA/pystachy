@@ -14,6 +14,7 @@ Each shape is a family of programs whose size grows with N:
   fields   one class whose __init__ sets N fields and a method that reads them all
   calls    an imported module of N functions, each calling the one before it
   imports  N modules, each importing the one before it (the program imports them in order)
+  stdlib   N imported modules, each importing math, os and sys and four functions of math
   breaks   one while True loop of N breaks, each after an assignment to a new variable
   exits    one while True loop of N ifs, each breaking after an assignment to a new variable,
            with another new variable assigned before each if
@@ -128,6 +129,14 @@ def imports(n):
     return out
 
 
+def stdlib(n):
+    out = {"main.py": [f"import m{i}" for i in range(n)] + [f"print(m0.f(1.0) + m{n - 1}.f(2.0))"]}
+    for i in range(n):
+        out[f"m{i}.py"] = ["import math", "import os", "import sys", "from math import ceil, fabs, floor, sqrt",
+                           "def f(x: float) -> float:", f"    return sqrt(x) + {i}"]
+    return out
+
+
 def breaks(n):
     src = ["def big(x: int) -> int:", "    v0 = x", "    while True:"]
     for i in range(1, n):
@@ -191,7 +200,7 @@ def gdicts(n):
 
 
 SHAPES = {"funcs": funcs, "globals": globals_, "both": both, "long": long, "top": top, "classes": classes, "modules": modules,
-          "fields": fields, "calls": calls, "imports": imports, "breaks": breaks, "exits": exits, "elifs": elifs,
+          "fields": fields, "calls": calls, "imports": imports, "stdlib": stdlib, "breaks": breaks, "exits": exits, "elifs": elifs,
           "topelifs": topelifs, "comps": comps, "chain": chain,
           "lookups": lookups, "gdicts": gdicts}
 
