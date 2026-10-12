@@ -10,6 +10,7 @@ honest.
 | `make` | the bootstrap: the compiler built by itself reproduces its own LLVM IR byte for byte |
 | `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
+| `make test-ffi` | the FFI's tests, JIT and AOT: C calls and the FFI's errors ([ffi.md](ffi.md#tests)) |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
@@ -102,6 +103,9 @@ versions, platform, git commit and a timestamp:
 - **rt-abi** — `tools/rtabi.py`: every function `runtime.py` defines or declares has one LLVM
   signature in `runtime.py`, in runtime.c and in every program of the corpus (`llvm-link`
   would accept a mismatch silently);
+- **ffi** — `tests/ffi/run.sh` (`make test-ffi`) with the native compiler: `@ffi.extern`'s C
+  calls and the FFI's compile-time errors, against what CPython printed with the twin in
+  `tools/rt_cpython` ([ffi.md](ffi.md));
 - **dict-probes** — `tools/dictprobe.c` counts the table slots that dict insertions and
   lookups visit for twelve key patterns that defeat a weak hash or probe sequence (`i << 46`,
   spaced ints, str keys sharing a long prefix or suffix, ...) and every shift `i << s`, with

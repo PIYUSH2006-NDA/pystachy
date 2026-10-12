@@ -217,7 +217,8 @@ with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
-(`/`) parameters.
+(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`): see
+[ffi.md](ffi.md) (a program's own `ffi.py` comes first, as under CPython).
 
 ## Exceptions
 

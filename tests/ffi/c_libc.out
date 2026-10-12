@@ -1,0 +1,9 @@
+Wikipedia 9 1 -1 1 -5 7 4611686018427387904
+9223372036854775807 None True 1
+OverflowError Python int too large to convert to C int
+ValueError embedded null character
+OverflowError C unsigned result is too large for int
+OverflowError can't convert negative int to unsigned
+ValueError ffi.string_at() takes a length >= 0
+OverflowError Python int too large to convert to C int
+[exit 0]

@@ -3182,6 +3182,8 @@ def builtin_has(mod: str, x: str) -> bool:
         return x in ABCS
     if mod == "dataclasses":
         return x == "dataclass"
+    if mod == "ffi":
+        return x in ("extern", "string_at", "c_buf") or x in CTYPES
     return mod == "builtins" or known_path(mod + "." + x)  # (a builtin is checked where it is called)
 
 
@@ -3601,7 +3603,7 @@ class Loader:
         if p == "":
             # (an optional import other than try: <imports> / except ImportError:, which optional() decides)
             hint = "; an optional import is supported only as try: <imports> / except ImportError: (except clauses naming only ImportError or ModuleNotFoundError, and no finally)" if self.optry else ""
-            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join(MODULES.keys())}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
+            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi'])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
         if p.endswith("/__init__.py"):
             return self.load(name, p, p[:-12])
         if p.endswith(".py"):
@@ -5123,7 +5125,7 @@ CALLS: dict[str, str] = {
     "all(list[bool])": "pys_all:bool", "any(list[int])": "pys_any:bool", "all(list[int])": "pys_all:bool",
     "os.system(str)": "pys_system:int", "os.execv(str,list[str])": "pys_execv:None",
     "os.getpid()": "pys_getpid:int", "os.path.exists(str)": "pys_exists:bool", "os.path.realpath(str)": "pys_realpath:str",
-    "os.getenv(str,str)": "pys_getenv:str",
+    "os.getenv(str,str)": "pys_getenv:str", "ffi.string_at(int,int)": "pys_string_at:str",
     "os.remove(str)": "pys_remove:None", "os.rmdir(str)": "pys_rmdir:None", "tempfile.mkdtemp()": "pys_mkdtemp:str",
     "math.floor(float)": "pys_floor:int", "math.ceil(float)": "pys_ceil:int", "math.trunc(float)": "pys_m_trunc:int",
     "math.gcd(int,int)": "pys_m_gcd:int", "math.lcm(int,int)": "pys_m_lcm:int", "math.isqrt(int)": "pys_m_isqrt:int",
@@ -5178,7 +5180,12 @@ CALLS["math.frexp(float)"] = "pys_m_frexp:tuple[float,int]"
 CALLS["math.modf(float)"] = "pys_m_modf:tuple[float,float]"
 # the modules a program may import; their functions and attributes are the CALLS entries and modattr()
 MODULES: dict[str, bool] = {}
-for _k in "sys os os.path math tempfile typing dataclasses __future__ builtins time errno".split():
+LINKDL: list[str] = []  # not empty: the program looks C functions up at run time (dlopen, dlsym), linked with -ldl
+# @ffi.extern's C integer types: LLVM type with its extension, and pys_c_check's kind (-1: none):
+# 0 C int, 1 C unsigned int, 2 an unsigned 64-bit argument (>= 0), 3 one's result (< 2**63)
+CTYPES: dict[str, str] = {"c_int": "i32 signext:0", "c_uint": "i32 zeroext:1", "c_int64": "i64:-1", "c_ssize_t": "i64:-1",
+                          "c_uint64": "i64:2", "c_size_t": "i64:2", "c_void_p": "ptr:-1"}
+for _k in "sys os os.path math tempfile typing dataclasses __future__ builtins time errno ffi".split():
     MODULES[_k] = True
 MODATTRS: dict[str, bool] = {}
 for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform math.pi math.e math.inf math.tau math.nan "
@@ -5360,7 +5367,7 @@ UNSUPPORTED: dict[str, str] = {
 # of the program (over object.__new__, which makes an object of the class, only those marked "o")
 INERT_DECOS: dict[str, str] = {"typing.overload": "f", "typing.final": "fco", "typing.no_type_check": "fco", "typing.override": "fco",
                                "staticmethod": "f", "classmethod": "f", "property": "f", "dataclasses.dataclass": "c",
-                               "typing.runtime_checkable": "c", "object.__new__": "c"}
+                               "typing.runtime_checkable": "c", "object.__new__": "c", "ffi.extern": "f"}
 # node kinds that evaluate without effects
 INERT: dict[str, bool] = {}
 for _k in "int float str bytes complex None True False ellipsis noann omit".split():
@@ -5587,7 +5594,7 @@ RUNTIME: dict[str, str] = {
     # runtime mode's primitives (Gen.primitive): a new str's memory, and the C library's searches
     # and copy, over the bytes of strs (a str that _rt.str_new made is written only before
     # _rt.str_done hands it out, so these need no letter either)
-    "alloc_atomic": "%ptr:int|A|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
+    "alloc_atomic": "%ptr:int|A|", "cstr": "opt[str]:%ptr,int|R A|", "c_check": "int:int,int|R I|", "c_str": "None:str|R|", "string_at": "str:int,int|R A|", "c_bind": "None:%ptr,%ptr,%ptr|R A I|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
     "memmem": "%ptr:%ptr,int,%ptr,int||memmem", "memmove": "None:%ptr,%ptr,int,%i1||llvm.memmove.p0.p0.i64",
 }
 # LLVM symbol -> RUNTIME key (spelt out here as rtsym does: module code calls no function before
@@ -6509,6 +6516,8 @@ class FnInfo:
         self.varelem = ""  # its annotation (the type of each extra argument), or ""
         self.export = False  # runtime mode: a pys_* function defined under its C name, for runtime.c and programs
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
+        self.lib = ""  # @ffi.extern's library ("" the process's own)
+        self.csym = ""  # and its C symbol
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
@@ -6986,6 +6995,8 @@ class Gen:
         # code calling back into the module
         self.late: dict[str, bool] = {}
         self.lib = False  # declaring an imported module's function: what it cannot compile is an error only where it is called
+        self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
+        self.csymline: dict[str, int] = {}  # and the line that declared it
         self.rtmode = False  # compiling runtime.py: its pys_* functions join runtime.c's under their C names (see runtime_ir)
         self.rtdefs: dict[str, FnInfo] = {}  # runtime mode: the pys_* functions this module defines, by C name
         self.rtcache = False  # runtime mode, for the driver's runtime cache: PYSTACHY_IRFX is the program's
@@ -7654,6 +7665,10 @@ class Gen:
         if k == "name":
             if s == "int" or s == "float" or s == "bool" or s == "str" or s in self.classes:
                 return s
+            if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
+                return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
+            if self.imported(s) == "ffi.c_buf":
+                return "str"  # (a str's UTF-8 bytes, NULs and all, for a C function that takes their length too)
             if is_excname(s):
                 return "exc"  # (a builtin exception class: any exception, not only those of the class)
             t = self.typing_name(s)
@@ -8055,6 +8070,16 @@ class Gen:
             f.ll = "@" + d.s
             f.export = True
             self.rtdefs[d.s] = f
+        for x in d.kids[3:] if cls == "" and not self.rtmode else []:
+            a = x.kids[0].kids[1:] if len(x.kids) > 0 else []
+            if self.imported(x.s) == "ffi.extern":
+                if len(a) == 0 or len(a) > 2 or a[0].kind != "str" or (len(a) == 2 and a[1].kind != "str") or len(d.kids) != 4:
+                    self.err('@extern takes the library ("" for the process\'s own) and an optional symbol name, as string literals')
+                if len(body) != 1 or body[0].kind != "expr" or body[0].kids[0].kind != "ellipsis":
+                    self.err(f"{short(d.s)}() is a C function (@extern): its body must be ...")
+                f.extern = True
+                f.lib = a[0].s
+                f.csym = "@" + (a[1].s if len(a) == 2 else short(d.s))
         ps = d.kids[0].kids
         deco = ""
         stub = False  # (an imported module's that no def follows: see typing_forms)
@@ -8065,7 +8090,7 @@ class Gen:
         if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and (deco == "staticmethod" or deco == "classmethod"):
             f.deco = deco  # (a method that takes no self, or its class as cls)
         deco = short(deco)
-        if deco != "" and f.deco == "" and not self.lib:
+        if deco != "" and f.deco == "" and not self.lib and not f.extern:
             # (CPython applies a decorator when the def runs, called or not: see decorators())
             if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
                 self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -8128,8 +8153,8 @@ class Gen:
                 f.ptypes.append(self.vtype(p.kids[0]))
         if int(marks[0]) == len(ps) and len(ps) > 0:
             f.posonly = len(f.params)  # def f(a, b, /)
-        if self.rtmode and (f.export or f.extern) and f.generic:
-            self.err(f"runtime function {d.s}() needs an annotation on every parameter, and no *args")
+        if (f.export or f.extern) and f.generic:
+            self.err(f"runtime function {d.s}() needs an annotation on every parameter, and no *args" if self.rtmode else f"C function {short(d.s)}() (@extern) needs an annotation on every parameter, and no *args")
         for x in f.defaults if self.rtmode else []:
             if not is_const(x):
                 # a computed default is stored by module code, which runtime mode never runs
@@ -8139,7 +8164,7 @@ class Gen:
             f.npos = len(f.params)
         if f.vararg >= 0:
             f.npos = f.vararg
-        if len(d.kids) > 3 and f.deco == "":
+        if len(d.kids) > 3 and f.deco == "" and not f.extern:
             bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
             bad = STUB.replace("NAME", short(d.s)) if stub else bad
         if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
@@ -9812,6 +9837,96 @@ class Gen:
         self.fn.n = self.n
         self.fns.append(self.fn)
 
+    def externtype(self, a: Node, t: str, what: str, f: FnInfo) -> str:
+        # an @extern signature's type: "float", "str", "None", "opt[str]" or a CTYPES name
+        c = self.imported(a.s)[4:] if a.kind == "name" and self.imported(a.s).startswith("ffi.") else ""
+        if c in CTYPES or (c == "c_buf" and what == "takes"):
+            return c
+        if t == "int":
+            self.err(f"C function {f.name}() {what} int: say which C integer type (ffi.c_int, c_uint, c_int64, c_uint64, c_size_t, c_ssize_t or c_void_p)")
+        if t in ("float", "str") or (what == "returns" and t in ("None", "opt[str]")):
+            return t
+        self.err(f"C function {f.name}() {what} {typestr(t)}: an @extern function {'takes' if what == 'takes' else 'returns'} a C integer type, float or str{', str | None or None' if what == 'returns' else ''}")
+        return ""
+
+    def cextern(self, f: FnInfo) -> None:
+        # @ffi.extern: the program calls @f.<name> as any function, an internal stub that checks and
+        # narrows C integers (OverflowError), passes a str as its bytes (const char *, NUL-terminated;
+        # ValueError for a NUL in it) and copies a returned char * (NULL: None, or ValueError). It calls
+        # the C function through @ffi.fp.<f.ll>, which the def statement set as ctypes.CDLL would find it, in
+        # the library's own handle (pys_c_bind: see stmt's defaults)
+        self.line = f.node.line
+        sym = f.csym[1:]
+        for pre in ("pys_", "pyx_", "PyInit_", "PyModExport_"):
+            if sym.startswith(pre) or sym == "main":
+                self.err(f"C function {sym} is reserved for Pystachy's runtime and extension modules")
+        ps: list[str] = []
+        args: list[str] = []
+        code: list[str] = []
+        cts: list[str] = []
+        for j in range(len(f.ptypes)):
+            t = f.ptypes[j]
+            ps.append(f"{lt(t)} %a{j}")
+            c = self.externtype(f.node.kids[0].kids[j].kids[0], t, "takes", f)
+            if c == "str" or c == "c_buf":
+                if c == "str":
+                    self.runtime("pys_c_str")
+                    code.append(f"  call void @pys_c_str(ptr %a{j})")
+                code.append(f"  %p{j} = getelementptr i8, ptr %a{j}, i64 8")
+                cts.append("ptr")
+            elif c == "float":
+                code.append(f"  %p{j} = bitcast double %a{j} to double")  # (as it is: -0.0, inf and nan too)
+                cts.append("double")
+            else:
+                ll, k = CTYPES[c].split(":")
+                v = f"%a{j}"
+                if k != "-1":
+                    self.runtime("pys_c_check")
+                    code.append(f"  %k{j} = call i64 @pys_c_check(i64 %a{j}, i64 {k})")
+                    v = f"%k{j}"
+                code.append(f"  %p{j} = {'trunc i64 ' + v + ' to i32' if ll.startswith('i32') else 'inttoptr i64 ' + v + ' to ptr' if ll == 'ptr' else 'add i64 0, ' + v}")
+                cts.append(ll)
+            args.append(f"{cts[-1]} %p{j}")
+        c = self.externtype(f.node.kids[1], f.ret, "returns", f)
+        r = "ptr" if c in ("str", "opt[str]") else "double" if c == "float" else "void" if c == "None" else CTYPES[c].split(":")[0]
+        rr = r[r.find(" ") + 1 :] + " " + r[: r.find(" ")] if " " in r else r  # (a result's attribute comes first: zeroext i32)
+        cl = f"call {rr} %fp({', '.join(args)})"
+        code.insert(0, f"  %fp = load ptr, ptr @ffi.fp.{f.ll[1:]}")
+        if r == "void":
+            code.extend([f"  {cl}", "  ret void"])
+        elif c == "str" or c == "opt[str]":
+            self.runtime("pys_cstr")
+            code.extend([f"  %r = {cl}", f"  %s = call ptr @pys_cstr(ptr %r, i64 {1 if c == 'str' else 0})", "  ret ptr %s"])
+        elif c == "float":
+            code.extend([f"  %r = {cl}", "  ret double %r"])
+        else:
+            k = CTYPES[c].split(":")[1]
+            code.append(f"  %r = {cl}")
+            code.append(f"  %x = {'sext i32 %r to i64' if r == 'i32 signext' else 'zext i32 %r to i64' if r == 'i32 zeroext' else 'ptrtoint ptr %r to i64' if r == 'ptr' else 'add i64 0, %r'}")
+            if k == "2":
+                self.runtime("pys_c_check")
+                code.append("  %y = call i64 @pys_c_check(i64 %x, i64 3)")
+            code.append(f"  ret i64 {'%y' if k == '2' else '%x'}")
+        decl = f"declare {rr} {f.csym}({', '.join(cts)})"
+        tys = [r.split(" ")[0]] + [x.split(" ")[0] for x in cts]
+        if sym in RTSYM:
+            # one the compiler or the runtime calls too (fabs, memchr, ...): RUNTIME's types
+            e = RtFn(RTSYM[sym]).ll
+            if tys != e:
+                self.err(f"C function {sym} is declared as {tys[0]}({', '.join(tys[1:])}), but Pystachy's runtime calls it as {e[0]}({', '.join(e[1:])})")
+        elif sym in self.csyms:
+            if self.csyms[sym] != decl:
+                self.err(f"C function {sym} is declared again with other types: {self.csyms[sym][8:]} at line {self.csymline[sym]}, {decl[8:]} here")
+        else:
+            self.csyms[sym] = decl
+            self.csymline[sym] = f.node.line
+        # (the C function's address, and the library and symbol pys_c_bind looks it up by)
+        x = f.ll[1:]
+        decl = f"@ffi.fp.{x} = internal global ptr null\n@ffi.lib.{x} = private unnamed_addr constant [{len(f.lib) + 1} x i8] c\"{llstr(f.lib)}\\00\"\n@ffi.sym.{x} = private unnamed_addr constant [{len(sym) + 1} x i8] c\"{llstr(sym)}\\00\""
+        if len(LINKDL) == 0:
+            LINKDL.append("dl")
+        self.externs[f.ll] = decl + f"\ndefine internal {lt(f.ret)} {f.ll}({', '.join(ps)}) {{\n" + "\n".join(code) + "\n}"
+
     def untold(self, f: FnInfo, ts: list[str], how: str) -> None:
         # a function of runtime mode that runtime.c calls or defines and RUNTIME does not name
         # (the dict's string hash, the format of a str): only LLVM's types check it (rtabi,
@@ -10638,7 +10753,7 @@ class Gen:
             ok = x.s == "async" or (("f" if d.kind == "def" else "c") in INERT_DECOS.get(key, "") and (not inst or ("o" in INERT_DECOS[key] and "__setattr__" not in self.body_names(d))))
             inst = inst or key == "object.__new__"
             e = f"'{short(root)}' may not be the builtin then" if "$" in root and short(root) in PYBUILTINS and key == "" else ""
-            e = e if e != "" or len(x.kids) == 0 or key == "dataclasses.dataclass" else f"it calls {short(x.s)}()"
+            e = e if e != "" or len(x.kids) == 0 or key == "dataclasses.dataclass" or key == "ffi.extern" else f"it calls {short(x.s)}()"
             for a in x.kids[0].kids[1:] if len(x.kids) > 0 and key == "dataclasses.dataclass" else []:
                 # (@dataclass(...) tests the truth of each option)
                 e = e if e != "" else self.effect(a.kids[0], {}, 1) if a.kind == "kw" else "it takes no positional argument"
@@ -10990,7 +11105,9 @@ class Gen:
         # the functions and methods of imported modules are compiled only if the program calls
         # them, as templates are (a function compiled early, see early, is compiled already)
         for f in self.funcs.values():
-            if f.mod != "" and not f.generic:
+            if f.extern and not self.rtmode:
+                self.cextern(f)
+            elif f.mod != "" and not f.generic:
                 self.lazy[f.ll] = f
             elif f.extern:
                 self.line = f.node.line
@@ -13205,6 +13322,11 @@ class Gen:
             if k == "defaults":
                 self.decorators(self.funcs[n.s].node, self.funcs[n.s].node.kids[3:] if self.curfn.mod != "" else [], {})
                 self.hoist(self.funcs[n.s])
+                ef = self.funcs[n.s]
+                if ef.extern and not self.rtmode:
+                    # @ffi.extern looks its C function up when the def runs, as ctypes.CDLL does (cextern)
+                    xs = ef.ll[1:]
+                    self.rt("pys_c_bind", "void", [f"ptr @ffi.fp.{xs}", f"ptr @ffi.lib.{xs}", f"ptr @ffi.sym.{xs}"])
             else:
                 self.hoist_class(self.classes[n.s])
             if n.s in self.gflag:
@@ -16672,6 +16794,10 @@ def main() -> None:
         if d != "":
             dirs.append(d)
     dirs.append(home + "/lib")
+    for d in dirs[:-1]:
+        if os.path.exists(d + "/ffi.py") or os.path.exists(d + "/ffi/__init__.py"):
+            del MODULES["ffi"]  # (the program's own ffi module comes first, as under CPython: Pystachy's is not imported then)
+            break
     f = open(SRC, "r", encoding="latin-1")
     ir = compile_program(SRC, f.read(), dirs)
     f.close()
@@ -16772,13 +16898,14 @@ def main() -> None:
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
         code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(part)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(part)} {q(rto)})")
     link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
+    libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
     if code != 0:
         msg = "cannot build the runtime (are clang and LLVM 18 installed? see PYSTACHY_LLVM, PYSTACHY_CFLAGS)"
     elif cmd == "build":
         # AOT tier: full -O2 over program + runtime as one module (whole-program optimization)
         if out == "":
             out = SRC[:-3] if SRC.endswith(".py") else SRC + ".exe"
-        code = sh(f"{link} && {llvm}clang -O2 -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang {q(obj)} -o {q(out)} -lm{cflags}")
+        code = sh(f"{link} && {llvm}clang -O2 -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang {q(obj)} -o {q(out)}{libs} -lm{cflags}")
     else:
         # JIT tier: cheap SSA cleanup of the program alone, then LLVM's ORC JIT compiles it for the
         # host CPU and links it with the precompiled runtime (the JIT tier never inlines the runtime)
