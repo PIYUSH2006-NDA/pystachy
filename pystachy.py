@@ -5440,7 +5440,7 @@ METHODS: dict[str, str] = {
     "dict.values": "list[V]:", "dict.items": "list[tuple[K,V]]:", "dict.clear": "None:", "dict.copy": "S:",
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
-    "float.hex": "str:", "float.is_integer": "bool:",
+    "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
 # the IR's ops (Ins.op) and their effects (docs/typed-ir.md 3.4 and 3.7, and FX below): T ends
 # a block; an rt op has its runtime function's effects (RUNTIME), a call or an init its callee's
@@ -5547,7 +5547,7 @@ RUNTIME: dict[str, str] = {
     "ffloordiv": "float:float,float|R|", "fmod": "float:float,float|R|", "fpow": "float:float,float|R|", "cmp_if": "int:int,float||",
     "f2i": "int:float|R|", "round": "int:float|R|", "round_n": "float:float,int|R|", "round_int": "int:int,int|R|", "floor": "int:float|R|",
     "ceil": "int:float|R|", "int.str": "int:str,int|R A|", "float.str": "float:str|R A|", "float.hex": "str:float|A|",
-    "float.is_integer": "bool:float||", "fabs": "float:float||fabs",
+    "float.is_integer": "bool:float||", "int.bit_length": "int:int||", "int.bit_count": "int:int||", "fabs": "float:float||fabs",
     "ovf.sadd": "%ovf:int,int||llvm.sadd.with.overflow.i64", "ovf.ssub": "%ovf:int,int||llvm.ssub.with.overflow.i64",
     "ovf.smul": "%ovf:int,int||llvm.smul.with.overflow.i64",
     "m.sqrt": "float:float|R|", "m.sin": "float:float|R|", "m.cos": "float:float|R|", "m.tan": "float:float|R|",
@@ -8563,7 +8563,7 @@ class Gen:
             self.err(f"the attributes of an exception (e.{name}) are not supported; str(e) and repr(e) are{hint}")
         if o.t not in self.classes:
             t = unopt(o.t)
-            base = "list" if is_list(t) else "dict" if is_dict(t) else t
+            base = "list" if is_list(t) else "dict" if is_dict(t) else "int" if t == "bool" else t
             if base + "." + name in METHODS:
                 self.err(f"{tname(t)}.{name} is a method: call it, {name}(...) (methods are not values)")
             self.err(f"type {typestr(o.t)} has no attribute '{name}'")
@@ -16328,6 +16328,9 @@ class Gen:
             kv = targs(o.t)
             K = kv[0]
             V = kv[1]
+        elif o.t == "bool" and "int." + m in METHODS:
+            base = "int"  # (a bool is an int: True.bit_length() is 1)
+            o = self.as_int(o)
         key = base + "." + m
         if key not in METHODS and o.t == "exc":
             self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")

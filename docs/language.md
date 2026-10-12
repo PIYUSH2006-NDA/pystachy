@@ -425,7 +425,8 @@ with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `d
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
 `zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default; not
 `str.format()`, `dict.update()`, `popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
-`index()` and `count()`); `open()` with CPython's modes, errors, `buffering=`, `newline=`
+`index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
+`open()` with CPython's modes, errors, `buffering=`, `newline=`
 translation and positions for `"+"` modes, and files' `read`/`readline`/
 `readlines`/`write`/`writelines`/`flush`/`close`, iteration and `closed`/`name`/`mode`;
 `sys.argv/exit/stdin/stdout/stderr/maxsize/platform/setrecursionlimit/getrecursionlimit` (the streams
