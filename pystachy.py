@@ -5462,6 +5462,9 @@ LOOKUPS = 32
 # exponential width growth such as f((x, x)). These are compiler resource limits.
 TYPE_SIZE = 65536
 TEMPLATE_BYTES = 1048576
+# Completed instances retain their FnInfo and IR too: branching on short types can
+# grow exponentially without reaching either active limit. Count across all templates.
+TEMPLATE_INSTANCES = 4096
 # Effect letters: R may raise (in a program that has try or with, a raise allocates its exception, so a
 # collection may run before a handler takes it; if none does, the raise prints its message, flushes
 # stdout and exits); N never returns; A allocates on the way to returning (a collection may run, and
@@ -6509,7 +6512,8 @@ class FnInfo:
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
-        self.orig = node  # and then its def statement as it was, before cls was renamed (see inherit)
+        self.orig = node  # and then its immutable def before cls was renamed (shared by inherited methods)
+        self.pending = False  # inherited class method: node shares orig's body until materialize()
         # a template's function: the parameters whose arguments are objects known not to be None
         # (a new object, self), which its isinstance(), hasattr() and "is None" tests read as such
         self.nnp: dict[str, bool] = {}
@@ -6970,6 +6974,7 @@ class Gen:
         self.branch = 0  # how many if branches and loop bodies enclose the code being compiled
         self.making: list[str] = []  # the template functions being compiled, each with its call site
         self.template_bytes = 0  # bytes in the signatures of the active instance() calls
+        self.template_instances = 0  # retained instances in this compilation, including completed ones
         self.unsupported: dict[str, str] = {}  # classes of imported modules that cannot be compiled: why
         self.cnodes: dict[int, Node] = {}  # every module-level class or subclass statement, by line
         self.hooks: dict[str, str] = {}  # see hook()
@@ -6988,6 +6993,7 @@ class Gen:
         self.deps: dict[str, str] = {}  # the modules each module's top-level code imports, space-separated
         self.comp: dict[str, str] = {}  # each module's strongly connected component of that graph (one of its modules)
         self.flowmod = ""
+        self.flowctx: dict[str, list[dict[str, bool]]] = {}  # module globals, safe bindings and deletions for lazy method flow
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
         self.brks: list[list[dict[str, bool]]] = []  # for each loop being compiled, what narrowed holds at its breaks
@@ -8033,7 +8039,7 @@ class Gen:
             i += 1
         return True
 
-    def declare_fn(self, d: Node, cls: str) -> FnInfo:
+    def declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         # a function or method. A module-level function with a parameter that has no annotation
         # is a template: a call compiles it, once per list of argument types, for those types
         # (see instance), and what cannot be compiled in it is an error only then
@@ -8139,7 +8145,7 @@ class Gen:
             bad = STUB.replace("NAME", short(d.s)) if stub else bad
         if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
             bad = f"@{f.deco} on the special method {d.s} is not supported"
-        if f.deco == "classmethod" and bad == "" and ps[0].kind == "param":
+        if not inherited and f.deco == "classmethod" and bad == "" and ps[0].kind == "param":
             # its cls parameter names the class in its body: cls(...) makes one, cls.x reads a
             # class attribute, cls.m(...) calls a static or class method
             asg: dict[str, bool] = {}
@@ -8150,7 +8156,7 @@ class Gen:
             if f.clsuse:
                 f.orig = clone(d)
             rename(d.kids[2], ps[0].s, cls)
-        if bad == "" and has_kind(d.kids[2], "yield"):
+        if not inherited and bad == "" and has_kind(d.kids[2], "yield"):
             bad = UNSUPPORTED["yield"]  # a generator function
             if cls != "" and d.s == "__iter__":
                 bad += ": __iter__ can return iter(xs) of a list xs of the items"
@@ -9007,6 +9013,7 @@ class Gen:
         # does the first fill of the containers names in function f (see fills) show what they
         # hold, so that compiling f now can give them a type: not d[k] = [] or d.setdefault(k, {}),
         # unless the type expected of the call types its empty default (return d.get(k, []))
+        self.materialize(f)
         body = f.node.kids[2].kids
         fr = self.save()
         self.modlevel = False
@@ -9026,6 +9033,8 @@ class Gen:
         globals_in(body, decl)
         for p in f.params:
             loc[p] = True
+        if f.pending:
+            loc[f.orig.kids[0].kids[0].s] = True  # the unrenamed cls is a class binding, never a global
         for nm in names:
             if (nm not in loc or nm in decl) and shows_items(mk("block", "", 0, body), nm):
                 return True
@@ -9659,7 +9668,24 @@ class Gen:
             local_names(body, self.assigned)
             globals_in(body, self.gdecl)  # (global holds for the whole function, also from a dead branch)
 
+    def materialize(self, f: FnInfo) -> None:
+        # Flow annotates nodes and cls substitution renames them: each compiled inherited
+        # method needs its own body, but an unused one retains only its declaration header.
+        if not f.pending:
+            return
+        f.pending = False
+        f.node.kids[2] = clone(f.orig.kids[2])
+        rename(f.node.kids[2], f.orig.kids[0].kids[0].s, f.cls)
+        mod = self.flowmod
+        self.flowmod = f.mod
+        ctx = self.flowctx[f.mod]
+        self.flow_function(f, ctx[0], ctx[1], ctx[2])
+        self.flowmod = mod
+
     def function(self, f: FnInfo, body: list[Node]) -> None:
+        if f.pending:
+            self.materialize(f)
+            body = f.node.kids[2].kids
         if f.cls != "" and self.classes[f.cls].bad != "":
             self.err(self.classes[f.cls].bad)
         if f.bad != "" and not f.generic:
@@ -10537,7 +10563,17 @@ class Gen:
                 self.line = f.node.line
                 self.lib = f.mod != ""
                 self.selfcls = ci.name
-                ci.methods[m] = self.declare_fn(clone(f.orig), ci.name)
+                # Clone the declaration only. Its immutable body is shared until the method
+                # is needed; declaring and flowing a copy per subclass costs body * subclasses
+                # even when no inherited method is called.
+                d = Node(f.orig.kind, f.orig.s, f.orig.line)
+                d.kids = [f.orig.kids[i] if i == 2 else clone(f.orig.kids[i]) for i in range(len(f.orig.kids))]
+                g = self.declare_fn(d, ci.name, True)
+                g.orig = f.orig
+                g.clsuse = True
+                g.pending = True
+                g.bad = g.bad if g.bad != "" else f.bad  # the defining declaration checked the body
+                ci.methods[m] = g
                 self.selfcls = ""
                 self.lib = False
                 ci.methods[m].mod = f.mod
@@ -11132,6 +11168,8 @@ class Gen:
         gl: dict[str, bool] = {}
         collect(top, gl)
         for f in fns:
+            if f.pending:
+                continue  # its defining method already contributes the same global assignments
             decl: dict[str, bool] = {}
             asg: dict[str, bool] = {}
             globals_in(f.node.kids[2].kids, decl)
@@ -11181,39 +11219,49 @@ class Gen:
                 if nm not in safe or nm in dels:
                     self.late[nm] = True
                     self.gflag[nm] = True
+        self.flowctx[mod] = [gl, safe, dels]
         for f in fns:
-            body = f.node.kids[2].kids
-            loc: dict[str, bool] = {}
-            decl: dict[str, bool] = {}
-            local_names(body, loc)
-            globals_in(body, decl)
-            # the analysis looks up only the names the body mentions, and each name's state is
-            # independent of the others': it tracks those alone, not every global of the module
-            refs: dict[str, bool] = {}
-            for st in body:
-                name_nodes(st, refs)
-            tracked: dict[str, bool] = {}
-            defd: dict[str, bool] = {}
-            for nm in refs:
-                if nm in gl or nm in loc:
-                    tracked[nm] = True
-                if nm in gl and nm in safe and nm not in dels and (nm not in loc or nm in decl):
-                    defd[nm] = True
-            fdels: dict[str, bool] = {}
-            deleted(body, fdels)
-            for nm in f.params:
-                defd[nm] = True
-                if nm in fdels:
-                    tracked[nm] = True  # (a parameter that del unbinds)
-            fl = Flow(tracked, defd)
-            self.fl_stmts(fl, body)
-            for nm in fl.marks:
-                if (nm in loc or nm in fdels) and nm not in decl:
-                    f.uflags[nm] = True
-                else:
-                    self.gflag[nm] = True
+            if f.pending:
+                # A later materialization may mark reads of the substituted subclass name.
+                # Reserve its flag before module code is emitted, which sets it at the class.
+                if f.cls not in safe or f.cls in dels:
+                    self.gflag[f.cls] = True
+            else:
+                self.flow_function(f, gl, safe, dels)
         for ci in mcls:
             self.fl_fields(ci)
+
+    def flow_function(self, f: FnInfo, gl: dict[str, bool], safe: dict[str, bool], dels: dict[str, bool]) -> None:
+        body = f.node.kids[2].kids
+        loc: dict[str, bool] = {}
+        decl: dict[str, bool] = {}
+        local_names(body, loc)
+        globals_in(body, decl)
+        # the analysis looks up only the names the body mentions, and each name's state is
+        # independent of the others': it tracks those alone, not every global of the module
+        refs: dict[str, bool] = {}
+        for st in body:
+            name_nodes(st, refs)
+        tracked: dict[str, bool] = {}
+        defd: dict[str, bool] = {}
+        for nm in refs:
+            if nm in gl or nm in loc:
+                tracked[nm] = True
+            if nm in gl and nm in safe and nm not in dels and (nm not in loc or nm in decl):
+                defd[nm] = True
+        fdels: dict[str, bool] = {}
+        deleted(body, fdels)
+        for nm in f.params:
+            defd[nm] = True
+            if nm in fdels:
+                tracked[nm] = True  # (a parameter that del unbinds)
+        fl = Flow(tracked, defd)
+        self.fl_stmts(fl, body)
+        for nm in fl.marks:
+            if (nm in loc or nm in fdels) and nm not in decl:
+                f.uflags[nm] = True
+            else:
+                self.gflag[nm] = True
 
     def fl_fields(self, ci: ClassInfo) -> None:
         # a field that may be read before __init__ assigns it gets an "is assigned" flag, so the
@@ -12327,6 +12375,8 @@ class Gen:
         for f in fs:
             if f.mod != owner(name) or f.node.kind != "def" or name in f.params:
                 continue
+            if f.pending and name == f.orig.kids[0].kids[0].s:
+                continue  # its shared body still spells the implicit class binding as cls
             body = f.node.kids[2].kids
             decl: dict[str, bool] = {}
             globals_in(body, decl)
@@ -15712,6 +15762,8 @@ class Gen:
             self.err(f"{short(f.name)}() needs more than 100 nested template functions; annotate its parameters")
         if self.template_bytes + size > TEMPLATE_BYTES:
             self.err(f"active template signatures exceed {TEMPLATE_BYTES} bytes; annotate template parameters")
+        if self.template_instances >= TEMPLATE_INSTANCES:
+            self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
         g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, "")
         g.params = f.params
         g.ptypes = ts
@@ -15729,6 +15781,7 @@ class Gen:
         for x in nnp:
             g.nnp[x] = True
         f.insts[key] = g
+        self.template_instances += 1
         maybe = [f.params[j] for j in range(len(ts)) if ts[j] in self.classes and f.params[j] not in g.nnp and self.dispatches(f, f.params[j])]
         why = f", where {' and '.join(maybe)} may be None: only a new object or self is known not to be None, which decides isinstance(), hasattr() and 'is None' at compile time" if len(maybe) > 0 else ""
         args = ", ".join(ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"
