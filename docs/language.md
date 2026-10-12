@@ -97,7 +97,14 @@ imports `annotations` from `__future__`.
   method, class or Callable (`f(*t)`, and `f(*args)` forwards a function's own), and so does a
   list or tuple display's (`f(*[a, b])`); `print(*xs)` also prints a list's, a str's or a dict's
   items. The function is evaluated first (the object of `o.m(*t)`), then the arguments in order,
-  each star's where it is, as in CPython. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
+  each star's where it is, as in CPython. A function with `**kwargs` is a template too: each call
+  compiles it with `kwargs` the record of its extra keyword arguments' names and types, which
+  `f(**kwargs)` forwards as keyword arguments (as `**{"k": v}` of a display with str keys does), and
+  which reads as the dict CPython makes: `kwargs["k"]` (a name the call did not pass raises
+  `KeyError`), `get()`, `in` (also decided at compile time for a literal name, as `if kwargs:` is),
+  `len()`, iteration and `keys()`, and, where its values share a type, `values()`, `items()` and
+  `dict(kwargs)`; it prints as that dict. Changing it (`kwargs["k"] = v`, `pop()`) is rejected:
+  copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a module-level function's parameters and return that mention a
   module-level `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's may not).
   In a template's function, an empty list or dict that nothing fills where the
@@ -550,9 +557,10 @@ rejected.
 
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
-arguments above, inheritance other than an exception class's, `**kwargs` and
-`*args` in methods, `**` arguments in calls (`f(**d)`), star arguments other than a tuple's
-items (or a display's, and a list's in `print()`: see *Typing rules*), starred targets (`a, *rest = xs`),
+arguments above, inheritance other than an exception class's,
+`*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
+display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
+*Typing rules*), starred targets (`a, *rest = xs`),
 sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` (a function is a value
 of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
