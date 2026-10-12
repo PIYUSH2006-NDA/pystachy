@@ -84,6 +84,14 @@ model.py and propagation.py are sgp4 2.27's modules, edited where ports/sgp4/POR
 edit is marked "Pystachy port:"). sgp4 is used under the MIT License, whose text and copyright
 notice ("Copyright © 2012–2016 Brandon Rhodes") are in ports/sgp4/LICENSE.
 
+sqids (ports/sqids/)
+--------------------
+
+ports/sqids/__init__.py, constants.py and sqids.py are sqids 0.5.2's modules, edited where
+ports/sqids/PORT.md lists (each edit is marked "Pystachy port:"). sqids is used under the MIT
+License, whose text and copyright notice ("Copyright (c) 2023-present Sqids maintainers.") are in
+ports/sqids/LICENSE.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
