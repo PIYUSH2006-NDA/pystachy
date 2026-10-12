@@ -5107,6 +5107,8 @@ SPECIAL: dict[str, str] = {"__str__": "1:str", "__repr__": "1:str", "__len__": "
                            "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool"}
 for _k in "add sub mul truediv floordiv mod iadd isub imul itruediv ifloordiv imod".split():
     SPECIAL[f"__{_k}__"] = "2:"
+for _k in "neg pos invert".split():
+    SPECIAL[f"__{_k}__"] = "1:"
 # a comparison from pys_cmp_if's result R (-1, 0, 1, or 2 when a NaN makes it unordered)
 MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<": "icmp eq i64 R, -1", "<=": "icmp sle i64 R, 0",
                           ">": "icmp eq i64 R, 1", ">=": "icmp ule i64 R, 1"}
@@ -5114,6 +5116,7 @@ REFL: dict[str, str] = {"<": ">", "<=": ">=", ">": "<", ">=": "<="}  # a < b may
 ORDOP: dict[str, int] = {"<": 0, "<=": 1, ">": 2, ">=": 3}  # op codes shared with runtime.c
 DUNDER: dict[str, str] = {"+": "__add__", "-": "__sub__", "*": "__mul__", "/": "__truediv__", "//": "__floordiv__", "%": "__mod__",
                           "==": "__eq__", "!=": "__ne__", "<": "__lt__", "<=": "__le__", ">": "__gt__", ">=": "__ge__"}
+UNARY: dict[str, str] = {"-": "__neg__", "+": "__pos__", "~": "__invert__"}
 # builtin and module functions that are one runtime call: "name(argtypes)": "C function:result type"
 CALLS: dict[str, str] = {
     "ord(str)": "pys_ord:int", "chr(int)": "pys_chr:str", "int(float)": "pys_f2i:int", "int(str,int)": "pys_int_str:int",
@@ -8495,7 +8498,8 @@ class Gen:
             return "str"
         if k == "unary" and e.s != "not":
             t = self.guess(e.kids[0], f)
-            return "int" if t == "bool" else t  # (-True is -1, as unary() computes it)
+            # (-True is -1, as unary() computes it; -o is what o.__neg__ returns, unknown as for o + o)
+            return "int" if t == "bool" else "" if t in self.classes and UNARY[e.s] in self.classes[t].methods else t
         if k == "name" and e.s in f.params:
             t = f.ptypes[f.params.index(e.s)]
             return t if t != "" or f.bad == "" else "!" + f.bad  # (a parameter whose annotation failed)
@@ -14886,9 +14890,10 @@ class Gen:
             return Val(self.ins(f"fneg double {v.v}"), "float")
         if (v.t == "int" or v.t == "float") and op == "+":
             return v
-        m = "__neg__" if op == "-" else "__pos__" if op == "+" else "__invert__"
+        m = UNARY[op]
         if v.t in self.classes and m in self.classes[v.t].methods:
-            self.err(f"unary {op} on an object ({m}) is not supported")
+            self.notnone(v, f"TypeError: bad operand type for unary {op}: 'NoneType'")
+            return self.call_fn(self.classes[v.t].methods[m], [v], [])
         self.err(f"bad operand type for unary {op}: '{tname(v.t)}'")
         return v
 
