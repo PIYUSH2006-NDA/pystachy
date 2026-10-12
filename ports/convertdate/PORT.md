@@ -17,7 +17,7 @@ the sdist's).
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `f74977814036547b4971fb513771e96c0a10e3900d311e5972bcdac3d0a4d851` | 3 (4 lines) |
+| `__init__.py` | `f74977814036547b4971fb513771e96c0a10e3900d311e5972bcdac3d0a4d851` | 6 (8 lines) |
 | `armenian.py` | `9656af80fa6147c8d1c185ce2aeed353ba19da75c3ddb324a34b58f034ffb9f6` | 2 |
 | `coptic.py` | `708c59f6ded28f4203e13c673ab9eede2f37df8370c3133e05f3a2b7d27443a2` | none |
 | `daycount.py` | `4a27c7e2fd2c0a95187364fd3b535ea622d1671bee08da55fbfbf7a3d1880b32` | none |
@@ -37,7 +37,7 @@ the sdist's).
 | `data/positivist.py` | `1008b71b7ce4d8f910dbb5ac075a100d6f7f9ff145a0b41496c49a1a8fb87df2` | none |
 | `_calendar.py` | not convertdate's: the stand-in for `calendar` below | |
 
-That is 37 edits in 14 files, most of them one line; every edit is marked `# Pystachy port:` in
+That is 40 edits in 14 files, most of them one line; every edit is marked `# Pystachy port:` in
 the source, and `diff -ru convertdate-2.5.1/src/convertdate ports/convertdate` shows them all.
 The package leaves out `bahai.py`, `french_republican.py`, `persian.py` and `dublin.py` (below)
 and `data/french_republican_days.py`, which only `french_republican` reads; the rest of the
@@ -144,14 +144,15 @@ program that calls `to_jd()`, `from_jd()` or a conversion first, but not one tha
 each of them compiles when it is the first one called. The types are what CPython returns
 (`year_days(5784)` is `383.0`).
 
-**Modules left out of `__init__.py`, 3 edits (4 lines).** `bahai`, `french_republican` and
+**Modules left out of `__init__.py`, 6 edits (8 lines).** `bahai`, `french_republican` and
 `persian` import [PyMeeus](https://pypi.org/project/PyMeeus/), an astronomy library under the
 LGPL-3.0, whose classes take `*args, **kwargs` (M2, M3) and which imports `calendar` and
 `datetime` (#11); it is not ported. `dublin` makes the bound methods of a `DayCount` object its
 functions (`to_gregorian = _dublin.to_gregorian`): unannotated methods (M2,
 [#7](https://github.com/den-run-ai/pystachy/issues/7)) and methods as values (M3,
 [#8](https://github.com/den-run-ai/pystachy/issues/8)). The four are commented out of the
-package's `from . import (...)`; `__all__` still names them.
+package's `from . import (...)`, and out of its `__all__`: `from convertdate import *` takes
+the names it lists, and stopped at `bahai` with an `AttributeError`.
 
 ## What compiles as it is
 
@@ -266,12 +267,16 @@ a float year, which `new_years(2023.0)` keeps and with which `new_years(2023.0, 
 `TypeError` from `calendar.weekday()`; and the `ValueError`, `NotImplementedError` and
 `DeprecationWarning` that `easter()`, `thanksgiving()` and `columbus_day()` raise.
 
+`tests/port_convertdate_star.py` takes the package's modules with `from convertdate import *`
+and calls a conversion of each calendar; the import stopped at `bahai` while `__all__` named
+the four modules the port leaves out.
+
 `tests/run.sh` compares what they print with CPython's, JIT and AOT. Run under CPython against
 the unmodified upstream package (with PyMeeus 0.5.12 on the path, as its `__init__.py` imports
-`bahai`, `french_republican` and `persian`, which the tests do not call), both print exactly
-what they print against this port. Both are small: under `make verify`'s gc-stress stage (the
-compiler collecting every 1,000 allocations, the program at every allocation), each takes 3 to 6
-s for the JIT run and the AOT build and run together, and each AOT build 2 to 4 s.
+`bahai`, `french_republican` and `persian`, which the tests do not call), the first two print
+exactly what they print against this port. Both are small: under `make verify`'s gc-stress stage
+(the compiler collecting every 1,000 allocations, the program at every allocation), each takes 3
+to 6 s for the JIT run and the AOT build and run together, and each AOT build 2 to 4 s.
 
 ## Speed
 

@@ -44,11 +44,11 @@ __version__ = '2.5.1'
 
 __all__ = [
     'armenian',
-    'bahai',
+    # 'bahai',  # Pystachy port: left out above, where import * would look for it
     'coptic',
     'daycount',
-    'dublin',
-    'french_republican',
+    # 'dublin',  # Pystachy port: left out above, as bahai
+    # 'french_republican',  # Pystachy port: left out above, as bahai
     'gregorian',
     'hebrew',
     'holidays',
@@ -59,7 +59,7 @@ __all__ = [
     'julianday',
     'mayan',
     'ordinal',
-    'persian',
+    # 'persian',  # Pystachy port: left out above, as bahai
     'positivist',
     'utils',
 ]
