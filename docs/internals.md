@@ -22,7 +22,7 @@ flowchart TD
     rtpy["runtime.py: str methods, format specs, math, dict hashing, in the subset"] -->|pystachy rt| rtbc
     lower --> ir["LLVM IR"]
     ir --> aot["pystachy build: llvm-link with the runtime bitcode, clang -O2 on the whole module"]
-    ir --> jit["pystachy run: opt (mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
+    ir --> jit["pystachy run: opt (globaldce, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
     rtbc --> aot
     rtbc --> jit
     aot --> exe["native executable"]
@@ -316,8 +316,10 @@ against CPython's own str methods, `math` and `format()`.
 
 ### Two tiers
 
-`run` favors latency: a three-pass pipeline over the program alone, then
-ORC JIT compilation linked against a cached, precompiled runtime `.o`. `build` favors
+`run` favors latency: `globaldce` removes unused internal functions before the three
+function cleanup passes, then ORC JIT compilation links against a cached, precompiled
+runtime `.o`. Frontend checks and definition-time effects still run; the external
+object-dispatch callbacks remain available to the runtime. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags
 (such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set (and per
