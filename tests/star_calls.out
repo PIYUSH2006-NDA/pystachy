@@ -1,0 +1,28 @@
+call add (1, 2)
+call add ('x', 'y')
+3 xy 6 16 8
+123 550 457 220 789 220
+1 2 3
+1-2-3!
+3 1 2
+a, 3, 1, 2, b
+only
+a|b|c
+k j
+3 (0, 4) p-q
+42 [42, 7]
+('bad', 1)
+eval f
+eval a
+eval t
+123
+eval o
+eval d
+3
+TypeError: __main__.three() argument after * must be an iterable, not NoneType
+TypeError: __main__.P() argument after * must be an iterable, not NoneType
+TypeError: print() argument after * must be an iterable, not NoneType
+eval g
+TypeError: __main__.three() argument after * must be an iterable, not NoneType
+TypeError: ValueError() argument after * must be an iterable, not NoneType
+[exit 0]

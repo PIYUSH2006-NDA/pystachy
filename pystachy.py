@@ -13425,13 +13425,22 @@ class Gen:
             if a.kind == "kw" and a.s not in ok:
                 self.err(f"{what} got an unexpected keyword argument '{a.s}'")
 
-    def exc_vals(self, args: list[Node]) -> list[Val]:
-        # the positional arguments of a call of a builtin exception class, its keyword arguments
+    def exc_vals(self, args: list[Node], name: str = "") -> list[Val]:
+        # the positional arguments of a call of builtin exception class name, its keyword arguments
         # evaluated in order too (exc_kw)
         vals: list[Val] = []
         for a in args:
             if a.kind == "kw":
                 self.expr(a.kids[0], "")
+            elif a.kind == "starred" and (a.kids[0].kind == "list" or a.kids[0].kind == "tuple") and len([x for x in a.kids[0].kids if x.kind == "starred"]) == 0:
+                for x in a.kids[0].kids:
+                    vals.append(self.expr(x, ""))  # (*[a, b] of a display: its items)
+            elif a.kind == "starred":
+                v = self.unwrap(self.expr(a.kids[0], ""), f"TypeError: {name + '() argument' if name != '' else 'Value'} after * must be an iterable, not NoneType")
+                if not is_tuple(v.t):
+                    self.err(f"unpacking a {typestr(v.t)} into the arguments of an exception is not supported (a tuple's items are)")
+                for i in range(len(targs(v.t))):
+                    vals.append(self.tget(v, i))
             else:
                 vals.append(self.expr(a, ""))
         return vals
@@ -13458,7 +13467,7 @@ class Gen:
                 self.raise_("TypeError", self.sconst("exception causes must derive from BaseException"))
                 self.place(self.label())  # (what follows, the raise itself, is never reached)
             return
-        self.exc_vals(self.exc_args(c))
+        self.exc_vals(self.exc_args(c), c.kids[0].s if c.kind == "call" else "")
 
     def exc_value_of(self, e: Node, k: str) -> Val:
         # the value of e, the exception of a raise statement, unless it is a builtin exception class
@@ -13498,7 +13507,7 @@ class Gen:
             self.throw(v)
             return
         name = e.kids[0].s if e.kind == "call" else e.s
-        vals = self.exc_vals(self.exc_args(e))
+        vals = self.exc_vals(self.exc_args(e), name)
         if len(n.kids) > 1:
             self.cause(n.kids[1])
         if n.s == "init":
@@ -16450,8 +16459,10 @@ class Gen:
         if f.kind == "badattr":
             self.err(f.s)
         for a in args:
-            if a.kind == "starred" or a.kind == "dstar":
-                self.err("star arguments are not supported")
+            if a.kind == "dstar":
+                self.err("** arguments (f(**d)) are not supported")
+        if len([a for a in args if a.kind == "starred"]) > 0:
+            return self.star_call(n, want)
         if f.kind == "name":
             self.modchk(f)
         if f.kind == "name" and f.s not in self.ltype:
@@ -16480,7 +16491,7 @@ class Gen:
                 self.err(self.unsupported[f.s])
             if f.s in EXCEPTIONS and EXCEPTIONS[f.s] != "-":
                 # an exception made, not raised (raise e raises it)
-                vals = self.exc_vals(self.exc_args(n))
+                vals = self.exc_vals(self.exc_args(n), f.s)
                 if f.s == "SystemExit":
                     return self.exit_value(vals)
                 return self.exc_value("OSError" if f.s == "IOError" or f.s == "EnvironmentError" else f.s, vals)
@@ -16511,6 +16522,100 @@ class Gen:
         if f.kind == "name":
             self.not_callable(f.s, self.ltype[f.s])
         return self.obj_call(self.expr(f, ""), args, want)
+
+    def star_call(self, n: Node, want: str) -> Val:
+        # f(a, *t, b): the items a star unpacks are positional arguments. CPython evaluates the
+        # function (the object of o.m), then the arguments in order, unpacking each star's: those up
+        # to the last star are evaluated here, a tuple's items become arguments, and the call is
+        # compiled with them (a list's items, which only run time knows, only print() takes)
+        f = n.kids[0]
+        args = n.kids[1:]
+        sup = f.kind == "attr" and f.kids[0].kind == "call" and f.kids[0].kids[0].kind == "name" and f.kids[0].kids[0].s == "super" and not self.bound("super")
+        if f.kind == "attr" and f.kids[0].kind != "name" and f.kids[0].kind != "val" and not sup and self.dotted(f) == "":
+            f = mk("attr", f.s, f.line, [self.vnode(self.expr(f.kids[0], ""))])
+        elif f.kind != "name" and f.kind != "attr" and f.kind != "val":
+            f = self.vnode(self.expr(f, ""))
+        last = max([j for j in range(len(args)) if args[j].kind == "starred"])
+        printing = f.kind == "name" and f.s == "print" and not self.bound("print")
+        who = self.star_who(f)
+        out: list[Node] = []
+        for j in range(len(args)):
+            a = args[j]
+            if j > last:
+                out.append(a)
+            elif a.kind == "starred" and (a.kids[0].kind == "list" or a.kids[0].kind == "tuple") and len([x for x in a.kids[0].kids if x.kind == "starred"]) == 0:
+                for x in a.kids[0].kids:
+                    out.append(self.vnode(self.expr(x, "")))  # (*[a, b] of a display: its items)
+            elif a.kind == "starred":
+                v = self.expr(a.kids[0], "")
+                self.line = a.line
+                v = self.unwrap(v, f"TypeError: {who + ' argument' if who != '' else 'Value'} after * must be an iterable, not NoneType")
+                if is_tuple(v.t):
+                    for i in range(len(targs(v.t))):
+                        out.append(self.vnode(self.tget(v, i)))
+                elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t)):
+                    # print(*xs): its items printed as arguments are, joined by sep
+                    xs = v if is_list(v.t) else self.as_list(v, "print")
+                    item = mk("name", "__pys_item", a.line, [])
+                    out.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
+                else:
+                    self.err(f"unpacking a {typestr(v.t)} into the arguments of {who if who != '' else 'a function'} is not supported (a tuple's items are)")
+            elif a.kind == "kw":
+                out.append(mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]))
+            else:
+                out.append(self.vnode(self.expr(a, "")))
+        if printing and len([a for a in out if a.kind == "starred"]) > 0:
+            return self.print_star(n, out)
+        return self.call(mk("call", n.s, n.line, [f] + out), want)
+
+    def star_who(self, f: Node) -> str:
+        # the function f(...) calls, as CPython's messages name it (module.qualname(), a builtin's
+        # name()), or "" where it is known only at run time
+        t = ""
+        if f.kind == "name" and f.s not in self.ltype and (f.s in self.funcs or f.s in self.classes):
+            t = f"fn[f:{f.s}]" if f.s in self.funcs else ""
+            if f.s in self.classes:
+                m = self.classes[f.s].mod
+                return f"{m if m != '' else '__main__'}.{short(f.s)}()"
+        elif f.kind == "name" and not self.bound(f.s):
+            return f"{f.s}()"
+        elif f.kind == "val":
+            t = self.vnodes[int(f.s)].t
+        elif f.kind == "attr" and f.kids[0].kind == "val" and self.vnodes[int(f.kids[0].s)].t in self.classes:
+            c = self.vnodes[int(f.kids[0].s)].t
+            m = self.classes[c].mod
+            return f"{m if m != '' else '__main__'}.{short(c)}.{f.s}()"
+        if t.startswith("fn[f:"):
+            m = self.funcs[t[5:-1]].mod
+            return f"{m if m != '' else '__main__'}.{short(t[5:-1])}()"
+        if t.startswith("fn[c:"):
+            clo = self.closures[int(t[5 : t.find(":", 5)])]
+            return f"{clo.f.mod if clo.f.mod != '' else '__main__'}.{clo.qual}()"
+        return ""
+
+    def print_star(self, n: Node, args: list[Node]) -> Val:
+        # print(a, *xs, b, sep=..., end=..., file=..., flush=...) where xs is a list known only at run
+        # time: one argument, the str of each item and argument joined by sep (" " if None). The
+        # arguments are evaluated first, in order, then each one's str is made, as print makes them
+        sep: Node = mk("str", " ", n.line, [])
+        parts: list[Node] = []
+        kws: list[Node] = []
+        for a in args:
+            if a.kind == "starred":
+                parts.append(a.kids[0])  # (a list comprehension of the strs of the list's items)
+            elif a.kind == "kw":
+                sv = self.vnode(self.expr(a.kids[0], "str" if a.s == "sep" or a.s == "end" else ""))
+                if a.s == "sep":
+                    sep = mk("ifexp", "", n.line, [mk("cmp", "is", n.line, [sv, mk("None", "", n.line, [])]), mk("str", " ", n.line, []), sv])
+                else:
+                    kws.append(mk("kw", a.s, a.line, [sv]))
+            else:
+                parts.append(mk("list", "", n.line, [mk("call", "", n.line, [mk("name", "str", n.line, []), self.vnode(self.expr(a, ""))])]))
+        joined: Node = parts[0]
+        for x in parts[1:]:
+            joined = mk("binop", "+", n.line, [joined, x])
+        line = mk("call", "", n.line, [mk("attr", "join", n.line, [sep]), joined])
+        return self.call(mk("call", n.s, n.line, [mk("name", "print", n.line, []), line] + kws), "")
 
     def not_callable(self, name: str, t: str) -> None:
         # a call of variable name's value (c() for an object c), of type t: CPython's TypeError,
