@@ -59,6 +59,16 @@ modules, edited where ports/pylev/PORT.md lists (each edit is marked "Pystachy p
 is used under the 3-clause BSD License, whose text and copyright notice ("Copyright (c) 2012,
 Daniel Lindsley") are in ports/pylev/LICENSE.
 
+qrcode (ports/qrcode/)
+----------------------
+
+ports/qrcode/__init__.py, base.py, constants.py, exceptions.py, LUT.py, main.py and util.py are
+qrcode 8.2's modules, edited where ports/qrcode/PORT.md lists (each edit is marked "Pystachy
+port:"). qrcode is used under the BSD 3-Clause License, whose text and copyright notice
+("Copyright (c) 2011, Lincoln Loop") are in ports/qrcode/LICENSE, the sdist's LICENSE file; it
+also holds the MIT License notice of pyqrnative, the code qrcode was forked from ("Copyright (c)
+2009 Kazuhiko Arase").
+
 CPython's list sort (runtime.c)
 -------------------------------
 
