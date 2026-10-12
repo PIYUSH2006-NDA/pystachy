@@ -406,10 +406,10 @@ returning operands, `not`, conditional expressions, keyword and default argument
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
 displays, list comprehensions, generator expressions and
 `range()`/`reversed()`/`enumerate()`/`zip()` as the argument of `list()`, `sorted()`,
-`sum()`, `min()`, `max()`, `any()`, `all()`, `str.join()` or `list.extend()` (`any()` and
-`all()` stop at the deciding item, as they do over files, and `list.extend()` appends each
-item of a generator expression as it is made), `x in range(...)`, and operator
-overloading resolved statically:
+`sum()`, `min()`, `max()`, `any()`, `all()`, `math.fsum()`, `math.prod()`, `str.join()` or
+`list.extend()` (`any()` and `all()` stop at the deciding item, as they do over files, and
+`list.extend()` appends each item of a generator expression as it is made), `x in range(...)`,
+and operator overloading resolved statically:
 `__add__` & co, the in-place forms, `__neg__`, `__pos__` and `__invert__` for unary `-`, `+`
 and `~`, `__eq__`, rich comparisons with CPython's reflection
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
@@ -427,11 +427,11 @@ result counts as its truth does; without `__contains__`, `x in o` looks for `x` 
 returns `iter(xs)` of a list, a tuple, a `str` or another such object steps through `xs` as a
 list's iterator does, wherever the object is iterated: `for` loops, comprehensions, unpacking,
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
-`str.join()` and `list.extend()`; `list()`, `sorted()` and `list.extend()` then call its
-`__len__`, if it has one, as CPython's length hint. A method the operation needs and the class
-does not define is an error with CPython's message (`'C' object is not subscriptable`,
-`'C' object is not callable`), and an object that is `None` raises CPython's error when it
-runs.
+`math.fsum()`, `math.prod()`, `str.join()` and `list.extend()`; `list()`, `sorted()` and
+`list.extend()` then call its `__len__`, if it has one, as CPython's length hint. A method the
+operation needs and the class does not define is an error with CPython's message (`'C' object
+is not subscriptable`, `'C' object is not callable`), and an object that is `None` raises
+CPython's error when it runs.
 
 ## Builtins and library modules
 
@@ -455,8 +455,9 @@ are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/ma
 `os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
-constants, which raise CPython's domain and range errors (but `dist`, `fsum`, `gamma`,
-`isclose`, `lgamma`, `prod` and `sumprod`, which are rejected).
+constants, which raise CPython's domain and range errors, with `fsum` and `prod` (and its
+`start=`) computed as CPython computes them (they take what `sum()` takes, and `fsum` a tuple
+of ints and floats too); `dist`, `gamma`, `isclose`, `lgamma` and `sumprod` are rejected.
 
 ## Removed on purpose
 
@@ -547,10 +548,14 @@ In these cases the program compiles but can behave differently from CPython:
   and where CPython raises `RecursionError` the program dies with `SIGSEGV` (status 139, losing buffered output) or,
   for a tail call in an AOT build, loops forever. `==` between two cyclic dataclass objects
   recurses like that too.
+- `min()`, `max()` and `math.fsum()` make all the items of a generator expression before they
+  compare or add them, so where CPython stops at an item (a `__lt__` that raises, or fsum's
+  `OverflowError: intermediate overflow in fsum`), the expressions of the later items have run,
+  and an exception that one of them raises comes first.
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
   tuples holding the same NaN object compare, and sort, as if they held different ones. The
-  sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), where CPython returns the int
-  start.
+  sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
+  `1.0`, where CPython returns the int start.
 - An import of a builtin module binds its names for the whole program, wherever it appears
   (an import of a Python module in a function binds its names in that function only, as in
   CPython, also where the name is a builtin module it re-exports: `from helper import os`). A program that reads a module's attribute before the import of the module has
@@ -588,7 +593,7 @@ In these cases the program compiles but can behave differently from CPython:
 - An optional import of a module that Pystachy does not find runs its handler, also where
   CPython would find the module (a standard library module Pystachy lacks, or a package
   installed for CPython), and so does one of a name that a builtin module of Pystachy lacks
-  (`from math import fsum`); a handler that may end the program is rejected instead (below). A
+  (`from math import gamma`); a handler that may end the program is rejected instead (below). A
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 - A global (a function or class included) that its module's code has not bound when it is
