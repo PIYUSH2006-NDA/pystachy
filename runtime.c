@@ -934,7 +934,14 @@ static I resc(char *t, const char *s, I len, char q, I *n) {   /* the character 
 static void repr_str(Buf *b, Str *s) {
   char q = rquote(s->s, s->len), t[12];
   put(b, &q, 1);
-  for (I i = 0, n; i < s->len; i += n) put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  for (I i = 0, n; i < s->len; i += n) {
+    for (n = 0; i + n < s->len; n++) {   /* a run of printable ASCII, which resc copies as it is: one put */
+      unsigned char c = s->s[i + n];
+      if (c < 32 || c > 126 || c == q || c == '\\') break;
+    }
+    if (n) put(b, s->s + i, n);
+    else put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  }
   put(b, &q, 1);
 }
 static const char *repr(Buf *b, I v, const char *d) {
