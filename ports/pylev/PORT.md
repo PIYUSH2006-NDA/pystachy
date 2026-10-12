@@ -12,7 +12,7 @@ license (`LICENSE`).
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `abd7f780829ad3ef0dd4f4eeb01ccd048e4dead3bc73a646f0fa5a8461e12463` | 2 regions (the three aliases) |
+| `__init__.py` | `abd7f780829ad3ef0dd4f4eeb01ccd048e4dead3bc73a646f0fa5a8461e12463` | none |
 | `classic.py` | `b2205250a290e2cf7f125e127bec28c1ea0f7a7387ad3559a841fec40a25d248` | none |
 | `recursive.py` | `759d2d7ccbf4205ff0c6e946296d8f8c2eb0a7db503ac3a666f36066087e9088` | 1 line |
 | `wf.py` | `160773704d0cee4715faddacb57b35e25bd28a72bbbd4726e11a1eebbf0caef1` | 2 regions (the Python 2 shim) |
@@ -71,35 +71,22 @@ outside the milestones.**
   This is rejected with the same message, and it compiles when the fill is
   `memo[n] = n * 3`.
 
-**An alias of a from-imported function, from-imported in turn: a bug of the loader, outside
-the milestones.**
-
-- **6, 7.** `__init__.py`: `levenshtein = wfi_levenshtein`,
-  `classic_levenschtein = classic_levenshtein` and `levenschtein = levenshtein` become
-  `from .wf import wfi_levenshtein as levenshtein`,
-  `from .classic import classic_levenshtein as classic_levenschtein` and
-  `from .wf import wfi_levenshtein as levenschtein`: the same functions under the same names.
-  As upstream writes them, `pylev.levenshtein(...)` works, but `from pylev import levenshtein`,
-  the import clikit and cleo write, and `from pylev import *` fail with
-  `name 'levenshtein' is not defined`. `name = f` is an alias (docs/language.md, "Module
-  scope"), but where `f` is itself from-imported the loader makes it one only after every import
-  statement of the program has been resolved (`Loader.late_aliases()`), and by then another
-  module's `from pylev import levenshtein` has taken `levenshtein` as a variable, which the
-  alias leaves unassigned. A module and a program that imports it show it:
-
-  ```python
-  # m.py (sub.py: def f(x): return x + 1)
-  from sub import f
-  g = f
-  # main.py: rejected with name 'g' is not defined, where import m and m.g(1) work
-  from m import g
-  ```
+**Aliases of from-imported functions.** `__init__.py` is upstream's. Until
+[#159](https://github.com/den-run-ai/pystachy/issues/159) was fixed, edits 6 and 7 made its three
+aliases (`levenshtein = wfi_levenshtein`, `classic_levenschtein = classic_levenshtein` and
+`levenschtein = levenshtein`) from-imports of the same functions: `from pylev import levenshtein`,
+the import clikit and cleo write, and `from pylev import *` failed with
+`name 'levenshtein' is not defined`, where `pylev.levenshtein(...)` worked. The loader makes
+`name = f` an alias where `f` is itself from-imported only once every import statement of the
+program has been resolved (`Loader.late_aliases()`), and by then another module's
+`from pylev import levenshtein` had taken `levenshtein` as a variable, which the alias left
+unassigned; such an import now takes the alias too (`Loader.late_takes()`).
 
 ## What compiles as it is
 
 Every function of pylev is unannotated, so each one is a template, compiled once for each set
 of argument types a program calls it with: `str`, and also `list[str]` or `list[int]`, since the
-code indexes and compares any sequence. As they are: the from-imports of `__init__.py`,
+code indexes and compares any sequence. As they are: the from-imports and aliases of `__init__.py`,
 `__all__` (which `from pylev import *` reads), the `__version__` tuple; `None` defaults that the
 body replaces with an `int` or a dict (`if len_1 is None: len_1 = len(string_1)`), given by
 keyword too, and passed on by the recursion; the swap of the two arguments by tuple assignment

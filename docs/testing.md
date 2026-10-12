@@ -42,8 +42,10 @@ predecessors branch to it, only unwind edges reach a landing pad, and inside a `
 that may raise is left without one). The optimizations that run on the IR before it is lowered
 ([`docs/typed-ir.md`](typed-ir.md) §7.1) can be turned off for a differential run: `PYSTACHY_OPT=-listget`
 (a for loop's reads of the list it steps through, without a bounds check) or `-dictfuse` (one
-hash lookup for `if k in d: d[k] += 1` and the like), comma-separated, or `-all`; the tests
-pass with each one off. The programs cover arithmetic and overflow edges,
+hash lookup for `if k in d: d[k] += 1` and the like), and so can a choice of the lowering,
+`-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items),
+comma-separated, or `-all`; the tests pass with each one off.
+The programs cover arithmetic and overflow edges,
 strings (also their Unicode whitespace), escapes and f-strings, a 400-case sample of the
 format-spec language, lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
 (also their container protocol, static and class methods, and class variables), dataclasses, NamedTuples, typing's forms (`collections.abc`, `Final`, `@overload`, `TypeVar`,

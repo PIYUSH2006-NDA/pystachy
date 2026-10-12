@@ -1,0 +1,10 @@
+@main.init: pys_alloc pys_alloc pys_alloc pys_alloc pys_alloc
+@f.total:
+@f.near: pys_raise
+@f.mixed: pys_alloc pys_alloc
+@m.Bag.__init__:
+@m.Bag.__iter__: pys_list_new pys_list_append pys_list_append
+@pys_obj_eq:
+@pys_obj_cmp:
+@pys_obj_repr:
+@main: pys_init pys_finish
