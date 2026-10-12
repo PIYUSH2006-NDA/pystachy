@@ -1,6 +1,7 @@
 # A method's first parameter shadows a module-level function, class or import of its name: a
 # field __init__ assigns from self(...) is typed by its class's __call__, and from self.m(...) by
-# its method m, not by the function, class or import of that name.
+# its method m, not by the function, class or import of that name; and self(...) in __init__
+# lets a __call__ that reads a field not assigned yet raise AttributeError.
 import os
 from os import fspath
 
@@ -58,9 +59,35 @@ class Len:
         return fspath.k * len(s)
 
 
+class Early:
+    def __init__(self, n: int) -> None:
+        self.v: int = self(1)  # (__call__ reads self.k before it is assigned)
+        self.k = n
+
+    def __call__(self, d: int) -> int:
+        return self.k + d
+
+
+class Late:
+    def __init__(Box, n: int) -> None:
+        print(Box("!"))  # (__call__ reads Box.s before it is assigned)
+        Box.s = str(n)
+
+    def __call__(Box, t: str) -> str:
+        return Box.s + t
+
+
 f = Fact(41)
 print(f.v, f(2), self())
 p = Pair(5)
 print(p.big, p.area, p(9), p.size(2))
 print(Box().v, Box.size(4))
 print(Path(3).a, Len(4).a, os.fspath("p"), fspath("q"))
+try:
+    print(Early(1).v)
+except AttributeError as e:
+    print("AttributeError:", e)
+try:
+    print(Late(2).s)
+except AttributeError as e:
+    print("AttributeError:", e)

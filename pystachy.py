@@ -11634,8 +11634,8 @@ class Gen:
             c = e.kids[0]
             if c.kind == "attr":
                 self.fl_expr(fl, c.kids[0])
-            elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes):
-                self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called)
+            elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes) or c.s == fl.me:
+                self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called; self shadows a function or class)
             elif c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
                 c.chk = True
                 fl.marks[c.s] = True
