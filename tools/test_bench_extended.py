@@ -101,10 +101,17 @@ class ProcessTests(unittest.TestCase):
                 self.assertTrue(pidfile.exists(), "grandchild never started; timeout test is inconclusive")
                 self.assertFalse(marker.exists(), "grandchild survived its process group's timeout")
                 stat = Path("/proc") / pidfile.read_text() / "stat"
-                try:
-                    state = stat.read_text().rsplit(")", 1)[1].split()[0]
-                except FileNotFoundError:
-                    state = None
+                # SIGKILL closes the grandchild's files, which ends the pipe, before it becomes a
+                # zombie: it reads as running (or in disk sleep) while it exits, longer on a busy host
+                deadline = time.monotonic() + 5
+                while True:
+                    try:
+                        state = stat.read_text().rsplit(")", 1)[1].split()[0]
+                    except FileNotFoundError:
+                        state = None
+                    if state not in ("R", "D") or time.monotonic() > deadline:
+                        break
+                    time.sleep(0.01)
                 # An orphan may remain a zombie until the container's init reaps it.
                 self.assertIn(state, (None, "Z", "X"), "grandchild is still executing")
             finally:
