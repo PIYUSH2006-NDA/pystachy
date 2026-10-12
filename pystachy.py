@@ -6426,6 +6426,9 @@ def only_none(body: list[Node], name: str) -> bool:
             continue
         if stmt_binds(st, name) and not (st.kind == "assign" and nonexpr(st.kids[-1]) and assigns(st, name)):
             return False  # (also a, name = None, None)
+        for a in st.kids if st.kind == "import" else st.kids[:0]:
+            if a.s == name:
+                return False  # (import m as name, which stmt_binds() leaves out)
         for kid in st.kids:
             if kid.kind == "block" and not only_none(kid.kids, name):
                 return False
