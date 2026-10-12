@@ -9893,7 +9893,7 @@ class Gen:
                 if c == "str":
                     self.runtime("pys_c_str")
                     code.append(f"  call void @pys_c_str(ptr %a{j})")
-                code.append(f"  %p{j} = getelementptr i8, ptr %a{j}, i64 8")
+                code.append(f"  %p{j} = getelementptr i8, ptr %a{j}, i64 16")  # (the bytes, after the length and dict hash: runtime.c's Str)
                 cts.append("ptr")
             elif c == "float":
                 code.append(f"  %p{j} = bitcast double %a{j} to double")  # (as it is: -0.0, inf and nan too)

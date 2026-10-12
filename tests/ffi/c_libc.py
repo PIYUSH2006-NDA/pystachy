@@ -51,6 +51,10 @@ s = string_at(p, strlen("Wikipedia"))
 free(p)
 print(s, strlen(s), strnlen("a\0b", 3), strcmp("a", "b"), strcmp("b", "a"), atoi("-5"), abs(-7), labs(-2**62))
 print(to_u64("9223372036854775807", 0, 10), getenv("PYSTACHY_FFI_TEST_UNSET"), memchr("abc", 98, 3) != 0, "abc".find("b"))
+# a dict key (made at run time, or a literal) caches its hash in the str, beside its bytes: C still
+# gets only the bytes
+d = {s: 1, "-12": 2}
+print(strlen(s), atoi("-12"), strcmp(s, "Wikipedia"), strnlen(s, 99), d[s] + d["-12"])
 for k in range(6):
     try:
         if k == 0:
