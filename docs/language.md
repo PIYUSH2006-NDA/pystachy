@@ -372,10 +372,11 @@ unsupported type annotation`), but its `def` or `class` statement still runs whe
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
 compile, and the parts it can compile of the others (the items of a display). Of a class body,
 it evaluates in order the operations that may raise and that it computes as CPython does, but
-not in the branches of an `if`: `//`, `%` and `/` of numbers, an index of a str, list or dict,
-`int()` and `float()`, and `min()` and `max()` of a str or list, applied to literals and the
-module's variables (`1 // 0`, `TABLE["k"]`, `int(s)`). It stops at the first operation that may
-raise and that it does not evaluate (another call, `**`, `1 // n` of the body's own `n`), and
+not in the branches of an `if`: `//`, `%` and `/` of numbers (not `//` of two ints that may be
+`-2**63 // -1`), an index of a list or dict, `int()` of a str literal of ASCII characters with at
+most 18 digits, and `min()` and `max()` of a list, applied to literals and the module's variables
+(`1 // 0`, `TABLE["k"]`, `int("x")`). It stops at the first operation that may raise and that it
+does not evaluate (another call, `**`, an index of a str, `1 // n` of the body's own `n`), and
 evaluates none in the module's later classes. What it leaves
 uncompiled (decorators, default values, bases, a class body) must run no code of the
 program: it may read names, compute with literals and builtin values (`2 ** 31 - 1`,

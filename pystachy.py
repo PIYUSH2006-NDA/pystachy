@@ -5458,10 +5458,10 @@ for _k in ("abs all any ascii bin bool bytes callable chr complex dict divmod en
            "int isinstance issubclass iter len list map max min object oct ord pow range repr reversed round set slice sorted "
            "str sum tuple zip __pys_repr __pys_str __pys_ascii typing.cast os.getcwd os.getenv os.environ.get").split():
     PURE[_k] = True
-# the builtins whose calls the body of a class Pystachy leaves out still runs: given values of
-# builtin types, they compute what CPython's do and may raise (int("x"), max([])), see Gen.plain
+# the builtins whose calls the body of a class Pystachy leaves out still runs: given the values
+# Gen.plain allows, they compute what CPython's do and may raise (int("x"), max([]))
 RAISERS: dict[str, bool] = {}
-for _k in "float int max min".split():
+for _k in "int max min".split():
     RAISERS[_k] = True
 # encoding= names of UTF-8 (1) and Latin-1 (2) as CPython's codec lookup finds them (see codec()):
 # a str holds the file's bytes either way, which is what CPython's str holds for a Latin-1 file
@@ -5880,6 +5880,25 @@ def raising(e: Node) -> bool:
     # is expression e an operation that may raise on values of builtin types: a division or
     # modulo, a power or shift, an index, or a call (int("x"))
     return (e.kind == "binop" and raising_op(e.s)) or e.kind == "index" or e.kind == "call"
+
+
+def int_lit(e: Node) -> str:
+    # the value of e if it is an int literal (or its negation), else ""
+    if e.kind == "unary" and e.s == "-" and e.kids[0].kind == "int":
+        return "-" + e.kids[0].s
+    return e.s if e.kind == "int" else ""
+
+
+def short_ascii(s: str) -> bool:
+    # is s printable ASCII with at most 18 digits, so that int(s) is what CPython's is: an int of
+    # 64 bits or a ValueError (not an int beyond 64 bits, or one of other digits)
+    n = 0
+    for c in s:
+        if c < " " or c > "~":
+            return False
+        if c >= "0" and c <= "9":
+            n += 1
+    return n <= 18
 
 
 def may_raise(e: Node) -> bool:
@@ -11064,10 +11083,11 @@ class Gen:
     def plain(self, e: Node, local: dict[str, str]) -> str:
         # the type of value e of a class body Pystachy leaves out (local: the names it has bound) if
         # Pystachy computes e as CPython does, else "": a literal, a variable of the module of a
-        # builtin type, or one of these operations on them, which may raise but compute no int
-        # beyond 64 bits (where Pystachy's raise OverflowError, see docs/language.md, Deviations):
-        # //, % and / of numbers, an index of a str, list or dict, int() and float() of a number or
-        # str, and min() and max() of a str or list
+        # builtin type, or one of these operations on them, which may raise: //, % and / of numbers,
+        # an index of a list or dict, int() of a str literal and min() and max() of a list. Not
+        # where CPython's would compute an int beyond 64 bits, which Pystachy's raise OverflowError
+        # for (see docs/language.md, Deviations), nor an index of a str or min() of one, which count
+        # its bytes
         k = e.kind
         if k == "unary" and e.s == "-" and (e.kids[0].kind == "int" or e.kids[0].kind == "float"):
             return self.plain(e.kids[0], local)
@@ -11083,23 +11103,26 @@ class Gen:
         if k == "binop" and (e.s == "//" or e.s == "%" or e.s == "/"):
             a = self.plain(e.kids[0], local)
             b = self.plain(e.kids[1], local)
-            if (a == "int" or a == "float") and (b == "int" or b == "float"):
-                return "float" if e.s == "/" or a == "float" or b == "float" else "int"
-            return ""
+            if (a != "int" and a != "float") or (b != "int" and b != "float"):
+                return ""
+            r = int_lit(e.kids[1])
+            if e.s == "//" and a == "int" and b == "int" and int_lit(e.kids[0]) == "" and (r == "" or r == "-1"):
+                return ""  # (it may be -2**63 // -1)
+            return "float" if e.s == "/" or a == "float" or b == "float" else "int"
         if k == "index":
             o = self.plain(e.kids[0], local)
             i = self.plain(e.kids[1], local)
-            if (o == "str" or is_list(o)) and i == "int":
-                return o if o == "str" else elem(o)
+            if is_list(o) and i == "int":
+                return elem(o)
             return targs(o)[1] if is_dict(o) and i != "" and i == targs(o)[0] else ""
         if k == "call" and len(e.kids) == 2 and e.kids[0].kind == "name":  # (one argument: not a keyword, see a)
             f = e.kids[0].s
             a = self.plain(e.kids[1], local)
             if f not in RAISERS or f in local or self.bound(f) or a == "":
                 return ""
-            if f == "int" or f == "float":
-                return f if a == "int" or a == "float" or a == "str" else ""
-            return "str" if a == "str" else elem(a) if is_list(a) and (elem(a) == "int" or elem(a) == "float" or elem(a) == "str") else ""
+            if f == "int":
+                return "int" if e.kids[1].kind == "str" and short_ascii(e.kids[1].s) else ""
+            return elem(a) if is_list(a) and (elem(a) == "int" or elem(a) == "float" or elem(a) == "str") else ""
         return ""
 
     def body_names(self, c: Node) -> dict[str, bool]:

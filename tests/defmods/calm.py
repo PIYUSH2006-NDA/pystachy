@@ -1,5 +1,6 @@
 # Classes that Pystachy leaves uncompiled whose bodies run without raising
-# (tests/deftime_class_raises.py)
+# (tests/deftime_class_raises.py). Skipped holds operations Pystachy does not evaluate, so it
+# evaluates none in the classes after it: each calm_*.py module has one such operation first.
 from typing import Iterable
 
 NAMES = ["x"]
@@ -20,21 +21,6 @@ class Skipped:  # (operations that CPython does not run)
     either = N and 1 // N
     if N:
         half = 1 // N
-    xs: Iterable[int]
-
-
-class Tenth:  # (Pystachy's int ** negative int is a ValueError: docs/language.md, Deviations)
-    tenth = 10**-1
-    xs: Iterable[int]
-
-
-class Mask:  # (Pystachy's int is 64-bit)
-    mask = (1 << 64) - 1
-    xs: Iterable[int]
-
-
-class Mixed:  # (which Pystachy rejects)
-    pick = max(1, 2.5)
     xs: Iterable[int]
 
 
