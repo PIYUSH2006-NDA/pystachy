@@ -16,6 +16,18 @@ try:
     print(max(()))
 except ValueError as e:
     print("ValueError:", e)
+c = "outer"
+evens: list[int] = [c * 2 for c in ()]
+words: list[str] = list(w.upper() for w in () if w)
+print(evens, words, c, any(c for c in ()), all(c for c in ()), "+".join(c for c in ()))
+
+
+def tag(c: str) -> str:
+    seen: list[str] = [c + "!" for c in ()]
+    return c + str(len(seen))
+
+
+print(tag("k"))
 for n in sorted(range(3)):
     print(n)
 for y in list(enumerate(["a"])):
