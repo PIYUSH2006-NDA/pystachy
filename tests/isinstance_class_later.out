@@ -1,0 +1,35 @@
+module: name 'Later' is not defined
+plain: name 'Later' is not defined
+folded: name 'Later' is not defined
+in_tuple: name 'Later' is not defined
+in_union: name 'Later' is not defined
+ternary: name 'Later' is not defined
+stops True
+reaches: name 'Later' is not defined
+first: name 'Later' is not defined
+asserted: name 'Later' is not defined
+looped: name 'Later' is not defined
+side
+evaluated_first: name 'Later' is not defined
+template: name 'Later' is not defined
+caught: name 'LateError' is not defined
+optional: name 'Later' is not defined
+method: name 'Later' is not defined
+plain False
+folded not Later
+in_tuple True
+in_union True
+ternary yes
+stops True
+reaches False
+first False
+asserted
+looped
+side
+evaluated_first False
+template 1 s
+caught False
+optional None
+method True
+False True True Later
+[exit 0]

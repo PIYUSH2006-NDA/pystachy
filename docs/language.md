@@ -84,7 +84,8 @@ imports `annotations` from `__future__`.
   `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
   its argument is known not to be: a new object or `self`), are constants: only the branch that
   runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
-  nothing after a `return`. A parameter whose
+  nothing after a `return`. The classes `isinstance()` names are still looked up there, as
+  everywhere (one whose `class` statement has not run raises `NameError`). A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
