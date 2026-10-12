@@ -5662,7 +5662,7 @@ METHODS: dict[str, str] = {
 # summary (IFn.fx); a raw op is LLVM text that loads, stores or computes (never a call), whose
 # letters its text gives (rawfx)
 IROPS: dict[str, str] = {
-    "raw": "*", "slot": "", "rt": "*", "call": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
+    "raw": "*", "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
     "list.load": "rL",
     "landing": "T", "throw": "T R N", "exc.match": "",
@@ -5995,6 +5995,8 @@ def tname(t: str) -> str:
         return "BaseException"
     if is_fn(t):
         return "builtin_function_or_method" if t.startswith("fn[b:") else "function"
+    if is_callable(t):
+        return "function"
     b = t.find("[")
     return t[:b] if b >= 0 else short(t)
 
@@ -6094,6 +6096,19 @@ def is_fn(t: str) -> bool:
     return t.startswith("fn[")
 
 
+def is_callable(t: str) -> bool:
+    # Callable[[A, B], R]: callable[R,A,B], a pointer to an object {code, env} whose code takes the
+    # env and the arguments (Gen.call_callable). A function value becomes one where a Callable is
+    # expected (Gen.to_callable), so one variable, field or list may hold different functions
+    return t.startswith("callable[")
+
+
+def callable_shown(t: str) -> str:
+    # callable[R,A,B] as typing writes it: Callable[[A, B], R] (its types still to be shown)
+    ts = targs(t)
+    return "Callable[[" + ", ".join(ts[1:]) + "], " + ts[0] + "]"
+
+
 def fn_shown(t: str) -> str:
     # function value type t for a message: the function it is, as CPython's repr names it (a
     # closure's type ends with its qualified name)
@@ -6149,6 +6164,14 @@ def typestr(t: str) -> str:
         a = t.find("fn[")
         b = t.find("]", a)
         t = t[:a] + fn_shown(t[a : b + 1]) + t[b + 1 :]
+    while "callable[" in t:
+        a = t.find("callable[")
+        b = a + 9
+        depth = 1
+        while depth > 0:
+            depth += 1 if t[b] == "[" else -1 if t[b] == "]" else 0
+            b += 1
+        t = t[:a] + callable_shown(t[a:b]) + t[b:]
     out: list[str] = []
     w = ""
     for c in t + ",":
@@ -7531,6 +7554,8 @@ class Gen:
         self.closures: list[Closure] = []
         self.clokeys: dict[str, int] = {}
         self.cells: dict[str, str] = {}  # the function's variables that closures take: the cell of each (a pointer)
+        self.adapters: dict[str, str] = {}  # "<function value type> <Callable type>" -> its adapter's symbol (Gen.adapter)
+        self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
         self.nlw: dict[str, bool] = {}  # and those of them, or of the variables it takes, that a closure assigns (nonlocal)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
@@ -8104,6 +8129,8 @@ class Gen:
             self.err(f"expected an object of {short(t)}, got a builtin exception, which is not converted to a class of the program (catch it as one: except {short(t)} as e)")
         if self.widens(v.t, t):
             return Val(v.v, t)
+        if is_fn(v.t) and is_callable(unopt(t)):
+            return Val(self.to_callable(v, unopt(t)).v, t)  # (a function where a Callable is expected)
         if is_sopt(t) and v.t == unopt(t):
             return Val(self.rt("pys_box", "ptr", ["i64 " + self.to_slot(v)]), t)  # (a new box)
         if self.reboxes(v.t, t):
@@ -8167,8 +8194,8 @@ class Gen:
             if t not in self.ocls:
                 self.ocls[t] = len(self.ocls)
             return f"O{self.ocls[t]:03d}"
-        if is_fn(t):
-            self.err(f"printing a function, or comparing containers of functions, is not supported: {fn_shown(t)}")
+        if is_fn(t) or is_callable(t):
+            self.err(f"printing a function, or comparing containers of functions, is not supported: {typestr(t)}")
         self.err(f"{tname(t)} values cannot be compared or printed")
         return ""
 
@@ -8259,6 +8286,19 @@ class Gen:
             elif base == "classvar":
                 return "!" + CLASSVAR
             a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
+            if base == "callable":
+                # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
+                if len(a) != 2 or (a[0].kind != "list" and a[0].kind != "ellipsis"):
+                    return "!Callable takes a list of parameter types and a return type: Callable[[A, B], R]"
+                if a[0].kind == "ellipsis":
+                    return "!Callable[..., R] is not supported: name the parameter types (Callable[[A, B], R])"
+                cts: list[str] = [self.ann(a[1])]
+                for x in a[0].kids:
+                    cts.append(self.ann(x))
+                for ct in cts:
+                    if ct.startswith("!"):
+                        return ct
+                return self.ctype("callable", cts)
             if base == "union" and len([x for x in a if self.pathlike(x)]) > 0:
                 return self.path_union(a)
             ts: list[str] = []
@@ -8499,7 +8539,7 @@ class Gen:
         # the type of a value that is a t or None, "" if there is none
         if t in self.classes or is_opt(t):
             return t
-        if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_tuple(t)) and "?" not in t:
+        if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_tuple(t) or is_callable(t)) and "?" not in t:
             return self.ctype("opt", [t])
         return ""
 
@@ -10847,6 +10887,10 @@ class Gen:
         elif op == "call":
             c = self.invoke(f"call {lt(i.t)} {i.s}({', '.join([lt(v.t) + ' ' + v.v for v in i.a])})", i)
             o.append("  " + c if i.t == "None" else f"  %t{i.r[0]} = {c}")
+        elif op == "icall":
+            # a Callable's code (operand 0), called with its env and the arguments
+            c = self.invoke(f"call {lt(i.t)} {i.a[0].v}({', '.join([lt(v.t) + ' ' + v.v for v in i.a[1:]])})", i)
+            o.append("  " + c if i.t == "None" else f"  %t{i.r[0]} = {c}")
         elif op == "init":
             o.append("  " + self.invoke(f"call void @init.{i.s}()", i))
         elif op == "list.load":
@@ -10911,7 +10955,7 @@ class Gen:
                 i = b.code[j]
                 if i.op not in IROPS:
                     self.bad_ir(fn, b, f"unknown op {i.op}")
-                inv = len(i.b) == 2 and (i.op == "rt" or i.op == "call" or i.op == "init")
+                inv = len(i.b) == 2 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init")
                 if ("T" in IROPS[i.op] or inv) != (j == len(b.code) - 1):
                     self.bad_ir(fn, b, f"a terminator in the middle, at {i.op}" if j < len(b.code) - 1 else f"no terminator, last {i.op}")
                 if i.op == "landing" and j > 0:
@@ -10921,7 +10965,7 @@ class Gen:
                 for l in i.b[:1] if inv else i.b if i.op != "phi" else i.b[:0]:
                     if l in lands:
                         self.bad_ir(fn, b, f"a branch to the landing block {l}, which only unwind edges may reach")
-                if eh and b.handler != "" and (i.op == "raise" or i.op == "throw" or (not inv and (i.op == "rt" or i.op == "call" or i.op == "init") and self.opfx(i, fn.fa) & FXBIT["R"] != 0)):
+                if eh and b.handler != "" and (i.op == "raise" or i.op == "throw" or (not inv and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init") and self.opfx(i, fn.fa) & FXBIT["R"] != 0)):
                     self.bad_ir(fn, b, f"{i.op} {i.s} may raise, in a block {b.handler} covers, but goes to no landing block")
                 if i.op == "phi" and j > 0 and b.code[j - 1].op != "phi":
                     self.bad_ir(fn, b, "a phi after other ops")
@@ -10972,7 +11016,7 @@ class Gen:
             return 1
         if i.op == "rt":
             return 0 if self.rtfns[i.s].sig[0] == "None" else 1
-        if i.op == "call":
+        if i.op == "call" or i.op == "icall":
             return 0 if i.t == "None" else 1
         return 0
 
@@ -11016,6 +11060,8 @@ class Gen:
         if i.op == "call" or i.op == "init":
             c = i.s if i.op == "call" else "@init." + i.s
             return self.fns[self.fll[c]].fx if c in self.fll else FXALL
+        if i.op == "icall":
+            return FXALL  # (a Callable's code: any function of its type)
         if i.op == "rt":
             # (an exception, E, may be an object of an exception class, whose __str__ and __repr__ run)
             f = self.rtfns[i.s]
@@ -11438,7 +11484,7 @@ class Gen:
             for j in range(len(code)):
                 i = code[j]
                 cur.code.append(i)
-                if j < len(code) - 1 and (i.op == "rt" or i.op == "call" or i.op == "init") and self.opfx(i, fn.fa) & raises != 0:
+                if j < len(code) - 1 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init") and self.opfx(i, fn.fa) & raises != 0:
                     fn.n += 1
                     i.b = [f"L{fn.n}", b.handler]
                     used[b.handler] = True
@@ -16500,6 +16546,34 @@ class Gen:
                     self.err(f"== {what} is not supported where an exception class defines {m} ({short(c.name)} does): compare objects of the class itself, or use 'is'")
 
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
+        if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and is_fn(b.t):
+            b = self.coerce(b, unopt(a.t))  # (a function and a Callable: as Callables of one type)
+        elif (op == "==" or op == "!=" or op == "is" or op == "is not") and is_fn(a.t) and is_callable(unopt(b.t)):
+            a = self.coerce(a, unopt(b.t))
+        if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and unopt(a.t) == unopt(b.t) and (is_opt(a.t) or is_opt(b.t)):
+            # Callables that may be None: both are, or both hold one function (below)
+            nula = self.ins(f"icmp eq ptr {a.v}, null")
+            nulb = self.ins(f"icmp eq ptr {b.v}, null")
+            lsome = self.label()
+            ldone = self.label()
+            cph = Ins("phi", "bool", "")
+            self.incoming(cph, self.ins(f"and i1 {nula}, {nulb}"), self.cur)
+            self.cbr(self.ins(f"or i1 {nula}, {nulb}"), ldone, lsome)
+            self.place(lsome)
+            rv = self.cmp2("==", Val(a.v, unopt(a.t)), Val(b.v, unopt(b.t)))
+            self.incoming(cph, rv.v, self.cur)
+            self.br(ldone)
+            self.place(ldone)
+            eqv = self.phi(cph)
+            return Val(eqv if op == "==" or op == "is" else self.ins(f"xor i1 {eqv}, true"), "bool")
+        if is_callable(a.t) and a.t == b.t and (op == "==" or op == "!=" or op == "is" or op == "is not"):
+            # one function, as Callables of one type: the same code and the same env (a closure's)
+            ca = self.ins(f"load ptr, ptr {a.v}")
+            cb = self.ins(f"load ptr, ptr {b.v}")
+            ea = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {a.v}, i64 1')}")
+            eb = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {b.v}, i64 1')}")
+            both = self.ins(f"and i1 {self.ins(f'icmp eq ptr {ca}, {cb}')}, {self.ins(f'icmp eq ptr {ea}, {eb}')}")
+            return Val(both if op == "==" or op == "is" else self.ins(f"xor i1 {both}, true"), "bool")
         if (is_fn(a.t) or is_fn(b.t)) and (op == "==" or op == "!=" or op == "is" or op == "is not"):
             # a function value is the function its type names: never None, and the same function as
             # another value of its type only (a closure, as the same def or lambda run once: its env)
@@ -16780,7 +16854,7 @@ class Gen:
         # a call of variable name's value (c() for an object c), of type t: CPython's TypeError,
         # unless it has __call__ or is a function (is_fn); a builtin's name bound as a variable is
         # rejected as such
-        if is_fn(t):
+        if is_fn(t) or is_callable(unopt(t)):
             return
         if short(name) in PYBUILTINS or t == "":
             self.err(f"'{name}' is a variable, so it cannot be called")
@@ -16793,9 +16867,85 @@ class Gen:
         # the arguments are evaluated
         if is_fn(o.t):
             return self.call_value(o, args, want)
+        if is_callable(unopt(o.t)):
+            return self.call_callable(o, args)
         if o.t not in self.classes or "__call__" not in self.classes[o.t].methods:
             self.err(f"'{tname(unopt(o.t))}' object is not callable")
         return self.call_fn(self.classes[o.t].methods["__call__"], [o], args, want, "TypeError: 'NoneType' object is not callable")
+
+    def to_callable(self, v: Val, t: str) -> Val:
+        # function value v as a Callable of type t: an object {code, env}, whose code is an adapter
+        # that calls v's function with the env (a closure's) and t's parameters. A function of a
+        # module or a builtin has no env: one constant object serves for each Callable type
+        code = self.adapter(v.t, t)
+        if not v.t.startswith("fn[c:"):
+            g = f"@cvo.{code[4:]}"
+            if g not in self.cvos:
+                self.cvos[g] = True
+                self.consts.append(f"{g} = private constant {{ptr, ptr}} {{ptr {code}, ptr null}}")
+            return Val(g, t)
+        o = self.rt("pys_alloc", "ptr", ["i64 16"])
+        self.emit(f"store ptr {code}, ptr {o}")
+        self.emit(f"store ptr {v.v}, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o}, i64 1')}")
+        self.nn[o] = True
+        return Val(o, t)
+
+    def adapter(self, ft: str, t: str) -> str:
+        # the code of a Callable of type t (callable[R,A,B]) that holds function value type ft: a
+        # function R(ptr env, A a0, B a1) whose body calls the function, def <callable>(f, a0, a1):
+        # return f(a0, a1), with f typed ft (a closure's value is its env), compiled when first needed
+        key = ft + " " + t
+        if key in self.adapters:
+            return self.adapters[key]
+        ts = targs(t)
+        ll = f"@cv.{len(self.adapters)}"
+        self.adapters[key] = ll
+        line = self.line
+        f = FnInfo("<callable>", ll, mk("def", "<callable>", line, []), "")
+        f.params = ["_f"] + [f"_a{j}" for j in range(len(ts) - 1)]
+        f.ptypes = [ft] + ts[1:]
+        for _ in f.params:
+            f.defaults.append(mk("noann", "", line, []))
+            f.dglob.append("")
+            f.dtypes.append("")
+        f.ret = ts[0]
+        f.mod = self.curfn.mod
+        call = mk("call", "", line, [mk("name", p, line, []) for p in f.params])
+        body = [mk("return", "", line, [call]) if ts[0] != "None" else mk("expr", "", line, [call])]
+        f.node.kids = [mk("params", "-1,-1", line, []), mk("noann", "", line, []), mk("block", "", line, body)]
+        self.making.append(f"making a {typestr(t)} of {typestr(ft)} at {where(line)}")
+        fr = self.save()
+        self.modlevel = False
+        self.lenient = False
+        self.function(f, body)
+        self.restore(fr)
+        self.making.pop()
+        return ll
+
+    def call_callable(self, o: Val, args: list[Node]) -> Val:
+        # o(args), o a Callable (callable[R,A,B]): its code, with its env and the arguments, which
+        # the Callable's parameter types type (they are positional: its function's names are not known).
+        # One that may be None raises once the arguments are evaluated, as CPython's call does
+        ct = unopt(o.t)
+        ts = targs(ct)
+        for a in args:
+            if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+                self.err(f"a call of a {typestr(ct)} takes positional arguments only")
+        if len(args) != len(ts) - 1:
+            self.err(f"a {typestr(ct)} takes {len(ts) - 1} argument{'s' if len(ts) != 2 else ''}, but {len(args)} {'were' if len(args) != 1 else 'was'} given")
+        vals: list[Val] = []
+        for j in range(len(args)):
+            vals.append(self.coerce(self.expr(args[j], ts[j + 1]), ts[j + 1], f"argument {j + 1} of a {typestr(ct)}"))
+        o = self.unwrap(o, "TypeError: 'NoneType' object is not callable")
+        code = self.ins(f"load ptr, ptr {o.v}")
+        env = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o.v}, i64 1')}")
+        c = Ins("icall", ts[0], "")
+        c.a = [Val(code, "env"), Val(env, "env")] + vals
+        if ts[0] == "None":
+            self.add(c)
+            return Val("null", "None")
+        self.put(c, 1)
+        return Val(f"%t{c.r[0]}", ts[0])
 
     def call_value(self, v: Val, args: list[Node], want: str) -> Val:
         # a call through function value v (is_fn): the call of the function it is, as if called by
@@ -17368,8 +17518,7 @@ class Gen:
                 rev = self.reverse_val(kvals[j], name)
             elif kvals[j].t != "None":
                 keyv = kvals[j]  # (key=None: the items themselves)
-                if not is_fn(keyv.t):
-                    self.err(f"'{tname(keyv.t)}' object is not callable (the key of {name}())")
+                self.key_check(keyv, f"{name}()")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
             self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
@@ -17578,6 +17727,17 @@ class Gen:
         self.vnodes.append(v)
         return mk("val", str(len(self.vnodes) - 1), self.line, [])
 
+    def key_check(self, key: Val, of: str) -> None:
+        # key= of sorted(), min(), max() or list.sort(): a function value or a Callable
+        if is_opt(key.t) and is_callable(unopt(key.t)):
+            self.err(f"a key that may be None ({typestr(key.t)}) is not supported (the key of {of}): test it with 'is not None' first")
+        if not is_fn(key.t) and not is_callable(key.t):
+            self.err(f"'{tname(key.t)}' object is not callable (the key of {of})")
+
+    def call_key(self, key: Val, x: Val) -> Val:
+        # key(x), the key of item x: a call through function value key, or of Callable key
+        return self.call_value(key, [self.vnode(x)], "") if is_fn(key.t) else self.call_callable(key, [self.vnode(x)])
+
     def keys_of(self, xs: Val, key: Val) -> Val:
         # [key(x) for x in xs]: the keys of a sort, computed in order, as CPython computes them
         # before it sorts; xs is a list that no other code sees (a copy, or the items a list gave up)
@@ -17599,7 +17759,7 @@ class Gen:
         self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
         self.place(lb)
         item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t))
-        k = self.call_value(key, [self.vnode(item)], "")
+        k = self.call_key(key, item)
         if "?" in k.t:
             self.err(f"the key function returns an empty container whose type is not known here ({typestr(k.t)})")
         self.rt("pys_list_append", "void", [f"ptr {ks}", "i64 " + self.to_slot(k)])
@@ -17644,7 +17804,7 @@ class Gen:
         self.place(lb)
         item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
         self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
-        k = self.call_value(key, [self.vnode(item)], "")
+        k = self.call_key(key, item)
         if "?" in k.t or k.t == "None":
             self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
         bk = self.alloca(k.t, "")
@@ -17672,9 +17832,9 @@ class Gen:
         for b in vals[1:]:
             t = t if self.join(t, b.t) == "" else self.join(t, b.t)
         best = self.coerce(vals[0], t)
-        bk = self.call_value(key, [self.vnode(vals[0])], "")
+        bk = self.call_key(key, vals[0])
         for b in vals[1:]:
-            kb = self.call_value(key, [self.vnode(b)], "")
+            kb = self.call_key(key, b)
             kt = bk.t if kb.t == bk.t else self.join(bk.t, kb.t)
             if kt == "" or "?" in kt or kt == "None":
                 self.err(f"comparing the keys of {name}()'s arguments is not supported: they are {typestr(bk.t)} and {typestr(kb.t)}")
@@ -17860,8 +18020,8 @@ class Gen:
                     rev = self.reverse_arg(a.kids[0], "sort")
                 elif a.s == "key":
                     keyv = self.expr(a.kids[0], "")
-                    if keyv.t != "None" and not is_fn(keyv.t):
-                        self.err(f"'{tname(keyv.t)}' object is not callable (the key of sort())")
+                    if keyv.t != "None":
+                        self.key_check(keyv, "sort()")
                 else:
                     self.err(f"sort() got an unexpected keyword argument '{a.s}'")
             if keyv.t != "" and keyv.t != "None":

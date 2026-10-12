@@ -154,7 +154,11 @@ stores go through the cell as they would through an `alloca`, and a closure's co
 whose hidden first parameter is the env (`.env`, passed as a method's object is), loads the cells
 from it as it begins, so that both see each other's assignments (`nonlocal`). `Flow` checks where a
 closure is defined that the variables it takes are assigned (`Gen.fl_nested`), and analyses its
-body as a function's.
+body as a function's. Where a `Callable[[A, B], R]` is expected (`callable[R,A,B]`), a function
+value becomes a pointer to an object `{code, env}`: the code is an adapter compiled for each
+function and `Callable` type, `R(ptr env, A, B)`, which calls the function as a call of the value
+would (`Gen.adapter`), and a call of a `Callable` is an `icall` op, LLVM's indirect call of the code
+with the env. A function of a module and a builtin need no env: one constant object serves them.
 
 ### Definite assignment
 
