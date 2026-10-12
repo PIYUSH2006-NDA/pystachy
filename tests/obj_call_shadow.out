@@ -1,0 +1,7 @@
+42 43 the function self
+True 15 False 10
+1 Box.size 4
+5 12 p q
+AttributeError: 'Early' object has no attribute 'k'
+AttributeError: 'Late' object has no attribute 's'
+[exit 0]

@@ -1,6 +1,6 @@
 # error: (compiling show(str | None) for the call at
 def show(v):
-    return isinstance(v, type(None))
+    return isinstance(v, type(""))
 
 
 def get() -> str | None:
