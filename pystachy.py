@@ -16101,10 +16101,26 @@ class Gen:
                     self.err(f"== {what} is not supported where an exception class defines {m} ({short(c.name)} does): compare objects of the class itself, or use 'is'")
 
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
-        if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(a.t) and is_fn(b.t):
-            b = self.coerce(b, a.t)  # (a function and a Callable: as Callables of one type)
-        elif (op == "==" or op == "!=" or op == "is" or op == "is not") and is_fn(a.t) and is_callable(b.t):
-            a = self.coerce(a, b.t)
+        if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and is_fn(b.t):
+            b = self.coerce(b, unopt(a.t))  # (a function and a Callable: as Callables of one type)
+        elif (op == "==" or op == "!=" or op == "is" or op == "is not") and is_fn(a.t) and is_callable(unopt(b.t)):
+            a = self.coerce(a, unopt(b.t))
+        if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and unopt(a.t) == unopt(b.t) and (is_opt(a.t) or is_opt(b.t)):
+            # Callables that may be None: both are, or both hold one function (below)
+            nula = self.ins(f"icmp eq ptr {a.v}, null")
+            nulb = self.ins(f"icmp eq ptr {b.v}, null")
+            lsome = self.label()
+            ldone = self.label()
+            cph = Ins("phi", "bool", "")
+            self.incoming(cph, self.ins(f"and i1 {nula}, {nulb}"), self.cur)
+            self.cbr(self.ins(f"or i1 {nula}, {nulb}"), ldone, lsome)
+            self.place(lsome)
+            rv = self.cmp2("==", Val(a.v, unopt(a.t)), Val(b.v, unopt(b.t)))
+            self.incoming(cph, rv.v, self.cur)
+            self.br(ldone)
+            self.place(ldone)
+            eqv = self.phi(cph)
+            return Val(eqv if op == "==" or op == "is" else self.ins(f"xor i1 {eqv}, true"), "bool")
         if is_callable(a.t) and a.t == b.t and (op == "==" or op == "!=" or op == "is" or op == "is not"):
             # one function, as Callables of one type: the same code and the same env (a closure's)
             ca = self.ins(f"load ptr, ptr {a.v}")
@@ -16461,18 +16477,19 @@ class Gen:
 
     def call_callable(self, o: Val, args: list[Node]) -> Val:
         # o(args), o a Callable (callable[R,A,B]): its code, with its env and the arguments, which
-        # the Callable's parameter types type (they are positional: its function's names are not known)
-        if is_opt(o.t):
-            o = self.unwrap(o, "TypeError: 'NoneType' object is not callable")
-        ts = targs(o.t)
+        # the Callable's parameter types type (they are positional: its function's names are not known).
+        # One that may be None raises once the arguments are evaluated, as CPython's call does
+        ct = unopt(o.t)
+        ts = targs(ct)
         for a in args:
             if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
-                self.err(f"a call of a {typestr(o.t)} takes positional arguments only")
+                self.err(f"a call of a {typestr(ct)} takes positional arguments only")
         if len(args) != len(ts) - 1:
-            self.err(f"a {typestr(o.t)} takes {len(ts) - 1} argument{'s' if len(ts) != 2 else ''}, but {len(args)} {'were' if len(args) != 1 else 'was'} given")
+            self.err(f"a {typestr(ct)} takes {len(ts) - 1} argument{'s' if len(ts) != 2 else ''}, but {len(args)} {'were' if len(args) != 1 else 'was'} given")
         vals: list[Val] = []
         for j in range(len(args)):
-            vals.append(self.coerce(self.expr(args[j], ts[j + 1]), ts[j + 1], f"argument {j + 1} of a {typestr(o.t)}"))
+            vals.append(self.coerce(self.expr(args[j], ts[j + 1]), ts[j + 1], f"argument {j + 1} of a {typestr(ct)}"))
+        o = self.unwrap(o, "TypeError: 'NoneType' object is not callable")
         code = self.ins(f"load ptr, ptr {o.v}")
         env = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o.v}, i64 1')}")
         c = Ins("icall", ts[0], "")
@@ -17053,8 +17070,7 @@ class Gen:
                 rev = self.reverse_val(kvals[j], name)
             elif kvals[j].t != "None":
                 keyv = kvals[j]  # (key=None: the items themselves)
-                if not is_fn(keyv.t):
-                    self.err(f"'{tname(keyv.t)}' object is not callable (the key of {name}())")
+                self.key_check(keyv, f"{name}()")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
             self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
@@ -17252,6 +17268,17 @@ class Gen:
         self.vnodes.append(v)
         return mk("val", str(len(self.vnodes) - 1), self.line, [])
 
+    def key_check(self, key: Val, of: str) -> None:
+        # key= of sorted(), min(), max() or list.sort(): a function value or a Callable
+        if is_opt(key.t) and is_callable(unopt(key.t)):
+            self.err(f"a key that may be None ({typestr(key.t)}) is not supported (the key of {of}): test it with 'is not None' first")
+        if not is_fn(key.t) and not is_callable(key.t):
+            self.err(f"'{tname(key.t)}' object is not callable (the key of {of})")
+
+    def call_key(self, key: Val, x: Val) -> Val:
+        # key(x), the key of item x: a call through function value key, or of Callable key
+        return self.call_value(key, [self.vnode(x)], "") if is_fn(key.t) else self.call_callable(key, [self.vnode(x)])
+
     def keys_of(self, xs: Val, key: Val) -> Val:
         # [key(x) for x in xs]: the keys of a sort, computed in order, as CPython computes them
         # before it sorts; xs is a list that no other code sees (a copy, or the items a list gave up)
@@ -17273,7 +17300,7 @@ class Gen:
         self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
         self.place(lb)
         item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t))
-        k = self.call_value(key, [self.vnode(item)], "")
+        k = self.call_key(key, item)
         if "?" in k.t:
             self.err(f"the key function returns an empty container whose type is not known here ({typestr(k.t)})")
         self.rt("pys_list_append", "void", [f"ptr {ks}", "i64 " + self.to_slot(k)])
@@ -17318,7 +17345,7 @@ class Gen:
         self.place(lb)
         item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
         self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
-        k = self.call_value(key, [self.vnode(item)], "")
+        k = self.call_key(key, item)
         if "?" in k.t or k.t == "None":
             self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
         bk = self.alloca(k.t, "")
@@ -17346,9 +17373,9 @@ class Gen:
         for b in vals[1:]:
             t = t if self.join(t, b.t) == "" else self.join(t, b.t)
         best = self.coerce(vals[0], t)
-        bk = self.call_value(key, [self.vnode(vals[0])], "")
+        bk = self.call_key(key, vals[0])
         for b in vals[1:]:
-            kb = self.call_value(key, [self.vnode(b)], "")
+            kb = self.call_key(key, b)
             kt = bk.t if kb.t == bk.t else self.join(bk.t, kb.t)
             if kt == "" or "?" in kt or kt == "None":
                 self.err(f"comparing the keys of {name}()'s arguments is not supported: they are {typestr(bk.t)} and {typestr(kb.t)}")
@@ -17534,8 +17561,8 @@ class Gen:
                     rev = self.reverse_arg(a.kids[0], "sort")
                 elif a.s == "key":
                     keyv = self.expr(a.kids[0], "")
-                    if keyv.t != "None" and not is_fn(keyv.t):
-                        self.err(f"'{tname(keyv.t)}' object is not callable (the key of sort())")
+                    if keyv.t != "None":
+                        self.key_check(keyv, "sort()")
                 else:
                     self.err(f"sort() got an unexpected keyword argument '{a.s}'")
             if keyv.t != "" and keyv.t != "None":

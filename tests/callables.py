@@ -109,3 +109,32 @@ c1: Callable[[int], int] = same
 c2: Callable[[int], int] = same
 c3: Callable[[int], int] = adder(1)
 print(c1 == c2, c1 is c2, c1 == c3, c1 != c3)
+
+
+def side(x: int) -> int:
+    print("side", x)
+    return x
+
+
+def neg(x: int) -> int:
+    return -x
+
+
+# a Callable that is None raises once its arguments are evaluated
+none_f: Callable[[int], int] | None = None
+try:
+    none_f(side(3))
+except TypeError as e:
+    print("TypeError:", e)
+# Callables that may be None compare as CPython's functions and None do
+o1: Callable[[int], int] | None = double
+o2: Optional[Callable[[int], int]] = double
+o3: Callable[[int], int] | None = None
+o4: Callable[[int], int] | None = same
+o5: Callable[[int], int] | None = same
+print(o1 == o2, o1 is o2, o1 != o3, o3 == o3, o3 is None, o1 == double, o4 is o5, o4 == o1, c1 == o4)
+# a Callable as the key of sorted(), min(), max() and list.sort()
+kf: Callable[[int], int] = neg
+ys = [3, 1, 2]
+ys.sort(key=kf)
+print(sorted([3, 1, 2], key=kf), min([3, 1, 2], key=kf), max(3, 1, 2, key=kf), ys)

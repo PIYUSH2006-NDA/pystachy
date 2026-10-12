@@ -193,9 +193,11 @@ imports `annotations` from `__future__`.
   becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
   dict item), compiled for those parameter types, so one variable, field or list holds different
   functions (defs, builtins, lambdas, closures). A call of a Callable passes its arguments by
-  position, as its parameter types type them; two Callables are the same function where they
-  hold one function (a closure from one run of its def or lambda), also compared with that
-  function. `Callable[..., R]` is not supported.
+  position, as its parameter types type them (one that is `None` raises `TypeError` once they are
+  evaluated); two Callables are the same function where they hold one function (a closure from
+  one run of its def or lambda), also compared with that function, and where they may be `None`,
+  where both are. A Callable may be the `key=` of `sorted()`, `min()`, `max()` and `list.sort()`
+  (one that may be `None` only once tested). `Callable[..., R]` is not supported.
 - A lambda, and a def inside a function, make a closure each time they run: a function value
   typed by the def or lambda and by the function (the template's instance) it is in, which is a
   template, compiled for the argument types of each call through it (an annotated parameter

@@ -11,4 +11,8 @@ none 6
 3
 caught negative -2
 True True False True
+side 3
+TypeError: 'NoneType' object is not callable
+True True True True True True True False True
+[3, 2, 1] 3 1 [3, 2, 1]
 [exit 0]
