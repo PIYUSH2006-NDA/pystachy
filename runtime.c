@@ -5,6 +5,7 @@
    Value model: every container slot is 8 bytes (int, float bits, bool, or pointer). */
 #define _GNU_SOURCE
 #include <ctype.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <langinfo.h>
 #include <locale.h>
@@ -24,7 +25,7 @@
 #include <unwind.h>
 
 typedef int64_t I;
-typedef struct { I len; char s[]; } Str;              /* immutable, NUL-terminated */
+typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
 typedef struct { char *p; I n, cap; } Buf;
@@ -383,6 +384,24 @@ __attribute__((noinline)) static void put(Buf *b, const char *s, I n) {   /* not
 Str *pys_str(const char *p, I n) { Str *s = pys_alloc_atomic(sizeof(Str) + n + 1); s->len = n; if (n) memcpy(s->s, p, n); return s; }
 static Str *cstr(const char *p) { return pys_str(p, strlen(p)); }
 static Str *done(Buf *b) { return pys_str(b->p, b->n); }
+/* float text: CPython converts floats without the C locale (its own dtoa), so a Python that shares the
+   process and calls setlocale (an embedded or hosting CPython, or a C function) must not change it:
+   then (c_num, set by pys_c_numeric) snprintf and strtod run in the C locale */
+static locale_t c_num;
+void pys_c_numeric(void) { if (!c_num) c_num = newlocale(LC_ALL_MASK, "C", (locale_t)0); }
+static double fstrtod(const char *s, char **e) {
+  locale_t o = c_num ? uselocale(c_num) : (locale_t)0;
+  double r = strtod(s, e);
+  if (o) uselocale(o);
+  return r;
+}
+__attribute__((format(printf, 3, 4))) static int fsnprintf(char *b, size_t n, const char *f, ...) {
+  va_list a; va_start(a, f);
+  locale_t o = c_num ? uselocale(c_num) : (locale_t)0;
+  int r = vsnprintf(b, n, f, a);
+  if (o) uselocale(o);
+  va_end(a); return r;
+}
 static I u8enc(char *o, I c);
 Str *pys_chr(I c) {                    /* below 256 the byte itself (str holds bytes); above, UTF-8 */
   if (c < 0 || c > 0x10FFFF) pys_fail("ValueError: chr() arg not in range(0x110000)");
@@ -435,6 +454,17 @@ Str *pys_str_slice(Str *s, I lo, I hi) { span(&lo, &hi, s->len); return pys_str(
 Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
+}
+/* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
+   The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */
+Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, Str *h) {
+  Str *p[8] = {a, b, c, d, e, f, g, h};
+  I len = 0;
+  for (int i = 0; i < 8; i++) len += i < n ? p[i]->len : 0;
+  Str *s = pys_alloc_atomic(sizeof(Str) + len + 1); s->len = len;
+  char *w = s->s;
+  for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
+  return s;
 }
 Str *pys_str_mul(Str *a, I n) {
   if (n < 0 || !a->len) n = 0;
@@ -498,8 +528,8 @@ Str *pys_str_float(double d) {               /* Python repr(): shortest round-tr
   if (isinf(d)) return cstr(d > 0 ? "inf" : "-inf");
   if (d == 0) return cstr(signbit(d) ? "-0.0" : "0.0");
   int p = 1;
-  for (; p < 17; p++) { snprintf(b, 40, "%.*e", p - 1, d); if (strtod(b, 0) == d) break; }
-  if (p == 17) snprintf(b, 40, "%.16e", d);
+  for (; p < 17; p++) { fsnprintf(b, 40, "%.*e", p - 1, d); if (fstrtod(b, 0) == d) break; }
+  if (p == 17) fsnprintf(b, 40, "%.16e", d);
   int nd = 0, neg = b[0] == '-';
   char *q = b + neg;
   for (; *q != 'e'; q++) if (*q != '.') dig[nd++] = *q;
@@ -521,7 +551,7 @@ Str *pys_float_hex(double d) {                /* float.hex(): CPython spells zer
   char b[40];
   if (isnan(d)) return cstr("nan");
   if (d == 0) return cstr(signbit(d) ? "-0x0.0p+0" : "0x0.0p+0");
-  return pys_str(b, snprintf(b, 40, "%.13a", d));
+  return pys_str(b, fsnprintf(b, 40, "%.13a", d));
 }
 I pys_float_is_integer(double d) { return isfinite(d) && d == floor(d); }
 /* int() and float() of a string follow Python's grammar (whitespace around the number, a sign,
@@ -609,7 +639,7 @@ double pys_float_str(Str *s) {
   if (q < e && (*q == '+' || *q == '-')) put(&b, q++, 1);
   I n = e - q;
   if ((n == 3 && !strncasecmp(q, "inf", 3)) || (n == 8 && !strncasecmp(q, "infinity", 8)) || (n == 3 && !strncasecmp(q, "nan", 3))) {
-    put(&b, q, n); put(&b, "", 1); return strtod(b.p, 0);
+    put(&b, q, n); put(&b, "", 1); return fstrtod(b.p, 0);
   }
   int digits = 0, prev = 0;                    /* prev: 1 after a digit; underscores only between digits */
   for (; q < e; q++) {
@@ -620,7 +650,7 @@ double pys_float_str(Str *s) {
     badlit("ValueError: could not convert string to float", -1, s);
   }
   put(&b, "", 1);
-  char *end; double v = strtod(b.p, &end);
+  char *end; double v = fstrtod(b.p, &end);
   if (!digits || *end) badlit("ValueError: could not convert string to float", -1, s);
   return v;
 }
@@ -676,6 +706,11 @@ I pys_shl(I a, I b) {
   return r;
 }
 I pys_shr(I a, I b) { if (b < 0) pys_fail("ValueError: negative shift count"); return a >> (b > 63 ? 63 : b); }
+I pys_int_bit_length(I a) {                  /* int.bit_length() and bit_count() count the bits of |a|: 2**63 for -2**63 */
+  uint64_t x = a < 0 ? 0 - (uint64_t)a : (uint64_t)a;
+  return x ? 64 - __builtin_clzll(x) : 0;    /* (clz(0) is undefined) */
+}
+I pys_int_bit_count(I a) { return __builtin_popcountll(a < 0 ? 0 - (uint64_t)a : (uint64_t)a); }
 double pys_fdiv(double a, double b) { if (b == 0) pys_fail("ZeroDivisionError: float division by zero"); return a / b; }
 double pys_idiv(I a, I b) {                  /* int / int, rounded once like CPython's true division */
   if (!b) pys_fail("ZeroDivisionError: division by zero");
@@ -793,13 +828,17 @@ I pys_m_isfinite(double x) { return isfinite(x); }
 I pys_m_isinf(double x) { return isinf(x); }
 I pys_m_isnan(double x) { return isnan(x); }
 I pys_m_trunc(double x) { return pys_f2i(trunc(x)); }
-/* math.gcd, lcm, isqrt, factorial, comb and perm are in runtime.py */
+/* math.gcd, lcm, isqrt, factorial, comb, perm, fsum and prod are in runtime.py */
 I pys_m_gcd(I a, I b);
 I pys_m_lcm(I a, I b);
 I pys_m_isqrt(I n);
 I pys_m_factorial(I n);
 I pys_m_comb(I n, I k);
 I pys_m_perm(I n, I k);
+double pys_m_fsum(List *l);
+I pys_m_prod_int(List *l, I start);
+double pys_m_prod_float(List *l, double start);
+List *pys_m_floats(List *l);
 
 static double pymod(double a, double b, double *q) {   /* CPython's float_divmod */
   double m = fmod(a, b), d = (a - m) / b;
@@ -831,9 +870,9 @@ I pys_round_int(I x, I n) {                  /* round(x, n) of an int: x, or for
 double pys_round_n(double x, I n) {           /* round(x, n): half-even on the exact decimal value */
   static char b[1500], o[1500];
   if (!isfinite(x) || n > 400) return x;
-  if (n >= 0) { snprintf(b, sizeof b, "%.*f", (int)n, x); return strtod(b, 0); }
+  if (n >= 0) { fsnprintf(b, sizeof b, "%.*f", (int)n, x); return fstrtod(b, 0); }
   if (n < -308 && fabs(x) < 1e308) return copysign(0.0, x);
-  int k = n < -400 ? 400 : (int)-n, len = snprintf(b, sizeof b, "%.1080f", fabs(x));
+  int k = n < -400 ? 400 : (int)-n, len = fsnprintf(b, sizeof b, "%.1080f", fabs(x));
   int h = (int)(strchr(b, '.') - b) - k, up = 0, m = h;   /* keep h integer digits, drop k */
   if (h < 0) return copysign(0.0, x);
   if (b[h] != '5') up = b[h] > '5';
@@ -843,7 +882,7 @@ double pys_round_n(double x, I n) {           /* round(x, n): half-even on the e
   if (up) { int i = m - 1; while (i >= 0 && o[i] == '9') o[i--] = '0'; if (i >= 0) o[i]++; else { memmove(o + 1, o, m); o[0] = '1'; m++; } }
   if (!m) o[m++] = '0';
   memset(o + m, '0', k); o[m + k] = 0;
-  double r = strtod(o, 0);
+  double r = fstrtod(o, 0);
   if (isinf(r)) pys_fail("OverflowError: rounded value too large to represent");
   return copysign(r, x);
 }
@@ -906,7 +945,14 @@ static I resc(char *t, const char *s, I len, char q, I *n) {   /* the character 
 static void repr_str(Buf *b, Str *s) {
   char q = rquote(s->s, s->len), t[12];
   put(b, &q, 1);
-  for (I i = 0, n; i < s->len; i += n) put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  for (I i = 0, n; i < s->len; i += n) {
+    for (n = 0; i + n < s->len; n++) {   /* a run of printable ASCII, which resc copies as it is: one put */
+      unsigned char c = s->s[i + n];
+      if (c < 32 || c > 126 || c == q || c == '\\') break;
+    }
+    if (n) put(b, s->s + i, n);
+    else put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  }
   put(b, &q, 1);
 }
 static const char *repr(Buf *b, I v, const char *d) {
@@ -1410,11 +1456,13 @@ I pys_range_has(I x, I a, I b, I s) {               /* x in range(a, b, s) */
   if (s > 0 ? !(a <= x && x < b) : !(b < x && x <= a)) return 0;
   return (s > 0 ? (uint64_t)x - (uint64_t)a : (uint64_t)a - (uint64_t)x) % (s > 0 ? (uint64_t)s : -(uint64_t)s) == 0;
 }
-List *pys_range_list(I a, I b, I s) {
-  List *l = pys_list_new(0);
-  if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
-  for (I i = a; s > 0 ? i < b : i > b;) { pys_list_append(l, i); if (__builtin_add_overflow(i, s, &i)) break; }
-  return l;
+List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once at its length, as CPython does */
+  uint64_t n = (uint64_t)pys_range_len(a, b, s);
+  if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
+  if (n > INT64_MAX >> 4) pys_fail("MemoryError");
+  List *l = pys_list_new((I)n);
+  for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
+  l->len = (I)n; return l;
 }
 List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (I)pys_chr((unsigned char)s->s[i])); return l; }
 
@@ -1453,7 +1501,15 @@ static uint64_t hval(I k, const char *d) {           /* a tuple key's hash (or i
   return h ^ h >> 29;
 }
 static uint64_t hsh(Dict *d, I k) {                  /* kind: 0 int keys, 1 str keys, else a tuple key's descriptor */
-  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)(d->kind ? pys_hash_str((Str *)k) : pys_hash_int(k));
+  if (d->kind == 1) {
+    Str *s = (Str *)k;
+    if (!s->dict_hash) {                /* zeroed allocations and writable literals start uncached */
+      uint64_t h = (uint64_t)pys_hash_str(s);
+      s->dict_hash = h ? h : 1;         /* cache the dictionary's normalized hash, also for tuple items */
+    }
+    return s->dict_hash;
+  }
+  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)pys_hash_int(k);
   return h ? h : 1;                                  /* 0 marks a hole */
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */
@@ -1505,12 +1561,13 @@ LOOKUP I pys_dict_find(Dict *d, I k) { return entry(d, k); }
 LOOKUP I pys_dict_entry(Dict *d, I k) { I e = entry(d, k); if (e < 0) keyerr(d, k); return e; }
 void pys_dict_entry_set(Dict *d, I e, I v) { d->vals[e] = v; }
 LOOKUP I pys_dict_get(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : d->vals[e]; }
-LOOKUP void pys_dict_set(Dict *d, I k, I v) {
-  uint64_t h = hsh(d, k); I f = -1, i = dfind(d, k, h, &f);
+static void dset(Dict *d, I k, uint64_t h, I v) {   /* d[k] = v, k's hash h */
+  I f = -1, i = dfind(d, k, h, &f);
   if (i >= 0) { d->vals[d->idx[i] - 1] = v; return; }
   if (d->n >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
   d->keys[d->n] = k; d->vals[d->n] = v; d->hs[d->n] = h; d->idx[f] = (int32_t)++d->n; d->len++;
 }
+LOOKUP void pys_dict_set(Dict *d, I k, I v) { dset(d, k, hsh(d, k), v); }
 static I dpop(Dict *d, I k, I dflt, int has) {
   I i = dfind(d, k, hsh(d, k), 0);
   if (i < 0) { if (!has) keyerr(d, k); return dflt; }
@@ -1560,20 +1617,33 @@ List *pys_dict_items(Dict *d) {
    sparse (8 slots, or more items than USABLE_FRACTION(size / 2)) and otherwise inserts the items
    into a table sized for them (estimate_log2_keysize); dict.copy() clones a table with at most a
    third of holes, and otherwise merges the same way */
-static Dict *clone(Dict *d) {                         /* the same table, holes included */
-  Dict *r = pys_dict_new(d->kind, 0); I u = d->size * 2 / 3;
+static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
+  I u = d->size * 2 / 3;
   r->keys = pys_alloc(u * 8); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
-  return r;
 }
+static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
+static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }
 Dict *pys_dict_from(Dict *d) {
-  if (d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len)) return clone(d);
+  if (clean(d)) return clone(d);
   Dict *r = pys_dict_new(d->kind, 0);
   if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
   return r;
 }
 Dict *pys_dict_copy(Dict *d) { return d->len && d->len >= d->n * 2 / 3 ? clone(d) : pys_dict_from(d); }
+/* d.update(o) of a dict of d's type, as CPython 3.13's dict_dict_merge: an empty d takes a clone
+   of o's table where dict(o) would, else d is resized once for both dicts' items (if o has more
+   than d's table could take), then o's items are inserted in order (with the hashes o keeps) */
+void pys_dict_update(Dict *d, Dict *o) {
+  if (o == d || !o->len) return;
+  if (!d->len && clean(o)) { retable(d, o); return; }
+  if ((d->size ? d->size : 8) * 2 / 3 < o->len) build(d, d, keysize(((d->len + o->len) * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], o->vals[e]);
+}
+/* d.update(pairs) of a list of (key, value) tuples: one insertion per item, as
+   PyDict_MergeFromSeq2 makes them */
+void pys_dict_update_pairs(Dict *d, List *l) { for (I i = 0; i < l->len; i++) { I *t = (I *)l->a[i]; pys_dict_set(d, t[0], t[1]); } }
 
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:
@@ -1615,7 +1685,7 @@ Str *pys_fmt_float(double m, I type, I prec, I alt) {   /* |x| = m for type (0: 
   int up = type && strchr("EFG", (int)type);
   char tb[1100];
   I tsz = (prec > 0 ? prec : 0) + 400; char *t = tsz > (I)sizeof tb ? pys_alloc_atomic(tsz) : tb; I n;
-  if (isnan(m) || isinf(m)) n = snprintf(t, tsz, "%s%s", isnan(m) ? (up ? "NAN" : "nan") : (up ? "INF" : "inf"), type == '%' ? "%" : "");
+  if (isnan(m) || isinf(m)) n = fsnprintf(t, tsz, "%s%s", isnan(m) ? (up ? "NAN" : "nan") : (up ? "INF" : "inf"), type == '%' ? "%" : "");
   else if (!type && prec < 0) {
     Str *r = pys_str_float(m); n = r->len; memcpy(t, r->s, n + 1);
     char *e = strchr(t, 'e');                 /* '#': a point even in 1e+16 */
@@ -1623,9 +1693,9 @@ Str *pys_fmt_float(double m, I type, I prec, I alt) {   /* |x| = m for type (0: 
   }
   else if (!type) {                          /* like 'g', but the exponent starts at p-1 and a ".0" stays */
     int pr = prec ? (int)prec : 1;
-    snprintf(t, tsz, "%.*e", pr - 1, m);
+    fsnprintf(t, tsz, "%.*e", pr - 1, m);
     int X = atoi(strchr(t, 'e') + 1), ex = X < -4 || X >= pr - 1;
-    n = ex ? snprintf(t, tsz, alt ? "%#.*e" : "%.*e", pr - 1, m) : snprintf(t, tsz, alt ? "%#.*f" : "%.*f", pr - 1 - X, m);
+    n = ex ? fsnprintf(t, tsz, alt ? "%#.*e" : "%.*e", pr - 1, m) : fsnprintf(t, tsz, alt ? "%#.*f" : "%.*f", pr - 1 - X, m);
     if (!alt) {                              /* drop the mantissa's trailing zeros, as 'g' does */
       char *e = strchr(t, 'e'); I me = e ? e - t : n;
       if (memchr(t, '.', me)) { I k = me; while (t[k - 1] == '0') k--; if (t[k - 1] == '.') k--; memmove(t + k, t + me, n - me + 1); n -= me - k; }
@@ -1635,13 +1705,13 @@ Str *pys_fmt_float(double m, I type, I prec, I alt) {   /* |x| = m for type (0: 
     /* glibc's %#g drops the zeros when rounding carries into the exponent (1.e+06): choose
        the notation from the rounded exponent, as CPython does, and keep every digit */
     int pr = prec < 0 ? 6 : prec ? (int)prec : 1;
-    snprintf(t, tsz, "%.*e", pr - 1, m);
+    fsnprintf(t, tsz, "%.*e", pr - 1, m);
     int X = atoi(strchr(t, 'e') + 1);
-    n = X < -4 || X >= pr ? snprintf(t, tsz, type == 'G' ? "%#.*E" : "%#.*e", pr - 1, m) : snprintf(t, tsz, "%#.*f", pr - 1 - X, m);
+    n = X < -4 || X >= pr ? fsnprintf(t, tsz, type == 'G' ? "%#.*E" : "%#.*e", pr - 1, m) : fsnprintf(t, tsz, "%#.*f", pr - 1 - X, m);
   } else {
     char c = type == 'n' ? 'g' : type == '%' ? 'f' : type, f[16]; int pr = prec < 0 ? 6 : (int)prec;
     snprintf(f, 16, alt ? "%%#.%d%c" : "%%.%d%c", pr, c);
-    n = snprintf(t, tsz, f, type == '%' ? m * 100 : m);
+    n = fsnprintf(t, tsz, f, type == '%' ? m * 100 : m);
     if (type == '%') { t[n++] = '%'; t[n] = 0; }
   }
   return pys_str(t, n);
@@ -1860,10 +1930,12 @@ static void setbuf1(File *f, I bs) {   /* CPython's write layers: 8 KiB of pendi
   f->buf = f->pb + 8192; f->bs = bs; f->emu = 1;
   setvbuf(f->f, f->buf, _IOFBF, bs);
 }
+static int jit;                        /* pystachy run: the program runs in lli's process */
 __attribute__((minsize)) void pys_init(int argc, char **argv, char *sb, I **roots, I nroots) {   /* first call of @main */
   gc_init(sb, roots, nroots);
   args = pys_list_new(argc); for (int i = 0; i < argc; i++) pys_list_append(args, (I)cstr(argv[i]));
   char *a0 = getenv("PYSTACHY_ARGV0");  /* pystachy run: sys.argv[0] is the script, as in CPython */
+  jit = a0 != 0;
   if (a0 && argc) { args->a[0] = (I)cstr(a0); unsetenv("PYSTACHY_ARGV0"); }
   if (a0) {                            /* and lli's crash handlers, which print lli's stack, are dropped: the */
     int sig[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};   /* program dies by the signal, as when built */
@@ -2943,4 +3015,36 @@ static int printable(I c) {            /* c >= 0x80: printable unless an odd num
   I lo = 0, hi = sizeof pchange / sizeof *pchange;
   while (lo < hi) { I m = (lo + hi) / 2; if (pchange[m] <= c) lo = m + 1; else hi = m; }
   return !(lo & 1);
+}
+/* @ffi.extern: a char * a C function returned, as a str (NULL: None, or an error if must) */
+Str *pys_cstr(const char *p, I must) { if (!p && must) pys_fail("ValueError: a C function declared -> str returned NULL"); return p ? cstr(p) : 0; }
+Str *pys_string_at(I a, I n) {         /* ffi.string_at: n bytes at a, as ctypes.string_at */
+  if (n < 0) pys_fail("ValueError: ffi.string_at() takes a length >= 0");
+  return pys_str((const char *)a, n);
+}
+I pys_c_check(I v, I k) {              /* @ffi.extern: an int as C's int (0), unsigned int (1), unsigned 64-bit (2), or such a result (3) */
+  static const char *m[] = {"OverflowError: Python int too large to convert to C int", "OverflowError: Python int too large to convert to C unsigned int",
+                            "OverflowError: can't convert negative int to unsigned", "OverflowError: C unsigned result is too large for int"};
+  if (k == 0 ? v != (int32_t)v : k == 1 ? v < 0 || v > 0xFFFFFFFFLL : v < 0) pys_fail(m[k == 1 && v < 0 ? 2 : k]);
+  return v;
+}
+void pys_c_str(Str *s) { if (nul(s)) pys_fail("ValueError: embedded null character"); }   /* a str passed as const char * */
+/* @ffi.extern("lib"): when the def statement runs, the C function is looked up in lib's own handle, as
+   ctypes.CDLL(lib or None) finds it: dlopen(RTLD_NOW | RTLD_LOCAL), then dlsym; a failure raises what
+   ctypes raises, OSError or AttributeError with dlerror's text. Under pystachy run, lli's own libraries
+   (libLLVM's dependencies) are in the global scope: RTLD_DEEPBIND keeps lib and its dependencies first */
+void pys_c_bind(void **slot, const char *lib, const char *sym) {
+  pys_c_numeric();                     /* (a C function may call setlocale) */
+#ifdef RTLD_DEEPBIND
+  int deep = jit ? RTLD_DEEPBIND : 0;
+#else
+  int deep = 0;
+#endif
+  void *h = dlopen(*lib ? lib : 0, RTLD_NOW | RTLD_LOCAL | deep);
+  if (!h) failf("OSError: %s", dlerror());
+  dlerror();
+  void *p = dlsym(h, sym);
+  const char *e = p ? 0 : dlerror();
+  if (e) failf("AttributeError: %s", e);
+  *slot = p;
 }

@@ -22,7 +22,7 @@ flowchart TD
     rtpy["runtime.py: str methods, format specs, math, dict hashing, in the subset"] -->|pystachy rt| rtbc
     lower --> ir["LLVM IR"]
     ir --> aot["pystachy build: llvm-link with the runtime bitcode, clang -O2 on the whole module"]
-    ir --> jit["pystachy run: opt (mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
+    ir --> jit["pystachy run: opt (globaldce, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
     rtbc --> aot
     rtbc --> jit
     aot --> exe["native executable"]
@@ -35,12 +35,12 @@ flowchart TD
 |---|---:|---|
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
 | `runtime.c` | 2,920 | garbage collector, string, list and dict memory, timsort, dict tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
-| `runtime.py` | 1,277 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
+| `runtime.py` | 1,366 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, `fsum` and `prod`, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
-| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter and the stdlib census |
-| `ports/` | 1 package | iniconfig 2.3.1, pytest's INI parser, with the few edits it needs to compile ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); `tests/port_iniconfig_*.py` run its own test cases |
+| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter, the stdlib census, and the count of a port's edits by cause |
+| `ports/` | 5 packages | PyPI packages with the few edits each needs to compile, marked "Pystachy port:" and listed in its `PORT.md`: iniconfig 2.3.1, pytest's INI parser ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); jdcal 1.4.1, Julian date conversions ([`ports/jdcal/PORT.md`](../ports/jdcal/PORT.md)); pylev 1.4.0, Levenshtein distances ([`ports/pylev/PORT.md`](../ports/pylev/PORT.md)); qrcode 8.2's encoder and text output ([`ports/qrcode/PORT.md`](../ports/qrcode/PORT.md)); and sgp4 2.27, the SGP4/SDP4 satellite propagator under Skyfield ([`ports/sgp4/PORT.md`](../ports/sgp4/PORT.md)); `tests/port_*.py` run their test cases, and `tools/port_edits.py` sorts the markers by cause and, given the upstream package, lists the census blockers the edits removed |
 
 ## Environment variables
 
@@ -55,7 +55,7 @@ flowchart TD
 | `PYSTACHY_GC` | `off` turns collection off, `stats` prints a summary at exit |
 | `PYSTACHY_IRCHECK=1` | the compiler checks the typed IR it built before lowering it, and again after each pass that changed it (`tests/run.sh` sets it unless it is set otherwise) |
 | `PYSTACHY_IRFX=1` | the compiler prints each function's effect summary on stderr, as `tests/ir/*.fx` record them |
-| `PYSTACHY_OPT` | turns optimizations on the typed IR off: `-listget`, `-dictfuse`, comma-separated, or `-all` |
+| `PYSTACHY_OPT` | turns optimizations off: `-listget`, `-dictfuse` (passes on the typed IR), `-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items), comma-separated, or `-all` |
 | `PYSTACHY_JOBS` | how many test cases `tests/run.sh` and the IR tools run at once (default: one per CPU) |
 
 ## Design, piece by piece
@@ -267,7 +267,14 @@ the table is rebuilt, with its sizes and growth, and `dict(d)` merges as CPython
 so deletion is O(1) and a loop that changes its dict, `reversed(d)` included, sees what
 CPython's would. The index follows CPython's probe sequence (each step mixes in five more
 bits of the hash), over a hash that costs one multiply: one round of SplitMix64's mixer
-for an int, FNV-1a with the high half folded into the low for a str; a dict of tuple keys
+for an int, FNV-1a with the high half folded into the low for a str. Each string caches its
+dictionary-normalized hash lazily in an eight-byte header field (zero means uncomputed,
+a raw zero hash is stored as one). Reusing that object hashes its bytes once, including
+when it is a tuple component; newly constructed equal strings still need hashing and
+may need a byte comparison. String bytes stay immutable, but literals occupy writable
+LLVM globals for the cache. The header grows from eight to sixteen bytes, before allocator
+rounding. This internal cache does not change the compiler's semantic effects or the raw
+hash function in `runtime.py`. A dict of tuple keys
 holds their type descriptor, by which a key's hash mixes its items' hashes and keys compare
 as `==` compares the tuples (a `None` item hashes and compares as `None` also where the
 descriptor says `str`, which is how a looked-up tuple whose item may be `None` finds no
@@ -309,8 +316,10 @@ against CPython's own str methods, `math` and `format()`.
 
 ### Two tiers
 
-`run` favors latency: a three-pass pipeline over the program alone, then
-ORC JIT compilation linked against a cached, precompiled runtime `.o`. `build` favors
+`run` favors latency: `globaldce` removes unused internal functions before the three
+function cleanup passes, then ORC JIT compilation links against a cached, precompiled
+runtime `.o`. Frontend checks and definition-time effects still run; the external
+object-dispatch callbacks remain available to the runtime. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags
 (such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set (and per

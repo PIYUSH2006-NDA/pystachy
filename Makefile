@@ -28,8 +28,22 @@ test-py:
 	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
+# the FFI's tests (docs/ffi.md): C functions called through @ffi.extern, and the FFI's compile-time errors
+test-ffi: pystachy
+	PY="$(PY)" tests/ffi/run.sh ./pystachy "jit aot"
+
 bench: pystachy
 	PY="$(PY)" bench/run.sh
+
+# Advisory diagnostics with separate compilation and in-process execution timings.
+BENCH_ARGS ?=
+bench-extended: pystachy
+	$(PY) tools/bench_extended.py $(BENCH_ARGS)
+
+# Correctness only: no wall-clock performance thresholds on shared CI runners.
+bench-extended-check: pystachy
+	$(PY) -m unittest discover -s tools -p test_bench_extended.py
+	$(PY) tools/bench_extended.py --smoke --json build/extended-smoke.json
 
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
@@ -42,6 +56,7 @@ dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	$(LLVMBIN)llvm-link build/dictprobe-rt.ll build/dictprobe.ll -o build/dictprobe.bc
 	$(LLVMBIN)clang -O2 build/dictprobe.bc -o build/dictprobe -lm
 	build/dictprobe
+	PYSTACHY_GC_STRESS=1 build/dictprobe --hash-cache
 
 # A reachable empty list must release its historical backing, without allocating in clear.
 listprobe: tools/listprobe.c runtime.c runtime.py pystachy
@@ -62,6 +77,10 @@ eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	$(LLVMBIN)clang -O2 build/eqprobe.bc -o build/eqprobe -lm
 	build/eqprobe
 	PYSTACHY_GC_STRESS=1 build/eqprobe
+
+# Inspect the bitcode passed to lli, then run it: dead functions must not reach code generation.
+jitprobe: pystachy
+	$(PY) tools/jitprobe.py
 
 # Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
 # scaling) -> build/verification.json
@@ -108,10 +127,10 @@ check-runtime:
 # sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
 lint:
 	ruff check
-	shellcheck -s sh -S warning $(wildcard tests/*.sh tools/*.sh bench/*.sh)
+	shellcheck -s sh -S warning $(wildcard tests/*.sh tests/ffi/*.sh tools/*.sh bench/*.sh)
 	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c
 
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench dictprobe listprobe eqprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
