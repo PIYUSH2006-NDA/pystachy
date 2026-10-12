@@ -76,6 +76,14 @@ port:"). qrcode is used under the BSD 3-Clause License, whose text and copyright
 also holds the MIT License notice of pyqrnative, the code qrcode was forked from ("Copyright (c)
 2009 Kazuhiko Arase").
 
+sgp4 (ports/sgp4/)
+------------------
+
+ports/sgp4/__init__.py, alpha5.py, api.py, earth_gravity.py, ext.py, functions.py, io.py,
+model.py and propagation.py are sgp4 2.27's modules, edited where ports/sgp4/PORT.md lists (each
+edit is marked "Pystachy port:"). sgp4 is used under the MIT License, whose text and copyright
+notice ("Copyright © 2012–2016 Brandon Rhodes") are in ports/sgp4/LICENSE.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
