@@ -4061,6 +4061,7 @@ class Loader:
                 inner = scope_names(c) if c.kind == "def" or c.kind == "class" else scope
                 decl: dict[str, bool] = {}
                 types: dict[str, Node] = {}
+                held: dict[str, int] = {}
                 pos = self.pos
                 fs = self.fs
                 fsure = self.fsure
@@ -4073,6 +4074,7 @@ class Loader:
                     self.fsure = {}
                 elif c.kind == "class":
                     self.incls = True
+                    scope_globals(c.kids[0].kids, held)
                 for kid in c.kids:
                     if kid.kind == "block":
                         self.simplify(m, kid, inner)
@@ -4084,9 +4086,24 @@ class Loader:
                 self.incls = incls
                 if st.kind == "def":
                     self.dropped_locals(st, inner, decl, types)
+                elif c.kind == "class":
+                    self.dropped_globals(c, held)
         for nm in added:
             del self.fsure[nm]
         blk.kids = out
+
+    def dropped_globals(self, c: Node, held: dict[str, int]) -> None:
+        # a global statement in class c's body holds for the whole body in CPython, also in code
+        # simplify() dropped (held: the names the body declared global before, each with its
+        # statement's line), so x = 2 further on binds the module's x: such a statement is kept,
+        # and the class is the error that a global statement in a class body is
+        now: dict[str, int] = {}
+        scope_globals(c.kids[0].kids, now)
+        kept: list[Node] = []
+        for nm in held:
+            if nm not in now:
+                kept.append(mk("global", "", held[nm], [mk("name", nm, held[nm], [])]))
+        c.kids[0].kids = kept + c.kids[0].kids
 
     def dropped_locals(self, d: Node, before: dict[str, bool], decl: dict[str, bool], types: dict[str, Node]) -> None:
         # what function d binds only in code simplify() dropped still decides its scope in CPython: a
@@ -6503,6 +6520,22 @@ def globals_in(body: list[Node], out: dict[str, bool]) -> None:
                 globals_in(kid.kids, out)
             elif kid.kind == "except":
                 globals_in(kid.kids[1].kids, out)
+
+
+def scope_globals(body: list[Node], out: dict[str, int]) -> None:
+    # the names that the global statements of a scope (body: its statements) declare, not those of
+    # the functions and classes it defines, each with the line of its first global statement
+    for st in body:
+        if st.kind == "global":
+            for nm in st.kids:
+                if nm.s not in out:
+                    out[nm.s] = st.line
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            for kid in st.kids:
+                if kid.kind == "block":
+                    scope_globals(kid.kids, out)
+                elif kid.kind == "except":
+                    scope_globals(kid.kids[1].kids, out)
 
 
 def stmt_binds(st: Node, name: str) -> bool:

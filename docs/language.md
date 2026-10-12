@@ -339,7 +339,9 @@ also inside `not`/`and`/`or`, where the other operands still run in CPython's or
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
 hides them, and a name a function binds only in code dropped this way (also by `:=`, a `match` capture or
-a `type` statement) is still its local.
+a `type` statement) is still its local. A `global` statement in dropped code still holds for its whole
+function, and in a class body, which may not hold one, it is an error (there CPython's `x = 2` further
+on binds the module's `x`, not a class attribute).
 
 ### Optional imports
 
