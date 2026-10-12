@@ -1,0 +1,5 @@
+5 x 1
+pair 1 2 1 and ['k'] many one 7 many
+idx:1 idx:3 name:x ('idx:2', 'name:y') ('idx:1', 'idx:2', 'idx:3')
+three True [1, 2, 3]
+[exit 0]

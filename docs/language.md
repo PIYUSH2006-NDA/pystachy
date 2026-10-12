@@ -95,7 +95,8 @@ imports `annotations` from `__future__`.
   (the builtin types have CPython 3.13's attributes) and `x is None` (for a parameter `x` also
   `None is x` and `x == None`, but not for an exception or an object whose class defines
   `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
-  its argument is known not to be: a new object or `self`), are constants: only the branch that
+  its argument is known not to be: a new object or `self`), and `len(x)` of a tuple or of
+  `**kwargs` compared with an int constant (`if len(args) == 2:`), are constants: only the branch that
   runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
   nothing after a `return`. The classes `isinstance()` names are still looked up there, as
   everywhere (one whose `class` statement has not run raises `NameError`). A parameter whose
