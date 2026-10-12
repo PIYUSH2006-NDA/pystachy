@@ -410,12 +410,13 @@ displays, list comprehensions, generator expressions and
 `all()` stop at the deciding item, as they do over files, and `list.extend()` appends each
 item of a generator expression as it is made), `x in range(...)`, and operator
 overloading resolved statically:
-`__add__` & co, the in-place forms, `__eq__`, rich comparisons with CPython's reflection
+`__add__` & co, the in-place forms, `__neg__`, `__pos__` and `__invert__` for unary `-`, `+`
+and `~`, `__eq__`, rich comparisons with CPython's reflection
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
 `__format__`. Objects inside lists, dicts and tuples compare, sort and print through
 their own methods, as CPython calls them: lists and tuples compare their items with `==`
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
-`__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
+`__gt__`), and `max` uses `>`.
 
 Calls of objects and the container protocol are resolved statically too: `o(x)` calls
 `__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
