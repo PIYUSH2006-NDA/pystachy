@@ -5154,6 +5154,11 @@ SPECIAL: dict[str, str] = {"__str__": "1:str", "__repr__": "1:str", "__len__": "
                            "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool"}
 for _k in "add sub mul truediv floordiv mod iadd isub imul itruediv ifloordiv imod".split():
     SPECIAL[f"__{_k}__"] = "2:"
+# special methods that CPython calls implicitly and Pystachy never does, and when CPython calls
+# them: a class that defines or inherits one is an error (see declare_fields)
+UNCALLED: dict[str, str] = {"__new__": "to make each object of the class", "__getattribute__": "to read each attribute",
+                            "__getattr__": "for each attribute it does not find", "__setattr__": "to assign each attribute",
+                            "__delattr__": "to delete each attribute"}
 # a comparison from pys_cmp_if's result R (-1, 0, 1, or 2 when a NaN makes it unordered)
 MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<": "icmp eq i64 R, -1", "<=": "icmp sle i64 R, 0",
                           ">": "icmp eq i64 R, 1", ">=": "icmp ule i64 R, 1"}
@@ -6813,6 +6818,7 @@ class ClassInfo:
         self.methods: dict[str, FnInfo] = {}
         self.mod = ""
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used
+        self.hook = ""  # the same for a special method Pystachy never calls (UNCALLED): its class statement compiles
         self.kwonly = False  # @dataclass(kw_only=True): its __init__ takes the fields by keyword only
         # an exception class: its base (a class of the program or a builtin exception class), and
         # the builtin exception class it derives from through it ("" for any other class)
@@ -8393,6 +8399,24 @@ class Gen:
             self.nt_class(ci)
         if self.is_dc(ci.name):
             self.dc_methods(ci)
+        for m in UNCALLED:
+            # a def or a class attribute (CPython calls what it binds), also a base's, then named; an
+            # imported module's class: an error only where the program uses it (see hoist_class)
+            owner = ci.methods[m].cls if m in ci.methods else self.default_home(ci, m).name if m in ci.fdefault else ""
+            if owner == "":
+                continue
+            why = f"the special method {m}{'' if owner == ci.name else ' of its base ' + shown(owner)} is not supported (CPython calls it {UNCALLED[m]})"
+            if ci.mod == "":
+                self.line = ci.node.line if owner != ci.name else ci.methods[m].node.line if m in ci.methods else ci.fdefault[m].line
+                self.err(why)
+            ci.hook = ci.hook if ci.hook != "" else f"class {shown(ci.name)} is not supported: {why}"
+        b = self.classes[ci.base] if ci.base in self.classes else ClassInfo("", ci.node)
+        if "__init_subclass__" in b.methods or "__init_subclass__" in b.fdefault:
+            # a base's (a def or a class attribute), which CPython calls when the class statement runs
+            # (in an imported module, as the module is imported, whether or not the program uses the class)
+            self.line = ci.node.line
+            owner = short(b.methods["__init_subclass__"].cls if "__init_subclass__" in b.methods else self.default_home(b, "__init_subclass__").name)
+            self.err(f"a base that defines __init_subclass__ is not supported (CPython calls {owner}.__init_subclass__() when it creates class {short(ci.name)})")
         if "__init__" in ci.methods or ci.exc != "":
             # (an exception class without __init__ of its own takes its base's, or none)
             if "__init__" in ci.methods and ci.methods["__init__"].cls == ci.name:
@@ -8547,6 +8571,18 @@ class Gen:
         if k == "name" and e.s in f.params:
             t = f.ptypes[f.params.index(e.s)]
             return t if t != "" or f.bad == "" else "!" + f.bad  # (a parameter whose annotation failed)
+        # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
+        # import or builtin of its name
+        me = f.params[0] if takes_self(f) else ""
+        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            return self.classes[f.cls].ftypes.get(e.s, "")
+        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
+            ms = self.classes[f.cls].methods
+            m = e.kids[0].s
+            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
+        if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
+            return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
         if k == "call" and len(e.kids) == 2 and self.imported_ref(e.kids[0]) == "os.fspath" and unopt(self.guess(e.kids[1], f)) == "str":
             return "str"  # (a str path is its own file system path)
         if k == "call" and e.kids[0].kind == "name":
@@ -8566,13 +8602,6 @@ class Gen:
         if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s in self.classes:
             ms = self.classes[e.kids[0].kids[0].s].methods  # C.m(...): a static or class method
             return ms[e.kids[0].s].ret if e.kids[0].s in ms and ms[e.kids[0].s].deco != "" else ""
-        me = f.params[0] if takes_self(f) else ""
-        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
-            return self.classes[f.cls].ftypes.get(e.s, "")
-        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
-            ms = self.classes[f.cls].methods
-            m = e.kids[0].s
-            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
         if k == "cmp" or (k == "unary" and e.s == "not"):
             return "bool"
         if k == "ifexp":
@@ -10996,6 +11025,7 @@ class Gen:
             self.selfcls = ci.name
             self.declare_fields(ci)
             self.selfcls = ""
+            ci.bad = ci.bad if ci.bad != "" else ci.hook  # (after the problems declare_fields finds, see hoist_class)
             for f in ci.methods.values():
                 self.check_special(f)
         for m in mods:
@@ -11704,9 +11734,9 @@ class Gen:
             c = e.kids[0]
             if c.kind == "attr":
                 self.fl_expr(fl, c.kids[0])
-            elif c.kind != "name":
-                self.fl_expr(fl, c)
-            elif (c.s in self.funcs or c.s in self.classes) and c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
+            elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes) or c.s == fl.me:
+                self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called; self shadows a function or class)
+            elif c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
                 c.chk = True
                 fl.marks[c.s] = True
             # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
@@ -11937,6 +11967,8 @@ class Gen:
     def hoist_class(self, ci: ClassInfo) -> None:
         # class-body defaults are evaluated once, when the class statement runs, in body order,
         # and shared. Pystachy has no class scope: names bound earlier in the body are rejected.
+        # (A class whose only problem is ci.hook still compiles here: CPython runs its body.)
+        ci.bad = "" if ci.bad == ci.hook else ci.bad
         for st in ci.node.kids[0].kids if ci.mod != "" and ci.bad == "" else []:
             if st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name":
                 why = self.default_problem(st.kids[2], ci.ftypes[st.kids[0].s])
@@ -11984,7 +12016,7 @@ class Gen:
             init = ci.methods["__init__"]
             for j in range(1, len(init.params)):
                 init.dglob[j] = ci.fglob.get(init.params[j], "")
-        ci.bad = later  # (an imported module's class: an error where the program uses it)
+        ci.bad = later if later != "" else ci.hook  # (an imported module's class: an error where the program uses it)
 
     def no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> None:
         # (the loader leaves a class body's names unqualified where it reads them: qstmts)
@@ -12382,6 +12414,10 @@ class Gen:
                 self.err(self.unsupported[c.s])
             if c.s in self.classes and self.classes[c.s].exc == "":
                 self.err("catching classes that do not inherit from BaseException is not allowed")
+            if c.s in self.classes and self.classes[c.s].hook != "":
+                # (an imported module's class with a hook Pystachy never calls: an error where the program
+                # uses it, catching it too; one bad otherwise, by its fields, may still be caught)
+                self.err(self.classes[c.s].hook)
             if c.s in self.classes:
                 names.append(c.s)
                 continue
@@ -14393,6 +14429,8 @@ class Gen:
     def class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
         # C.m(...): a static or class method called through its class (cls.m(...) in a class method)
         ci = self.class_ready(cn)
+        if m not in ci.methods and m in ci.fdefault and cn.s not in self.nts:
+            return self.obj_call(self.class_attr(cn, m), args, want)  # (C.k(args) of a class attribute k)
         if m not in ci.methods:
             self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
         f = ci.methods[m]
@@ -15504,7 +15542,8 @@ class Gen:
                 self.call_fn(self.classes[f.s].methods["__init__"], [o], args)
                 return o
             if f.s in self.mvars:
-                self.not_callable(f.s, self.gtypes.get(f.s, ""))
+                self.not_callable(f.s, self.gtype(f.s))
+                return self.obj_call(self.expr(f, ""), args, want)
             if f.s in self.unsupported:
                 self.err(self.unsupported[f.s])
             if f.s in EXCEPTIONS and EXCEPTIONS[f.s] != "-":
@@ -15539,17 +15578,22 @@ class Gen:
             return r
         if f.kind == "name":
             self.not_callable(f.s, self.ltype[f.s])
-        self.err("only functions, classes and methods can be called")
-        return Val("", "")
+        return self.obj_call(self.expr(f, ""), args, want)
 
     def not_callable(self, name: str, t: str) -> None:
         # a call of variable name's value (c() for an object c), of type t: CPython's TypeError,
         # unless it has __call__; a builtin's name bound as a variable is rejected as such
         if short(name) in PYBUILTINS or t == "":
             self.err(f"'{name}' is a variable, so it cannot be called")
-        if t in self.classes and "__call__" in self.classes[t].methods:
-            self.err(f"calling an object ({short(t)}.__call__) is not supported")
-        self.err(f"'{tname(unopt(t))}' object is not callable")
+        if t not in self.classes or "__call__" not in self.classes[t].methods:
+            self.err(f"'{tname(unopt(t))}' object is not callable")
+
+    def obj_call(self, o: Val, args: list[Node], want: str) -> Val:
+        # o(args), o already evaluated: o.__call__(args) where o's class defines it, else CPython's
+        # TypeError; an o that is None raises its TypeError once the arguments are evaluated
+        if o.t not in self.classes or "__call__" not in self.classes[o.t].methods:
+            self.err(f"'{tname(unopt(o.t))}' object is not callable")
+        return self.call_fn(self.classes[o.t].methods["__call__"], [o], args, want, "TypeError: 'NoneType' object is not callable")
 
     def bound(self, s: str) -> bool:
         # a builtin's name that the program binds (a local, def, class or module-level variable)
@@ -15631,6 +15675,8 @@ class Gen:
             ci = self.classes[o.t]
             if m not in ci.methods and ci.exc != "" and m in HASATTR["any"].split() + ["add_note", "with_traceback"]:
                 self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
+            if m not in ci.methods and m in ci.ftypes:
+                return self.obj_call(self.getfield(o, self.field(o, m), m), args, "")  # (o.f(args) of a field f)
             if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
                 self.err(f"'{o.t}' object has no method '{m}'")
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
@@ -15693,7 +15739,8 @@ class Gen:
             what = f"argument {j if takes_self(f) else j + 1} of {short(f.name)}()" if j < f.npos else f"argument '{f.params[j]}' of {short(f.name)}()"
         return self.coerce(v, t, what)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "") -> Val:
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "") -> Val:
+        # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
         if f.bad != "":
             self.err(f.bad)  # (before its arguments, whose types may be placeholders')
         if f.ll not in self.called and f.ll in self.lazyat:
@@ -15724,6 +15771,8 @@ class Gen:
             vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
         if f.vararg >= 0:
             vals[f.vararg] = self.tuple_(extra)
+        if none != "":
+            self.notnone(pre[0], none)  # (CPython calls o once it has evaluated the arguments)
         for j in range(np):
             if vals[j].t == "":
                 t = f.ptypes[j]

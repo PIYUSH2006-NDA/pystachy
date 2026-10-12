@@ -173,11 +173,11 @@ imports `annotations` from `__future__`.
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method or function call, or a list, tuple or dict display of those (by its first
-  item), `[x] * n`, `list(range(n))`, `list(xs)` or `sorted(xs)` (not a call of a template,
-  whose result type is known only once it is compiled, nor of a function that returns `None`:
-  annotate the field). An exception class (below) also has its base's fields, and an object
-  of it is an object of its bases too.
+  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
+  `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
+  nor of a function that returns `None`: annotate the field). An exception class (below) also
+  has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
@@ -359,7 +359,8 @@ A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
 unannotated methods, an annotation it does not support such as `Iterable[int]` or
 `dict[float, X]`, a `bytes` or
-`**kwargs` parameter, a field whose type cannot be inferred, ...) is an error only where the
+`**kwargs` parameter, a field whose type cannot be inferred, a special method that Pystachy
+never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
@@ -412,7 +413,9 @@ their own methods, as CPython calls them: lists and tuples compare their items w
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
 `__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
 
-The container protocol is resolved statically too: `o[k]` calls `__getitem__`, `o[k] = v`
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls
+`__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
+a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
 `__iter__` steps through. An `__iter__` annotated `-> Iterator[T]` (or `Iterable[T]`) that
@@ -421,8 +424,9 @@ list's iterator does, wherever the object is iterated: `for` loops, comprehensio
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
 `str.join()` and `list.extend()`; `list()`, `sorted()` and `list.extend()` then call its
 `__len__`, if it has one, as CPython's length hint. A method the operation needs and the class
-does not define is an error with CPython's message (`'C' object is not subscriptable`), and an
-object that is `None` raises CPython's error when it runs.
+does not define is an error with CPython's message (`'C' object is not subscriptable`,
+`'C' object is not callable`), and an object that is `None` raises CPython's error when it
+runs.
 
 ## Builtins and library modules
 
@@ -737,6 +741,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`), and decorators other
   than these, `@dataclass` and `@overload`
+- a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
+  `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
+  never does (in an imported module, an error where the program uses the class; its class
+  statement still runs), and an exception class whose base defines `__init_subclass__`, which
+  CPython calls when it creates the class (also in an imported module, whose code creates it when
+  it is imported)
 - `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
   and `KW_ONLY`
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
