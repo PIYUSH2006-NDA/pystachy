@@ -66,7 +66,9 @@ print(jd2gcal(2400000.5, -51544.75), jd2gcal(0.0, 0.0), jd2jcal(0.0, 0.0), jd2jc
 print(jd2gcal(2451545.4, 0.3), jd2gcal(2451545.6, -0.3), jd2jcal(2451545.75, -1.5))
 
 # Excel's serial dates, as openpyxl's to_excel and from_excel converted them with jdcal (up to
-# openpyxl 3.0.6): days since 1899-12-30, with Excel's 29 February 1900 below day 61
+# openpyxl 3.0.6): days since 1899-12-30, with Excel's 29 February 1900 below day 61. Serials 1
+# to 59 are a day later than that count (serial 1 is 1 January 1900), as to_excel makes them:
+# openpyxl 3.0.6's from_excel left serial 1 out (1 < value), which 3.1 corrects (0 < value)
 WINDOWS_1900 = sum(gcal2jd(1899, 12, 30))
 MAC_1904 = sum(gcal2jd(1904, 1, 1))
 print(WINDOWS_1900, MAC_1904)
@@ -76,7 +78,7 @@ for y, m, d in [(1900, 1, 1), (1900, 2, 28), (1900, 3, 1), (2024, 2, 29), (9999,
         jul -= 1
     print((y, m, d), jul, sum(gcal2jd(y, m, d)) - MAC_1904)
 for value in [1.0, 59.0, 60.0, 61.0, 45351.75, 2958465.5]:
-    if 1 < value < 60:
+    if 0 < value < 60:
         value += 1
     print(value, jd2gcal(MJD_0, value + WINDOWS_1900 - MJD_0))
 
