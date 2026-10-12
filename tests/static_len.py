@@ -42,3 +42,16 @@ m = M(1)
 print(m.group(), m.group(2), m.group("x"), m.group(1, "y"), m.group(0, 1, 2))
 t = (1, 2, 3)
 print("three" if len(t) == 3 else t[5], len(t) > 2, [x for x in t if len(t) >= 3])
+
+
+def maybe(flag: bool) -> str:
+    # (folding the test keeps the read of u, which raises where u is unbound)
+    if flag:
+        u = (1, 2)
+    try:
+        return "two" if len(u) == 2 else "other"
+    except UnboundLocalError as e:
+        return "unbound: " + str(e)
+
+
+print(maybe(True), maybe(False))
