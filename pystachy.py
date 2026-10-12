@@ -9149,19 +9149,34 @@ class Gen:
         self.err(f"name '{short(name)}' is not defined")
         return Val("", "")
 
-    def applies(self, st: Node, top: bool) -> bool:
+    def applies(self, st: Node, top: bool, loc: dict[str, bool]) -> bool:
         # does def st have a decorator that CPython calls on the function: one Pystachy does not
         # leave out, typing's (overload, final, ...) or, at a module's top level (top), another of
-        # INERT_DECOS (ffi.extern; staticmethod and the like, which declare_fn rejects there)
+        # INERT_DECOS (ffi.extern; staticmethod and the like, which declare_fn rejects there). One
+        # named by a variable of the function the def is in (loc) is that variable, not an import
         for x in st.kids[3:]:
             if x.s == "async":
                 continue
+            if (x.s[: x.s.find(".")] if "." in x.s else x.s) in loc:
+                return True
             key = self.imported(x.s) if self.imported(x.s) != "" else x.s
             key = key[9:] if key.startswith("builtins.") else key
             typing = key.startswith("typing.") or key.startswith("typing_extensions.")
             if not typing and not (top and "f" in INERT_DECOS.get(key, "")):
                 return True
         return False
+
+    def scope_names(self) -> dict[str, bool]:
+        # the names local to the function being compiled: its parameters, the variables it binds
+        # anywhere, and those it takes from the functions around it
+        out: dict[str, bool] = {}
+        for nm in self.ltype:
+            out[nm] = True
+        for nm in self.curfn.params:
+            out[nm] = True
+        if self.curfn.node.kind == "def":
+            local_names(self.curfn.node.kids[2].kids, out)
+        return out
 
     def decorate(self, n: Node) -> Val:
         # def n with decorators: CPython evaluates the decorators, from the top (a call, @d(args), runs
@@ -9304,7 +9319,7 @@ class Gen:
             if x not in self.cells and x not in mine:
                 continue  # (a global, a builtin, or a name nothing binds)
             t = ""
-            if n.kind == "def" and x == n.s and not self.applies(n, False):
+            if n.kind == "def" and x == n.s and not self.applies(n, False, self.scope_names()):
                 t = c.t  # its own name, assigned once it is made
             elif x in self.nonevars and x not in self.ltype:
                 if x in self.assigned and x in self.cells:
@@ -11691,10 +11706,10 @@ class Gen:
             top: list[Node] = []
             for st in m.body.kids:
                 self.line = st.line
-                if self.rtmode and m.name == "" and (st.kind != "def" or self.applies(st, True)) and st.kind != "import" and st.kind != "pass" and not (st.kind == "expr" and st.kids[0].kind == "str"):
+                if self.rtmode and m.name == "" and (st.kind != "def" or self.applies(st, True, {})) and st.kind != "import" and st.kind != "pass" and not (st.kind == "expr" and st.kids[0].kind == "str"):
                     # nothing runs runtime.py's module code: pys_init comes before any program code
                     self.err("runtime.py may hold only functions, imports and docstrings at module level")
-                if st.kind == "def" and self.applies(st, True):
+                if st.kind == "def" and self.applies(st, True, {}):
                     # a def whose decorators CPython calls on the function: module code makes the
                     # function and binds its name to what they give (decorate), a module variable
                     for dk in st.kids[3:]:
@@ -12109,7 +12124,7 @@ class Gen:
         closure_free(d, free)
         caps: dict[str, bool] = {}
         late: list[str] = []
-        own = n.s if n.kind == "def" and not self.applies(n, False) else ""  # (a decorated def's name binds what the decorators give, later)
+        own = n.s if n.kind == "def" and not self.applies(n, False, fl.scope) else ""  # (a decorated def's name binds what the decorators give, later)
         for x in free:
             if x in fl.scope:
                 caps[x] = True
@@ -12313,7 +12328,7 @@ class Gen:
         # runs the module's code; a def, its decorators; a function read as a value, or a lambda,
         # may be called through what holds it, fs[0]() or sorted(xs, key=f), but name = f only
         # makes name one too: fvars)
-        if n.kind == "def" and self.applies(n, False):
+        if n.kind == "def" and self.applies(n, False, {}):
             return True
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.funcs or n.kids[0].s in self.classes):
             return True
@@ -14183,7 +14198,7 @@ class Gen:
                     self.emit(f"store i1 false, ptr @init.{x.s}.guard")
                 else:
                     self.add(Ins("init", "", x.s))
-        elif k == "def" and (n.s in self.decorated if self.modlevel else self.applies(n, False)):
+        elif k == "def" and (n.s in self.decorated if self.modlevel else self.applies(n, False, self.scope_names())):
             self.store_name(n.s, self.decorate(n))  # (its name binds what its decorators give)
         elif k == "def" and not self.modlevel:
             self.store_name(n.s, self.closure(n))  # (a def inside a function: a closure)

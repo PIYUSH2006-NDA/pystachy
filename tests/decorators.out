@@ -15,4 +15,5 @@ call s
 9
 UnboundLocalError: cannot access local variable 'd' where it is not associated with a value
 4 6 8
+42 7
 [exit 0]

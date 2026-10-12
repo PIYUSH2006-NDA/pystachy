@@ -1,7 +1,7 @@
 # Decorators on defs run when the def statement does, as in CPython: the decorator expressions
 # are evaluated from the top, then the defaults, then each decorator is called, from the bottom,
 # with what the one below gave, and the def's name binds the last result, whatever it is
-from typing import Callable
+from typing import Callable, final
 
 
 class Parser:
@@ -157,3 +157,28 @@ def counter(start: int) -> Callable[[], int]:
 
 c = counter(1)
 print(c(), c(), c())
+
+
+def shadowed() -> int:
+    # (a local decorator named as a typing one is the local: CPython calls it)
+    def final(f):
+        def g():
+            return 42
+        return g
+
+    @final
+    def h() -> int:
+        return 1
+
+    return h()
+
+
+def typed() -> int:
+    @final
+    def k() -> int:
+        return 7
+
+    return k()
+
+
+print(shadowed(), typed())
