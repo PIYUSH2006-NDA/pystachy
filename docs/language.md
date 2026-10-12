@@ -354,7 +354,8 @@ A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
 unannotated methods, an annotation it does not support such as `Iterable[int]` or
 `dict[float, X]`, a `bytes` or
-`**kwargs` parameter, a field whose type cannot be inferred, ...) is an error only where the
+`**kwargs` parameter, a field whose type cannot be inferred, a special method that Pystachy
+never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
@@ -729,6 +730,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`), and decorators other
   than these, `@dataclass` and `@overload`
+- a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
+  `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
+  never does (in an imported module, an error where the program uses the class; its class
+  statement still runs), and an exception class whose base defines `__init_subclass__`, which
+  CPython calls when it creates the class (also in an imported module, whose code creates it when
+  it is imported)
 - `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
   and `KW_ONLY`
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
