@@ -6005,7 +6005,9 @@ def tname(t: str) -> str:
     if t == "exc":
         return "BaseException"
     if is_fn(t):
-        return "builtin_function_or_method" if t.startswith("fn[b:") else "function"
+        if t.startswith("fn[u:"):
+            return "method_descriptor"
+        return "builtin_function_or_method" if t.startswith("fn[b:") or t.startswith("fn[d:") else "method" if t.startswith("fn[m:") else "function"
     if is_callable(t):
         return "function"
     b = t.find("[")
@@ -6098,12 +6100,21 @@ def is_sopt(t: str) -> bool:
     return t == "opt[int]" or t == "opt[float]" or t == "opt[bool]"
 
 
+def has_method(base: str, m: str) -> bool:
+    # does builtin type base ("str", "list", "dict", "file", ...) have method m that Pystachy
+    # compiles (METHODS, and those Gen.bmethod dispatches itself)
+    return base + "." + m in METHODS or (base == "list" and m == "sort") or (base == "dict" and m == "update")
+
+
 def is_fn(t: str) -> bool:
     # a function as a value, typed by the function it is: fn[f:NAME] the program's function NAME (a
     # def at a module's top level), fn[b:NAME] the builtin NAME (len, math.sqrt), fn[c:N:QUAL] a def
-    # or lambda inside a function (Gen.closures[N]). A call through it is compiled as a call of that
-    # function, of a template for the call's argument types: the value holds nothing (null), but a
-    # closure's, which points to its env
+    # or lambda inside a function (Gen.closures[N]), fn[m:C.NAME] method NAME bound to an object of
+    # class C, fn[d:NAME:T] method NAME of builtin type T bound to a value ("".join), fn[u:T.NAME]
+    # that method read through its type (str.lower), which takes the value first. A call through
+    # it is compiled as a call of that function, of a template for the call's argument types: the
+    # value holds nothing (null), but a closure's, which points to its env, and a bound method's,
+    # which is the object
     return t.startswith("fn[")
 
 
@@ -6124,6 +6135,12 @@ def fn_shown(t: str) -> str:
     # function value type t for a message: the function it is, as CPython's repr names it (a
     # closure's type ends with its qualified name)
     k = t[3:-1]
+    if k.startswith("u:"):
+        return f"<method '{k[k.find('.') + 1 :]}' of '{k[2 : k.find('.')]}' objects>"
+    if k.startswith("m:"):
+        return f"<bound method {short(k[2 : k.rfind('.')])}.{k[k.rfind('.') + 1 :]}>"
+    if k.startswith("d:"):
+        return f"<built-in method {k[2 : k.find(':', 2)]} of {tname(k[k.find(':', 2) + 1 :])} object>"
     if k.startswith("c:"):
         q = k[k.find(":", 2) + 1 :]
         return f"<function {q[: q.find('@')]} ({q[q.find('@') + 1 :]})>"
@@ -6173,8 +6190,12 @@ def typestr(t: str) -> str:
     t = t.replace("[?,?]", "").replace("[?]", "")
     while "fn[" in t:
         a = t.find("fn[")
-        b = t.find("]", a)
-        t = t[:a] + fn_shown(t[a : b + 1]) + t[b + 1 :]
+        b = a + 3
+        depth = 1
+        while depth > 0:
+            depth += 1 if t[b] == "[" else -1 if t[b] == "]" else 0
+            b += 1
+        t = t[:a] + fn_shown(t[a:b]) + t[b:]  # (a bound method's receiver type may hold brackets)
     while "callable[" in t:
         a = t.find("callable[")
         b = a + 9
@@ -9149,7 +9170,10 @@ class Gen:
         # import or builtin of its name
         me = f.params[0] if takes_self(f) else ""
         if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
-            return self.classes[f.cls].ftypes.get(e.s, "")
+            ci = self.classes[f.cls]
+            if e.s not in ci.ftypes and e.s in ci.methods and ci.methods[e.s].deco == "":
+                return f"fn[m:{f.cls}.{e.s}]"  # (self.m: the method bound to the object)
+            return ci.ftypes.get(e.s, "")
         if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
             ms = self.classes[f.cls].methods
             m = e.kids[0].s
@@ -12910,7 +12934,10 @@ class Gen:
                 fl.exposed()
                 fl.escaped = True
         elif k == "attr" and fl.me != "" and e.kids[0].kind == "name" and e.kids[0].s == fl.me:
-            if "." + e.s not in fl.defd and " dead" not in fl.defd:
+            if e.s not in fl.fields:
+                fl.exposed()  # (self.m, a method bound to self: what it is given to may call it)
+                fl.escaped = True
+            elif "." + e.s not in fl.defd and " dead" not in fl.defd:
                 fl.unsafe[e.s] = True
         elif k == "listcomp":
             # [elt for target in iter if cond]: iter is read outside, the rest with target bound
@@ -15479,8 +15506,16 @@ class Gen:
             o = self.expr(n.kids[0], "")
             if is_fn(o.t) and (n.s == "__name__" or n.s == "__qualname__"):
                 # (a function of a module's top level, or a builtin: its own name; a closure's
-                # qualified name is outer.<locals>.name)
+                # qualified name is outer.<locals>.name, a bound method's C.name)
                 fk = o.t[5:-1]
+                if o.t.startswith("fn[u:"):
+                    return Val(self.sconst(fk[fk.find(".") + 1 :] if n.s == "__name__" else fk), "str")
+                if o.t.startswith("fn[m:"):
+                    mn = fk[fk.rfind(".") + 1 :]
+                    return Val(self.sconst(mn if n.s == "__name__" else short(fk[: fk.rfind(".")]) + "." + mn), "str")
+                if o.t.startswith("fn[d:"):
+                    mn = fk[: fk.find(":")]
+                    return Val(self.sconst(mn if n.s == "__name__" else tname(fk[fk.find(":") + 1 :]) + "." + mn), "str")
                 if o.t.startswith("fn[c:"):
                     clo = self.closures[int(fk[: fk.find(":")])]
                     return Val(self.sconst(clo.name if n.s == "__name__" else clo.qual), "str")
@@ -15491,6 +15526,9 @@ class Gen:
             if o.t == "file" and (n.s == "closed" or n.s == "name" or n.s == "mode"):
                 r = self.rt(f"pys_file_{n.s}", "i64" if n.s == "closed" else "ptr", [f"ptr {o.v}"])
                 return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool") if n.s == "closed" else Val(r, "str")
+            bm = self.method_value(o, n.s)
+            if bm.t != "":
+                return bm
             return self.getfield(o, self.field(o, n.s), n.s)
         if k == "index":
             return self.index(n)
@@ -16670,7 +16708,10 @@ class Gen:
         if (is_fn(a.t) or is_fn(b.t)) and (op == "==" or op == "!=" or op == "is" or op == "is not"):
             # a function value is the function its type names: never None, and the same function as
             # another value of its type only (a closure, as the same def or lambda run once: its env)
-            if a.t == b.t and a.t.startswith("fn[c:"):
+            if a.t == b.t and (a.t.startswith("fn[m:") or a.t.startswith("fn[d:")) and (op == "is" or op == "is not"):
+                self.err(f"'{op}' between bound methods is not supported: CPython makes a new method object each time one is read (compare them with ==)")
+            if a.t == b.t and (a.t.startswith("fn[c:") or a.t.startswith("fn[m:") or a.t.startswith("fn[d:")):
+                # (bound methods of one method are equal where they are bound to one object)
                 return Val(self.ins(f"icmp {'eq' if op == '==' or op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
             same = a.t == b.t
             return Val("true" if same == (op == "==" or op == "is") else "false", "bool")
@@ -16968,10 +17009,11 @@ class Gen:
 
     def to_callable(self, v: Val, t: str) -> Val:
         # function value v as a Callable of type t: an object {code, env}, whose code is an adapter
-        # that calls v's function with the env (a closure's) and t's parameters. A function of a
-        # module or a builtin has no env: one constant object serves for each Callable type
+        # that calls v's function with the env (a closure's, or a bound method's object) and t's
+        # parameters. A function of a module or a builtin has no env: one constant object serves for
+        # each Callable type
         code = self.adapter(v.t, t)
-        if not v.t.startswith("fn[c:"):
+        if v.t.startswith("fn[f:") or v.t.startswith("fn[b:") or v.t.startswith("fn[u:"):
             g = f"@cvo.{code[4:]}"
             if g not in self.cvos:
                 self.cvos[g] = True
@@ -17045,6 +17087,12 @@ class Gen:
         # its name there (the function a module's own name binds: a builtin that the program binds
         # is still the builtin)
         k = v.t[3:-1]
+        if k.startswith("u:"):
+            return self.unbound_call(k[2 : k.find(".")], k[k.find(".") + 1 :], args)
+        if k.startswith("m:"):
+            return self.method(Val(v.v, k[2 : k.rfind(".")]), k[k.rfind(".") + 1 :], args)  # (a bound method: o.name(args))
+        if k.startswith("d:"):
+            return self.method(Val(v.v, k[k.find(":", 2) + 1 :]), k[2 : k.find(":", 2)], args)
         if k.startswith("b:"):
             return self.builtin(k[2:], args, want)
         if k.startswith("c:"):
@@ -17118,6 +17166,8 @@ class Gen:
                                                f"i64 {vals['buffering']}"]), "file")
 
     def method(self, o: Val, m: str, args: list[Node]) -> Val:
+        if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
+            return self.unbound_call(o.t[5:-1], m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
         if (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")) and (m == "__str__" or m == "__repr__") and len(args) == 0 and not self.curfn.ll.startswith("@x."):
@@ -17146,6 +17196,46 @@ class Gen:
             self.cls_bound(ci.methods[m], o.t, True)
             return self.call_fn(ci.methods[m], [o] if ci.methods[m].deco == "" else [], args)  # (a static or class method gets no o)
         return self.bmethod(o, m, args)
+
+    def unbound_call(self, tn: str, m: str, args: list[Node]) -> Val:
+        # T.m(o, args) of builtin type T (str.lower(s), list.append(xs, x)): o.m(args), where o must
+        # be a T (CPython's TypeError otherwise: a compile error here, but for None)
+        if len(args) == 0 or args[0].kind == "kw" or args[0].kind == "starred" or args[0].kind == "dstar":
+            self.err(f"unbound method {tn}.{m}() needs an argument")
+        o = self.expr(args[0], "str" if tn == "str" else "")
+        t = unopt(o.t)
+        if ("list" if is_list(t) else "dict" if is_dict(t) else t) != tn:
+            self.err(f"descriptor '{m}' for '{tn}' objects doesn't apply to a '{tname(t)}' object")
+        rest = args[1:]
+        if is_opt(o.t):
+            # (an o that may be None raises once the other arguments are evaluated, as CPython's call does)
+            rest = [mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]) if a.kind == "kw" else self.vnode(self.expr(a, "")) for a in rest]
+        o = self.unwrap(o, f"TypeError: descriptor '{m}' for '{tn}' objects doesn't apply to a 'NoneType' object")
+        return self.method(o, m, rest)
+
+    def method_value(self, o: Val, name: str) -> Val:
+        # o.name read as a value, where name is a method of o's value and no field: the method bound
+        # to it, fn[m:C.name] for an object of class C, fn[d:name:T] for a str, list, dict or file,
+        # whose value is the object (a call through it is o.name(...): call_value); else Val("", "")
+        t = unopt(o.t)
+        if (t == "fn[b:str]" or t == "fn[b:list]" or t == "fn[b:dict]") and has_method(t[5:-1], name):
+            return Val("null", f"fn[u:{t[5:-1]}.{name}]")  # (str.lower: the method, which takes the str first)
+        if t in self.classes:
+            ci = self.classes[t]
+            if name in ci.ftypes or name not in ci.methods:
+                return Val("", "")
+            f = ci.methods[name]
+            if f.deco != "":
+                self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
+            if f.iters:
+                self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            return Val(o.v, f"fn[m:{t}.{name}]")
+        base = "list" if is_list(t) else "dict" if is_dict(t) else t
+        if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t)):
+            o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            return Val(o.v, f"fn[d:{name}:{t}]")
+        return Val("", "")
 
     def replace(self, o: Val, args: list[Node]) -> Val:
         # p._replace(f=v, ...): a new NamedTuple with the fields given, and p's others
