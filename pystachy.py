@@ -5107,6 +5107,11 @@ SPECIAL: dict[str, str] = {"__str__": "1:str", "__repr__": "1:str", "__len__": "
                            "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool"}
 for _k in "add sub mul truediv floordiv mod iadd isub imul itruediv ifloordiv imod".split():
     SPECIAL[f"__{_k}__"] = "2:"
+# special methods that CPython calls implicitly and Pystachy never does, and when CPython calls
+# them: a class that defines or inherits one is an error (see declare_fields)
+UNCALLED: dict[str, str] = {"__new__": "to make each object of the class", "__getattribute__": "to read each attribute",
+                            "__getattr__": "for each attribute it does not find", "__setattr__": "to assign each attribute",
+                            "__delattr__": "to delete each attribute"}
 # a comparison from pys_cmp_if's result R (-1, 0, 1, or 2 when a NaN makes it unordered)
 MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<": "icmp eq i64 R, -1", "<=": "icmp sle i64 R, 0",
                           ">": "icmp eq i64 R, 1", ">=": "icmp ule i64 R, 1"}
@@ -6766,6 +6771,7 @@ class ClassInfo:
         self.methods: dict[str, FnInfo] = {}
         self.mod = ""
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used
+        self.hook = ""  # the same for a special method Pystachy never calls (UNCALLED): its class statement compiles
         self.kwonly = False  # @dataclass(kw_only=True): its __init__ takes the fields by keyword only
         # an exception class: its base (a class of the program or a builtin exception class), and
         # the builtin exception class it derives from through it ("" for any other class)
@@ -8345,6 +8351,24 @@ class Gen:
             self.nt_class(ci)
         if self.is_dc(ci.name):
             self.dc_methods(ci)
+        for m in UNCALLED:
+            # a def or a class attribute (CPython calls what it binds), also a base's, then named; an
+            # imported module's class: an error only where the program uses it (see hoist_class)
+            owner = ci.methods[m].cls if m in ci.methods else self.default_home(ci, m).name if m in ci.fdefault else ""
+            if owner == "":
+                continue
+            why = f"the special method {m}{'' if owner == ci.name else ' of its base ' + shown(owner)} is not supported (CPython calls it {UNCALLED[m]})"
+            if ci.mod == "":
+                self.line = ci.node.line if owner != ci.name else ci.methods[m].node.line if m in ci.methods else ci.fdefault[m].line
+                self.err(why)
+            ci.hook = ci.hook if ci.hook != "" else f"class {shown(ci.name)} is not supported: {why}"
+        b = self.classes[ci.base] if ci.base in self.classes else ClassInfo("", ci.node)
+        if "__init_subclass__" in b.methods or "__init_subclass__" in b.fdefault:
+            # a base's (a def or a class attribute), which CPython calls when the class statement runs
+            # (in an imported module, as the module is imported, whether or not the program uses the class)
+            self.line = ci.node.line
+            owner = short(b.methods["__init_subclass__"].cls if "__init_subclass__" in b.methods else self.default_home(b, "__init_subclass__").name)
+            self.err(f"a base that defines __init_subclass__ is not supported (CPython calls {owner}.__init_subclass__() when it creates class {short(ci.name)})")
         if "__init__" in ci.methods or ci.exc != "":
             # (an exception class without __init__ of its own takes its base's, or none)
             if "__init__" in ci.methods and ci.methods["__init__"].cls == ci.name:
@@ -10949,6 +10973,7 @@ class Gen:
             self.selfcls = ci.name
             self.declare_fields(ci)
             self.selfcls = ""
+            ci.bad = ci.bad if ci.bad != "" else ci.hook  # (after the problems declare_fields finds, see hoist_class)
             for f in ci.methods.values():
                 self.check_special(f)
         for m in mods:
@@ -11888,6 +11913,8 @@ class Gen:
     def hoist_class(self, ci: ClassInfo) -> None:
         # class-body defaults are evaluated once, when the class statement runs, in body order,
         # and shared. Pystachy has no class scope: names bound earlier in the body are rejected.
+        # (A class whose only problem is ci.hook still compiles here: CPython runs its body.)
+        ci.bad = "" if ci.bad == ci.hook else ci.bad
         for st in ci.node.kids[0].kids if ci.mod != "" and ci.bad == "" else []:
             if st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name":
                 why = self.default_problem(st.kids[2], ci.ftypes[st.kids[0].s])
@@ -11935,7 +11962,7 @@ class Gen:
             init = ci.methods["__init__"]
             for j in range(1, len(init.params)):
                 init.dglob[j] = ci.fglob.get(init.params[j], "")
-        ci.bad = later  # (an imported module's class: an error where the program uses it)
+        ci.bad = later if later != "" else ci.hook  # (an imported module's class: an error where the program uses it)
 
     def no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> None:
         # (the loader leaves a class body's names unqualified where it reads them: qstmts)
@@ -12333,6 +12360,10 @@ class Gen:
                 self.err(self.unsupported[c.s])
             if c.s in self.classes and self.classes[c.s].exc == "":
                 self.err("catching classes that do not inherit from BaseException is not allowed")
+            if c.s in self.classes and self.classes[c.s].hook != "":
+                # (an imported module's class with a hook Pystachy never calls: an error where the program
+                # uses it, catching it too; one bad otherwise, by its fields, may still be caught)
+                self.err(self.classes[c.s].hook)
             if c.s in self.classes:
                 names.append(c.s)
                 continue
