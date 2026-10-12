@@ -3378,10 +3378,10 @@ def rebound(body: list[Node], special: bool) -> dict[str, bool]:
 def false_flag(body: list[Node]) -> int:
     # the index of module code body's top-level TYPE_CHECKING = False (the idiom that spares
     # importing typing), if no other statement binds or deletes TYPE_CHECKING, no star import may
-    # and no global statement names it (no function rebinds it): module code after it tests a
-    # constant False there (Loader.decide()); else -1. Code that assigns it through the module, as
-    # another module's or its own after it imports itself, may assign only False (Gen.store_name())
-    # and may not delete it (Gen.del_name())
+    # and no global statement names it (no function rebinds it): module code after it, outside
+    # class bodies, tests a constant False there (Loader.decide()); else -1. Code that assigns it
+    # through the module, as another module's or its own after it imports itself, may assign only
+    # False (Gen.store_name()) and may not delete it (Gen.del_name())
     at = -1
     for i in range(len(body)):
         st = body[i]
@@ -3480,8 +3480,9 @@ class Loader:
         self.failc: dict[str, str] = {}  # what init_fails() found for a module not loaded yet
         self.scanning: dict[str, bool] = {}  # the modules init_fails() is looking at
         # the index of the top-level statement whose code simplify() or init_raise() is in, -1 in a
-        # function
+        # function, and whether simplify() is in a class body there
         self.pos = -1
+        self.incls = False
         # the names that the top-level code imports() is in has surely bound by then, and those it
         # may have bound (for take())
         self.sure: dict[str, bool] = {}
@@ -3994,12 +3995,15 @@ class Loader:
                 pos = self.pos
                 fs = self.fs
                 fsure = self.fsure
+                incls = self.incls
                 if st.kind == "def":
                     globals_in(st.kids[2].kids, decl)
                     local_types(st.kids[2].kids, types)
                     self.pos = -1
                     self.fs = own_specials(st)
                     self.fsure = {}
+                elif c.kind == "class":
+                    self.incls = True
                 for kid in c.kids:
                     if kid.kind == "block":
                         self.simplify(m, kid, inner)
@@ -4008,6 +4012,7 @@ class Loader:
                 self.pos = pos
                 self.fs = fs
                 self.fsure = fsure
+                self.incls = incls
                 if st.kind == "def":
                     self.dropped_locals(st, inner, decl, types)
         for nm in added:
@@ -4045,7 +4050,8 @@ class Loader:
     def static_if(self, m: Mod, st: Node, scope: dict[str, bool], out: list[Node]) -> bool:
         # an if statement CPython decides at import time, as Pystachy does at compile time: a test of
         # the platform, of TYPE_CHECKING, in an imported module of __name__ == "__main__" or in module
-        # code of False or 0 (decide()). Appends what runs to out; False if st is none of these
+        # code outside class bodies of False or 0 (decide()). Appends what runs to out; False if st
+        # is none of these
         if st.kind != "if":
             return False
         pre: list[Node] = []
@@ -4231,12 +4237,15 @@ class Loader:
         self.prescan(t)
         pos = self.pos
         fs = self.fs
+        incls = self.incls
         self.fs = Mod("", "", "")
+        self.incls = False
         kept: list[Node] = []
         sure: dict[str, bool] = {}
         self.folded(t, t.body.kids, kept, sure, True)
         self.pos = pos
         self.fs = fs
+        self.incls = incls
         self.rawbound[t.path] = rebound(kept, True)
         self.rawsure[t.path] = sure
 
@@ -4277,12 +4286,15 @@ class Loader:
         r: list[Node] = []
         pos = self.pos
         fs = self.fs
-        self.fs = Mod("", "", "")  # (t's code is not in the function simplify() may be in)
+        incls = self.incls
+        self.fs = Mod("", "", "")  # (t's code is not in the function or class body simplify() may be in)
+        self.incls = False
         self.scanning[name] = True
         self.init_raise(t, t.body.kids, r, True)
         del self.scanning[name]
         self.pos = pos
         self.fs = fs
+        self.incls = incls
         self.failc[name] = import_error(r[0].kids[0]) if len(r) > 0 else ""
         return self.failc[name]
 
@@ -4515,9 +4527,10 @@ class Loader:
         # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
         # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), os.name ==
         # "nt", sys.platform in ("win32", ...)), TYPE_CHECKING, an imported module's __name__ ==
-        # "__main__" or, in module code, False and 0 (false), also under not/and/or: 1 or 0, after
-        # appending to pre what still runs for the other operands, in CPython's order ("if x: pass"
-        # for an operand x that is evaluated and tested); -1 if e is undecided
+        # "__main__" or, in module code outside class bodies, False and 0 (false), also under
+        # not/and/or: 1 or 0, after appending to pre what still runs for the other operands, in
+        # CPython's order ("if x: pass" for an operand x that is evaluated and tested); -1 if e is
+        # undecided
         if e.kind == "unary" and e.s == "not":
             r = self.decide(m, e.kids[0], scope, pre)
             return 1 - r if r >= 0 else -1
@@ -4543,10 +4556,12 @@ class Loader:
             return 0
         if e.kind == "name" and self.special(m, e.s, scope) == "typing.TYPE_CHECKING":
             return 0
-        if e.kind == "name" and e.s == "TYPE_CHECKING" and e.s not in scope and m.falseat >= 0 and m.falseat < self.pos:
-            return 0  # (module code after TYPE_CHECKING = False: false_flag())
-        if (e.kind == "False" or (e.kind == "int" and e.s.strip("0") == "")) and self.pos >= 0:
-            return 0  # (in module code: in a function, what the branch binds is still local)
+        if e.kind == "name" and e.s == "TYPE_CHECKING" and not self.incls and m.falseat >= 0 and m.falseat < self.pos:
+            return 0  # (module code after TYPE_CHECKING = False, outside class bodies: false_flag())
+        if (e.kind == "False" or (e.kind == "int" and e.s.strip("0") == "")) and self.pos >= 0 and not self.incls:
+            # (in module code: in a function, what the branch binds is still local; in a class body, a
+            # global statement in it still holds for the whole body)
+            return 0
         if m.name != "" and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
             return 0  # (in an imported module)
         other = "win32 cygwin msys nt java emscripten wasi ios android"

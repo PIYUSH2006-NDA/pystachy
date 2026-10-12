@@ -1,9 +1,13 @@
 # Branches of module code that CPython never runs, decided at compile time as if TYPE_CHECKING:
 # blocks are: "if False:", "if 0:", and TYPE_CHECKING = False (the idiom that spares importing
-# typing) tested after it, also under not/and/or and with elif and else. Their imports are never
-# loaded (tests/loader/never.py has a syntax error), their defs and classes never compiled. A test
-# before the assignment raises NameError; functions read the global; a flag that something
-# rebinds is not a constant (tests/loader/tcset.py). Another module may assign the flag False.
+# typing) tested after it, also under not/and/or, with elif and else, in the blocks of loops, try
+# and with statements and after a class body. Not in a class body (tests/errors/fold_*_class.py),
+# where typing.TYPE_CHECKING still is. Their imports are never loaded (tests/loader/never.py has
+# a syntax error), their defs and classes never compiled. A test before the assignment raises
+# NameError; functions read the global; a flag that something rebinds is not a constant
+# (tests/loader/tcset.py). Another module may assign the flag False.
+import typing
+
 import loader.tcflag
 import loader.tcset
 
@@ -49,6 +53,44 @@ for i in range(2):
         print("i", i)
     elif TYPE_CHECKING:
         import loader.never
+
+
+class Plain:
+    if typing.TYPE_CHECKING:
+        import loader.never
+    k = 5
+
+
+if False:
+    import loader.never
+n = 2
+while n > 0:
+    n -= 1
+    if 0:
+        import loader.never
+    elif TYPE_CHECKING:
+        import loader.never
+    else:
+        print("while", n)
+try:
+    if 00:
+        import loader.never
+    print("try")
+finally:
+    if TYPE_CHECKING or False:
+        import loader.never
+    print("finally")
+with open("/dev/null") as f:
+    if not 0:
+        print("with", len(f.read()))
+if not False:
+
+    class Shown:
+        k = 6
+
+    if TYPE_CHECKING:
+        import loader.never
+    print("Shown", Shown.k, Plain.k)
 
 
 def read() -> bool:

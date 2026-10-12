@@ -318,10 +318,11 @@ code fills; the read is checked as above.
 What CPython decides at import time is decided at compile time. An imported module's
 `if __name__ == "__main__":` block is dropped, and so are `if typing.TYPE_CHECKING:` blocks
 (also where `TYPE_CHECKING` is imported in a `try` whose `except ImportError:` clause sets it
-to `False`). In module code, outside its functions, `if False:` and `if 0:` blocks are dropped
-too, and so are `if TYPE_CHECKING:` blocks after a top-level `TYPE_CHECKING = False` (the
-idiom that spares importing `typing`) where the module binds the name nowhere else: no other
-assignment, `del` or import of it, no star import and no `global` statement naming it.
+to `False`). In module code, outside its functions and class bodies, `if False:` and `if 0:`
+blocks are dropped too, and so are `if TYPE_CHECKING:` blocks after a top-level
+`TYPE_CHECKING = False` (the idiom that spares importing `typing`) where the module binds the
+name nowhere else: no other assignment, `del` or import of it, no star import and no `global`
+statement naming it.
 Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()`, `in` a tuple
 or list of Windows names) and of `os.name` are decided for POSIX, these and the tests above
 also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
