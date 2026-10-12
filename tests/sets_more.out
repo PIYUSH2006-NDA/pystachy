@@ -1,0 +1,23 @@
+eval a 5
+eval b 1
+eval g 7
+eval g 8
+{8, 1, 5, 7}
+RuntimeError Set changed size during iteration
+{1, 2}
+ZeroDivisionError integer division or modulo by zero
+{10, 20}
+{1, 2}
+0
+{0, 2, 3, 4, 9}
+eval c 0
+{0, 2, 3}
+eval d 6
+eval h 4
+{2, 4, 6}
+True False True True False False
+set() {'a'}
+set() 0
+0 False set()
+1 True {'b'}
+[exit 0]

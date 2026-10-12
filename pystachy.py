@@ -5547,6 +5547,12 @@ HASATTR: dict[str, str] = {
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
+    "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
+           "__rsub__ __rxor__ __sub__ __xor__ add clear copy difference difference_update discard intersection "
+           "intersection_update isdisjoint issubset issuperset pop remove symmetric_difference symmetric_difference_update "
+           "union update",
+    "frozenset": "__and__ __class_getitem__ __contains__ __iter__ __len__ __or__ __rand__ __ror__ __rsub__ __rxor__ __sub__ "
+                 "__xor__ copy difference intersection isdisjoint issubset issuperset symmetric_difference union",
 }
 # what builtins raise for a None argument (an optional value that is None); OPTARG: builtins that
 # take None (or an optional value) themselves
@@ -6096,6 +6102,11 @@ def is_dict(t: str) -> bool:
 def is_set(t: str) -> bool:
     # set[T] or frozenset[T] (runtime.c's sets): a frozenset is a set that no method changes
     return t.startswith("set[") or t.startswith("frozenset[")
+
+
+def empty_ann(t: str) -> str:
+    # the annotation that types an empty list, set or dict t, as the error suggesting it shows it
+    return "list[T] = []" if is_list(t) else "set[T] = set()" if is_set(t) else "dict[K, V] = {}"
 
 
 def is_fset(t: str) -> bool:
@@ -7086,7 +7097,8 @@ def aliases(n: Node, name: str) -> bool:
 
 def shows_items(n: Node, name: str) -> bool:
     # does n (outside the functions and classes it defines) assign variable name, or fill the
-    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get
+    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get,
+    # and a set's add and update
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "lambda":
         return False
     if stmt_binds(n, name):
@@ -7096,7 +7108,7 @@ def shows_items(n: Node, name: str) -> bool:
             if t.kind == "index" and t.kids[0].kind == "name" and t.kids[0].s == name:
                 return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name:
-        if n.kids[0].s in "append insert extend setdefault get".split():
+        if n.kids[0].s in "append insert extend setdefault get add update".split():
             return True
     for k in n.kids:
         if shows_items(k, name):
@@ -9472,7 +9484,7 @@ class Gen:
         src = name
         while src in self.origin and name not in self.ltype:
             src = self.origin[src]
-        self.err(f"cannot infer the type of '{short(name)}', an empty {'list' if is_list(t) else 'dict'} so far: annotate it{self.where_def(src)} ({short(src)}: {'list[T] = []' if is_list(t) else 'dict[K, V] = {}'})")
+        self.err(f"cannot infer the type of '{short(name)}', an empty {tname(t)} so far: annotate it{self.where_def(src)} ({short(src)}: {empty_ann(t)})")
 
     def load_name(self, name: str) -> Val:
         if (name in self.nonevars or name in self.noneglobals) and name not in self.ltype:
@@ -9482,8 +9494,8 @@ class Gen:
             if self.unfilled(name) and self.dead and not aliases(self.curfn.node.kids[2], name):
                 # only code these argument types leave out fills it, and nothing else gets it to
                 # fill: it is always empty here
-                self.refine(name, "list[int]" if is_list(t) else "dict[int,int]")
-                self.guessed[self.curfn.ll] = f"'{name}' of {short(self.curfn.name)}() is always empty for these arguments, and taken as {typestr(self.ltype[name])}: annotate it ({name}: {'list[T] = []' if is_list(t) else 'dict[K, V] = {}'})"
+                self.refine(name, "list[int]" if is_list(t) else "set[int]" if is_set(t) else "dict[int,int]")
+                self.guessed[self.curfn.ll] = f"'{name}' of {short(self.curfn.name)}() is always empty for these arguments, and taken as {typestr(self.ltype[name])}: annotate it ({name}: {empty_ann(t)})"
             elif not self.globread(name) or self.copying or "?" in self.early(name):
                 self.no_type(name)
         if name in self.ltype:
@@ -10095,12 +10107,13 @@ class Gen:
         return None
 
     def only_empties(self, body: list[Node], name: str) -> bool:
-        # is every binding of name in body (into the blocks that run) an assignment of an empty [] or {}
+        # is every binding of name in body (into the blocks that run) an assignment of an empty [],
+        # {} or set()
         for st in body:
             if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
                 continue
             v = st.kids[-1] if st.kind == "assign" else st
-            empty = len(st.kids) == 2 and st.kids[0].kind == "name" and (v.kind == "list" or v.kind == "dict") and len(v.kids) == 0
+            empty = len(st.kids) == 2 and st.kids[0].kind == "name" and self.empty_of(v) != ""
             if stmt_binds(st, name) and not empty:
                 return False
             for kid in self.live_blocks(st):
@@ -10389,9 +10402,9 @@ class Gen:
             if (m == "append" and len(a) == 1) or (m == "insert" and len(a) == 2) or (m == "add" and len(a) == 1):
                 found.append(mk("int", "0", n.line, []))
                 found.append(a[-1])
-            elif (m == "extend" or (m == "update" and is_set(self.qtype(name)))) and len(a) == 1:
+            elif (m == "extend" and len(a) == 1) or (m == "update" and is_set(self.qtype(name)) and len(a) > 0):
                 found.append(mk("omit", "", n.line, []))
-                found.append(a[0])
+                found.append(a[0])  # (s.update(xs, ys): the first one's elements)
             elif (m == "setdefault" or m == "get") and len(a) == 2:
                 found.append(a[0])
                 found.append(a[1])
@@ -10504,6 +10517,21 @@ class Gen:
             self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
             self.supdate(o.v, v)
             return Val("null", "None")
+        if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
+            # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
+            # for a set of that type (each argument evaluated before any is added, as CPython does)
+            a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
+            if a.kind == "listcomp" and a.s == "gen":
+                et = elem(self.dry(mk("listcomp", "", a.line, a.kids)))  # (the type of a list of what it yields)
+                et = self.none_items(et) if is_tuple(et) else et
+                if elem_problem(et) != "":
+                    self.err(elem_problem(et))
+                self.refine(name, self.ctype("set", [et]))
+            else:
+                v = self.siter(a, "", "set.update()")
+                self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
+                a = self.vnode(v)
+            return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
         if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
             if self.empty_of(args[1]) != "" and (want == "" or "?" in want):
                 self.no_type(name)
@@ -15467,6 +15495,7 @@ class Gen:
                 return -1
             return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() else 0
         b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) else "int" if t == "bool" else t
+        b = t[: t.find("[")] if is_set(t) else b
         if b in HASATTR:
             return 1 if a in HASATTR[b].split() else 0
         self.err(f"hasattr() of '{a}' on a {tname(t)} is not supported")
@@ -19100,17 +19129,25 @@ class Gen:
             return none
         if m == "copy":
             return o if fz else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)  # (frozenset.copy() is the frozenset)
-        if m == "update" and n == 1 and args[0].kind == "listcomp" and args[0].s == "gen":
-            # each element is added as the generator yields it (which may see the set change)
-            self.listcomp(args[0], o.t, "", o.v, None, "set")
+        if m == "update":
+            # CPython evaluates the arguments, then adds the elements of each in turn: a generator's
+            # (or map()'s, filter()'s) as it yields them, which may see the set change
+            gens: list[Node] = []
+            vs = []
+            for a in args:
+                g = self.mapgen(a) if self.is_mapcall(a) else a
+                gens.append(g)
+                vs.append(Val("", "") if g.kind == "listcomp" and g.s == "gen" else self.siter(g, et, f"{tn}.{m}()"))
+            for i in range(n):
+                if vs[i].t == "":
+                    self.listcomp(gens[i], o.t, "", o.v, None, "set")
+                else:
+                    self.supdate(o.v, vs[i])
             return none
         vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
-        if m == "update" or m == "difference_update":
+        if m == "difference_update":
             for v in vs:
-                if m == "update":
-                    self.supdate(o.v, v)
-                else:
-                    self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
+                self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
             return none
         if m == "union":
             r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
