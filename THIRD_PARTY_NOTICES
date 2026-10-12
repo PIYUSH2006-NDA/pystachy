@@ -110,6 +110,17 @@ ports/sqids/PORT.md lists (each edit is marked "Pystachy port:"). sqids is used 
 License, whose text and copyright notice ("Copyright (c) 2023-present Sqids maintainers.") are in
 ports/sqids/LICENSE.
 
+wcwidth (ports/wcwidth/)
+------------------------
+
+ports/wcwidth/__init__.py, _constants.py, _wcswidth.py, _wcwidth.py, bisearch.py,
+unicode_versions.py and table_ambiguous.py, table_grapheme.py, table_mc.py, table_vs15.py,
+table_vs16.py, table_wide.py and table_zero.py are wcwidth 0.9.2's modules, edited where
+ports/wcwidth/PORT.md lists (each edit is marked "Pystachy port:"). wcwidth is used under the MIT
+License, whose text and copyright notice ("Copyright (c) 2014 Jeff Quast
+<contact@jeffquast.com>") are in ports/wcwidth/LICENSE, with the permission notice of Markus
+Kuhn's code that wcwidth derives from.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
