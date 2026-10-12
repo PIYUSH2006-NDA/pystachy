@@ -8478,6 +8478,18 @@ class Gen:
         if k == "name" and e.s in f.params:
             t = f.ptypes[f.params.index(e.s)]
             return t if t != "" or f.bad == "" else "!" + f.bad  # (a parameter whose annotation failed)
+        # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
+        # import or builtin of its name
+        me = f.params[0] if takes_self(f) else ""
+        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            return self.classes[f.cls].ftypes.get(e.s, "")
+        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
+            ms = self.classes[f.cls].methods
+            m = e.kids[0].s
+            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
+        if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
+            ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
+            return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
         if k == "call" and len(e.kids) == 2 and self.imported_ref(e.kids[0]) == "os.fspath" and unopt(self.guess(e.kids[1], f)) == "str":
             return "str"  # (a str path is its own file system path)
         if k == "call" and e.kids[0].kind == "name":
@@ -8497,16 +8509,6 @@ class Gen:
         if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s in self.classes:
             ms = self.classes[e.kids[0].kids[0].s].methods  # C.m(...): a static or class method
             return ms[e.kids[0].s].ret if e.kids[0].s in ms and ms[e.kids[0].s].deco != "" else ""
-        me = f.params[0] if takes_self(f) else ""
-        if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
-            return self.classes[f.cls].ftypes.get(e.s, "")
-        if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
-            ms = self.classes[f.cls].methods
-            m = e.kids[0].s
-            return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
-        if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
-            ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
-            return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
         if k == "cmp" or (k == "unary" and e.s == "not"):
             return "bool"
         if k == "ifexp":
