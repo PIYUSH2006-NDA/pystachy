@@ -8801,13 +8801,7 @@ class Gen:
                 # **kwargs: each call passes its extra keyword arguments as a record of their names
                 # and types (kw[...]), which the instance for it is compiled with
                 f.kwarg = len(f.params)
-                f.kwelem = ""
-                if p.kids[0].kind != "noann" and self.lib and self.ann_problem(p.kids[0], False) != "":
-                    # (of an imported module, an annotation it cannot compile is an error only
-                    # where the program calls the function, as another parameter's is)
-                    bad = f"{d.s}() is not supported: parameter '{p.s}': {self.ann_problem(p.kids[0], False)}"
-                elif p.kids[0].kind != "noann":
-                    f.kwelem = self.vtype(p.kids[0])
+                f.kwelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
                 f.params.append(p.s)
                 f.defaults.append(mk("noann", "", p.line, []))
                 f.dglob.append("")
