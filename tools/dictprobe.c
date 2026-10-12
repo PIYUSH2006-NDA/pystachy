@@ -16,12 +16,25 @@
    lookup: a hash that behaved randomly would average at most 1.5 per miss and 2 per lookup
    after the deletions, at the fullest table (a third of the slots in use). The times
    (nanoseconds per insertion or hit, best of three) are for information only.
+   The string-cache check counts calls/bytes through the real runtime.py hash, so repeated
+   lookups must not rescan bytes; --hash-cache runs only this check, also under GC stress.
    runtime.c's dict hash functions are in runtime.py, so the build links its IR (pystachy rt).
-   usage: make dictprobe   (build/dictprobe [N...]) */
+   usage: make dictprobe   (build/dictprobe [N...] or build/dictprobe --hash-cache) */
 #include <time.h>
 static long long probes;
 #define DICT_PROBE() (probes++)
+#define pys_hash_str counted_hash_str
 #include "../runtime.c"
+#undef pys_hash_str
+
+I pys_hash_str(Str *s);
+static I hash_calls, hash_bytes;
+static Str *zero_hash_key;
+I counted_hash_str(Str *s) {
+  hash_calls++; hash_bytes += s->len;
+  /* Exercise the rare zero-result sentinel branch without changing the production hash. */
+  return s == zero_hash_key ? 0 : pys_hash_str(s);
+}
 
 #define LIMIT 3.0
 I pys_obj_eq(I c, I a, I b) { (void)c; return a == b; }   /* the programs' callbacks: no objects here */
@@ -40,6 +53,71 @@ static long long longest;
 static int shift, sign;                /* the sweep's keys: sign * (i << shift) */
 static double worst;                   /* the highest average, and how many are above LIMIT */
 static I fails;
+
+static _Noreturn void cache_bad(const char *what) { fprintf(stderr, "dictprobe: string cache: %s\n", what); exit(1); }
+static void hash_count(I calls, I bytes) {
+  if (hash_calls != calls || hash_bytes != bytes) {
+    fprintf(stderr, "dictprobe: string cache: expected %lld calls/%lld bytes, got %lld/%lld\n",
+            (long long)calls, (long long)bytes, (long long)hash_calls, (long long)hash_bytes);
+    exit(1);
+  }
+}
+static Str *cache_key(const char *s, I n) {
+  Str *k = pys_str(s, n);
+  if (k->dict_hash) cache_bad("new string has a populated cache");
+  pys_list_append(keys, (I)k);
+  return k;
+}
+static void hash_cache(void) {
+  char text[4096]; memset(text, 'x', sizeof text);
+  keys = pys_list_new(80);
+  Str *a = cache_key(text, sizeof text), *equal = cache_key(text, sizeof text);
+  text[sizeof text - 1] = 'y'; Str *b = cache_key(text, sizeof text);
+  text[sizeof text - 1] = 'z'; Str *missing = cache_key(text, sizeof text);
+  dict = pys_dict_new(1, 0);
+  hash_calls = hash_bytes = 0;
+  pys_dict_set(dict, (I)a, 7);
+  hash_count(1, sizeof text);
+  if (a->dict_hash != (uint64_t)pys_hash_str(a) || equal->dict_hash) cache_bad("hash value or per-object cache");
+  pys_dict_set(dict, (I)b, 9);
+  for (I i = 0; i < 100; i++) {
+    if (pys_dict_get(dict, (I)(i % 2 ? b : a), -1) != (i % 2 ? 9 : 7) ||
+        pys_dict_get(dict, (I)equal, -1) != 7 || pys_dict_has(dict, (I)missing)) cache_bad("hit/miss lookup");
+  }
+  hash_count(4, 4 * sizeof text);
+  if (a == equal || a->dict_hash != equal->dict_hash) cache_bad("equal distinct strings");
+
+  I bytes = hash_bytes;
+  for (I i = 0; i < 64; i++) {
+    char s[24]; I n = snprintf(s, sizeof s, "resize-%lld", (long long)i);
+    Str *k = cache_key(s, n); pys_dict_set(dict, (I)k, i); bytes += n;
+  }
+  hash_count(68, bytes);
+  for (I i = 0; i < 64; i++) if (pys_dict_pop(dict, keys->a[4 + i]) != i) cache_bad("resize/delete");
+  if (pys_dict_pop(dict, (I)equal) != 7 || pys_dict_has(dict, (I)a)) cache_bad("equal-key deletion");
+  pys_dict_set(dict, (I)a, 11);
+  if (pys_dict_get(dict, (I)equal, -1) != 11) cache_bad("reinsertion");
+  hash_count(68, bytes);
+
+  /* Both the stored tuple and fresh equal tuples reuse each string component's cache. */
+  dict = pys_dict_new((I)cstr("T2ss"), 0);
+  I *pair = pys_alloc(16); pair[0] = (I)a; pair[1] = (I)b; pys_list_append(keys, (I)pair);
+  pys_dict_set(dict, (I)pair, 13);
+  for (I i = 0; i < 100; i++) {
+    I *query = pys_alloc(16); query[0] = (I)equal; query[1] = (I)b;
+    if (pys_dict_get(dict, (I)query, -1) != 13) cache_bad("tuple lookup");
+  }
+  hash_count(68, bytes);
+
+  zero_hash_key = cache_key("forced-zero", 11);
+  dict = pys_dict_new(1, 0);
+  pys_dict_set(dict, (I)zero_hash_key, 17);
+  if (zero_hash_key->dict_hash != 1) cache_bad("zero hash is not normalized before caching");
+  for (I i = 0; i < 100; i++) if (pys_dict_get(dict, (I)zero_hash_key, -1) != 17) cache_bad("normalized hash lookup");
+  hash_count(69, bytes + 11);
+  zero_hash_key = 0;
+  printf("string cache: one hash per string, cached hits/misses/tuples, zero hash normalized\n");
+}
 
 #define X64 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 static I key(I p, I i) {               /* key i of pattern p; the 2N keys of a pattern are distinct */
@@ -101,6 +179,8 @@ static void tally(long long c[4], I n) {   /* the limit applies to hits, misses 
 }
 int main(int argc, char **argv) {
   gc_init(__builtin_frame_address(0), roots, 2);
+  hash_cache();
+  if (argc == 2 && !strcmp(argv[1], "--hash-cache")) return 0;
   I ns[8] = {4000, 8000, 16000, 30000}, nn = 4;
   if (argc > 1) for (nn = 0; nn + 1 < argc && nn < 8; nn++) ns[nn] = atoll(argv[nn + 1]) & ~(I)1;
   for (I k = 0; k < nn; k++) if (ns[k] < 2 || ns[k] > MAXN) { fprintf(stderr, "usage: dictprobe [N...]   (2 <= N <= %d)\n", MAXN); return 2; }

@@ -1,5 +1,8 @@
 # Performance
 
+For opt-in object, container, allocation and exception diagnostics with separate compiler,
+JIT startup and warmed execution measurements, see the [extended subset prototype](extended-performance.md).
+
 Pystachy compiles each program to native code through LLVM, so compute-bound Python runs one to
 two orders of magnitude faster than under CPython, and code that spends its time in strings and
 dicts runs a few times faster. This page has the numbers, what they include, and where the time
