@@ -172,13 +172,26 @@ imports `annotations` from `__future__`.
   it). A comprehension's variables are its own, and do not change what is narrowed outside it.
   Module globals and fields are not narrowed, as a call may change them: copy one to a local,
   and test that.
+- A function is a value. The name of a def at a module's top level (also another module's:
+  `m.f`, or `f` after `from m import f`), of a builtin (`len`, `int`, `print`) or of a builtin
+  module's function (`math.sqrt`) is a value whose type is that function, so a call through it
+  (`f(x)`, where `f` is a parameter, a variable, a field, an item or a call's result) is compiled
+  as a call of the function there: a template's for the call's argument types, with the keyword
+  and default arguments that a call by its name takes. A template given a function is compiled
+  for that function (`apply(double, 5)`), as for any other argument type, and so is
+  `lib/bisect`'s `key=`. A function value is true and never `None`, is (`==`, `is`) another value
+  of its own type only, and its `__name__` and `__qualname__` are its name. As a value has one
+  type, a variable, a field, a list's items and a dict's values hold one function, and printing a
+  function is rejected (CPython prints its address). Lambdas, nested functions and `Callable`
+  annotations are not supported (below).
 - No silent `int` → `float` conversion when assigning or passing arguments: CPython would
   keep an `int`, so `x: float = 1` is rejected (write `1.0`). Arithmetic mixes freely, and so
   do `in`, `count()`, `index()` and `remove()` of a list of numbers (`1 in [1.0]`).
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  constructor, method (also `self(...)`, its `__call__`) or function call, a function (a def, a
+  builtin or a builtin module's, such as `math.sqrt`), or a list, tuple or
   dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
   `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
   nor of a function that returns `None`: annotate the field). An exception class (below) also
@@ -433,8 +446,9 @@ their own methods, as CPython calls them: lists and tuples compare their items w
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
 `__gt__`), and `max` uses `>`.
 
-Calls of objects and the container protocol are resolved statically too: `o(x)` calls
-`__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls the
+function `o` is (see *Typing rules*), or `__call__`, with keyword and default arguments as a
+method takes them (`o` a variable, a field,
 a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
@@ -487,8 +501,8 @@ Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
 arguments above, lambdas and closures, inheritance other than an exception class's, `**kwargs` and
 `*args` in methods, star arguments in calls (`f(*xs)`) and starred targets (`a, *rest = xs`),
-sets, dict and multi-clause comprehensions, slice steps, first-class
-functions (`map`, `key=`), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
+sets, dict and multi-clause comprehensions, slice steps, `map()`, `filter()` and `key=` (a function is
+a value of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
 files, complex numbers, arbitrary-precision integers, `async`, `match` and `:=`. The parser
 accepts all of them, and the compiler rejects each where it compiles it, so an imported
@@ -776,6 +790,10 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
 - a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
   `str | None` (CPython raises `TypeError` at the first such item it reaches)
+- two different functions where one value goes (a variable, a field, a list's items, a dict's
+  values, the two arms of a conditional expression): each function is a type of its own
+- printing a function, also inside a container, and comparing containers of functions (CPython
+  prints a function's address)
 
 ### Classes, dataclasses and NamedTuples
 

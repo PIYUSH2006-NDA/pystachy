@@ -1,2 +1,2 @@
-# error: sorted(key=...) is not supported: functions are not values
+# error: sorted(key=...) is not supported
 print(sorted(["b", "a"], key=len))
