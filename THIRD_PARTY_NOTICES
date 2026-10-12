@@ -44,6 +44,13 @@ where ports/iniconfig/PORT.md lists (each edit is marked "Pystachy port:"). inic
 under the MIT License, whose text and copyright notice ("Copyright (c) 2010 - 2023 Holger Krekel
 and others") are in ports/iniconfig/LICENSE.
 
+jdcal (ports/jdcal/)
+--------------------
+
+ports/jdcal/__init__.py is jdcal 1.4.1's module jdcal.py, edited where ports/jdcal/PORT.md lists
+(each edit is marked "Pystachy port:"). jdcal is used under the 2-clause BSD License, whose text
+and copyright notice ("Copyright (c) 2011, Prasanth Nair") are in ports/jdcal/LICENSE.
+
 pylev (ports/pylev/)
 --------------------
 
