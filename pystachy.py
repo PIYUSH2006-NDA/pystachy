@@ -13937,6 +13937,7 @@ class Gen:
         seq = self.iterable(self.expr(it, ""))
         if seq.t == "tuple[]":
             self.iterarg(arg)
+            self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
             return  # nothing to iterate: the body never runs (and its types are unknown)
         self.for_seq(tgt, [seq], "", body, "0", hide, arg)
         self.close_temp(it, seq)
