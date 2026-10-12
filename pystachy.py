@@ -3369,13 +3369,7 @@ def rebound(body: list[Node], special: bool) -> dict[str, bool]:
         fns = [st] if st.kind == "def" else st.kids[0].kids if st.kind == "class" else st.kids[:0]
         for d in fns:
             if d.kind == "def":
-                decl: dict[str, bool] = {}
-                asg: dict[str, bool] = {}
-                globals_in(d.kids[2].kids, decl)
-                binds(d.kids[2].kids, asg, True)
-                for nm in decl:
-                    if nm in asg:
-                        out[nm] = True
+                global_assigns(d.kids[2].kids, out, True)
     return out
 
 
@@ -3412,7 +3406,7 @@ def own_specials(d: Node) -> Mod:
     body = d.kids[2].kids
     specials(f, body, -1)
     binds(body, f.rebound, False)
-    globals_in(body, f.rebound)
+    globals_deep(body, f.rebound)
     for p in d.kids[0].kids:
         f.rebound[p.s] = True
     return f
@@ -3694,14 +3688,11 @@ class Loader:
                 m.kinds[st.s] = "f" if k == "def" else "c"
                 for d in [st] if k == "def" else st.kids[0].kids if k == "class" else st.kids[0].kids[0].kids:
                     if d.kind == "def":
-                        decl: dict[str, bool] = {}
-                        asg: dict[str, bool] = {}
-                        globals_in(d.kids[2].kids, decl)
-                        collect(d.kids[2].kids, asg)
-                        for nm in decl:
-                            if nm in asg:
-                                m.fnglobal[nm] = True
-                            if nm in asg and nm not in m.kinds:
+                        ga: dict[str, bool] = {}
+                        global_assigns(d.kids[2].kids, ga)
+                        for nm in ga:
+                            m.fnglobal[nm] = True
+                            if nm not in m.kinds:
                                 m.kinds[nm] = "v"
                                 m.fnonly[nm] = True
             elif k != "import":
@@ -5932,6 +5923,13 @@ def is_sopt(t: str) -> bool:
     return t == "opt[int]" or t == "opt[float]" or t == "opt[bool]"
 
 
+def pure_arg(e: Node) -> bool:
+    # an argument whose value nothing evaluated before it can change, and that changes nothing: a
+    # constant or an empty display (Gen.star_call leaves it for its parameter to type)
+    k = e.kind
+    return k in INERT or ((k == "list" or k == "dict" or k == "tuple") and len(e.kids) == 0)
+
+
 def has_method(base: str, m: str) -> bool:
     # does builtin type base ("str", "list", "dict", "file", ...) have method m that Pystachy
     # compiles (METHODS, and those Gen.bmethod dispatches itself)
@@ -6254,9 +6252,12 @@ def targets(st: Node, out: dict[str, bool]) -> None:
 
 
 def collect(body: list[Node], out: dict[str, bool]) -> None:
-    # Python's rule: a name assigned anywhere in a function is local to it (except ... as e too)
+    # Python's rule: a name assigned anywhere in a function is local to it (except ... as e too),
+    # but in the defs and classes in it, scopes of their own
     for st in body:
         targets(st, out)
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
         for kid in st.kids:
             if kid.kind == "block":
                 collect(kid.kids, out)
@@ -6639,15 +6640,54 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
 
 
 def globals_in(body: list[Node], out: dict[str, bool]) -> None:
+    # the names the global statements of a function's body declare (not those of the defs and
+    # classes in it, scopes of their own)
+    for st in body:
+        if st.kind == "global":
+            for nm in st.kids:
+                out[nm.s] = True
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
+        for kid in st.kids:
+            if kid.kind == "block":
+                globals_in(kid.kids, out)
+            elif kid.kind == "except":
+                globals_in(kid.kids[1].kids, out)
+
+
+def globals_deep(body: list[Node], out: dict[str, bool]) -> None:
+    # (globals_in, also in the defs inside: each may rebind a name of the module)
     for st in body:
         if st.kind == "global":
             for nm in st.kids:
                 out[nm.s] = True
         for kid in st.kids:
             if kid.kind == "block":
-                globals_in(kid.kids, out)
+                globals_deep(kid.kids, out)
             elif kid.kind == "except":
-                globals_in(kid.kids[1].kids, out)
+                globals_deep(kid.kids[1].kids, out)
+
+
+def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False) -> None:
+    # the names of the module that a function's body assigns (also by an import, with imports),
+    # declared global, also those the defs inside it assign so (each a scope of its own: its own
+    # global statements decide)
+    decl: dict[str, bool] = {}
+    asg: dict[str, bool] = {}
+    globals_in(body, decl)
+    if imports:
+        binds(body, asg, True)
+    else:
+        collect(body, asg)
+    for nm in decl:
+        if nm in asg:
+            out[nm] = True
+    inner: list[Node] = []
+    for st in body:
+        nested_defs(st, inner)
+    for d in inner:
+        if d.kind == "def":
+            global_assigns(d.kids[2].kids, out, imports)
 
 
 def stmt_binds(st: Node, name: str) -> bool:
@@ -12060,15 +12100,12 @@ class Gen:
         for f in fns:
             if f.pending:
                 continue  # its defining method already contributes the same global assignments
-            decl: dict[str, bool] = {}
-            asg: dict[str, bool] = {}
-            globals_in(f.node.kids[2].kids, decl)
-            collect(f.node.kids[2].kids, asg)
-            for nm in decl:
-                if nm in asg:
-                    if nm not in gl:
-                        self.fglobals[nm] = True
-                    gl[nm] = True
+            ga: dict[str, bool] = {}
+            global_assigns(f.node.kids[2].kids, ga)
+            for nm in ga:
+                if nm not in gl:
+                    self.fglobals[nm] = True
+                gl[nm] = True
         # one binding per name: a function, a class, an import or a variable
         for nm in gl:
             if nm in self.funcs or nm in self.classes or (nm in self.imports and not self.imports[nm].startswith("__future__")):
@@ -16615,60 +16652,79 @@ class Gen:
         return self.obj_call(self.expr(f, ""), args, want)
 
     def star_call(self, n: Node, want: str) -> Val:
-        # f(a, *t, b): the items a star unpacks are positional arguments. CPython evaluates the
-        # function (the object of o.m), then the arguments in order, unpacking each star's: those up
-        # to the last star are evaluated here, a tuple's items become arguments, and the call is
-        # compiled with them (a list's items, which only run time knows, only print() takes)
+        # f(a, *t, k=v): the items a star unpacks are positional arguments. CPython evaluates the
+        # function (o.m binds o first), then the positional arguments in order, unpacking each star,
+        # then the keyword ones; here each is evaluated so (but a constant or a name, which nothing
+        # can change meanwhile, keeps the type its parameter wants), a tuple's items become
+        # arguments, and the call is compiled with them (a list's items, which only run time knows,
+        # only print() takes: a sole star's once the keywords are evaluated, as CPython unpacks it)
         f = n.kids[0]
         args = n.kids[1:]
-        sup = f.kind == "attr" and f.kids[0].kind == "call" and f.kids[0].kids[0].kind == "name" and f.kids[0].kids[0].s == "super" and not self.bound("super")
-        if f.kind == "attr" and f.kids[0].kind != "name" and f.kids[0].kind != "val" and not sup and self.dotted(f) == "":
+        if f.kind == "attr" and not self.static_callee(f) and f.kids[0].kind != "val":
             f = mk("attr", f.s, f.line, [self.vnode(self.expr(f.kids[0], ""))])
-        elif f.kind != "name" and f.kind != "attr" and f.kind != "val":
+        elif f.kind != "attr" and f.kind != "val" and not self.static_callee(f):
             f = self.vnode(self.expr(f, ""))
-        last = max([j for j in range(len(args)) if args[j].kind == "starred" or args[j].kind == "dstar"])
         printing = f.kind == "name" and f.s == "print" and not self.bound("print")
+        sole = len([a for a in args if a.kind != "kw" and a.kind != "dstar"]) == 1
         who = self.star_who(f)
-        out: list[Node] = []
-        for j in range(len(args)):
-            a = args[j]
-            if j > last:
-                out.append(a)
-            elif a.kind == "starred" and (a.kids[0].kind == "list" or a.kids[0].kind == "tuple") and len([x for x in a.kids[0].kids if x.kind == "starred"]) == 0:
+        pos: list[Node] = []
+        kws: list[Node] = []
+        for a in args:
+            if a.kind == "kw" or a.kind == "dstar":
+                continue
+            if a.kind == "starred" and (a.kids[0].kind == "list" or a.kids[0].kind == "tuple") and len([x for x in a.kids[0].kids if x.kind == "starred"]) == 0:
                 for x in a.kids[0].kids:
-                    out.append(self.vnode(self.expr(x, "")))  # (*[a, b] of a display: its items)
+                    pos.append(x if pure_arg(x) else self.vnode(self.expr(x, "")))  # (*[a, b] of a display: its items)
             elif a.kind == "starred":
                 v = self.expr(a.kids[0], "")
                 self.line = a.line
                 v = self.unwrap(v, f"TypeError: {who + ' argument' if who != '' else 'Value'} after * must be an iterable, not NoneType")
                 if is_tuple(v.t):
                     for i in range(len(targs(v.t))):
-                        out.append(self.vnode(self.tget(v, i)))
+                        pos.append(self.vnode(self.tget(v, i)))
                 elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t)):
-                    # print(*xs): its items printed as arguments are, joined by sep
-                    xs = v if is_list(v.t) else self.as_list(v, "print")
+                    # print(*xs): its items printed as arguments are, joined by sep (a sole star's
+                    # items as they are once the keywords are evaluated, others' as they are now)
+                    xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), mk("name", "__pys_item", a.line, []), self.vnode(v)]), "")
                     item = mk("name", "__pys_item", a.line, [])
-                    out.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
+                    pos.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
                 else:
                     self.err(f"unpacking a {typestr(v.t)} into the arguments of {who if who != '' else 'a function'} is not supported (a tuple's items are)")
+            else:
+                pos.append(a if pure_arg(a) else self.vnode(self.expr(a, "")))
+        for a in args:
+            if a.kind == "kw":
+                kws.append(a if pure_arg(a.kids[0]) else mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]))
             elif a.kind == "dstar" and a.kids[0].kind == "dict" and len([i for i in range(0, len(a.kids[0].kids), 2) if a.kids[0].kids[i].kind != "str"]) == 0:
                 d = a.kids[0]
                 for i in range(0, len(d.kids), 2):
-                    out.append(mk("kw", d.kids[i].s, a.line, [self.vnode(self.expr(d.kids[i + 1], ""))]))  # (**{"k": v}: its items)
+                    kws.append(mk("kw", d.kids[i].s, a.line, [self.vnode(self.expr(d.kids[i + 1], ""))]))  # (**{"k": v}: its items)
             elif a.kind == "dstar":
                 v = self.expr(a.kids[0], "")
                 if not is_kw(v.t):
                     self.err(f"** of a {typestr(v.t)} is not supported: of a function's **kwargs, or a dict display with str keys, it is")
                 names = kw_names(v.t)
                 for i in range(len(names)):
-                    out.append(mk("kw", names[i], a.line, [self.vnode(self.tget(self.kw_tuple(v), i))]))
-            elif a.kind == "kw":
-                out.append(mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]))
-            else:
-                out.append(self.vnode(self.expr(a, "")))
+                    kws.append(mk("kw", names[i], a.line, [self.vnode(self.tget(self.kw_tuple(v), i))]))
+        out = pos + kws
         if printing and len([a for a in out if a.kind == "starred"]) > 0:
             return self.print_star(n, out)
         return self.call(mk("call", n.s, n.line, [f] + out), want)
+
+    def static_callee(self, f: Node) -> bool:
+        # does evaluating callee f (or the object of o.m) read nothing a call's arguments may change:
+        # a def, class, builtin or module's function, super(), or a variable's empty container that
+        # the call fills (whose name types it)
+        if f.kind == "attr":
+            o = f.kids[0]
+            if self.dotted(f) != "" or (o.kind == "call" and o.kids[0].kind == "name" and o.kids[0].s == "super" and not self.bound("super")):
+                return True
+            if o.kind != "name":
+                return False
+            return (o.s in self.classes and o.s not in self.ltype) or (o.s in PYBUILTINS and not self.bound(o.s)) or "?" in self.rtype(o.s)
+        if f.kind != "name":
+            return False
+        return ((f.s in self.funcs or f.s in self.classes) and f.s not in self.ltype) or not self.bound(f.s) or (f.s in self.aliases and f.s not in self.gtypes)
 
     def star_who(self, f: Node) -> str:
         # the function f(...) calls, as CPython's messages name it (module.qualname(), a builtin's

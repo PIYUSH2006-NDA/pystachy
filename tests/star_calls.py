@@ -84,3 +84,35 @@ try:
     raise ValueError(*none_t)
 except TypeError as e:
     print("TypeError:", e)
+
+
+def fk(*a, b=0, c=0):
+    return a, b, c
+
+
+# positional and starred arguments are evaluated before keyword ones, whatever their order
+print(fk(b=note("kw", 2), *[note("star", 1)]))
+print(fk(note("p", 0), b=note("kw", 2), *[note("star", 1)], c=note("kw2", 3)))
+dd = {"a": 1}
+
+
+def make_sep() -> str:
+    dd["z"] = 2
+    return "-"
+
+
+# a sole star is unpacked once the keywords are evaluated
+print(*dd, sep=make_sep())
+ys: list[int] | None = [1]
+old_ys = ys
+
+
+def rebind() -> tuple[int]:
+    global ys
+    ys = None
+    return (5,)
+
+
+# o.m binds o before the arguments are evaluated
+ys.append(*rebind())
+print(old_ys)
