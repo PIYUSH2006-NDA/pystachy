@@ -8785,21 +8785,21 @@ class Gen:
                 f.posonly = len(f.params)
             if i == 0 and f.deco == "classmethod" and p.kind == "param":
                 continue  # cls: the class, which is not passed (see rename)
-            if p.kind == "starparam" and f.generic:
-                # *args: each call passes the extra positional arguments as a tuple of their types
-                f.vararg = len(f.params)
-                f.varelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
-                f.params.append(p.s)
-                f.defaults.append(mk("noann", "", p.line, []))
-                f.dglob.append("")
-                f.dtypes.append("")
-                f.ptypes.append("")
-                continue
-            if p.kind == "dstarparam" and f.generic:
-                # **kwargs: each call passes its extra keyword arguments as a record of their names
-                # and types (kw[...]), which the instance for it is compiled with
-                f.kwarg = len(f.params)
-                f.kwelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
+            if (p.kind == "starparam" or p.kind == "dstarparam") and f.generic:
+                # *args: each call passes the extra positional arguments as a tuple of their types;
+                # **kwargs: its extra keyword arguments as a record of their names and types
+                # (kw[...]), which the instance for it is compiled with. An imported module's
+                # annotation that fails is an error where a call needs the function
+                why = self.ann_problem(p.kids[0], False) if self.lib and p.kids[0].kind != "noann" else ""
+                if why != "":
+                    bad = f"{d.s}() is not supported: parameter '{'*' if p.kind == 'starparam' else '**'}{p.s}': {why}"
+                elem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" and why == "" else ""
+                if p.kind == "starparam":
+                    f.vararg = len(f.params)
+                    f.varelem = elem
+                else:
+                    f.kwarg = len(f.params)
+                    f.kwelem = elem
                 f.params.append(p.s)
                 f.defaults.append(mk("noann", "", p.line, []))
                 f.dglob.append("")
