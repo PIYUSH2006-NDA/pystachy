@@ -1,0 +1,17 @@
+ key(10) key(3) key(8) key(1)  3<3  1<3  3<3  1<1  1<1[8, 1, 10, 3]
+ key(10) key(3)  3<3 key(8)  1<3 key(1)  1<18
+ key(10) key(3)  3>3 key(8)  1>3 key(1)  1>310
+ key(4) key(9)  2<4 key(2)  2<29
+ sees 0 sees 0 sees 0 -> [1, 4, 5]
+key raised 4 [5, 1, 4, 2]
+list modified during sort [1, 2, 3]
+  99<6
+comparison raised: no order for 99 [6, 99, 2, 5, 1]
+  5<1  2<5  1<5  2<5  2<1  99<2
+reversed, comparison raised: no order for 99 [6, 99, 5, 2, 1]
+min() iterable argument is empty
+max() iterable argument is empty
+ reverse item(3) item(1) item(2)[3, 2, 1]
+ make_key(1) reverse item(3) item(1) item(2) key(3) key(1) key(2)  1<2  3<1  1<3  3<2[3, 2, 1]
+ reverse make_key(2) key(5) key(6)  6>5[2, 1, 0] 6
+[exit 0]

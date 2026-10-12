@@ -5588,6 +5588,8 @@ RUNTIME: dict[str, str] = {
     "list.imul": "None:S,int|R A rL wL|", "list.reverse": "None:S|rL wL|", "list.find": "int:S,*T,#|rL rD U?|",
     "list.index": "int:S,*T,#,int,int|R A I rL rD U?|", "list.index_as": "int:S,*T,#,int,int,bool,int,%ptr|R A I rL rD U?|", "list.count": "int:S,*T,#|rL rD U?|", "list.remove": "None:S,*T,#|R rL wL rD U?|",
     "list.sort_r": "None:S,#,bool|R A I rL wL rD U?|", "list.minmax": "*T:S,#,bool|R rL rD U?|",
+    "list.take": "S:S|A I rL wL|", "list.keyed": "%ptr:S,%ptr,bool|A rL wL|", "list.unkey": "None:S,%ptr|rL wL|",
+    "list.give": "None:S|R I rL wL|",
     "any": "bool:list[T]|rL|", "all": "bool:list[T]|rL|", "sum.int": "int:list[T],int|R rL|",
     "sum.float": "float:list[float],float|rL|", "sum.float_int": "float:list[float],int|rL|", "sum.int_float": "float:list[T],float|rL|",
     "range.len": "int:int,int,int|R|", "range.has": "bool:int,int,int,int|R|", "range.list": "list[int]:int,int,int|R A|",
@@ -7032,6 +7034,7 @@ class Gen:
         self.consts: list[str] = []
         self.strs: dict[str, str] = {}
         self.strvals: list[str] = []  # the text of each @s.N
+        self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)
         # the runtime functions declared, by RUNTIME key, in the order of their first use (which
         # the program's declare lines keep)
         self.rtfns: dict[str, RtFn] = {}
@@ -14391,6 +14394,8 @@ class Gen:
     def expr(self, n: Node, want: str) -> Val:
         self.line = n.line
         k = n.kind
+        if k == "val":
+            return self.vnodes[int(n.s)]  # (a value computed already: see vnode)
         if k == "int":
             neg = n.s.startswith("-")
             d = n.s[1:] if neg else n.s
@@ -16364,8 +16369,8 @@ class Gen:
         for a in args:
             if a.kind != "kw":
                 npos += 1
-            elif name == "sorted" and a.s == "key":
-                self.err("sorted(key=...) is not supported")
+            elif (name == "sorted" or name == "min" or name == "max") and a.s == "key":
+                pass  # (a function the items are compared by)
             elif name != "open" and not (name == "sorted" and a.s == "reverse"):
                 self.err(f"keyword argument '{a.s}' of {name}() is not supported")
         if name in ARITY and npos > ARITY[name]:
@@ -16375,10 +16380,19 @@ class Gen:
             args = [self.parse_expr(DEFAULTS[name])]
         w = want if name == "list" or name == "sorted" or name == "dict" else ""
         fresh = False
+        # key= and reverse= of sorted(), min() and max(), evaluated in the order written: once the
+        # iterator of the argument is made, before the function iterates it (as CPython calls it)
+        kws = [a for a in args if a.kind == "kw" and (a.s == "key" or a.s == "reverse") and (name == "sorted" or name == "min" or name == "max")]
+        kvals: list[Val] = []
         if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
             # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
             fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
-            v0 = self.consume(args[0], w)
+            ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and fresh else None
+            v0 = self.consume(args[0], w, ka)
+            if ka is not None:
+                kvals = [self.tget(ka.value, j) for j in range(len(kws))]
+            elif len(kws) > 0:
+                kvals = [self.expr(a.kids[0], "") for a in kws]
             if is_opt(v0.t):
                 v0 = self.unwrap(v0, "TypeError: 'NoneType' object is not iterable")
             if name == "any" and v0.t == "file":
@@ -16404,10 +16418,16 @@ class Gen:
             self.allowq = False
         else:
             vals = [self.expr(a, w) for a in args if a.kind != "kw"]
+            kvals = [self.expr(a.kids[0], "") for a in kws]
         rev = "0"
-        for a in args:
-            if a.kind == "kw" and a.s == "reverse":
-                rev = self.reverse_arg(a.kids[0], name)
+        keyv = Val("", "")
+        for j in range(len(kws)):
+            if kws[j].s == "reverse":
+                rev = self.reverse_val(kvals[j], name)
+            elif kvals[j].t != "None":
+                keyv = kvals[j]  # (key=None: the items themselves)
+                if not is_fn(keyv.t):
+                    self.err(f"'{tname(keyv.t)}' object is not callable (the key of {name}())")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
             self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
         if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
@@ -16539,6 +16559,10 @@ class Gen:
         elif (name == "hex" or name == "oct" or name == "bin") and (t == "int" or t == "bool"):
             # format()'s alternate form: hex(x) is format(x, "#x"), and hex(True) is '0x1'
             return self.format_(self.as_int(v), mk("str", "#" + ("x" if name == "hex" else name[0]), self.line, []))
+        elif (name == "min" or name == "max") and len(vals) == 1 and is_list(t) and keyv.t != "":
+            return self.key_minmax(v, keyv, name)
+        elif (name == "min" or name == "max") and len(vals) > 1 and keyv.t != "":
+            return self.key_minmax2(vals, keyv, name)
         elif (name == "min" or name == "max") and len(vals) == 1 and is_list(t):
             d = self.sconst(self.desc(elem(t), ">" if name == "max" else "<"))
             r = self.rt("pys_list_minmax", "i64", [f"ptr {v.v}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"])
@@ -16556,7 +16580,9 @@ class Gen:
             return v
         elif (name == "sorted" or name == "list") and is_list(t):
             c = v.v if fresh else self.rt("pys_list_copy", "ptr", [f"ptr {v.v}"])
-            if name == "sorted":
+            if name == "sorted" and keyv.t != "":
+                self.key_sort(Val(c, t), keyv, rev, False)
+            elif name == "sorted":
                 self.rt("pys_list_sort_r", "void", [f"ptr {c}", f"ptr {self.sconst(self.desc(elem(t), '<'))}", f"i64 {rev}"])
             return Val(c, t)
         elif name == "divmod" and len(vals) == 2 and self.isnum(t) and self.isnum(vals[1].t):
@@ -16592,6 +16618,117 @@ class Gen:
             self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
         self.err(f"unsupported call {key}")
         return v
+
+    def vnode(self, v: Val) -> Node:
+        # a node whose value is v, computed already: an argument of a call the compiler makes (the
+        # key function's, key(item))
+        self.vnodes.append(v)
+        return mk("val", str(len(self.vnodes) - 1), self.line, [])
+
+    def keys_of(self, xs: Val, key: Val) -> Val:
+        # [key(x) for x in xs]: the keys of a sort, computed in order, as CPython computes them
+        # before it sorts; xs is a list that no other code sees (a copy, or the items a list gave up)
+        ks = self.rt("pys_list_new", "ptr", [f"i64 {self.ins(f'load i64, ptr {xs.v}')}"])
+        ctr = self.alloca("int", "")
+        self.emit(f"store i64 0, ptr {ctr}")
+        lc = self.label()
+        lb = self.label()
+        le = self.label()
+        lp = Loop("seq", lc, lb, lc, le)
+        lp.seqs = [xs]
+        lp.tests = [lb]
+        lp.ctr = ctr
+        self.fn.loops.append(lp)
+        self.br(lc)
+        self.place(lc)
+        i = self.ins(f"load i64, ptr {ctr}")
+        lp.idx = [i]
+        self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
+        self.place(lb)
+        item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t))
+        k = self.call_value(key, [self.vnode(item)], "")
+        if "?" in k.t:
+            self.err(f"the key function returns an empty container whose type is not known here ({typestr(k.t)})")
+        self.rt("pys_list_append", "void", [f"ptr {ks}", "i64 " + self.to_slot(k)])
+        self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
+        self.br(lc)
+        self.place(le)
+        return Val(ks, self.ctype("list", [k.t]))
+
+    def key_sort(self, xs: Val, key: Val, rev: str, taken: bool) -> None:
+        # sort list xs by key(item) (sorted(xs, key=...) of the copy xs, or xs.sort(key=...) of the
+        # items a list gave up, taken: pys_list_take), reversed if rev: runtime.c sorts records of the
+        # keys and the items by the keys (K), as CPython sorts its keys and moves the items along
+        ks = self.keys_of(xs, key)
+        p = self.rt("pys_list_keyed", "ptr", [f"ptr {xs.v}", f"ptr {ks.v}", f"i64 {1 if taken else 0}"])
+        self.rt("pys_list_sort_r", "void", [f"ptr {p}", f"ptr {self.sconst('K' + self.desc(elem(ks.t), '<'))}", f"i64 {rev}"])
+        if not taken:
+            self.rt("pys_list_unkey", "void", [f"ptr {xs.v}", f"ptr {p}"])
+
+    def key_minmax(self, xs: Val, key: Val, name: str) -> Val:
+        # min(xs, key=...) and max(...): CPython calls the key on each item in turn and compares the
+        # key with the best so far (key < best for min, key > best for max), keeping the first best
+        # item; the list's length is read again at each step, as its iterator does
+        et = elem(xs.t)
+        best = self.alloca(et, "")
+        ctr = self.alloca("int", "")
+        self.emit(f"store i64 0, ptr {ctr}")
+        lc = self.label()
+        lb = self.label()
+        lt_ = self.label()
+        ln = self.label()
+        le = self.label()
+        lp = Loop("seq", lc, lb, lc, le)
+        lp.seqs = [xs]
+        lp.tests = [lb]
+        lp.ctr = ctr
+        self.fn.loops.append(lp)
+        self.br(lc)
+        self.place(lc)
+        i = self.ins(f"load i64, ptr {ctr}")
+        lp.idx = [i]
+        self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
+        self.place(lb)
+        item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
+        self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
+        k = self.call_value(key, [self.vnode(item)], "")
+        if "?" in k.t or k.t == "None":
+            self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
+        bk = self.alloca(k.t, "")
+        # the first item is the best so far; each other is if its key compares so with the best's
+        first = self.ins(f"icmp eq i64 {i}, 0")
+        lf = self.label()
+        self.cbr(first, ln, lf)
+        self.place(lf)
+        c = self.cmp2(">" if name == "max" else "<", k, Val(self.ins(f"load {lt(k.t)}, ptr {bk}"), k.t))
+        self.cbr(self.truth(c), ln, lt_)
+        self.place(ln)
+        self.emit(f"store {lt(et)} {item.v}, ptr {best}")
+        self.emit(f"store {lt(k.t)} {k.v}, ptr {bk}")
+        self.br(lt_)
+        self.place(lt_)
+        self.br(lc)
+        self.place(le)
+        self.guard(self.ins(f"icmp eq i64 {self.ins(f'load i64, ptr {ctr}')}, 0"), f"ValueError: {name}() iterable argument is empty")
+        return Val(self.ins(f"load {lt(et)}, ptr {best}"), et)
+
+    def key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
+        # min(a, b, ..., key=f) and max(...): the key of each argument in turn, compared with the
+        # best's so far (as key_minmax does)
+        t = vals[0].t
+        for b in vals[1:]:
+            t = t if self.join(t, b.t) == "" else self.join(t, b.t)
+        best = self.coerce(vals[0], t)
+        bk = self.call_value(key, [self.vnode(vals[0])], "")
+        for b in vals[1:]:
+            kb = self.call_value(key, [self.vnode(b)], "")
+            kt = bk.t if kb.t == bk.t else self.join(bk.t, kb.t)
+            if kt == "" or "?" in kt or kt == "None":
+                self.err(f"comparing the keys of {name}()'s arguments is not supported: they are {typestr(bk.t)} and {typestr(kb.t)}")
+            c = self.truth(self.cmp2(">" if name == "max" else "<", kb, bk))
+            best = Val(self.select(c, self.coerce(b, t), best), t)
+            bk = Val(self.select(c, self.coerce(kb, kt), self.coerce(bk, kt)), kt)
+        return best
 
     def anyall(self, v: Val, name: str) -> Val:
         # any(xs) / all(xs) by each item's truth, stopping at the first item that decides
@@ -16634,19 +16771,22 @@ class Gen:
         fn = n.kids[0].s
         return fn == "range" or fn == "reversed" or fn == "enumerate" or fn == "zip"
 
-    def consume(self, n: Node, want: str) -> Val:
+    def consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
         # range(), reversed(), enumerate(), zip() and generator expressions where their items are
         # used at once (list(), sorted(), "".join(), ...) become a fresh list of those items, built
-        # by the for loop machinery; anywhere else they are rejected, as a list would behave differently
+        # by the for loop machinery; anywhere else they are rejected, as a list would behave
+        # differently. arg: evaluated once the iterator is made, before it is iterated
         if n.kind == "listcomp":
-            return self.listcomp(n, want)
+            return self.listcomp(n, want, "", "", arg)
         if not self.iterator_call(n):
             return self.expr(n, want)
         if n.kids[0].s == "range":
             vs = self.range_args(n.kids[1:])
-            return Val(self.rt("pys_range_list", "ptr", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "list[int]")
+            r = Val(self.rt("pys_range_list", "ptr", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "list[int]")
+            self.iterarg(arg)
+            return r
         it = mk("name", "__item", n.line, [])
-        return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want)
+        return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want, "", "", arg)
 
     def as_list(self, v: Val, name: str) -> Val:
         # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item
@@ -16682,8 +16822,10 @@ class Gen:
         return v
 
     def reverse_arg(self, n: Node, name: str) -> str:
+        return self.reverse_val(self.expr(n, "bool"), name)
+
+    def reverse_val(self, r: Val, name: str) -> str:
         # sorted(..., reverse=r) and list.sort(reverse=r): r is a bool or an int, as in CPython
-        r = self.expr(n, "bool")
         if r.t != "bool" and r.t != "int":
             self.err(f"{name}() argument 'reverse' must be a bool, not {tname(r.t)}")
         return self.ins(f"zext i1 {self.truth(r)} to i64")
@@ -16757,13 +16899,24 @@ class Gen:
     def bmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         if is_list(o.t) and m == "sort":
             rev = "0"
+            keyv = Val("", "")
             for a in args:
                 if a.kind != "kw":
                     self.err("list.sort() takes no positional arguments")
                 elif a.s == "reverse":
                     rev = self.reverse_arg(a.kids[0], "sort")
+                elif a.s == "key":
+                    keyv = self.expr(a.kids[0], "")
+                    if keyv.t != "None" and not is_fn(keyv.t):
+                        self.err(f"'{tname(keyv.t)}' object is not callable (the key of sort())")
                 else:
-                    self.err(f"list.sort({a.s}=...) is not supported" if a.s == "key" else f"sort() got an unexpected keyword argument '{a.s}'")
+                    self.err(f"sort() got an unexpected keyword argument '{a.s}'")
+            if keyv.t != "" and keyv.t != "None":
+                # the list gives its items up while the keys are computed (pys_list_take)
+                taken = Val(self.rt("pys_list_take", "ptr", [f"ptr {o.v}"]), o.t)
+                self.key_sort(taken, keyv, rev, True)
+                self.rt("pys_list_give", "void", [f"ptr {taken.v}"])
+                return Val("null", "None")
             self.rt("pys_list_sort_r", "void", [f"ptr {o.v}", f"ptr {self.sconst(self.desc(elem(o.t), '<'))}", f"i64 {rev}"])
             return Val("null", "None")
         if is_dict(o.t) and m == "update":

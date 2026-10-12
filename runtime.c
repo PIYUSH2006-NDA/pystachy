@@ -1042,6 +1042,7 @@ static int opv(I a, I b, const char *d, I op) {
     return cmpop(0, op);
   }
   case 'O': return pys_obj_cmp(ocls(d + 1), op, a, b) != 0;
+  case 'K': return opv(((I *)a)[0], ((I *)b)[0], d + 1, op);   /* key='s records {key, value}: their keys */
   case 'D': failf("TypeError: '%s' not supported between instances of 'dict' and 'dict'", op == 0 ? "<" : op == 1 ? "<=" : op == 2 ? ">" : ">=");
   case '?':
     if (a && b) return opv(unbox(a, d + 1), unbox(b, d + 1), d + 1, op);
@@ -1162,8 +1163,8 @@ void pys_list_reverse(List *l) { rev(l->a, l->len); }
    observable (where NaNs end up, what an __lt__ with side effects sees): each ISLT(x, y) there is
    one LT(x, y) here, in the same order. Natural runs, extended to minrun items by binary insertion,
    are merged as the powersort policy decides; a merge copies the shorter run to a buffer and
-   gallops while one side keeps winning. No key=; CPython's type-specialized compares make the same
-   comparisons as opv. As in CPython (ob_item NULL, allocated -1), the list looks empty while it is
+   gallops while one side keeps winning. key= sorts records of the keys and the items (below,
+   pys_list_keyed); CPython's type-specialized compares make the same comparisons as opv. As in CPython (ob_item NULL, allocated -1), the list looks empty while it is
    sorted, and growing it from __lt__ makes the sort fail afterwards. Items can exist only in the
    merge buffer when a comparison runs the collector: the buffer is scanned memory, and it and the
    item array stay in volatile fields of the MergeState (MS) on the stack. A comparison that
@@ -1406,6 +1407,45 @@ void pys_list_sort_r(List *l, Str *d, I reverse) {
   l->len = n; l->cap = cap; l->a = a;
 }
 void pys_list_sort(List *l, Str *d) { pys_list_sort_r(l, d, 0); }
+/* key= (sorted(xs, key=f), xs.sort(key=f)): CPython sorts the keys and moves the values along with
+   them (its sortslice). Here each key and its value make a record {key, value}, and a list of the
+   records sorts by the descriptor K followed by the keys' (opv compares two records' first slots),
+   so the sort makes CPython's comparisons, in its order; the values then go back in the order of
+   the records (pys_list_unkey). xs.sort(key=f) gives its items up while compiled code calls f on
+   each (pys_list_take), as CPython's list does: it looks empty meanwhile, a change to it makes the
+   sort fail afterwards (pys_list_give), and a raise gives it its items back (untake): as they were
+   if a key call raised, else in the order the sort reached when a comparison raised. */
+typedef struct { List t; List *l, *p; } Taken;     /* the items l gave up, and the records sorting them */
+static void untake(void *p) {
+  Taken *k = p;
+  if (k->p) for (I i = 0; i < k->p->len; i++) k->t.a[i] = ((I *)k->p->a[i])[1];
+  k->l->len = k->t.len; k->l->cap = k->t.cap; k->l->a = k->t.a;
+}
+List *pys_list_take(List *l) {
+  Taken *k = pys_alloc(sizeof(Taken));
+  k->t = *l; k->l = l; k->p = 0;
+  l->len = l->cap = 0; l->a = sorting;
+  if (eh) unwind_push(untake, k);
+  return &k->t;
+}
+List *pys_list_keyed(List *l, List *keys, I taken) {   /* the records of l's items and their keys */
+  I n = l->len, *r = pys_alloc(n * 16 + 8);
+  List *p = pys_list_new(n);
+  for (I i = 0; i < n; i++) { r[2 * i] = keys->a[i]; r[2 * i + 1] = l->a[i]; p->a[i] = (I)(r + 2 * i); }
+  p->len = n;
+  if (taken) ((Taken *)l)->p = p;                    /* (l is what pys_list_take returned) */
+  return p;
+}
+void pys_list_unkey(List *l, List *p) {
+  for (I i = 0; i < p->len; i++) l->a[i] = ((I *)p->a[i])[1];
+}
+void pys_list_give(List *t) {
+  Taken *k = (Taken *)t;
+  int changed = k->l->a != sorting;                 /* items added meanwhile are dropped, as in CPython */
+  if (eh) unwind_pop();
+  untake(k);
+  if (changed) pys_fail("ValueError: list modified during sort");
+}
 I pys_list_minmax(List *l, Str *d, I max) {   /* keeps the item it compared, whatever the comparison did to l */
   if (!l->len) pys_fail(max ? "ValueError: max() iterable argument is empty" : "ValueError: min() iterable argument is empty");
   I m = l->a[0];

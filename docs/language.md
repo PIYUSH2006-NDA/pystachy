@@ -178,7 +178,12 @@ imports `annotations` from `__future__`.
   as a call of the function there: a template's for the call's argument types, with the keyword
   and default arguments that a call by its name takes. A template given a function is compiled
   for that function (`apply(double, 5)`), as for any other argument type, and so is
-  `lib/bisect`'s `key=`. A function value is true and never `None`, is (`==`, `is`) another value
+  `lib/bisect`'s `key=`. `key=` of `sorted()`, `list.sort()`, `min()` and `max()` is called as
+  CPython calls it: a sort computes every item's key first, in order (`list.sort()` empties its
+  list meanwhile, gives its items back if a key raises, and fails with `ValueError: list modified
+  during sort` if one changes it), then sorts by the keys with CPython's comparisons; `min()` and
+  `max()` compare each item's key with the best so far as they go. A function value is true and
+  never `None`, is (`==`, `is`) another value
   of its own type only, and its `__name__` and `__qualname__` are its name. As a value has one
   type, a variable, a field, a list's items and a dict's values hold one function, and printing a
   function is rejected (CPython prints its address). Lambdas, nested functions and `Callable`
@@ -451,8 +456,8 @@ CPython's error when it runs.
 
 `print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
 `int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
-or a bool), `abs`, `min`, `max`, `sum`, `sorted` (and
-`list.sort`, with `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
+or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
+`list.sort`, with `key=` and `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
 with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
 (`find`/`index`/`count` with start and end, also `None`, `startswith`/`endswith` also with a tuple of
 `str`, `split`/`rsplit`, `partition`/`rpartition`,
@@ -480,8 +485,8 @@ Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
 arguments above, lambdas and closures, inheritance other than an exception class's, `**kwargs` and
 `*args` in methods, star arguments in calls (`f(*xs)`) and starred targets (`a, *rest = xs`),
-sets, dict and multi-clause comprehensions, slice steps, `map()`, `filter()` and `key=` (a function is
-a value of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
+sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` (a function is a value
+of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
 files, complex numbers, arbitrary-precision integers, `async`, `match` and `:=`. The parser
 accepts all of them, and the compiler rejects each where it compiles it, so an imported
@@ -567,9 +572,9 @@ In these cases the program compiles but can behave differently from CPython:
   for a tail call in an AOT build, loops forever. `==` between two cyclic dataclass objects
   recurses like that too.
 - `min()`, `max()` and `math.fsum()` make all the items of a generator expression before they
-  compare or add them, so where CPython stops at an item (a `__lt__` that raises, or fsum's
-  `OverflowError: intermediate overflow in fsum`), the expressions of the later items have run,
-  and an exception that one of them raises comes first.
+  compare or add them (or call `key=` on them), so where CPython stops at an item (a `__lt__`
+  that raises, or fsum's `OverflowError: intermediate overflow in fsum`), the expressions of the
+  later items have run, and an exception that one of them raises comes first.
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
   tuples holding the same NaN object compare, and sort, as if they held different ones. The
   sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
