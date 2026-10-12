@@ -51,6 +51,14 @@ ports/jdcal/__init__.py is jdcal 1.4.1's module jdcal.py, edited where ports/jdc
 (each edit is marked "Pystachy port:"). jdcal is used under the 2-clause BSD License, whose text
 and copyright notice ("Copyright (c) 2011, Prasanth Nair") are in ports/jdcal/LICENSE.
 
+ordered-set (ports/ordered_set/)
+--------------------------------
+
+ports/ordered_set/__init__.py is ordered-set 4.1.0's module, edited where
+ports/ordered_set/PORT.md lists (each edit is marked "Pystachy port:"). ordered-set is used under
+the MIT License, whose text and copyright notice ("Copyright (c) 2012-2022 Elia Robyn Lake") are
+in ports/ordered_set/LICENSE.
+
 pyaes (ports/pyaes/)
 --------------------
 
