@@ -149,6 +149,23 @@ accept for any operand), and `instance` checks the return type a special method 
 (`SPECIAL`) once the instance is compiled. The methods of a class are compiled when the program
 is (or, in an imported module, when called), but for its templates: only their instances are.
 
+A class template (`Gen.tmpl`: its `__init__` has a parameter without an annotation, or names a
+class template in one, or makes an object of one) has no objects of its own: `C(args)` reaches
+`call_fn` with a placeholder for the object, and once the arguments are evaluated (their
+annotated ones coerced), `specialize` picks the class the object belongs to. It types the fields
+that `__init__` assigns as `scan_fields` would for parameters annotated with the arguments'
+types, and the list of those types is the key of the specialization (`C-1`, `C-2`, ... in
+`ClassInfo.specs`; `ClassInfo.origin` leads back to `C`). A field that holds the specialization
+itself (`self.next: "Node | None"`, where `C` in an annotation of its methods and fields names it,
+see `ann`) is written `@` in the key, so each call of the recursion finds the same one. A new
+specialization is an ordinary class: its methods are declared from the template's `def` nodes,
+`__init__` and those `template_ok` allows as templates (compiled where called), the other
+special methods compiled when it is made (`Gen` saved and restored as for an instance), and
+`fl_fields` decides its flags. It shares the template's class attributes (`fdefault`,
+`fglob`). `isinst` takes it for `C`; `short()` and `shown()`, which give CPython's names, drop
+its number, and `typestr()` shows its fields' types (`SPECSHOW`: `Box[int]`), so that messages
+can tell two specializations apart. Each specialization counts towards `TEMPLATE_INSTANCES`.
+
 ### Functions as values and closures
 
 A function used as a value has a type of its own, the function it is: `fn[f:NAME]` for a def of a
