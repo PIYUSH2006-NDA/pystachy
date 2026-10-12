@@ -55,7 +55,7 @@ flowchart TD
 | `PYSTACHY_GC` | `off` turns collection off, `stats` prints a summary at exit |
 | `PYSTACHY_IRCHECK=1` | the compiler checks the typed IR it built before lowering it, and again after each pass that changed it (`tests/run.sh` sets it unless it is set otherwise) |
 | `PYSTACHY_IRFX=1` | the compiler prints each function's effect summary on stderr, as `tests/ir/*.fx` record them |
-| `PYSTACHY_OPT` | turns optimizations on the typed IR off: `-listget`, `-dictfuse`, comma-separated, or `-all` |
+| `PYSTACHY_OPT` | turns optimizations off: `-listget`, `-dictfuse` (passes on the typed IR), `-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items), comma-separated, or `-all` |
 | `PYSTACHY_JOBS` | how many test cases `tests/run.sh` and the IR tools run at once (default: one per CPU) |
 
 ## Design, piece by piece

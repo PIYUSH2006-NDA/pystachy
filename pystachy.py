@@ -5648,9 +5648,10 @@ IROPS: dict[str, str] = {
 LLNOTRAW: dict[str, bool] = {}
 for _k in "ret br switch indirectbr invoke callbr resume catchswitch catchret cleanupret unreachable phi call tail musttail notail".split():
     LLNOTRAW[_k] = True
-# the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1), which
-# PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
-OPTS: list[str] = ["listget", "dictfuse"]
+# the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
+# tupleiter, a choice of the lowering (a for loop steps through a tuple's slots, not through a list
+# of its items: Gen.iterable), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
+OPTS: list[str] = ["listget", "dictfuse", "tupleiter"]
 # what bounds dictfuse's work: the depth of the chain of values Gen.canon follows (the
 # self-compile's deepest is 18), the ops Gen.reaching walks back over (85) and the lookups that
 # hold at once (7)
@@ -6827,7 +6828,7 @@ class Loop:
         self.exit = brk  # break's target, after the else block
         self.seqs: list[Val] = []  # what a seq loop steps through
         # a seq loop's test of each of seqs leads to a block (tests) where the item it takes is the
-        # one at idx (a list's or a str's index: 0 <= idx < its length when it was tested)
+        # one at idx (a list's, a str's or a tuple's index: 0 <= idx < its length when it was tested)
         self.tests: list[str] = []
         self.idx: list[str] = []
         self.ctr = ""  # the slot of its counter or index
@@ -7167,6 +7168,7 @@ class Gen:
         self.shadows: list[list[str]] = []
         self.xcls: dict[str, bool] = {}  # exception classes whose objects are made: they get an ExcClass
         self.eh = False  # the program has try or with (closed world): exceptions are on (pys_eh_on)
+        self.opts: dict[str, bool] = {}  # the optimizations on (optimizations()), once program() starts
         self.lcs: list[str] = []
         self.lct: list[str] = []
         self.ret = "None"
@@ -11243,6 +11245,7 @@ class Gen:
         return r if e.kind in ["tuple", "list", "set", "dict"] else self.effect(e, {}, use)
 
     def program(self, mods: list[Mod]) -> str:
+        self.opts = optimizations()
         # the modules in the order their code may first run, the main program last
         tops: list[list[Node]] = []
         for m in mods:
@@ -11485,7 +11488,7 @@ class Gen:
             fail("internal error: an op changed the lists all ops start with", 0)
         chk = os.getenv("PYSTACHY_IRCHECK", "") == "1"
         dump = os.getenv("PYSTACHY_IRFX", "") == "1" and not self.rtcache
-        on = optimizations()
+        on = self.opts
         if chk:
             for fn in self.fns:
                 self.verify(fn, False)
@@ -13963,14 +13966,17 @@ class Gen:
         self.close_temp(it, seq)
 
     def iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not iterable") -> Val:
-        # a tuple is iterated as a list of its items, which must then share one type, an object as
-        # the list its __iter__ steps through; None raises msg
+        # what a for loop steps through (for_seq): a tuple as it is, whose items must then share
+        # one type (with PYSTACHY_OPT=-tupleiter, a list of them), an object the list its __iter__
+        # steps through; None raises msg
         v = self.unwrap(v, msg)
         if v.t in self.nts:
             self.notnone(v, msg)
             v = self.ntup(v, True)  # (the tuple of its fields)
         if v.t in self.classes:
             return self.obj_iter(v, msg, f"'{tname(v.t)}' object is not iterable")
+        if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
+            return v  # (no list: for_seq reads its slots, as many as its type has)
         if not is_tuple(v.t) or v.t == "tuple[]":
             return v
         ts = targs(v.t)
@@ -14078,23 +14084,24 @@ class Gen:
         self.narrowed = after
 
     def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None) -> None:
-        # One loop serves lists, strings, dicts, enumerate, zip and reversed. Each round takes
-        # the next item of every sequence, in order, the way its CPython iterator would: lists
-        # and strings by index, checked against their current length (reversed: counting down
-        # from the length at the start); dicts by entry position, skipping deleted entries and
-        # failing if the dict changed size. The loop ends at the first exhausted sequence.
+        # One loop serves lists, strings, tuples, dicts, enumerate, zip and reversed. Each round
+        # takes the next item of every sequence, in order, the way its CPython iterator would:
+        # lists and strings by index, checked against their current length (reversed: counting
+        # down from the length at the start), tuples by index below the length their type gives;
+        # dicts by entry position, skipping deleted entries and failing if the dict changed size.
+        # The loop ends at the first exhausted sequence.
         ctr = self.alloca("int", "")
         self.emit(f"store i64 0, ptr {ctr}")
         st: list[str] = []
         used: list[str] = []
         for s in seqs:
-            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or (s.t == "file" and mode != "reversed")):
+            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
                 self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
             if s.t == "file":
                 st.append("")
                 used.append("")
                 continue
-            n0 = self.ins(f"load i64, ptr {s.v}")
+            n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
             used.append(n0)
             if is_dict(s.t):
                 pos = self.alloca("int", "")
@@ -14140,7 +14147,7 @@ class Gen:
                 ok = self.ins(f"icmp ult i64 {j}, {self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k]}")
             else:
                 j = i
-                ok = self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {s.v}')}")
+                ok = self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {s.v}') if not is_tuple(s.t) else st[k]}")
             go = self.label()
             self.cbr(ok, go, le)
             self.place(go)
@@ -14158,6 +14165,8 @@ class Gen:
             j = at[k]
             if is_list(s.t):
                 vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
+            elif is_tuple(s.t):
+                vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {j}')}"), targs(s.t)[0]))
             elif s.t == "str":
                 vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
             elif s.t == "file":
@@ -15178,6 +15187,8 @@ class Gen:
         if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "iter" or self.bound("iter") or len(e.kids) != 2 or e.kids[1].kind == "kw":
             self.err(f"{short(self.curfn.cls)}.__iter__ must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
         v = self.iterable(self.consume(e.kids[1], self.ret))
+        if is_tuple(v.t) and v.t != "tuple[]":
+            v = self.as_list(v, "iter")  # (of the items, which share one type)
         last = self.blk.code[-1] if len(self.blk.code) > 0 else Ins("", "", "")
         if last.op == "rt" and (last.s == "dict.keys" or last.s == "dict.values" or last.s == "dict.items") and v.v == f"%t{last.r[0]}":
             # (keys() is a list here; CPython's view iterator raises if the dict changes size)
