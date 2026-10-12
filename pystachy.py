@@ -15018,9 +15018,14 @@ class Gen:
                 # None's own __format__ accepts only an empty spec
                 self.guard(self.ins(f"icmp eq ptr {v.v}, null"), "TypeError: unsupported format string passed to NoneType.__format__")
             return self.call_fn(self.classes[v.t].methods["__format__"], [v, sv], [])
-        if empty or v.t == "None":
-            if not empty and spec.kind == "str":
+        if empty:
+            return self.to_str(v)
+        if v.t == "None":
+            if spec.kind == "str":
                 self.err("unsupported format string passed to NoneType.__format__")
+            # a computed spec runs, as for any value: str(None) when it turns out empty, else TypeError
+            sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
+            self.guard(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {sv.v}')}, 0"), "TypeError: unsupported format string passed to NoneType.__format__")
             return self.to_str(v)
         if is_opt(v.t):
             # None's __format__ accepts only an empty spec, the value's its own (the runtime checks)
