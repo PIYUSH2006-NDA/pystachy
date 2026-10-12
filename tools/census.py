@@ -1,6 +1,8 @@
 """Feature census: which of the Python features Pystachy cannot compile does each function use?
 
 usage: python3 -I tools/census.py [PREFIX=]ROOT ... [--json OUT.json]
+Each .py file under a ROOT directory is a module named by its path there; a ROOT that is a .py
+file is one module, named by its base name; PREFIX= names a ROOT's modules PREFIX:name.
 The census reads source with the ast module only (it never imports what it scans). Each
 module-level function, each method, each class and each module's top-level code is a unit; a
 unit's blockers are the syntactic features in it that Pystachy rejects or treats specially
@@ -322,6 +324,8 @@ def scan_module(path, modname):
 
 
 def walk(root, prefix):
+    if root.endswith(".py") and os.path.isfile(root):
+        return [(root, prefix + os.path.basename(root)[:-3])]  # a single-file module
     out = []
     for dp, dn, fn in os.walk(root):
         dn[:] = sorted(d for d in dn if d not in ("test", "tests", "__pycache__", "idlelib", "tkinter", "turtledemo",
