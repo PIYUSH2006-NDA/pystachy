@@ -5874,6 +5874,8 @@ def tname(t: str) -> str:
         return tname(t[4:-1]) + " | None"
     if t == "exc":
         return "BaseException"
+    if is_kw(t):
+        return "dict"
     if is_fn(t):
         if t.startswith("fn[u:"):
             return "method_descriptor"
@@ -5934,6 +5936,20 @@ def has_method(base: str, m: str) -> bool:
     # does builtin type base ("str", "list", "dict", "file", ...) have method m that Pystachy
     # compiles (METHODS, and those Gen.bmethod dispatches itself)
     return base + "." + m in METHODS or (base == "list" and m == "sort") or (base == "dict" and m == "update")
+
+
+def is_kw(t: str) -> bool:
+    # kw[a:A,b:B]: a function's **kwargs, the record of a call's extra keyword arguments, by name
+    # and type (Gen.kw_record), which is the tuple of their values at run time
+    return t.startswith("kw[")
+
+
+def kw_names(t: str) -> list[str]:
+    return [x[: x.find(":")] for x in targs(t)]
+
+
+def kw_types(t: str) -> list[str]:
+    return [x[x.find(":") + 1 :] for x in targs(t)]
 
 
 def is_fn(t: str) -> bool:
@@ -6018,6 +6034,16 @@ def typestr(t: str) -> str:
     # opt[T] is T | None, a builtin exception BaseException, a class its own name, a function value
     # the function (fn_shown)
     t = t.replace("[?,?]", "").replace("[?]", "")
+    while "kw[" in t:
+        # (**kwargs: the record of a call's extra keyword arguments)
+        a = t.find("kw[")
+        b = a + 3
+        depth = 1
+        while depth > 0:
+            depth += 1 if t[b] == "[" else -1 if t[b] == "]" else 0
+            b += 1
+        k = t[a:b]
+        t = t[:a] + "**kwargs(" + ", ".join([kw_names(k)[i] + "=" + typestr(kw_types(k)[i]) for i in range(len(kw_names(k)))]) + ")" + t[b:]
     while "fn[" in t:
         a = t.find("fn[")
         b = t.find("]", a)
@@ -6800,6 +6826,7 @@ class FnInfo:
         self.inst = False  # a template's function, compiled for one list of argument types
         self.vararg = -1  # the index of a template's *args parameter (a tuple of the extra arguments), or -1
         self.varelem = ""  # its annotation (the type of each extra argument), or ""
+        self.kwarg = -1  # the position of its **kwargs parameter, which a template's call gives a record of the extra keyword arguments (kw[...])
         self.export = False  # runtime mode: a pys_* function defined under its C name, for runtime.c and programs
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
@@ -7969,6 +7996,8 @@ class Gen:
             return f"O{self.ocls[t]:03d}"
         if is_fn(t) or is_callable(t):
             self.err(f"printing a function, or comparing containers of functions, is not supported: {typestr(t)}")
+        if is_kw(t):
+            self.err(f"printing or comparing **kwargs inside a container is not supported: make it a dict first, dict(kwargs) ({typestr(t)})")
         self.err(f"{tname(t)} values cannot be compared or printed")
         return ""
 
@@ -8476,7 +8505,7 @@ class Gen:
         if tv != "" and cls != "" and not self.lib:
             self.err(tvbad)
         for i in range(len(ps)):
-            if cls == "" and ((ps[i].kind == "param" and ps[i].kids[0].kind == "noann") or ps[i].kind == "starparam"):
+            if cls == "" and ((ps[i].kind == "param" and ps[i].kids[0].kind == "noann") or ps[i].kind == "starparam" or ps[i].kind == "dstarparam"):
                 f.generic = True
         marks = d.kids[0].s.split(",")
         bad = ""
@@ -8493,6 +8522,16 @@ class Gen:
                 # *args: each call passes the extra positional arguments as a tuple of their types
                 f.vararg = len(f.params)
                 f.varelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
+                f.params.append(p.s)
+                f.defaults.append(mk("noann", "", p.line, []))
+                f.dglob.append("")
+                f.dtypes.append("")
+                f.ptypes.append("")
+                continue
+            if p.kind == "dstarparam" and f.generic:
+                # **kwargs: each call passes its extra keyword arguments as a record of their names
+                # and types (kw[...]), which the instance for it is compiled with
+                f.kwarg = len(f.params)
                 f.params.append(p.s)
                 f.defaults.append(mk("noann", "", p.line, []))
                 f.dglob.append("")
@@ -8527,7 +8566,7 @@ class Gen:
                 self.line = x.line
                 self.err(f"in runtime.py, a parameter's default value must be a literal (in {d.s}())")
         if f.npos < 0:
-            f.npos = len(f.params)
+            f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
         if f.vararg >= 0:
             f.npos = f.vararg
         if len(d.kids) > 3 and f.deco == "" and not f.extern:
@@ -9302,6 +9341,8 @@ class Gen:
         f.posonly += 1
         if f.vararg >= 0:
             f.vararg += 1
+        if f.kwarg >= 0:
+            f.kwarg += 1
         c = Closure(f, name, qual)
         c.t = f"fn[c:{idx}:{qual}@{where(n.line)}]"  # (where it is defined, which messages show)
         self.closures.append(c)
@@ -10251,6 +10292,8 @@ class Gen:
                 ik = self.expr(t.kids[1], self.argtype(o.t, "__setitem__", 1, f"'{tname(o.t)}' object does not support item assignment"))
                 self.notnone(o, nosub)
                 self.protocol(o, "__setitem__", [ik, v])
+            elif is_kw(o.t):
+                self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
             else:
                 self.err(f"'{o.t}' does not support item assignment")
         elif k == "tuple" and is_opt(v.t):
@@ -14142,6 +14185,8 @@ class Gen:
                     ik = self.expr(dt.kids[1], self.argtype(o.t, "__delitem__", 1, f"'{tname(o.t)}' object doesn't support item deletion"))
                     self.notnone(o, nodel)
                     self.protocol(o, "__delitem__", [ik])
+                elif is_kw(o.t):
+                    self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
                 else:
                     self.err("only 'del list[i]' and 'del dict[key]' are supported")
         elif k == "with":
@@ -14352,6 +14397,8 @@ class Gen:
                 self.notnone(o, sub)
                 cur = self.protocol(o, "__getitem__", [ik])
                 self.protocol(o, "__setitem__", [ik, self.inplace(op, cur, n.kids[1])])
+            elif is_kw(o.t):
+                self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
             else:
                 self.err(f"'{o.t}' does not support item assignment")
         else:
@@ -14519,6 +14566,8 @@ class Gen:
         # a tuple is iterated as a list of its items, which must then share one type, an object as
         # the list its __iter__ steps through; None raises msg
         v = self.unwrap(v, msg)
+        if is_kw(v.t):
+            return self.kw_list(v)  # (iterating **kwargs gives the names)
         if v.t in self.nts:
             self.notnone(v, msg)
             v = self.ntup(v, True)  # (the tuple of its fields)
@@ -14805,6 +14854,11 @@ class Gen:
             return 0  # a parameter whose argument is None is false
         if k == "name" and is_tuple(self.static_type(n)):
             return 0 if self.static_type(n) == "tuple[]" else 1  # (*args: the extra arguments)
+        if k == "name" and is_kw(self.static_type(n)):
+            return 0 if self.static_type(n) == "kw[]" else 1  # (**kwargs: the extra keyword arguments)
+        if k == "cmp" and (n.s == "in" or n.s == "not in") and len(n.kids) == 2 and n.kids[0].kind == "str" and n.kids[1].kind == "name" and is_kw(self.static_type(n.kids[1])):
+            r = 1 if n.kids[0].s in kw_names(self.static_type(n.kids[1])) else 0  # ("name" in kwargs)
+            return r if n.s == "in" else 1 - r
         if k == "unary" and n.s == "not":
             r = self.static(n.kids[0])
             return 1 - r if r >= 0 else -1
@@ -14989,6 +15043,8 @@ class Gen:
             return v.v
         if is_fn(t):
             return "true"  # (a function is true)
+        if is_kw(t):
+            return "true" if len(kw_names(t)) > 0 else "false"  # (**kwargs: true where a keyword argument was given)
         if t == "int":
             return self.ins(f"icmp ne i64 {v.v}, 0")
         if t == "float":
@@ -15647,6 +15703,17 @@ class Gen:
         o = self.expr(n.kids[0], "")
         t = unopt(o.t)
         sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
+        if is_kw(t) and n.kids[1].kind == "str":
+            # kwargs["name"]: the keyword argument name, or CPython's KeyError where the call passed none
+            names = kw_names(t)
+            if n.kids[1].s in names:
+                return self.tget(self.kw_tuple(o), names.index(n.kids[1].s))
+            self.raise_("KeyError", self.repr(Val(self.sconst(n.kids[1].s), "str")).v, self.sconst("KeyError"))
+            self.place(self.label())  # (not reached)
+            return Val("null", "None")
+        if is_kw(t):
+            o = self.kw_dict(o)  # (another key: looked up in the dict CPython makes)
+            t = o.t
         if is_list(t) or t == "str":
             i = self.ival(n.kids[1], "TypeError: list indices must be integers or slices, not NoneType" if is_list(t) else "TypeError: string indices must be integers, not 'NoneType'")
             o = self.unwrap(o, sub)
@@ -16237,6 +16304,8 @@ class Gen:
                     self.err(f"== {what} is not supported where an exception class defines {m} ({short(c.name)} does): compare objects of the class itself, or use 'is'")
 
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
+        if (op == "in" or op == "not in") and is_kw(b.t):
+            b = self.kw_list(b)  # (x in kwargs: among the names)
         if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and is_fn(b.t):
             b = self.coerce(b, unopt(a.t))  # (a function and a Callable: as Callables of one type)
         elif (op == "==" or op == "!=" or op == "is" or op == "is not") and is_fn(a.t) and is_callable(unopt(b.t)):
@@ -16479,10 +16548,7 @@ class Gen:
         args = n.kids[1:]
         if f.kind == "badattr":
             self.err(f.s)
-        for a in args:
-            if a.kind == "dstar":
-                self.err("** arguments (f(**d)) are not supported")
-        if len([a for a in args if a.kind == "starred"]) > 0:
+        if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
             return self.star_call(n, want)
         if f.kind == "name":
             self.modchk(f)
@@ -16556,7 +16622,7 @@ class Gen:
             f = mk("attr", f.s, f.line, [self.vnode(self.expr(f.kids[0], ""))])
         elif f.kind != "name" and f.kind != "attr" and f.kind != "val":
             f = self.vnode(self.expr(f, ""))
-        last = max([j for j in range(len(args)) if args[j].kind == "starred"])
+        last = max([j for j in range(len(args)) if args[j].kind == "starred" or args[j].kind == "dstar"])
         printing = f.kind == "name" and f.s == "print" and not self.bound("print")
         who = self.star_who(f)
         out: list[Node] = []
@@ -16581,6 +16647,17 @@ class Gen:
                     out.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
                 else:
                     self.err(f"unpacking a {typestr(v.t)} into the arguments of {who if who != '' else 'a function'} is not supported (a tuple's items are)")
+            elif a.kind == "dstar" and a.kids[0].kind == "dict" and len([i for i in range(0, len(a.kids[0].kids), 2) if a.kids[0].kids[i].kind != "str"]) == 0:
+                d = a.kids[0]
+                for i in range(0, len(d.kids), 2):
+                    out.append(mk("kw", d.kids[i].s, a.line, [self.vnode(self.expr(d.kids[i + 1], ""))]))  # (**{"k": v}: its items)
+            elif a.kind == "dstar":
+                v = self.expr(a.kids[0], "")
+                if not is_kw(v.t):
+                    self.err(f"** of a {typestr(v.t)} is not supported: of a function's **kwargs, or a dict display with str keys, it is")
+                names = kw_names(v.t)
+                for i in range(len(names)):
+                    out.append(mk("kw", names[i], a.line, [self.vnode(self.tget(self.kw_tuple(v), i))]))
             elif a.kind == "kw":
                 out.append(mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]))
             else:
@@ -16822,6 +16899,8 @@ class Gen:
     def method(self, o: Val, m: str, args: list[Node]) -> Val:
         if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
             return self.unbound_call(o.t[5:-1], m, args)
+        if is_kw(o.t):
+            return self.kw_method(o, m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
         if (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")) and (m == "__str__" or m == "__repr__") and len(args) == 0 and not self.curfn.ll.startswith("@x."):
@@ -16866,6 +16945,63 @@ class Gen:
             rest = [mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]) if a.kind == "kw" else self.vnode(self.expr(a, "")) for a in rest]
         o = self.unwrap(o, f"TypeError: descriptor '{m}' for '{tn}' objects doesn't apply to a 'NoneType' object")
         return self.method(o, m, rest)
+
+    def kw_record(self, names: list[str], vals: list[Val]) -> Val:
+        # the **kwargs of a call: its extra keyword arguments, a tuple of the values typed by the
+        # record of their names and types (is_kw)
+        tu = self.tuple_(vals)
+        ts = targs(tu.t)
+        return Val(tu.v, "kw[" + ",".join([names[i] + ":" + ts[i] for i in range(len(ts))]) + "]")
+
+    def kw_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        # kwargs.m(args): get() of a literal name and keys() from the record, the others of the dict
+        # CPython makes; a method that changes it is rejected (kwargs then is another record)
+        names = kw_names(o.t)
+        if m == "get" and len(args) >= 1 and args[0].kind == "str" and len([a for a in args if a.kind != "kw"]) == len(args) and len(args) <= 2:
+            dv = self.expr(args[1], "") if len(args) == 2 else Val("null", "None")  # (CPython evaluates the default anyway)
+            if args[0].s in names:
+                return self.tget(self.kw_tuple(o), names.index(args[0].s))
+            return dv
+        if m == "keys" and len(args) == 0:
+            return self.expr(mk("list", "", self.line, [mk("str", x, self.line, []) for x in names]), "list[str]")
+        if m == "pop" or m == "popitem" or m == "setdefault" or m == "update" or m == "clear":
+            self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
+        return self.method(self.kw_dict(o), m, args)
+
+    def kw_repr(self, v: Val) -> Val:
+        # str() and repr() of kwargs: those of the dict CPython makes, {'a': 1, 'b': 'x'}, whatever
+        # its values' types
+        line = self.line
+        names = kw_names(v.t)
+        out: Node = mk("str", "{", line, [])
+        for i in range(len(names)):
+            out = mk("binop", "+", line, [out, mk("str", (", " if i > 0 else "") + "'" + names[i] + "': ", line, [])])
+            item = self.vnode(self.tget(self.kw_tuple(v), i))
+            out = mk("binop", "+", line, [out, mk("call", "", line, [mk("name", "__pys_repr", line, []), item])])
+        return self.expr(mk("binop", "+", line, [out, mk("str", "}", line, [])]), "str")
+
+    def kw_list(self, v: Val) -> Val:
+        # the names of kwargs v, a list[str] (what iterating it gives)
+        return self.expr(mk("list", "", self.line, [mk("str", x, self.line, []) for x in kw_names(v.t)]), "list[str]")
+
+    def kw_tuple(self, v: Val) -> Val:
+        # kwargs v as the tuple of its values
+        return Val(v.v, "tuple[" + ",".join(kw_types(v.t)) + "]")
+
+    def kw_dict(self, v: Val) -> Val:
+        # kwargs v as the dict CPython makes it, a new one: its values must have one type
+        line = self.line
+        ts = kw_types(v.t)
+        jt = ts[0] if len(ts) > 0 else ""
+        for x in ts[1:]:
+            jt = self.join(jt, x) if jt != "" else ""
+        if len(ts) > 1 and jt == "":
+            self.err(f"using {typestr(v.t)} as a dict is not supported: its values have different types (read each by its name, kwargs['name'], or forward it, f(**kwargs))")
+        kids: list[Node] = []
+        for i in range(len(kw_names(v.t))):
+            kids.append(mk("str", kw_names(v.t)[i], line, []))
+            kids.append(self.vnode(self.tget(self.kw_tuple(v), i)))
+        return self.expr(mk("dict", "", line, kids), "")
 
     def method_value(self, o: Val, name: str) -> Val:
         # o.name read as a value, where name is a method of o's value and no field: the method bound
@@ -16955,6 +17091,8 @@ class Gen:
             vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))
         pos = len(pre)
         extra: list[Val] = []
+        kwn: list[str] = []
+        kwv: list[Val] = []
         for a in args:
             j = pos
             e = a
@@ -16964,6 +17102,10 @@ class Gen:
                 extra.append(self.pcoerce(self.expr(a, f.varelem), f.varelem, f, j))
                 pos += 1
                 continue
+            if a.kind == "kw" and f.kwarg >= 0 and (a.s not in f.params or f.params.index(a.s) < f.posonly or f.params.index(a.s) == f.kwarg or f.params.index(a.s) == f.vararg):
+                kwn.append(a.s)  # (an extra keyword argument: **kwargs's)
+                kwv.append(self.expr(a.kids[0], ""))
+                continue
             if a.kind == "kw":
                 j = f.params.index(a.s)
                 e = a.kids[0]
@@ -16972,6 +17114,8 @@ class Gen:
             vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
         if f.vararg >= 0:
             vals[f.vararg] = self.tuple_(extra)
+        if f.kwarg >= 0:
+            vals[f.kwarg] = self.kw_record(kwn, kwv)
         if none != "":
             self.notnone(pre[0], none)  # (CPython calls o once it has evaluated the arguments)
         for j in range(np):
@@ -17034,6 +17178,7 @@ class Gen:
         # keyword-only ones; npre values (the object of a method) come before args
         np = len(f.params)
         last = f.vararg if f.vararg >= 0 else f.npos if f.npos >= 0 else np  # (the positional parameters end there)
+        last = min(last, f.kwarg) if f.kwarg >= 0 else last
         given = npre
         filled: list[bool] = [False] * np
         for j in range(min(npre, last)):
@@ -17048,6 +17193,8 @@ class Gen:
             if a.kind != "kw":
                 continue
             j = f.params.index(a.s) if a.s in f.params and a.s != (f.params[f.vararg] if f.vararg >= 0 else "") else -1
+            if f.kwarg >= 0 and (j < 0 or j < f.posonly or j == f.kwarg):
+                continue  # (one of the keyword arguments **kwargs takes)
             if j < 0 or j < f.posonly:
                 po = [k for k in kws if k in f.params and f.params.index(k) < f.posonly]
                 if len(po) > 0:
@@ -17067,7 +17214,7 @@ class Gen:
             kwonly = f" positional argument{'s' if given + off != 1 else ''} (and {kwg} keyword-only argument{'s' if kwg != 1 else ''})" if kwg > 0 else ""
             self.err(f"{self.fname(f)}() takes {takes} positional argument{plural} but {given + off}{kwonly} {'was' if given + off == 1 and kwg == 0 else 'were'} given")
         for kind in ["positional", "keyword-only"]:
-            miss = [f.params[j] for j in range(np) if not filled[j] and f.defaults[j].kind == "noann" and j != f.vararg and (j < last) == (kind == "positional")]
+            miss = [f.params[j] for j in range(np) if not filled[j] and f.defaults[j].kind == "noann" and j != f.vararg and j != f.kwarg and (j < last) == (kind == "positional")]
             if len(miss) > 0:
                 names = "'" + "', '".join(miss) + "'"
                 if len(miss) == 2:
@@ -17137,6 +17284,7 @@ class Gen:
         g.npos = f.npos
         g.posonly = f.posonly
         g.vararg = f.vararg
+        g.kwarg = f.kwarg
         g.clo = f.clo
         for x in nnp:
             g.nnp[x] = True
@@ -17449,6 +17597,10 @@ class Gen:
             self.err(f"unsupported call {name}()")
         v = vals[0]
         t = v.t
+        if is_kw(t) and name == "len":
+            return Val(str(len(kw_names(t))), "int")
+        if is_kw(t) and name == "dict" and len(vals) == 1:
+            return self.kw_dict(v)  # (a new dict: CPython's dict(kwargs) copies it too)
         if name == "len":
             if t in self.classes and "__len__" in self.classes[t].methods:
                 self.notnone(v, "TypeError: object of type 'NoneType' has no len()")
@@ -17729,6 +17881,8 @@ class Gen:
     def as_list(self, v: Val, name: str) -> Val:
         # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item
         # type, as a list, or the list an object's __iter__ steps through (which list() copies)
+        if is_kw(v.t):
+            return self.kw_list(v)  # (the names of **kwargs)
         if v.t in self.nts:
             self.notnone(v, "TypeError: 'NoneType' object is not iterable")
             v = self.ntup(v, True)
@@ -18171,6 +18325,8 @@ class Gen:
         t = v.t
         if t == "str":
             return v
+        if is_kw(t):
+            return self.kw_repr(v)
         if t == "int":
             return Val(self.rt("pys_str_int", "ptr", [f"i64 {v.v}"]), "str")
         if t == "float":
@@ -18224,6 +18380,8 @@ class Gen:
         return Val(self.phi(ph), "str")
 
     def repr(self, v: Val) -> Val:
+        if is_kw(v.t):
+            return self.kw_repr(v)
         if v.t in self.classes:
             return self.obj_str(v, "__repr__")
         if v.t == "None":

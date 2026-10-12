@@ -1,0 +1,19 @@
+{} 0 False False True
+[] [] None 9
+{'a': 1, 'b': 'two'} 2 True True True
+ key a
+ key b
+['a', 'b'] ['a', 'b'] 1 9
+a is 1
+{'b': 2.5} 1 True False True
+ key b
+['b'] ['b'] None 9
+calling target2 (1,) {}
+calling target2 (1,) {'y': 2}
+calling target2 (3, 4) {'label': 'sum'}
+calling target2 () {'x': 5, 'label': 'kw'}
+none: 1 none: 3 sum: 7 kw: 5
+lit: 1
+([('extra', 0), ('p', 1), ('q', 2)], [1, 2])
+(1, {'a': 2}) x ("2 keys: {'n': 1, 's': 's'}", "KeyError 'missing'") KeyError 'missing'
+[exit 0]
