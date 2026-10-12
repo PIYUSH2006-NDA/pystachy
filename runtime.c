@@ -1657,9 +1657,17 @@ void pys_dict_update(Dict *d, Dict *o) {
   if ((d->size ? d->size : 8) * 2 / 3 < o->len) build(d, d, keysize(((d->len + o->len) * 3 + 1) / 2));
   for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], o->vals[e]);
 }
-/* d.update(pairs) of a list of (key, value) tuples: one insertion per item, as
-   PyDict_MergeFromSeq2 makes them */
+/* d.update(pairs) of a list of (key, value) tuples, and dict.fromkeys(keys, v) of a list: one
+   insertion per item, as PyDict_MergeFromSeq2 and _PyDict_FromKeys make them */
 void pys_dict_update_pairs(Dict *d, List *l) { for (I i = 0; i < l->len; i++) { I *t = (I *)l->a[i]; pys_dict_set(d, t[0], t[1]); } }
+Dict *pys_dict_fromkeys(I kind, List *l, I v) { Dict *d = pys_dict_new(kind, 0); for (I i = 0; i < l->len; i++) pys_dict_set(d, l->a[i], v); return d; }
+/* dict.fromkeys(o, v) of a dict o: sized for o's keys at once, as dict_dict_fromkeys does */
+Dict *pys_dict_fromkeys_dict(Dict *o, I v) {
+  Dict *d = pys_dict_new(o->kind, 0);
+  build(d, d, keysize((o->len * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], v);
+  return d;
+}
 
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:

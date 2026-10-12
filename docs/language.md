@@ -461,8 +461,10 @@ with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `d
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
 `zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default,
 `dict.update()` of a dict of its type, a list of `(key, value)` tuples and keyword arguments
-(str keys); not `str.format()`, `dict.popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
-`index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
+(str keys), and `dict.fromkeys(xs, v)` (`v` omitted or `None` where an annotation gives values
+that can be `None`; `xs` not a generator, `zip()`, `enumerate()` or `reversed()`; an empty `()`
+or `{}` has the keys of the dict wanted); not `str.format()`, `dict.popitem()`, `dict()` of
+pairs, or tuple's `index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
 `open()` with CPython's modes, errors, `buffering=`, `newline=`
 translation and positions for `"+"` modes, and files' `read`/`readline`/
 `readlines`/`write`/`writelines`/`flush`/`close`, iteration and `closed`/`name`/`mode`;
@@ -555,8 +557,8 @@ In these cases the program compiles but can behave differently from CPython:
   `d.values()` when an `__eq__` or `__lt__` of the values changes the dict, where CPython
   raises `RuntimeError`; they print as lists and compare equal to lists. A snapshot is taken
   where the call is evaluated, so a later argument that changes the dict does not change it
-  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`), where CPython's view shows
-  the change.
+  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
+  `dict.fromkeys(d.keys(), d.pop(k))`), where CPython's view shows the change.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without
@@ -901,7 +903,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
 - `dict.update()` of a dict of other key or value types, of an iterable other than a list of
   `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
-  keyword arguments where the keys are not `str`
+  keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
+  a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
 
 ### Source text
