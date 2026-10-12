@@ -537,7 +537,7 @@ of ints and floats too); `dist`, `gamma`, `isclose`, `lgamma` and `sumprod` are 
 
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
-arguments above, inheritance other than an exception class's, `**kwargs` and
+arguments above, inheritance other than an exception class's,
 `*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
