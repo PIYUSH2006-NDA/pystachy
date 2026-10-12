@@ -76,6 +76,15 @@ port:"). qrcode is used under the BSD 3-Clause License, whose text and copyright
 also holds the MIT License notice of pyqrnative, the code qrcode was forked from ("Copyright (c)
 2009 Kazuhiko Arase").
 
+roman (ports/roman/)
+--------------------
+
+ports/roman/__init__.py is roman 5.2's module, edited where ports/roman/PORT.md lists (each edit
+is marked "Pystachy port:", and the file states that it was changed and when). roman is used
+under the Zope Public License (ZPL) Version 2.1, whose text is in ports/roman/LICENSE; its
+copyright notice ("Copyright (c) 2001 Mark Pilgrim and Contributors. All Rights Reserved.") is
+kept in the header of ports/roman/__init__.py.
+
 sgp4 (ports/sgp4/)
 ------------------
 
