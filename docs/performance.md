@@ -24,6 +24,7 @@ CPython's.
 | `words.py`: word count, strings and dicts | 0.17 s | 0.10 s | 0.05 s | 3× |
 | `dictlookup.py`: dict lookups, int and str keys | 0.90 s | 0.47 s | 0.39 s | 2× |
 | `dictkeys.py`: dict keys that defeat a weak hash | 0.50 s | 0.25 s | 0.16 s | 3× |
+| `setdisplay.py`: set displays of constants in loops | 0.40 s | 0.20 s | 0.12 s | 3× |
 
 The speedup column is computed by `bench/run.sh` from the unrounded times. The first `run` after a
 build also compiles and caches the runtime, which adds one to two seconds once. `bench/dictcount.py`

@@ -17139,6 +17139,10 @@ class Gen:
             w = a.t
             if (ops[0] == "in" or ops[0] == "not in") and n.kids[1].kind == "list" and (is_list(a.t) or is_dict(a.t)):
                 w = self.ctype("list", [a.t])  # (xs in [[1], [2]]: a list of such)
+            if (ops[0] == "in" or ops[0] == "not in") and n.kids[1].kind == "set" and folds(mk("tuple", "", n.line, n.kids[1].kids)):
+                # x in {1, 2, 3}: CPython's AST optimizer makes a display of constants there a
+                # frozenset constant (see set_display)
+                return self.cmp2(ops[0], a, self.set_display(n.kids[1], "", True))
             self.soft = n.kids[1]  # (a display there may hold what may be None where a holds none)
             return self.cmp2(ops[0], a, self.expr(n.kids[1], w))
         l3 = self.label()
@@ -19356,7 +19360,22 @@ class Gen:
         # (SET_UPDATE), which can leave it a smaller table; folded: the iterable of a for loop or
         # a comprehension, of constants, which CPython's AST optimizer makes that frozenset. The
         # constant is the frozenset of the items inserted in order, made again of its elements
-        # in the order it has them (the compiler's merge_consts_recursive does that)
+        # in the order it has them (the compiler's merge_consts_recursive does that). It is made
+        # where the display first runs and kept in a global, which the collector scans: each run
+        # after that copies it into a new set, or (folded) is it, as CPython's code object keeps it
+        const = (folded or (len(n.kids) > 2 and folds(mk("tuple", "", n.line, n.kids)))) and not self.rtmode
+        g = f"@fs.{len(self.globs)}"
+        old = ""
+        l0 = ""
+        ldone = ""
+        if const:
+            self.global_var(g, "ptr")
+            old = self.ins(f"load ptr, ptr {g}")
+            l0 = self.cur
+            lmake = self.label()
+            ldone = self.label()
+            self.cbr(self.ins(f"icmp eq ptr {old}, null"), lmake, ldone)
+            self.place(lmake)
         et = selem(want) if is_set(want) and "?" not in want else ""
         given = et != ""
         items: list[Val] = []
@@ -19383,6 +19402,15 @@ class Gen:
             c = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
             self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"])
             r = c
+            if const:
+                self.emit(f"store ptr {r}, ptr {g}")
+                l1 = self.cur
+                self.br(ldone)
+                self.place(ldone)
+                ph = Ins("phi", self.ctype("frozenset", [et]), "")
+                self.incoming(ph, old, l0)
+                self.incoming(ph, r, l1)
+                r = self.phi(ph)
             if not folded:
                 m = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
                 self.rt("pys_set_update", "void", [f"ptr {m}", f"ptr {r}"])

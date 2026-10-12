@@ -355,7 +355,10 @@ CPython's for ints, bools, `None` and tuples of them (xxHash's rounds over the i
 of those iterates in CPython's order; a str's is the dict's hash of it, as CPython's own changes
 from run to run. A display of more than two constants is the frozenset constant CPython's
 compiler makes (made a second time from its own elements, as `merge_consts_recursive` makes
-it) merged into a new set, and a `for` loop over a display of constants iterates that frozenset.
+it) merged into a new set, and a `for` loop over a display of constants, or `x in` one,
+uses that frozenset. The constant is made where the display first runs and kept in a global
+(`@fs.N`, among the collector's roots), as CPython's code object keeps it: later runs copy it,
+or use it, and do not make it again.
 Files wrap C stdio with CPython's open() rules: argument checks in its
 order, errno-based `OSError` subclasses, newline translation, `"+"` mode positioning
 (including its 8 KiB read-ahead), and closed/readable/writable checks. Writes reach the
