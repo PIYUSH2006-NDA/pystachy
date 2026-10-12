@@ -84,7 +84,8 @@ imports `annotations` from `__future__`.
   `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
   its argument is known not to be: a new object or `self`), are constants: only the branch that
   runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
-  nothing after a `return`. A parameter whose
+  nothing after a `return`. The classes `isinstance()` names are still looked up there, as
+  everywhere (one whose `class` statement has not run raises `NameError`). A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
@@ -253,8 +254,9 @@ leaves the list whole): a missing dict key, an index out of range, `int("x")`, a
 zero, `open()` of a missing file and the other `OSError` subclasses, unpacking, `sys.exit()` as
 `SystemExit`, and the checked arithmetic's `OverflowError`.
 
-A clause's classes are looked up when an exception gets to it (one whose `class` statement has
-not run raises `NameError`). The name bound by `as` is unbound after its clause, however the
+A clause's classes are looked up when an exception gets to it, and `raise C(...)`'s (also
+`raise C` and `raise ... from C(...)`) before the exception is made: one whose `class` statement
+has not run raises `NameError`. The name bound by `as` is unbound after its clause, however the
 clause is left, and may be bound to a value of another type before or after it.
 
 A builtin exception, which calling a builtin exception class makes too
@@ -273,8 +275,10 @@ that is not an exception raises CPython's `TypeError`.
 `continue` in it drops the exception in flight. A bare `raise` re-raises the exception being
 handled, which every way out of an except clause restores, and an exception that leaves a `with`
 block closes its file (a close that fails raises its `OSError` in its place, inside the `try`
-statement around, as `__exit__` does). A module whose code raises is not imported: the name its
-import binds is unbound, and a later import runs its code again.
+statement around, as `__exit__` does). A module whose code raises is not imported: the names its
+import binds are unbound (`import m as x`, `import p.m as x`, and what `from p import m` or
+`from m import f, C` takes), so a read of one raises `NameError` (`UnboundLocalError` in a
+function), and a later import runs its code again.
 
 ### Exception classes
 
@@ -326,7 +330,8 @@ value, as CPython binds it; of a function or class it names the same one. `from 
 takes the names `__all__` lists (also after `+=`, `append` and `extend`), else the public
 names bound when the module's code ends; a name a package binds itself (`from .parse import
 parse`) wins over its submodule of that name. A module-level `name = function` makes an
-alias. A global that its module's code may leave unbound (assigned in an `if`, or only after
+alias, also of a function or class the module from-imports, which `from m import name` and
+`import *` take as the function or class itself. A global that its module's code may leave unbound (assigned in an `if`, or only after
 an import that can call back into the module) is checked where functions and other modules
 read it, raising CPython's `NameError` or `AttributeError`. A template's function compiled
 before its module's code assigns a global it reads (first called in a branch that does not
@@ -350,7 +355,9 @@ also inside `not`/`and`/`or`, where the other operands still run in CPython's or
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
 hides them, and a name a function binds only in code dropped this way (also by `:=`, a `match` capture or
-a `type` statement) is still its local.
+a `type` statement) is still its local. A `global` statement in dropped code still holds for its whole
+function, and in a class body, which may not hold one, it is an error (there CPython's `x = 2` further
+on binds the module's `x`, not a class attribute).
 
 ### Optional imports
 
@@ -382,7 +389,14 @@ never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
-compile, and the parts it can compile of the others (the items of a display). What it leaves
+compile, and the parts it can compile of the others (the items of a display). Of a class body,
+it evaluates in order the operations that may raise and that it computes as CPython does, but
+not in the branches of an `if`: `//`, `%` and `/` of numbers (not `//` of two ints that may be
+`-2**63 // -1`), an index of a list or dict, `int()` of a str literal of ASCII characters with at
+most 18 digits, and `min()` and `max()` of a list, applied to literals and the module's variables
+(`1 // 0`, `TABLE["k"]`, `int("x")`). It stops at the first operation that may raise and that it
+does not evaluate (another call, `**`, an index of a str, `1 // n` of the body's own `n`), and
+evaluates none in the module's later classes. What it leaves
 uncompiled (decorators, default values, bases, a class body) must run no code of the
 program: it may read names, compute with literals and builtin values (`2 ** 31 - 1`,
 `TABLE.get(k)`, `sorted(xs, key=len)`, `math.sqrt(2.0)`, `typing.Optional[int]`), bind and
@@ -605,7 +619,8 @@ In these cases the program compiles but can behave differently from CPython:
   `typing`'s checks of `NamedTuple`, `TypedDict`, `Protocol` and `Generic` classes, `__slots__`
   conflicts, `@dataclass`'s field order and mutable defaults, a base that is not a class or
   cannot be subscripted (but a subscript of a class without bases, above), and an exception
-  that a builtin operation in its body raises. A template's code is compiled per argument
+  that a builtin operation in its body raises where Pystachy does not evaluate it (above), as
+  `1 // n` of the body's own `n`. A template's code is compiled per argument
   types, so a type error in code a program never calls is not reported (syntax errors are), and its
   variables keep one type, so code that rebinds one to another type (`a /= b` on ints) is
   rejected when it is compiled.
@@ -649,12 +664,15 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   `__format__`), where CPython raises `NameError`, `AttributeError` or `TypeError` as it runs, also
   in a `try` whose clause catches it (a feature test such as `try: unicode / except NameError:`)
 - a function, class, method or import name bound twice, or a name that is both a variable and a
-  function, class or import
+  function, class or import, also in a function: a parameter or local that an import in it binds
+  too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
+  which assigns the local
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
   one named like a builtin or `__name__`, also in an imported module
 - a local read textually before its first assignment (declare it first: `x: int`), where a name
   that a function deletes, defines with `def` or `class`, or binds with `:=`, a `match` capture
-  or a `type` statement is its local too
+  or a `type` statement is its local too, also where the name is a class's that the read uses
+  (`C.m()`, `C.x`, `C.x = v`, `isinstance(o, C)`, `raise C(...)`)
 - a read of a function's local that only code dropped at compile time binds
 - calling a builtin whose name the module also binds as a variable (`sum = 0` ... `sum(xs)`,
   which CPython would reject at run time)
@@ -687,7 +705,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a name a package binds itself that is also the name of a submodule the program imports, read
   as `pkg.util`, with `from pkg import util` or in the package's functions, when which of the
   two it is depends on when the submodule is first imported
-- an alias (`f = g`) that module-level code uses before its assignment
+- an alias (`f = g`) that module-level code uses before its assignment, and an alias of a
+  from-imported function or class that another module from-imports, in an import cycle, before
+  the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
 - `del` of another module's attribute
