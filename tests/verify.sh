@@ -276,7 +276,7 @@ step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
 L=$V/dict-probes.log; s=$(now); r=fail
 { "$V/pystachy2" rt runtime.py -o "$V/dictprobe-rt.ll" && "${LLVM}clang" -O2 -S -emit-llvm tools/dictprobe.c -o "$V/dictprobe.ll" &&
   "${LLVM}llvm-link" "$V/dictprobe-rt.ll" "$V/dictprobe.ll" -o "$V/dictprobe.bc" && "${LLVM}clang" -O2 "$V/dictprobe.bc" -o "$V/dictprobe" -lm &&
-  "$V/dictprobe" && r=pass; } > "$L" 2>&1
+  "$V/dictprobe" && PYSTACHY_GC_STRESS=1 "$V/dictprobe" --hash-cache && r=pass; } > "$L" 2>&1
 step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per lookup (limit \([0-9.]*\))$/, "worst_average_slots": \1, "limit": \2/p' "$L")"
 
 # ---- compile limits: small sources must receive bounded source diagnostics, not exhaust memory

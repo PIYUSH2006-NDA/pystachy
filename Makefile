@@ -52,6 +52,7 @@ dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	$(LLVMBIN)llvm-link build/dictprobe-rt.ll build/dictprobe.ll -o build/dictprobe.bc
 	$(LLVMBIN)clang -O2 build/dictprobe.bc -o build/dictprobe -lm
 	build/dictprobe
+	PYSTACHY_GC_STRESS=1 build/dictprobe --hash-cache
 
 # A reachable empty list must release its historical backing, without allocating in clear.
 listprobe: tools/listprobe.c runtime.c runtime.py pystachy
