@@ -7157,6 +7157,7 @@ class Gen:
         self.gdecl: dict[str, bool] = {}
         self.assigned: dict[str, bool] = {}
         self.compvars: dict[str, int] = {}
+        self.drying = 0  # (dry() is typing an expression from further on in the function)
         self.loops: list[Loop] = []  # the loops the code being compiled is in, innermost last
         self.exits: list[Exit] = []  # what break, continue and return must do on their way out, innermost last
         self.wdepth: list[int] = []  # len(exits) when each enclosing loop began
@@ -8926,6 +8927,19 @@ class Gen:
         # (which hides the module's variable, function, class or import of that name)
         return name in self.assigned and name not in self.gdecl and name not in self.ltype
 
+    def read_ahead(self, name: str) -> None:
+        # a read of name where it is such a local, which CPython reads unbound there
+        # (UnboundLocalError): an error, as a read before a local's first assignment is
+        if self.unbound_local(name):
+            self.err(f"local variable '{name}' is read before its first assignment; declare it first ({name}: T)")
+
+    def class_ahead(self, name: str) -> None:
+        # read_ahead() for a read of class name (C.x, C.m(), isinstance(o, C)), but not while dry()
+        # types an expression from further on in the function (lookahead()), where the function may
+        # have bound the name by then: the read is checked where it is compiled
+        if self.drying == 0:
+            self.read_ahead(name)
+
     def no_type(self, name: str) -> None:
         # the error for the empty list or dict of variable name, still without a type where a use
         # needs it (an annotation of it belongs where the container was made, see origin)
@@ -8959,8 +8973,7 @@ class Gen:
             if name in self.narrowed and is_opt(t) and t != NONEVAR:
                 return self.deref(Val(r, t))  # known not to be None here
             return Val(r, t)
-        if self.unbound_local(name):
-            self.err(f"local variable '{name}' is read before its first assignment; declare it first ({name}: T)")
+        self.read_ahead(name)
         if name in self.gtypes:
             t = self.gtypes[name]
             r = self.ins(f"load {lt(t)}, ptr @g.{name}")
@@ -9659,7 +9672,9 @@ class Gen:
         self.blk = Blk("")
         self.fn.blocks = []
         self.fn.loops = []
+        self.drying += 1
         t = self.expr(e, "").t
+        self.drying -= 1
         self.blk = blk
         self.fn.blocks = blocks
         self.fn.loops = loops
@@ -12926,8 +12941,8 @@ class Gen:
         # class (EXCEPTIONS) or a class of the program; "" for any other expression (a variable,
         # a call of a function), whose value is the exception
         c = e.kids[0] if e.kind == "call" else e
-        if c.kind != "name" or c.s in self.funcs or c.s in self.ltype or c.s in self.gtypes:
-            return ""
+        if c.kind != "name" or c.s in self.funcs or c.s in self.ltype or c.s in self.gtypes or self.unbound_local(c.s):
+            return ""  # (a local the function assigns further on: reading it is the error, see read_ahead)
         return c.s if c.s in self.classes or c.s in EXCEPTIONS else ""
 
     def cause(self, c: Node) -> None:
@@ -14428,6 +14443,7 @@ class Gen:
             for x in c.kids:
                 self.isinst_reads(x)
         elif c.kind == "name":
+            self.class_ahead(c.s)
             self.modchk(c)
             if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
                 self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
@@ -14796,6 +14812,7 @@ class Gen:
         # the class that name cn reads (C.a, C.m(...)), checked where its class statement may not
         # have run yet, or where the import that binds it (or its module) may have raised
         c = cn.s
+        self.class_ahead(c)  # (not where cn is a local of the function, assigned further on)
         ci = self.classes[c]
         if ci.bad != "":
             self.err(ci.bad)
@@ -15909,8 +15926,7 @@ class Gen:
         if f.kind == "name":
             self.modchk(f)
         if f.kind == "name" and f.s not in self.ltype:
-            if self.unbound_local(f.s):
-                self.err(f"local variable '{f.s}' is read before its first assignment; declare it first ({f.s}: T)")
+            self.read_ahead(f.s)
             if (f.chk or self.foreign(f.s)) and f.s in self.gflag:
                 # a call that may run before the def or class statement
                 bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{f.s}.def')}, true")
@@ -15943,6 +15959,7 @@ class Gen:
             c = self.curfn.cls
             if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and len(self.curfn.params) > 0 and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
                 # Base.m(self, args) in a method of an exception class: super().m(args) for its base
+                self.class_ahead(f.kids[0].s)
                 if f.kids[0].s != self.classes[c].base and not (self.classes[c].base == "OSError" and (f.kids[0].s == "IOError" or f.kids[0].s == "EnvironmentError")):
                     self.err(f"{f.kids[0].s}.{f.s}(self, ...) in a method of {short(c)} is supported only for its base, {short(self.classes[c].base)} (as super().{f.s}(...))")
                 return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:], True)
