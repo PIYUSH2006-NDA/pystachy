@@ -14,6 +14,7 @@ Each shape is a family of programs whose size grows with N:
   fields   one class whose __init__ sets N fields and a method that reads them all
   calls    an imported module of N functions, each calling the one before it
   imports  N modules, each importing the one before it (the program imports them in order)
+  stdlib   N imported modules, each importing math, os and sys and four functions of math
   breaks   one while True loop of N breaks, each after an assignment to a new variable
   exits    one while True loop of N ifs, each breaking after an assignment to a new variable,
            with another new variable assigned before each if
@@ -25,6 +26,8 @@ Each shape is a family of programs whose size grows with N:
            tests and updates it (Gen.canon follows the key's chain of values)
   lookups  one function of N reads of a dict, each of another key (dictfuse's lookups that hold)
   gdicts   N global dicts and one function that sets each (Gen.reaching walks back from each load)
+  dropped  one function whose if sys.platform == "win32" block, dropped at compile time, binds N
+           variables, each read further on where a test that is false guards it
 Each cell is the median of RUNS runs of "COMMAND ir main.py -o /dev/null" in seconds, startup
 included; "x" is its growth from the previous N (2.0 is linear when N doubles, 4.0 quadratic).
 --ops adds, for each COMMAND that runs a .py file (the CPython-hosted compiler), the number of
@@ -128,6 +131,14 @@ def imports(n):
     return out
 
 
+def stdlib(n):
+    out = {"main.py": [f"import m{i}" for i in range(n)] + [f"print(m0.f(1.0) + m{n - 1}.f(2.0))"]}
+    for i in range(n):
+        out[f"m{i}.py"] = ["import math", "import os", "import sys", "from math import ceil, fabs, floor, sqrt",
+                           "def f(x: float) -> float:", f"    return sqrt(x) + {i}"]
+    return out
+
+
 def breaks(n):
     src = ["def big(x: int) -> int:", "    v0 = x", "    while True:"]
     for i in range(1, n):
@@ -190,10 +201,17 @@ def gdicts(n):
     return {"main.py": src}
 
 
+def dropped(n):
+    src = ["import sys", "def big(x: int) -> int:", "    t = x", "    if sys.platform == 'win32':"] + [f"        w{i} = {i}" for i in range(n)]
+    src += [f"    t += w{i} if x < 0 else {i}" for i in range(n)]
+    src += ["    return t", "print(big(5))"]
+    return {"main.py": src}
+
+
 SHAPES = {"funcs": funcs, "globals": globals_, "both": both, "long": long, "top": top, "classes": classes, "modules": modules,
-          "fields": fields, "calls": calls, "imports": imports, "breaks": breaks, "exits": exits, "elifs": elifs,
+          "fields": fields, "calls": calls, "imports": imports, "stdlib": stdlib, "breaks": breaks, "exits": exits, "elifs": elifs,
           "topelifs": topelifs, "comps": comps, "chain": chain,
-          "lookups": lookups, "gdicts": gdicts}
+          "lookups": lookups, "gdicts": gdicts, "dropped": dropped}
 
 
 def write(d, files):
