@@ -313,7 +313,8 @@ value, as CPython binds it; of a function or class it names the same one. `from 
 takes the names `__all__` lists (also after `+=`, `append` and `extend`), else the public
 names bound when the module's code ends; a name a package binds itself (`from .parse import
 parse`) wins over its submodule of that name. A module-level `name = function` makes an
-alias. A global that its module's code may leave unbound (assigned in an `if`, or only after
+alias, also of a function or class the module from-imports, which `from m import name` and
+`import *` take as the function or class itself. A global that its module's code may leave unbound (assigned in an `if`, or only after
 an import that can call back into the module) is checked where functions and other modules
 read it, raising CPython's `NameError` or `AttributeError`. A template's function compiled
 before its module's code assigns a global it reads (first called in a branch that does not

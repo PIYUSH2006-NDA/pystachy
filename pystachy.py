@@ -3505,6 +3505,13 @@ class Loader:
         # for submodules(): s is the name bound, the kids the package, the name and the copy if any
         self.taken: list[Node] = []
         self.takek: list[dict[str, str]] = []
+        # each from-import of a variable (take()), with the bindings it went to, for late_takes(): s
+        # is the name bound, the kids the module, the name, the copy, what bound the name before
+        # (but another from-import of a variable) and where ("@" and the module, or the function);
+        # vtook: the names, by where, that only such imports have bound as variables so far
+        self.vtaken: list[Node] = []
+        self.vtakek: list[dict[str, str]] = []
+        self.vtook: dict[str, bool] = {}
         # each star import of a package without __all__, with the module it is in (submodules())
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
@@ -3556,8 +3563,13 @@ class Loader:
                     break
         self.guarded()
         self.submodules()
-        for x in self.order:
-            self.late_aliases(x)
+        more = True
+        while more:
+            # (until no from-import of an alias is left to make one: an alias may be of one)
+            for x in self.order:
+                self.late_aliases(x)
+            more = self.late_takes(False)
+        self.late_takes(True)
         for x in self.order:
             self.lazyann = False
             self.called = 0
@@ -3736,6 +3748,53 @@ class Loader:
                     m.kinds[nm] = src
                     st.kind = "pass"
                     self.used_before(m, st)
+
+    def late_takes(self, last: bool) -> bool:
+        # from t import x as name took t's variable x, which late_aliases() has since made an alias
+        # of a function or class (x = f, f from-imported): name is that alias too, rather than a copy
+        # of a variable that t's code no longer assigns, where all the from-imports of variables that
+        # bind name there take that alias and nothing else binds it; else, once the last pass finds
+        # no other alias to wait for, the import is an error. Did any import change?
+        took: dict[str, str] = {}  # (by where and name: the alias they take, "!" for two)
+        var: dict[str, bool] = {}  # (and whether one of them takes a variable)
+        for n in self.vtaken:
+            if n.kids[2].kind == "assign":
+                key = n.kids[4].s + " " + n.s
+                k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
+                if not k.startswith("a:"):
+                    var[key] = True
+                else:
+                    took[key] = k if took.get(key, k) == k else "!"
+        changed = False
+        for i in range(len(self.vtaken)):
+            n = self.vtaken[i]
+            cp = n.kids[2]
+            k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
+            if cp.kind != "assign" or not k.startswith("a:"):
+                continue
+            key = n.kids[4].s + " " + n.s
+            was = n.kids[3].s
+            now = self.vtakek[i].get(n.s, "")
+            msg = ""
+            if was == "v" or (key in var and last):
+                msg = f"'{n.s}' is bound both as a variable and by an import (not supported)"
+            elif took[key] == "!" or (was != "" and was != k) or (now != "" and now != "v" and now != k):
+                msg = f"'{n.s}' is bound by two imports, to different modules, functions or classes (not supported)"
+            elif key in var:
+                continue  # (another of them takes a variable, which may yet be found an alias)
+            if msg == "":
+                self.vtakek[i][n.s] = k
+                cp.kind = "pass"
+                if not n.kids[4].s.startswith("@") and n.kids[4].s + " " + n.s not in self.fkline:
+                    self.fkline[n.kids[4].s + " " + n.s] = n.line  # (the function's import that binds it: qstmts())
+            elif not n.kids[4].s.startswith("@"):
+                cp.kind = "badimport"  # (in a function: an error where it is compiled)
+                cp.s = msg
+                cp.kids = []
+            else:
+                fail(msg, n.line)
+            changed = True
+        return changed
 
     def used_before(self, m: Mod, al: Node) -> None:
         # an alias (name = f) binds name for all of the module's code; module-level code that runs
@@ -4865,9 +4924,18 @@ class Loader:
         elif k != "v":
             self.bind(m, name, k, infn, line)
         else:
+            ks = self.fks[self.curdef] if infn else m.kinds
+            at = self.curdef if infn else "@" + m.name
+            was = ks.get(name, "")
+            if was == "v" and at + " " + name in self.vtook:
+                was = ""  # (another from-import of a variable bound it: see late_takes())
+            elif was != "v":
+                self.vtook[at + " " + name] = True
             if not infn:
                 m.kinds[name] = "v"
             copies.append(mk("assign", "from", line, [mk("name", name, line, []), mk("name", src.q + x, line, [])]))
+            self.vtaken.append(mk("vtake", name, line, [mk("str", src.name, line, []), mk("str", x, line, []), copies[-1], mk("str", was, line, []), mk("str", at, line, [])]))
+            self.vtakek.append(ks)
         if src.pdir != "" and k != "" and k != "m:" + src.name + "." + x:
             # the package binds x itself, which an import of its submodule x may rebind (submodules())
             self.taken.append(mk("take", name, line, [mk("str", src.name, line, []), mk("str", x, line, [])] + (copies[-1:] if k == "v" else copies[:0])))
