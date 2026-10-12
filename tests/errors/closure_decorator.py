@@ -1,13 +1,13 @@
-# error: closure_decorator.py:8: error: a decorator on a def inside a function is not supported (inner())
-def deco(g):
-    return g
+# error: closure_decorator.py:7: error: down() reads its own name, which binds what its decorators give once they have run: not supported in a def inside a function
+def identity(f):
+    return f
 
 
-def f(n):
-    @deco
-    def inner(k):
-        return k + n
-    return inner(1)
+def outer(n: int) -> int:
+    @identity
+    def down(k):
+        return 0 if k == 0 else 1 + down(k - 1)
+    return down(n)
 
 
-print(f(1))
+print(outer(4))

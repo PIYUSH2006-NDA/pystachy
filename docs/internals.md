@@ -159,6 +159,12 @@ value becomes a pointer to an object `{code, env}`: the code is an adapter compi
 function and `Callable` type, `R(ptr env, A, B)`, which calls the function as a call of the value
 would (`Gen.adapter`), and a call of a `Callable` is an `icall` op, LLVM's indirect call of the code
 with the env. A function of a module and a builtin need no env: one constant object serves them.
+A def with decorators that CPython calls (all but `typing`'s, and in a class body, those it leaves
+out) is compiled as an assignment of its name (`Gen.decorate`): the decorator expressions are
+evaluated top first, then the closure is made and each decorator called on it, bottom first, so
+the def's name, also at a module's top level, is a variable of the result's type. `Flow` reads
+each decorator as a call where the def is (`Gen.deco_callee`), and module code that applies one
+counts as a call into user code.
 
 ### Definite assignment
 

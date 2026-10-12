@@ -210,6 +210,15 @@ imports `annotations` from `__future__`.
   comprehension's variable. Two closures are the same function where they come from one run of
   one def or lambda; `__name__` is the def's name or `<lambda>`, and `__qualname__` is
   `outer.<locals>.inner`, which CPython's messages about a call's arguments show.
+- A def's decorators (`@d`, `@m.d`, `@d(args)`, stacked) run when the def statement runs, as
+  CPython runs them: the decorator expressions are evaluated from the top, then the def's default
+  values, and each decorator is called, from the bottom, with what the one below gave. The def's
+  name binds the last result, whatever it is (a function, an object such as `Parser(f)`, an
+  `int`), as an assignment would: at a module's top level a module variable, which raises
+  `NameError` where it is read before the def has run, and the decorated function is a closure
+  (above). `typing`'s decorators (`@overload`, `@final`, ...) are left out; `@staticmethod`,
+  `@classmethod` and `@property` apply only in a class body, where no other decorator is supported
+  yet.
 - No silent `int` → `float` conversion when assigning or passing arguments: CPython would
   keep an `int`, so `x: float = 1` is rejected (write `1.0`). Arithmetic mixes freely, and so
   do `in`, `count()`, `index()` and `remove()` of a list of numbers (`1 in [1.0]`).
@@ -259,7 +268,7 @@ that changes size raises `RuntimeError`), `break`, `continue`, `return`, `pass` 
 parentheses or not), `try` (below), `raise` of an exception class, a call of one or an
 exception, a bare `raise` and `raise ... from ...` (if nothing catches it, it ends the program
 with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included), `def` (also
-inside a function: a closure, see *Typing rules*), `nonlocal`, lambdas, `class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
+inside a function: a closure, see *Typing rules*), decorators of a def (see *Typing rules*), `nonlocal`, lambdas, `class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
@@ -408,8 +417,9 @@ never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
-compile, and the parts it can compile of the others (the items of a display). What it leaves
-uncompiled (decorators, default values, bases, a class body) must run no code of the
+compile, and the parts it can compile of the others (the items of a display), and calls a def's
+decorators (*Typing rules*). What it leaves
+uncompiled (a class's and its methods' decorators, default values, bases, a class body) must run no code of the
 program: it may read names, compute with literals and builtin values (`2 ** 31 - 1`,
 `TABLE.get(k)`, `sorted(xs, key=len)`, `math.sqrt(2.0)`, `typing.Optional[int]`), bind and
 delete names in a class body, use `if`, and apply `staticmethod`, `classmethod`, `property`,
@@ -722,7 +732,7 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code (above) that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,
@@ -798,8 +808,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   not the `Callable`'s return type (an `int` for a `float`, as for a function's own return)
 - a lambda or a def inside a function that reads a variable of the functions around it which may
   not be assigned where it is defined (but a def's own name), which a `del` or the end of an
-  `except ... as` clause unbinds, or which is a variable of the comprehension it is in; a decorator
-  on a def inside a function, and a class inside a function
+  `except ... as` clause unbinds, or which is a variable of the comprehension it is in; a decorated
+  def inside a function that reads its own name (what its decorators give binds it only once they
+  have run), and a class inside a function
 - printing a function, also inside a container, and comparing containers of functions (CPython
   prints a function's address)
 

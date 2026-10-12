@@ -1,0 +1,18 @@
+True 2 -1 2 -1 -1
+NameError: name 'inc' is not defined
+7 3 4.5
+43
+deco a
+deco b
+eval default
+apply b
+apply a
+default given
+['0', '1'] 12 13 54
+call 1
+call s
+1 s
+9
+UnboundLocalError: cannot access local variable 'd' where it is not associated with a value
+4 6 8
+[exit 0]

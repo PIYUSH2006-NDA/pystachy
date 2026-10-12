@@ -244,7 +244,7 @@ compiler rejects each where it would have to compile it.
 | exception attributes such as `e.args`, `except*` (`try`, `raise` and exception classes are supported) | M5 |
 | unions other than `Optional` (`Optional` is supported for `int`, `str` and the other builtin types) | M4 |
 | inheritance, but for exception classes | M2 |
-| decorators and `map()` (functions, lambdas and closures are values, also as `Callable[[A], R]`) | M3 |
+| decorators of classes and methods, and `map()` (functions, lambdas and closures are values, also as `Callable[[A], R]`; a def's decorators run) | M3 |
 | generators, `async`, sets, `bytes` | M7 |
 | dict and multi-clause comprehensions, slice steps, `getattr`/`eval`, complex numbers, `match`, `:=` | [Further language coverage](#roadmap) |
 
