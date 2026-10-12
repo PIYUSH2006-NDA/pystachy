@@ -140,6 +140,14 @@ def _to_char(offs: list[int], pos: int) -> int:
     return lo
 
 
+def _to_char_floor(offs: list[int], pos: int) -> int:
+    # the code point at index pos of the str, or the one whose bytes pos is inside
+    i = _to_char(offs, pos)
+    if len(offs) != 0 and offs[i] > pos:
+        i -= 1
+    return i
+
+
 def _to_index(offs: list[int], i: int) -> int:
     # the index in the str of code point i
     if len(offs) == 0 or i < 0:
@@ -1765,13 +1773,17 @@ class Pattern:
             self._indexgroup[groupindex[k]] = k
 
     def _state(self, string: str, pos: int, endpos: int) -> _sre.State:
-        # state_init: pos and endpos clamped to the string, as code point indices
+        # state_init: pos and endpos clamped to the string, then made code point indices; where one
+        # is inside a character's bytes, the match starts after that character, or ends before it.
+        # The state's pos and endpos keep them as the caller gave them, for the match objects
         n = len(string)
         pos = 0 if pos < 0 else n if pos > n else pos
         endpos = 0 if endpos < 0 else n if endpos > n else endpos
         codes = _codes(string)
         offs = _last_offs
-        st = _sre.State(codes, _to_char(offs, pos), _to_char(offs, endpos), self.groups)
+        st = _sre.State(codes, _to_char(offs, pos), _to_char_floor(offs, endpos), self.groups)
+        st.pos = pos
+        st.endpos = endpos
         return st
 
     def _new_match(self, string: str, st: _sre.State) -> "Match":
@@ -1787,7 +1799,7 @@ class Pattern:
                 mark.append(-1)
                 mark.append(-1)
             j += 2
-        return Match(self, string, mark, _to_index(offs, st.pos), _to_index(offs, st.endpos), st.lastindex)
+        return Match(self, string, mark, st.pos, st.endpos, st.lastindex)
 
     def match(self, string: str, pos: int = 0, endpos: int = _MAXSIZE) -> "Match | None":
         """Matches zero or more characters at the beginning of the string."""
@@ -1881,7 +1893,7 @@ class Pattern:
             last = st.ptr
             st.start = st.ptr
         # the segment after the last match (even if empty)
-        out.append(string[_to_index(offs, last) : _to_index(offs, st.endpos)])
+        out.append(string[_to_index(offs, last) : st.endpos])
         return out
 
     def sub(self, repl, string: str, count: int = 0) -> str:
@@ -1933,7 +1945,7 @@ class Pattern:
             st.must_advance = st.ptr == st.start
             st.start = st.ptr
         # the segment after the last match
-        end = _to_index(offs, st.endpos)
+        end = st.endpos
         if i < end:
             out.append(string[i:end])
         return ("".join(out), n)

@@ -262,7 +262,7 @@ class State:
         self.s = s
         self.start = start
         self.end = end
-        self.pos = start
+        self.pos = start  # (pos and endpos as re's caller gave them: re's _state sets them)
         self.endpos = end
         self.ptr = start
         self.mark = [-1] * (2 * groups)

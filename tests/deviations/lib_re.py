@@ -10,6 +10,17 @@ m = re.search(r"\w+", "€uro")
 if m is not None:
     print(m.start(), m.end())
 
+# A pos or endpos inside a character's bytes: the match starts after that character, or ends
+# before it, and m.pos and m.endpos are the bounds as given (CPython's count code points)
+print(re.compile(".").match("é", 0, 1))
+m = re.compile(".").search("aéb", 2)
+if m is not None:
+    print(m.span(), m.group(), m.pos, m.endpos)
+m = re.compile(".+").search("aéb", 0, 2)
+if m is not None:
+    print(m.span(), m.group(), m.pos, m.endpos)
+print([x.group() for x in re.compile(".").finditer("éé", 1, 3)], re.compile(".").fullmatch("éa", 1, 3))
+
 # The flags are ints, not re.RegexFlag members; CPython prints re.IGNORECASE re.IGNORECASE|re.MULTILINE
 print(re.I, re.I | re.M)
 
