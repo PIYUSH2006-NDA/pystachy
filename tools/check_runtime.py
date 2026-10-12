@@ -26,7 +26,8 @@ disagrees with its entry is an internal error. This tool checks the table itself
     through getelementptr, load (the list's items array, an item), phi, select and casts,
     the locals they are stored in, and the parameters of the runtime functions they are passed
     to (from clang -O1, whose SSA form leaves few locals; a C library function other than
-    READS_ONLY counts as both, and user code as neither: that is U);
+    READS_ONLY counts as both, and user code as neither: that is U). Stores to Str.dict_hash
+    alone are excluded: caching a hash changes neither a string's value nor a container;
   - it has I if its call graph, outside a raise (R: the funnels, which end the program or
     unwind to a handler) and the allocator (A), reads or writes a mutable static of the runtime
     other than NO_STATE's or calls a C library function other than PURE_C's (I/O, the process,
@@ -74,7 +75,8 @@ TOOL = (LLVM.rstrip("/") + "/") if LLVM else ""
 # repr of the key: dict keys are ints, strs, or tuples of int, bool, str, None and such tuples,
 # which compare and print without user code
 NO_USER = {"dict.has", "dict.find", "dict.getitem", "dict.entry", "dict.get", "dict.set", "dict.pop", "dict.pop_default",
-           "dict.setdefault", "dict.getbox", "dict.popbox"}
+           "dict.setdefault", "dict.getbox", "dict.popbox", "dict.update", "dict.update_pairs", "dict.fromkeys",
+           "dict.fromkeys_dict"}
 RAISES = {"pys_fail", "pys_raise", "oserr", "kbint_exit", "throw_", "pys_reraise"}
 # what the raise funnels build their exception with: in a program that has a try, a raise allocates
 # its Exc on the way out, which R stands for (a collection may then run before a handler takes it),
@@ -102,13 +104,14 @@ ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic"}
 PURE_C = set("""sqrt sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh exp log log2 log10 log1p expm1
     exp2 cbrt fmod atan2 pow ldexp frexp modf erf erfc nextafter remainder atoi memcmp bcmp memchr memmem strlen
     strchr strstr strcmp strncasecmp snprintf sprintf vsnprintf strtod __isoc23_strtol __isoc23_strtoll
-    __ctype_b_loc __ctype_tolower_loc __errno_location""".split())
+    __ctype_b_loc __ctype_tolower_loc __errno_location uselocale""".split())
 # and those that only read the memory their pointer arguments point to
 READS_ONLY = set("""memcmp bcmp memchr memmem strlen strchr strstr strcmp strncasecmp strtod __isoc23_strtol
     __isoc23_strtoll fwrite fputs fprintf snprintf sprintf vsnprintf write""".split())
 # runtime statics that keep no state from one call to the next: the cache of one-character
-# strings (immutable, made on first use) and the scratch buffers of round(x, n)
-NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o"}
+# strings (immutable, made on first use), the scratch buffers of round(x, n), and the C locale that
+# float text uses once a C library shares the process (c_num: the text is the same)
+NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o", "c_num"}
 # the parameter types whose memory the letters rL wL, rD wD and rF wF are about, by entry prefix
 # for S (the receiver)
 OWNER = {"list.": "L", "dict.": "D", "file.": "F"}
@@ -240,15 +243,25 @@ def params(ll):
     # derived from it), or None for a parameter that is no ptr or i64
     fns = {}
     cur = None
+    cache_layout = "%struct.Str = type { i64, i64, [0 x i8] }" in ll.split("\n")
+    cache_fields = set()
     for line in ll.split("\n"):
         m = re.match(r"define [^@]*@([\w.]+)\((.*)\)[^(]*\{$", line)
         if m:
             cur = ([ssa(p) if p.startswith(("ptr", "i64")) else None for p in split_top(m.group(2))], [])
             fns[m.group(1)] = cur
+            cache_fields = set()
         elif line == "}":
             cur = None
         elif cur is not None and line.startswith("  "):
+            # Only a direct i64 store to Str's second field is an invisible cache write.
+            # Keep its loads, calls, and every other reachable store in the effect analysis.
+            m = re.fullmatch(r"  (%[\w.]+) = getelementptr (?:inbounds )?%struct.Str, ptr %[\w.]+, i64 0, i32 1", line)
+            if cache_layout and m:
+                cache_fields.add(m.group(1))
             x = instruction(line.strip())
+            if x is not None and x[0] == "store" and x[2][1] in cache_fields and line.startswith("  store i64 "):
+                continue
             if x is not None:
                 cur[1].append(x)
     eff = {f: [None if p is None else [False, False, False] for p in fns[f][0]] for f in fns}
@@ -324,6 +337,21 @@ def derived(fns, eff, f, p):
                     D.add(dest)
                     more = True
     return [r, w, ret]
+
+
+# The cache exception must not hide writes to string contents, lengths, or another struct.
+for _struct, _field, _store, _writes in [
+    ("Str", 1, "i64", False), ("Str", 0, "i64", True), ("Str", 2, "i8", True),
+    ("Dict", 1, "i64", True), ("Str", 1, "i32", True),
+]:
+    _probe = f"""%struct.Str = type {{ i64, i64, [0 x i8] }}
+define void @probe(ptr %p) {{
+  %field = getelementptr inbounds %struct.{_struct}, ptr %p, i64 0, i32 {_field}
+  store {_store} 1, ptr %field
+  ret void
+}}
+"""
+    assert params(_probe)["probe"][0][1] is _writes
 
 
 def state(ll):

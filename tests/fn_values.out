@@ -1,0 +1,17 @@
+10 abab 3.0
+12 16
+5 7 42! 13
+3 8
+[2, 4, 6] ["'a'", "'b'"] [2.0, 3.0]
+10 24 9
+xy 4
+42 5 'z'
+HEY? OK!
+20 -- 14
+[4, 4] 2
+via-print.
+a function is true
+False True
+double len sqrt shout abs add
+30 2 's' 4.0 2
+[exit 0]

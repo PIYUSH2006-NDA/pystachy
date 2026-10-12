@@ -1,0 +1,10 @@
+6 5 ba 2.5
+[11, 13, 103] [70, 70, 70] [0, 10, 20] 832040
+abababab 7 5 6
+6 xyz 20
+['1a!', '2a!', '3b?c', '4-c'] ['>a, b', '>x', '>']
+12 [5, 3, 1, 6, 4, 2]
+[('a', 3), ('b', 2), ('c', 1)] [False, True, True] ['inner', 'names.<locals>.inner', '<lambda>', 'names.<locals>.<lambda>']
+49 [(2, 'a'), (1, 'b'), (0, 'c')] (0, 'c') o
+14 now 10 3
+[exit 0]

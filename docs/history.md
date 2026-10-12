@@ -70,7 +70,7 @@ Each row says what was decided, why, and where to read more.
 
 | decision | why | where |
 |---|---|---|
-| Standalone mode, or also a CPython-extension mode (open, nothing decided) | Broad package support needs an interoperability strategy as well as features: #5 estimates that even with every feature, standalone mode makes only 288 of 821 pure-Python top packages at least half usable, and #4 §4 recommends evaluating an AOT extension mode in which CPython keeps imports, dynamic objects and dependencies. | [#4](https://github.com/den-run-ai/pystachy/issues/4) §4, [#5](https://github.com/den-run-ai/pystachy/issues/5), [typed-ir.md](typed-ir.md) §7.4 |
+| Standalone mode, or also a CPython-extension mode (open, nothing decided) | Broad package support needs an interoperability strategy as well as features: #5 estimates that even with every feature, standalone mode makes only 288 of 821 pure-Python top packages at least half usable, and #4 §4 recommends evaluating an AOT extension mode in which CPython keeps imports, dynamic objects and dependencies. | [#4](https://github.com/den-run-ai/pystachy/issues/4) §4, [#5](https://github.com/den-run-ai/pystachy/issues/5), [typed-ir.md](typed-ir.md) §7.4; proposal and prototype: [ffi.md](ffi.md) |
 
 ## Where it comes from
 

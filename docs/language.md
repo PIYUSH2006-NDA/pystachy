@@ -16,7 +16,7 @@ with a `file:line: error:`, never miscompiled.
 | [Typing rules](#typing-rules) | annotated functions have their declared types; an unannotated module-level function is a *template*, compiled once per list of argument types |
 | [Exceptions](#exceptions) | `try`/`except`/`else`/`finally` and `raise` with CPython 3.13's exception hierarchy, and exception classes of the program |
 | [Modules](#modules) | your own modules and packages, the builtin modules `sys`, `os`, `math`, `time`, ..., and unmodified standard library modules from `lib/` |
-| [Removed on purpose](#removed-on-purpose) | generators, lambdas and closures, inheritance (but an exception class's), sets, `bytes`, big integers, `async`, ... |
+| [Removed on purpose](#removed-on-purpose) | generators, inheritance (but an exception class's), sets, `bytes`, big integers, `async`, ... |
 | [Syntax errors](#syntax-errors) | every `SyntaxError` CPython reports before running a file, at CPython's line and almost always with its message |
 
 Contents: [Types](#types) · [Typing rules](#typing-rules) · [Statements](#statements) ·
@@ -79,10 +79,13 @@ imports `annotations` from `__future__`.
   keeps its type), and its first `return` with a value decides what it returns. It is
   compiled only when a call needs it, so what Pystachy cannot compile in it is an error only
   then. In it, `isinstance(x, T)` (also with a tuple of types or `T | U`), `hasattr(x, "a")`
-  (the builtin types have CPython 3.13's attributes) and `x is None`, when `x`'s type decides
-  them (for an object, which may be `None`, when its argument is known not to be: a new object
-  or `self`), are constants: only the branch that runs is compiled (in `if`, `while`, `assert`,
-  `and`/`or` and conditional expressions), and nothing after a `return`. A parameter whose
+  (the builtin types have CPython 3.13's attributes) and `x is None` (for a parameter `x` also
+  `None is x` and `x == None`, but not for an exception or an object whose class defines
+  `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
+  its argument is known not to be: a new object or `self`), are constants: only the branch that
+  runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
+  nothing after a `return`. The classes `isinstance()` names are still looked up there, as
+  everywhere (one whose `class` statement has not run raises `NameError`). A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
@@ -90,7 +93,18 @@ imports `annotations` from `__future__`.
   (`return fail("bad")`): the call has the type its context expects. A
   function with `*args` is a template too: each call arity compiles it with `args` a tuple
   of the extra arguments' types (iterating it needs one item type; `()` is the empty
-  tuple), and in `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
+  tuple). A star argument passes a tuple's items as positional arguments, to any function,
+  method, class or Callable (`f(*t)`, and `f(*args)` forwards a function's own), and so does a
+  list or tuple display's (`f(*[a, b])`); `print(*xs)` also prints a list's, a str's or a dict's
+  items. The function is evaluated first (the object of `o.m(*t)`), then the arguments in order,
+  each star's where it is, as in CPython. A function with `**kwargs` is a template too: each call
+  compiles it with `kwargs` the record of its extra keyword arguments' names and types, which
+  `f(**kwargs)` forwards as keyword arguments (as `**{"k": v}` of a display with str keys does), and
+  which reads as the dict CPython makes: `kwargs["k"]` (a name the call did not pass raises
+  `KeyError`), `get()`, `in` (also decided at compile time for a literal name, as `if kwargs:` is),
+  `len()`, iteration and `keys()`, and, where its values share a type, `values()`, `items()` and
+  `dict(kwargs)`; it prints as that dict. Changing it (`kwargs["k"] = v`, `pop()`) is rejected:
+  copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a module-level function's parameters and return that mention a
   module-level `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's may not).
   In a template's function, an empty list or dict that nothing fills where the
@@ -144,6 +158,10 @@ imports `annotations` from `__future__`.
   optional items, also against containers of `T` items (`list[str | None] == list[str]`; `+` of
   the two makes a `list[str | None]`, which `extend()` and `+=` also take a `list[str]` into);
   `join()` and `writelines()` check each `str | None` item.
+- `isinstance(x, T)` of an optional value or an object is decided by its type and, where that
+  leaves it open, by whether it is `None`: `None` is an `object` and a `type(None)`, also in a
+  tuple of types and in a union (`int | None`). A test that is true (or false) only where `x` is
+  not `None` narrows it as `x is not None` does (below); `isinstance(x, object)` narrows nothing.
 - A key that may be `None` is in no dict: `in` is `False`, `get()` and `pop()` give their
   default, and `d[k]`, `d.pop(k)`, `del d[k]` and `d[k] op= v` raise `KeyError: None`
   (`d[k] op= v` stores `k` only where `d[k]` has found it, so `k` needs no narrowing there,
@@ -165,21 +183,81 @@ imports `annotations` from `__future__`.
   it). A comprehension's variables are its own, and do not change what is narrowed outside it.
   Module globals and fields are not narrowed, as a call may change them: copy one to a local,
   and test that.
+- A function is a value. The name of a def at a module's top level (also another module's:
+  `m.f`, or `f` after `from m import f`), of a builtin (`len`, `int`, `print`) or of a builtin
+  module's function (`math.sqrt`) is a value whose type is that function, so a call through it
+  (`f(x)`, where `f` is a parameter, a variable, a field, an item or a call's result) is compiled
+  as a call of the function there: a template's for the call's argument types, with the keyword
+  and default arguments that a call by its name takes. A template given a function is compiled
+  for that function (`apply(double, 5)`), as for any other argument type, and so is
+  `lib/bisect`'s `key=`. `key=` of `sorted()`, `list.sort()`, `min()` and `max()` is called as
+  CPython calls it: a sort computes every item's key first, in order (`list.sort()` empties its
+  list meanwhile, gives its items back if a key raises, and fails with `ValueError: list modified
+  during sort` if one changes it), then sorts by the keys with CPython's comparisons; `min()` and
+  `max()` compare each item's key with the best so far as they go. A function value is true and
+  never `None`, is (`==`, `is`) another value
+  of its own type only, and its `__name__` and `__qualname__` are its name. As a value has one
+  type, a variable, a field, a list's items and a dict's values hold one function, unless they
+  are annotated `Callable` (below), and printing a function is rejected (CPython prints its
+  address).
+- A method read without a call is bound to its object, as in CPython: `o.m` of an object (also
+  `self.m`, which a field may hold: `self.on_click = self.default_click`), and `s.join`,
+  `xs.append`, `d.get` or `f.write` of a `str`, list, dict or file, is a value typed by the method
+  that holds the object, and a call through it is `o.m(...)`. A method read through a builtin
+  type takes the value first: `str.lower(s)` is `s.lower()`, and `str.lower` is a value too
+  (`sorted(words, key=str.lower)`). Bound methods are equal (`==`) where they are one method of one
+  object; `is` between them is rejected, as CPython makes a new method object at each read. A
+  static or class method, and a method of an `int`, `float` or `bool`, as a value are rejected.
+- `Callable[[A, B], R]` (typing's or `collections.abc`'s, also `Callable[[], R]` and with `| None`)
+  is the type of any function that takes an `A` and a `B` and returns an `R`: a function value
+  becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
+  dict item), compiled for those parameter types, so one variable, field or list holds different
+  functions (defs, builtins, lambdas, closures, bound methods). A call of a Callable passes its arguments by
+  position, as its parameter types type them (one that is `None` raises `TypeError` once they are
+  evaluated); two Callables are the same function where they hold one function (a closure from
+  one run of its def or lambda), also compared with that function, and where they may be `None`,
+  where both are. A Callable may be the `key=` of `sorted()`, `min()`, `max()` and `list.sort()`
+  (one that may be `None` only once tested). `Callable[..., R]` is not supported.
+- A lambda, and a def inside a function, make a closure each time they run: a function value
+  typed by the def or lambda and by the function (the template's instance) it is in, which is a
+  template, compiled for the argument types of each call through it (an annotated parameter
+  keeps its type). It reads the variables of the functions around it when it runs, as CPython's
+  closures do: each such variable lives in a cell, which the function that binds it and the
+  closures that read it share, so a closure sees later assignments (`lambda: i` made in a loop
+  reads the last `i`) and `nonlocal` assigns the variable itself. Its default values that are no
+  constants are evaluated where it is defined, and the value keeps them. Such a variable must be
+  assigned where the closure is defined (but a def's own name, for recursion), have a type known
+  there (annotate an empty list a closure fills: `seen: list[int] = []`), and not be unbound by
+  `del` or as an `except ... as` name; a closure in a comprehension may not read the
+  comprehension's variable. Two closures are the same function where they come from one run of
+  one def or lambda; `__name__` is the def's name or `<lambda>`, and `__qualname__` is
+  `outer.<locals>.inner`, which CPython's messages about a call's arguments show.
+- A def's decorators (`@d`, `@m.d`, `@d(args)`, stacked) run when the def statement runs, as
+  CPython runs them: the decorator expressions are evaluated from the top, then the def's default
+  values, and each decorator is called, from the bottom, with what the one below gave. The def's
+  name binds the last result, whatever it is (a function, an object such as `Parser(f)`, an
+  `int`), as an assignment would: at a module's top level a module variable, which raises
+  `NameError` where it is read before the def has run, and the decorated function is a closure
+  (above). `typing`'s decorators (`@overload`, `@final`, ...) are left out; `@staticmethod`,
+  `@classmethod` and `@property` apply only in a class body, where no other decorator is supported
+  yet.
 - No silent `int` → `float` conversion when assigning or passing arguments: CPython would
   keep an `int`, so `x: float = 1` is rejected (write `1.0`). Arithmetic mixes freely, and so
   do `in`, `count()`, `index()` and `remove()` of a list of numbers (`1 in [1.0]`).
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method or function call, or a list, tuple or dict display of those (by its first
-  item), `[x] * n`, `list(range(n))`, `list(xs)` or `sorted(xs)` (not a call of a template,
-  whose result type is known only once it is compiled, nor of a function that returns `None`:
-  annotate the field). An exception class (below) also has its base's fields, and an object
-  of it is an object of its bases too.
+  constructor, method (also `self(...)`, its `__call__`) or function call, a function (a def, a
+  builtin or a builtin module's, such as `math.sqrt`), or a list, tuple or
+  dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
+  `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
+  nor of a function that returns `None`: annotate the field). An exception class (below) also
+  has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
-  `+` and `*` (which make a tuple), `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
+  `+` and `*` (which make a tuple), the prefixes of `str.startswith()` or suffixes of `endswith()`,
+  `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
   one type), and `==`, `!=` and ordering as tuple's methods do them (also with plain tuples
   and other NamedTuples), except an operator that its class defines; its `repr()` is a
   dataclass's.
@@ -212,12 +290,13 @@ that changes size raises `RuntimeError`), `break`, `continue`, `return`, `pass` 
 `del` of a list item, a dict key or an object's item, `assert`, `with open(...) as f:` (also several items, in
 parentheses or not), `try` (below), `raise` of an exception class, a call of one or an
 exception, a bare `raise` and `raise ... from ...` (if nothing catches it, it ends the program
-with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included), `def`,
-`class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
+with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included), `def` (also
+inside a function: a closure, see *Typing rules*), decorators of a def (see *Typing rules*), `nonlocal`, lambdas, `class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
-(`/`) parameters.
+(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`): see
+[ffi.md](ffi.md) (a program's own `ffi.py` comes first, as under CPython).
 
 ## Exceptions
 
@@ -232,8 +311,9 @@ leaves the list whole): a missing dict key, an index out of range, `int("x")`, a
 zero, `open()` of a missing file and the other `OSError` subclasses, unpacking, `sys.exit()` as
 `SystemExit`, and the checked arithmetic's `OverflowError`.
 
-A clause's classes are looked up when an exception gets to it (one whose `class` statement has
-not run raises `NameError`). The name bound by `as` is unbound after its clause, however the
+A clause's classes are looked up when an exception gets to it, and `raise C(...)`'s (also
+`raise C` and `raise ... from C(...)`) before the exception is made: one whose `class` statement
+has not run raises `NameError`. The name bound by `as` is unbound after its clause, however the
 clause is left, and may be bound to a value of another type before or after it.
 
 A builtin exception, which calling a builtin exception class makes too
@@ -252,8 +332,10 @@ that is not an exception raises CPython's `TypeError`.
 `continue` in it drops the exception in flight. A bare `raise` re-raises the exception being
 handled, which every way out of an except clause restores, and an exception that leaves a `with`
 block closes its file (a close that fails raises its `OSError` in its place, inside the `try`
-statement around, as `__exit__` does). A module whose code raises is not imported: the name its
-import binds is unbound, and a later import runs its code again.
+statement around, as `__exit__` does). A module whose code raises is not imported: the names its
+import binds are unbound (`import m as x`, `import p.m as x`, and what `from p import m` or
+`from m import f, C` takes), so a read of one raises `NameError` (`UnboundLocalError` in a
+function), and a later import runs its code again.
 
 ### Exception classes
 
@@ -305,7 +387,8 @@ value, as CPython binds it; of a function or class it names the same one. `from 
 takes the names `__all__` lists (also after `+=`, `append` and `extend`), else the public
 names bound when the module's code ends; a name a package binds itself (`from .parse import
 parse`) wins over its submodule of that name. A module-level `name = function` makes an
-alias. A global that its module's code may leave unbound (assigned in an `if`, or only after
+alias, also of a function or class the module from-imports, which `from m import name` and
+`import *` take as the function or class itself. A global that its module's code may leave unbound (assigned in an `if`, or only after
 an import that can call back into the module) is checked where functions and other modules
 read it, raising CPython's `NameError` or `AttributeError`. A template's function compiled
 before its module's code assigns a global it reads (first called in a branch that does not
@@ -318,13 +401,20 @@ code fills; the read is checked as above.
 What CPython decides at import time is decided at compile time. An imported module's
 `if __name__ == "__main__":` block is dropped, and so are `if typing.TYPE_CHECKING:` blocks
 (also where `TYPE_CHECKING` is imported in a `try` whose `except ImportError:` clause sets it
-to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()`, `in` a tuple
-or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
-test also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
+to `False`). In module code, outside its functions and class bodies, `if False:` and `if 0:`
+blocks are dropped too, and so are `if TYPE_CHECKING:` blocks after a top-level
+`TYPE_CHECKING = False` (the idiom that spares importing `typing`) where the module binds the
+name nowhere else: no other assignment, `del` or import of it, no star import and no `global`
+statement naming it.
+Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()` also of a tuple, `in` a
+tuple or list of Windows names) and of `os.name` are decided for POSIX, these and the tests above
+also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
 hides them, and a name a function binds only in code dropped this way (also by `:=`, a `match` capture or
-a `type` statement) is still its local.
+a `type` statement) is still its local. A `global` statement in dropped code still holds for its whole
+function, and in a class body, which may not hold one, it is an error (there CPython's `x = 2` further
+on binds the module's `x`, not a class attribute).
 
 ### Optional imports
 
@@ -351,12 +441,21 @@ A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
 unannotated methods, an annotation it does not support such as `Iterable[int]` or
 `dict[float, X]`, a `bytes` or
-`**kwargs` parameter, a field whose type cannot be inferred, ...) is an error only where the
+`**kwargs` parameter, a field whose type cannot be inferred, a special method that Pystachy
+never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
-compile, and the parts it can compile of the others (the items of a display). What it leaves
-uncompiled (decorators, default values, bases, a class body) must run no code of the
+compile, and the parts it can compile of the others (the items of a display), and calls a def's
+decorators (*Typing rules*). Of a class body,
+it evaluates in order the operations that may raise and that it computes as CPython does, but
+not in the branches of an `if`: `//`, `%` and `/` of numbers (not `//` of two ints that may be
+`-2**63 // -1`), an index of a list or dict, `int()` of a str literal of ASCII characters with at
+most 18 digits, and `min()` and `max()` of a list, applied to literals and the module's variables
+(`1 // 0`, `TABLE["k"]`, `int("x")`). It stops at the first operation that may raise and that it
+does not evaluate (another call, `**`, an index of a str, `1 // n` of the body's own `n`), and
+evaluates none in the module's later classes. What it leaves
+uncompiled (a class's and its methods' decorators, default values, bases, a class body) must run no code of the
 program: it may read names, compute with literals and builtin values (`2 ** 31 - 1`,
 `TABLE.get(k)`, `sorted(xs, key=len)`, `math.sqrt(2.0)`, `typing.Optional[int]`), bind and
 delete names in a class body, use `if`, and apply `staticmethod`, `classmethod`, `property`,
@@ -384,64 +483,87 @@ with every escape except `\N{...}`, raw and triple-quoted strings, implicit
 concatenation), f-strings with `!r`, `!s`, `!a`, `=`, nested format specs and CPython's
 complete format-spec mini-language, `%` formatting with a constant format string
 (`"%-5s %05.2f" % (a, b)`: the conversions `s r a d i u x X o e E f F g G c` with their flags,
-widths and precisions, but not `%(name)s`, `*` or a precision on integers), arithmetic with Python semantics (`//` and `%` floor,
+widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
+that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `and`/`or`
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+`None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
 displays, list comprehensions, generator expressions and
-`range()`/`reversed()`/`enumerate()`/`zip()` as the argument of `list()`, `sorted()`,
-`sum()`, `min()`, `max()`, `any()`, `all()`, `str.join()` or `list.extend()` (`any()` and
-`all()` stop at the deciding item, as they do over files, and `list.extend()` appends each
-item of a generator expression as it is made), `x in range(...)`, and operator
-overloading resolved statically:
-`__add__` & co, the in-place forms, `__eq__`, rich comparisons with CPython's reflection
+`range()`/`reversed()`/`enumerate()`/`zip()`, and `map()`/`filter()` (the generator expressions
+they are, their function evaluated first), as the argument of `list()`, `sorted()`,
+`sum()`, `min()`, `max()`, `any()`, `all()`, `math.fsum()`, `math.prod()`, `str.join()` or
+`list.extend()` (`any()` and `all()` stop at the deciding item, as they do over files, and
+`list.extend()` appends each item of a generator expression as it is made), `x in range(...)`,
+and operator overloading resolved statically:
+`__add__` & co, the in-place forms, `__neg__`, `__pos__` and `__invert__` for unary `-`, `+`
+and `~`, `__eq__`, rich comparisons with CPython's reflection
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
 `__format__`. Objects inside lists, dicts and tuples compare, sort and print through
 their own methods, as CPython calls them: lists and tuples compare their items with `==`
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
-`__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
+`__gt__`), and `max` uses `>`.
 
-The container protocol is resolved statically too: `o[k]` calls `__getitem__`, `o[k] = v`
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls the
+function `o` is (see *Typing rules*), or `__call__`, with keyword and default arguments as a
+method takes them (`o` a variable, a field,
+a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
 `__iter__` steps through. An `__iter__` annotated `-> Iterator[T]` (or `Iterable[T]`) that
 returns `iter(xs)` of a list, a tuple, a `str` or another such object steps through `xs` as a
 list's iterator does, wherever the object is iterated: `for` loops, comprehensions, unpacking,
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
-`str.join()` and `list.extend()`; `list()`, `sorted()` and `list.extend()` then call its
-`__len__`, if it has one, as CPython's length hint. A method the operation needs and the class
-does not define is an error with CPython's message (`'C' object is not subscriptable`), and an
-object that is `None` raises CPython's error when it runs.
+`math.fsum()`, `math.prod()`, `math.dist()`, `str.join()` and `list.extend()`; `list()`,
+`sorted()` and `list.extend()` then call its `__len__`, if it has one, as CPython's length
+hint. A method the
+operation needs and the class does not define is an error with CPython's message (`'C' object
+is not subscriptable`, `'C' object is not callable`), and an object that is `None` raises
+CPython's error when it runs.
 
 ## Builtins and library modules
 
 `print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
-`int`, `float`, `bool`, `ord`, `chr`, `abs`, `min`, `max`, `sum`, `sorted` (and
-`list.sort`, with `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
+`int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
+or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
+`list.sort`, with `key=` and `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
 with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
-(`find`/`index`/`count` with start and end, also `None`, `split`/`rsplit`, `partition`/`rpartition`,
+(`find`/`index`/`count` with start and end, also `None`, `startswith`/`endswith` also with a tuple of
+`str`, `split`/`rsplit`, `partition`/`rpartition`,
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
-`zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default; not
-`str.format()`, `dict.update()`, `popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
-`index()` and `count()`); `open()` with CPython's modes, errors, `buffering=`, `newline=`
+`zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default,
+`dict.update()` of a dict of its type, a list of `(key, value)` tuples and keyword arguments
+(str keys), and `dict.fromkeys(xs, v)` (`v` omitted or `None` where an annotation gives values
+that can be `None`; `xs` not a generator, `zip()`, `enumerate()` or `reversed()`; an empty `()`
+or `{}` has the keys of the dict wanted); not `str.format()`, `dict.popitem()`, `dict()` of
+pairs, or tuple's `index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
+`open()` with CPython's modes, errors, `buffering=`, `newline=`
 translation and positions for `"+"` modes, and files' `read`/`readline`/
 `readlines`/`write`/`writelines`/`flush`/`close`, iteration and `closed`/`name`/`mode`;
 `sys.argv/exit/stdin/stdout/stderr/maxsize/platform/setrecursionlimit/getrecursionlimit` (the streams
-are files), `os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
+are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/mant_dig/epsilon/radix/rounds`
+(CPython's for IEEE 754 doubles; `sys.float_info` itself is not a value),
+`os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
-constants, which raise CPython's domain and range errors (but `dist`, `fsum`, `gamma`,
-`isclose`, `lgamma`, `prod` and `sumprod`, which are rejected).
+constants, which raise CPython's domain and range errors, with `fsum`, `prod` (and its
+`start=`) and `dist` computed as CPython computes them (`fsum` and `prod` take what `sum()`
+takes, and `fsum` a tuple of ints and floats too; `dist` takes two lists or tuples of
+numbers, NamedTuples or objects with `__iter__`, and copies the first point's items before it
+iterates the second, as its `tuple(p)` does); `gamma`, `isclose`, `lgamma` and `sumprod` are
+rejected.
 
 ## Removed on purpose
 
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
-arguments above, lambdas and closures, inheritance other than an exception class's, `**kwargs` and
-`*args` in methods, star arguments in calls (`f(*xs)`) and starred targets (`a, *rest = xs`),
-sets, dict and multi-clause comprehensions, slice steps, first-class
-functions (`map`, `key=`), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
+arguments above, inheritance other than an exception class's,
+`*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
+display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
+*Typing rules*), starred targets (`a, *rest = xs`),
+sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` other than as a
+consumer's argument (above), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
 files, complex numbers, arbitrary-precision integers, `async`, `match` and `:=`. The parser
 accepts all of them, and the compiler rejects each where it compiles it, so an imported
@@ -508,7 +630,10 @@ In these cases the program compiles but can behave differently from CPython:
   and `reversed()` of them do not notice a dict that changes size (a plain `for` over
   `d.items()` steps the dict itself and does), and neither do `in`, `min()` and `max()` over
   `d.values()` when an `__eq__` or `__lt__` of the values changes the dict, where CPython
-  raises `RuntimeError`; they print as lists and compare equal to lists.
+  raises `RuntimeError`; they print as lists and compare equal to lists. A snapshot is taken
+  where the call is evaluated, so a later argument that changes the dict does not change it
+  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
+  `dict.fromkeys(d.keys(), d.pop(k))`), where CPython's view shows the change.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without
@@ -523,10 +648,17 @@ In these cases the program compiles but can behave differently from CPython:
   and where CPython raises `RecursionError` the program dies with `SIGSEGV` (status 139, losing buffered output) or,
   for a tail call in an AOT build, loops forever. `==` between two cyclic dataclass objects
   recurses like that too.
+- `min()`, `max()` and `math.fsum()` make all the items of a generator expression before they
+  compare or add them (or call `key=` on them), so where CPython stops at an item (a `__lt__`
+  that raises, or fsum's `OverflowError: intermediate overflow in fsum`), the expressions of the
+  later items have run, and an exception that one of them raises comes first.
+- `is` between `Callable`s compares the function they hold and its env or bound object, as `==`
+  does, so two reads of one bound method (`o.m`) made `Callable`s are the same object, where
+  CPython makes a new method object at each read.
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
   tuples holding the same NaN object compare, and sort, as if they held different ones. The
-  sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), where CPython returns the int
-  start.
+  sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
+  `1.0`, where CPython returns the int start.
 - An import of a builtin module binds its names for the whole program, wherever it appears
   (an import of a Python module in a function binds its names in that function only, as in
   CPython, also where the name is a builtin module it re-exports: `from helper import os`). A program that reads a module's attribute before the import of the module has
@@ -557,14 +689,15 @@ In these cases the program compiles but can behave differently from CPython:
   `typing`'s checks of `NamedTuple`, `TypedDict`, `Protocol` and `Generic` classes, `__slots__`
   conflicts, `@dataclass`'s field order and mutable defaults, a base that is not a class or
   cannot be subscripted (but a subscript of a class without bases, above), and an exception
-  that a builtin operation in its body raises. A template's code is compiled per argument
+  that a builtin operation in its body raises where Pystachy does not evaluate it (above), as
+  `1 // n` of the body's own `n`. A template's code is compiled per argument
   types, so a type error in code a program never calls is not reported (syntax errors are), and its
   variables keep one type, so code that rebinds one to another type (`a /= b` on ints) is
   rejected when it is compiled.
 - An optional import of a module that Pystachy does not find runs its handler, also where
   CPython would find the module (a standard library module Pystachy lacks, or a package
   installed for CPython), and so does one of a name that a builtin module of Pystachy lacks
-  (`from math import fsum`); a handler that may end the program is rejected instead (below). A
+  (`from math import gamma`); a handler that may end the program is rejected instead (below). A
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 - A global (a function or class included) that its module's code has not bound when it is
@@ -601,12 +734,15 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   `__format__`), where CPython raises `NameError`, `AttributeError` or `TypeError` as it runs, also
   in a `try` whose clause catches it (a feature test such as `try: unicode / except NameError:`)
 - a function, class, method or import name bound twice, or a name that is both a variable and a
-  function, class or import
+  function, class or import, also in a function: a parameter or local that an import in it binds
+  too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
+  which assigns the local
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
   one named like a builtin or `__name__`, also in an imported module
 - a local read textually before its first assignment (declare it first: `x: int`), where a name
   that a function deletes, defines with `def` or `class`, or binds with `:=`, a `match` capture
-  or a `type` statement is its local too
+  or a `type` statement is its local too, also where the name is a class's that the read uses
+  (`C.m()`, `C.x`, `C.x = v`, `isinstance(o, C)`, `raise C(...)`)
 - a read of a function's local that only code dropped at compile time binds
 - calling a builtin whose name the module also binds as a variable (`sum = 0` ... `sum(xs)`,
   which CPython would reject at run time)
@@ -639,13 +775,18 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a name a package binds itself that is also the name of a submodule the program imports, read
   as `pkg.util`, with `from pkg import util` or in the package's functions, when which of the
   two it is depends on when the submodule is first imported
-- an alias (`f = g`) that module-level code uses before its assignment
+- an alias (`f = g`) that module-level code uses before its assignment, and an alias of a
+  from-imported function or class that another module from-imports, in an import cycle, before
+  the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
 - `del` of another module's attribute
+- an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
+  module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time (above): from
+  another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code (above) that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,
@@ -711,12 +852,33 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
+- a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
+  `str | None` (CPython raises `TypeError` at the first such item it reaches)
+- two different functions where one value goes (a variable, a field, a list's items, a dict's
+  values, the two arms of a conditional expression) that is not annotated `Callable`: each function
+  is a type of its own, and so is each lambda and def inside a function
+- `Callable[..., R]`, a call of a `Callable` with keyword arguments or with another number of
+  arguments than its parameter types, and a function where a `Callable` is expected whose result is
+  not the `Callable`'s return type (an `int` for a `float`, as for a function's own return)
+- a lambda or a def inside a function that reads a variable of the functions around it which may
+  not be assigned where it is defined (but a def's own name), which a `del` or the end of an
+  `except ... as` clause unbinds, or which is a variable of the comprehension it is in; a decorated
+  def inside a function that reads its own name (what its decorators give binds it only once they
+  have run), and a class inside a function
+- printing a function, also inside a container, and comparing containers of functions (CPython
+  prints a function's address)
 
 ### Classes, dataclasses and NamedTuples
 
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`), and decorators other
   than these, `@dataclass` and `@overload`
+- a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
+  `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
+  never does (in an imported module, an error where the program uses the class; its class
+  statement still runs), and an exception class whose base defines `__init_subclass__`, which
+  CPython calls when it creates the class (also in an imported module, whose code creates it when
+  it is imported)
 - `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
   and `KW_ONLY`
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
@@ -742,9 +904,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   expected (as mypy does: the container could then be given a `None` that its other references do
   not expect; mypy takes it for a `Sequence[T | None]` or `Mapping[K, T | None]`, a list and a dict
   here), and an argument that may be `None` of a builtin function other than `len()`, `int()`,
-  `float()`, `ord()`, `dict()`, `sum()`, `round()`, `os.system()`, `os.path.exists()` and those
-  that take `None` (and `round(x, n)` of a `float` `x` and an `n` that may be `None`, which would
-  return an `int` or a `float` by whether `n` is `None`)
+  `float()`, `ord()`, `hex()`, `oct()`, `bin()`, `dict()`, `sum()`, `round()`, `os.system()`,
+  `os.path.exists()` and those that take `None` (and `round(x, n)` of a `float` `x` and an `n`
+  that may be `None`, which would return an `int` or a `float` by whether `n` is `None`)
 - a read that needs the type of a local that only `None` has been assigned so far, where no other
   value assigned to it can be typed yet and the context expects none (annotate it:
   `x: T | None = None`)
@@ -786,8 +948,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `except ... as x` in a function where `x` is a global (the end of the clause deletes it, as `del`
   would), and at a module's top level where `x` is a global of another type that a function reads
   (the function would not see the exception)
-- `==` between exceptions where an exception class defines `__eq__` or `__ne__` (`is` works), but
-  between objects of classes with a base in common
+- `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
+  or `__ne__` (`is` works), but between objects of classes with a base in common
 - an exception that may be `None` (`Exception | None`, `ValueError | None`; an object of an
   exception class may be)
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:
@@ -820,13 +982,20 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   a field of the base unassigned where the base's code reads it (call `super().__init__()` first),
   keyword arguments where no class of its line has an `__init__` (but those its builtin base's
   takes, such as `ImportError`'s `name` and `path`), more than three arguments for one deriving
-  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes
+  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes,
+  in a static method without parameters, without arguments in a class method (where it binds the
+  class), or with arguments other than the method's own class and `self` (`super(Base, self)`, or a
+  local that hides the class's name), or calling a class method of the base that uses `cls`
 
 ### Builtins
 
 - `range()`, `enumerate()`, `zip()` or `reversed()` nested inside `enumerate()`, `zip()` or
   `reversed()` in a `for` loop, and `zip(strict=...)`
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
+- `dict.update()` of a dict of other key or value types, of an iterable other than a list of
+  `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
+  keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
+  a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
 
 ### Source text

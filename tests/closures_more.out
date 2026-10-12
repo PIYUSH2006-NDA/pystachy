@@ -1,0 +1,7 @@
+ANN - ['3', 'bad -1', '2']
+5 2 [0, 1, 2, 3] {'d': 42, 's': 2}
+42 ['p:1', 'p:a', 'p:2.5', 'p:[1]'] 21 (60, 30)
+caught integer division or modulo by zero
+True
+AttributeError: 'NoneType' object has no attribute 'upper'
+[exit 0]

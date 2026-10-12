@@ -118,7 +118,7 @@ methods.
 
 | module | what works (checked against CPython) | what does not, and why |
 |---|---|---|
-| `bisect` | `bisect_left`, `bisect_right`, `insort_left`, `insort_right`, `bisect`, `insort`, with `lo`/`hi`, on ints, floats, strings, tuples, objects | `key=<function>` (functions are not values) |
+| `bisect` | `bisect_left`, `bisect_right`, `insort_left`, `insort_right`, `bisect`, `insort`, with `lo`/`hi`, on ints, floats, strings, tuples, objects, and `key=` with a function of the program or a builtin | `key=` with a lambda (not supported) |
 | `colorsys` | all six conversions, with float or int arguments | — |
 | `heapq` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` forms, on any ordered type | `merge` (a generator, `*iterables`), `nlargest`/`nsmallest` (`iter`, `key=`, `try`) |
 | `operator` | 49 of its functions: arithmetic, bitwise, comparisons, `not_`/`truth`, `concat`, `contains`/`countOf`/`indexOf`, item access, the in-place forms, the dunder aliases | `attrgetter`, `itemgetter`, `methodcaller` (classes with `*args`), `call`, `length_hint`, `index` (`int.__index__`); in-place forms that change the type (`itruediv(1, 2)`) |
@@ -229,7 +229,7 @@ bounds. The 15 best candidates, read line by line:
 | `sys.version_info` tests and module-level `HAS_X = False` flags folded | 731 and 395 modules | not yet |
 | a `lib/warnings.py` with `warn()` | 3,589 modules use only `warnings.warn` | not yet |
 | exception classes that only subclass a builtin exception | 4,747 classes, raised at 55,510 sites | not yet |
-| `dict.get(k)` on scalar values; `math.modf`/`fsum`/`asinh`; `int(x, base=16)` | 75,656 call sites; jdcal, sgp4, hsluv | not yet |
+| `dict.get(k)` on scalar values; `math.modf`/`fsum`/`asinh`; `int(x, base=16)` | 75,656 call sites; jdcal, sgp4, hsluv | done |
 
 The importability counts above were measured on the compiler before the first four refinements;
 the survey's model with them (and the folding of `sys.version_info`) raises the top 400 from 200 to

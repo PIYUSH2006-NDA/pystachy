@@ -1,0 +1,33 @@
+int None True True True True True True True True True True True True True True
+int 3 True False True True True True True False False True True False True False
+float None True True True True True True
+float 2.5 True False True True False False
+bool None True True True True True True
+bool False True False True True False False
+str None True True True True True True
+str  True False True True False False
+list None True True True True True True
+list [] True False True True False False
+dict None True True True True True True
+dict {'a': 1} True False True True False False
+tuple None True True True True True True
+tuple (1, 'a') True False True True False False
+class True True True True True True True False
+class False True False True True False True True
+namedtuple None True True True True False True
+namedtuple P(x=1, y=2) True False True True True False
+plain False False True True True False True True True False False True True True
+False True True
+int 0
+str 0
+True False True
+int 10
+str 1
+True False True
+0
+[True, True, True, True, False] [False, True, True, True, False]
+[False, True, True, False, False]
+True True False
+False True True
+False True True
+[exit 0]

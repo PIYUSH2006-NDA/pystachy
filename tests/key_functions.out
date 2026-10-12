@@ -1,0 +1,19 @@
+['Fig', 'fig', 'pear', 'Kiwi', 'apple', 'banana'] ['apple', 'banana', 'Fig', 'fig', 'Kiwi', 'pear'] ['banana', 'apple', 'pear', 'Kiwi', 'Fig', 'fig']
+['Fig', 'fig', 'Kiwi', 'pear', 'apple', 'banana'] ['pear', 'Kiwi', 'Fig', 'fig', 'banana', 'apple']
+[('b', 1), ('e', 1), ('d', 2), ('a', 3), ('c', 3)] [('a', 3), ('c', 3), ('d', 2), ('b', 1), ('e', 1)]
+[9, 8, 7, 6, 5, 4, 3, 2, 1, 0] [8, 2, 4, 6, 0, 5, 3, 1, 9, 7] [5, 3, 1, 9, 7, 8, 2, 4, 6, 0]
+[0, 2, 4, 6, 8, 1, 3, 5, 7, 9] [9, 9, 4, 4, 1, 1, 0]
+[0.5, -1.0, 2.5] ['A', 'b', 'c'] [1, 2, 3]
+[5, 0, 1, 6, 2, 7, 3, 8, 9, 4]
+['apple', 'banana', 'Fig', 'fig', 'Kiwi', 'pear']
+['banana', 'apple', 'Kiwi', 'pear', 'Fig', 'fig']
+[1, -2, 3, -4]
+[3, 1, -2, -4]
+Fig banana ('b', 1) ('a', 3)
+9 5 1.0 o
+3 def 9 Box(4)
+8 1 x
+[] 1 9
+[0, 2, 4, 6, 8] [1, 3, 5, 7, 9]
+[199, 198, 197]
+[exit 0]
