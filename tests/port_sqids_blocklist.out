@@ -1,0 +1,74 @@
+[4572721] JExTR [100000] ArUO
+[100000]
+[4572721] aho1e [100000] ArUO
+[100000]
+[4572721] aho1e [100000] QyG4
+[100000]
+1aYeB7bRUt [1000000, 2000000]
+JSwXFaosAN
+[[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3]] KA5FQN
+LM7 [1000] pnd
+IBSHOZ [1, 2, 3] SXNZKL
+ab! True []
+abc! True []
+xyz True []
+BBC False [2]
+abab False [10]
+UkK Uk
+Gpk Uk [63]
+['UKP', 'ukp', 'Ukp', 'ukp'] [(61, 'GpL')] True
+['bnn', 'BNN', 'gXZ', 'gxz', 'gxz'] [(62, 'XMM'), (64, '6Vb')] True
+['', '   ', 'a b'] [] True
+ValueError: Reached max attempts to re-generate the ID
+bM bM
+0 [21606] M1st ZTAa True [21606]
+0 [152540] P1P1 DTDT True [152540]
+0 [15583] CocK rxzk True [15583]
+0 [125256] slut Aoca True [125256]
+0 [3465, 42] PorNI DxyPh True [3465, 42]
+8 [21606] M1stnylo ZTAaMUPd True [21606]
+8 [152540] P1P1NMcn DTDTPsx3 True [152540]
+8 [15583] CocKSrJg rxzkClYt True [15583]
+8 [125256] slut8jaG Aocas1ig True [125256]
+8 [3465, 42] PorNIMER DxyPhsIT True [3465, 42]
+'abc'/3 0 [0] True 'ca'
+'abc'/3 0 [1, 2, 3] True 'aacacbaa' True True 'bbabcabb'
+'abc'/3 0 [999, 0, 12345678] True 'aaaaaabbaaac' True True 'bbbbbbccbbba'
+'abc'/3 0 [9223372036854775807] True 'aaaaaaaaaaaa' True True 'bbbbbbbbbbbb'
+'abc'/3 7 [0] True 'cabacba' True True 'abcbcab'
+'abc'/3 7 [1, 2, 3] True 'aacacbaa' True True 'bbabcabb'
+'abc'/3 7 [999, 0, 12345678] True 'aaaaaabbaaac' True True 'bbbbbbccbbba'
+'abc'/3 7 [9223372036854775807] True 'aaaaaaaaaaaa' True True 'bbbbbbbbbbbb'
+'012'/10 0 [0] True '60'
+'012'/10 0 [1, 2, 3] True '506077' True True '185765'
+'012'/10 0 [999, 0, 12345678] True '184465262923' True True '760051696169'
+'012'/10 0 [9223372036854775807] True '856747983269' True True '615303269452'
+'012'/10 7 [0] True '6084637' True True '5867980'
+'012'/10 7 [1, 2, 3] True '5060774' True True '1857656'
+'012'/10 7 [999, 0, 12345678] True '184465262923' True True '760051696169'
+'012'/10 7 [9223372036854775807] True '856747983269' True True '615303269452'
+'zyx'/26 0 [0] True 'pa'
+'zyx'/26 0 [1, 2, 3] True 'vjakzd' True True 'pkvmkn'
+'zyx'/26 0 [999, 0, 12345678] True 'kzxkjfzdxwbq' True True 'alhakdymnhis'
+'zyx'/26 0 [9223372036854775807] True 'cmxnkujcveef' True True 'efhzaqkepbbx'
+'zyx'/26 7 [0] True 'pavktdm' True True 'gvpxkof'
+'zyx'/26 7 [1, 2, 3] True 'vjakzde' True True 'pkvmknv'
+'zyx'/26 7 [999, 0, 12345678] True 'kzxkjfzdxwbq' True True 'alhakdymnhis'
+'zyx'/26 7 [9223372036854775807] True 'cmxnkujcveef' True True 'efhzaqkepbbx'
+'\x00\x7f '/6 0 [0] True '~\x00'
+'\x00\x7f '/6 0 [1, 2, 3] True '! \x7f \n ' True True '\n~!~\x7f\x00'
+'\x00\x7f '/6 0 [999, 0, 12345678] True '\x00\x7f~\x00\x00\x00\n\x7f~\n\n\n' True True ' !\x7f   \x00\x00!\x7f\x7f\x7f'
+'\x00\x7f '/6 0 [9223372036854775807] True '\x7f\x00\x00 \x7f!!\n\x7f \x00!' True True '!  ~!\n\n\x00!~ \n'
+'\x00\x7f '/6 7 [0] True '~\x00 \n~\x00!' True True '\x7f ~ \n\x00~'
+'\x00\x7f '/6 7 [1, 2, 3] True '! \x7f \n \x00' True True '\n~!~\x7f\x00\n'
+'\x00\x7f '/6 7 [999, 0, 12345678] True '\x00\x7f~\x00\x00\x00\n\x7f~\n\n\n' True True ' !\x7f   \x00\x00!\x7f\x7f\x7f'
+'\x00\x7f '/6 7 [9223372036854775807] True '\x7f\x00\x00 \x7f!!\n\x7f \x00!' True True '!  ~!\n\n\x00!~ \n'
+'abc'/62 0 [0] True 'bM'
+'abc'/62 0 [1, 2, 3] True '86Rf07' True True 'se8ojk'
+'abc'/62 0 [999, 0, 12345678] True '5WOQnZS2cv' True True 'K3458Qy0Rx'
+'abc'/62 0 [9223372036854775807] True 'AqkYhRmbHpEX' True True 'Qnp2E8vXgLYV'
+'abc'/62 7 [0] True 'bMZn4Y5' True True 'XZbb5HT'
+'abc'/62 7 [1, 2, 3] True '86Rf07x' True True 'se8ojkC'
+'abc'/62 7 [999, 0, 12345678] True '5WOQnZS2cv' True True 'K3458Qy0Rx'
+'abc'/62 7 [9223372036854775807] True 'AqkYhRmbHpEX' True True 'Qnp2E8vXgLYV'
+[exit 0]

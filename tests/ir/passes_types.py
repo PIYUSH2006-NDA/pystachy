@@ -116,7 +116,7 @@ def optloop(xs: Optional[list[int]]) -> int:
 
 def ntloop(p: Pt) -> int:
     t = 0
-    for v in p:  # the list of its items: an inline load
+    for v in p:  # the tuple of its fields, whose slots it reads (tupleiter)
         t += v
     return t
 

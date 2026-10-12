@@ -1,0 +1,208 @@
+from typing import List, Sequence, Set, Tuple
+import sys
+from .constants import (
+    DEFAULT_ALPHABET,
+    DEFAULT_BLOCKLIST,
+    DEFAULT_MIN_LENGTH,
+    _exact_match,
+    _match_at_ends,
+    _match_anywhere,
+)
+
+# Pystachy port: a str for a set (M7); the blocklist filter looks for its characters.
+DIGITS = "0123456789"
+
+
+class Sqids:
+    def __init__(
+        self,
+        alphabet: str = DEFAULT_ALPHABET,
+        min_length: int = DEFAULT_MIN_LENGTH,
+        blocklist: List[str] = DEFAULT_BLOCKLIST,
+    ):
+        if any(ord(char) > 127 for char in alphabet):
+            raise ValueError("Alphabet cannot contain multibyte characters")
+
+        if len(alphabet) < 3:
+            raise ValueError("Alphabet length must be at least 3")
+
+        # Pystachy port: no set (M7): a character the alphabet holds more than once.
+        if any(alphabet.count(c) > 1 for c in alphabet):
+            raise ValueError("Alphabet must contain unique characters")
+
+        if not isinstance(min_length, int) or isinstance(min_length, bool):
+            raise TypeError("Minimum length must be an int")
+
+        MIN_LENGTH_LIMIT = 255
+        if min_length < 0 or min_length > MIN_LENGTH_LIMIT:
+            raise ValueError(
+                f"Minimum length has to be between 0 and {MIN_LENGTH_LIMIT}"
+            )
+
+        # When the blocklist and alphabet are defaults, use pre-filtered blocklists.
+        if blocklist is DEFAULT_BLOCKLIST and alphabet is DEFAULT_ALPHABET:
+            # Pystachy port: lists for the sets and the tuple, here and below (M7; a
+            # Pystachy tuple has a fixed length); they are only searched or looped over.
+            self.__blocklist_exact_match: List[str] = _exact_match
+            self.__blocklist_match_at_ends: List[str] = list(_match_at_ends)
+            self.__blocklist_match_anywhere: List[str] = _match_anywhere
+        else:
+            # Pystachy port: a str and lists for the sets (M7). A word may then be in a
+            # list twice, which changes no result.
+            alphabet_lower = alphabet.lower()
+            exact_match: List[str] = []
+            match_at_ends: List[str] = []
+            match_anywhere: List[str] = []
+            for word in blocklist:
+                if len(word) < 3:
+                    continue
+                word_lower = word.lower()
+                # Pystachy port: all() and any() for set operations, append() for add().
+                if not all(c in alphabet_lower for c in word_lower):
+                    continue
+
+                if len(word) == 3:
+                    exact_match.append(word.lower())  # Pystachy port: append()
+                elif any(c in DIGITS for c in word_lower):
+                    match_at_ends.append(word_lower)
+                else:
+                    match_anywhere.append(word_lower)  # Pystachy port: append()
+
+            self.__blocklist_exact_match = exact_match
+            # When matching at the ends, `.startswith()` and `.endswith()` need a tuple.
+            self.__blocklist_match_at_ends = match_at_ends  # Pystachy port: a list
+            self.__blocklist_match_anywhere = match_anywhere
+
+        self.__alphabet = self.__shuffle(alphabet)
+        self.__min_length = min_length
+
+    def encode(self, numbers: Sequence[int]) -> str:
+        if not numbers:
+            return ""
+
+        if not all(0 <= number <= sys.maxsize for number in numbers):
+            raise ValueError(f"Encoding supports numbers between 0 and {sys.maxsize}")
+
+        return self.__encode_numbers(numbers, 0)
+
+    def __encode_numbers(self, numbers: Sequence[int], increment: int = 0) -> str:
+        if increment > len(self.__alphabet):
+            raise ValueError("Reached max attempts to re-generate the ID")
+
+        offset = sum(
+            (
+                ord(self.__alphabet[v % len(self.__alphabet)]) + i
+                for i, v in enumerate(numbers)
+            )
+        )
+        offset = (offset + len(numbers)) % len(self.__alphabet)
+        offset = (offset + increment) % len(self.__alphabet)
+        alphabet = self.__alphabet[offset:] + self.__alphabet[:offset]
+        prefix = alphabet[0]
+        alphabet = "".join(reversed(alphabet))  # Pystachy port: no slice steps (M7)
+
+        ret = [prefix]
+
+        for i, num in enumerate(numbers):
+            ret.append(self.__to_id(num, alphabet[1:]))
+
+            if i >= len(numbers) - 1:
+                continue
+
+            ret.append(alphabet[0])
+            alphabet = self.__shuffle(alphabet)
+
+        id_ = "".join(ret)
+
+        if self.__min_length > len(id_):
+            id_ += alphabet[0]
+
+            while self.__min_length - len(id_) > 0:
+                alphabet = self.__shuffle(alphabet)
+                id_ += alphabet[: min(self.__min_length - len(id_), len(alphabet))]
+
+        if len(id_) >= 3 and self.__is_blocked_id(id_):
+            id_ = self.__encode_numbers(numbers, increment + 1)
+
+        return id_
+
+    def decode(self, id_: str) -> List[int]:
+        ret: List[int] = []
+
+        if not id_:
+            return ret
+
+        alphabet_chars = list(self.__alphabet)
+        if any(c not in alphabet_chars for c in id_):
+            return ret
+
+        prefix = id_[0]
+        offset = self.__alphabet.index(prefix)
+        alphabet = self.__alphabet[offset:] + self.__alphabet[:offset]
+        alphabet = "".join(reversed(alphabet))  # Pystachy port: no slice steps (M7)
+        id_ = id_[1:]
+
+        while id_:
+            separator = alphabet[0]
+            chunks = id_.split(separator)
+            if not chunks[0]:
+                return ret
+
+            ret.append(self.__to_number(chunks[0], alphabet[1:]))
+            if len(chunks) > 1:
+                alphabet = self.__shuffle(alphabet)
+
+            id_ = separator.join(chunks[1:])
+
+        return ret
+
+    def __shuffle(self, alphabet: str) -> str:
+        chars = list(alphabet)
+
+        i = 0
+        j = len(chars) - 1
+        while j > 0:
+            r = (i * j + ord(chars[i]) + ord(chars[j])) % len(chars)
+            chars[i], chars[r] = chars[r], chars[i]
+            i += 1
+            j -= 1
+
+        return "".join(chars)
+
+    def __to_id(self, num: int, alphabet: str) -> str:
+        id_chars: List[str] = []
+        result = num
+        alphabet_length = len(alphabet)
+
+        while True:
+            id_chars.insert(0, alphabet[result % alphabet_length])
+            result = result // alphabet_length
+            if not result:
+                break
+
+        return "".join(id_chars)
+
+    def __to_number(self, id_: str, alphabet: str) -> int:
+        chars = list(alphabet)
+        # Pystachy port: no slice steps (M7); enumerate() takes reversed() as a list.
+        return sum(
+            chars.index(c) * (len(chars) ** i)
+            for i, c in enumerate(list(reversed(id_)))
+        )
+
+    def __is_blocked_id(self, id_: str) -> bool:
+        id_ = id_.lower()
+
+        if len(id_) == 3:
+            return id_ in self.__blocklist_exact_match
+
+        # Pystachy port: a loop for startswith() and endswith() of a tuple (M1).
+        for word in self.__blocklist_match_at_ends:
+            if id_.startswith(word) or id_.endswith(word):
+                return True
+
+        for word in self.__blocklist_match_anywhere:
+            if word in id_:
+                return True
+
+        return False
