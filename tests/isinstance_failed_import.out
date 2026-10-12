@@ -1,0 +1,7 @@
+import failed
+NameError: name 'class_then_raise' is not defined
+NameError: name 'class_then_raise' is not defined
+NameError: name 'class_then_raise' is not defined
+import failed in local
+UnboundLocalError: cannot access local variable 'ctr' where it is not associated with a value
+[exit 0]

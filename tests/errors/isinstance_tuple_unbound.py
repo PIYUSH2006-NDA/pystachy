@@ -1,4 +1,4 @@
-# error: isinstance_tuple_unbound.py:7: error: isinstance() is only supported with the builtin types and classes as its second argument
+# error: isinstance_tuple_unbound.py:7: error: local variable 'y' is read before its first assignment; declare it first (y: T)
 # CPython reads every item of the tuple: y is not assigned yet (UnboundLocalError), although the test
 # would stop at int
 
