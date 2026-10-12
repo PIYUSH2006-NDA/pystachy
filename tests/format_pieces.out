@@ -1,0 +1,55 @@
+2 a0bb1
+3 a0bb1ccc2
+4 a0bb1ccc2d3
+7 a0bb1ccc2d3ee4fff5g6
+8 a0bb1ccc2d3ee4fff5g6hh7
+9 a0bb1ccc2d3ee4fff5g6hh7iii8
+16 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15
+17 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16
+63 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16rrr17s18tt19uuu20v21ww22xxx23y24zz25aaa26b27cc28ddd29e30ff31ggg32h33ii34jjj35k36ll37mmm38n39oo40ppp41q42rr43sss44t45uu46vvv47w48xx49yyy50z51aa52bbb53c54dd55eee56f57gg58hhh59i60jj61kkk62
+64 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16rrr17s18tt19uuu20v21ww22xxx23y24zz25aaa26b27cc28ddd29e30ff31ggg32h33ii34jjj35k36ll37mmm38n39oo40ppp41q42rr43sss44t45uu46vvv47w48xx49yyy50z51aa52bbb53c54dd55eee56f57gg58hhh59i60jj61kkk62l63
+65 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16rrr17s18tt19uuu20v21ww22xxx23y24zz25aaa26b27cc28ddd29e30ff31ggg32h33ii34jjj35k36ll37mmm38n39oo40ppp41q42rr43sss44t45uu46vvv47w48xx49yyy50z51aa52bbb53c54dd55eee56f57gg58hhh59i60jj61kkk62l63mm64
+66 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16rrr17s18tt19uuu20v21ww22xxx23y24zz25aaa26b27cc28ddd29e30ff31ggg32h33ii34jjj35k36ll37mmm38n39oo40ppp41q42rr43sss44t45uu46vvv47w48xx49yyy50z51aa52bbb53c54dd55eee56f57gg58hhh59i60jj61kkk62l63mm64nnn65
+130 a0bb1ccc2d3ee4fff5g6hh7iii8j9kk10lll11m12nn13ooo14p15qq16rrr17s18tt19uuu20v21ww22xxx23y24zz25aaa26b27cc28ddd29e30ff31ggg32h33ii34jjj35k36ll37mmm38n39oo40ppp41q42rr43sss44t45uu46vvv47w48xx49yyy50z51aa52bbb53c54dd55eee56f57gg58hhh59i60jj61kkk62l63mm64nnn65o66pp67qqq68r69ss70ttt71u72vv73www74x75yy76zzz77a78bb79ccc80d81ee82fff83g84hh85iii86j87kk88lll89m90nn91ooo92p93qq94rrr95s96tt97uuu98v99ww100xxx101y102zz103aaa104b105cc106ddd107e108ff109ggg110h111ii112jjj113k114ll115mmm116n117oo118ppp119q120rr121sss122t123uu124vvv125w126xx127yyy128z129
+2 <a0|bb1>
+4 <a0|bb1|ccc2|d3>
+5 <a0|bb1|ccc2|d3|ee4>
+32 <a0|bb1|ccc2|d3|ee4|fff5|g6|hh7|iii8|j9|kk10|lll11|m12|nn13|ooo14|p15|qq16|rrr17|s18|tt19|uuu20|v21|ww22|xxx23|y24|zz25|aaa26|b27|cc28|ddd29|e30|ff31>
+33 <a0|bb1|ccc2|d3|ee4|fff5|g6|hh7|iii8|j9|kk10|lll11|m12|nn13|ooo14|p15|qq16|rrr17|s18|tt19|uuu20|v21|ww22|xxx23|y24|zz25|aaa26|b27|cc28|ddd29|e30|ff31|ggg32>
+65 <a0|bb1|ccc2|d3|ee4|fff5|g6|hh7|iii8|j9|kk10|lll11|m12|nn13|ooo14|p15|qq16|rrr17|s18|tt19|uuu20|v21|ww22|xxx23|y24|zz25|aaa26|b27|cc28|ddd29|e30|ff31|ggg32|h33|ii34|jjj35|k36|ll37|mmm38|n39|oo40|ppp41|q42|rr43|sss44|t45|uu46|vvv47|w48|xx49|yyy50|z51|aa52|bbb53|c54|dd55|eee56|f57|gg58|hhh59|i60|jj61|kkk62|l63|mm64>
+True True
+ww100xxx101y102zz103aaa104b105cc106ddd107e108
+IndexError list index out of range
+a[a:]b   T('b')c  <c>  d[d:xy]eT('\xe9')f | new a ; format a '' ; new b ; repr b ; spec 9 ; new c ; str c ; spec ^ ; spec 7 ; new d ; spec x ; spec y ; format d 'xy' ; new é ; repr é
+[g:][h:]<i>T('j')[k:][l:<][m:][n:][o:][p:] | new g ; format g '' ; new h ; format h '' ; new i ; str i ; new j ; repr j ; new k ; format k '' ; new l ; spec < ; format l '<' ; new m ; format m '' ; new n ; format n '' ; new o ; format o '' ; new p ; format p ''
+ValueError boom in s | new q ; format q '' ; new r ; repr r ; new s ; spec bo ; spec om ; format s 'boom'
+KeyError 'bad' | new z ; format z '' ; spec . ; new bad ; str bad
+made | new m1 ; new m2 ; new m3 ; new m4 ; new bad ; new m6 ; new m7 ; new m8 ; new m9 ; new p1 ; new p2 ; new p3 ; new ü
+KeyError 'bad' | str m1 ; repr m2 ; str m3 ; str m4 ; str bad
+<p1>|T('p2')|   ab|<p3>  |T('\xfc')|0 | str p1 ; repr p2 ; str p3 ; repr ü
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 w00 w11 w22 w33 w44 w55 w66 w77 w88 w99 'w00' 'w11' 'w22' 'w33' 'w44'   0.0   0.0   0.0   0.0   0.0 ff 10 A % +0 00000 -1  |
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 w00 w11 w22 w33 w44 w55 w66 w77 w88 w99 'w00' 'w11' 'w22' 'w33' 'w44'   1.0   0.5   0.3   0.2   0.2 100 11 B % +1 00003 0   |
+2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 w00 w11 w22 w33 w44 w55 w66 w77 w88 w99 'w00' 'w11' 'w22' 'w33' 'w44'   2.0   1.0   0.7   0.5   0.4 101 12 C % +2 00006 1   |
+7=seven (7.50) one    ab|cd   | 
+3/three/P(x=3, y='three', z=0.5)/P(x=3, y='three', z=0.5)
+4/four/1.5
+{'k': 1, 'é': 2} {'k': 1, 'é': 2}|{'k': 1, 'é': 2}|[{'k': 1, 'é': 2}]
+ünï·'ünï'·'\xfcn\xef'·***ünï***·日本語·  😀·ünïünïünïünïünïünïünïünïünï·
+ünï·'ünï'·'\xfcn\xef'·é     |    日本|
+lit5aby='why'x=   5   'why'end
+5| | | |
+TrueNone5FalseNone5TrueNoneNone5
+ABC    C-B-AABCABCA
+[3.142       ] [*****x******] [      +5|         why]
+[1, 2](3, 'x'){'a': 1}['why', 'z'](5,)
+70000 True AAAAABBBBB QQQQQRRRRR
+3004 AAAAA5BBBBBBBBB
+457731
+Mixed(a=1, b="it's", c=2.5, d=['x', 'y"'], e=Inner(name='in', vals=[1, 2]), f=None, g=True, h=(3, 't'), i={'k': 4}, j='é')
+True True True
+D70(f0=0, f1=7, f2=14, f3=21, f4=28, f5=35, f6=42, f7=49, f8=56, f9=63, f10=70, f11=77, f12=84, f13=91, f14=98, f15=105, f16=112, f17=119, f18=126, f19=133, f20=140, f21=147, f22=154, f23=161, f24=168, f25=175, f26=182, f27=189, f28=196, f29=203, f30=210, f31=217, f32=224, f33=231, f34=238, f35=245, f36=252, f37=259, f38=266, f39=273, f40=280, f41=287, f42=294, f43=301, f44=308, f45=315, f46=322, f47=329, f48=336, f49=343, f50=350, f51=357, f52=364, f53=371, f54=378, f55=385, f56=392, f57=399, f58=406, f59=413, f60=420, f61=427, f62=434, f63=441, f64=448, f65=455, f66=462, f67=469, f68=476, f69=483)
+N12(a=1, b='b', c=3.0, d=4, e='e', f=False, g=7, h='h', i=9, j='j', k=11, l='l')
+RuntimeError flaky
+Holder(a=1, b=Flaky(2), c='c', d=4, e='e')
+Holder(a=1, b=Flaky(3), c='c', d=4, e='e')
+[exit 0]
