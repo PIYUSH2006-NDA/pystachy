@@ -10384,6 +10384,8 @@ class Gen:
             if empty_display(args[-1]):
                 self.no_type(name)  # (xs.append([]) shows nothing of what xs holds)
             i = self.ival(args[0]) if m == "insert" else Val("0", "int")
+            if m == "extend" and self.is_mapcall(args[0]):
+                args = [self.mapgen(args[0])]
             if m == "extend" and args[0].kind == "listcomp" and args[0].s == "gen":
                 # (item by item, as bmethod's)
                 self.refine(name, self.listcomp(args[0], "", "", o.v).t)
@@ -17860,7 +17862,9 @@ class Gen:
         if name == "open":
             return self.open_(args)
         if name == "map" or name == "filter":
-            self.err(f"{name}() is not supported; use a list comprehension")
+            self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
+        if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
+            args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
         if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
             # format(v, spec): what the f-string field {v:spec} gives, v.__format__(spec)
             return self.format_(self.expr(args[0], ""), args[1] if len(args) == 2 else mk("str", "", self.line, []))
@@ -18358,11 +18362,44 @@ class Gen:
         fn = n.kids[0].s
         return fn == "range" or fn == "reversed" or fn == "enumerate" or fn == "zip"
 
+    def is_mapcall(self, n: Node) -> bool:
+        # map(...) or filter(...) of the builtins
+        return n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s == "map" or n.kids[0].s == "filter") and not self.bound(n.kids[0].s)
+
+    def mapgen(self, n: Node) -> Node:
+        # map(f, xs, ...) or filter(f, xs) where a consumer takes its items (list(), sum(), "".join(),
+        # ...): the generator expression it is, (f(x) for x in xs), with zip() for several
+        # iterables, or (x for x in xs if f(x)) (if x, for filter(None, xs)), whose f is evaluated
+        # now, before the iterables, as CPython evaluates map's arguments
+        fn = n.kids[0].s
+        args = n.kids[1:]
+        line = n.line
+        for a in args:
+            if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+                self.err(f"{fn}() takes positional arguments only here")
+        if fn == "map" and len(args) < 2:
+            self.err("map() must have at least two arguments.")
+        if fn == "filter" and len(args) != 2:
+            self.err(f"filter expected 2 arguments, got {len(args)}")
+        f = args[0] if fn == "filter" and args[0].kind == "None" else self.vnode(self.expr(args[0], ""))
+        if fn == "filter":
+            cond = mk("name", "__item", line, []) if f.kind == "None" else mk("call", "", line, [f, mk("name", "__item", line, [])])
+            return mk("listcomp", "gen", line, [mk("name", "__item", line, []), mk("name", "__item", line, []), args[1], cond])
+        if len(args) == 2:
+            return mk("listcomp", "gen", line, [mk("call", "", line, [f, mk("name", "__item", line, [])]), mk("name", "__item", line, []), args[1]])
+        if self.bound("zip"):
+            self.err("map() of several iterables is not supported where zip is bound")
+        items = [mk("name", f"__item{i}", line, []) for i in range(len(args) - 1)]
+        elt = mk("call", "", line, [f] + [mk("name", x.s, line, []) for x in items])
+        return mk("listcomp", "gen", line, [elt, mk("tuple", "", line, items), mk("call", "", line, [mk("name", "zip", line, [])] + args[1:])])
+
     def consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
         # range(), reversed(), enumerate(), zip() and generator expressions where their items are
         # used at once (list(), sorted(), "".join(), ...) become a fresh list of those items, built
         # by the for loop machinery; anywhere else they are rejected, as a list would behave
         # differently. arg: evaluated once the iterator is made, before it is iterated
+        if self.is_mapcall(n):
+            n = self.mapgen(n)
         if n.kind == "listcomp":
             return self.listcomp(n, want, "", "", arg)
         if not self.iterator_call(n):
@@ -18513,6 +18550,8 @@ class Gen:
         for a in args:
             if a.kind == "kw":
                 self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")
+        if is_list(o.t) and m == "extend" and len(args) == 1 and self.is_mapcall(args[0]):
+            args = [self.mapgen(args[0])]
         if is_list(o.t) and m == "extend" and len(args) == 1 and args[0].kind == "listcomp" and args[0].s == "gen":
             # each item is appended as the generator yields it: the items before a raise stay, and
             # the generator sees those it added (xs.extend(f(x) for x in xs))
