@@ -179,7 +179,8 @@ imports `annotations` from `__future__`.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
-  `+` and `*` (which make a tuple), `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
+  `+` and `*` (which make a tuple), the prefixes of `str.startswith()` or suffixes of `endswith()`,
+  `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
   one type), and `==`, `!=` and ordering as tuple's methods do them (also with plain tuples
   and other NamedTuples), except an operator that its class defines; its `repr()` is a
   dataclass's.
@@ -318,8 +319,8 @@ code fills; the read is checked as above.
 What CPython decides at import time is decided at compile time. An imported module's
 `if __name__ == "__main__":` block is dropped, and so are `if typing.TYPE_CHECKING:` blocks
 (also where `TYPE_CHECKING` is imported in a `try` whose `except ImportError:` clause sets it
-to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()`, `in` a tuple
-or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
+to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()` also of a tuple, `in` a
+tuple or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
 test also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
@@ -422,7 +423,8 @@ object that is `None` raises CPython's error when it runs.
 or a bool), `abs`, `min`, `max`, `sum`, `sorted` (and
 `list.sort`, with `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
 with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
-(`find`/`index`/`count` with start and end, also `None`, `split`/`rsplit`, `partition`/`rpartition`,
+(`find`/`index`/`count` with start and end, also `None`, `startswith`/`endswith` also with a tuple of
+`str`, `split`/`rsplit`, `partition`/`rpartition`,
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
 `zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default; not
 `str.format()`, `dict.update()`, `popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
@@ -716,6 +718,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
+- a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
+  `str | None` (CPython raises `TypeError` at the first such item it reaches)
 
 ### Classes, dataclasses and NamedTuples
 

@@ -4487,11 +4487,11 @@ class Loader:
 
     def decide(self, m: Mod, e: Node, scope: dict[str, bool], pre: list[Node]) -> int:
         # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
-        # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), os.name ==
-        # "nt", sys.platform in ("win32", ...)), TYPE_CHECKING or an imported module's __name__ ==
-        # "__main__" (false), also under not/and/or: 1 or 0, after appending to pre what still runs
-        # for the other operands, in CPython's order ("if x: pass" for an operand x that is
-        # evaluated and tested); -1 if e is undecided
+        # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), also of a
+        # tuple of such prefixes, os.name == "nt", sys.platform in ("win32", ...)), TYPE_CHECKING or
+        # an imported module's __name__ == "__main__" (false), also under not/and/or: 1 or 0, after
+        # appending to pre what still runs for the other operands, in CPython's order ("if x: pass"
+        # for an operand x that is evaluated and tested); -1 if e is undecided
         if e.kind == "unary" and e.s == "not":
             r = self.decide(m, e.kids[0], scope, pre)
             return 1 - r if r >= 0 else -1
@@ -4534,11 +4534,13 @@ class Loader:
             if mod == "os" and e.kids[0].s == "name":
                 r = 1 if e.kids[1].s == "posix" else 0
             return r if r < 0 or e.s == "==" else 1 - r
-        if e.kind == "call" and len(e.kids) == 2 and e.kids[1].kind == "str" and e.kids[0].kind == "attr" and e.kids[0].s == "startswith":
+        if e.kind == "call" and len(e.kids) == 2 and (e.kids[1].kind == "str" or e.kids[1].kind == "tuple") and e.kids[0].kind == "attr" and e.kids[0].s == "startswith":
             pa = e.kids[0].kids[0]
             if pa.kind == "attr" and pa.s == "platform" and pa.kids[0].kind == "name" and self.special(m, pa.kids[0].s, scope) == "sys":
-                if e.kids[1].s in "win win32 cygwin msys emscripten wasi java".split():
-                    return 0
+                for x in e.kids[1].kids if e.kids[1].kind == "tuple" else [e.kids[1]]:
+                    if x.kind != "str" or x.s not in "win win32 cygwin msys emscripten wasi java".split():
+                        return -1
+                return 0
         return -1
 
     def special(self, m: Mod, name: str, scope: dict[str, bool]) -> str:
@@ -16378,6 +16380,7 @@ class Gen:
         bk = Val("", "")  # d.pop(k) of a bool where the keys are ints (bool_find)
         numx = Val("", "")  # xs.index(x), count(x) or remove(x) of a number x of another type
         numok = "true"  # (whether an item can equal it, see numkey)
+        alts = Val("", "")  # s.startswith((a, b)) or endswith: the tuple whose items are tried (affix_any)
         i = 0
         for p in spec[c + 1 :].split(","):
             if p == "":
@@ -16401,6 +16404,16 @@ class Gen:
                 av.append("i64 " + dflt)
             elif i < len(args):
                 v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], pt)
+                if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
+                    v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
+                    for x in targs(unopt(v.t)):
+                        if x != "str" and x != "opt[str]":
+                            self.err(f"tuple for {m} must only contain str, not {tname(x)}")  # (CPython's TypeError, at the item it reaches)
+                    if is_opt(v.t):
+                        nones.append(v.v)
+                        nmsg.append(self.none_arg(m, 1))
+                    alts = Val(v.v, unopt(v.t))
+                    v = Val("null", "str")  # (each item in its place, in affix_any)
                 if is_opt(v.t) and (key == "str.join" or key == "list.extend" or key == "file.writelines"):
                     v = self.unwrap(v, "TypeError: can only join an iterable" if key == "str.join" else "TypeError: 'NoneType' object is not iterable")
                 if key == "str.join" or (key == "list.extend" and v.t in self.classes):
@@ -16452,6 +16465,8 @@ class Gen:
             self.err(f"too many arguments for {m}()")
         for j in range(len(nones)):
             self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        if alts.t != "":
+            return self.affix_any(alts, m, av)
         r = spec[:c]
         slot = r.startswith("*")
         rtype = self.subst(r[1:] if slot else r, T, K, V, o.t)
@@ -16476,6 +16491,26 @@ class Gen:
         if slot:
             return self.from_slot(res, rtype)
         return self.rres(res, rtype)
+
+    def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
+        # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
+        # item in order, stopping at the first that matches (False for an empty tuple); an item that
+        # is None raises when it is reached. av: the call's arguments, the item's place left empty
+        lend = self.label()
+        ph = Ins("phi", "bool", "")
+        for i in range(len(targs(tup.t))):
+            item = self.tget(tup, i)
+            if is_opt(item.t):
+                self.guard(self.ins(f"icmp eq ptr {item.v}, null"), f"TypeError: tuple for {m} must only contain str, not NoneType")
+            c = self.rres(self.rt(f"pys_str_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
+            nx = self.label()
+            self.incoming(ph, "true", self.cur)
+            self.cbr(c.v, lend, nx)
+            self.place(nx)
+        self.incoming(ph, "false", self.cur)
+        self.br(lend)
+        self.place(lend)
+        return Val(self.phi(ph), "bool")
 
     def optdefault(self, d: Val, t: str) -> str:
         # the type of d.get(k, d) and d.pop(k, d) for values of type t: t | None for a default
