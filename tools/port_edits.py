@@ -82,6 +82,8 @@ def census(root):
         rows = json.load(open(js))
     counts = {}
     for r in rows:
+        if "error" in r:  # a module the census could not read or parse: no counts rather than zeros
+            sys.exit(f"tools/census.py cannot scan the {os.path.basename(root)}'s module {r['module']}: {r['error']}")
         for k, n in r.get("blockers", {}).items():
             k = k + " " + r["kind"] if k == "unannotated" else k
             counts[k] = counts.get(k, 0) + n
@@ -123,7 +125,8 @@ def main():
         if not os.path.isdir(port):
             sys.exit(f"{port}: not a port's directory")
         counts = markers(port)
-        print(f"{port}: {sum(counts.values())} markers")
+        n = sum(counts.values())
+        print(f"{port}: {n} marker{'s' * (n != 1)}")
         for c, n in sorted(counts.items(), key=lambda x: (-x[1], x[0])):
             print(f"  {n:6}  {c}")
             total[c] = total.get(c, 0) + n
