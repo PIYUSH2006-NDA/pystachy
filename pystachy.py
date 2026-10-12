@@ -3369,13 +3369,7 @@ def rebound(body: list[Node], special: bool) -> dict[str, bool]:
         fns = [st] if st.kind == "def" else st.kids[0].kids if st.kind == "class" else st.kids[:0]
         for d in fns:
             if d.kind == "def":
-                decl: dict[str, bool] = {}
-                asg: dict[str, bool] = {}
-                globals_in(d.kids[2].kids, decl)
-                binds(d.kids[2].kids, asg, True)
-                for nm in decl:
-                    if nm in asg:
-                        out[nm] = True
+                global_assigns(d.kids[2].kids, out, True)
     return out
 
 
@@ -3412,7 +3406,7 @@ def own_specials(d: Node) -> Mod:
     body = d.kids[2].kids
     specials(f, body, -1)
     binds(body, f.rebound, False)
-    globals_in(body, f.rebound)
+    globals_deep(body, f.rebound)
     for p in d.kids[0].kids:
         f.rebound[p.s] = True
     return f
@@ -3694,14 +3688,11 @@ class Loader:
                 m.kinds[st.s] = "f" if k == "def" else "c"
                 for d in [st] if k == "def" else st.kids[0].kids if k == "class" else st.kids[0].kids[0].kids:
                     if d.kind == "def":
-                        decl: dict[str, bool] = {}
-                        asg: dict[str, bool] = {}
-                        globals_in(d.kids[2].kids, decl)
-                        collect(d.kids[2].kids, asg)
-                        for nm in decl:
-                            if nm in asg:
-                                m.fnglobal[nm] = True
-                            if nm in asg and nm not in m.kinds:
+                        ga: dict[str, bool] = {}
+                        global_assigns(d.kids[2].kids, ga)
+                        for nm in ga:
+                            m.fnglobal[nm] = True
+                            if nm not in m.kinds:
                                 m.kinds[nm] = "v"
                                 m.fnonly[nm] = True
             elif k != "import":
@@ -6196,9 +6187,12 @@ def targets(st: Node, out: dict[str, bool]) -> None:
 
 
 def collect(body: list[Node], out: dict[str, bool]) -> None:
-    # Python's rule: a name assigned anywhere in a function is local to it (except ... as e too)
+    # Python's rule: a name assigned anywhere in a function is local to it (except ... as e too),
+    # but in the defs and classes in it, scopes of their own
     for st in body:
         targets(st, out)
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
         for kid in st.kids:
             if kid.kind == "block":
                 collect(kid.kids, out)
@@ -6581,15 +6575,54 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
 
 
 def globals_in(body: list[Node], out: dict[str, bool]) -> None:
+    # the names the global statements of a function's body declare (not those of the defs and
+    # classes in it, scopes of their own)
+    for st in body:
+        if st.kind == "global":
+            for nm in st.kids:
+                out[nm.s] = True
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
+        for kid in st.kids:
+            if kid.kind == "block":
+                globals_in(kid.kids, out)
+            elif kid.kind == "except":
+                globals_in(kid.kids[1].kids, out)
+
+
+def globals_deep(body: list[Node], out: dict[str, bool]) -> None:
+    # (globals_in, also in the defs inside: each may rebind a name of the module)
     for st in body:
         if st.kind == "global":
             for nm in st.kids:
                 out[nm.s] = True
         for kid in st.kids:
             if kid.kind == "block":
-                globals_in(kid.kids, out)
+                globals_deep(kid.kids, out)
             elif kid.kind == "except":
-                globals_in(kid.kids[1].kids, out)
+                globals_deep(kid.kids[1].kids, out)
+
+
+def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False) -> None:
+    # the names of the module that a function's body assigns (also by an import, with imports),
+    # declared global, also those the defs inside it assign so (each a scope of its own: its own
+    # global statements decide)
+    decl: dict[str, bool] = {}
+    asg: dict[str, bool] = {}
+    globals_in(body, decl)
+    if imports:
+        binds(body, asg, True)
+    else:
+        collect(body, asg)
+    for nm in decl:
+        if nm in asg:
+            out[nm] = True
+    inner: list[Node] = []
+    for st in body:
+        nested_defs(st, inner)
+    for d in inner:
+        if d.kind == "def":
+            global_assigns(d.kids[2].kids, out, imports)
 
 
 def stmt_binds(st: Node, name: str) -> bool:
@@ -11906,15 +11939,12 @@ class Gen:
         for f in fns:
             if f.pending:
                 continue  # its defining method already contributes the same global assignments
-            decl: dict[str, bool] = {}
-            asg: dict[str, bool] = {}
-            globals_in(f.node.kids[2].kids, decl)
-            collect(f.node.kids[2].kids, asg)
-            for nm in decl:
-                if nm in asg:
-                    if nm not in gl:
-                        self.fglobals[nm] = True
-                    gl[nm] = True
+            ga: dict[str, bool] = {}
+            global_assigns(f.node.kids[2].kids, ga)
+            for nm in ga:
+                if nm not in gl:
+                    self.fglobals[nm] = True
+                gl[nm] = True
         # one binding per name: a function, a class, an import or a variable
         for nm in gl:
             if nm in self.funcs or nm in self.classes or (nm in self.imports and not self.imports[nm].startswith("__future__")):
