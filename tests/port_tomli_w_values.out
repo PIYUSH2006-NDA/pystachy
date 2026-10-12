@@ -1,0 +1,160 @@
+1.2.0 ('dumps', 'dump')
+'a = "x"\n'
+title = "TOML \"example\""
+path = "C:\\dir"
+ctrl = "tab	here\u0001\u007f"
+
+"k\u0000ey" = "v\u001f"
+"\u007f" = "  ﻿"
+"tab	key" = "a\\b\"c"
+"é" = "􏿿"
+
+"név" = "Zoë € 😀"
+"a b" = "space"
+"" = "empty key"
+ok-key_1 = "bare"
+
+c1 = " ÿ"
+bs = "\b\f\r\n\u001b"
+
+"߿ࠀ" = "\u007f߿ࠀ￿𐀀  "
+
+ml_string = """
+This is longer than threshold!
+Should be formatted as a multiline basic string"""
+
+text = """
+line1
+line2
+line3"""
+
+m = """
+a\\
+b \"\"\" c\b
+d	e\f"""
+
+s = "no newline but \"quotes\""
+cr = "a\rb"
+
+text = "line1\nline2"
+
+n = 1
+big = 9223372036854775807
+neg = -9223372036854775808
+zero = 0
+
+pi = 3.14159
+inf = inf
+ninf = -inf
+zero = -0.0
+e = 6.02e+23
+
+a = 1e+16
+b = 1e-07
+c = 0.30000000000000004
+d = 5e-324
+e = 1.7976931348623157e+308
+f = nan
+g = 123456789.0
+h = 2e+16
+
+on = true
+off = false
+
+arr = [
+    1,
+    2,
+    3,
+]
+empty = []
+neg = [
+    -1,
+]
+
+matrix = [
+    [
+        1,
+        2,
+    ],
+    [
+        3,
+        4,
+    ],
+    [],
+]
+
+t = [
+    1,
+    2,
+    3,
+]
+u = [
+    4,
+    5,
+    6,
+]
+
+nested = [
+    [
+        1,
+        2,
+    ],
+    [
+        3,
+        4,
+    ],
+]
+
+flags = [
+    true,
+    false,
+]
+
+floats = [
+    0.5,
+    -1e+300,
+    inf,
+]
+
+k0 = [
+  [
+    "v1",
+    "v2",
+  ],
+  [
+    "v3",
+    "v4",
+  ],
+]
+
+k0 = [
+[
+"v1",
+"v2",
+],
+[
+"v3",
+"v4",
+],
+]
+
+deep = [
+ [
+  [
+   1,
+  ],
+ ],
+ [
+  [
+   2,
+   3,
+  ],
+ ],
+]
+
+[t]
+x = 1
+y = 2
+
+ValueError: Indent width must be non-negative
+[exit 0]
