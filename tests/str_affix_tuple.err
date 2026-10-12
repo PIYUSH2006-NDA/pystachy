@@ -1,0 +1,1 @@
+TypeError: tuple for startswith must only contain str, not NoneType

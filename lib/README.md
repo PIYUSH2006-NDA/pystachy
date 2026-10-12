@@ -5,12 +5,12 @@ A program's `import NAME` finds `NAME.py` or `NAME/__init__.py` next to the prog
 listed in [docs/language.md](../docs/language.md#builtins-and-library-modules), come first). The modules here are **unmodified** copies of CPython
 3.13.16's pure-Python standard library modules that Pystachy compiles as they are: their
 unannotated functions are templates, compiled for the argument types of each call, and the
-code they never run (CPython's C accelerators, `key=` functions, generators) is never
-compiled. `tests/lib_*.py` checks each against CPython.
+code they never run (CPython's C accelerators, generators) is never compiled. `tests/lib_*.py`
+checks each against CPython.
 
 | module | from CPython 3.13.16 | SHA-256 | what works |
 |---|---|---|---|
-| `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | everything but `key=` (functions are not values) |
+| `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | everything, `key=` too (a function of the program or a builtin, compiled into each call) |
 | `colorsys` | `Lib/colorsys.py` | `65e3dfbf7bad61d4d7d7731a69dd7e75a347fd350d91327a51010a94e6fd2f1d` | everything |
 | `heapq` | `Lib/heapq.py` | `6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` variants; not `merge` (a generator), `nlargest`, `nsmallest` (`iter`, `key=`) |
 | `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` | the operator functions; not `attrgetter`, `itemgetter`, `methodcaller` (classes with `*args`), `call`, `length_hint`, `index`; the in-place functions only where the result keeps its type (`itruediv(1, 2)` would rebind an int to a float) |

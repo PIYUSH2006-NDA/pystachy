@@ -1,0 +1,5 @@
+NameError: name 'x' is not defined
+NameError: name 'y' is not defined
+NameError: name 'z' is not defined
+hello 2 [2, 1]
+[exit 0]

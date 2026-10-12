@@ -1,0 +1,24 @@
+mods: init mods
+mods.shapes: init mods.shapes
+10 11 13 8
+18 12 5
+evaluated 1
+22 15 10 20
+40 18 7 12
+6 6
+3628800 1 5 10 Err(1)
+None
+['a', '-']
+[10, 20] 7
+3 1 2
+pick 3
+6
+ValueError: boom
+pick 0
+evaluated 1
+evaluated 2
+TypeError: 'NoneType' object is not callable
+evaluated 3
+TypeError: 'NoneType' object is not callable
+TypeError: 'NoneType' object is not callable
+[exit 0]

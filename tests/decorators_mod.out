@@ -1,0 +1,13 @@
+mods: init mods
+mods.shapes: init mods.shapes
+register add
+register neg
+imported
+register main
+register aliased
+['add', 'neg', 'main', 'aliased']
+call 5
+call 4
+call 0
+3 -5 3 16 4 8 ab
+[exit 0]

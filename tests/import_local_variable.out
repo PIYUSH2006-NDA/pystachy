@@ -1,0 +1,7 @@
+local 10
+mods: init mods
+mods.shapes: init mods.shapes
+mods.counter: init mods.counter
+param 5
+3 0 [3, 10, 3, 11] 6.283185307179586 True
+[exit 0]
