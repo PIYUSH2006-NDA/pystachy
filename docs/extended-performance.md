@@ -179,10 +179,9 @@ uses those principles without claiming pyperf's calibration or statistical guara
 
 Initial local run on main `3542d63`, Linux x86-64, LLVM 18.1.3, CPython 3.12.14,
 three processes per mode and three timed calls per process, default N. These are shared-host
-diagnostics, not published speed claims. [Compact raw samples](../bench/extended/baseline-3542d63.json)
-retain all measured wall/first/hot times, checksums, GC output and run-time source hashes;
-repeated command paths/stdout are omitted. The snapshot predates small controller input-validation
-and metadata fixes made during review; kernel sources and generated driver hashes are unchanged.
+diagnostics, not published speed claims, and a snapshot of that commit: the raw samples are not
+kept in the repository (`--json` writes a current report with every sample, checksum, GC output
+and source hash).
 
 | Case | CPython hot, ms | JIT hot, ms | AOT hot, ms |
 |---|---:|---:|---:|
