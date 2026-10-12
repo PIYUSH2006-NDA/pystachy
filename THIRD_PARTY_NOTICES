@@ -51,6 +51,14 @@ ports/jdcal/__init__.py is jdcal 1.4.1's module jdcal.py, edited where ports/jdc
 (each edit is marked "Pystachy port:"). jdcal is used under the 2-clause BSD License, whose text
 and copyright notice ("Copyright (c) 2011, Prasanth Nair") are in ports/jdcal/LICENSE.
 
+pylev (ports/pylev/)
+--------------------
+
+ports/pylev/__init__.py, classic.py, damerau.py, recursive.py and wf.py are pylev 1.4.0's
+modules, edited where ports/pylev/PORT.md lists (each edit is marked "Pystachy port:"). pylev
+is used under the 3-clause BSD License, whose text and copyright notice ("Copyright (c) 2012,
+Daniel Lindsley") are in ports/pylev/LICENSE.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
