@@ -140,6 +140,15 @@ frame into code that is dropped. A call compiled before the `def` or `class` sta
 the function it calls loads that function's non-constant default values from the global
 the statement fills when it runs, so they are still evaluated once.
 
+A method is a template the same way (`template_ok` says which may be): its object is the
+first argument, whose type is its class, and an instance is a method of that class
+(`@m.C.name.N`), so `self` reads its fields as the method's own code does. The calls that
+reach it all go through `call_fn` (a method call, a bound method's value, the operators, the
+comparisons that sorting and containers make, which `cmp_method` and the object descriptor
+accept for any operand), and `instance` checks the return type a special method must have
+(`SPECIAL`) once the instance is compiled. The methods of a class are compiled when the program
+is (or, in an imported module, when called), but for its templates: only their instances are.
+
 ### Functions as values and closures
 
 A function used as a value has a type of its own, the function it is: `fn[f:NAME]` for a def of a

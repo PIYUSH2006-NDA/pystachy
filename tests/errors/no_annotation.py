@@ -1,4 +1,10 @@
-# error: parameter 'x' of 'm' needs a type annotation
+# error: parameter 'x' of '__init__' needs a type annotation
 class A:
-    def m(self, x) -> int:
-        return x
+    def __init__(self, x) -> None:
+        self.x = x
+
+    def m(self, y):
+        return self.x + y
+
+
+print(A(1).m(2))

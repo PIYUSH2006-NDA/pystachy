@@ -12,5 +12,5 @@ h = H()
 class Table:
     KEYS = {(h, 1)}
 
-    def get(self, *a):
-        return a
+    def __init__(self, *a):
+        self.a = a

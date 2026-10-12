@@ -19,6 +19,4 @@ class Token(NamedTuple):
 
 class Untyped(NamedTuple):
     a: int
-
-    def f(self, x):
-        return x
+    b: complex

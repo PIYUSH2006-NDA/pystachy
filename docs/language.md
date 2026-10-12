@@ -13,7 +13,7 @@ with a `file:line: error:`, never miscompiled.
 | | in short |
 |---|---|
 | [Types](#types) | `int` (64-bit, overflow-checked), `float`, `bool`, `str`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, `tuple[...]`, classes, dataclasses and `NamedTuple`s, `Optional` of any of these |
-| [Typing rules](#typing-rules) | annotated functions have their declared types; an unannotated module-level function is a *template*, compiled once per list of argument types |
+| [Typing rules](#typing-rules) | annotated functions have their declared types; an unannotated module-level function or method is a *template*, compiled once per list of argument types |
 | [Exceptions](#exceptions) | `try`/`except`/`else`/`finally` and `raise` with CPython 3.13's exception hierarchy, and exception classes of the program |
 | [Modules](#modules) | your own modules and packages, the builtin modules `sys`, `os`, `math`, `time`, ..., and unmodified standard library modules from `lib/` |
 | [Removed on purpose](#removed-on-purpose) | generators, inheritance (but an exception class's), `bytes`, big integers, `async`, ... |
@@ -86,7 +86,7 @@ imports `annotations` from `__future__`.
 ## Typing rules
 
 - A function whose parameters are annotated has those types; a missing return annotation
-  means `-> None`. Methods' parameters must be annotated.
+  means `-> None`. `__init__`'s parameters must be annotated: they type the fields it assigns.
 - A module-level function with an unannotated parameter is a **template**: each call
   compiles it, once per list of argument types, for those types (an annotated parameter
   keeps its type), and its first `return` with a value decides what it returns. It is
@@ -118,8 +118,8 @@ imports `annotations` from `__future__`.
   `len()`, iteration and `keys()`, and, where its values share a type, `values()`, `items()` and
   `dict(kwargs)`; it prints as that dict. Changing it (`kwargs["k"] = v`, `pop()`) is rejected:
   copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
-  unannotated, as are a module-level function's parameters and return that mention a
-  module-level `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's may not).
+  unannotated, as are a function's parameters and return that mention a module-level
+  `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's too, but `__init__`'s).
   In a template's function, an empty list or dict that nothing fills where the
   argument types let code run (a loop over the empty tuple of `*args`, a branch an
   `isinstance` test removes) may be returned before anything shows its type: the first use
@@ -128,6 +128,14 @@ imports `annotations` from `__future__`.
   type its context expects (an annotated variable or parameter, `str.join()`, a declared
   return type), else `list[int]` or `dict[int, int]`; a type error that such a guess causes
   says where it came from.
+- A method with an unannotated parameter (besides `self`, or a class method's `cls`), `*args`
+  or `**kwargs` is a template too: `o.m(x)`, `self.m(x)`, `C.m(x)` of a
+  static or class method and a bound method's value (`f = o.m`, `key=o.m`, a `Callable`) compile
+  it for their arguments' types, with `self` of its class. So are the operator methods
+  (`__add__` & co, the comparisons, which `sorted()`, `in` and `==` of containers call with two
+  objects of the class, and must return `bool`), `__call__`, `__getitem__` and `__contains__`;
+  not `__init__`, nor the other special methods. A field is typed by `__init__` as before, so a
+  template that assigns one must give it a value of its type.
 - Each variable has one type for its lifetime, fixed by its annotation or first assignment.
 - Empty `[]` and `{}` take their type from context: an annotation, a parameter, a field,
   or the variable being assigned. A variable without a type that is assigned `[]` or `{}`
@@ -452,9 +460,8 @@ submodule (`from .util import util`).
 
 A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
-unannotated methods, an annotation it does not support such as `Iterable[int]` or
-`dict[float, X]`, a `bytes` or
-`**kwargs` parameter, a field whose type cannot be inferred, a special method that Pystachy
+an unannotated `__init__`, an annotation it does not support such as `Iterable[int]` or
+`dict[float, X]`, a `bytes` parameter, a field whose type cannot be inferred, a special method that Pystachy
 never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
@@ -576,7 +583,8 @@ rejected.
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
 arguments above, inheritance other than an exception class's,
-`*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
+`*args` and `**kwargs` in `__init__` and the special methods that are no templates, `**`
+arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
 dict and multi-clause comprehensions, slice steps, `map()` and `filter()` other than as a
@@ -964,8 +972,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 ### Typing forms
 
 - `typing.ClassVar`, `os.PathLike` other than in a union with `str`, a `TypeVar` named other than
-  by a module-level function's parameters and return (in a method, a field, a variable's
-  annotation, or as a value), a `TypeVar`'s constraints and a bound other than a string, a bare
+  by a function's or method's parameters and return (in `__init__` or a special method that is
+  no template, a field, a variable's annotation, or as a value), a `TypeVar`'s constraints and a bound other than a string, a bare
   `Final` but in an assignment (in a class body, of a constant), an `@overload` stub that the `def`
   implementing it does not follow in its block past other `def`s only (in an imported module, one
   that no `def` of its name follows, also a method, is an error where it is called; also one after
