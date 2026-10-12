@@ -477,7 +477,8 @@ chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `=
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
 displays, list comprehensions, generator expressions and
-`range()`/`reversed()`/`enumerate()`/`zip()` as the argument of `list()`, `sorted()`,
+`range()`/`reversed()`/`enumerate()`/`zip()`, and `map()`/`filter()` (the generator expressions
+they are, their function evaluated first), as the argument of `list()`, `sorted()`,
 `sum()`, `min()`, `max()`, `any()`, `all()`, `math.fsum()`, `math.prod()`, `str.join()` or
 `list.extend()` (`any()` and `all()` stop at the deciding item, as they do over files, and
 `list.extend()` appends each item of a generator expression as it is made), `x in range(...)`,
@@ -541,8 +542,8 @@ arguments above, inheritance other than an exception class's, `**kwargs` and
 `*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
-sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` (a function is a value
-of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
+sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` other than as a
+consumer's argument (above), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
 files, complex numbers, arbitrary-precision integers, `async`, `match` and `:=`. The parser
 accepts all of them, and the compiler rejects each where it compiles it, so an imported
