@@ -1,0 +1,160 @@
+-- compile, Pattern
+re.compile('(?P<year>\\d{4})-(?P<month>\\d\\d)(?:-(?P<day>\\d\\d))?')
+(?P<year>\d{4})-(?P<month>\d\d)(?:-(?P<day>\d\d))? 32 3 {'year': 1, 'month': 2, 'day': 3}
+re.compile('a', re.IGNORECASE|re.MULTILINE) re.compile('(?s)x', re.DOTALL) re.compile('b', re.ASCII) re.compile('c', re.DOTALL|re.VERBOSE)
+True False
+True
+True re.compile('yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy)
+-- Match
+<re.Match object; span=(3, 13), match='2024-05-17'>
+2024-05-17 2024-05-17 2024 05 ('2024', '17', '05')
+2024-05-17 2024 17 {'year': '2024', 'month': '05', 'day': '17'} {'year': '2024', 'month': '05', 'day': '17'}
+3 13 (3, 13) 8 13 (3, 7)
+0 25 3 day on 2024-05-17 and 1999-12 True
+17.05.2024 (2024-05-17)
+<re.Match object; span=(0, 7), match='1999-12'>
+None (-1, -1) -1 {'year': '1999', 'month': '12', 'day': None} month
+'[]'
+-- match, fullmatch, search, pos and endpos
+'hello world' (0, 5) 'hello' last=None/None None (0, 5) 'hello' last=None/None
+'  x' None None (2, 3) 'x' last=None/None
+'' None None None
+(6, 11) 'world' last=None/None (3, 5) 'lo' last=None/None (6, 11) 'world' last=None/None
+(6, 11) 'world' last=None/None (6, 10) 'worl' last=None/None None
+(0, 5) 'hello' last=None/None None (1, 1) '' last=None/None
+(0, 3) 'aaa' last=None/None (0, 4) 'aaab' last=None/None (3, 6) 'bbb' last=None/None
+-- findall, finditer
+['1', '22', '333'] ['1', '2', '3'] ['', 'xx', '', '']
+['t', 'q', 'b'] ['', '', '', ''] ['a', '']
+[(0, 3), (4, 7), (9, 14)] ['', 'aa', '', '']
+['bc', 'def'] [0, 2]
+-- split
+['Words', 'words', 'words', ''] ['Words', ', ', 'words', ', ', 'words', '.', '']
+['Words', 'words, words.'] ['', 'a', '', 'b', 'c', ''] ['', 'a', ' ', 'b', '']
+['0', '3', '9'] [''] ['a\n', '\nb']
+-- sub, subn
+host at me there at you -a-b--d-
+('bbnbnb', 3) bbnbna ('[a][A]b', 2)
+a2 b44 c666
+'\n\t\\' -a-b-
+[a|b] [a|] aB!cB!
+ many spaces here  > one
+> two
+W cd ('(ab) (cd)', 2)
+-- syntax
+'a{2,3}' (0, 3) 'aaa' last=None/None (0, 3) 'aaa' last=None/None
+'a{,2}b' (1, 4) 'aab' last=None/None (1, 4) 'aab' last=None/None
+'a{2,}?' (0, 2) 'aa' last=None/None (0, 2) 'aa' last=None/None
+'(?:ab)+' (0, 4) 'abab' last=None/None (0, 4) 'abab' last=None/None
+'a+?b' (0, 4) 'aaab' last=None/None (0, 4) 'aaab' last=None/None
+'a*+a' None None
+'(?>a+)b' (0, 3) 'aab' last=None/None (0, 3) 'aab' last=None/None
+'a++b' (0, 4) 'aaab' last=None/None (0, 4) 'aaab' last=None/None
+'[\\b]' (1, 2) '\x08' last=None/None (1, 2) '\x08' last=None/None
+'(\\w)\\1' (2, 4) 'cc' last=1/None (2, 4) 'cc' last=1/None
+'(?P<c>.)(?P=c)' (1, 3) 'yy' last=1/c (1, 3) 'yy' last=1/c
+'(?<=\\$)\\d+' (6, 8) '42' last=None/None (6, 8) '42' last=None/None
+'(?<!a)b' (3, 4) 'b' last=None/None (3, 4) 'b' last=None/None
+'\\d+(?=px)' (5, 7) '20' last=None/None (5, 7) '20' last=None/None
+'q(?!u)' (5, 6) 'q' last=None/None (5, 6) 'q' last=None/None
+'(a)?(?(1)b|c)' (1, 2) 'c' last=None/None (1, 2) 'c' last=None/None
+"(?P<q>')?\\w+(?(q)')" (0, 4) "'hi'" last=1/q (0, 4) "'hi'" last=1/q
+'\\Aab|cd\\Z' (0, 2) 'cd' last=None/None (0, 2) 'cd' last=None/None
+'\\Bb\\B' (1, 2) 'b' last=None/None (1, 2) 'b' last=None/None
+'[^a-c]+' (3, 6) 'def' last=None/None (3, 6) 'def' last=None/None
+'[\\w.-]+@[\\w.-]+' (5, 14) 'me@ex.com' last=None/None (5, 14) 'me@ex.com' last=None/None
+'[\\x41-\\x43]+' (0, 3) 'ABC' last=None/None (0, 3) 'ABC' last=None/None
+'A\\U00000042' (0, 2) 'AB' last=None/None (0, 2) 'AB' last=None/None
+'\\101\\0' (0, 2) 'A\x00' last=None/None (0, 2) 'A\x00' last=None/None
+'[]a]+' (0, 3) 'a]]' last=None/None (0, 3) 'a]]' last=None/None
+'[a-]+' (0, 3) '-a-' last=None/None (0, 3) '-a-' last=None/None
+'(?x) a  b  # comment' (0, 2) 'ab' last=None/None (0, 2) 'ab' last=None/None
+'(?i:A)a' (0, 2) 'aa' last=None/None (0, 2) 'aa' last=None/None
+'(?-i:a)b' None None
+'a|b|c' (3, 4) 'c' last=None/None (3, 4) 'c' last=None/None
+'ab|ac' (0, 2) 'ac' last=None/None (0, 2) 'ac' last=None/None
+'(a|ab)(c|bcd)(d*)' (0, 4) 'abcd' last=3/None (0, 4) 'abcd' last=3/None
+'(a*)*b' (0, 3) 'aab' last=1/None (0, 3) 'aab' last=1/None
+'(a*)+' (0, 0) '' last=1/None (0, 0) '' last=1/None
+'x{0}y' (0, 1) 'y' last=None/None (0, 1) 'y' last=None/None
+'\\.\\*' (1, 3) '.*' last=None/None (1, 3) '.*' last=None/None
+-- flags
+None (2, 3) 'b' last=None/None (0, 1) 'a' last=None/None
+None (0, 3) 'a\nb' last=None/None (0, 1) 'a' last=None/None
+(4, 9) 'HeLLo' last=None/None (0, 3) 'abc' last=None/None (1, 2) 'b' last=None/None
+['abc', 'd_e'] ['i', 'there'] 2 24
+-- non-ASCII text
+'é' 'é' True True 
+'\\w+' 'naïve' True True  résumé
+'(?i)É+' 'éÉé' True True !
+'\\d+' '١٢٣' True True b45
+'\\s' '\xa0' True True b
+'\\w+' 'uro' True True 
+'.' '☃' True True 
+'[à-ÿ]+' 'à' True True  ça
+'(?i)straße' None
+'(?i)k' 'K' True True 
+'(?i)[ſ]' 'S' True True 
+'(?a)\\w+' 'h' True True éllo
+'\\W' ' ' True True b
+'𝔄+' '𝔄𝔄' True True y
+'[^a]' 'é' True True 
+['n', 'a', 'ï', 'v', 'e', '☃', '𝔄'] ['a', 'b', 'c'] Koln KoLN
+<a><é> 3
+-- escape, purge
+a,b\ c\.d\*e\(f\)g\
+ http://ex\.com/\?q=1\&r=\[2\] 
+(3, 9) '1+1=2?' last=None/None
+True
+-- errors
+error '(' | missing ), unterminated subpattern 0 1 1 | missing ), unterminated subpattern at position 0
+error ')' | unbalanced parenthesis 0 1 1 | unbalanced parenthesis at position 0
+error 'a)' | unbalanced parenthesis 1 1 2 | unbalanced parenthesis at position 1
+error '(?' | unexpected end of pattern 2 1 3 | unexpected end of pattern at position 2
+error '(?P<1a>x)' | bad character in group name '1a' 4 1 5 | bad character in group name '1a' at position 4
+error '(?P<a>x)(?P<a>y)' | redefinition of group name 'a' as group 2; was group 1 12 1 13 | redefinition of group name 'a' as group 2; was group 1 at position 12
+error '(?P=b)' | unknown group name 'b' 4 1 5 | unknown group name 'b' at position 4
+error '[' | unterminated character set 0 1 1 | unterminated character set at position 0
+error '[z-a]' | bad character range z-a 1 1 2 | bad character range z-a at position 1
+error 'a**' | multiple repeat 2 1 3 | multiple repeat at position 2
+error '*a' | nothing to repeat 0 1 1 | nothing to repeat at position 0
+error 'x{2,1}' | min repeat greater than max repeat 2 1 3 | min repeat greater than max repeat at position 2
+error '\\8' | invalid group reference 8 1 1 2 | invalid group reference 8 at position 1
+error '\\777' | octal escape value \777 outside of range 0-0o377 0 1 1 | octal escape value \777 outside of range 0-0o377 at position 0
+error '\\q' | bad escape \q 0 1 1 | bad escape \q at position 0
+error '\\' | bad escape (end of pattern) 0 1 1 | bad escape (end of pattern) at position 0
+error '(?i' | missing -, : or ) 3 1 4 | missing -, : or ) at position 3
+error '(?z)' | unknown extension ?z 1 1 2 | unknown extension ?z at position 1
+error '(?<=a+)' | look-behind requires fixed-width pattern None None None | look-behind requires fixed-width pattern
+error '(?(1)a|b|c)' | conditional backref with more than two branches 8 1 9 | conditional backref with more than two branches at position 8
+error '(?(2)a)(b)' | invalid group reference 2 3 1 4 | invalid group reference 2 at position 3
+error '(a)\\2' | invalid group reference 2 4 1 5 | invalid group reference 2 at position 4
+error '(?P<a' | missing >, unterminated name 4 1 5 | missing >, unterminated name at position 4
+error '(?<x>y)' | unknown extension ?<x 1 1 2 | unknown extension ?<x at position 1
+error '(?#abc' | missing ), unterminated comment 0 1 1 | missing ), unterminated comment at position 0
+error 'a\n(b' | missing ), unterminated subpattern 2 2 1 | missing ), unterminated subpattern at position 2 (line 2, column 1)
+error 'ab\ncd\n(?P' | unexpected end of pattern 9 3 4 | unexpected end of pattern at position 9 (line 3, column 4)
+error 'a(?i)b' | global flags not at the start of the expression 1 1 2 | global flags not at the start of the expression at position 1
+error '(?-a:x)' | bad inline flags: cannot turn off flags 'a', 'u' and 'L' 4 1 5 | bad inline flags: cannot turn off flags 'a', 'u' and 'L' at position 4
+error '\\x4' | incomplete escape \x4 0 1 1 | incomplete escape \x4 at position 0
+error '\\u12g' | incomplete escape \u12 0 1 1 | incomplete escape \u12 at position 0
+error '\\U0011ffff' | bad escape \U0011ffff 0 1 1 | bad escape \U0011ffff at position 0
+ok '(?P<é>x)(?P=é)'
+error '(?P<¹>x)' | bad character in group name '¹' 4 1 5 | bad character in group name '¹' at position 4
+error '\\g<1>' | bad escape \g 0 1 1 | bad escape \g at position 0
+error '[\\d-z]' | bad character range \d-z 1 1 2 | bad character range \d-z at position 1
+error '(?<!a|bc)' | look-behind requires fixed-width pattern None None None | look-behind requires fixed-width pattern
+error '(?L)x' | bad inline flags: cannot use 'L' flag with a str pattern 3 1 4 | bad inline flags: cannot use 'L' flag with a str pattern at position 3
+error '(?au)x' | bad inline flags: flags 'a', 'u' and 'L' are incompatible 4 1 5 | bad inline flags: flags 'a', 'u' and 'L' are incompatible at position 4
+ValueError 'x' cannot use LOCALE flag with a str pattern
+ValueError 'x' ASCII and UNICODE flags are incompatible
+OverflowError 'a{4294967296}' the repetition number is too large
+ok 'a{0000000000004}'
+ValueError: cannot process flags argument with a compiled pattern
+error: invalid group reference 2 at position 1
+IndexError: unknown group name 'b'
+IndexError: no such group
+IndexError: no such group
+-- a parser's loop: match at each position of one string
+2:x1 3:= 1:42 3:+ 2:foo 3:( 1:7 3:)
+[exit 0]

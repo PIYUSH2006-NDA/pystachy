@@ -495,7 +495,9 @@ objects inside containers).
 `lib/` holds unmodified
 CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`, `heapq`,
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
-`curses.ascii`.
+`curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
+matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists.
 
 ## Expressions
 

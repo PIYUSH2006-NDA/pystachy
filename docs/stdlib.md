@@ -272,7 +272,9 @@ thread), `_io` (over Pystachy's files), `itertools`, `binascii` and `_codecs` (U
 Latin-1) would let the import graph reach `functools`, `abc`, `collections` and `codecs`; past
 them, `_collections_abc` (bytes literals and `type()` at module level), `enum` (metaclasses)
 and `re` (the `_sre` matching engine; CPython's `re/_parser.py` and `_compiler.py` are pure
-Python, as PyPy's reuse of them shows) are the hubs that most of the library imports.
+Python, as PyPy's reuse of them shows) are the hubs that most of the library imports. `lib/re`
+now ports both (the measurements above predate it; see
+[`lib/README.md`](../lib/README.md#re-a-port-of-cpythons)).
 
 ## 7. Reproducing
 
