@@ -1,0 +1,14 @@
+'instal' ['install']
+'updtae' ['update']
+'sell' ['shell']
+'confg' ['config']
+'ad' ['add']
+'lokc' []
+'xyz' []
+'self' ['self update']
+'pubish' ['publish']
+'' ['add', 'new', 'run', 'init', 'lock', 'show', 'about', 'build', 'check', 'shell', 'config', 'export', 'remove', 'search', 'update', 'install', 'publish', 'version', 'debug info', 'cache clear', 'self update']
+3 2 2
+1 1 1 1 1
+False 2 1
+[exit 0]

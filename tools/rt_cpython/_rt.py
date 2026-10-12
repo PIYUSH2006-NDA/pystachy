@@ -20,7 +20,7 @@ def byte(s, i):
 
 
 def str_new(n):
-    if not 0 <= n <= (1 << 63) - 10:
+    if not 0 <= n <= (1 << 63) - 18:
         raise MemoryError()
     return bytearray(n)
 
