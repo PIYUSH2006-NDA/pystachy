@@ -216,7 +216,8 @@ imports `annotations` from `__future__`.
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  constructor, method (also `self(...)`, its `__call__`) or function call, a function (a def, a
+  builtin or a builtin module's, such as `math.sqrt`), or a list, tuple or
   dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
   `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
   nor of a function that returns `None`: annotate the field). An exception class (below) also

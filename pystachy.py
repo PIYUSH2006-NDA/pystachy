@@ -7290,6 +7290,7 @@ class Gen:
         self.comp: dict[str, str] = {}  # each module's strongly connected component of that graph (one of its modules)
         self.flowmod = ""
         self.flowctx: dict[str, list[dict[str, bool]]] = {}  # module globals, safe bindings and deletions for lazy method flow
+        self.fvars: dict[str, bool] = {}  # the module's variables that its code so far has made functions (name = f: user_call)
         self.flowlater: list[Node] = []  # the bodies of module code's lambdas, analysed once flowctx has the module's (fl_nested)
         # the defs and lambdas inside functions, each as one function (an instance) compiles it: by
         # "<that function's symbol> <the node>" (closure_key), their position in closures
@@ -8863,6 +8864,17 @@ class Gen:
             local_names(f.node.kids[2].kids, asg)
             if e.s not in asg:
                 return f"fn[f:{e.s}]" if e.s in self.funcs else f"fn[b:{e.s}]"
+        p = self.imported_ref(e) if k == "name" or k == "attr" else ""
+        if p in MODFUNCS:
+            # a builtin module's function (math.sqrt, or sqrt from-imported), unless a local of the
+            # method has the name it is read through
+            root = e
+            while root.kind == "attr":
+                root = root.kids[0]
+            asg = {}
+            local_names(f.node.kids[2].kids, asg)
+            if root.s not in asg:
+                return f"fn[b:{p}]"
         # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
         # import or builtin of its name
         me = f.params[0] if takes_self(f) else ""
@@ -11918,6 +11930,7 @@ class Gen:
         for ci in mcls:
             gl[ci.name] = True
         mfl = Flow(gl, {})
+        self.fvars = {}
         for st in top:
             # (a statement inside a compound one calls user code only if the compound one does)
             if not mfl.called and self.user_call(st):
@@ -12210,8 +12223,24 @@ class Gen:
 
     def user_call(self, n: Node) -> bool:
         # may running n call a user function, method or constructor? (an import of a user module
-        # runs the module's code)
+        # runs the module's code; a function read as a value, or a lambda, may be called through
+        # what holds it, fs[0]() or sorted(xs, key=f), but name = f only makes name one too: fvars)
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.funcs or n.kids[0].s in self.classes):
+            return True
+        if n.kind == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and (n.kids[1].s in self.funcs or n.kids[1].s in self.fvars):
+            self.fvars[n.kids[0].s] = True
+            return False
+        if n.kind == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "lambda":
+            self.fvars[n.kids[0].s] = True  # (name = lambda ...: as name = f, but its defaults run here)
+            for pa in n.kids[1].kids[0].kids:
+                if self.user_call(pa.kids[1]):
+                    return True
+            return False
+        if n.kind == "lambda":
+            return True  # (a function made here, which what it is given to may call)
+        if n.kind == "pass":
+            return False  # (also an alias, name = f, that the loader resolved: its kids are left)
+        if n.kind == "name" and (n.s in self.funcs or n.s in self.fvars):
             return True
         if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s in self.classes:
             return True  # C.m(...): a static or class method
@@ -12226,7 +12255,8 @@ class Gen:
             return False
         if n.kind == "defaults" or n.kind == "cdefaults":
             for d in self.fl_defaults(n):
-                if self.user_call(d):
+                # (a function or lambda given as a default runs only when the function does)
+                if d.kind != "lambda" and not (d.kind == "name" and d.s in self.funcs) and self.user_call(d):
                     return True
         for k in n.kids:
             if self.user_call(k):
@@ -16975,14 +17005,16 @@ class Gen:
             args = [self.parse_expr(DEFAULTS[name])]
         w = want if name == "list" or name == "sorted" or name == "dict" else ""
         fresh = False
-        # key= and reverse= of sorted(), min() and max(), evaluated in the order written: once the
-        # iterator of the argument is made, before the function iterates it (as CPython calls it)
+        # key= and reverse= of sorted(), min() and max(), evaluated in the order written: after a
+        # list comprehension has run, but once the iterator of a generator expression or of
+        # range(), zip(), ... is made, before the function iterates it (as CPython calls it)
         kws = [a for a in args if a.kind == "kw" and (a.s == "key" or a.s == "reverse") and (name == "sorted" or name == "min" or name == "max")]
         kvals: list[Val] = []
         if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
             # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
             fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
-            ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and fresh else None
+            lazy = self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")
+            ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and lazy else None
             v0 = self.consume(args[0], w, ka)
             if ka is not None:
                 kvals = [self.tget(ka.value, j) for j in range(len(kws))]

@@ -169,7 +169,10 @@ the state before the loop, leaving `while True` only through what its breaks hav
 common). Reads it cannot prove are marked, and only those test an "is
 assigned" flag that LLVM removes again where it can; fields that `__init__` may leave
 unassigned get a hidden flag in the object. Globals read in functions are safe when
-module code assigned them before its first call into user code, and calls to a
+module code assigned them before its first call into user code (a statement that reads a
+function as a value or makes a lambda counts, since what holds it may call it, but not
+`name = f` or `name = lambda ...`, which makes `name` such a value in turn, nor a function's
+default value), and calls to a
 function before its `def` has run raise `NameError`. The compiler itself needs none of
 these checks. The pass costs what the code contains: a function is analysed over the names
 its body mentions, not over every global of its module; a branch is undone from a log of

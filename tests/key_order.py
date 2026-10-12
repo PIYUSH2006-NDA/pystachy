@@ -113,3 +113,7 @@ def make_key(tag):
 print(sorted((item(x) for x in [3, 1, 2]), reverse=rev()))
 print(sorted((item(x) for x in [3, 1, 2]), key=make_key(1), reverse=rev()))
 print(sorted(range(3), reverse=rev()), max([5, 6], key=make_key(2)))
+
+# and after a list comprehension has run
+print(sorted([item(x) for x in [3, 1, 2]], reverse=rev()))
+print(max([item(x) for x in [5, 6]], key=make_key(3)), min([item(x) for x in [5, 6]], key=make_key(4)))
