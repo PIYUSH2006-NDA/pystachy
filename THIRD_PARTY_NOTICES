@@ -51,6 +51,13 @@ ports/jdcal/__init__.py is jdcal 1.4.1's module jdcal.py, edited where ports/jdc
 (each edit is marked "Pystachy port:"). jdcal is used under the 2-clause BSD License, whose text
 and copyright notice ("Copyright (c) 2011, Prasanth Nair") are in ports/jdcal/LICENSE.
 
+pyaes (ports/pyaes/)
+--------------------
+
+ports/pyaes/__init__.py and aes.py are pyaes 1.6.1's modules, edited where ports/pyaes/PORT.md
+lists (each edit is marked "Pystachy port:"). pyaes is used under the MIT License, whose text and
+copyright notice ("Copyright (c) 2014 Richard Moore") are in ports/pyaes/LICENSE.
+
 pylev (ports/pylev/)
 --------------------
 
