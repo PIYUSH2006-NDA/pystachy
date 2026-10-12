@@ -636,7 +636,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   `__format__`), where CPython raises `NameError`, `AttributeError` or `TypeError` as it runs, also
   in a `try` whose clause catches it (a feature test such as `try: unicode / except NameError:`)
 - a function, class, method or import name bound twice, or a name that is both a variable and a
-  function, class or import
+  function, class or import, also in a function: a parameter or local that an import in it binds
+  too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
+  which assigns the local
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
   one named like a builtin or `__name__`, also in an imported module
 - a local read textually before its first assignment (declare it first: `x: int`), where a name
