@@ -1,0 +1,17 @@
+mods: init mods
+mods.shapes: init mods.shapes
+11 12 103 [14, 104]
+21 ['add 1', 'add 2', 'add 4', 'add 1', 'add 11']
+add Acc.add join str.join list.append
+True False True
+[7, 3, 3]
+['A', 'b', 'c'] abc b+A+c b-A-c A, b, c
+['x', 'y'] 1 None 7
+mixed 3 2
+AttributeError: 'NoneType' object has no attribute 'add'
+AttributeError: 'Late' object has no attribute 'v'
+5
+20
+Circle(2.0) Circle.__repr__
+ok clicked 2 ok clicked 5
+[exit 0]

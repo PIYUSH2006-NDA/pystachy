@@ -143,10 +143,14 @@ the statement fills when it runs, so they are still evaluated once.
 ### Functions as values and closures
 
 A function used as a value has a type of its own, the function it is: `fn[f:NAME]` for a def of a
-module, `fn[b:NAME]` for a builtin, `fn[c:N:...]` for a lambda or a def inside a function. A call
+module, `fn[b:NAME]` for a builtin, `fn[c:N:...]` for a lambda or a def inside a function,
+`fn[m:C.NAME]` for a method bound to an object of class C, `fn[d:NAME:T]` for a method bound to a
+value of builtin type T (`"".join`), and `fn[u:T.NAME]` for that method read through its type
+(`str.lower`). A call
 through such a value is compiled as a call of that function by name, so a template given a
 function is compiled for it, as for any other argument type, and the call is direct. A value of a
-module's def or a builtin holds nothing (null). A closure's points to its env, which `Gen.closure`
+module's def or a builtin holds nothing (null), a bound method's is its object (a call through it is
+the method's call on it: `Gen.method_value`, `Gen.call_value`). A closure's points to its env, which `Gen.closure`
 allocates each time the def or lambda runs: the cells of the variables it takes from the functions
 around it, then its default values that are no constants. Each variable that a closure takes lives
 in a cell that the function binding it allocates as it begins (`Gen.cellvars`); its loads and

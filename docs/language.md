@@ -188,11 +188,19 @@ imports `annotations` from `__future__`.
   type, a variable, a field, a list's items and a dict's values hold one function, unless they
   are annotated `Callable` (below), and printing a function is rejected (CPython prints its
   address).
+- A method read without a call is bound to its object, as in CPython: `o.m` of an object (also
+  `self.m`, which a field may hold: `self.on_click = self.default_click`), and `s.join`,
+  `xs.append`, `d.get` or `f.write` of a `str`, list, dict or file, is a value typed by the method
+  that holds the object, and a call through it is `o.m(...)`. A method read through a builtin
+  type takes the value first: `str.lower(s)` is `s.lower()`, and `str.lower` is a value too
+  (`sorted(words, key=str.lower)`). Bound methods are equal (`==`) where they are one method of one
+  object; `is` between them is rejected, as CPython makes a new method object at each read. A
+  static or class method, and a method of an `int`, `float` or `bool`, as a value are rejected.
 - `Callable[[A, B], R]` (typing's or `collections.abc`'s, also `Callable[[], R]` and with `| None`)
   is the type of any function that takes an `A` and a `B` and returns an `R`: a function value
   becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
   dict item), compiled for those parameter types, so one variable, field or list holds different
-  functions (defs, builtins, lambdas, closures). A call of a Callable passes its arguments by
+  functions (defs, builtins, lambdas, closures, bound methods). A call of a Callable passes its arguments by
   position, as its parameter types type them (one that is `None` raises `TypeError` once they are
   evaluated); two Callables are the same function where they hold one function (a closure from
   one run of its def or lambda), also compared with that function, and where they may be `None`,
