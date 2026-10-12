@@ -10,6 +10,8 @@ a b c x-y p+q
 0 0.5 [] [] False True 
 ['n']
 ValueError: max() iterable argument is empty
+[] [] outer False True 
+k0
 0
 1
 2

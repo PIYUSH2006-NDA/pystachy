@@ -3109,6 +3109,7 @@ class Mod:
         self.sure: dict[str, bool] = {}
         self.maybe: dict[str, bool] = {}
         self.done = False
+        self.at = 0  # (until done: the line of the top-level statement whose imports are being loaded)
         # the names only name = f(...) statements bind, with each f: a TypeVar if every f is typing's
         self.tvars: dict[str, list[Node]] = {}
 
@@ -3455,6 +3456,7 @@ class Loader:
         self.laterd: list[str] = []
         # what the imports in a function bind (for that function only), by the def's line
         self.fks: dict[str, dict[str, str]] = {}
+        self.fkline: dict[str, int] = {}  # and the line of the first import that binds each name, by "<def's line> <name>"
         self.fgl: dict[str, dict[str, bool]] = {}  # and the names its global statements declare
         self.curdef = ""  # the def whose body imports() is in
         self.fk: dict[str, str] = {}  # the bindings of the function being qualified
@@ -3500,6 +3502,14 @@ class Loader:
         # for submodules(): s is the name bound, the kids the package, the name and the copy if any
         self.taken: list[Node] = []
         self.takek: list[dict[str, str]] = []
+        # each from-import of a variable (take()), with the bindings it went to, for late_takes(): s
+        # is the name bound, the kids the module, the name, the copy, what bound the name before (but
+        # another from-import of a variable), where ("@" and the module, or the function) and the line
+        # its module's code was at (Mod.at, 0 once done); vtook: names only such imports bound so far
+        self.vtaken: list[Node] = []
+        self.vtakek: list[dict[str, str]] = []
+        self.vtook: dict[str, bool] = {}
+        self.aliased: dict[str, Node] = {}  # the alias statements late_aliases() made, by "<module> <name>"
         # each star import of a package without __all__, with the module it is in (submodules())
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
@@ -3551,8 +3561,13 @@ class Loader:
                     break
         self.guarded()
         self.submodules()
-        for x in self.order:
-            self.late_aliases(x)
+        more = True
+        while more:
+            # (until no from-import of an alias is left to make one: an alias may be of one)
+            for x in self.order:
+                self.late_aliases(x)
+            more = self.late_takes(False)
+        self.late_takes(True)
         for x in self.order:
             self.lazyann = False
             self.called = 0
@@ -3727,7 +3742,59 @@ class Loader:
                 if src.startswith("a:") and m.kinds.get(nm, "") == "v" and count.get(nm, 0) == 1 and nm not in m.fnglobal:
                     m.kinds[nm] = src
                     st.kind = "pass"
+                    self.aliased[m.name + " " + nm] = st
                     self.used_before(m, st)
+
+    def late_takes(self, last: bool) -> bool:
+        # from t import x as name took t's variable x, which late_aliases() has since made an alias
+        # of a function or class (x = f, f from-imported): name is that alias too, rather than a copy
+        # of a variable that t's code no longer assigns, where all the from-imports of variables that
+        # bind name there take that alias and nothing else binds it; else, once the last pass finds
+        # no other alias to wait for, the import is an error. Did any import change?
+        took: dict[str, str] = {}  # (by where and name: the alias they take, "!" for two)
+        var: dict[str, bool] = {}  # (and whether one of them takes a variable)
+        for n in self.vtaken:
+            if n.kids[2].kind == "assign":
+                key = n.kids[4].s + " " + n.s
+                k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
+                if not k.startswith("a:"):
+                    var[key] = True
+                else:
+                    took[key] = k if took.get(key, k) == k else "!"
+        changed = False
+        for i in range(len(self.vtaken)):
+            n = self.vtaken[i]
+            cp = n.kids[2]
+            k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
+            if cp.kind != "assign" or not k.startswith("a:"):
+                continue
+            key = n.kids[4].s + " " + n.s
+            was = n.kids[3].s
+            now = self.vtakek[i].get(n.s, "")
+            al = self.aliased.get(n.kids[0].s + " " + n.kids[1].s, n)
+            msg = ""
+            if al is not n and int(n.kids[5].s) > 0 and al.line > int(n.kids[5].s):
+                # (taken while t's code ran an import above the alias: CPython raises ImportError)
+                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it ({n.kids[1].s} = {al.kids[1].s}) only after the import that runs this one (not supported for an alias of a function or class)"
+            elif was == "v" or (key in var and last):
+                msg = f"'{n.s}' is bound both as a variable and by an import (not supported)"
+            elif took[key] == "!" or (was != "" and was != k) or (now != "" and now != "v" and now != k):
+                msg = f"'{n.s}' is bound by two imports, to different modules, functions or classes (not supported)"
+            elif key in var:
+                continue  # (another of them takes a variable, which may yet be found an alias)
+            if msg == "":
+                self.vtakek[i][n.s] = k
+                cp.kind = "pass"
+                if not n.kids[4].s.startswith("@") and n.kids[4].s + " " + n.s not in self.fkline:
+                    self.fkline[n.kids[4].s + " " + n.s] = n.line  # (the function's import that binds it: qstmts())
+            elif not n.kids[4].s.startswith("@"):
+                cp.kind = "badimport"  # (in a function: an error where it is compiled)
+                cp.s = msg
+                cp.kids = []
+            else:
+                fail(msg, n.line)
+            changed = True
+        return changed
 
     def used_before(self, m: Mod, al: Node) -> None:
         # an alias (name = f) binds name for all of the module's code; module-level code that runs
@@ -3987,6 +4054,7 @@ class Loader:
                 inner = scope_names(c) if c.kind == "def" or c.kind == "class" else scope
                 decl: dict[str, bool] = {}
                 types: dict[str, Node] = {}
+                held: dict[str, int] = {}
                 pos = self.pos
                 fs = self.fs
                 fsure = self.fsure
@@ -3999,6 +4067,7 @@ class Loader:
                     self.fsure = {}
                 elif c.kind == "class":
                     self.incls = True
+                    scope_globals(c.kids[0].kids, held)
                 for kid in c.kids:
                     if kid.kind == "block":
                         self.simplify(m, kid, inner)
@@ -4010,9 +4079,24 @@ class Loader:
                 self.incls = incls
                 if st.kind == "def":
                     self.dropped_locals(st, inner, decl, types)
+                elif c.kind == "class":
+                    self.dropped_globals(c, held)
         for nm in added:
             del self.fsure[nm]
         blk.kids = out
+
+    def dropped_globals(self, c: Node, held: dict[str, int]) -> None:
+        # a global statement in class c's body holds for the whole body in CPython, also in code
+        # simplify() dropped (held: the names the body declared global before, each with its
+        # statement's line), so x = 2 further on binds the module's x: such a statement is kept,
+        # and the class is the error that a global statement in a class body is
+        now: dict[str, int] = {}
+        scope_globals(c.kids[0].kids, now)
+        kept: list[Node] = []
+        for nm in held:
+            if nm not in now:
+                kept.append(mk("global", "", held[nm], [mk("name", nm, held[nm], [])]))
+        c.kids[0].kids = kept + c.kids[0].kids
 
     def dropped_locals(self, d: Node, before: dict[str, bool], decl: dict[str, bool], types: dict[str, Node]) -> None:
         # what function d binds only in code simplify() dropped still decides its scope in CPython: a
@@ -4022,18 +4106,25 @@ class Loader:
         # it; if none gives one, it is an error where d is compiled
         now: dict[str, bool] = {}
         globals_in(d.kids[2].kids, now)
+        pre: list[Node] = []  # (the statements put first, each before the ones so far)
         for nm in decl:
             if nm not in now:
-                d.kids[2].kids.insert(0, mk("global", "", d.line, [mk("name", nm, d.line, [])]))
-        now = scope_names(d)
+                pre.append(mk("global", "", d.line, [mk("name", nm, d.line, [])]))
+        now = scope_names(d)  # (without pre's global statements, which only take decl's names out: before has none)
+        read: dict[str, bool] = {}
+        for nm in before:
+            if nm not in now:
+                read_names(d.kids[2], read)  # (one walk of the body, not one for each name)
+                break
         for nm in before:
             msg = f"'{nm}' is local to {d.s}() only through code that is dropped at compile time (for the platform, TYPE_CHECKING or an import that fails), so a read of it raises UnboundLocalError; that is supported only where the dropped code annotates it with a supported type or assigns it a constant"
-            if nm not in now and reads(d.kids[2], nm) and nm in types:
+            if nm not in now and nm in read and nm in types:
                 # (where the type is not supported, the message is msg: Gen.stmt())
                 t = types[nm]
-                d.kids[2].kids.insert(0, mk("annassign", msg, t.line, [mk("name", nm, t.line, []), t]))
-            elif nm not in now and reads(d.kids[2], nm):
-                d.kids[2].kids.insert(0, mk("badimport", msg, d.line, []))
+                pre.append(mk("annassign", msg, t.line, [mk("name", nm, t.line, []), t]))
+            elif nm not in now and nm in read:
+                pre.append(mk("badimport", msg, d.line, []))
+        d.kids[2].kids = [pre[len(pre) - 1 - i] for i in range(len(pre))] + d.kids[2].kids
         early: dict[str, bool] = {}
         user: dict[str, bool] = {}
         import_reads(d.kids[2], {}, early, user)
@@ -4610,6 +4701,8 @@ class Loader:
         out: list[Node] = []
         added: list[str] = []  # (what blk surely binds holds only within it)
         for st in blk.kids:
+            if blk is m.body:
+                m.at = st.line
             if st.kind == "import" and infn and m.name != "":
                 self.later.append(st)
                 self.laterm.append(m)
@@ -4664,6 +4757,8 @@ class Loader:
             k = f"x:'{name}' is bound by two imports, to different modules, functions or classes (not supported)"
             if not infn:
                 fail(k[2:], line)
+        if infn and name not in ks:
+            self.fkline[f"{self.curdef} {name}"] = line
         ks[name] = k
 
     def import_stmt(self, m: Mod, st: Node, infn: bool, out: list[Node]) -> None:
@@ -4676,6 +4771,7 @@ class Loader:
         inits = mk("uimport", "", line, [])
         copies: list[Node] = []
         names: list[str] = []
+        took: list[str] = []  # (the names a from-import binds to a module, function or class: not copied)
         for a in st.kids if infn else st.kids[:0]:
             if a.s in self.fgl.get(self.curdef, {}) and (st.s.startswith("from.") or not builtin_module(a.kids[1].s) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
                 # (CPython binds the module's global, which then names one module or another; but
@@ -4730,7 +4826,8 @@ class Loader:
                         self.takek.append(m.kinds)
                     i = j
                 n = len(self.taken)
-                self.take(m, self.mods[tgt[: tgt.rfind(".")]], tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
+                if self.take(m, self.mods[tgt[: tgt.rfind(".")]], tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
+                    self.import_binds(m, a.s, tgt, infn)
                 if len(self.taken) > n:
                     self.taken[n].kind = "takesub"  # (this import runs the submodule's code: submodules())
                 names.append(a.s)
@@ -4738,28 +4835,39 @@ class Loader:
                 # import a.b.c binds a; import a as x binds x to a
                 self.bind(m, a.s, "m:" + a.kids[0].s, infn, line)
                 names.append(a.s)
-                key = f"{m.name} {self.curdef if infn else ''} {a.s}"
-                if self.intry == 0:
-                    self.solid[key] = True
-                elif key not in self.solid:
-                    self.fragile[key] = path
+                self.import_binds(m, a.s, path, infn)
             elif a.s == "*":
                 for x in self.public(src):
-                    self.take(m, src, x, x, infn, keep, inits, copies, line)
+                    if self.take(m, src, x, x, infn, keep, inits, copies, line) != "v":
+                        took.append(x)
                     names.append(x)
                 if src.pdir != "" and not has_all(src.body.kids):
                     self.stars.append(mk("star", "", line, [mk("str", src.name, line, [])]))
                     self.starm.append(m)
             else:
                 tgt = a.kids[0].s
-                self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
+                if self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
+                    took.append(a.s)
                 names.append(a.s)
+        for nm in took:
+            # (a from-import binds its names once the code of all its modules has run: the last one's)
+            self.import_binds(m, nm, inits.kids[-1].s, infn)
         inits.s = " ".join(names)  # (the names the statement binds, for deftime())
         if len(keep.kids) > 0:
             out.append(keep)
         if len(inits.kids) > 0:
             out.append(inits)
         out.extend(copies)
+
+    def import_binds(self, m: Mod, name: str, path: str, infn: bool) -> None:
+        # name, which an import in module m (in the function being loaded, if infn) binds: for sure
+        # outside try statements (solid); in one, unless the import raises, which leaves module path,
+        # the last it runs, not imported (fragile: reads of name check its done flag, Node.mchk)
+        key = f"{m.name} {self.curdef if infn else ''} {name}"
+        if self.intry == 0:
+            self.solid[key] = True
+        elif key not in self.solid:
+            self.fragile[key] = path
 
     def chain(self, path: str, inits: Node) -> None:
         # the modules import path initializes: a, a.b, a.b.c
@@ -4825,8 +4933,9 @@ class Loader:
         else:
             fail(f"from {src.name} import *: __all__ must be a list or tuple of strings", v.line)
 
-    def take(self, m: Mod, src: Mod, x: str, name: str, infn: bool, keep: Node, inits: Node, copies: list[Node], line: int) -> None:
-        # from src import x as name
+    def take(self, m: Mod, src: Mod, x: str, name: str, infn: bool, keep: Node, inits: Node, copies: list[Node], line: int) -> str:
+        # from src import x as name; what x is in src ("" for a submodule, "v" for a variable, which
+        # an assignment copies)
         k = src.kinds.get(x, "")
         if src.name == m.name and not infn and x not in self.sure:
             # (from . import x in a package's own code takes the package's x if its code has bound x
@@ -4855,13 +4964,24 @@ class Loader:
         elif k != "v":
             self.bind(m, name, k, infn, line)
         else:
+            ks = self.fks[self.curdef] if infn else m.kinds
+            at = self.curdef if infn else "@" + m.name
+            was = ks.get(name, "")
+            if was == "v" and at + " " + name in self.vtook:
+                was = ""  # (another from-import of a variable bound it: see late_takes())
+            elif was != "v":
+                self.vtook[at + " " + name] = True
             if not infn:
                 m.kinds[name] = "v"
             copies.append(mk("assign", "from", line, [mk("name", name, line, []), mk("name", src.q + x, line, [])]))
+            self.vtaken.append(mk("vtake", name, line, [mk("str", src.name, line, []), mk("str", x, line, []), copies[-1], mk("str", was, line, []), mk("str", at, line, []),
+                                                       mk("int", str(src.at if not src.done else 0), line, [])]))
+            self.vtakek.append(ks)
         if src.pdir != "" and k != "" and k != "m:" + src.name + "." + x:
             # the package binds x itself, which an import of its submodule x may rebind (submodules())
             self.taken.append(mk("take", name, line, [mk("str", src.name, line, []), mk("str", x, line, [])] + (copies[-1:] if k == "v" else copies[:0])))
             self.takek.append(self.fks[self.curdef] if infn else m.kinds)
+        return k
 
     # ---- qualification of names
     def kind(self, m: Mod, s: str) -> str:
@@ -4934,14 +5054,17 @@ class Loader:
             while root.kind == "attr":
                 root = root.kids[0]
             fr = ""
-            if k == "attr" and root.kind == "name" and root.s not in loc:
+            if root.kind == "name" and root.s not in loc:
                 inf = root.s in self.fk
                 key = f"{m.name} {self.fkey if inf else ''} {root.s}"
                 if key in self.fragile:
                     fr = f"{self.fragile[key]} {root.s} {'L' if inf else 'G'}"
             mod = self.qmod(m, n, loc)
-            if fr != "" and (n.kind == "name" or n.kind == "str"):
-                n.mchk = fr
+            r = n
+            while r.kind == "attr":
+                r = r.kids[0]  # (m.C.k: the name qmod() made of m.C is what is read)
+            if fr != "" and (r.kind == "name" or r.kind == "str"):
+                r.mchk = fr
             if mod != "":
                 n.kind = "badattr"
                 n.s = f"module '{mod}' cannot be used as a value"
@@ -5073,6 +5196,13 @@ class Loader:
                         # (a function's import of a Python module binds a local, which CPython reads
                         # unbound before it runs)
                         st.kids[2].kids.insert(0, mk("badimport", f"'{nm}' is read in {st.s}() where Pystachy cannot tell that the import in it that binds '{nm}' has run (where it has not, CPython raises UnboundLocalError): not supported", st.line, []))
+                        break
+                for nm in self.fk:
+                    if nm in inner:
+                        # (one binding per name, as in module code: CPython's import rebinds the
+                        # function's variable, which every read of the name here would read)
+                        at = self.fkline.get(f"{st.line} {nm}", st.line)
+                        st.kids[2].kids.insert(0, mk("badimport", f"'{nm}' is bound both as a variable and by an import (not supported)", at, []))
                         break
                 self.fkey = str(st.line)
                 self.qdef = True
@@ -5459,6 +5589,11 @@ for _k in ("abs all any ascii bin bool bytes callable chr complex dict divmod en
            "int isinstance issubclass iter len list map max min object oct ord pow range repr reversed round set slice sorted "
            "str sum tuple zip __pys_repr __pys_str __pys_ascii typing.cast os.getcwd os.getenv os.environ.get").split():
     PURE[_k] = True
+# the builtins whose calls the body of a class Pystachy leaves out still runs: given the values
+# Gen.plain allows, they compute what CPython's do and may raise (int("x"), max([]))
+RAISERS: dict[str, bool] = {}
+for _k in "int max min".split():
+    RAISERS[_k] = True
 # encoding= names of UTF-8 (1) and Latin-1 (2) as CPython's codec lookup finds them (see codec()):
 # a str holds the file's bytes either way, which is what CPython's str holds for a Latin-1 file
 CODECS: dict[str, int] = {}
@@ -5536,9 +5671,10 @@ IROPS: dict[str, str] = {
 LLNOTRAW: dict[str, bool] = {}
 for _k in "ret br switch indirectbr invoke callbr resume catchswitch catchret cleanupret unreachable phi call tail musttail notail".split():
     LLNOTRAW[_k] = True
-# the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1), which
-# PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
-OPTS: list[str] = ["listget", "dictfuse"]
+# the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
+# tupleiter, a choice of the lowering (a for loop steps through a tuple's slots, not through a list
+# of its items: Gen.iterable), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
+OPTS: list[str] = ["listget", "dictfuse", "tupleiter"]
 # what bounds dictfuse's work: the depth of the chain of values Gen.canon follows (the
 # self-compile's deepest is 18), the ops Gen.reaching walks back over (85) and the lookups that
 # hold at once (7)
@@ -5610,6 +5746,7 @@ RUNTIME: dict[str, str] = {
     "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
     # strings
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.rsplit": "list[str]:S,str,int|R A|", "str.splitlines": "list[str]:S,bool|R A|", "str.strip": "str:S,str|A|",
     "str.lstrip": "str:S,str|A|", "str.rstrip": "str:S,str|A|", "str.startswith": "bool:S,str,int,int|R|",
@@ -5869,6 +6006,46 @@ def owner(name: str) -> str:
 def short(name: str) -> str:
     # a function's or class's own name, without its module (heapq$heappush: heappush)
     return name[name.rfind("$") + 1 :]
+
+
+def raising_op(op: str) -> bool:
+    # does binary operator op raise on some values of builtin types (1 // 0, 0 ** -1, 1 << -1)
+    return op == "/" or op == "//" or op == "%" or op == "**" or op == "<<" or op == ">>"
+
+
+def raising(e: Node) -> bool:
+    # is expression e an operation that may raise on values of builtin types: a division or
+    # modulo, a power or shift, an index, or a call (int("x"))
+    return (e.kind == "binop" and raising_op(e.s)) or e.kind == "index" or e.kind == "call"
+
+
+def int_lit(e: Node) -> str:
+    # the value of e if it is an int literal (or its negation), else ""
+    if e.kind == "unary" and e.s == "-" and e.kids[0].kind == "int":
+        return "-" + e.kids[0].s
+    return e.s if e.kind == "int" else ""
+
+
+def short_ascii(s: str) -> bool:
+    # is s printable ASCII with at most 18 digits, so that int(s) is what CPython's is: an int of
+    # 64 bits or a ValueError (not an int beyond 64 bits, or one of other digits)
+    n = 0
+    for c in s:
+        if c < " " or c > "~":
+            return False
+        if c >= "0" and c <= "9":
+            n += 1
+    return n <= 18
+
+
+def may_raise(e: Node) -> bool:
+    # does expression e hold such an operation
+    if raising(e):
+        return True
+    for x in e.kids:
+        if may_raise(x):
+            return True
+    return False
 
 
 def is_const(e: Node) -> bool:
@@ -6282,6 +6459,32 @@ def reads(n: Node, name: str) -> bool:
     return False
 
 
+def read_names(n: Node, out: dict[str, bool]) -> None:
+    # every name that reads(n, name) finds, in one walk of n
+    k = n.kind
+    if k == "name":
+        out[n.s] = True
+        return
+    if k == "def" or k == "class" or k == "subclass" or k == "lambda":
+        return
+    names: list[str] = []
+    if k == "listcomp":
+        names_in(n.kids[1], names)
+    for i in range(len(n.kids)):
+        if k == "listcomp" and i != 2:
+            # (a name its target binds counts only in its iterable)
+            inner: dict[str, bool] = {}
+            read_names(n.kids[i], inner)
+            for nm in inner:
+                if nm not in names:
+                    out[nm] = True
+        elif not (k == "annassign" and i == 1):
+            read_names(n.kids[i], out)
+        x = n.kids[i].kind
+        if k == "block" and (x == "return" or x == "raise" or x == "break" or x == "continue"):
+            return
+
+
 def local_types(body: list[Node], out: dict[str, Node]) -> None:
     # a type for the names a function's body binds (not in the functions and classes it defines):
     # the annotation of one, or the type of a constant one is assigned
@@ -6545,9 +6748,9 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
     for k in n.kids if n.kind != "def" and n.kind != "class" and n.kind != "subclass" and n.kind != "lambda" else n.kids[:0]:
         import_reads(k, dict(sure) if k.kind == "block" and n.kind != "with" else sure, out, user)
     first = n.kids[0].kids[0] if n.kind == "try" and len(n.kids[0].kids) > 0 else n
-    for a in first.kids if first.kind == "import" and first.s == "" else first.kids[:0]:
-        # try: import m as x / ...: after the statement, x is bound unless the import raised,
-        # which a read of it checks as it runs (Loader.fragile, Gen.modchk)
+    for a in first.kids if first.kind == "import" else first.kids[:0]:
+        # try: import m as x / ... (or from m import x): after the statement, x is bound unless the
+        # import raised, which a read of it checks as it runs (Loader.fragile, Gen.modchk)
         sure[a.s] = True
 
 
@@ -6600,6 +6803,22 @@ def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False
     for d in inner:
         if d.kind == "def":
             global_assigns(d.kids[2].kids, out, imports)
+
+
+def scope_globals(body: list[Node], out: dict[str, int]) -> None:
+    # the names that the global statements of a scope (body: its statements) declare, not those of
+    # the functions and classes it defines, each with the line of its first global statement
+    for st in body:
+        if st.kind == "global":
+            for nm in st.kids:
+                if nm.s not in out:
+                    out[nm.s] = st.line
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            for kid in st.kids:
+                if kid.kind == "block":
+                    scope_globals(kid.kids, out)
+                elif kid.kind == "except":
+                    scope_globals(kid.kids[1].kids, out)
 
 
 def stmt_binds(st: Node, name: str) -> bool:
@@ -6892,7 +7111,7 @@ class Loop:
         self.exit = brk  # break's target, after the else block
         self.seqs: list[Val] = []  # what a seq loop steps through
         # a seq loop's test of each of seqs leads to a block (tests) where the item it takes is the
-        # one at idx (a list's or a str's index: 0 <= idx < its length when it was tested)
+        # one at idx (a list's, a str's or a tuple's index: 0 <= idx < its length when it was tested)
         self.tests: list[str] = []
         self.idx: list[str] = []
         self.ctr = ""  # the slot of its counter or index
@@ -7227,6 +7446,7 @@ class Gen:
         self.gdecl: dict[str, bool] = {}
         self.assigned: dict[str, bool] = {}
         self.compvars: dict[str, int] = {}
+        self.drying = 0  # (dry() is typing an expression from further on in the function)
         self.loops: list[Loop] = []  # the loops the code being compiled is in, innermost last
         self.exits: list[Exit] = []  # what break, continue and return must do on their way out, innermost last
         self.wdepth: list[int] = []  # len(exits) when each enclosing loop began
@@ -7238,6 +7458,7 @@ class Gen:
         self.shadows: list[list[str]] = []
         self.xcls: dict[str, bool] = {}  # exception classes whose objects are made: they get an ExcClass
         self.eh = False  # the program has try or with (closed world): exceptions are on (pys_eh_on)
+        self.opts: dict[str, bool] = {}  # the optimizations on (optimizations()), once program() starts
         self.lcs: list[str] = []
         self.lct: list[str] = []
         self.ret = "None"
@@ -7283,6 +7504,7 @@ class Gen:
         self.hooks: dict[str, str] = {}  # see hook()
         self.chooks: dict[int, str] = {}
         self.flagged: dict[str, bool] = {}  # globals whose "is assigned" flag effect() reads
+        self.unraised: dict[str, bool] = {}  # the modules where a class left out held an operation that may raise, not evaluated (left_out)
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
@@ -9041,6 +9263,19 @@ class Gen:
         # (which hides the module's variable, function, class or import of that name)
         return name in self.assigned and name not in self.gdecl and name not in self.ltype
 
+    def read_ahead(self, name: str) -> None:
+        # a read of name where it is such a local, which CPython reads unbound there
+        # (UnboundLocalError): an error, as a read before a local's first assignment is
+        if self.unbound_local(name):
+            self.err(f"local variable '{name}' is read before its first assignment; declare it first ({name}: T)")
+
+    def class_ahead(self, name: str) -> None:
+        # read_ahead() for a read of class name (C.x, C.m(), isinstance(o, C)), but not while dry()
+        # types an expression from further on in the function (lookahead()), where the function may
+        # have bound the name by then: the read is checked where it is compiled
+        if self.drying == 0:
+            self.read_ahead(name)
+
     def no_type(self, name: str) -> None:
         # the error for the empty list or dict of variable name, still without a type where a use
         # needs it (an annotation of it belongs where the container was made, see origin)
@@ -9074,8 +9309,7 @@ class Gen:
             if name in self.narrowed and is_opt(t) and t != NONEVAR:
                 return self.deref(Val(r, t))  # known not to be None here
             return Val(r, t)
-        if self.unbound_local(name):
-            self.err(f"local variable '{name}' is read before its first assignment; declare it first ({name}: T)")
+        self.read_ahead(name)
         if name in self.gtypes:
             t = self.gtypes[name]
             r = self.ins(f"load {lt(t)}, ptr @g.{name}")
@@ -9936,7 +10170,9 @@ class Gen:
         self.blk = Blk("")
         self.fn.blocks = []
         self.fn.loops = []
+        self.drying += 1
         t = self.expr(e, "").t
+        self.drying -= 1
         self.blk = blk
         self.fn.blocks = blocks
         self.fn.loops = loops
@@ -11365,9 +11601,18 @@ class Gen:
                 self.err(f"unsupported decorator @{short(x.s)}: CPython applies it when module '{self.curfn.mod}' is imported" + (f", and {e}" if e != "" else ""))
         return key
 
-    def class_effect(self, st: Node, why: str) -> None:
+    def left_out(self, st: Node, why: str) -> None:
+        # class statement st of the module's code, which Pystachy leaves out (for the reason why).
+        # After one whose body held an operation that may raise and was not evaluated, CPython may
+        # have raised there, so the later ones evaluate none (see body_effect)
+        m = self.curfn.mod
+        if not self.class_effect(st, why, m not in self.unraised):
+            self.unraised[m] = True
+
+    def class_effect(self, st: Node, why: str, runs: bool = True) -> bool:
         # class statement st, which Pystachy leaves out (for the reason why): CPython evaluates its
-        # decorators and bases, runs its body, creates the class and applies the decorators
+        # decorators and bases, runs its body, creates the class and applies the decorators. runs:
+        # the statement surely runs there (see body_effect, which gives the result)
         c = st.kids[0] if st.kind == "subclass" else st
         does = f"creates class {short(c.s)}"
         self.decorators(c, c.kids[1:], {})
@@ -11382,25 +11627,33 @@ class Gen:
             elif e == "" and b.kind != "kw" and b.kind != "typeparams" and not ("$" not in p and p in PYBUILTINS) and self.imported(p) == "":
                 e = f"its base '{short(p)}' may not be a class"  # (its __mro_entries__ may run)
             self.eager(e if e != "" or b.kind != "index" else self.effect(b.kids[1], {}, 2), why, does)
-        self.body_effect(c.kids[0].kids, {}, why, f"runs this statement of the body of class {short(c.s)}")
+        return self.body_effect(c.kids[0].kids, {}, why, f"runs this statement of the body of class {short(c.s)}", runs)
 
-    def body_effect(self, body: list[Node], local: dict[str, str], why: str, does: str) -> None:
-        # the statements of a class body Pystachy leaves out (local: the names it has bound)
+    def body_effect(self, body: list[Node], local: dict[str, str], why: str, does: str, runs: bool = True) -> bool:
+        # the statements of a class body Pystachy leaves out (local: the names it has bound). Where
+        # they surely run (runs: not in a branch), the operations of their values that may raise
+        # (1 // 0) are compiled in order, so that they raise as CPython's do, up to the first one
+        # Pystachy does not compile (raisers). False if they hold such an operation, uncompiled
+        clear = True
         for b in body:
             self.line = b.line
             k = b.kind
             e = ""
             if k == "def":
                 local[b.s] = "p" if self.decorators(b, b.kids[3:], local) == "property" else "f"
+                clear = clear and not any(may_raise(x) for x in b.kids[3:])
                 for p in b.kids[0].kids:
                     self.eager(self.effect(p.kids[1], local, 0), why, does)
+                    clear = self.raisers(p.kids[1], local, runs and clear) and clear
             elif k == "class" or k == "subclass":
-                self.class_effect(b, "nested classes are not supported")
+                clear = self.class_effect(b, "nested classes are not supported", runs and clear) and clear
                 local[short(b.s)] = "f"
             elif k == "if":
                 self.eager(self.effect(b.kids[0], local, 1), why, does)
-                self.body_effect(b.kids[1].kids, local, why, does)
-                self.body_effect(b.kids[2].kids, local, why, does)
+                clear = self.raisers(b.kids[0], local, runs and clear) and clear
+                yes = self.body_effect(b.kids[1].kids, local, why, does, False)
+                no = self.body_effect(b.kids[2].kids, local, why, does, False)
+                clear = clear and yes and no
             elif k == "assign" or k == "annassign" or k == "augassign" or k == "expr":
                 # (CPython calls a class attribute's __set_name__, each unpacked one's too)
                 ts: list[str] = []
@@ -11412,6 +11665,9 @@ class Gen:
                 e = e if e != "" or k != "augassign" else self.effect(b.kids[0], local, 2)
                 if e == "" and (k != "annassign" or len(b.kids) == 3):
                     e = self.effect(b.kids[-1], local, u)
+                    if e == "":
+                        # (then an unpacking, or an augmented assignment's division, may raise)
+                        clear = self.raisers(b.kids[-1], local, runs and clear) and clear and not (u == 2 and (k != "augassign" or raising_op(b.s)))
                 for nm in ts:
                     local[nm] = ""
                 self.eager(e, why, does)
@@ -11423,6 +11679,76 @@ class Gen:
             elif k != "pass":
                 k = "import" if k.endswith("import") else k
                 self.eager(f"Pystachy does not check what {'an' if k[0] in 'aeiou' else 'a'} '{k}' statement there runs", why, does)
+        return clear
+
+    def raisers(self, e: Node, local: dict[str, str], run: bool) -> bool:
+        # value e of a class body Pystachy leaves out (local: the names it has bound): where it
+        # surely runs (run), its operations that may raise (raising) and that Pystachy computes as
+        # CPython does (plain) are compiled in CPython's order, their values dropped, so that they
+        # raise as CPython's do. False if e holds such an operation that is not compiled: CPython
+        # may raise there first, so nothing after it is compiled
+        if not may_raise(e):
+            return True
+        if not run:
+            return False
+        k = e.kind
+        if raising(e) and self.plain(e, local) != "":
+            self.expr(e, "")
+            return True
+        n = len(e.kids)
+        if k == "ifexp" or k == "boolop" or k == "cmp":
+            n = 2 if k == "cmp" else 1  # (the operands that surely run)
+        elif k not in ["binop", "unary", "index", "slice", "call", "attr", "tuple", "list", "set", "dict", "starred", "dstar"]:
+            return False
+        for x in e.kids[:n]:
+            if not self.raisers(x.kids[0] if x.kind == "kw" else x, local, True):
+                return False
+        return not raising(e) and not any(may_raise(x) for x in e.kids[n:])
+
+    def plain(self, e: Node, local: dict[str, str]) -> str:
+        # the type of value e of a class body Pystachy leaves out (local: the names it has bound) if
+        # Pystachy computes e as CPython does, else "": a literal, a variable of the module of a
+        # builtin type, or one of these operations on them, which may raise: //, % and / of numbers,
+        # an index of a list or dict, int() of a str literal and min() and max() of a list. Not
+        # where CPython's would compute an int beyond 64 bits, which Pystachy's raise OverflowError
+        # for (see docs/language.md, Deviations), nor an index of a str or min() of one, which count
+        # its bytes
+        k = e.kind
+        if k == "unary" and e.s == "-" and (e.kids[0].kind == "int" or e.kids[0].kind == "float"):
+            return self.plain(e.kids[0], local)
+        if k == "int":
+            d = e.s[1:] if e.s.startswith("-") else e.s
+            return "int" if len(d) < 19 or (len(d) == 19 and d <= "9223372036854775807") else ""  # (else an error, see expr)
+        if k == "float" or k == "str":
+            return k
+        if k == "name":
+            t = self.gtypes.get(e.s, "")
+            ok = t == "int" or t == "float" or t == "str" or ((is_list(t) or is_dict(t)) and "?" not in t and not self.objects(t, 2))
+            return t if "$" in e.s and ok else ""  # (not a name the body bound, which is not qualified)
+        if k == "binop" and (e.s == "//" or e.s == "%" or e.s == "/"):
+            a = self.plain(e.kids[0], local)
+            b = self.plain(e.kids[1], local)
+            if (a != "int" and a != "float") or (b != "int" and b != "float"):
+                return ""
+            r = int_lit(e.kids[1])
+            if e.s == "//" and a == "int" and b == "int" and int_lit(e.kids[0]) == "" and (r == "" or r == "-1"):
+                return ""  # (it may be -2**63 // -1)
+            return "float" if e.s == "/" or a == "float" or b == "float" else "int"
+        if k == "index":
+            o = self.plain(e.kids[0], local)
+            i = self.plain(e.kids[1], local)
+            if is_list(o) and i == "int":
+                return elem(o)
+            return targs(o)[1] if is_dict(o) and i != "" and i == targs(o)[0] else ""
+        if k == "call" and len(e.kids) == 2 and e.kids[0].kind == "name":  # (one argument: not a keyword, see a)
+            f = e.kids[0].s
+            a = self.plain(e.kids[1], local)
+            if f not in RAISERS or f in local or self.bound(f) or a == "":
+                return ""
+            if f == "int":
+                return "int" if e.kids[1].kind == "str" and short_ascii(e.kids[1].s) else ""
+            return elem(a) if is_list(a) and (elem(a) == "int" or elem(a) == "float" or elem(a) == "str") else ""
+        return ""
 
     def body_names(self, c: Node) -> dict[str, bool]:
         # the names class statement c's body binds, by assignment or def
@@ -11549,6 +11875,7 @@ class Gen:
         return r if e.kind in ["tuple", "list", "set", "dict"] else self.effect(e, {}, use)
 
     def program(self, mods: list[Mod]) -> str:
+        self.opts = optimizations()
         # the modules in the order their code may first run, the main program last
         tops: list[list[Node]] = []
         for m in mods:
@@ -11669,7 +11996,7 @@ class Gen:
         for ci in self.classes.values():
             mcls[ci.mod].append(ci)
         for i in range(len(mods)):
-            self.flow_program(tops[i], mods[i].name, mfns[mods[i].name], mcls[mods[i].name])
+            self.flow_program(tops[i], mods[i].name, mfns[mods[i].name], mcls[mods[i].name], i == 0)
         for nm in self.gflag:
             if nm in self.funcs or nm in self.classes:
                 self.global_var(f"@g.{nm}.def", "i1")
@@ -11791,7 +12118,7 @@ class Gen:
             fail("internal error: an op changed the lists all ops start with", 0)
         chk = os.getenv("PYSTACHY_IRCHECK", "") == "1"
         dump = os.getenv("PYSTACHY_IRFX", "") == "1" and not self.rtcache
-        on = optimizations()
+        on = self.opts
         if chk:
             for fn in self.fns:
                 self.verify(fn, False)
@@ -11878,8 +12205,9 @@ class Gen:
     # ---- definite assignment, before code generation: CPython raises UnboundLocalError or
     # NameError when a read finds its variable unassigned. Reads that cannot are plain loads;
     # the others (Node.chk) test an "is assigned" flag kept only for the variables they read.
-    def flow_program(self, top: list[Node], mod: str, mfns: list[FnInfo], mcls: list[ClassInfo]) -> None:
-        # one module: its top-level code, functions (mfns) and classes' methods (mcls)
+    def flow_program(self, top: list[Node], mod: str, mfns: list[FnInfo], mcls: list[ClassInfo], first: bool) -> None:
+        # one module: its top-level code, functions (mfns) and classes' methods (mcls); the first
+        # module's (first) also checks the program's imports
         self.flowmod = mod
         fns: list[FnInfo] = []
         for f in mfns:
@@ -11903,7 +12231,8 @@ class Gen:
         for nm in gl:
             if nm in self.funcs or nm in self.classes or (nm in self.imports and not self.imports[nm].startswith("__future__")):
                 self.err(f"'{nm}' is bound both as a variable and as a function, class or import (not supported)")
-        for nm in self.imports:
+        for nm in self.imports if first else {}:
+            # (those of every module, which no module's flow changes: once)
             if nm in self.funcs or nm in self.classes:
                 self.err(f"'{nm}' is bound both by an import and by a def or class (not supported)")
         for nm in gl:
@@ -12699,7 +13028,7 @@ class Gen:
                     ci.bad = f"class {shown(ci.name)} is not supported: {why}"
         if ci.bad != "":
             # an imported module's class Pystachy cannot compile: an error only where used
-            self.class_effect(self.cnodes[ci.node.line], ci.bad)
+            self.left_out(self.cnodes[ci.node.line], ci.bad)
             return
         bound: dict[str, bool] = {}
         syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann"  # (a dataclass's)
@@ -12938,6 +13267,7 @@ class Gen:
                 if h.s != "" and not self.modlevel and h.s in self.gdecl:
                     self.err(f"except ... as {h.s}, of the global '{h.s}', in a function is not supported: the end of the clause deletes the global, as del would")
                 for c in h.kids[0].kids if h.kids[0].kind == "tuple" else [h.kids[0]] if h.kids[0].kind == "name" else h.kids[:0]:
+                    self.modchk(c)  # (read through an import that may have raised)
                     if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
                         # a class whose class statement may not have run yet
                         self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
@@ -13332,8 +13662,8 @@ class Gen:
         # class (EXCEPTIONS) or a class of the program; "" for any other expression (a variable,
         # a call of a function), whose value is the exception
         c = e.kids[0] if e.kind == "call" else e
-        if c.kind != "name" or c.s in self.funcs or c.s in self.ltype or c.s in self.gtypes:
-            return ""
+        if c.kind != "name" or c.s in self.funcs or c.s in self.ltype or c.s in self.gtypes or self.unbound_local(c.s):
+            return ""  # (a local the function assigns further on: reading it is the error, see read_ahead)
         return c.s if c.s in self.classes or c.s in EXCEPTIONS else ""
 
     def cause(self, c: Node) -> None:
@@ -13358,6 +13688,7 @@ class Gen:
             return self.expr(e, "")
         if self.classes[k].exc == "":
             self.err(f"'{short(k)}' is not an exception class: exceptions must derive from BaseException")
+        self.class_ready(e.kids[0] if e.kind == "call" else e)  # (looked up first, as a call of it does)
         return self.exc_object(k, e.kids[1:] if e.kind == "call" else [])
 
     def raise_stmt(self, n: Node) -> None:
@@ -13824,6 +14155,7 @@ class Gen:
             if st >= 0:
                 # the static types decide the test (isinstance(x, str), x is None): only the branch
                 # that runs is compiled
+                self.static_reads(n.kids[0])
                 self.stmts(n.kids[1].kids if st == 1 else n.kids[2].kids)
                 return
             c = self.cond(n.kids[0])
@@ -13856,6 +14188,7 @@ class Gen:
                         self.narrowed[both] = True
         elif k == "while" and self.static(n.kids[0]) == 0:
             # a loop whose test is false from the start (while x: with x None): only its else block runs
+            self.static_reads(n.kids[0])
             if n.kids[-1].s == "else":
                 self.stmts(n.kids[-1].kids)
         elif (k == "while" or k == "for") and n.kids[-1].s == "else":
@@ -13961,10 +14294,11 @@ class Gen:
         elif k == "assert" and (self.static(n.kids[0]) == 0 or n.kids[0].kind == "False"):
             # an assertion that cannot hold (assert x is not None with x None, assert False): code
             # after it never runs
+            self.static_reads(n.kids[0])
             self.assert_fails(n)
             self.term = True
         elif k == "assert" and self.static(n.kids[0]) == 1:
-            pass
+            self.static_reads(n.kids[0])
         elif k == "assert":
             l1 = self.label()
             l2 = self.label()
@@ -14061,7 +14395,7 @@ class Gen:
             if n.s in self.gflag:
                 self.emit(f"store i1 true, ptr @g.{n.s}.def")
         elif k == "lclass":
-            self.class_effect(self.cnodes[n.line], self.unsupported[n.s])
+            self.left_out(self.cnodes[n.line], self.unsupported[n.s])
         elif k == "import":
             for a in n.kids:
                 self.aliases[a.s] = a.kids[0].s
@@ -14370,19 +14704,23 @@ class Gen:
         seq = self.iterable(self.expr(it, ""))
         if seq.t == "tuple[]":
             self.iterarg(arg)
+            self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
             return  # nothing to iterate: the body never runs (and its types are unknown)
         self.for_seq(tgt, [seq], "", body, "0", hide, arg)
         self.close_temp(it, seq)
 
     def iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not iterable") -> Val:
-        # a tuple is iterated as a list of its items, which must then share one type, an object as
-        # the list its __iter__ steps through; None raises msg
+        # what a for loop steps through (for_seq): a tuple as it is, whose items must then share
+        # one type (with PYSTACHY_OPT=-tupleiter, a list of them), an object the list its __iter__
+        # steps through; None raises msg
         v = self.unwrap(v, msg)
         if v.t in self.nts:
             self.notnone(v, msg)
             v = self.ntup(v, True)  # (the tuple of its fields)
         if v.t in self.classes:
             return self.obj_iter(v, msg, f"'{tname(v.t)}' object is not iterable")
+        if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
+            return v  # (no list: for_seq reads its slots, as many as its type has)
         if not is_tuple(v.t) or v.t == "tuple[]":
             return v
         ts = targs(v.t)
@@ -14490,23 +14828,24 @@ class Gen:
         self.narrowed = after
 
     def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None) -> None:
-        # One loop serves lists, strings, dicts, enumerate, zip and reversed. Each round takes
-        # the next item of every sequence, in order, the way its CPython iterator would: lists
-        # and strings by index, checked against their current length (reversed: counting down
-        # from the length at the start); dicts by entry position, skipping deleted entries and
-        # failing if the dict changed size. The loop ends at the first exhausted sequence.
+        # One loop serves lists, strings, tuples, dicts, enumerate, zip and reversed. Each round
+        # takes the next item of every sequence, in order, the way its CPython iterator would:
+        # lists and strings by index, checked against their current length (reversed: counting
+        # down from the length at the start), tuples by index below the length their type gives;
+        # dicts by entry position, skipping deleted entries and failing if the dict changed size.
+        # The loop ends at the first exhausted sequence.
         ctr = self.alloca("int", "")
         self.emit(f"store i64 0, ptr {ctr}")
         st: list[str] = []
         used: list[str] = []
         for s in seqs:
-            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or (s.t == "file" and mode != "reversed")):
+            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
                 self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
             if s.t == "file":
                 st.append("")
                 used.append("")
                 continue
-            n0 = self.ins(f"load i64, ptr {s.v}")
+            n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
             used.append(n0)
             if is_dict(s.t):
                 pos = self.alloca("int", "")
@@ -14552,7 +14891,7 @@ class Gen:
                 ok = self.ins(f"icmp ult i64 {j}, {self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k]}")
             else:
                 j = i
-                ok = self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {s.v}')}")
+                ok = self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {s.v}') if not is_tuple(s.t) else st[k]}")
             go = self.label()
             self.cbr(ok, go, le)
             self.place(go)
@@ -14570,6 +14909,8 @@ class Gen:
             j = at[k]
             if is_list(s.t):
                 vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
+            elif is_tuple(s.t):
+                vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {j}')}"), targs(s.t)[0]))
             elif s.t == "str":
                 vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
             elif s.t == "file":
@@ -14687,6 +15028,18 @@ class Gen:
             r = self.isinst(t, n.kids[2]) if t != "" else -1
             return r if r >= 0 else (1 if r == -2 else 0) if r < -1 and self.knownobj(n.kids[1]) else -1
         return -1
+
+    def static_reads(self, n: Node) -> None:
+        # test n, which static() decides, still reads the classes of its isinstance() tests where it
+        # runs, up to where and/or stops (see isinst_reads)
+        if n.kind == "unary" and n.s == "not":
+            self.static_reads(n.kids[0])
+        elif n.kind == "boolop":
+            self.static_reads(n.kids[0])
+            if (self.static(n.kids[0]) == 1) != (n.s == "or"):
+                self.static_reads(n.kids[1])
+        elif n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and len(n.kids) == 3:
+            self.isinst_reads(n.kids[2])
 
     def knownobj(self, n: Node) -> bool:
         # is n a template's parameter whose argument is an object known not to be None (see nnp)
@@ -14811,6 +15164,19 @@ class Gen:
     def isnone(self, t: str) -> int:
         # isinstance(x, type(None)) for x of static type t, not an optional one (see isinst)
         return 1 if t == "None" else -3 if t in self.classes else 0
+
+    def isinst_reads(self, c: Node) -> None:
+        # c, isinstance's second argument, is built before the test, all of a tuple's or union's
+        # items too: a class it names whose class statement may not have run yet raises there,
+        # and so does one read through a module whose import raised (modchk)
+        if c.kind == "tuple" or (c.kind == "binop" and c.s == "|"):
+            for x in c.kids:
+                self.isinst_reads(x)
+        elif c.kind == "name":
+            self.class_ahead(c.s)
+            self.modchk(c)
+            if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
+                self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
 
     def puretype(self, c: Node, u: bool) -> bool:
         # can c, isinstance's second argument, be built without running code or raising, as
@@ -15102,17 +15468,15 @@ class Gen:
                 self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
             return self.listcomp(n, want)
         if k == "fstr":
-            acc = Val(self.sconst(""), "str")
-            for i in range(len(n.kids)):
-                part = n.kids[i]
+            parts: list[Val] = []
+            for part in n.kids:
                 if part.kind == "fmt":
-                    s = self.format_(self.expr(part.kids[0], ""), part.kids[1])
+                    parts.append(self.format_(self.expr(part.kids[0], ""), part.kids[1]))
                 elif part.kind == "str":
-                    s = Val(self.sconst(part.s), "str")
+                    parts.append(Val(self.sconst(part.s), "str"))
                 else:
-                    s = self.to_str(self.expr(part, ""))  # compiler-written parts (dataclass __repr__)
-                acc = s if i == 0 else Val(self.rt("pys_str_add", "ptr", [f"ptr {acc.v}", f"ptr {s.v}"]), "str")
-            return acc
+                    parts.append(self.to_str(self.expr(part, "")))  # compiler-written parts (dataclass __repr__)
+            return self.concat(parts)
         self.err(f"unsupported expression '{k}'")
         return Val("", "")
 
@@ -15188,11 +15552,13 @@ class Gen:
 
     def class_ready(self, cn: Node) -> ClassInfo:
         # the class that name cn reads (C.a, C.m(...)), checked where its class statement may not
-        # have run yet
+        # have run yet, or where the import that binds it (or its module) may have raised
         c = cn.s
+        self.class_ahead(c)  # (not where cn is a local of the function, assigned further on)
         ci = self.classes[c]
         if ci.bad != "":
             self.err(ci.bad)
+        self.modchk(cn)
         if (cn.chk or self.foreign(c)) and c in self.gflag:
             self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c}.def')}, true"), self.unbound(c))
         return ci
@@ -15274,7 +15640,7 @@ class Gen:
     def pformat(self, fmt: str, items: list[Val], rtnone: bool) -> Val:
         # fmt % items; rtnone: a None among them that a conversion cannot take raises when it runs
         # (it is a tuple's place, see percent_opt), as CPython's error
-        acc = Val(self.sconst(""), "str")
+        parts: list[Val] = []
         lit: list[str] = []
         used = 0
         i = 0
@@ -15318,18 +15684,18 @@ class Gen:
             v = items[used]
             used += 1
             if len(lit) > 0:
-                acc = self.cat(acc, Val(self.sconst("".join(lit)), "str"))
+                parts.append(Val(self.sconst("".join(lit)), "str"))
                 lit = []
             if rtnone and v.t == "None" and t not in "sra":
                 return self.fmt_error(self.nonefmt(t))
             if is_sopt(v.t) and t not in "sra":
                 v = self.unwrap(v, "TypeError: " + self.nonefmt(t))
-            acc = self.cat(acc, self.conversion(v, flags, width, prec, t))
+            parts.append(self.conversion(v, flags, width, prec, t))
         if used < len(items):
             return self.fmt_error("not all arguments converted during string formatting")
         if len(lit) > 0:
-            acc = self.cat(acc, Val(self.sconst("".join(lit)), "str"))
-        return acc
+            parts.append(Val(self.sconst("".join(lit)), "str"))
+        return self.concat(parts)
 
     def nonefmt(self, t: str) -> str:
         # what %-conversion t (not s, r or a) raises for None
@@ -15347,6 +15713,41 @@ class Gen:
         if a.v == self.sconst(""):
             return b
         return Val(self.rt("pys_str_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), "str")
+
+    def concat(self, parts: list[Val]) -> Val:
+        # the strs parts as one str (an f-string's pieces, a % format's, all made already, in
+        # order), literals next to each other as one: two pieces are a str.add, three to eight a
+        # str.cat, which copies each piece once, and more are joined eight at a time, then those
+        # joins (each piece is copied once per level: three times up to 512 pieces). Adding them
+        # one at a time would copy every prefix again, quadratic in the pieces (a dataclass's
+        # __repr__ has two per field)
+        ps: list[Val] = []
+        run: list[str] = []  # (the literals since the last other piece; the "" at the end ends a run)
+        for v in parts + [Val("", "str")]:
+            if v.v.startswith("@s."):
+                run.append(self.strvals[int(v.v[3:])])
+                continue
+            s = "".join(run)
+            if s != "":
+                ps.append(Val(self.sconst(s), "str"))
+            run = []
+            if v.v != "":
+                ps.append(v)
+        if len(ps) == 0:
+            return Val(self.sconst(""), "str")
+        while len(ps) > 1:
+            out: list[Val] = []
+            for j in range(0, len(ps), 8):
+                g = ps[j : j + 8]
+                if len(g) == 1:
+                    out.append(g[0])
+                elif len(g) == 2:
+                    out.append(Val(self.rt("pys_str_add", "ptr", [f"ptr {g[0].v}", f"ptr {g[1].v}"]), "str"))
+                else:
+                    args = [f"i64 {len(g)}"] + [f"ptr {x.v}" for x in g] + ["ptr null"] * (8 - len(g))
+                    out.append(Val(self.rt("pys_str_cat", "ptr", args), "str"))
+            ps = out
+        return ps[0]
 
     def conversion(self, v: Val, flags: str, width: str, prec: str, t: str) -> Val:
         # one %-conversion of v, as a format() spec: '-' left-aligns, '0' pads numbers with
@@ -15394,9 +15795,14 @@ class Gen:
                 # None's own __format__ accepts only an empty spec
                 self.guard(self.ins(f"icmp eq ptr {v.v}, null"), "TypeError: unsupported format string passed to NoneType.__format__")
             return self.call_fn(self.classes[v.t].methods["__format__"], [v, sv], [])
-        if empty or v.t == "None":
-            if not empty and spec.kind == "str":
+        if empty:
+            return self.to_str(v)
+        if v.t == "None":
+            if spec.kind == "str":
                 self.err("unsupported format string passed to NoneType.__format__")
+            # a computed spec runs, as for any value: str(None) when it turns out empty, else TypeError
+            sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
+            self.guard(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {sv.v}')}, 0"), "TypeError: unsupported format string passed to NoneType.__format__")
             return self.to_str(v)
         if is_opt(v.t):
             # None's __format__ accepts only an empty spec, the value's its own (the runtime checks)
@@ -15580,6 +15986,8 @@ class Gen:
         if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "iter" or self.bound("iter") or len(e.kids) != 2 or e.kids[1].kind == "kw":
             self.err(f"{short(self.curfn.cls)}.__iter__ must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
         v = self.iterable(self.consume(e.kids[1], self.ret))
+        if is_tuple(v.t) and v.t != "tuple[]":
+            v = self.as_list(v, "iter")  # (of the items, which share one type)
         last = self.blk.code[-1] if len(self.blk.code) > 0 else Ins("", "", "")
         if last.op == "rt" and (last.s == "dict.keys" or last.s == "dict.values" or last.s == "dict.items") and v.v == f"%t{last.r[0]}":
             # (keys() is a list here; CPython's view iterator raises if the dict changes size)
@@ -15642,6 +16050,7 @@ class Gen:
     def ifexp(self, n: Node, want: str) -> Val:
         st = self.static(n.kids[0])
         if st >= 0:
+            self.static_reads(n.kids[0])
             return self.expr(n.kids[1] if st == 1 else n.kids[2], want)
         c = self.cond(n.kids[0])
         l1 = self.label()
@@ -15688,8 +16097,12 @@ class Gen:
         st = self.static(n.kids[0])
         if st >= 0:
             # a static test on the left: it is the value if it decides, else the right operand
+            # (where the test is not compiled, static_reads() reads its classes)
+            if (st == 1) == (n.s == "or") and not ascond:
+                return self.expr(n.kids[0], want)
+            self.static_reads(n.kids[0])
             if (st == 1) == (n.s == "or"):
-                return Val("true" if st == 1 else "false", "bool") if ascond else self.expr(n.kids[0], want)
+                return Val("true" if st == 1 else "false", "bool")
             return Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], want)
         a = Val(self.cond(n.kids[0]), "bool") if ascond else self.expr(n.kids[0], want)
         if a.t == "None":
@@ -16302,8 +16715,7 @@ class Gen:
         if f.kind == "name":
             self.modchk(f)
         if f.kind == "name" and f.s not in self.ltype:
-            if self.unbound_local(f.s):
-                self.err(f"local variable '{f.s}' is read before its first assignment; declare it first ({f.s}: T)")
+            self.read_ahead(f.s)
             if (f.chk or self.foreign(f.s)) and f.s in self.gflag:
                 # a call that may run before the def or class statement
                 bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{f.s}.def')}, true")
@@ -16336,6 +16748,7 @@ class Gen:
             c = self.curfn.cls
             if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and len(self.curfn.params) > 0 and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
                 # Base.m(self, args) in a method of an exception class: super().m(args) for its base
+                self.class_ahead(f.kids[0].s)
                 if f.kids[0].s != self.classes[c].base and not (self.classes[c].base == "OSError" and (f.kids[0].s == "IOError" or f.kids[0].s == "EnvironmentError")):
                     self.err(f"{f.kids[0].s}.{f.s}(self, ...) in a method of {short(c)} is supported only for its base, {short(self.classes[c].base)} (as super().{f.s}(...))")
                 return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:], True)
@@ -16860,6 +17273,7 @@ class Gen:
         if name == "isinstance" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw":
             # decided by the static types, or by whether it is None (an optional value, an object)
             v = self.expr(args[0], "")
+            self.isinst_reads(args[1])
             if (v.t == "exc" or (v.t in self.classes and self.classes[v.t].exc != "")) and self.exc_classes(args[1]):
                 return self.exc_isinst(v, args[1])
             known = self.isinst(v.t, args[1])
@@ -17988,8 +18402,14 @@ def main() -> None:
     rcb = tmp + "/runtime-c.bc"
     rpl = tmp + "/rtpy.ll"
     lnk = tmp + "/runtime-l.bc"
-    part = f"{rtb}.{os.getpid()}"  # renamed over the cache only once complete
     rto = rtb[:-3] + ".o"  # the runtime as machine code, for the JIT tier
+    # the runtime's bitcode and machine code are written to names of this process's own in the
+    # cache's directory, then renamed over the cache once complete (in one file system, so that the
+    # rename is atomic). The process ID alone is no such name: processes in separate PID namespaces
+    # share it (each container's first process is 1), so tmp's random name is in it too
+    own = tmp[tmp.rfind("/") + 1 :]
+    part = f"{rtb}.{os.getpid()}.{own}"
+    parto = f"{rto}.{os.getpid()}.{own}"
     f = open(ll, "w", encoding="latin-1")
     f.write(ir)
     f.close()
@@ -18004,7 +18424,7 @@ def main() -> None:
         code = sh(f"{llvm}clang -O2 -S -emit-llvm {q(rtc)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(rcb)} && {llvm}llvm-link {q(rpl)} {q(rcb)} -o {q(lnk)} && {llvm}opt -O2 {q(lnk)} -o {q(part)} && mv -f {q(part)} {q(rtb)}")
     if code == 0 and cmd == "run":
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
-        code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(part)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(part)} {q(rto)})")
+        code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(parto)} {q(rto)})")
     link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
     libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
     if code != 0:
@@ -18026,14 +18446,14 @@ def main() -> None:
             # PYSTACHY_GC_STRESS_PROGRAM: the program's own collection interval, apart from the
             # compiler's (PYSTACHY_GC_STRESS), so that the tests can stress programs without stressing
             # their compilation
-            for p in [ll, obj, rll, rsl, rcb, rpl, lnk, part]:
+            for p in [ll, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
                 if os.path.exists(p):
                     os.remove(p)
             gsp = os.getenv("PYSTACHY_GC_STRESS_PROGRAM", "")
             env = f"PYSTACHY_GC_STRESS={q(gsp)} " if gsp != "" else ""
             run = f"{env}PYSTACHY_ARGV0={q(SRC)} exec {llvm}lli -extra-object={q(rto)} /dev/fd/9 {' '.join([q(a) for a in rest])}"
             os.execv("/bin/sh", ["sh", "-c", f"exec 9< {q(bc)} && rm -f {q(bc)} && rmdir {q(tmp)} && {run}"])
-    for p in [ll, bc, obj, rll, rsl, rcb, rpl, lnk, part]:
+    for p in [ll, bc, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
         if os.path.exists(p):
             os.remove(p)
     os.rmdir(tmp)

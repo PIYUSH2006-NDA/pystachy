@@ -1,0 +1,20 @@
+mods: init mods
+mods.shapes: init mods.shapes
+halfpkg: init mods.halfpkg
+import failed: made raises after its definitions
+NameError: name 'alias' is not defined
+NameError: name 'alias' is not defined
+from-import of the submodule failed
+NameError: name 'made' is not defined
+from-import of its names failed
+NameError: name 'fn' is not defined
+NameError: name 'Made' is not defined
+NameError: name 'Made' is not defined
+NameError: name 'MadeError' is not defined
+NameError: name 'MadeError' is not defined
+NameError: name 'Made' is not defined
+NameError: name 'made' is not defined
+whole ok whole ok
+import failed in local
+UnboundLocalError: cannot access local variable 'm2' where it is not associated with a value
+[exit 0]
