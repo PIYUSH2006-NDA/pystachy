@@ -10,7 +10,7 @@
 @f.objeq: pys_dict_has pys_list_find pys_dict_entry pys_dict_val pys_dict_entry_set pys_raise
 @f.objloop: pys_raise pys_raise
 @f.optloop: pys_raise
-@f.ntloop: pys_alloc pys_list_new pys_list_append pys_list_append pys_raise pys_raise
+@f.ntloop: pys_alloc pys_raise pys_raise
 @m.Bag.__init__:
 @m.Bag.__contains__: pys_dict_has
 @m.Drop.__init__:
