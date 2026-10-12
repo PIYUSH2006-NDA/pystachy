@@ -1,0 +1,7 @@
+mods: init mods
+mods.shapes: init mods.shapes
+alias_cyc_b: 42
+2 3 4 5 10 12 11
+7 True 9 9
+2
+[exit 0]
