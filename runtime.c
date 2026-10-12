@@ -1445,11 +1445,13 @@ I pys_range_has(I x, I a, I b, I s) {               /* x in range(a, b, s) */
   if (s > 0 ? !(a <= x && x < b) : !(b < x && x <= a)) return 0;
   return (s > 0 ? (uint64_t)x - (uint64_t)a : (uint64_t)a - (uint64_t)x) % (s > 0 ? (uint64_t)s : -(uint64_t)s) == 0;
 }
-List *pys_range_list(I a, I b, I s) {
-  List *l = pys_list_new(0);
-  if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
-  for (I i = a; s > 0 ? i < b : i > b;) { pys_list_append(l, i); if (__builtin_add_overflow(i, s, &i)) break; }
-  return l;
+List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once at its length, as CPython does */
+  uint64_t n = (uint64_t)pys_range_len(a, b, s);
+  if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
+  if (n > INT64_MAX >> 4) pys_fail("MemoryError");
+  List *l = pys_list_new((I)n);
+  for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
+  l->len = (I)n; return l;
 }
 List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (I)pys_chr((unsigned char)s->s[i])); return l; }
 
