@@ -5339,6 +5339,8 @@ NONEARG: dict[str, str] = {"len": "object of type 'NoneType' has no len()", "dic
                            "abs": "bad operand type for abs(): 'NoneType'", "round": "type NoneType doesn't define __round__ method",
                            "chr": "'NoneType' object cannot be interpreted as an integer",
                            "os.path.exists": "stat: path should be string, bytes, os.PathLike or integer, not NoneType"}
+for _k in "hex oct bin".split():
+    NONEARG[_k] = NONEARG["chr"]
 OPTARG: list[str] = "str repr ascii bool input min max sys.exit exit quit".split()
 # what those return (for None itself, which always raises)
 NONERET: dict[str, str] = {"len": "int", "int": "int", "float": "float", "ord": "int", "os.system": "int", "os.path.exists": "bool"}
@@ -5415,9 +5417,9 @@ def normcodec(e: str) -> str:
             punct = True
     return n
 # the most positional arguments a builtin takes: more are a compile error (a TypeError in CPython)
-ARITY: dict[str, int] = {"len": 1, "repr": 1, "ascii": 1, "abs": 1, "ord": 1, "chr": 1, "bool": 1, "float": 1, "list": 1,
-                         "dict": 1, "str": 1, "sorted": 1, "any": 1, "all": 1, "input": 1, "int": 2, "round": 2,
-                         "divmod": 2, "sum": 2, "pow": 3}
+ARITY: dict[str, int] = {"len": 1, "repr": 1, "ascii": 1, "abs": 1, "ord": 1, "chr": 1, "hex": 1, "oct": 1, "bin": 1, "bool": 1,
+                         "float": 1, "list": 1, "dict": 1, "str": 1, "sorted": 1, "any": 1, "all": 1, "input": 1, "int": 2,
+                         "round": 2, "divmod": 2, "sum": 2, "pow": 3}
 # Builtin methods, "ret:arg,arg=default". *X: passed/returned as an 8-byte slot; #: element
 # type descriptor; T: list element, K/V: dict key/value, S: the receiver's own type.
 # Each maps to the C function pys_<type>_<method>.
@@ -8498,7 +8500,7 @@ class Gen:
                 return c
             if c == "len" or c == "ord":
                 return "int"
-            if c == "input" or c == "repr" or c == "chr" or c == "ascii":
+            if c == "input" or c == "repr" or c == "chr" or c == "ascii" or c == "hex" or c == "oct" or c == "bin":
                 return "str"
             if c == "open":
                 return "file"
@@ -15923,6 +15925,13 @@ class Gen:
             if g.kind != "listcomp":
                 g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
             return self.listcomp(g, "", name)
+        base = [a.kids[0] for a in args if a.kind == "kw" and a.s == "base"] if name == "int" else []
+        if len(base) > 0:
+            # int(x, base=b) is int(x, b) (x is positional only: int(x=s) is an unknown keyword)
+            args = [a for a in args if a.kind != "kw" or a.s != "base"]
+            if len(args) == 0:
+                self.err("int() missing string argument")
+            args = args + base
         npos = 0
         for a in args:
             if a.kind != "kw":
@@ -15980,6 +15989,14 @@ class Gen:
             vals[1] = self.coerce(Val(self.optint(vals[1], "0"), "int"), "int")
         elif name == "round" and len(vals) == 2 and is_opt(vals[1].t):
             self.err(f"round() with an ndigits that may be None ({typestr(vals[1].t)}) is not supported: it returns an int where ndigits is None, else a float; test it with 'is not None' first")
+        if name == "int" and len(vals) == 2:
+            # CPython checks the base before x: its type (a bool is an int), then its range (as
+            # pys_int_str does first; checked here too where x may be None, tested before the call)
+            vals[1] = self.as_int(self.unwrap(vals[1], "TypeError: " + NONEARG["chr"]))
+            nb = vals[1].v
+            if is_opt(vals[0].t) and vals[1].t == "int" and not (nb.isdigit() and int(nb) <= 36 and nb != "1"):
+                out = self.ins(f"icmp ugt i64 {self.ins(f'sub i64 {nb}, 2')}, 34")
+                self.guard(self.ins(f"and i1 {out}, {self.ins(f'icmp ne i64 {nb}, 0')}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
         for i in range(len(vals)):
             if vals[i].t == "None" and name in NONERET and len(vals) == 1:
                 # None itself (a template's parameter whose argument is None): CPython's error
@@ -16071,6 +16088,8 @@ class Gen:
             return Val(self.rt("pys_ascii", "ptr", [f"ptr {self.repr(v).v}"]), "str")
         elif name == "bool":
             return Val(self.truth(v), "bool")
+        elif name == "int" and len(vals) == 2 and t != "str":
+            self.err("int() can't convert non-string with explicit base")
         elif name == "int" and (t == "int" or t == "bool"):
             return self.as_int(v)
         elif name == "float" and (t == "float" or t == "int" or t == "bool"):
@@ -16080,6 +16099,9 @@ class Gen:
             c = self.ins(f"icmp slt i64 {v.v}, 0")
             neg = self.iop("-", "0", v.v)
             return Val(self.select(c, Val(neg, "int"), v), "int")
+        elif (name == "hex" or name == "oct" or name == "bin") and (t == "int" or t == "bool"):
+            # format()'s alternate form: hex(x) is format(x, "#x"), and hex(True) is '0x1'
+            return self.format_(self.as_int(v), mk("str", "#" + ("x" if name == "hex" else name[0]), self.line, []))
         elif (name == "min" or name == "max") and len(vals) == 1 and is_list(t):
             d = self.sconst(self.desc(elem(t), ">" if name == "max" else "<"))
             r = self.rt("pys_list_minmax", "i64", [f"ptr {v.v}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"])
@@ -16123,8 +16145,12 @@ class Gen:
             self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), sorted(), sum(), min(), max(), any(), all() or str.join()")
         if name in self.gtypes or name in self.ltype:
             self.err(f"'{name}' is not callable")
+        if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:
+            self.err(f"{name}() of an object is not supported: Pystachy does not call __index__")
         if t in self.classes and name in NONEARG:
             self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
+        if name == "hex" or name == "oct" or name == "bin":
+            self.err(NONEARG[name].replace("NoneType", tname(t)))
         if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
             self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
         self.err(f"unsupported call {key}")

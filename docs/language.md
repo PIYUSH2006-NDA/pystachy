@@ -418,7 +418,8 @@ object that is `None` raises CPython's error when it runs.
 ## Builtins and library modules
 
 `print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
-`int`, `float`, `bool`, `ord`, `chr`, `abs`, `min`, `max`, `sum`, `sorted` (and
+`int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
+or a bool), `abs`, `min`, `max`, `sum`, `sorted` (and
 `list.sort`, with `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
 with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
 (`find`/`index`/`count` with start and end, also `None`, `split`/`rsplit`, `partition`/`rpartition`,
@@ -746,9 +747,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   expected (as mypy does: the container could then be given a `None` that its other references do
   not expect; mypy takes it for a `Sequence[T | None]` or `Mapping[K, T | None]`, a list and a dict
   here), and an argument that may be `None` of a builtin function other than `len()`, `int()`,
-  `float()`, `ord()`, `dict()`, `sum()`, `round()`, `os.system()`, `os.path.exists()` and those
-  that take `None` (and `round(x, n)` of a `float` `x` and an `n` that may be `None`, which would
-  return an `int` or a `float` by whether `n` is `None`)
+  `float()`, `ord()`, `hex()`, `oct()`, `bin()`, `dict()`, `sum()`, `round()`, `os.system()`,
+  `os.path.exists()` and those that take `None` (and `round(x, n)` of a `float` `x` and an `n`
+  that may be `None`, which would return an `int` or a `float` by whether `n` is `None`)
 - a read that needs the type of a local that only `None` has been assigned so far, where no other
   value assigned to it can be typed yet and the context expects none (annotate it:
   `x: T | None = None`)
