@@ -1,0 +1,6 @@
+none other str str none none other none other other other other
+[True, True, True, True, True, True] [True, False, True, True, False, False] [True, False, False, False, False, False]
+[True, True, True, True, True, True] [True, True, True, True, True, True] [True, False, True, True, False, False]
+[True, True, True, True, True, True] [True, False, False, False, True, False] [True, False, False, False, True, False] [True, False, False, False, False, True]
+5 0
+[exit 0]
