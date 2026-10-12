@@ -103,13 +103,14 @@ ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic"}
 PURE_C = set("""sqrt sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh exp log log2 log10 log1p expm1
     exp2 cbrt fmod atan2 pow ldexp frexp modf erf erfc nextafter remainder atoi memcmp bcmp memchr memmem strlen
     strchr strstr strcmp strncasecmp snprintf sprintf vsnprintf strtod __isoc23_strtol __isoc23_strtoll
-    __ctype_b_loc __ctype_tolower_loc __errno_location""".split())
+    __ctype_b_loc __ctype_tolower_loc __errno_location uselocale""".split())
 # and those that only read the memory their pointer arguments point to
 READS_ONLY = set("""memcmp bcmp memchr memmem strlen strchr strstr strcmp strncasecmp strtod __isoc23_strtol
     __isoc23_strtoll fwrite fputs fprintf snprintf sprintf vsnprintf write""".split())
 # runtime statics that keep no state from one call to the next: the cache of one-character
-# strings (immutable, made on first use) and the scratch buffers of round(x, n)
-NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o"}
+# strings (immutable, made on first use), the scratch buffers of round(x, n), and the C locale that
+# float text uses once a C library shares the process (c_num: the text is the same)
+NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o", "c_num"}
 # the parameter types whose memory the letters rL wL, rD wD and rF wF are about, by entry prefix
 # for S (the receiver)
 OWNER = {"list.": "L", "dict.": "D", "file.": "F"}

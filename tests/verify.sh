@@ -28,6 +28,8 @@
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
+#   ffi            tests/ffi/run.sh with the stage-2 compiler: @ffi.extern's C calls and the FFI's
+#                  compile-time errors, against what CPython printed with the twins (docs/ffi.md)
 #   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
 #   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
@@ -255,6 +257,11 @@ step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-
 L=$V/inherited-ast.log; s=$(now); r=fail
 $PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
+
+# ---- ffi: C functions called through @ffi.extern (docs/ffi.md)
+L=$V/ffi.log; s=$(now); r=fail
+PY=$PY tests/ffi/run.sh "$V/pystachy2" > "$L" 2>&1 && r=pass
+step ffi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) passed, \([0-9]*\) failed.*$/, "passed": \1, "failed": \2/p' "$L")"
 
 # ---- list-storage: deterministic capacity and live-byte checks for reachable empty lists
 L=$V/list-storage.log; s=$(now); r=fail

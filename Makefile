@@ -28,6 +28,10 @@ test-py:
 	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
+# the FFI's tests (docs/ffi.md): C functions called through @ffi.extern, and the FFI's compile-time errors
+test-ffi: pystachy
+	PY="$(PY)" tests/ffi/run.sh ./pystachy "jit aot"
+
 bench: pystachy
 	PY="$(PY)" bench/run.sh
 
@@ -123,10 +127,10 @@ check-runtime:
 # sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
 lint:
 	ruff check
-	shellcheck -s sh -S warning $(wildcard tests/*.sh tools/*.sh bench/*.sh)
+	shellcheck -s sh -S warning $(wildcard tests/*.sh tests/ffi/*.sh tools/*.sh bench/*.sh)
 	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c
 
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
