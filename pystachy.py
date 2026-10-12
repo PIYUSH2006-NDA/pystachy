@@ -3162,9 +3162,9 @@ def builtin_module(path: str) -> bool:
 
 
 def known_path(p: str) -> bool:
-    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, or
-    # a function builtin() handles itself
-    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "os.fspath" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
+    # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
+    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "sys.float_info" or p == "os.fspath" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):
@@ -5187,6 +5187,14 @@ for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform ma
 # the os module's constants on POSIX systems
 OSCONST: dict[str, str] = {"os.name": "posix", "os.sep": "/", "os.curdir": ".", "os.pardir": "..", "os.extsep": ".",
                            "os.pathsep": ":", "os.linesep": "\n", "os.devnull": "/dev/null"}
+# sys.float_info's attributes for IEEE 754 doubles: floats (with an "e") and ints
+FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "sys.float_info.max_exp": "1024",
+                             "sys.float_info.max_10_exp": "308", "sys.float_info.min": "2.2250738585072014e-308",
+                             "sys.float_info.min_exp": "-1021", "sys.float_info.min_10_exp": "-307", "sys.float_info.dig": "15",
+                             "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
+                             "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
+for _k in FLOATINFO:
+    MODATTRS[_k] = True
 TYPING: dict[str, bool] = {}
 for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Iterable Iterator Sequence Mapping Final ClassVar NamedTuple "
            "TypeVar Generic cast IO BinaryIO AnyStr Literal Protocol TYPE_CHECKING overload NoReturn Never Self TypeAlias ParamSpec "
@@ -15830,6 +15838,11 @@ class Gen:
             return Val("false", "bool")
         if path in OSCONST:
             return Val(self.sconst(OSCONST[path]), "str")
+        if path in FLOATINFO:
+            c = FLOATINFO[path]
+            return Val(fbits(c), "float") if "e" in c else Val(c, "int")
+        if path == "sys.float_info":
+            self.err("sys.float_info cannot be used as a value (read its attributes: sys.float_info.max, sys.float_info.epsilon, ...)")
         if path == "sys.platform":
             return Val(self.rt("pys_platform", "ptr", []), "str")
         if path.startswith("errno.") and path[6:] in ERRNO:
