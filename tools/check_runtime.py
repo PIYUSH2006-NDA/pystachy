@@ -103,12 +103,16 @@ PURE_C = set("""sqrt sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh
     exp2 cbrt fmod atan2 pow ldexp frexp modf erf erfc nextafter remainder atoi memcmp bcmp memchr memmem strlen
     strchr strstr strcmp strncasecmp snprintf sprintf vsnprintf strtod __isoc23_strtol __isoc23_strtoll
     __ctype_b_loc __ctype_tolower_loc __errno_location uselocale""".split())
+# function pointers CPython's glue installs (pys_set_hooks: pyembed.c's std_hook, which writes the
+# bytes it is given through Python's sys.stdout, and in_hook, which reads a line through sys.stdin
+# and returns it as a new str, reading only its prompt), called through these statics
+HOOKS = {"std_hook", "in_hook"}
 # and those that only read the memory their pointer arguments point to
 READS_ONLY = set("""memcmp bcmp memchr memmem strlen strchr strstr strcmp strncasecmp strtod __isoc23_strtol
-    __isoc23_strtoll fwrite fputs fprintf snprintf sprintf vsnprintf write""".split())
+    __isoc23_strtoll fwrite fputs fprintf snprintf sprintf vsnprintf write""".split()) | HOOKS
 # runtime statics that keep no state from one call to the next: the cache of one-character
 # strings (immutable, made on first use), the scratch buffers of round(x, n), and the C locale that
-# float text uses once a C library shares the process (c_num: the text is the same)
+# float text uses once CPython or a C library shares the process (c_num: the text is the same)
 NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o", "c_num"}
 # the parameter types whose memory the letters rL wL, rD wD and rF wF are about, by entry prefix
 # for S (the receiver)
@@ -241,15 +245,22 @@ def params(ll):
     # derived from it), or None for a parameter that is no ptr or i64
     fns = {}
     cur = None
+    hook = {}  # (a register loaded from a HOOKS static: the call through it is that hook's)
     for line in ll.split("\n"):
         m = re.match(r"define [^@]*@([\w.]+)\((.*)\)[^(]*\{$", line)
         if m:
             cur = ([ssa(p) if p.startswith(("ptr", "i64")) else None for p in split_top(m.group(2))], [])
             fns[m.group(1)] = cur
+            hook = {}
         elif line == "}":
             cur = None
         elif cur is not None and line.startswith("  "):
+            h = re.match(r"\s*(%[\w.]+) = load ptr, ptr @(\w+)\b", line)
+            if h and h.group(2) in HOOKS:
+                hook[h.group(1)] = h.group(2)
             x = instruction(line.strip())
+            if x is not None and x[0] == "call" and "%" + x[2][0] in hook:
+                x = ("call", x[1], (hook["%" + x[2][0]], x[2][1]))
             if x is not None:
                 cur[1].append(x)
     eff = {f: [None if p is None else [False, False, False] for p in fns[f][0]] for f in fns}

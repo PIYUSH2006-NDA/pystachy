@@ -28,7 +28,7 @@ test-py:
 	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
-# the FFI's tests (docs/ffi.md): C functions called through @ffi.extern, and the FFI's compile-time errors
+# the FFI's tests (docs/ffi.md): C calls, and with $(PY)'s libpython, extension modules
 test-ffi: pystachy
 	PY="$(PY)" tests/ffi/run.sh ./pystachy "jit aot"
 
@@ -113,7 +113,8 @@ check-runtime:
 lint:
 	ruff check
 	shellcheck -s sh -S warning $(wildcard tests/*.sh tests/ffi/*.sh tools/*.sh bench/*.sh)
-	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c pyext.c pyembed.c
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror -DPYX_ABI3T pyext.c
 
 clean:
 	rm -rf build pystachy
