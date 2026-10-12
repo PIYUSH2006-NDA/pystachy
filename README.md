@@ -20,7 +20,7 @@ list of documented deviations. Where Pystachy cannot keep that promise, it stops
 - **A good fit:** typed, algorithmic Python (numbers, strings, lists, dicts, dataclasses) that
   you want to run fast or ship as one binary, or curiosity about how a self-hosting compiler
   works.
-- **Not yet:** code that needs inheritance (beyond exception classes), lambdas, generators or
+- **Not yet:** code that needs inheritance (beyond exception classes), generators or
   third-party packages. See the [roadmap](#roadmap) and [what is missing](#status-and-limitations).
 
 ## At a glance
@@ -132,11 +132,15 @@ And when a program uses something Pystachy cannot run faithfully yet, you find o
 runs:
 
 ```
-$ cat words.py
-words = ["pear", "fig", "banana"]
-print(sorted(words, key=lambda w: len(w)))
-$ ./pystachy run words.py
-words.py:2: error: lambda is not supported
+$ cat squares.py
+def squares(n):
+    for i in range(n):
+        yield i * i
+
+
+print(sum(squares(4)))
+$ ./pystachy run squares.py
+squares.py:6: error: 'yield' is not supported (there are no generator functions)
 ```
 
 ## Quick start
@@ -240,7 +244,7 @@ compiler rejects each where it would have to compile it.
 | exception attributes such as `e.args`, `except*` (`try`, `raise` and exception classes are supported) | M5 |
 | unions other than `Optional` (`Optional` is supported for `int`, `str` and the other builtin types) | M4 |
 | inheritance, but for exception classes | M2 |
-| lambdas, closures, decorators and `map()` (functions are values, each typed by the function it is, and `key=` takes one) | M3 |
+| decorators, `Callable` annotations and `map()` (functions, lambdas and closures are values, each typed by the function it is) | M3 |
 | generators, `async`, sets, `bytes` | M7 |
 | dict and multi-clause comprehensions, slice steps, `getattr`/`eval`, complex numbers, `match`, `:=` | [Further language coverage](#roadmap) |
 

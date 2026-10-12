@@ -140,6 +140,22 @@ frame into code that is dropped. A call compiled before the `def` or `class` sta
 the function it calls loads that function's non-constant default values from the global
 the statement fills when it runs, so they are still evaluated once.
 
+### Functions as values and closures
+
+A function used as a value has a type of its own, the function it is: `fn[f:NAME]` for a def of a
+module, `fn[b:NAME]` for a builtin, `fn[c:N:...]` for a lambda or a def inside a function. A call
+through such a value is compiled as a call of that function by name, so a template given a
+function is compiled for it, as for any other argument type, and the call is direct. A value of a
+module's def or a builtin holds nothing (null). A closure's points to its env, which `Gen.closure`
+allocates each time the def or lambda runs: the cells of the variables it takes from the functions
+around it, then its default values that are no constants. Each variable that a closure takes lives
+in a cell that the function binding it allocates as it begins (`Gen.cellvars`); its loads and
+stores go through the cell as they would through an `alloca`, and a closure's code, a template
+whose hidden first parameter is the env (`.env`, passed as a method's object is), loads the cells
+from it as it begins, so that both see each other's assignments (`nonlocal`). `Flow` checks where a
+closure is defined that the variables it takes are assigned (`Gen.fl_nested`), and analyses its
+body as a function's.
+
 ### Definite assignment
 
 Before code generation, `Flow` walks every scope with the set

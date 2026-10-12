@@ -795,6 +795,7 @@ STARTS: dict[str, bool] = {}
 for _k in "id int float str fstr rfstr bytes complex ... ( [ { - + ~ not None True False lambda yield await".split():
     STARTS[_k] = True
 CMPOPS: dict[str, bool] = {"<": True, ">": True, "==": True, ">=": True, "<=": True, "!=": True, "in": True}
+LAMBDAS: list[int] = [0]  # the lambdas parsed so far (see Parser.test1)
 AUGOPS: dict[str, bool] = {}
 for _k in "+= -= *= /= //= %= **= &= |= ^= <<= >>= @=".split():
     AUGOPS[_k] = True
@@ -1722,12 +1723,13 @@ class Parser:
         line = self.line()
         if self.eat("lambda"):
             # lambda params: body (kids: the parameters, as a def's, then the body; s: "=" if one
-            # has a default)
+            # has a default, then "#" and a number that tells it from the other lambdas of its line)
             ps = self.params(":", line)
             self.deeper()  # (a lambda counts as two levels, as a ** does)
             b = self.test()
             self.nest -= 1
-            return mk("lambda", "=" if len([x for x in ps.kids if x.kids[1].kind != "noann"]) > 0 else "", line, [ps, b])
+            LAMBDAS[0] += 1
+            return mk("lambda", ("=" if len([x for x in ps.kids if x.kids[1].kind != "noann"]) > 0 else "") + f"#{LAMBDAS[0]}", line, [ps, b])
         p = self.p
         e = self.or_test()
         self.orp = p
@@ -4964,6 +4966,15 @@ class Loader:
                 n.s = self.qname(m, n.s, loc)
             elif n.kind == "attr":
                 self.qexpr(m, n.kids[0], loc)
+        elif k == "lambda":
+            # lambda params: body: its defaults are evaluated where it is, its body sees its parameters
+            # and the names of the function around it
+            for p in n.kids[0].kids:
+                self.qexpr(m, p.kids[1], loc)
+            inner = dict(loc)
+            for p in n.kids[0].kids:
+                inner[p.s] = True
+            self.qexpr(m, n.kids[1], inner)
         elif k == "listcomp":
             # [element for target in iterable if condition]: the target's names are the comprehension's
             # (added to loc while the rest is qualified, not to a copy: loc has all of a function's locals)
@@ -5050,7 +5061,9 @@ class Loader:
                     self.qann(m, p.kids[0], loc)
                     self.qexpr(m, p.kids[1], loc)
                 self.qann(m, st.kids[1], loc)
-                inner: dict[str, bool] = {}
+                # (a def in a function sees that function's names too: those it does not bind itself
+                # are the enclosing function's, which a closure reads)
+                inner: dict[str, bool] = dict(loc) if self.qdef and not cls else {}
                 for p in st.kids[0].kids:
                     inner[p.s] = True
                 local_names(st.kids[2].kids, inner)
@@ -5427,8 +5440,7 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # node kinds the parser accepts but code generation rejects, where it compiles them: an
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
-    "nonlocal": "'nonlocal' is not supported",
-    "subclass": "class inheritance is not supported", "lambda": "lambda is not supported",
+    "subclass": "class inheritance is not supported",
     "yield": "'yield' is not supported (there are no generator functions)", "set": "set literals are not supported",
     "setcomp": "set literals are not supported", "dictcomp": "dict comprehensions are not supported",
     "nestedcomp": "nested comprehensions are not supported", "starred": "starred expressions (*x) are not supported",
@@ -5905,15 +5917,20 @@ def is_sopt(t: str) -> bool:
 
 def is_fn(t: str) -> bool:
     # a function as a value, typed by the function it is: fn[f:NAME] the program's function NAME (a
-    # def at a module's top level), fn[b:NAME] the builtin NAME (len, math.sqrt). A call through it
-    # is compiled as a call of that function, of a template for the call's argument types, so the
-    # value holds nothing (null)
+    # def at a module's top level), fn[b:NAME] the builtin NAME (len, math.sqrt), fn[c:N:QUAL] a def
+    # or lambda inside a function (Gen.closures[N]). A call through it is compiled as a call of that
+    # function, of a template for the call's argument types: the value holds nothing (null), but a
+    # closure's, which points to its env
     return t.startswith("fn[")
 
 
 def fn_shown(t: str) -> str:
-    # function value type t for a message: the function it is, as CPython's repr names it
+    # function value type t for a message: the function it is, as CPython's repr names it (a
+    # closure's type ends with its qualified name)
     k = t[3:-1]
+    if k.startswith("c:"):
+        q = k[k.find(":", 2) + 1 :]
+        return f"<function {q[: q.find('@')]} ({q[q.find('@') + 1 :]})>"
     return f"<built-in function {k[2:]}>" if k.startswith("b:") else f"<function {short(k[2:])}>"
 
 
@@ -6387,6 +6404,110 @@ def none_assigns(body: list[Node], out: dict[str, list[Node]]) -> None:
                 none_assigns(kid.kids[1].kids, out)
 
 
+def lambda_def(n: Node) -> Node:
+    # lambda n as the def it is (def <lambda>(params): return body): a new node around n's own
+    # parameters and body, so that what is marked on those (Node.chk) is n's
+    return mk("def", "<lambda>", n.line, [n.kids[0], mk("noann", "", n.line, []), mk("block", "", n.line, [mk("return", "", n.line, [n.kids[1]])])])
+
+
+def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
+    # the names that code n reads where it runs, but those in bound: of the defs and lambdas in it,
+    # the names they take from around them (closure_free), and in a comprehension those it does not
+    # bind itself; a variable's annotation, which a function never evaluates, is not read
+    k = n.kind
+    if k == "name":
+        if n.s not in bound:
+            out[n.s] = True
+        return
+    if k == "def" or k == "lambda":
+        # (its defaults, and a def's annotations and decorators, are evaluated where it is)
+        for p in n.kids[0].kids:
+            free_reads(p.kids[1], bound, out)
+            free_reads(p.kids[0], bound, out)
+        for x in n.kids[1:2] + n.kids[3:] if k == "def" else n.kids[:0]:
+            if x.kind == "deco":
+                root = x.s[: x.s.find(".")] if "." in x.s else x.s
+                if root not in bound:
+                    out[root] = True
+            free_reads(x, bound, out)
+        inner: dict[str, bool] = {}
+        closure_free(n if k == "def" else lambda_def(n), inner)
+        for nm in inner:
+            if nm not in bound:
+                out[nm] = True
+        return
+    if k == "listcomp":
+        free_reads(n.kids[2], bound, out)
+        own = dict(bound)
+        names: list[str] = []
+        names_in(n.kids[1], names)
+        for nm in names:
+            own[nm] = True
+        for i in range(len(n.kids)):
+            if i != 1 and i != 2:
+                free_reads(n.kids[i], own, out)
+        return
+    if k == "annassign":
+        for x in n.kids[2:]:
+            free_reads(x, bound, out)
+        if n.kids[0].kind != "name":
+            free_reads(n.kids[0], bound, out)
+        return
+    if k == "global" or k == "nonlocal" or k == "class" or k == "subclass":
+        return
+    for kid in n.kids:
+        free_reads(kid, bound, out)
+
+
+def closure_free(d: Node, out: dict[str, bool]) -> None:
+    # the names that def d (also a lambda's, lambda_def) takes from the scopes around it: those it
+    # reads and does not bind itself, and those it declares nonlocal (not those it declares global)
+    loc: dict[str, bool] = {}
+    decl: dict[str, str] = {}
+    for p in d.kids[0].kids:
+        loc[p.s] = True
+    scope_binds(d.kids[2].kids, loc, decl)
+    for nm in decl:
+        loc[nm] = True
+        if decl[nm] == "nonlocal":
+            out[nm] = True
+    for st in d.kids[2].kids:
+        free_reads(st, loc, out)
+
+
+def nested_defs(n: Node, out: list[Node]) -> None:
+    # the defs and lambdas that code n defines itself (not those inside them)
+    if n.kind == "def" or n.kind == "lambda":
+        out.append(n)
+        for p in n.kids[0].kids:
+            nested_defs(p.kids[1], out)  # (a lambda among the defaults is defined where n is)
+        return
+    if n.kind == "class" or n.kind == "subclass":
+        return
+    for k in n.kids:
+        nested_defs(k, out)
+
+
+def nonlocal_decls(n: Node, out: dict[str, bool]) -> None:
+    # the names that nonlocal statements in code n declare, also in the defs and lambdas in it
+    if n.kind == "nonlocal":
+        for x in n.kids:
+            out[x.s] = True
+    for k in n.kids:
+        nonlocal_decls(k, out)
+
+
+def chk_names(n: Node, out: dict[str, bool]) -> None:
+    # the names of the reads in code n (not in the defs and lambdas in it) that Flow marked
+    # (Node.chk): they may find their variable unassigned
+    if n.kind == "name" and n.chk:
+        out[n.s] = True
+    if n.kind == "def" or n.kind == "lambda":
+        return
+    for k in n.kids:
+        chk_names(k, out)
+
+
 def local_names(body: list[Node], out: dict[str, bool]) -> None:
     # a function's locals: the names it assigns, deletes or defines (a def or class, which is an
     # error where it is compiled, as bound_in()'s are), but not a qualified name (M$x), which an
@@ -6640,6 +6761,25 @@ class FnInfo:
         # a template's function: the parameters whose arguments are objects known not to be None
         # (a new object, self), which its isinstance(), hasattr() and "is None" tests read as such
         self.nnp: dict[str, bool] = {}
+        self.clo = -1  # a closure's function (a def or lambda inside a function): its Gen.closures position
+
+
+class Closure:
+    # a def or lambda inside a function, as one function (an instance) compiles it (Gen.closure). Its
+    # value, of type fn[c:<position in Gen.closures>:<qualified name>], points to an env: the cells of
+    # the variables it takes from the functions around it, which they keep those variables in, then
+    # the default values that are no constants, evaluated where it is defined
+    def __init__(self, f: FnInfo, name: str, qual: str):
+        self.f = f  # its function: a template whose first parameter (.env) is the env
+        self.name = name  # its __name__: the def's name, or <lambda>
+        self.qual = qual  # its __qualname__: outer.<locals>.name
+        self.t = ""  # its type
+        self.caps: list[str] = []  # the variables it takes, in the env's order
+        self.ctypes: list[str] = []  # their types ("None": a parameter whose argument is None, held by no cell)
+        self.defs: list[int] = []  # the parameters whose defaults the env holds after the cells
+        # the variables it takes that a closure assigns (nonlocal), which a test does not narrow: a
+        # call may change them
+        self.nlw: dict[str, bool] = {}
 
 
 def takes_self(f: FnInfo) -> bool:
@@ -6843,6 +6983,8 @@ class Frame:
         self.selfname = ""
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        self.cells: dict[str, str] = {}
+        self.nlw: dict[str, bool] = {}
         self.nonevars: dict[str, int] = {}
         self.narrowed: dict[str, bool] = {}
         self.lkk: dict[str, str] = {}
@@ -6912,6 +7054,9 @@ class Flow:
         self.base = ""  # (the class's base, whose __init__ it may call as Base.__init__(self, ...))
         self.leak = False
         self.escaped = False
+        # the variables of the function analysed (its locals and those it takes from around it),
+        # which a def or lambda in it takes when it reads them (Gen.fl_nested)
+        self.scope: dict[str, bool] = {}
 
     def exposed(self) -> None:
         # self escapes or __init__ returns: fields not assigned yet may be read unassigned
@@ -7122,6 +7267,13 @@ class Gen:
         self.comp: dict[str, str] = {}  # each module's strongly connected component of that graph (one of its modules)
         self.flowmod = ""
         self.flowctx: dict[str, list[dict[str, bool]]] = {}  # module globals, safe bindings and deletions for lazy method flow
+        self.flowlater: list[Node] = []  # the bodies of module code's lambdas, analysed once flowctx has the module's (fl_nested)
+        # the defs and lambdas inside functions, each as one function (an instance) compiles it: by
+        # "<that function's symbol> <the node>" (closure_key), their position in closures
+        self.closures: list[Closure] = []
+        self.clokeys: dict[str, int] = {}
+        self.cells: dict[str, str] = {}  # the function's variables that closures take: the cell of each (a pointer)
+        self.nlw: dict[str, bool] = {}  # and those of them, or of the variables it takes, that a closure assigns (nonlocal)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
         self.brks: list[list[dict[str, bool]]] = []  # for each loop being compiled, what narrowed holds at its breaks
@@ -7196,6 +7348,8 @@ class Gen:
         fr.selfname = self.selfname
         fr.uflags = self.uflags
         fr.lflag = self.lflag
+        fr.cells = self.cells
+        fr.nlw = self.nlw
         fr.nonevars = self.nonevars
         fr.narrowed = self.narrowed
         fr.lkk = self.lkk
@@ -7231,6 +7385,8 @@ class Gen:
         self.selfname = fr.selfname
         self.uflags = fr.uflags
         self.lflag = fr.lflag
+        self.cells = fr.cells
+        self.nlw = fr.nlw
         self.nonevars = fr.nonevars
         self.narrowed = fr.narrowed
         self.lkk = fr.lkk
@@ -7587,6 +7743,19 @@ class Gen:
             self.err(f"cannot infer the type of '{name}' from None; annotate it ({name}: T | None = None)")
         if t == "":
             self.err(f"cannot infer the type of '{name}'; add a type annotation")
+        if name != "" and name in self.cells and name not in self.compvars:
+            # a variable a closure takes: its cell, which the function allocated as it began
+            self.ltype[name] = t
+            self.lreg[name] = self.cells[name]
+            self.anyopt = self.anyopt or is_opt(t)
+            if name in self.uflags:
+                self.n += 1
+                self.lflag[name] = f"%{name}.def.{self.n}"
+                i = Ins("slot", "bool", name)
+                i.k = 1
+                i.r = [self.n]
+                self.fn.slots.append(i)
+            return self.cells[name]
         self.n += 1
         r = f"%{name or 'h'}.{self.n}"
         self.anyopt = self.anyopt or is_opt(t)
@@ -8901,6 +9070,157 @@ class Gen:
         self.err(f"name '{short(name)}' is not defined")
         return Val("", "")
 
+    def cellvars(self, f: FnInfo, body: list[Node]) -> list[str]:
+        # the variables of function f that the defs and lambdas in it take (closure_free): its
+        # parameters and the names it binds, but those it declares global or nonlocal
+        ds: list[Node] = []
+        for st in body:
+            nested_defs(st, ds)
+        out: list[str] = []
+        if len(ds) == 0:
+            return out
+        loc: dict[str, bool] = {}
+        for p in f.params:
+            loc[p] = True
+        decl: dict[str, str] = {}
+        scope_binds(body, loc, decl)
+        for d in ds:
+            free: dict[str, bool] = {}
+            closure_free(d if d.kind == "def" else lambda_def(d), free)
+            for x in free:
+                if x in loc and x not in decl and x not in out:
+                    out.append(x)
+        return out
+
+    def qualname(self, f: FnInfo) -> str:
+        # f's __qualname__: a method's is Class.name, a closure's outer.<locals>.name
+        if f.clo >= 0:
+            return self.closures[f.clo].qual
+        return f"{short(f.cls)}.{f.name}" if f.cls != "" else short(f.name)
+
+    def closure(self, n: Node) -> Val:
+        # def or lambda n inside a function (or a lambda in module code): a new function value. Its
+        # env holds the cells of the variables it takes from around it, which the functions around it
+        # keep them in (so it reads their values when it runs, and nonlocal assigns them), then the
+        # default values that are no constants, which CPython evaluates when the def runs
+        what = "the lambda" if n.kind == "lambda" else f"{n.s}()"
+        if n.mchk != "":
+            x = n.mchk.split(" ")[0]
+            self.err(f"{what} reads '{x}', which may not be assigned yet where it is defined: not supported (a function reads the variables around it when it runs: assign '{x}' before the {'lambda' if n.kind == 'lambda' else 'def'})")
+        key = f"{self.curfn.ll} {n.line}:{n.s if n.kind == 'lambda' else 'def ' + n.s}"
+        c = self.closures[self.clokeys[key]] if key in self.clokeys else self.new_closure(n, key)
+        f = c.f
+        dvals: list[Val] = []
+        for j in c.defs:
+            t = f.ptypes[j]
+            v = self.expr(f.defaults[j], t)
+            v = self.coerce(v, t) if t != "" else v
+            if v.t == "None" and t == "":
+                self.err(f"a default value None of a parameter of {what} is not supported here: annotate the parameter ({f.params[j]}: T | None = None)")
+            if f.dtypes[j] == "":
+                f.dtypes[j] = v.t
+            dvals.append(self.coerce(v, f.dtypes[j]))
+        env = self.rt("pys_alloc", "ptr", [f"i64 {8 * max(len(c.caps) + len(c.defs), 1)}"])
+        for i in range(len(c.caps)):
+            if c.ctypes[i] != "None":
+                x = c.caps[i]
+                a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {i}")
+                self.emit(f"store ptr {self.cells[x] if x in self.cells else self.lreg[x]}, ptr {a}")
+        for j in range(len(dvals)):
+            a = self.ins(f"getelementptr inbounds i64, ptr {env}, i64 {len(c.caps) + j}")
+            self.emit(f"store {lt(dvals[j].t)} {dvals[j].v}, ptr {a}")
+        self.nn[env] = True
+        return Val(env, c.t)
+
+    def new_closure(self, n: Node, key: str) -> Closure:
+        # the function that def or lambda n compiles to where this function defines it (closure)
+        d = n if n.kind == "def" else lambda_def(n)
+        outer = self.curfn
+        name = n.s if n.kind == "def" else "<lambda>"
+        qual = name if self.modlevel else self.qualname(outer) + ".<locals>." + name
+        if n.kind == "def" and len(d.kids) > 3:
+            self.err(f"a decorator on a def inside a function is not supported ({name}())")
+        idx = len(self.closures)
+        f = self.declare_fn(d, "")
+        f.ll = f"@c.{idx}"
+        f.name = qual
+        f.mod = outer.mod
+        f.clo = idx
+        f.generic = True
+        f.ret = f.ret if d.kids[1].kind != "noann" else ""
+        # its env is its first parameter, passed as a method's object is (CPython's messages leave it out)
+        f.params.insert(0, ".env")
+        f.ptypes.insert(0, "env")
+        f.defaults.insert(0, mk("noann", "", n.line, []))
+        f.dglob.insert(0, "")
+        f.dtypes.insert(0, "")
+        f.npos += 1
+        f.posonly += 1
+        if f.vararg >= 0:
+            f.vararg += 1
+        c = Closure(f, name, qual)
+        c.t = f"fn[c:{idx}:{qual}@{where(n.line)}]"  # (where it is defined, which messages show)
+        self.closures.append(c)
+        self.clokeys[key] = idx
+        # the variables it takes: those of the function around it (its cells), and those that function
+        # takes itself, which its env holds
+        mine: dict[str, bool] = {}
+        for x in self.closures[outer.clo].caps if outer.clo >= 0 else []:
+            mine[x] = True
+        free: dict[str, bool] = {}
+        closure_free(d, free)
+        # (a variable that a del unbinds, in the function around it or in this one, which a nonlocal
+        # one may be: CPython's closure would find it unassigned, which nothing checks here)
+        dels: dict[str, bool] = {}
+        deleted(d.kids[2].kids, dels)
+        if not self.modlevel and outer.node.kind == "def":
+            deleted(outer.node.kids[2].kids, dels)
+        for x in free:
+            if x in self.compvars:
+                self.err(f"{'the lambda' if n.kind == 'lambda' else name + '()'} reads '{x}', a variable of the comprehension it is in: not supported")
+            if x not in self.cells and x not in mine:
+                continue  # (a global, a builtin, or a name nothing binds)
+            t = ""
+            if n.kind == "def" and x == n.s:
+                t = c.t  # its own name, assigned once it is made
+            elif x in self.nonevars and x not in self.ltype:
+                if x in self.assigned and x in self.cells:
+                    self.err(f"{'the lambda' if n.kind == 'lambda' else name + '()'} reads '{x}', a parameter whose argument is None here, which {short(outer.name)}() assigns: not supported (annotate the parameter)")
+                t = "None"
+            elif x in self.ltype:
+                t = self.ltype[x]
+                if t == NONEVAR or "?" in t:
+                    t = self.lookahead(x, True) if "?" in t else t
+                if t == NONEVAR or "?" in t or t == "":
+                    self.err(f"cannot infer the type of '{x}', which {'the lambda' if n.kind == 'lambda' else name + '()'} reads, where it is defined: annotate it ({x}: T = ...)")
+            else:
+                self.err(f"{'the lambda' if n.kind == 'lambda' else name + '()'} reads '{x}', which is not assigned yet where it is defined: not supported (assign it before)")
+            if x in dels:
+                self.err(f"{'the lambda' if n.kind == 'lambda' else name + '()'} reads '{x}', which del unbinds: not supported")
+            c.caps.append(x)
+            c.ctypes.append(t)
+            if x in self.nlw:
+                c.nlw[x] = True
+        # the defaults that are no constants: the env holds their values, after the cells
+        for j in range(1, len(f.params)):
+            if not is_const(f.defaults[j]):
+                f.dglob[j] = f"&{len(c.caps) + len(c.defs)}"
+                c.defs.append(j)
+        # its locals that a read may find unassigned (flow_body marked those reads)
+        marked: dict[str, bool] = {}
+        for st in d.kids[2].kids:
+            chk_names(st, marked)
+        loc: dict[str, bool] = {}
+        decl: dict[str, bool] = {}
+        local_names(d.kids[2].kids, loc)
+        globals_in(d.kids[2].kids, decl)
+        for p in d.kids[0].kids:
+            loc[p.s] = True
+        for nm in marked:
+            if nm in loc and nm not in decl and nm not in c.caps:
+                f.uflags[nm] = True
+        return c
+
     def fn_value(self, name: str) -> Val:
         # the program's function name as a value: a call through it calls the function, compiled as a
         # call of it by name is (call_value)
@@ -9857,6 +10177,8 @@ class Gen:
         self.narrowed = {}
         self.lkk = {}
         self.branch = 0
+        self.cells = {}
+        self.nlw = {}
         self.curfn = f
         self.line = f.node.line
         if not self.modlevel:
@@ -9893,6 +10215,18 @@ class Gen:
             self.nn["%a0"] = True
             if f.params[0] not in self.assigned:
                 self.selfname = f.params[0]
+        if not self.modlevel:
+            # the variables that the defs and lambdas in it take: each lives in a cell, which the
+            # closures share with it (see closure)
+            for cv in self.cellvars(f, body):
+                self.cells[cv] = self.rt("pys_alloc", "ptr", ["i64 8"])
+            if len(self.cells) > 0:
+                nl: dict[str, bool] = {}
+                for st in body:
+                    nonlocal_decls(st, nl)
+                for cv in self.cells:
+                    if cv in nl:
+                        self.nlw[cv] = True
         for i in range(len(f.params)):
             t = f.ptypes[i]
             if t == "None":
@@ -9903,6 +10237,19 @@ class Gen:
             self.emit(f"store {lt(t)} %a{i}, ptr {self.alloca(t, f.params[i])}")
             if f.params[i] in self.lflag:
                 self.emit(f"store i1 true, ptr {self.lflag[f.params[i]]}")  # (a parameter that del unbinds)
+        if f.clo >= 0:
+            # a closure: the variables it takes are the cells its env holds
+            c = self.closures[f.clo]
+            for cv in c.nlw:
+                self.nlw[cv] = True
+            env = self.ins(f"load ptr, ptr {self.lreg['.env']}")
+            for i in range(len(c.caps)):
+                if c.ctypes[i] == "None":
+                    self.nonevars[c.caps[i]] = 0  # (a parameter whose argument is None: it reads as None)
+                    continue
+                a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {i}")
+                self.lreg[c.caps[i]] = self.ins(f"load ptr, ptr {a}")
+                self.ltype[c.caps[i]] = c.ctypes[i]
         self.none_ends()
         if f.name == "__init__" and f.cls != "" and not (self.is_dc(f.cls) and f.node.kids[0].kind == "noann") and self.classes[f.cls].exc == "":
             # class-body defaults (a synthesized dataclass __init__ assigns every field itself; an
@@ -11088,7 +11435,7 @@ class Gen:
         q = self.imported(p)
         if use == 3 and (k == "lambda" or (q != "" and not self.pure(p))):
             return f"it passes {short(p) if p != '' else 'a lambda'} to a function that may call it"
-        if k in INERT or is_const(e) or q != "" or (k == "lambda" and e.s == "") or (k == "badattr" and e.s.endswith("cannot be used as a value")):
+        if k in INERT or is_const(e) or q != "" or (k == "lambda" and not e.s.startswith("=")) or (k == "badattr" and e.s.endswith("cannot be used as a value")):
             return ""
         if k == "name":
             if (e.chk or self.foreign(e.s)) and e.s in self.gflag:
@@ -11551,6 +11898,9 @@ class Gen:
                     self.late[nm] = True
                     self.gflag[nm] = True
         self.flowctx[mod] = [gl, safe, dels]
+        for d in self.flowlater:
+            self.flow_body(d, {})  # (the lambdas of module code: see fl_nested)
+        self.flowlater = []
         for f in fns:
             if f.pending:
                 # A later materialization may mark reads of the substituted subclass name.
@@ -11587,11 +11937,92 @@ class Gen:
             if nm in fdels:
                 tracked[nm] = True  # (a parameter that del unbinds)
         fl = Flow(tracked, defd)
+        fl.scope = dict(loc)
+        for nm in f.params:
+            fl.scope[nm] = True
+        for nm in decl:
+            fl.scope.pop(nm, False)
         self.fl_stmts(fl, body)
         for nm in fl.marks:
             if (nm in loc or nm in fdels) and nm not in decl:
                 f.uflags[nm] = True
             else:
+                self.gflag[nm] = True
+
+    def fl_nested(self, fl: Flow, n: Node) -> None:
+        # a def or lambda n in the code fl analyses: its defaults and decorators run here. The
+        # variables of fl's function that it reads must be assigned here, but a def's own name: a
+        # closure reads them when it runs (Gen.closure), and those that may not be assigned are kept
+        # in n.mchk. Its body is analysed as a function's is, with those variables assigned
+        d = n if n.kind == "def" else lambda_def(n)
+        for p in d.kids[0].kids:
+            self.fl_expr(fl, p.kids[1])
+        for dx in d.kids[3:]:
+            self.fl_expr(fl, dx)  # (its decorators)
+        free: dict[str, bool] = {}
+        closure_free(d, free)
+        caps: dict[str, bool] = {}
+        late: list[str] = []
+        own = n.s if n.kind == "def" else ""
+        for x in free:
+            if x in fl.scope:
+                caps[x] = True
+                if x != own and x in fl.tracked and x not in fl.defd and " dead" not in fl.defd:
+                    late.append(x)
+        n.mchk = " ".join(late)
+        if n.kind == "def":
+            fl.put(n.s)
+        if self.flowmod in self.flowctx:
+            self.flow_body(d, caps)
+        else:
+            self.flowlater.append(d)  # (module code's: once the module's state is known)
+
+    def flow_body(self, d: Node, caps: dict[str, bool]) -> None:
+        # the body of def d, a closure's, as flow_function analyses a function's: caps, the
+        # variables it takes from around it, are assigned (fl_nested); the reads of its locals that
+        # may find them unassigned are marked (Node.chk), which give its flags (Gen.closure_flags)
+        ctx = self.flowctx[self.flowmod]
+        gl = ctx[0]
+        safe = ctx[1]
+        dels = ctx[2]
+        body = d.kids[2].kids
+        loc: dict[str, bool] = {}
+        decl: dict[str, bool] = {}
+        local_names(body, loc)
+        globals_in(body, decl)
+        kinds: dict[str, str] = {}
+        scope_binds(body, {}, kinds)
+        for nm in kinds:
+            if kinds[nm] == "nonlocal":
+                loc.pop(nm, False)
+        refs: dict[str, bool] = {}
+        for st in body:
+            name_nodes(st, refs)
+        tracked: dict[str, bool] = {}
+        defd: dict[str, bool] = {}
+        for nm in refs:
+            if nm in caps:
+                continue
+            if nm in gl or nm in loc:
+                tracked[nm] = True
+            if nm in gl and nm in safe and nm not in dels and (nm not in loc or nm in decl):
+                defd[nm] = True
+        fdels: dict[str, bool] = {}
+        deleted(body, fdels)
+        fl = Flow(tracked, defd)
+        fl.scope = dict(loc)
+        for p in d.kids[0].kids:
+            defd[p.s] = True
+            fl.scope[p.s] = True
+            if p.s in fdels:
+                tracked[p.s] = True
+        for nm in caps:
+            fl.scope[nm] = True
+        for nm in decl:
+            fl.scope.pop(nm, False)
+        self.fl_stmts(fl, body)
+        for nm in fl.marks:
+            if not ((nm in loc or nm in fdels) and nm not in decl):
                 self.gflag[nm] = True
 
     def fl_fields(self, ci: ClassInfo) -> None:
@@ -11851,6 +12282,8 @@ class Gen:
             for d in self.fl_defaults(n):
                 self.fl_expr(fl, d)
             fl.put(n.s)
+        elif k == "def":
+            self.fl_nested(fl, n)  # (a def in a function)
         elif k == "lclass":
             self.fl_expr(fl, self.cnodes[n.line])  # (the reads of a class Pystachy leaves out, also in its methods)
         elif k == "expr" or k == "assert" or k == "del":
@@ -11938,6 +12371,9 @@ class Gen:
 
     def fl_expr(self, fl: Flow, e: Node) -> None:
         k = e.kind
+        if k == "lambda":
+            self.fl_nested(fl, e)
+            return
         if k == "name":
             if e.s in fl.tracked and e.s not in fl.defd and " dead" not in fl.defd:
                 e.chk = True
@@ -13578,10 +14014,18 @@ class Gen:
                     self.emit(f"store i1 false, ptr @init.{x.s}.guard")
                 else:
                     self.add(Ins("init", "", x.s))
+        elif k == "def" and not self.modlevel:
+            self.store_name(n.s, self.closure(n))  # (a def inside a function: a closure)
+        elif k == "nonlocal":
+            # the variables a closure takes: its cells hold them (see closure)
+            caps = self.closures[self.curfn.clo].caps if self.curfn.clo >= 0 else []
+            for x in n.kids:
+                if x.s not in caps:
+                    self.err(f"nonlocal '{x.s}' is not supported here: the function around it does not bind it where this function is defined")
         elif k == "def" or k == "class" or k == "subclass":
             if self.modlevel:
                 self.err(f"a {'class' if k == 'subclass' else k} statement inside a block of a module's code (if, try, for, while, with) is not supported: only at its top level")
-            self.err("nested functions and classes are not supported")
+            self.err("a class inside a function is not supported")
         elif k == "badimport":
             self.err(n.s)
         elif k in UNSUPPORTED:
@@ -13884,7 +14328,7 @@ class Gen:
         ts = targs(v.t)
         for x in ts:
             if x != ts[0]:
-                self.err(f"cannot iterate over {v.t}: its items have different types")
+                self.err(f"cannot iterate over {typestr(v.t)}: its items have different types")
         return self.as_list(v, "iter")
 
     def ival(self, n: Node, none: str = "") -> Val:
@@ -14113,8 +14557,9 @@ class Gen:
                 out.append(n.kids[1].s)
 
     def narrowable(self, name: str) -> bool:
-        # a local (or parameter) of an optional type: a global or a field may change in a call
-        return is_opt(self.ltype.get(name, "")) and not self.is_global(name)
+        # a local (or parameter) of an optional type: a global or a field may change in a call, and so
+        # may a variable that a closure assigns (nonlocal)
+        return is_opt(self.ltype.get(name, "")) and not self.is_global(name) and name not in self.nlw
 
     def narrow_by(self, test: Node, truth: bool) -> dict[str, bool]:
         # narrowed becomes a copy narrowed by test being truth; the state before is returned
@@ -14424,6 +14869,8 @@ class Gen:
             return self.read(n)
         if k == "badattr":
             self.err(n.s)  # a module attribute that does not exist, or a module used as a value
+        if k == "lambda":
+            return self.closure(n)
         if k in UNSUPPORTED:
             self.err(UNSUPPORTED[k])
         if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
@@ -14464,8 +14911,12 @@ class Gen:
                 self.no_class_attr(c, n.s)
             o = self.expr(n.kids[0], "")
             if is_fn(o.t) and (n.s == "__name__" or n.s == "__qualname__"):
-                # (a function of a module's top level, or a builtin: its own name)
+                # (a function of a module's top level, or a builtin: its own name; a closure's
+                # qualified name is outer.<locals>.name)
                 fk = o.t[5:-1]
+                if o.t.startswith("fn[c:"):
+                    clo = self.closures[int(fk[: fk.find(":")])]
+                    return Val(self.sconst(clo.name if n.s == "__name__" else clo.qual), "str")
                 return Val(self.sconst(short(fk) if o.t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]), "str")
             if o.t in self.nts and n.s == "_fields":
                 self.notnone(o, "AttributeError: 'NoneType' object has no attribute '_fields'")
@@ -15576,7 +16027,9 @@ class Gen:
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
         if (is_fn(a.t) or is_fn(b.t)) and (op == "==" or op == "!=" or op == "is" or op == "is not"):
             # a function value is the function its type names: never None, and the same function as
-            # another value of its type only
+            # another value of its type only (a closure, as the same def or lambda run once: its env)
+            if a.t == b.t and a.t.startswith("fn[c:"):
+                return Val(self.ins(f"icmp {'eq' if op == '==' or op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
             same = a.t == b.t
             return Val("true" if same == (op == "==" or op == "is") else "false", "bool")
         if (op == "==" or op == "!=") and a.t == b.t and a.t == "file":
@@ -15874,6 +16327,9 @@ class Gen:
         k = v.t[3:-1]
         if k.startswith("b:"):
             return self.builtin(k[2:], args, want)
+        if k.startswith("c:"):
+            # a closure: its function takes its env first
+            return self.call_fn(self.closures[int(k[2 : k.find(":", 2)])].f, [Val(v.v, "env")], args, want)
         return self.call_fn(self.funcs[k[2:]], [], args, want)
 
     def bound(self, s: str) -> bool:
@@ -16063,6 +16519,11 @@ class Gen:
                     self.err(f.dglob[j][1:])
                 if f.dglob[j] == "=None":
                     vals[j] = Val("null", "None")
+                elif f.dglob[j].startswith("&"):
+                    # a closure's default: in its env (pre[0]), evaluated where it was defined
+                    t = t if t != "" else f.dtypes[j]
+                    da = self.ins(f"getelementptr inbounds i64, ptr {pre[0].v}, i64 {f.dglob[j][1:]}")
+                    vals[j] = Val(self.ins(f"load {lt(t)}, ptr {da}"), t)
                 elif f.dglob[j] != "":
                     t = t if t != "" else f.dtypes[j]
                     vals[j] = Val(self.ins(f"load {lt(t)}, ptr {f.dglob[j]}"), t)
@@ -16131,7 +16592,7 @@ class Gen:
             if filled[j]:
                 self.err(f"{self.fname(f)}() got multiple values for argument '{a.s}'")
             filled[j] = True
-        off = 1 if f.deco == "classmethod" else 0  # (cls, which CPython counts and f.params leaves out)
+        off = 1 if f.deco == "classmethod" else -1 if f.clo >= 0 else 0  # (cls, which CPython counts and f.params leaves out; a closure's env, the reverse)
         if f.vararg < 0 and given > last:
             if f.name == "__init__" and f.node.kids[0].kind == "noann" and not self.is_dc(f.cls):
                 self.err(f"{short(f.cls)}() takes no arguments")
@@ -16212,13 +16673,14 @@ class Gen:
         g.npos = f.npos
         g.posonly = f.posonly
         g.vararg = f.vararg
+        g.clo = f.clo
         for x in nnp:
             g.nnp[x] = True
         f.insts[key] = g
         self.template_instances += 1
         maybe = [f.params[j] for j in range(len(ts)) if ts[j] in self.classes and f.params[j] not in g.nnp and self.dispatches(f, f.params[j])]
         why = f", where {' and '.join(maybe)} may be None: only a new object or self is known not to be None, which decides isinstance(), hasattr() and 'is None' at compile time" if len(maybe) > 0 else ""
-        args = ", ".join(ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"
+        args = ", ".join(ts[1:] if f.clo >= 0 else ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"  # (a closure's env aside)
         self.making.append(f"compiling {shown(f.name)}({args}) for the call at {where(self.line)}{why}")
         self.template_bytes += size
         fr = self.save()
