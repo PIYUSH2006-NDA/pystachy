@@ -39,8 +39,8 @@ flowchart TD
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
-| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter and the stdlib census |
-| `ports/` | 4 packages | PyPI packages with the few edits each needs to compile, marked "Pystachy port:" and listed in its `PORT.md`: iniconfig 2.3.1, pytest's INI parser ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); jdcal 1.4.1, Julian date conversions ([`ports/jdcal/PORT.md`](../ports/jdcal/PORT.md)); pylev 1.4.0, Levenshtein distances ([`ports/pylev/PORT.md`](../ports/pylev/PORT.md)); and qrcode 8.2's encoder and text output ([`ports/qrcode/PORT.md`](../ports/qrcode/PORT.md)); `tests/port_*.py` run their test cases |
+| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter, the stdlib census, and the count of a port's edits by cause |
+| `ports/` | 4 packages | PyPI packages with the few edits each needs to compile, marked "Pystachy port:" and listed in its `PORT.md`: iniconfig 2.3.1, pytest's INI parser ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); jdcal 1.4.1, Julian date conversions ([`ports/jdcal/PORT.md`](../ports/jdcal/PORT.md)); pylev 1.4.0, Levenshtein distances ([`ports/pylev/PORT.md`](../ports/pylev/PORT.md)); and qrcode 8.2's encoder and text output ([`ports/qrcode/PORT.md`](../ports/qrcode/PORT.md)); `tests/port_*.py` run their test cases, and `tools/port_edits.py` sorts the markers by cause and, given the upstream package, lists the census blockers the edits removed |
 
 ## Environment variables
 
@@ -55,7 +55,7 @@ flowchart TD
 | `PYSTACHY_GC` | `off` turns collection off, `stats` prints a summary at exit |
 | `PYSTACHY_IRCHECK=1` | the compiler checks the typed IR it built before lowering it, and again after each pass that changed it (`tests/run.sh` sets it unless it is set otherwise) |
 | `PYSTACHY_IRFX=1` | the compiler prints each function's effect summary on stderr, as `tests/ir/*.fx` record them |
-| `PYSTACHY_OPT` | turns optimizations on the typed IR off: `-listget`, `-dictfuse`, comma-separated, or `-all` |
+| `PYSTACHY_OPT` | turns optimizations off: `-listget`, `-dictfuse` (passes on the typed IR), `-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items), comma-separated, or `-all` |
 | `PYSTACHY_JOBS` | how many test cases `tests/run.sh` and the IR tools run at once (default: one per CPU) |
 
 ## Design, piece by piece
