@@ -76,7 +76,8 @@ TOOL = (LLVM.rstrip("/") + "/") if LLVM else ""
 # repr of the key: dict keys are ints, strs, or tuples of int, bool, str, None and such tuples,
 # which compare and print without user code
 NO_USER = {"dict.has", "dict.find", "dict.getitem", "dict.entry", "dict.get", "dict.set", "dict.pop", "dict.pop_default",
-           "dict.setdefault", "dict.getbox", "dict.popbox", "dict.update", "dict.update_pairs"} | {
+           "dict.setdefault", "dict.getbox", "dict.popbox", "dict.update", "dict.update_pairs", "dict.fromkeys",
+           "dict.fromkeys_dict"} | {
            k for k in ("set.add set.has set.discard set.remove set.update set.update_list set.update_dict set.union_more set.or "
                        "set.and set.and_list set.isub set.isub_list set.sub set.sub_list set.sub_dict set.xor set.xor_list "
                        "set.xor_dict set.ixor set.ixor_list set.ixor_dict set.cmp set.le_list set.ge_list set.isdisjoint "

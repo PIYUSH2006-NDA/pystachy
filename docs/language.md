@@ -529,8 +529,9 @@ result counts as its truth does; without `__contains__`, `x in o` looks for `x` 
 returns `iter(xs)` of a list, a tuple, a `str` or another such object steps through `xs` as a
 list's iterator does, wherever the object is iterated: `for` loops, comprehensions, unpacking,
 `enumerate()`, `zip()`, `list()`, `sorted()`, `min()`, `max()`, `sum()`, `any()`, `all()`,
-`math.fsum()`, `math.prod()`, `str.join()` and `list.extend()`; `list()`, `sorted()` and
-`list.extend()` then call its `__len__`, if it has one, as CPython's length hint. A method the
+`math.fsum()`, `math.prod()`, `math.dist()`, `str.join()` and `list.extend()`; `list()`,
+`sorted()` and `list.extend()` then call its `__len__`, if it has one, as CPython's length
+hint. A method the
 operation needs and the class does not define is an error with CPython's message (`'C' object
 is not subscriptable`, `'C' object is not callable`), and an object that is `None` raises
 CPython's error when it runs.
@@ -550,8 +551,10 @@ several); the common `str`, `list` and `dict` methods
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
 `zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default,
 `dict.update()` of a dict of its type, a list of `(key, value)` tuples and keyword arguments
-(str keys); not `str.format()`, `dict.popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
-`index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
+(str keys), and `dict.fromkeys(xs, v)` (`v` omitted or `None` where an annotation gives values
+that can be `None`; `xs` not a generator, `zip()`, `enumerate()` or `reversed()`; an empty `()`
+or `{}` has the keys of the dict wanted); not `str.format()`, `dict.popitem()`, `dict()` of
+pairs, or tuple's `index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
 `open()` with CPython's modes, errors, `buffering=`, `newline=`
 translation and positions for `"+"` modes, and files' `read`/`readline`/
 `readlines`/`write`/`writelines`/`flush`/`close`, iteration and `closed`/`name`/`mode`;
@@ -561,9 +564,12 @@ are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/ma
 `os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
-constants, which raise CPython's domain and range errors, with `fsum` and `prod` (and its
-`start=`) computed as CPython computes them (they take what `sum()` takes, and `fsum` a tuple
-of ints and floats too); `dist`, `gamma`, `isclose`, `lgamma` and `sumprod` are rejected.
+constants, which raise CPython's domain and range errors, with `fsum`, `prod` (and its
+`start=`) and `dist` computed as CPython computes them (`fsum` and `prod` take what `sum()`
+takes, and `fsum` a tuple of ints and floats too; `dist` takes two lists or tuples of
+numbers, NamedTuples or objects with `__iter__`, and copies the first point's items before it
+iterates the second, as its `tuple(p)` does); `gamma`, `isclose`, `lgamma` and `sumprod` are
+rejected.
 
 ## Removed on purpose
 
@@ -643,8 +649,8 @@ In these cases the program compiles but can behave differently from CPython:
   `d.values()` when an `__eq__` or `__lt__` of the values changes the dict, where CPython
   raises `RuntimeError`; they print as lists and compare equal to lists. A snapshot is taken
   where the call is evaluated, so a later argument that changes the dict does not change it
-  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`), where CPython's view shows
-  the change.
+  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
+  `dict.fromkeys(d.keys(), d.pop(k))`), where CPython's view shows the change.
 - A set of strs (or of tuples with str items) iterates and prints in an order of its own: a
   str's hash is the dict's, where CPython's changes from run to run (`PYTHONHASHSEED`), so no
   order of such a set is CPython's on every run (`sorted()` gives one). A display of constants
@@ -653,8 +659,10 @@ In these cases the program compiles but can behave differently from CPython:
   and a module CPython loads from its `.pyc` rebuilds such constants once more. `min()` and
   `max()` of a set take its elements before they call a `key=` function, which so does not see
   the set change (CPython's raises `RuntimeError` where it changes the set's size), and the set
-  methods but `update()` (which adds each element as it is made) take all the items of a
-  generator expression before they run.
+  methods but `update()` take all the items of a generator expression before they run.
+  `update()` adds a generator's elements as it makes them, after those of the arguments before
+  it, and evaluates the generator's first iterable then too, where CPython evaluates that with
+  the call's arguments.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without
@@ -1019,7 +1027,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
 - `dict.update()` of a dict of other key or value types, of an iterable other than a list of
   `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
-  keyword arguments where the keys are not `str`
+  keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
+  a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
 
 ### Source text

@@ -5335,7 +5335,7 @@ CALLS: dict[str, str] = {
     "math.isfinite(float)": "pys_m_isfinite:bool", "math.isinf(float)": "pys_m_isinf:bool", "math.isnan(float)": "pys_m_isnan:bool",
     "math.log(float,float)": "pys_m_logb:float", "math.fsum(list[float])": "pys_m_fsum:float",
     "math.prod(list[int],int)": "pys_m_prod_int:int", "math.prod(list[bool],int)": "pys_m_prod_int:int",
-    "math.prod(list[float],float)": "pys_m_prod_float:float",
+    "math.prod(list[float],float)": "pys_m_prod_float:float", "math.dist(list[float],list[float])": "pys_m_dist:float",
     "time.time()": "pys_time:float", "time.time_ns()": "pys_time_ns:int", "time.monotonic()": "pys_monotonic:float",
     "time.monotonic_ns()": "pys_monotonic_ns:int", "time.perf_counter()": "pys_monotonic:float",
     "time.perf_counter_ns()": "pys_monotonic_ns:int", "time.process_time()": "pys_process_time:float",
@@ -5763,6 +5763,7 @@ RUNTIME: dict[str, str] = {
     "dict.prev": "int:S,int,int,int|R rD|", "dict.key": "*K:S,int|rD|", "dict.val": "*V:S,int|rD|",
     "dict.find": "int:S,*K|rD|", "dict.entry": "int:S,*K|R A I rD|", "dict.entry_set": "None:S,int,*V|rD wD|",
     "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
+    "dict.fromkeys": "dict[K,V]:int,list[T],*V|A rL|", "dict.fromkeys_dict": "dict[K,V]:S,*V|A rD|",
     # sets and frozensets (CPython's tables; Set.kind as Dict.kind): their elements are a dict's
     # keys, which hash, compare and print without user code. A set's memory counts as a dict's (rD
     # wD: what changes a set may change a dict); what an operation makes, it alone has seen
@@ -5818,6 +5819,7 @@ RUNTIME: dict[str, str] = {
     "m.nextafter": "float:float,float||", "m.ulp": "float:float||", "m.remainder": "float:float,float|R|",
     "m.fma": "float:float,float,float|R|", "m.fsum": "float:list[float]|R A rL|", "m.prod_int": "int:list[T],int|R rL|",
     "m.prod_float": "float:list[float],float|rL|", "m.floats": "list[float]:list[T]|A rL|",
+    "m.dist": "float:list[float],list[float]|R A rL|",
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
@@ -8861,21 +8863,21 @@ class Gen:
                 f.posonly = len(f.params)
             if i == 0 and f.deco == "classmethod" and p.kind == "param":
                 continue  # cls: the class, which is not passed (see rename)
-            if p.kind == "starparam" and f.generic:
-                # *args: each call passes the extra positional arguments as a tuple of their types
-                f.vararg = len(f.params)
-                f.varelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
-                f.params.append(p.s)
-                f.defaults.append(mk("noann", "", p.line, []))
-                f.dglob.append("")
-                f.dtypes.append("")
-                f.ptypes.append("")
-                continue
-            if p.kind == "dstarparam" and f.generic:
-                # **kwargs: each call passes its extra keyword arguments as a record of their names
-                # and types (kw[...]), which the instance for it is compiled with
-                f.kwarg = len(f.params)
-                f.kwelem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" else ""
+            if (p.kind == "starparam" or p.kind == "dstarparam") and f.generic:
+                # *args: each call passes the extra positional arguments as a tuple of their types;
+                # **kwargs: its extra keyword arguments as a record of their names and types
+                # (kw[...]), which the instance for it is compiled with. An imported module's
+                # annotation that fails is an error where a call needs the function
+                why = self.ann_problem(p.kids[0], False) if self.lib and p.kids[0].kind != "noann" else ""
+                if why != "":
+                    bad = f"{d.s}() is not supported: parameter '{'*' if p.kind == 'starparam' else '**'}{p.s}': {why}"
+                elem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" and why == "" else ""
+                if p.kind == "starparam":
+                    f.vararg = len(f.params)
+                    f.varelem = elem
+                else:
+                    f.kwarg = len(f.params)
+                    f.kwelem = elem
                 f.params.append(p.s)
                 f.defaults.append(mk("noann", "", p.line, []))
                 f.dglob.append("")
@@ -17260,6 +17262,8 @@ class Gen:
                 return self.builtin(path, args, want)
             if f.kids[0].kind == "call" and f.kids[0].kids[0].kind == "name" and f.kids[0].kids[0].s == "super" and not self.bound("super"):
                 return self.super_call(f.kids[0], f.s, args)
+            if f.kids[0].kind == "name" and f.kids[0].s == "dict" and f.s == "fromkeys" and not self.bound("dict"):
+                return self.fromkeys(args, want)
             if f.kids[0].kind == "name" and "?" in self.rtype(f.kids[0].s):
                 return self.fill(f.kids[0], f.s, args, want)
             if f.kids[0].kind == "name" and f.kids[0].s in self.nts and f.kids[0].s not in self.ltype and f.s == "_make":
@@ -18208,6 +18212,17 @@ class Gen:
             vals[1] = self.coerce(Val(self.optint(vals[1], "0"), "int"), "int")
         elif name == "round" and len(vals) == 2 and is_opt(vals[1].t):
             self.err(f"round() with an ndigits that may be None ({typestr(vals[1].t)}) is not supported: it returns an int where ndigits is None, else a float; test it with 'is not None' first")
+        if name == "math.dist":
+            # tuple(p), then tuple(q): p's __iter__ runs before q is found to be None, and q's
+            # __iter__, which may change the list p steps through, after p's items are copied
+            q = unopt(vals[1].t) if len(vals) == 2 else ""
+            for i in range(len(vals)):
+                t = unopt(vals[i].t)
+                v = self.as_list(self.unwrap(vals[i], "TypeError: 'NoneType' object is not iterable") if is_opt(vals[i].t) else vals[i], name)
+                if i == 0 and q in self.classes and q not in self.nts and (is_list(t) or (t in self.classes and t not in self.nts)):
+                    # (p is a list, or the list its __iter__ steps through: not a copy)
+                    v = Val(self.rt("pys_list_copy", "ptr", [f"ptr {v.v}"]), v.t) if v.t == "list[float]" else self.floats(v)
+                vals[i] = v
         if name == "int" and len(vals) == 2:
             # CPython checks the base before x: its type (a bool is an int), then its range (as
             # pys_int_str does first; checked here too where x may be None, tested before the call)
@@ -18271,7 +18286,7 @@ class Gen:
         if key not in CALLS and name == "math.ldexp" and len(vals) == 2:
             vals = [self.as_float(self.as_int(vals[0])), self.as_int(vals[1])]
             key = f"{name}({','.join([v.t for v in vals])})"
-        if key not in CALLS and (name == "math.fsum" or name == "math.prod"):
+        if key not in CALLS and (name == "math.fsum" or name == "math.prod" or name == "math.dist"):
             # CPython makes a float of each int item (in a product, of each item and the start once
             # there is a float)
             fl = [self.floats(v) for v in vals]
@@ -18627,8 +18642,8 @@ class Gen:
             ts = targs(v.t)
             et = ts[0] if len(ts) > 0 else "str" if name == "join" else "int"  # (the empty tuple: no item to type)
             if any(x != et for x in ts):
-                if name == "math.fsum" and all(self.isnum(x) for x in ts):
-                    et = "float"  # (it makes a float of each item: (1, 2.5) too)
+                if (name == "math.fsum" or name == "math.dist") and all(self.isnum(x) for x in ts):
+                    et = "float"  # (they make a float of each item: (1, 2.5) too)
                 else:
                     self.err(f"{name}() of a {v.t} needs items of a single type")
             r = self.rt("pys_list_new", "ptr", [f"i64 {len(ts)}"])
@@ -19186,6 +19201,45 @@ class Gen:
         else:
             hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
         return Val(self.ins(f"icmp ne i64 {hit}, 0"), "bool")
+
+    def fromkeys(self, args: list[Node], want: str) -> Val:
+        # dict.fromkeys(xs, v=None): a dict of xs's items, each mapped to v. Both are evaluated
+        # first; a dict's keys go into a table sized for them, any other iterable's one by one
+        for a in args:
+            if a.kind == "kw":
+                self.err("dict.fromkeys() takes no keyword arguments")
+        if len(args) == 0 or len(args) > 2:
+            self.err(f"fromkeys expected {'at least 1 argument' if len(args) == 0 else 'at most 2 arguments'}, got {len(args)}")
+        kv = targs(want) if is_dict(want) and "?" not in want else ["", ""]
+        w = self.ctype("list", [kv[0]]) if kv[0] != "" and (args[0].kind == "list" or args[0].kind == "listcomp") else ""
+        if kv[0] != "" and args[0].kind == "dict" and len(args[0].kids) == 0:
+            w = want  # ({} has no key to type: the keys wanted)
+        xs = self.consume(args[0], w) if self.iterator_call(args[0]) and args[0].kids[0].s == "range" else self.expr(args[0], w)
+        V = kv[1]
+        v = self.expr(args[1], V) if len(args) == 2 else Val("null", "None")
+        if is_opt(xs.t):
+            xs = self.unwrap(xs, "TypeError: 'NoneType' object is not iterable")
+        if xs.t == "str":
+            xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {xs.v}"]), "list[str]")
+        elif xs.t == "tuple[]" and kv[0] != "":
+            xs = Val(self.as_list(xs, "fromkeys").v, self.ctype("list", [kv[0]]))  # (() has no item to type: the keys wanted)
+        elif not is_dict(xs.t):
+            xs = self.as_list(xs, "fromkeys")
+        if not is_list(xs.t) and not is_dict(xs.t):
+            self.err(f"'{tname(xs.t)}' object is not iterable")
+        K = targs(xs.t)[0] if is_dict(xs.t) else elem(xs.t)
+        if key_problem(K) != "":
+            self.err(key_problem(K))
+        if v.t == "None" and V == "":
+            self.err(f"dict.fromkeys(keys{', None' if len(args) == 2 else ''}) needs the type of the dict it makes, whose values are None: annotate it (d: dict[K, V | None] = ...)")
+        if v.t == "None" and self.optional(V) != V:
+            self.err(f"dict.fromkeys(keys{', None' if len(args) == 2 else ''}) needs values that can be None ({OPTTYPES}), not {typestr(V)}: give a value")
+        V = v.t if V == "" else V
+        v = self.coerce(v, V)
+        t = self.ctype("dict", [K, V])
+        if is_dict(xs.t):
+            return Val(self.rt("pys_dict_fromkeys_dict", "ptr", [f"ptr {xs.v}", "i64 " + self.to_slot(v)]), t)
+        return Val(self.rt("pys_dict_fromkeys", "ptr", [f"i64 {self.key_kind(K)}", f"ptr {xs.v}", "i64 " + self.to_slot(v)]), t)
 
     def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
         # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
