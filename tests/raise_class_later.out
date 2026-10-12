@@ -1,0 +1,7 @@
+NameError: name 'LateErr' is not defined
+NameError: name 'LateErr' is not defined
+NameError: name 'LateErr' is not defined
+LateErr: x
+LateErr: LateErr()
+ValueError: v
+[exit 0]

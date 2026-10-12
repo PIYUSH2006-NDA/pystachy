@@ -1,0 +1,46 @@
+Bits(0011) Bits(1100) [-1, -2, -3] +[1, 2, 3] +[-1, -2, -3] Vec([1, 2, 3]) False
+pos 5
+invert 5
+neg -6
+pos 5
+Num(6) True
+operand 1
+neg 1
+operand 2
+invert 2
+Num(-1) Num(-3)
+neg 3
+neg 3
+invert 3
+Num(-3) Num(-3) Num(-4)
+neg 2
+pos 7
+neg 1
+neg 2
+Num(-2) Bits(1110) Num(7) Bits(1101) [Num(-1), Num(-2)]
+-3 -3 5 -2
+250 Money(250) True False
+Mask(bits=245) True Flags(r=False, w=True) True
+-20 -30 -5 Shift
+-60 -7
+Vec([-1, -2, -3]) -6 -7 -2.5
+neg 5
+Num(-5) +[1, 2, 3] Bits(0011) Mask(bits=254)
+neg 2
+Num(-2)
+invert 3
+Num(-4)
+neg 3
+Num(-3)
+pos 3
+Num(3)
+invert 3
+Num(-4)
+TypeError: bad operand type for unary -: 'NoneType'
+TypeError: bad operand type for unary +: 'NoneType'
+TypeError: bad operand type for unary ~: 'NoneType'
+TypeError: bad operand type for unary -: 'NoneType'
+TypeError: bad operand type for unary ~: 'NoneType'
+ValueError: no negative
+-1 0 -2.5 3 -8 9 -1.5
+[exit 0]
