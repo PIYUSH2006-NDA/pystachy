@@ -3162,9 +3162,9 @@ def builtin_module(path: str) -> bool:
 
 
 def known_path(p: str) -> bool:
-    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, or
-    # a function builtin() handles itself
-    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "os.fspath" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
+    # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
+    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "sys.float_info" or p == "os.fspath" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):
@@ -4487,11 +4487,11 @@ class Loader:
 
     def decide(self, m: Mod, e: Node, scope: dict[str, bool], pre: list[Node]) -> int:
         # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
-        # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), os.name ==
-        # "nt", sys.platform in ("win32", ...)), TYPE_CHECKING or an imported module's __name__ ==
-        # "__main__" (false), also under not/and/or: 1 or 0, after appending to pre what still runs
-        # for the other operands, in CPython's order ("if x: pass" for an operand x that is
-        # evaluated and tested); -1 if e is undecided
+        # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), also of a
+        # tuple of such prefixes, os.name == "nt", sys.platform in ("win32", ...)), TYPE_CHECKING or
+        # an imported module's __name__ == "__main__" (false), also under not/and/or: 1 or 0, after
+        # appending to pre what still runs for the other operands, in CPython's order ("if x: pass"
+        # for an operand x that is evaluated and tested); -1 if e is undecided
         if e.kind == "unary" and e.s == "not":
             r = self.decide(m, e.kids[0], scope, pre)
             return 1 - r if r >= 0 else -1
@@ -4534,11 +4534,13 @@ class Loader:
             if mod == "os" and e.kids[0].s == "name":
                 r = 1 if e.kids[1].s == "posix" else 0
             return r if r < 0 or e.s == "==" else 1 - r
-        if e.kind == "call" and len(e.kids) == 2 and e.kids[1].kind == "str" and e.kids[0].kind == "attr" and e.kids[0].s == "startswith":
+        if e.kind == "call" and len(e.kids) == 2 and (e.kids[1].kind == "str" or e.kids[1].kind == "tuple") and e.kids[0].kind == "attr" and e.kids[0].s == "startswith":
             pa = e.kids[0].kids[0]
             if pa.kind == "attr" and pa.s == "platform" and pa.kids[0].kind == "name" and self.special(m, pa.kids[0].s, scope) == "sys":
-                if e.kids[1].s in "win win32 cygwin msys emscripten wasi java".split():
-                    return 0
+                for x in e.kids[1].kids if e.kids[1].kind == "tuple" else [e.kids[1]]:
+                    if x.kind != "str" or x.s not in "win win32 cygwin msys emscripten wasi java".split():
+                        return -1
+                return 0
         return -1
 
     def special(self, m: Mod, name: str, scope: dict[str, bool]) -> str:
@@ -5156,7 +5158,7 @@ RTL: dict[str, str] = {
 }
 TBAA_LEN = 3
 TBAA_BYTES = 4
-STRLEN_RANGE = 5  # !range of a str's length in runtime mode: 0 to 2**63 - 10 (_rt.str_new's limit)
+STRLEN_RANGE = 5  # !range of a str's length in runtime mode: 0 to 2**63 - 18 (_rt.str_new's limit)
 # the errno module: the platform's error numbers (runtime.c's table)
 ERRNO: dict[str, bool] = {}
 for _k in ("EPERM ENOENT ESRCH EINTR EIO ENXIO E2BIG ENOEXEC EBADF ECHILD EAGAIN ENOMEM EACCES EFAULT ENOTBLK EBUSY EEXIST EXDEV ENODEV "
@@ -5187,6 +5189,14 @@ for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform ma
 # the os module's constants on POSIX systems
 OSCONST: dict[str, str] = {"os.name": "posix", "os.sep": "/", "os.curdir": ".", "os.pardir": "..", "os.extsep": ".",
                            "os.pathsep": ":", "os.linesep": "\n", "os.devnull": "/dev/null"}
+# sys.float_info's attributes for IEEE 754 doubles: floats (with an "e") and ints
+FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "sys.float_info.max_exp": "1024",
+                             "sys.float_info.max_10_exp": "308", "sys.float_info.min": "2.2250738585072014e-308",
+                             "sys.float_info.min_exp": "-1021", "sys.float_info.min_10_exp": "-307", "sys.float_info.dig": "15",
+                             "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
+                             "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
+for _k in FLOATINFO:
+    MODATTRS[_k] = True
 TYPING: dict[str, bool] = {}
 for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Iterable Iterator Sequence Mapping Final ClassVar NamedTuple "
            "TypeVar Generic cast IO BinaryIO AnyStr Literal Protocol TYPE_CHECKING overload NoReturn Never Self TypeAlias ParamSpec "
@@ -5331,6 +5341,8 @@ NONEARG: dict[str, str] = {"len": "object of type 'NoneType' has no len()", "dic
                            "abs": "bad operand type for abs(): 'NoneType'", "round": "type NoneType doesn't define __round__ method",
                            "chr": "'NoneType' object cannot be interpreted as an integer",
                            "os.path.exists": "stat: path should be string, bytes, os.PathLike or integer, not NoneType"}
+for _k in "hex oct bin".split():
+    NONEARG[_k] = NONEARG["chr"]
 OPTARG: list[str] = "str repr ascii bool input min max sys.exit exit quit".split()
 # what those return (for None itself, which always raises)
 NONERET: dict[str, str] = {"len": "int", "int": "int", "float": "float", "ord": "int", "os.system": "int", "os.path.exists": "bool"}
@@ -5407,9 +5419,9 @@ def normcodec(e: str) -> str:
             punct = True
     return n
 # the most positional arguments a builtin takes: more are a compile error (a TypeError in CPython)
-ARITY: dict[str, int] = {"len": 1, "repr": 1, "ascii": 1, "abs": 1, "ord": 1, "chr": 1, "bool": 1, "float": 1, "list": 1,
-                         "dict": 1, "str": 1, "sorted": 1, "any": 1, "all": 1, "input": 1, "int": 2, "round": 2,
-                         "divmod": 2, "sum": 2, "pow": 3}
+ARITY: dict[str, int] = {"len": 1, "repr": 1, "ascii": 1, "abs": 1, "ord": 1, "chr": 1, "hex": 1, "oct": 1, "bin": 1, "bool": 1,
+                         "float": 1, "list": 1, "dict": 1, "str": 1, "sorted": 1, "any": 1, "all": 1, "input": 1, "int": 2,
+                         "round": 2, "divmod": 2, "sum": 2, "pow": 3}
 # Builtin methods, "ret:arg,arg=default". *X: passed/returned as an 8-byte slot; #: element
 # type descriptor; T: list element, K/V: dict key/value, S: the receiver's own type.
 # Each maps to the C function pys_<type>_<method>.
@@ -5432,7 +5444,7 @@ METHODS: dict[str, str] = {
     "dict.values": "list[V]:", "dict.items": "list[tuple[K,V]]:", "dict.clear": "None:", "dict.copy": "S:",
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
-    "float.hex": "str:", "float.is_integer": "bool:",
+    "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
 # the IR's ops (Ins.op) and their effects (docs/typed-ir.md 3.4 and 3.7, and FX below): T ends
 # a block; an rt op has its runtime function's effects (RUNTIME), a call or an init its callee's
@@ -5539,7 +5551,7 @@ RUNTIME: dict[str, str] = {
     "ffloordiv": "float:float,float|R|", "fmod": "float:float,float|R|", "fpow": "float:float,float|R|", "cmp_if": "int:int,float||",
     "f2i": "int:float|R|", "round": "int:float|R|", "round_n": "float:float,int|R|", "round_int": "int:int,int|R|", "floor": "int:float|R|",
     "ceil": "int:float|R|", "int.str": "int:str,int|R A|", "float.str": "float:str|R A|", "float.hex": "str:float|A|",
-    "float.is_integer": "bool:float||", "fabs": "float:float||fabs",
+    "float.is_integer": "bool:float||", "int.bit_length": "int:int||", "int.bit_count": "int:int||", "fabs": "float:float||fabs",
     "ovf.sadd": "%ovf:int,int||llvm.sadd.with.overflow.i64", "ovf.ssub": "%ovf:int,int||llvm.ssub.with.overflow.i64",
     "ovf.smul": "%ovf:int,int||llvm.smul.with.overflow.i64",
     "m.sqrt": "float:float|R|", "m.sin": "float:float|R|", "m.cos": "float:float|R|", "m.tan": "float:float|R|",
@@ -5833,6 +5845,14 @@ def nones(e: Node) -> bool:
         if e.kind == "dict" and i % 2 == 0 and x.kind != "str" and x.kind != "int":
             return False
     return True
+
+
+def nonetest(n: Node) -> int:
+    # n is x is None, x is not None, x == None or x != None (or None is x, None == x, ...): the
+    # index of x in n.kids; -1 otherwise
+    if n.kind != "cmp" or (n.s != "is" and n.s != "is not" and n.s != "==" and n.s != "!="):
+        return -1
+    return 0 if n.kids[1].kind == "None" else 1 if n.kids[0].kind == "None" else -1
 
 
 def same_kind(a: str, b: str) -> bool:
@@ -7320,8 +7340,8 @@ class Gen:
             for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n0}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n0}, {a[1]}')}",
                       f"icmp ugt i64 {a[3]}, {n1}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n1}, {a[3]}')}"]:
                 self.guard(self.ins(x), "IndexError: compare out of range")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
-            p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 8')}")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
+            p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
             return Val(self.ins(f"icmp eq i32 {self.rt('memcmp', 'i32', [f'ptr {p0}', f'ptr {p1}', f'i64 {a[4]}'])}, 0"), "bool")
         if name == "find_byte":
             # find_byte(s, c, st, en): 0 <= st <= en <= len(s)
@@ -7329,26 +7349,26 @@ class Gen:
             for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
                 self.guard(self.ins(x), "IndexError: search out of range")
             self.guard(self.ins(f"icmp ugt i64 {a[1]}, 255"), "ValueError: byte must be in range(0, 256)")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 8')}")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
             f = self.rt("memchr", "ptr", [f"ptr {p0}", f"i32 {self.ins(f'trunc i64 {a[1]} to i32')}", f"i64 {self.ins(f'sub i64 {a[3]}, {a[2]}')}"])
             d = self.ins(f"sub i64 {self.ins(f'ptrtoint ptr {f} to i64')}, {self.ins(f'ptrtoint ptr {a[0]} to i64')}")
-            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 8')}"), "int")
+            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 16')}"), "int")
         if name == "find_sub":
             # find_sub(h, n, st, en): 0 <= st <= en <= len(h)
             n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
             for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
                 self.guard(self.ins(x), "IndexError: search out of range")
-            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 8')}")
-            p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 8")
+            p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
+            p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 16")
             m = self.ins(f"load i64, ptr {a[1]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
             f = self.rt("memmem", "ptr", [f"ptr {p0}", f"i64 {self.ins(f'sub i64 {a[3]}, {a[2]}')}", f"ptr {p1}", f"i64 {m}"])
             d = self.ins(f"sub i64 {self.ins(f'ptrtoint ptr {f} to i64')}, {self.ins(f'ptrtoint ptr {a[0]} to i64')}")
-            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 8')}"), "int")
+            return Val(self.ins(f"select i1 {self.ins(f'icmp eq ptr {f}, null')}, i64 -1, i64 {self.ins(f'sub i64 {d}, 16')}"), "int")
         if name == "str_new":
             # a size the allocator cannot serve (negative, or past 2**63 with the header and NUL)
             # is CPython's MemoryError, as in runtime.c
-            self.guard(self.ins(f"icmp ugt i64 {a[0]}, 9223372036854775798"), "MemoryError: ")
-            r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.ins(f'add nuw nsw i64 {a[0]}, 9')}"])  # zeroed: the NUL is there
+            self.guard(self.ins(f"icmp ugt i64 {a[0]}, 9223372036854775790"), "MemoryError: ")
+            r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.ins(f'add nuw nsw i64 {a[0]}, 17')}"])  # zeroed: dict_hash and NUL
             self.emit(f"store i64 {a[0]}, ptr {r}, !tbaa !{TBAA_LEN}")
             return Val(r, "str")
         # the others index a str: an unsigned compare with its length also rejects a negative index
@@ -7359,12 +7379,12 @@ class Gen:
             for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n}, {a[1]}')}",
                       f"icmp ugt i64 {a[3]}, {m}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {m}, {a[3]}')}"]:
                 self.guard(self.ins(x), "IndexError: copy out of range")
-            dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
-            src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 8')}")
+            dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
+            src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
             self.rt("llvm.memmove.p0.p0.i64", "void", [f"ptr {dst}", f"ptr {src}", f"i64 {a[4]}", "i1 false"])
             return Val("null", "None")
         self.guard(self.ins(f"icmp uge i64 {a[1]}, {n}"), "IndexError: string index out of range")
-        p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 8')}")
+        p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
         if name == "byte":
             return Val(self.ins(f"zext i8 {self.ins(f'load i8, ptr {p}, !tbaa !{TBAA_BYTES}')} to i64"), "int")
         self.guard(self.ins(f"icmp ugt i64 {a[2]}, 255"), "ValueError: byte must be in range(0, 256)")
@@ -7450,7 +7470,8 @@ class Gen:
         self.strs[s] = name
         self.strvals.append(s)
         n = len(s) + 1
-        self.consts.append(f'{name} = private unnamed_addr constant {{i64, [{n} x i8]}} {{i64 {n - 1}, [{n} x i8] c"{llstr(s)}\\00"}}, align 8')
+        # Bytes stay immutable; the dictionary hash cache must be writable (runtime.c Str).
+        self.consts.append(f'{name} = private unnamed_addr global {{i64, i64, [{n} x i8]}} {{i64 {n - 1}, i64 0, [{n} x i8] c"{llstr(s)}\\00"}}, align 8')
         return name
 
     def alloca(self, t: str, name: str) -> str:
@@ -8490,7 +8511,7 @@ class Gen:
                 return c
             if c == "len" or c == "ord":
                 return "int"
-            if c == "input" or c == "repr" or c == "chr" or c == "ascii":
+            if c == "input" or c == "repr" or c == "chr" or c == "ascii" or c == "hex" or c == "oct" or c == "bin":
                 return "str"
             if c == "open":
                 return "file"
@@ -8555,7 +8576,7 @@ class Gen:
             self.err(f"the attributes of an exception (e.{name}) are not supported; str(e) and repr(e) are{hint}")
         if o.t not in self.classes:
             t = unopt(o.t)
-            base = "list" if is_list(t) else "dict" if is_dict(t) else t
+            base = "list" if is_list(t) else "dict" if is_dict(t) else "int" if t == "bool" else t
             if base + "." + name in METHODS:
                 self.err(f"{tname(t)}.{name} is a method: call it, {name}(...) (methods are not values)")
             self.err(f"type {typestr(o.t)} has no attribute '{name}'")
@@ -11131,7 +11152,7 @@ class Gen:
             hdr.append(f'!{TBAA_LEN - 1} = !{{!"str bytes", !{TBAA_LEN - 3}, i64 0}}')
             hdr.append(f"!{TBAA_LEN} = !{{!{TBAA_LEN - 2}, !{TBAA_LEN - 2}, i64 0}}")
             hdr.append(f"!{TBAA_BYTES} = !{{!{TBAA_LEN - 1}, !{TBAA_LEN - 1}, i64 0}}")
-            hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775799}}")
+            hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775791}}")
             return "\n".join(hdr) + "\n"
         # pys_init gets the GC roots: main's frame address bounds the stack scan (it also
         # covers @main.init if inlined here) and the table of pointer-typed globals
@@ -12852,19 +12873,31 @@ class Gen:
         a = self.getfield(o, self.field(o, " args"), " args")
         return Val(self.rt("pys_exc_brepr", "ptr", [f"ptr {o.v}", f"ptr {a.v}"]), "str")
 
-    def super_call(self, sc: Node, m: str, args: list[Node]) -> Val:
-        # super().m(args) in a method of an exception class: the base's method m, or what
-        # BaseException's __init__ (keep the args), __str__ and __repr__ do
+    def super_call(self, sc: Node, m: str, args: list[Node], based: bool = False) -> Val:
+        # super().m(args) in a method of an exception class (based: Base.m(self, args), for its
+        # base): the base's method m, or what BaseException's __init__ (keep the args), __str__ and
+        # __repr__ do
         cls = self.curfn.cls
-        me0 = self.curfn.params[0] if cls != "" else ""
-        # (super(C, self), in a method of class C, is super())
-        same = len(sc.kids) == 3 and sc.kids[1].kind == "name" and sc.kids[1].s == shown(cls) and sc.kids[2].kind == "name" and sc.kids[2].s == me0
+        # the object super() binds: the method's first parameter, self (a static method's first
+        # argument); none in a class method, whose super() binds cls, the class
+        me0 = self.curfn.params[0] if cls != "" and len(self.curfn.params) > 0 and (based or len(sc.kids) > 1 or self.curfn.deco != "classmethod") else ""
+        # (super(C, self), in a method of class C, is super(): C as the loader qualifies it, m$C in
+        # module m, and read as the module's name, not a local's)
+        same = len(sc.kids) == 3 and sc.kids[1].kind == "name" and sc.kids[1].s == cls and self.globread(cls) and sc.kids[2].kind == "name" and sc.kids[2].s == me0
         if (len(sc.kids) > 1 and not same) or cls == "" or self.classes[cls].exc == "":
             self.err("super() is only supported without arguments, in the methods of exception classes (super(C, self) in a method of C is super())")
-        me = self.expr(mk("name", self.curfn.params[0], sc.line, []), "")
+        if me0 == "":
+            self.err("super() in a class method (which binds cls, the class) or a static method without parameters is not supported")
+        me = self.expr(mk("name", me0, sc.line, []), "")
         b = self.classes[cls].base
         if b in self.classes and m in self.classes[b].methods:
-            return self.call_fn(self.classes[b].methods[m], [me], args)
+            bm = self.classes[b].methods[m]
+            if bm.deco != "" and not based:
+                # a static or class method of the base gets no object (Base.m(self, ...) passes
+                # self as its first argument), and a class method's cls would be the object's class
+                self.cls_bound(bm, cls, True)
+                return self.call_fn(bm, [], args)
+            return self.call_fn(bm, [me], args)
         if m == "__init__":
             self.exc_kw(b, args, f"{short(b)}.__init__()")
             vals = self.exc_vals(args)
@@ -13790,9 +13823,14 @@ class Gen:
     def static(self, n: Node) -> int:
         # 1 or 0 if n is a test whose result the static types decide and that has nothing else to
         # evaluate: isinstance(x, T), x is None and x is not None for a variable x (that is surely
-        # assigned), and not/and/or of those; -1 otherwise. A template's function, compiled for its
-        # argument types, can so dispatch on them as unannotated code does.
+        # assigned), and not/and/or of those; -1 otherwise. A template's function, compiled for
+        # its argument types, can so dispatch on them as unannotated code does, also with None is
+        # x, x == None and x != None for its parameter x (not where x's class defines __eq__ or
+        # __ne__). Elsewhere == runs: the branch it would remove may give a list its item type.
         k = n.kind
+        x = nonetest(n)
+        if x >= 0 and (x == 1 or n.s == "==" or n.s == "!=") and not (self.curfn.inst and n.kids[x].kind == "name" and n.kids[x].s in self.curfn.params and n.kids[x].s not in self.compvars):
+            x = -1
         if k == "name" and self.static_type(n) == "None":
             return 0  # a parameter whose argument is None is false
         if k == "name" and is_tuple(self.static_type(n)):
@@ -13805,10 +13843,12 @@ class Gen:
             if a < 0 or (a == 1) == (n.s == "or"):
                 return a
             return self.static(n.kids[1])
-        if k == "cmp" and (n.s == "is" or n.s == "is not") and n.kids[1].kind == "None":
-            t = self.static_type(n.kids[0])
-            r = -1 if t == "" or (t in self.classes and not self.knownobj(n.kids[0])) or is_opt(t) else 1 if t == "None" else 0
-            return r if r < 0 or n.s == "is" else 1 - r
+        if x >= 0:
+            t = self.static_type(n.kids[x])
+            r = -1 if t == "" or (t in self.classes and not self.knownobj(n.kids[x])) or is_opt(t) else 1 if t == "None" else 0
+            if (n.s == "==" or n.s == "!=") and (t == "exc" or (t in self.classes and ("__eq__" in self.classes[t].methods or "__ne__" in self.classes[t].methods))):
+                r = -1  # (CPython calls x.__eq__ or __ne__; an exception's class may define one)
+            return r if r < 0 or n.s == "is" or n.s == "==" else 1 - r
         if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "hasattr" and not self.bound("hasattr") and len(n.kids) == 3 and n.kids[2].kind == "str":
             t = self.static_type(n.kids[1], True)
             h = self.has(t, n.kids[2].s) if t != "" else -1
@@ -15090,6 +15130,9 @@ class Gen:
             return self.arith(op, b, a)
         if op == "+" and is_list(a.t) and is_list(b.t):
             self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
+        if op == "%" and a.t == "str":
+            # CPython formats with any str on the left; only a literal format is compiled (percent)
+            self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
         # CPython's TypeError, at compile time
         an = tname(a.t)
         bn = tname(b.t)
@@ -15308,7 +15351,11 @@ class Gen:
                 r = self.select(self.ins(f"icmp eq i64 {r}, 2"), Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
             return Val(self.ins(MIXCMP[op].replace("R", r)), "bool")
         eq = op == "==" or op == "!="
+        if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):
+            return Val("false" if op == "==" else "true", "bool")  # a number or bool never equals None
         if eq and (a.t == "None" or b.t == "None" or (a.t == b.t and a.t in self.classes)) and self.isref(a.t) and self.isref(b.t):
+            if a.t == "exc" or b.t == "exc":
+                self.exc_eq("exc", "between an exception and None")
             return Val(self.ins(f"icmp {ICMP[op]} ptr {a.v}, {b.v}"), "bool")
         # T and T | None (also as items): None == None, None == x is False, and None < x raises
         ct = self.wider(a.t, b.t)
@@ -15413,11 +15460,11 @@ class Gen:
             return self.builtin(f.s, args, want)
         if f.kind == "attr":
             c = self.curfn.cls
-            if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
+            if c != "" and self.classes[c].exc != "" and f.kids[0].kind == "name" and self.derives(c, f.kids[0].s) and f.kids[0].s != c and len(args) > 0 and args[0].kind == "name" and len(self.curfn.params) > 0 and args[0].s == self.curfn.params[0] and (f.kids[0].s in self.classes or not self.bound(f.kids[0].s)):
                 # Base.m(self, args) in a method of an exception class: super().m(args) for its base
                 if f.kids[0].s != self.classes[c].base and not (self.classes[c].base == "OSError" and (f.kids[0].s == "IOError" or f.kids[0].s == "EnvironmentError")):
                     self.err(f"{f.kids[0].s}.{f.s}(self, ...) in a method of {short(c)} is supported only for its base, {short(self.classes[c].base)} (as super().{f.s}(...))")
-                return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:])
+                return self.super_call(mk("call", "", f.line, [mk("name", "super", f.line, [])]), f.s, args[1:], True)
             path = self.dotted(f)
             if path != "" and path[: path.rfind(".")] not in MODATTRS:
                 return self.builtin(path, args, want)
@@ -15720,7 +15767,8 @@ class Gen:
 
     def dispatches(self, f: FnInfo, p: str) -> bool:
         # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
-        # (not) None, and never assign it: then an object known not to be None decides the tests
+        # (not) None (or p == None, see static), and never assign it: then an object known not to
+        # be None decides the tests
         asg: dict[str, bool] = {}
         local_names(f.node.kids[2].kids, asg)
         return p not in asg and self.tests(f.node.kids[2].kids, p)
@@ -15730,7 +15778,8 @@ class Gen:
         for n in ns:
             if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s == "isinstance" or n.kids[0].s == "hasattr") and len(n.kids) == 3 and n.kids[1].kind == "name" and n.kids[1].s == p:
                 return True
-            if n.kind == "cmp" and (n.s == "is" or n.s == "is not") and n.kids[0].kind == "name" and n.kids[0].s == p and n.kids[1].kind == "None":
+            x = nonetest(n)
+            if x >= 0 and n.kids[x].kind == "name" and n.kids[x].s == p:
                 return True
             if self.tests(n.kids, p):
                 return True
@@ -15827,6 +15876,11 @@ class Gen:
             return Val("false", "bool")
         if path in OSCONST:
             return Val(self.sconst(OSCONST[path]), "str")
+        if path in FLOATINFO:
+            c = FLOATINFO[path]
+            return Val(fbits(c), "float") if "e" in c else Val(c, "int")
+        if path == "sys.float_info":
+            self.err("sys.float_info cannot be used as a value (read its attributes: sys.float_info.max, sys.float_info.epsilon, ...)")
         if path == "sys.platform":
             return Val(self.rt("pys_platform", "ptr", []), "str")
         if path.startswith("errno.") and path[6:] in ERRNO:
@@ -15907,6 +15961,13 @@ class Gen:
             if g.kind != "listcomp":
                 g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
             return self.listcomp(g, "", name)
+        base = [a.kids[0] for a in args if a.kind == "kw" and a.s == "base"] if name == "int" else []
+        if len(base) > 0:
+            # int(x, base=b) is int(x, b) (x is positional only: int(x=s) is an unknown keyword)
+            args = [a for a in args if a.kind != "kw" or a.s != "base"]
+            if len(args) == 0:
+                self.err("int() missing string argument")
+            args = args + base
         npos = 0
         for a in args:
             if a.kind != "kw":
@@ -15964,6 +16025,14 @@ class Gen:
             vals[1] = self.coerce(Val(self.optint(vals[1], "0"), "int"), "int")
         elif name == "round" and len(vals) == 2 and is_opt(vals[1].t):
             self.err(f"round() with an ndigits that may be None ({typestr(vals[1].t)}) is not supported: it returns an int where ndigits is None, else a float; test it with 'is not None' first")
+        if name == "int" and len(vals) == 2:
+            # CPython checks the base before x: its type (a bool is an int), then its range (as
+            # pys_int_str does first; checked here too where x may be None, tested before the call)
+            vals[1] = self.as_int(self.unwrap(vals[1], "TypeError: " + NONEARG["chr"]))
+            nb = vals[1].v
+            if is_opt(vals[0].t) and vals[1].t == "int" and not (nb.isdigit() and int(nb) <= 36 and nb != "1"):
+                out = self.ins(f"icmp ugt i64 {self.ins(f'sub i64 {nb}, 2')}, 34")
+                self.guard(self.ins(f"and i1 {out}, {self.ins(f'icmp ne i64 {nb}, 0')}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
         for i in range(len(vals)):
             if vals[i].t == "None" and name in NONERET and len(vals) == 1:
                 # None itself (a template's parameter whose argument is None): CPython's error
@@ -16055,6 +16124,8 @@ class Gen:
             return Val(self.rt("pys_ascii", "ptr", [f"ptr {self.repr(v).v}"]), "str")
         elif name == "bool":
             return Val(self.truth(v), "bool")
+        elif name == "int" and len(vals) == 2 and t != "str":
+            self.err("int() can't convert non-string with explicit base")
         elif name == "int" and (t == "int" or t == "bool"):
             return self.as_int(v)
         elif name == "float" and (t == "float" or t == "int" or t == "bool"):
@@ -16064,6 +16135,9 @@ class Gen:
             c = self.ins(f"icmp slt i64 {v.v}, 0")
             neg = self.iop("-", "0", v.v)
             return Val(self.select(c, Val(neg, "int"), v), "int")
+        elif (name == "hex" or name == "oct" or name == "bin") and (t == "int" or t == "bool"):
+            # format()'s alternate form: hex(x) is format(x, "#x"), and hex(True) is '0x1'
+            return self.format_(self.as_int(v), mk("str", "#" + ("x" if name == "hex" else name[0]), self.line, []))
         elif (name == "min" or name == "max") and len(vals) == 1 and is_list(t):
             d = self.sconst(self.desc(elem(t), ">" if name == "max" else "<"))
             r = self.rt("pys_list_minmax", "i64", [f"ptr {v.v}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"])
@@ -16107,8 +16181,12 @@ class Gen:
             self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), sorted(), sum(), min(), max(), any(), all() or str.join()")
         if name in self.gtypes or name in self.ltype:
             self.err(f"'{name}' is not callable")
+        if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:
+            self.err(f"{name}() of an object is not supported: Pystachy does not call __index__")
         if t in self.classes and name in NONEARG:
             self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
+        if name == "hex" or name == "oct" or name == "bin":
+            self.err(NONEARG[name].replace("NoneType", tname(t)))
         if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
             self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
         self.err(f"unsupported call {key}")
@@ -16312,6 +16390,9 @@ class Gen:
             kv = targs(o.t)
             K = kv[0]
             V = kv[1]
+        elif o.t == "bool" and "int." + m in METHODS:
+            base = "int"  # (a bool is an int: True.bit_length() is 1)
+            o = self.as_int(o)
         key = base + "." + m
         if key not in METHODS and o.t == "exc":
             self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
@@ -16333,6 +16414,7 @@ class Gen:
         bk = Val("", "")  # d.pop(k) of a bool where the keys are ints (bool_find)
         numx = Val("", "")  # xs.index(x), count(x) or remove(x) of a number x of another type
         numok = "true"  # (whether an item can equal it, see numkey)
+        alts = Val("", "")  # s.startswith((a, b)) or endswith: the tuple whose items are tried (affix_any)
         i = 0
         for p in spec[c + 1 :].split(","):
             if p == "":
@@ -16356,6 +16438,16 @@ class Gen:
                 av.append("i64 " + dflt)
             elif i < len(args):
                 v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], pt)
+                if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
+                    v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
+                    for x in targs(unopt(v.t)):
+                        if x != "str" and x != "opt[str]":
+                            self.err(f"tuple for {m} must only contain str, not {tname(x)}")  # (CPython's TypeError, at the item it reaches)
+                    if is_opt(v.t):
+                        nones.append(v.v)
+                        nmsg.append(self.none_arg(m, 1))
+                    alts = Val(v.v, unopt(v.t))
+                    v = Val("null", "str")  # (each item in its place, in affix_any)
                 if is_opt(v.t) and (key == "str.join" or key == "list.extend" or key == "file.writelines"):
                     v = self.unwrap(v, "TypeError: can only join an iterable" if key == "str.join" else "TypeError: 'NoneType' object is not iterable")
                 if key == "str.join" or (key == "list.extend" and v.t in self.classes):
@@ -16407,6 +16499,8 @@ class Gen:
             self.err(f"too many arguments for {m}()")
         for j in range(len(nones)):
             self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        if alts.t != "":
+            return self.affix_any(alts, m, av)
         r = spec[:c]
         slot = r.startswith("*")
         rtype = self.subst(r[1:] if slot else r, T, K, V, o.t)
@@ -16431,6 +16525,26 @@ class Gen:
         if slot:
             return self.from_slot(res, rtype)
         return self.rres(res, rtype)
+
+    def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
+        # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
+        # item in order, stopping at the first that matches (False for an empty tuple); an item that
+        # is None raises when it is reached. av: the call's arguments, the item's place left empty
+        lend = self.label()
+        ph = Ins("phi", "bool", "")
+        for i in range(len(targs(tup.t))):
+            item = self.tget(tup, i)
+            if is_opt(item.t):
+                self.guard(self.ins(f"icmp eq ptr {item.v}, null"), f"TypeError: tuple for {m} must only contain str, not NoneType")
+            c = self.rres(self.rt(f"pys_str_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
+            nx = self.label()
+            self.incoming(ph, "true", self.cur)
+            self.cbr(c.v, lend, nx)
+            self.place(nx)
+        self.incoming(ph, "false", self.cur)
+        self.br(lend)
+        self.place(lend)
+        return Val(self.phi(ph), "bool")
 
     def optdefault(self, d: Val, t: str) -> str:
         # the type of d.get(k, d) and d.pop(k, d) for values of type t: t | None for a default
@@ -16780,9 +16894,10 @@ def main() -> None:
             out = SRC[:-3] if SRC.endswith(".py") else SRC + ".exe"
         code = sh(f"{link} && {llvm}clang -O2 -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang {q(obj)} -o {q(out)} -lm{cflags}")
     else:
-        # JIT tier: cheap SSA cleanup of the program alone, then LLVM's ORC JIT compiles it for the
-        # host CPU and links it with the precompiled runtime (the JIT tier never inlines the runtime)
-        fast = f"{llvm}opt -passes='mem2reg,instcombine<no-verify-fixpoint>,simplifycfg'"
+        # JIT tier: discard unused internal functions before SSA cleanup and ORC's module-wide
+        # code generation. The frontend still checks their bodies; external pys_obj_* dispatch
+        # callbacks stay visible to the precompiled runtime (which this tier never inlines).
+        fast = f"{llvm}opt -passes='globaldce,function(mem2reg,instcombine<no-verify-fixpoint>,simplifycfg)'"
         code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:
             # then this process becomes lli, through a shell that opens the bitcode for it and removes
