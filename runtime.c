@@ -455,6 +455,17 @@ Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
 }
+/* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
+   The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */
+Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, Str *h) {
+  Str *p[8] = {a, b, c, d, e, f, g, h};
+  I len = 0;
+  for (int i = 0; i < 8; i++) len += i < n ? p[i]->len : 0;
+  Str *s = pys_alloc_atomic(sizeof(Str) + len + 1); s->len = len;
+  char *w = s->s;
+  for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
+  return s;
+}
 Str *pys_str_mul(Str *a, I n) {
   if (n < 0 || !a->len) n = 0;
   if (n && a->len > INT64_MAX / n) pys_fail("OverflowError: repeated string is too long");
@@ -934,7 +945,14 @@ static I resc(char *t, const char *s, I len, char q, I *n) {   /* the character 
 static void repr_str(Buf *b, Str *s) {
   char q = rquote(s->s, s->len), t[12];
   put(b, &q, 1);
-  for (I i = 0, n; i < s->len; i += n) put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  for (I i = 0, n; i < s->len; i += n) {
+    for (n = 0; i + n < s->len; n++) {   /* a run of printable ASCII, which resc copies as it is: one put */
+      unsigned char c = s->s[i + n];
+      if (c < 32 || c > 126 || c == q || c == '\\') break;
+    }
+    if (n) put(b, s->s + i, n);
+    else put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  }
   put(b, &q, 1);
 }
 static const char *repr(Buf *b, I v, const char *d) {
@@ -1478,11 +1496,13 @@ I pys_range_has(I x, I a, I b, I s) {               /* x in range(a, b, s) */
   if (s > 0 ? !(a <= x && x < b) : !(b < x && x <= a)) return 0;
   return (s > 0 ? (uint64_t)x - (uint64_t)a : (uint64_t)a - (uint64_t)x) % (s > 0 ? (uint64_t)s : -(uint64_t)s) == 0;
 }
-List *pys_range_list(I a, I b, I s) {
-  List *l = pys_list_new(0);
-  if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
-  for (I i = a; s > 0 ? i < b : i > b;) { pys_list_append(l, i); if (__builtin_add_overflow(i, s, &i)) break; }
-  return l;
+List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once at its length, as CPython does */
+  uint64_t n = (uint64_t)pys_range_len(a, b, s);
+  if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
+  if (n > INT64_MAX >> 4) pys_fail("MemoryError");
+  List *l = pys_list_new((I)n);
+  for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
+  l->len = (I)n; return l;
 }
 List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (I)pys_chr((unsigned char)s->s[i])); return l; }
 
