@@ -5237,6 +5237,14 @@ CALLS["math.fma(float,float,float)"] = "pys_m_fma:float"
 CALLS["math.ldexp(float,int)"] = "pys_m_ldexp:float"
 CALLS["math.frexp(float)"] = "pys_m_frexp:tuple[float,int]"
 CALLS["math.modf(float)"] = "pys_m_modf:tuple[float,float]"
+# the functions of the builtin modules, which a program may also use as values (Gen.call_value): those
+# of CALLS, and those Gen.builtin compiles itself
+MODFUNCS: dict[str, bool] = {}
+for _k in CALLS:
+    if "." in _k[: _k.find("(")]:
+        MODFUNCS[_k[: _k.find("(")]] = True
+for _k in "os.path.join os.fspath sys.exit math.fsum math.prod".split():
+    MODFUNCS[_k] = True
 # the modules a program may import; their functions and attributes are the CALLS entries and modattr()
 MODULES: dict[str, bool] = {}
 LINKDL: list[str] = []  # not empty: the program looks C functions up at run time (dlopen, dlsym), linked with -ldl
@@ -5841,6 +5849,8 @@ def tname(t: str) -> str:
         return tname(t[4:-1]) + " | None"
     if t == "exc":
         return "BaseException"
+    if is_fn(t):
+        return "builtin_function_or_method" if t.startswith("fn[b:") else "function"
     b = t.find("[")
     return t[:b] if b >= 0 else short(t)
 
@@ -5891,6 +5901,20 @@ def is_sopt(t: str) -> bool:
     return t == "opt[int]" or t == "opt[float]" or t == "opt[bool]"
 
 
+def is_fn(t: str) -> bool:
+    # a function as a value, typed by the function it is: fn[f:NAME] the program's function NAME (a
+    # def at a module's top level), fn[b:NAME] the builtin NAME (len, math.sqrt). A call through it
+    # is compiled as a call of that function, of a template for the call's argument types, so the
+    # value holds nothing (null)
+    return t.startswith("fn[")
+
+
+def fn_shown(t: str) -> str:
+    # function value type t for a message: the function it is, as CPython's repr names it
+    k = t[3:-1]
+    return f"<built-in function {k[2:]}>" if k.startswith("b:") else f"<function {short(k[2:])}>"
+
+
 def meet(states: list[dict[str, bool]]) -> dict[str, bool]:
     # the names in every one of states (narrowed where paths join)
     r: dict[str, bool] = {}
@@ -5929,8 +5953,13 @@ def same_kind(a: str, b: str) -> bool:
 
 def typestr(t: str) -> str:
     # type t for a message: an empty list or dict whose type is not known yet is "list" or "dict",
-    # opt[T] is T | None, a builtin exception BaseException, a class its own name
+    # opt[T] is T | None, a builtin exception BaseException, a class its own name, a function value
+    # the function (fn_shown)
     t = t.replace("[?,?]", "").replace("[?]", "")
+    while "fn[" in t:
+        a = t.find("fn[")
+        b = t.find("]", a)
+        t = t[:a] + fn_shown(t[a : b + 1]) + t[b + 1 :]
     out: list[str] = []
     w = ""
     for c in t + ",":
@@ -7658,6 +7687,8 @@ class Gen:
                 self.err(f"{what} may be None ({typestr(v.t)}), and a test does not narrow a global or a field (a call may change it): copy it to a local variable, and test that")
             self.err(f"{what} may be None ({typestr(v.t)}); test it with 'is not None' first")
         hint = " (write a float literal like 1.0, or use float())" if t == "float" and v.t == "int" else ""
+        if is_fn(t) and is_fn(v.t):
+            hint = " (each function is a type of its own: a variable, a list's items or a dict's values hold one function)"
         if hint == "" and self.curfn.ll in self.guessed:
             hint = f" (perhaps because {self.guessed[self.curfn.ll]})"
         self.err(f"expected {typestr(t)}, got {typestr(v.t)}{hint}")
@@ -7706,6 +7737,8 @@ class Gen:
             if t not in self.ocls:
                 self.ocls[t] = len(self.ocls)
             return f"O{self.ocls[t]:03d}"
+        if is_fn(t):
+            self.err(f"printing a function, or comparing containers of functions, is not supported: {fn_shown(t)}")
         self.err(f"{tname(t)} values cannot be compared or printed")
         return ""
 
@@ -8612,6 +8645,12 @@ class Gen:
         if k == "name" and e.s in f.params:
             t = f.ptypes[f.params.index(e.s)]
             return t if t != "" or f.bad == "" else "!" + f.bad  # (a parameter whose annotation failed)
+        if k == "name" and (e.s in self.funcs or (e.s in PYBUILTINS and e.s[0].islower() and not self.bound(e.s))):
+            # a function, which the field then holds (unless a local of the method has its name)
+            asg: dict[str, bool] = {}
+            local_names(f.node.kids[2].kids, asg)
+            if e.s not in asg:
+                return f"fn[f:{e.s}]" if e.s in self.funcs else f"fn[b:{e.s}]"
         # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
         # import or builtin of its name
         me = f.params[0] if takes_self(f) else ""
@@ -8831,7 +8870,7 @@ class Gen:
         if name in self.aliases:
             return self.modattr(self.aliases[name])
         if name in self.funcs:
-            self.err(f"function '{name}' cannot be used as a value")
+            return self.fn_value(name)
         if name in self.classes:
             self.err(f"class '{name}' cannot be used as a value (classes are not values: call it, or read an attribute, C.x)")
         if name in self.fglobals:
@@ -8848,6 +8887,8 @@ class Gen:
             self.err(f"the type of '{short(name)}' is not known yet here, before its module's code assigns it: declare it at module level{self.where_def(src)} first ({short(src)}: T)")
         if name in self.unsupported:
             self.err(self.unsupported[name])
+        if name in PYBUILTINS and name[0].islower():
+            return Val("null", f"fn[b:{name}]")  # (a builtin function, or a class such as int: calling it calls it)
         if name in PYBUILTINS:
             self.err(f"the builtin '{name}' cannot be used as a value (not supported)")
         if name in MODDUNDERS.split():
@@ -8856,6 +8897,14 @@ class Gen:
             self.err(f"TypeVar '{short(name)}' cannot be used as a value (only annotations may name it)")
         self.err(f"name '{short(name)}' is not defined")
         return Val("", "")
+
+    def fn_value(self, name: str) -> Val:
+        # the program's function name as a value: a call through it calls the function, compiled as a
+        # call of it by name is (call_value)
+        f = self.funcs[name]
+        if f.bad != "" and not f.generic:
+            self.err(f.bad)  # (a template's is an error where a call needs an instance of it)
+        return Val("null", f"fn[f:{name}]")
 
     def none_read(self, name: str) -> str:
         # a read of local name, which only None has been assigned so far: a binding of another value
@@ -8924,7 +8973,8 @@ class Gen:
             if name in self.lflag and name not in self.compvars:
                 bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr {self.lflag[name]}')}, true")
                 self.guard(bad, f"UnboundLocalError: cannot access local variable '{name}' where it is not associated with a value")
-        elif (n.chk or self.foreign(name)) and name in self.gflag and name in self.gtypes:
+        elif (n.chk or self.foreign(name)) and name in self.gflag and (name in self.gtypes or (name in self.funcs and name not in self.ltype)):
+            # (a global, or a function whose def statement may not have run yet)
             bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{name}.def')}, true")
             self.guard(bad, self.unbound(name, self.copying))
         return self.load_name(name)
@@ -12120,9 +12170,9 @@ class Gen:
     def default_problem(self, e: Node, t: str) -> str:
         # why default value e of a parameter of type t ("": a template's) cannot be compiled, as far
         # as its form shows, or ""
-        if e.kind == "name" and (e.s in self.funcs or e.s in self.classes):
-            return f"function '{e.s}' cannot be used as a value"
-        if e.kind == "name" and e.s in PYBUILTINS and "$" not in e.s:
+        if e.kind == "name" and e.s in self.classes:
+            return f"class '{short(e.s)}' cannot be used as a value (classes are not values: call it, or read an attribute, C.x)"
+        if e.kind == "name" and e.s in PYBUILTINS and "$" not in e.s and not e.s[0].islower():
             return f"the builtin '{e.s}' cannot be used as a value (not supported)"
         if t == "" and (e.kind == "list" or e.kind == "dict") and len(e.kids) == 0:
             return f"cannot infer the type of an empty {e.kind} as a default value; annotate the parameter"
@@ -14288,6 +14338,8 @@ class Gen:
         t = v.t
         if t == "bool":
             return v.v
+        if is_fn(t):
+            return "true"  # (a function is true)
         if t == "int":
             return self.ins(f"icmp ne i64 {v.v}, 0")
         if t == "float":
@@ -14406,6 +14458,10 @@ class Gen:
             if c in self.classes:
                 self.no_class_attr(c, n.s)
             o = self.expr(n.kids[0], "")
+            if is_fn(o.t) and (n.s == "__name__" or n.s == "__qualname__"):
+                # (a function of a module's top level, or a builtin: its own name)
+                fk = o.t[5:-1]
+                return Val(self.sconst(short(fk) if o.t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]), "str")
             if o.t in self.nts and n.s == "_fields":
                 self.notnone(o, "AttributeError: 'NoneType' object has no attribute '_fields'")
                 return self.tuple_([Val(self.sconst(x), "str") for x in self.classes[o.t].fields])
@@ -15513,6 +15569,11 @@ class Gen:
                     self.err(f"== {what} is not supported where an exception class defines {m} ({short(c.name)} does): compare objects of the class itself, or use 'is'")
 
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
+        if (is_fn(a.t) or is_fn(b.t)) and (op == "==" or op == "!=" or op == "is" or op == "is not"):
+            # a function value is the function its type names: never None, and the same function as
+            # another value of its type only
+            same = a.t == b.t
+            return Val("true" if same == (op == "==" or op == "is") else "false", "bool")
         if (op == "==" or op == "!=") and a.t == b.t and a.t == "file":
             # files compare by identity, as CPython's do
             return Val(self.ins(f"icmp {'eq' if op == '==' else 'ne'} ptr {a.v}, {b.v}"), "bool")
@@ -15782,18 +15843,33 @@ class Gen:
 
     def not_callable(self, name: str, t: str) -> None:
         # a call of variable name's value (c() for an object c), of type t: CPython's TypeError,
-        # unless it has __call__; a builtin's name bound as a variable is rejected as such
+        # unless it has __call__ or is a function (is_fn); a builtin's name bound as a variable is
+        # rejected as such
+        if is_fn(t):
+            return
         if short(name) in PYBUILTINS or t == "":
             self.err(f"'{name}' is a variable, so it cannot be called")
         if t not in self.classes or "__call__" not in self.classes[t].methods:
             self.err(f"'{tname(unopt(t))}' object is not callable")
 
     def obj_call(self, o: Val, args: list[Node], want: str) -> Val:
-        # o(args), o already evaluated: o.__call__(args) where o's class defines it, else CPython's
-        # TypeError; an o that is None raises its TypeError once the arguments are evaluated
+        # o(args), o already evaluated: a call of the function o is (is_fn), or o.__call__(args) where
+        # o's class defines it, else CPython's TypeError; an o that is None raises its TypeError once
+        # the arguments are evaluated
+        if is_fn(o.t):
+            return self.call_value(o, args, want)
         if o.t not in self.classes or "__call__" not in self.classes[o.t].methods:
             self.err(f"'{tname(unopt(o.t))}' object is not callable")
         return self.call_fn(self.classes[o.t].methods["__call__"], [o], args, want, "TypeError: 'NoneType' object is not callable")
+
+    def call_value(self, v: Val, args: list[Node], want: str) -> Val:
+        # a call through function value v (is_fn): the call of the function it is, as if called by
+        # its name there (the function a module's own name binds: a builtin that the program binds
+        # is still the builtin)
+        k = v.t[3:-1]
+        if k.startswith("b:"):
+            return self.builtin(k[2:], args, want)
+        return self.call_fn(self.funcs[k[2:]], [], args, want)
 
     def bound(self, s: str) -> bool:
         # a builtin's name that the program binds (a local, def, class or module-level variable)
@@ -16190,6 +16266,11 @@ class Gen:
             return Val(self.rt("pys_platform", "ptr", []), "str")
         if path.startswith("errno.") and path[6:] in ERRNO:
             return Val(self.rt("pys_errno", "i64", [f"ptr {self.sconst(path[6:])}"]), "int")
+        if path in MODFUNCS:
+            return Val("null", f"fn[b:{path}]")  # (a function of a builtin module as a value)
+        if (path.endswith(".__name__") or path.endswith(".__qualname__")) and path[: path.rfind(".")] in MODFUNCS:
+            fp = path[: path.rfind(".")]
+            return Val(self.sconst(fp[fp.rfind(".") + 1 :]), "str")
         self.err(f"unsupported module attribute {path}")
         return Val("", "")
 
@@ -16284,7 +16365,7 @@ class Gen:
             if a.kind != "kw":
                 npos += 1
             elif name == "sorted" and a.s == "key":
-                self.err("sorted(key=...) is not supported: functions are not values")
+                self.err("sorted(key=...) is not supported")
             elif name != "open" and not (name == "sorted" and a.s == "reverse"):
                 self.err(f"keyword argument '{a.s}' of {name}() is not supported")
         if name in ARITY and npos > ARITY[name]:

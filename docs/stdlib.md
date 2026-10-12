@@ -118,7 +118,7 @@ methods.
 
 | module | what works (checked against CPython) | what does not, and why |
 |---|---|---|
-| `bisect` | `bisect_left`, `bisect_right`, `insort_left`, `insort_right`, `bisect`, `insort`, with `lo`/`hi`, on ints, floats, strings, tuples, objects | `key=<function>` (functions are not values) |
+| `bisect` | `bisect_left`, `bisect_right`, `insort_left`, `insort_right`, `bisect`, `insort`, with `lo`/`hi`, on ints, floats, strings, tuples, objects, and `key=` with a function of the program or a builtin | `key=` with a lambda (not supported) |
 | `colorsys` | all six conversions, with float or int arguments | — |
 | `heapq` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` forms, on any ordered type | `merge` (a generator, `*iterables`), `nlargest`/`nsmallest` (`iter`, `key=`, `try`) |
 | `operator` | 49 of its functions: arithmetic, bitwise, comparisons, `not_`/`truth`, `concat`, `contains`/`countOf`/`indexOf`, item access, the in-place forms, the dunder aliases | `attrgetter`, `itemgetter`, `methodcaller` (classes with `*args`), `call`, `length_hint`, `index` (`int.__index__`); in-place forms that change the type (`itruediv(1, 2)`) |
