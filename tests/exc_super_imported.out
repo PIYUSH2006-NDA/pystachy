@@ -1,0 +1,12 @@
+mods: init mods
+mods.shapes: init mods.shapes
+x1 Bad('x1')
+store: ("no key 'a'", 2) | Missing/Missing("no key 'a'", 2) | 2 | missing, code 2
+store: ("no key 'b!'", 2) | Missing/Gone("no key 'b!'", 2) | 2 | missing, code 2
+store: ('full', 3) | Full('full', 3) | 3 | code 3
+full, code 4 | gone, missing, code 2
+supers: store: ("no key 'd'", 2) Missing/Missing("no key 'd'", 2) missing, code 2
+("no key 'e'", 2) Missing("no key 'e'", 2) | Full('full', 6) ('full', 6)
+("no key 'f'", 2) Missing("no key 'f'", 2) | Missing("no key 'f'", 2) ("no key 'f'", 2)
+after 5s TimeoutError('after 5s') 5
+[exit 1]
