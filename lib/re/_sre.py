@@ -272,6 +272,7 @@ class State:
         self.match_all = False
         self.must_advance = False
         self.data: list[int] = []  # the data stack: saved marks and last_ptr values
+        self.offs: list[int] = []  # (re's: the index in the str of each of s's code points, [] if they are theirs)
 
     def reset(self) -> None:
         # state_reset
