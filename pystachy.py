@@ -13886,7 +13886,7 @@ class Gen:
         # not a type Pystachy knows
         if c.kind == "binop" and c.s == "|":
             # (a union, where None is NoneType; None | None raises, and so does a tuple in it)
-            if (c.kids[0].kind == "None" and c.kids[1].kind == "None") or c.kids[0].kind == "tuple" or c.kids[1].kind == "tuple":
+            if not self.puretype(c, False):
                 return -1
             return self.isinst(t, mk("tuple", "|", c.line, c.kids))
         if is_opt(t):
@@ -13896,7 +13896,10 @@ class Gen:
             return r if r == n else -2 if r == 1 and n == 0 else -3 if r == 0 and n == 1 else -1
         if c.kind == "tuple":
             # one of them, tested in order: CPython stops at a match, and raises at an item that is
-            # not a type (anywhere in a union, which checks them all when it is built)
+            # not a type (anywhere in a union, which checks them all when it is built); it has built
+            # every item before, also those past the match (see puretype)
+            if c.s == "" and not self.puretype(c, False):
+                return -1
             r = 0
             for x in c.kids:
                 y = self.isnone(t) if x.kind == "None" and c.s == "|" else self.isinst(t, x)
@@ -13939,6 +13942,20 @@ class Gen:
     def isnone(self, t: str) -> int:
         # isinstance(x, type(None)) for x of static type t, not an optional one (see isinst)
         return 1 if t == "None" else -3 if t in self.classes else 0
+
+    def puretype(self, c: Node, u: bool) -> bool:
+        # can c, isinstance's second argument, be built without running code or raising, as
+        # Pystachy compiles none of it: the types Pystachy knows (it decides isinstance(None, c))
+        # and None can, in a tuple the other constants too; in a union (u), None | None, a tuple
+        # and what is not a type raise
+        if c.kind == "binop" and c.s == "|":
+            return (c.kids[0].kind != "None" or c.kids[1].kind != "None") and self.puretype(c.kids[0], True) and self.puretype(c.kids[1], True)
+        if c.kind == "tuple":
+            for x in c.kids:
+                if not self.puretype(x, False):
+                    return False
+            return not u
+        return c.kind == "None" or (not u and is_const(c)) or self.isinst("None", c) >= 0
 
     # ---- expressions
     def cond(self, n: Node) -> str:
