@@ -13946,8 +13946,9 @@ class Gen:
     def puretype(self, c: Node, u: bool) -> bool:
         # can c, isinstance's second argument, be built without running code or raising, as
         # Pystachy compiles none of it: the types Pystachy knows (it decides isinstance(None, c))
-        # and None can, in a tuple the other constants too; in a union (u), None | None, a tuple
-        # and what is not a type raise
+        # and None can, in a tuple the other constants too, a builtin's name (an exception class,
+        # tested past a match) and typing's names; in a union (u), None | None, a tuple and what
+        # is not a type raise
         if c.kind == "binop" and c.s == "|":
             return (c.kids[0].kind != "None" or c.kids[1].kind != "None") and self.puretype(c.kids[0], True) and self.puretype(c.kids[1], True)
         if c.kind == "tuple":
@@ -13955,7 +13956,9 @@ class Gen:
                 if not self.puretype(x, False):
                     return False
             return not u
-        return c.kind == "None" or (not u and is_const(c)) or self.isinst("None", c) >= 0
+        if not u and c.kind == "name" and c.s in PYBUILTINS and not self.bound(c.s) and self.imported(c.s) == "":
+            return True
+        return c.kind == "None" or (not u and (is_const(c) or self.typing_ref(c) in TYPING)) or self.isinst("None", c) >= 0
 
     # ---- expressions
     def cond(self, n: Node) -> str:

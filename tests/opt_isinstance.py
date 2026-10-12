@@ -70,7 +70,8 @@ def plain(i: int, f: float, s: str, xs: list[str], t: tuple[int, int], c: C) -> 
     print("plain", isinstance(i, type(None)), isinstance(f, (type(None), int)), isinstance(s, str | None),
           isinstance(xs, object), isinstance(t, type(None) | tuple), isinstance(c, type(None)),
           isinstance(None, type(None)), isinstance(None, object), isinstance(None, int | None),
-          isinstance(None, (int, str)), isinstance(None, C), isinstance(i, (int, None, "s", -1.5)))
+          isinstance(None, (int, str)), isinstance(None, C), isinstance(i, (int, None, "s", -1.5)),
+          isinstance(i, (int, ValueError, len)), isinstance(s, (str, Optional, NamedTuple)))
 
 
 def before(n: int) -> None:

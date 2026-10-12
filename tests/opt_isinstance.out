@@ -16,7 +16,7 @@ class True True True True True True True False
 class False True False True True False True True
 namedtuple None True True True True False True
 namedtuple P(x=1, y=2) True False True True True False
-plain False False True True True False True True True False False True
+plain False False True True True False True True True False False True True True
 False True True
 int 0
 str 0
