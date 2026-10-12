@@ -6020,8 +6020,12 @@ def typestr(t: str) -> str:
     t = t.replace("[?,?]", "").replace("[?]", "")
     while "fn[" in t:
         a = t.find("fn[")
-        b = t.find("]", a)
-        t = t[:a] + fn_shown(t[a : b + 1]) + t[b + 1 :]
+        b = a + 3
+        depth = 1
+        while depth > 0:
+            depth += 1 if t[b] == "[" else -1 if t[b] == "]" else 0
+            b += 1
+        t = t[:a] + fn_shown(t[a:b]) + t[b:]  # (a bound method's receiver type may hold brackets)
     while "callable[" in t:
         a = t.find("callable[")
         b = a + 9
