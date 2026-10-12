@@ -19,7 +19,7 @@ def note(s: str) -> int:
     return 1
 
 
-def apply(x, f=(note("default"), {1}, lambda v: v)):
+def apply(x, f=(note("default"), b"x", lambda v: v)):
     "CPython evaluates the default when the def runs: Pystachy what it can compile of it"
     return x
 

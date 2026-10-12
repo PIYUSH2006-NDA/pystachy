@@ -34,7 +34,7 @@ flowchart TD
 | file | lines | contents |
 |---|---:|---|
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
-| `runtime.c` | 2,920 | garbage collector, string, list and dict memory, timsort, dict tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
+| `runtime.c` | 3,340 | garbage collector, string, list and dict memory, timsort, dict and set tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
 | `runtime.py` | 1,366 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, `fsum` and `prod`, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
@@ -257,7 +257,7 @@ implementation of `list`/`dict`/`tuple` serves every element type.
 
 Generic operations (`repr`, `==`, ordering, `sort`, `in`) receive a
 tiny string describing the static type — `LDsi` is `list[dict[str,int]]`, `?s` is
-`str | None` — and the
+`str | None`, `Si` and `Fi` are `set[int]` and `frozenset[int]` — and the
 runtime interprets it recursively, comparing sequences the way CPython does (first
 unequal pair, identity first). Objects appear as `O<id>`: the runtime calls back into
 `pys_obj_eq/cmp/repr`, a switch the compiler emits over the classes that occur in
@@ -314,7 +314,18 @@ descriptor says `str`, which is how a looked-up tuple whose item may be `None` f
 key). Keys that differ only
 in their high bits (`i << 46`, which used to form one cluster) probe as random keys do; the
 price is about 2 ns per lookup in tables larger than the cache, whose second slot is in
-another cache line. Files wrap C stdio with CPython's open() rules: argument checks in its
+another cache line. Sets and frozensets are CPython 3.13's own tables (`setobject.c`), since no
+entry array keeps their insertion order: a loop sees the elements in slot order, which the
+hashes, the probes (ten adjacent slots, then the perturbed step), the dummy an insertion reuses
+(the last one its probes passed), the resizes and the way each operation builds its result (a
+copy merges the table, `s & t` walks the smaller set, `s - t` copies `s` where it is more than
+four times larger, `s ^ t` starts from `t`) all decide, as they do in CPython. The hashes are
+CPython's for ints, bools, `None` and tuples of them (xxHash's rounds over the items'), so a set
+of those iterates in CPython's order; a str's is the dict's hash of it, as CPython's own changes
+from run to run. A display of more than two constants is the frozenset constant CPython's
+compiler makes (made a second time from its own elements, as `merge_consts_recursive` makes
+it) merged into a new set, and a `for` loop over a display of constants iterates that frozenset.
+Files wrap C stdio with CPython's open() rules: argument checks in its
 order, errno-based `OSError` subclasses, newline translation, `"+"` mode positioning
 (including its 8 KiB read-ahead), and closed/readable/writable checks. Writes reach the
 OS when CPython's do: 8 KiB of pending text in front of a `st_blksize` buffer, line
