@@ -618,6 +618,9 @@ In these cases the program compiles but can behave differently from CPython:
   compare or add them (or call `key=` on them), so where CPython stops at an item (a `__lt__`
   that raises, or fsum's `OverflowError: intermediate overflow in fsum`), the expressions of the
   later items have run, and an exception that one of them raises comes first.
+- `is` between `Callable`s compares the function they hold and its env or bound object, as `==`
+  does, so two reads of one bound method (`o.m`) made `Callable`s are the same object, where
+  CPython makes a new method object at each read.
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
   tuples holding the same NaN object compare, and sort, as if they held different ones. The
   sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
