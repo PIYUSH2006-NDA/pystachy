@@ -13285,6 +13285,7 @@ class Gen:
             if st >= 0:
                 # the static types decide the test (isinstance(x, str), x is None): only the branch
                 # that runs is compiled
+                self.static_reads(n.kids[0])
                 self.stmts(n.kids[1].kids if st == 1 else n.kids[2].kids)
                 return
             c = self.cond(n.kids[0])
@@ -13317,6 +13318,7 @@ class Gen:
                         self.narrowed[both] = True
         elif k == "while" and self.static(n.kids[0]) == 0:
             # a loop whose test is false from the start (while x: with x None): only its else block runs
+            self.static_reads(n.kids[0])
             if n.kids[-1].s == "else":
                 self.stmts(n.kids[-1].kids)
         elif (k == "while" or k == "for") and n.kids[-1].s == "else":
@@ -13422,10 +13424,11 @@ class Gen:
         elif k == "assert" and (self.static(n.kids[0]) == 0 or n.kids[0].kind == "False"):
             # an assertion that cannot hold (assert x is not None with x None, assert False): code
             # after it never runs
+            self.static_reads(n.kids[0])
             self.assert_fails(n)
             self.term = True
         elif k == "assert" and self.static(n.kids[0]) == 1:
-            pass
+            self.static_reads(n.kids[0])
         elif k == "assert":
             l1 = self.label()
             l2 = self.label()
@@ -14140,6 +14143,18 @@ class Gen:
             return r if r >= 0 else (1 if r == -2 else 0) if r < -1 and self.knownobj(n.kids[1]) else -1
         return -1
 
+    def static_reads(self, n: Node) -> None:
+        # test n, which static() decides, still reads the classes of its isinstance() tests where it
+        # runs, up to where and/or stops (see isinst_reads)
+        if n.kind == "unary" and n.s == "not":
+            self.static_reads(n.kids[0])
+        elif n.kind == "boolop":
+            self.static_reads(n.kids[0])
+            if (self.static(n.kids[0]) == 1) != (n.s == "or"):
+                self.static_reads(n.kids[1])
+        elif n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and len(n.kids) == 3:
+            self.isinst_reads(n.kids[2])
+
     def knownobj(self, n: Node) -> bool:
         # is n a template's parameter whose argument is an object known not to be None (see nnp)
         return n.kind == "name" and n.s in self.curfn.nnp and self.static_type(n) in self.classes
@@ -14263,6 +14278,18 @@ class Gen:
     def isnone(self, t: str) -> int:
         # isinstance(x, type(None)) for x of static type t, not an optional one (see isinst)
         return 1 if t == "None" else -3 if t in self.classes else 0
+
+    def isinst_reads(self, c: Node) -> None:
+        # c, isinstance's second argument, is built before the test, all of a tuple's or union's
+        # items too: a class it names whose class statement may not have run yet raises there,
+        # and so does one read through a module whose import raised (modchk)
+        if c.kind == "tuple" or (c.kind == "binop" and c.s == "|"):
+            for x in c.kids:
+                self.isinst_reads(x)
+        elif c.kind == "name":
+            self.modchk(c)
+            if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
+                self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
 
     def puretype(self, c: Node, u: bool) -> bool:
         # can c, isinstance's second argument, be built without running code or raising, as
@@ -15080,6 +15107,7 @@ class Gen:
     def ifexp(self, n: Node, want: str) -> Val:
         st = self.static(n.kids[0])
         if st >= 0:
+            self.static_reads(n.kids[0])
             return self.expr(n.kids[1] if st == 1 else n.kids[2], want)
         c = self.cond(n.kids[0])
         l1 = self.label()
@@ -15126,8 +15154,12 @@ class Gen:
         st = self.static(n.kids[0])
         if st >= 0:
             # a static test on the left: it is the value if it decides, else the right operand
+            # (where the test is not compiled, static_reads() reads its classes)
+            if (st == 1) == (n.s == "or") and not ascond:
+                return self.expr(n.kids[0], want)
+            self.static_reads(n.kids[0])
             if (st == 1) == (n.s == "or"):
-                return Val("true" if st == 1 else "false", "bool") if ascond else self.expr(n.kids[0], want)
+                return Val("true" if st == 1 else "false", "bool")
             return Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], want)
         a = Val(self.cond(n.kids[0]), "bool") if ascond else self.expr(n.kids[0], want)
         if a.t == "None":
@@ -16262,6 +16294,7 @@ class Gen:
         if name == "isinstance" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw":
             # decided by the static types, or by whether it is None (an optional value, an object)
             v = self.expr(args[0], "")
+            self.isinst_reads(args[1])
             if (v.t == "exc" or (v.t in self.classes and self.classes[v.t].exc != "")) and self.exc_classes(args[1]):
                 return self.exc_isinst(v, args[1])
             known = self.isinst(v.t, args[1])
