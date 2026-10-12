@@ -136,7 +136,7 @@ $ cat words.py
 words = ["pear", "fig", "banana"]
 print(sorted(words, key=lambda w: len(w)))
 $ ./pystachy run words.py
-words.py:2: error: sorted(key=...) is not supported
+words.py:2: error: lambda is not supported
 ```
 
 ## Quick start
@@ -240,7 +240,7 @@ compiler rejects each where it would have to compile it.
 | exception attributes such as `e.args`, `except*` (`try`, `raise` and exception classes are supported) | M5 |
 | unions other than `Optional` (`Optional` is supported for `int`, `str` and the other builtin types) | M4 |
 | inheritance, but for exception classes | M2 |
-| lambdas, closures, decorators, `key=` and `map()` (functions are values, each typed by the function it is) | M3 |
+| lambdas, closures, decorators and `map()` (functions are values, each typed by the function it is, and `key=` takes one) | M3 |
 | generators, `async`, sets, `bytes` | M7 |
 | dict and multi-clause comprehensions, slice steps, `getattr`/`eval`, complex numbers, `match`, `:=` | [Further language coverage](#roadmap) |
 
