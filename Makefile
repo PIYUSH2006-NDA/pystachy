@@ -31,6 +31,16 @@ test-py:
 bench: pystachy
 	PY="$(PY)" bench/run.sh
 
+# Advisory diagnostics with separate compilation and in-process execution timings.
+BENCH_ARGS ?=
+bench-extended: pystachy
+	$(PY) tools/bench_extended.py $(BENCH_ARGS)
+
+# Correctness only: no wall-clock performance thresholds on shared CI runners.
+bench-extended-check: pystachy
+	$(PY) -m unittest discover -s tools -p test_bench_extended.py
+	$(PY) tools/bench_extended.py --smoke --json build/extended-smoke.json
+
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
 # (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those)
@@ -118,4 +128,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py bench dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean

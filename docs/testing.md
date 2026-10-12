@@ -10,6 +10,7 @@ honest.
 | `make` | the bootstrap: the compiler built by itself reproduces its own LLVM IR byte for byte |
 | `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
+| `make bench-extended-check` | the [extended performance prototype](extended-performance.md)'s runner failure checks and small CPython/JIT/AOT checksum checks; no timing gates |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
