@@ -466,12 +466,18 @@ Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, St
   for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
   return s;
 }
-Str *pys_str_mul(Str *a, I n) {
+Str *pys_str_mul(Str *a, I n) {       /* as CPython's _PyBytes_Repeat: one byte is a memset, else the copied
+                                         prefix doubles, log2(n) memcpys rather than n */
   if (n < 0 || !a->len) n = 0;
   if (n && a->len > INT64_MAX / n) pys_fail("OverflowError: repeated string is too long");
   if (a->len * n > INT64_MAX - 64) pys_fail("MemoryError");
-  Str *s = pys_alloc_atomic(sizeof(Str) + a->len * n + 1); s->len = a->len * n;
-  for (I i = 0; i < n; i++) memcpy(s->s + i * a->len, a->s, a->len);
+  I m = a->len * n, k = a->len, c;
+  Str *s = pys_alloc_atomic(sizeof(Str) + m + 1); s->len = m;
+  if (k == 1) memset(s->s, a->s[0], m);
+  else if (m) {
+    memcpy(s->s, a->s, k);
+    for (; k < m; k += c) { c = k < m - k ? k : m - k; memcpy(s->s + k, s->s, c); }
+  }
   return s;
 }
 I pys_str_eq(Str *a, Str *b) { return a == b || (a->len == b->len && !memcmp(a->s, b->s, a->len)); }
