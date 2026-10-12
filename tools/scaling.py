@@ -25,6 +25,8 @@ Each shape is a family of programs whose size grows with N:
            tests and updates it (Gen.canon follows the key's chain of values)
   lookups  one function of N reads of a dict, each of another key (dictfuse's lookups that hold)
   gdicts   N global dicts and one function that sets each (Gen.reaching walks back from each load)
+  dropped  one function whose if sys.platform == "win32" block, dropped at compile time, binds N
+           variables, each read further on where a test that is false guards it
 Each cell is the median of RUNS runs of "COMMAND ir main.py -o /dev/null" in seconds, startup
 included; "x" is its growth from the previous N (2.0 is linear when N doubles, 4.0 quadratic).
 --ops adds, for each COMMAND that runs a .py file (the CPython-hosted compiler), the number of
@@ -190,10 +192,17 @@ def gdicts(n):
     return {"main.py": src}
 
 
+def dropped(n):
+    src = ["import sys", "def big(x: int) -> int:", "    t = x", "    if sys.platform == 'win32':"] + [f"        w{i} = {i}" for i in range(n)]
+    src += [f"    t += w{i} if x < 0 else {i}" for i in range(n)]
+    src += ["    return t", "print(big(5))"]
+    return {"main.py": src}
+
+
 SHAPES = {"funcs": funcs, "globals": globals_, "both": both, "long": long, "top": top, "classes": classes, "modules": modules,
           "fields": fields, "calls": calls, "imports": imports, "breaks": breaks, "exits": exits, "elifs": elifs,
           "topelifs": topelifs, "comps": comps, "chain": chain,
-          "lookups": lookups, "gdicts": gdicts}
+          "lookups": lookups, "gdicts": gdicts, "dropped": dropped}
 
 
 def write(d, files):

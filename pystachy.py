@@ -4030,18 +4030,25 @@ class Loader:
         # it; if none gives one, it is an error where d is compiled
         now: dict[str, bool] = {}
         globals_in(d.kids[2].kids, now)
+        pre: list[Node] = []  # (the statements put first, each before the ones so far)
         for nm in decl:
             if nm not in now:
-                d.kids[2].kids.insert(0, mk("global", "", d.line, [mk("name", nm, d.line, [])]))
-        now = scope_names(d)
+                pre.append(mk("global", "", d.line, [mk("name", nm, d.line, [])]))
+        now = scope_names(d)  # (without pre's global statements, which only take decl's names out: before has none)
+        read: dict[str, bool] = {}
+        for nm in before:
+            if nm not in now:
+                read_names(d.kids[2], read)  # (one walk of the body, not one for each name)
+                break
         for nm in before:
             msg = f"'{nm}' is local to {d.s}() only through code that is dropped at compile time (for the platform, TYPE_CHECKING or an import that fails), so a read of it raises UnboundLocalError; that is supported only where the dropped code annotates it with a supported type or assigns it a constant"
-            if nm not in now and reads(d.kids[2], nm) and nm in types:
+            if nm not in now and nm in read and nm in types:
                 # (where the type is not supported, the message is msg: Gen.stmt())
                 t = types[nm]
-                d.kids[2].kids.insert(0, mk("annassign", msg, t.line, [mk("name", nm, t.line, []), t]))
-            elif nm not in now and reads(d.kids[2], nm):
-                d.kids[2].kids.insert(0, mk("badimport", msg, d.line, []))
+                pre.append(mk("annassign", msg, t.line, [mk("name", nm, t.line, []), t]))
+            elif nm not in now and nm in read:
+                pre.append(mk("badimport", msg, d.line, []))
+        d.kids[2].kids = [pre[len(pre) - 1 - i] for i in range(len(pre))] + d.kids[2].kids
         early: dict[str, bool] = {}
         user: dict[str, bool] = {}
         import_reads(d.kids[2], {}, early, user)
@@ -6248,6 +6255,32 @@ def reads(n: Node, name: str) -> bool:
         if k == "block" and (x == "return" or x == "raise" or x == "break" or x == "continue"):
             return False
     return False
+
+
+def read_names(n: Node, out: dict[str, bool]) -> None:
+    # every name that reads(n, name) finds, in one walk of n
+    k = n.kind
+    if k == "name":
+        out[n.s] = True
+        return
+    if k == "def" or k == "class" or k == "subclass" or k == "lambda":
+        return
+    names: list[str] = []
+    if k == "listcomp":
+        names_in(n.kids[1], names)
+    for i in range(len(n.kids)):
+        if k == "listcomp" and i != 2:
+            # (a name its target binds counts only in its iterable)
+            inner: dict[str, bool] = {}
+            read_names(n.kids[i], inner)
+            for nm in inner:
+                if nm not in names:
+                    out[nm] = True
+        elif not (k == "annassign" and i == 1):
+            read_names(n.kids[i], out)
+        x = n.kids[i].kind
+        if k == "block" and (x == "return" or x == "raise" or x == "break" or x == "continue"):
+            return
 
 
 def local_types(body: list[Node], out: dict[str, Node]) -> None:
