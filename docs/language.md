@@ -146,6 +146,10 @@ imports `annotations` from `__future__`.
   optional items, also against containers of `T` items (`list[str | None] == list[str]`; `+` of
   the two makes a `list[str | None]`, which `extend()` and `+=` also take a `list[str]` into);
   `join()` and `writelines()` check each `str | None` item.
+- `isinstance(x, T)` of an optional value or an object is decided by its type and, where that
+  leaves it open, by whether it is `None`: `None` is an `object` and a `type(None)`, also in a
+  tuple of types and in a union (`int | None`). A test that is true (or false) only where `x` is
+  not `None` narrows it as `x is not None` does (below); `isinstance(x, object)` narrows nothing.
 - A key that may be `None` is in no dict: `in` is `False`, `get()` and `pop()` give their
   default, and `d[k]`, `d.pop(k)`, `del d[k]` and `d[k] op= v` raise `KeyError: None`
   (`d[k] op= v` stores `k` only where `d[k]` has found it, so `k` needs no narrowing there,
