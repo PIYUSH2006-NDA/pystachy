@@ -23,6 +23,15 @@ class Job:
 
 
 class Ratio:
+    n = 0
+    half = 1 // n
+    whole = 1 // 0  # (after 1 // n, which Pystachy does not evaluate)
+
+    def get(self, n):
+        return n
+
+
+class Later:
     half = 1 // 0
 
     def get(self, n):

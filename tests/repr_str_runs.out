@@ -1,0 +1,31 @@
+''
+'a'
+'plain text'
+"it's"
+'say "hi"'
+'both \' and "'
+'back\\slash'
+'\\'
+"'"
+'"'
+'tab\there'
+'\x00lead'
+'trail\x1f'
+' ~\x7f '
+'\x7f\x7f\x7f'
+'café au lait'
+'日本語 text'
+'😀!'
+'line1\nline2\r\n'
+'\x1b[0m'
+'~  ~\x1f\x80'
+['', 'a', 'plain text', "it's", 'say "hi"', 'both \' and "', 'back\\slash', '\\', "'", '"', 'tab\there', '\x00lead', 'trail\x1f', ' ~\x7f ', '\x7f\x7f\x7f', 'café au lait', '日本語 text', '😀!', 'line1\nline2\r\n', '\x1b[0m', '~  ~\x1f\x80']
+("tuple's", 'pair"') {"key's": ['v\\1', 'v\t2']}
+111002 'abcdefghijklmnopqrstuvwxyz0123456789 ab 9 abcdefghijklmnopqrstuvwxyz0123456789 '
+100202 150 "xxxx yyy\\\n"
+4002 "'' zz"
+3302 '\'"wwww wwwww'
+'ab\x00cdab\x01cdab\x02cdab\x03cdab\x04cdab\x05cdab\x06cdab\x07cdab\x08cdab\tcdab\ncdab\x0bcdab\x0ccdab\rcdab\x0ecdab\x0fcdab\x10cdab\x11cdab\x12cdab\x13cdab\x14cdab\x15cdab\x16cdab\x17cdab\x18cdab\x19cdab\x1acdab\x1bcdab\x1ccdab\x1dcdab\x1ecdab\x1fcdab cdab!cdab"cdab#cdab$cdab%cdab&cdab\'cdab(cdab)cdab*cdab+cdab,cdab-cdab.cdab/cdab0cdab1cdab2cdab3cdab4cdab5cdab6cdab7cdab8cdab9cdab:cdab;cdab<cdab=cdab>cdab?cdab@cdabAcdabBcdabCcdabDcdabEcdabFcdabGcdabHcdabIcdabJcdabKcdabLcdabMcdabNcdabOcdabPcdabQcdabRcdabScdabTcdabUcdabVcdabWcdabXcdabYcdabZcdab[cdab\\cdab]cdab^cdab_cdab`cdabacdabbcdabccdabdcdabecdabfcdabgcdabhcdabicdabjcdabkcdablcdabmcdabncdabocdabpcdabqcdabrcdabscdabtcdabucdabvcdabwcdabxcdabycdabzcdab{cdab|cdab}cdab~cdab\x7fcd'
+'abcdefghijklmnopqrstuvwxyz0123456789 abcdefghijklm' ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'yy"]
+KeyError 'it\'s a "key"\nkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk'
+[exit 0]
