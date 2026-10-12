@@ -1,0 +1,22 @@
+255 255 31 5 35
+5 -15 1000 7
+ValueError: invalid literal for int() with base 8: '9'
+ValueError: int() base must be >= 2 and <= 36, or 0
+ValueError: int() base must be >= 2 and <= 36, or 0
+ValueError: int() base must be >= 2 and <= 36, or 0
+ValueError: invalid literal for int() with base 10: ''
+ValueError: invalid literal for int() with base 16: '0x'
+TypeError: 'NoneType' object cannot be interpreted as an integer
+TypeError: 'NoneType' object cannot be interpreted as an integer
+TypeError: int() can't convert non-string with explicit base
+5
+TypeError: 'NoneType' object cannot be interpreted as an integer
+ValueError: int() base must be >= 2 and <= 36, or 0
+ValueError: int() base must be >= 2 and <= 36, or 0
+TypeError: int() can't convert non-string with explicit base
+TypeError: 'NoneType' object cannot be interpreted as an integer
+ValueError: int() base must be >= 2 and <= 36, or 0
+TypeError: int() can't convert non-string with explicit base
+10 11
+ValueError: int() base must be >= 2 and <= 36, or 0
+[exit 0]
