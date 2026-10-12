@@ -11414,7 +11414,7 @@ class Gen:
         for ci in self.classes.values():
             mcls[ci.mod].append(ci)
         for i in range(len(mods)):
-            self.flow_program(tops[i], mods[i].name, mfns[mods[i].name], mcls[mods[i].name])
+            self.flow_program(tops[i], mods[i].name, mfns[mods[i].name], mcls[mods[i].name], i == 0)
         for nm in self.gflag:
             if nm in self.funcs or nm in self.classes:
                 self.global_var(f"@g.{nm}.def", "i1")
@@ -11623,8 +11623,9 @@ class Gen:
     # ---- definite assignment, before code generation: CPython raises UnboundLocalError or
     # NameError when a read finds its variable unassigned. Reads that cannot are plain loads;
     # the others (Node.chk) test an "is assigned" flag kept only for the variables they read.
-    def flow_program(self, top: list[Node], mod: str, mfns: list[FnInfo], mcls: list[ClassInfo]) -> None:
-        # one module: its top-level code, functions (mfns) and classes' methods (mcls)
+    def flow_program(self, top: list[Node], mod: str, mfns: list[FnInfo], mcls: list[ClassInfo], first: bool) -> None:
+        # one module: its top-level code, functions (mfns) and classes' methods (mcls); the first
+        # module's (first) also checks the program's imports
         self.flowmod = mod
         fns: list[FnInfo] = []
         for f in mfns:
@@ -11651,7 +11652,8 @@ class Gen:
         for nm in gl:
             if nm in self.funcs or nm in self.classes or (nm in self.imports and not self.imports[nm].startswith("__future__")):
                 self.err(f"'{nm}' is bound both as a variable and as a function, class or import (not supported)")
-        for nm in self.imports:
+        for nm in self.imports if first else {}:
+            # (those of every module, which no module's flow changes: once)
             if nm in self.funcs or nm in self.classes:
                 self.err(f"'{nm}' is bound both by an import and by a def or class (not supported)")
         for nm in gl:
