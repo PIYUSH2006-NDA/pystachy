@@ -3,6 +3,7 @@
 # template's, for the call's argument types)
 import math
 import operator
+from math import floor
 
 
 def double(x):
@@ -85,10 +86,12 @@ class Scaler:
         self.k = k
         self.f = double
         self.show = repr
+        self.root = math.sqrt
+        self.floor = floor
 
     def run(self, x: int) -> str:
         return self.show(self.f(x) * self.k)
 
 
 sc = Scaler(3)
-print(sc.run(5), sc.f(1), sc.show("s"))
+print(sc.run(5), sc.f(1), sc.show("s"), sc.root(16.0), sc.floor(2.5))

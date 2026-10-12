@@ -7122,6 +7122,7 @@ class Gen:
         self.comp: dict[str, str] = {}  # each module's strongly connected component of that graph (one of its modules)
         self.flowmod = ""
         self.flowctx: dict[str, list[dict[str, bool]]] = {}  # module globals, safe bindings and deletions for lazy method flow
+        self.fvars: dict[str, bool] = {}  # the module's variables that its code so far has made functions (name = f: user_call)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
         self.brks: list[list[dict[str, bool]]] = []  # for each loop being compiled, what narrowed holds at its breaks
@@ -8654,6 +8655,17 @@ class Gen:
             local_names(f.node.kids[2].kids, asg)
             if e.s not in asg:
                 return f"fn[f:{e.s}]" if e.s in self.funcs else f"fn[b:{e.s}]"
+        p = self.imported_ref(e) if k == "name" or k == "attr" else ""
+        if p in MODFUNCS:
+            # a builtin module's function (math.sqrt, or sqrt from-imported), unless a local of the
+            # method has the name it is read through
+            root = e
+            while root.kind == "attr":
+                root = root.kids[0]
+            asg = {}
+            local_names(f.node.kids[2].kids, asg)
+            if root.s not in asg:
+                return f"fn[b:{p}]"
         # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
         # import or builtin of its name
         me = f.params[0] if takes_self(f) else ""
@@ -11525,6 +11537,7 @@ class Gen:
         for ci in mcls:
             gl[ci.name] = True
         mfl = Flow(gl, {})
+        self.fvars = {}
         for st in top:
             # (a statement inside a compound one calls user code only if the compound one does)
             if not mfl.called and self.user_call(st):
@@ -11733,8 +11746,16 @@ class Gen:
 
     def user_call(self, n: Node) -> bool:
         # may running n call a user function, method or constructor? (an import of a user module
-        # runs the module's code)
+        # runs the module's code; a function read as a value may be called through what holds it,
+        # fs[0]() or sorted(xs, key=f), but name = f only makes name one too: fvars)
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.funcs or n.kids[0].s in self.classes):
+            return True
+        if n.kind == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and (n.kids[1].s in self.funcs or n.kids[1].s in self.fvars):
+            self.fvars[n.kids[0].s] = True
+            return False
+        if n.kind == "pass":
+            return False  # (also an alias, name = f, that the loader resolved: its kids are left)
+        if n.kind == "name" and (n.s in self.funcs or n.s in self.fvars):
             return True
         if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s in self.classes:
             return True  # C.m(...): a static or class method
