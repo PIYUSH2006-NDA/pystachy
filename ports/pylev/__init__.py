@@ -27,14 +27,11 @@ __version__ = (1, 4, 0)
 __license__ = "New BSD"
 
 
-# Pystachy port: the three aliases are from-imports of the same functions. Another module's
-# from-import of an alias (name = f) of a from-imported function fails (`from pylev import
-# levenshtein`: name 'levenshtein' is not defined), where `pylev.levenshtein` works
-from .wf import wfi_levenshtein as levenshtein
+levenshtein = wfi_levenshtein
 
 # Backward-compatibilty because I misspelled.
-from .classic import classic_levenshtein as classic_levenschtein  # Pystachy port: as above
-from .wf import wfi_levenshtein as levenschtein  # Pystachy port: as above
+classic_levenschtein = classic_levenshtein
+levenschtein = levenshtein
 
 
 __all__ = [
