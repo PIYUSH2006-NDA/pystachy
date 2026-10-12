@@ -43,6 +43,21 @@ The no-argument TypeError becomes an expected compile-time rejection, as Pystach
 language contract specifies for static type errors. tests/math_fmod_ieee.py is Pystachy's
 own extension covering the IEEE nonfinite and signed-zero cross-product.
 
+convertdate (ports/convertdate/)
+--------------------------------
+
+ports/convertdate/ holds convertdate 2.5.1's modules (its package src/convertdate without bahai.py,
+dublin.py, french_republican.py, persian.py and data/french_republican_days.py), edited where
+ports/convertdate/PORT.md lists (each edit is marked "Pystachy port:"). convertdate is used under
+the MIT License, whose text and copyright notice ("Copyright (c) 2014-2022 Neil Freeman") are in
+ports/convertdate/LICENSE. ports/convertdate/_calendar.py, which stands in for CPython's calendar
+module, copies functions and constants of CPython 3.13.16's Lib/calendar.py and Lib/_pydatetime.py,
+which are part of Python and are used under the Python Software Foundation License Version 2,
+reproduced below. Summary of the changes made to them (clause 3 of the license): IllegalMonthError
+derives from IndexError alone and its methods are annotated, FEBRUARY is the int 2, and weekday()
+checks its arguments as datetime.date() does, counts the days with _pydatetime's _ymd2ord instead
+of building a datetime.date, and returns an int.
+
 iniconfig (ports/iniconfig/)
 ----------------------------
 
@@ -153,6 +168,16 @@ ports/sgp4/__init__.py, alpha5.py, api.py, earth_gravity.py, ext.py, functions.p
 model.py and propagation.py are sgp4 2.27's modules, edited where ports/sgp4/PORT.md lists (each
 edit is marked "Pystachy port:"). sgp4 is used under the MIT License, whose text and copyright
 notice ("Copyright © 2012–2016 Brandon Rhodes") are in ports/sgp4/LICENSE.
+
+snowballstemmer (ports/snowballstemmer/)
+----------------------------------------
+
+ports/snowballstemmer/__init__.py, among.py, basestemmer.py, english_stemmer.py and
+porter_stemmer.py are snowballstemmer 3.1.1's modules, edited where
+ports/snowballstemmer/PORT.md lists (each edit is marked "Pystachy port:"). snowballstemmer is
+used under the BSD 3-Clause License, whose text and copyright notices ("Copyright (c) 2001, Dr
+Martin Porter", "Copyright (c) 2004,2005, Richard Boulton", "Copyright (c) 2013, Yoshiki
+Shibukawa" and "Copyright (c) 2006-2025, Olly Betts") are in ports/snowballstemmer/LICENSE.
 
 sortedcontainers (ports/sortedcontainers/)
 ------------------------------------------

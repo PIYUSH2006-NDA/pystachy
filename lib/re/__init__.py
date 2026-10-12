@@ -73,12 +73,15 @@ def _charat(s: str, i: int) -> str:
 _last = ""
 _last_codes: list[int] = []
 _last_offs: list[int] = []  # (the index in the str of each code point, and its length; [] for ASCII)
+_decoded = 0  # the code points decoded so far (tests/deviations/lib_re_decoding.py counts them)
 
 
 def _codes(string: str) -> list[int]:
     # string's code points, decoded once for the string matched last (as parsy matches one string
-    # at many positions); _offs then has the index of each in the str, or is [] if those are theirs
-    global _last, _last_codes, _last_offs
+    # at many positions); _offs then has the index of each in the str, or is [] if those are theirs.
+    # An operation keeps what it gets (its State's s and offs): what a function it calls matches,
+    # which decodes another string, is no reason to decode its own again
+    global _last, _last_codes, _last_offs, _decoded
     if string is _last and len(string) == len(_last):
         return _last_codes
     codes: list[int] = []
@@ -122,6 +125,7 @@ def _codes(string: str) -> list[int]:
     _last = string
     _last_codes = codes
     _last_offs = offs
+    _decoded += len(codes)
     return codes
 
 
@@ -1782,13 +1786,14 @@ class Pattern:
         codes = _codes(string)
         offs = _last_offs
         st = _sre.State(codes, _to_char(offs, pos), _to_char_floor(offs, endpos), self.groups)
+        st.offs = offs
         st.pos = pos
         st.endpos = endpos
         return st
 
     def _new_match(self, string: str, st: _sre.State) -> "Match":
         # pattern_new_match: the match's bounds and its groups', as indices into the str
-        offs = _last_offs if string is _last else _offsets(string)
+        offs = st.offs
         mark = [_to_index(offs, st.start), _to_index(offs, st.ptr)]
         j = 0
         for _ in range(self.groups):
@@ -1834,7 +1839,7 @@ class Pattern:
             # the pattern's group count)
             raise NotImplementedError("re.findall() of a pattern with %d groups returns tuples of that many items, which Pystachy does not have: use finditer() and m.group(1, 2, ...)" % self.groups)
         st = self._state(string, pos, endpos)
-        offs = _last_offs
+        offs = st.offs
         out: list[str] = []
         while st.start <= st.end:
             st.reset()
@@ -1871,7 +1876,7 @@ class Pattern:
     def split(self, string: str, maxsplit: int = 0) -> list[str]:
         """Split string by the occurrences of pattern."""
         st = self._state(string, 0, _MAXSIZE)
-        offs = _last_offs
+        offs = st.offs
         out: list[str] = []
         n = 0
         last = st.start
@@ -1918,7 +1923,7 @@ class Pattern:
                     literal = template.literals[0]
                     template = Template()
         st = self._state(string, 0, _MAXSIZE)
-        offs = _last_offs
+        offs = st.offs
         out: list[str] = []
         n = 0
         i = 0
@@ -1939,7 +1944,6 @@ class Pattern:
                     out.append(template.expand(self._new_match(string, st)))
             else:
                 out.append(repl(self._new_match(string, st)))
-                offs = _codes_offs(string)
             i = e
             n += 1
             st.must_advance = st.ptr == st.start
@@ -1989,19 +1993,6 @@ def _cut(s: str, n: int) -> str:
         i += len(_charat(s, i))
         k += 1
     return s[:i]
-
-
-def _offsets(string: str) -> list[int]:
-    # the index of each code point of string in it ([] if they are theirs), recomputed for a
-    # string other than the one matched last
-    _codes(string)
-    return _last_offs
-
-
-def _codes_offs(string: str) -> list[int]:
-    # (a function given to sub() may have matched another string: string's again)
-    _codes(string)
-    return _last_offs
 
 
 class Match:
