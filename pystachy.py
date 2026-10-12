@@ -8092,15 +8092,13 @@ class Gen:
             f.export = True
             self.rtdefs[d.s] = f
         for x in d.kids[3:] if cls == "" and not self.rtmode else []:
-            a = x.kids[0].kids[1:] if len(x.kids) > 0 else []
             if self.imported(x.s) == "ffi.extern":
-                if len(a) == 0 or len(a) > 2 or a[0].kind != "str" or (len(a) == 2 and a[1].kind != "str") or len(d.kids) != 4:
-                    self.err('@extern takes the library ("" for the process\'s own) and an optional symbol name, as string literals')
+                ls = self.extern_args(x, len(d.kids) != 4)
                 if len(body) != 1 or body[0].kind != "expr" or body[0].kids[0].kind != "ellipsis":
                     self.err(f"{short(d.s)}() is a C function (@extern): its body must be ...")
                 f.extern = True
-                f.lib = a[0].s
-                f.csym = "@" + (a[1].s if len(a) == 2 else short(d.s))
+                f.lib = ls[0]
+                f.csym = "@" + (ls[1] if ls[1] != "" else short(d.s))  # (the twin's symbol or f.__name__)
         ps = d.kids[0].kids
         deco = ""
         stub = False  # (an imported module's that no def follows: see typing_forms)
@@ -9857,6 +9855,47 @@ class Gen:
         del self.building[f.ll]
         self.fn.n = self.n
         self.fns.append(self.fn)
+
+    def extern_args(self, x: Node, more: bool) -> list[str]:
+        # decorator x, @ffi.extern(lib, symbol=""): the library and the symbol ("" for the function's
+        # own name), its arguments bound as CPython binds the twin's (by position or keyword, with its
+        # TypeError for what that signature does not take), each a string literal with no NUL in it.
+        # more: the def has another decorator too, or is async (an error, as a bare @extern is)
+        bad = '@extern takes the library ("" for the process\'s own) and an optional symbol name, as string literals'
+        if len(x.kids) == 0 or more:
+            self.err(bad)
+        names = ["lib", "symbol"]
+        given: dict[str, Node] = {}
+        npos = 0
+        for a in x.kids[0].kids[1:]:
+            if a.kind == "starred" or a.kind == "dstar":
+                self.err(bad)
+            if a.kind != "kw":
+                if npos < 2:
+                    given[names[npos]] = a
+                npos += 1
+            elif a.s not in names:
+                self.err(f"extern() got an unexpected keyword argument '{a.s}'")
+            elif a.s in given:
+                self.err(f"extern() got multiple values for argument '{a.s}'")
+            else:
+                given[a.s] = a.kids[0]
+        if npos > 2:
+            self.err(f"extern() takes from 1 to 2 positional arguments but {npos} were given")
+        if "lib" not in given:
+            self.err("extern() missing 1 required positional argument: 'lib'")
+        r: list[str] = []
+        for k in names:
+            v = given.get(k, mk("str", "", x.line, []))
+            if v.kind != "str":
+                self.err(bad)
+            if chr(0) in v.s:
+                # (the C string would end there: ctypes raises ValueError for the library's, and looks the
+                # symbol up only as far as it, where the program surely meant the whole name)
+                why = "ctypes raises ValueError: embedded null byte" if k == "lib" else "C would look up only the name before it"
+                self.err(f"@extern's {'library' if k == 'lib' else 'symbol'} has a NUL character in it: {why}")
+            r.append(v.s)
+        return r
 
     def externtype(self, a: Node, t: str, what: str, f: FnInfo) -> str:
         # an @extern signature's type: "float", "str", "None", "opt[str]" or a CTYPES name

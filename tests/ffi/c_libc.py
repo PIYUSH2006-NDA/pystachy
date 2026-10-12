@@ -46,6 +46,24 @@ def getenv(name: str) -> str | None: ...
 def memchr(s: str, c: c_int, n: c_size_t) -> c_void_p: ...  # (the runtime's own, with the same types)
 
 
+# the library and the symbol by keyword, as the twin's extern(lib, symbol="") takes them, and an empty
+# symbol for the function's own name
+@extern("", symbol="atol")
+def to_long(s: str) -> c_int64: ...
+
+
+@extern(lib="", symbol="toupper")
+def upper(c: c_int) -> c_int: ...
+
+
+@extern("", symbol="abs")
+def c_abs(n: c_int) -> c_int: ...  # (abs again, with the same types)
+
+
+@extern("", "")
+def strncmp(a: str, b: str, n: c_size_t) -> c_int: ...
+
+
 p = strdup("Wikipedia")
 s = string_at(p, strlen("Wikipedia"))
 free(p)
@@ -55,6 +73,7 @@ print(to_u64("9223372036854775807", 0, 10), getenv("PYSTACHY_FFI_TEST_UNSET"), m
 # gets only the bytes
 d = {s: 1, "-12": 2}
 print(strlen(s), atoi("-12"), strcmp(s, "Wikipedia"), strnlen(s, 99), d[s] + d["-12"])
+print(to_long("-123456789012"), upper(97), c_abs(-9), strncmp("abcd", "abce", 3), strncmp("abcd", "abce", 4) < 0)
 for k in range(6):
     try:
         if k == 0:
