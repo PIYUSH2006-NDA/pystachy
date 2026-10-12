@@ -1,0 +1,39 @@
+val 1
+val 2
+val 3
+val 4
+False False True True
+fl
+fl
+False True
+False False True False False True
+False True False True
+False True False False True False
+val 5
+val 6
+val 7
+val 8
+val 9
+False False True True
+True True False
+False True
+False True False
+True False
+True False
+3
+k False
+n 3
+False False True True
+Eq.__eq__ True
+Eq.__eq__ True
+Eq.__eq__ True
+Eq.__eq__ True
+False False True True
+Ne.__ne__
+Ne.__ne__
+False False True True
+False True False True
+[] 0 0
+[1] []
+[]
+[exit 0]

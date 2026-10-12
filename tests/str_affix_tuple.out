@@ -1,0 +1,46 @@
+True False True False
+False False False True True
+'a.txt' True False
+'b.py' True False
+'c.rs' False False
+'' False False
+'.md' True True
+['x.py', 'z.md']
+True True False
+True True True
+True False False True
+True False True
+False True True
+True True False
+True
+tuple evaluated
+index evaluated 0
+index evaluated 100
+True
+tuple evaluated
+index evaluated -3
+True
+True True
+True True
+True
+True False
+tuple evaluated
+True
+AttributeError: 'NoneType' object has no attribute 'startswith'
+True
+False
+index evaluated 1
+False
+True
+TypeError: tuple for startswith must only contain str, not NoneType
+TypeError: tuple for endswith must only contain str, not NoneType
+index evaluated 1
+TypeError: startswith first arg must be str or a tuple of str, not NoneType
+TypeError: endswith first arg must be str or a tuple of str, not NoneType
+index evaluated -3
+True True True
+index evaluated 1
+TypeError: startswith first arg must be str or a tuple of str, not NoneType
+TypeError: tuple for startswith must only contain str, not NoneType
+False False
+[exit 1]
