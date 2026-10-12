@@ -4771,6 +4771,7 @@ class Loader:
         inits = mk("uimport", "", line, [])
         copies: list[Node] = []
         names: list[str] = []
+        took: list[str] = []  # (the names a from-import binds to a module, function or class: not copied)
         for a in st.kids if infn else st.kids[:0]:
             if a.s in self.fgl.get(self.curdef, {}) and (st.s.startswith("from.") or not builtin_module(a.kids[1].s) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
                 # (CPython binds the module's global, which then names one module or another; but
@@ -4825,7 +4826,8 @@ class Loader:
                         self.takek.append(m.kinds)
                     i = j
                 n = len(self.taken)
-                self.take(m, self.mods[tgt[: tgt.rfind(".")]], tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
+                if self.take(m, self.mods[tgt[: tgt.rfind(".")]], tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
+                    self.import_binds(m, a.s, tgt, infn)
                 if len(self.taken) > n:
                     self.taken[n].kind = "takesub"  # (this import runs the submodule's code: submodules())
                 names.append(a.s)
@@ -4833,28 +4835,39 @@ class Loader:
                 # import a.b.c binds a; import a as x binds x to a
                 self.bind(m, a.s, "m:" + a.kids[0].s, infn, line)
                 names.append(a.s)
-                key = f"{m.name} {self.curdef if infn else ''} {a.s}"
-                if self.intry == 0:
-                    self.solid[key] = True
-                elif key not in self.solid:
-                    self.fragile[key] = path
+                self.import_binds(m, a.s, path, infn)
             elif a.s == "*":
                 for x in self.public(src):
-                    self.take(m, src, x, x, infn, keep, inits, copies, line)
+                    if self.take(m, src, x, x, infn, keep, inits, copies, line) != "v":
+                        took.append(x)
                     names.append(x)
                 if src.pdir != "" and not has_all(src.body.kids):
                     self.stars.append(mk("star", "", line, [mk("str", src.name, line, [])]))
                     self.starm.append(m)
             else:
                 tgt = a.kids[0].s
-                self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
+                if self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
+                    took.append(a.s)
                 names.append(a.s)
+        for nm in took:
+            # (a from-import binds its names once the code of all its modules has run: the last one's)
+            self.import_binds(m, nm, inits.kids[-1].s, infn)
         inits.s = " ".join(names)  # (the names the statement binds, for deftime())
         if len(keep.kids) > 0:
             out.append(keep)
         if len(inits.kids) > 0:
             out.append(inits)
         out.extend(copies)
+
+    def import_binds(self, m: Mod, name: str, path: str, infn: bool) -> None:
+        # name, which an import in module m (in the function being loaded, if infn) binds: for sure
+        # outside try statements (solid); in one, unless the import raises, which leaves module path,
+        # the last it runs, not imported (fragile: reads of name check its done flag, Node.mchk)
+        key = f"{m.name} {self.curdef if infn else ''} {name}"
+        if self.intry == 0:
+            self.solid[key] = True
+        elif key not in self.solid:
+            self.fragile[key] = path
 
     def chain(self, path: str, inits: Node) -> None:
         # the modules import path initializes: a, a.b, a.b.c
@@ -4920,8 +4933,9 @@ class Loader:
         else:
             fail(f"from {src.name} import *: __all__ must be a list or tuple of strings", v.line)
 
-    def take(self, m: Mod, src: Mod, x: str, name: str, infn: bool, keep: Node, inits: Node, copies: list[Node], line: int) -> None:
-        # from src import x as name
+    def take(self, m: Mod, src: Mod, x: str, name: str, infn: bool, keep: Node, inits: Node, copies: list[Node], line: int) -> str:
+        # from src import x as name; what x is in src ("" for a submodule, "v" for a variable, which
+        # an assignment copies)
         k = src.kinds.get(x, "")
         if src.name == m.name and not infn and x not in self.sure:
             # (from . import x in a package's own code takes the package's x if its code has bound x
@@ -4967,6 +4981,7 @@ class Loader:
             # the package binds x itself, which an import of its submodule x may rebind (submodules())
             self.taken.append(mk("take", name, line, [mk("str", src.name, line, []), mk("str", x, line, [])] + (copies[-1:] if k == "v" else copies[:0])))
             self.takek.append(self.fks[self.curdef] if infn else m.kinds)
+        return k
 
     # ---- qualification of names
     def kind(self, m: Mod, s: str) -> str:
@@ -5039,14 +5054,17 @@ class Loader:
             while root.kind == "attr":
                 root = root.kids[0]
             fr = ""
-            if k == "attr" and root.kind == "name" and root.s not in loc:
+            if root.kind == "name" and root.s not in loc:
                 inf = root.s in self.fk
                 key = f"{m.name} {self.fkey if inf else ''} {root.s}"
                 if key in self.fragile:
                     fr = f"{self.fragile[key]} {root.s} {'L' if inf else 'G'}"
             mod = self.qmod(m, n, loc)
-            if fr != "" and (n.kind == "name" or n.kind == "str"):
-                n.mchk = fr
+            r = n
+            while r.kind == "attr":
+                r = r.kids[0]  # (m.C.k: the name qmod() made of m.C is what is read)
+            if fr != "" and (r.kind == "name" or r.kind == "str"):
+                r.mchk = fr
             if mod != "":
                 n.kind = "badattr"
                 n.s = f"module '{mod}' cannot be used as a value"
@@ -6504,9 +6522,9 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
     for k in n.kids if n.kind != "def" and n.kind != "class" and n.kind != "subclass" and n.kind != "lambda" else n.kids[:0]:
         import_reads(k, dict(sure) if k.kind == "block" and n.kind != "with" else sure, out, user)
     first = n.kids[0].kids[0] if n.kind == "try" and len(n.kids[0].kids) > 0 else n
-    for a in first.kids if first.kind == "import" and first.s == "" else first.kids[:0]:
-        # try: import m as x / ...: after the statement, x is bound unless the import raised,
-        # which a read of it checks as it runs (Loader.fragile, Gen.modchk)
+    for a in first.kids if first.kind == "import" else first.kids[:0]:
+        # try: import m as x / ... (or from m import x): after the statement, x is bound unless the
+        # import raised, which a read of it checks as it runs (Loader.fragile, Gen.modchk)
         sure[a.s] = True
 
 
@@ -12510,6 +12528,7 @@ class Gen:
                 if h.s != "" and not self.modlevel and h.s in self.gdecl:
                     self.err(f"except ... as {h.s}, of the global '{h.s}', in a function is not supported: the end of the clause deletes the global, as del would")
                 for c in h.kids[0].kids if h.kids[0].kind == "tuple" else [h.kids[0]] if h.kids[0].kind == "name" else h.kids[:0]:
+                    self.modchk(c)  # (read through an import that may have raised)
                     if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
                         # a class whose class statement may not have run yet
                         self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
@@ -12930,6 +12949,7 @@ class Gen:
             return self.expr(e, "")
         if self.classes[k].exc == "":
             self.err(f"'{short(k)}' is not an exception class: exceptions must derive from BaseException")
+        self.class_ready(e.kids[0] if e.kind == "call" else e)  # (looked up first, as a call of it does)
         return self.exc_object(k, e.kids[1:] if e.kind == "call" else [])
 
     def raise_stmt(self, n: Node) -> None:
@@ -14765,11 +14785,12 @@ class Gen:
 
     def class_ready(self, cn: Node) -> ClassInfo:
         # the class that name cn reads (C.a, C.m(...)), checked where its class statement may not
-        # have run yet
+        # have run yet, or where the import that binds it (or its module) may have raised
         c = cn.s
         ci = self.classes[c]
         if ci.bad != "":
             self.err(ci.bad)
+        self.modchk(cn)
         if (cn.chk or self.foreign(c)) and c in self.gflag:
             self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c}.def')}, true"), self.unbound(c))
         return ci

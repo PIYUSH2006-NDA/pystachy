@@ -241,8 +241,9 @@ leaves the list whole): a missing dict key, an index out of range, `int("x")`, a
 zero, `open()` of a missing file and the other `OSError` subclasses, unpacking, `sys.exit()` as
 `SystemExit`, and the checked arithmetic's `OverflowError`.
 
-A clause's classes are looked up when an exception gets to it (one whose `class` statement has
-not run raises `NameError`). The name bound by `as` is unbound after its clause, however the
+A clause's classes are looked up when an exception gets to it, and `raise C(...)`'s (also
+`raise C` and `raise ... from C(...)`) before the exception is made: one whose `class` statement
+has not run raises `NameError`. The name bound by `as` is unbound after its clause, however the
 clause is left, and may be bound to a value of another type before or after it.
 
 A builtin exception, which calling a builtin exception class makes too
@@ -261,8 +262,10 @@ that is not an exception raises CPython's `TypeError`.
 `continue` in it drops the exception in flight. A bare `raise` re-raises the exception being
 handled, which every way out of an except clause restores, and an exception that leaves a `with`
 block closes its file (a close that fails raises its `OSError` in its place, inside the `try`
-statement around, as `__exit__` does). A module whose code raises is not imported: the name its
-import binds is unbound, and a later import runs its code again.
+statement around, as `__exit__` does). A module whose code raises is not imported: the names its
+import binds are unbound (`import m as x`, `import p.m as x`, and what `from p import m` or
+`from m import f, C` takes), so a read of one raises `NameError` (`UnboundLocalError` in a
+function), and a later import runs its code again.
 
 ### Exception classes
 
