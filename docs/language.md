@@ -676,7 +676,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a name a package binds itself that is also the name of a submodule the program imports, read
   as `pkg.util`, with `from pkg import util` or in the package's functions, when which of the
   two it is depends on when the submodule is first imported
-- an alias (`f = g`) that module-level code uses before its assignment
+- an alias (`f = g`) that module-level code uses before its assignment, and an alias of a
+  from-imported function or class that another module from-imports, in an import cycle, before
+  the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
 - `del` of another module's attribute

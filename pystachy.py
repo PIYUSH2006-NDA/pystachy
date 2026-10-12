@@ -3107,6 +3107,7 @@ class Mod:
         self.sure: dict[str, bool] = {}
         self.maybe: dict[str, bool] = {}
         self.done = False
+        self.at = 0  # (until done: the line of the top-level statement whose imports are being loaded)
         # the names only name = f(...) statements bind, with each f: a TypeVar if every f is typing's
         self.tvars: dict[str, list[Node]] = {}
 
@@ -3506,12 +3507,13 @@ class Loader:
         self.taken: list[Node] = []
         self.takek: list[dict[str, str]] = []
         # each from-import of a variable (take()), with the bindings it went to, for late_takes(): s
-        # is the name bound, the kids the module, the name, the copy, what bound the name before
-        # (but another from-import of a variable) and where ("@" and the module, or the function);
-        # vtook: the names, by where, that only such imports have bound as variables so far
+        # is the name bound, the kids the module, the name, the copy, what bound the name before (but
+        # another from-import of a variable), where ("@" and the module, or the function) and the line
+        # its module's code was at (Mod.at, 0 once done); vtook: names only such imports bound so far
         self.vtaken: list[Node] = []
         self.vtakek: list[dict[str, str]] = []
         self.vtook: dict[str, bool] = {}
+        self.aliased: dict[str, Node] = {}  # the alias statements late_aliases() made, by "<module> <name>"
         # each star import of a package without __all__, with the module it is in (submodules())
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
@@ -3747,6 +3749,7 @@ class Loader:
                 if src.startswith("a:") and m.kinds.get(nm, "") == "v" and count.get(nm, 0) == 1 and nm not in m.fnglobal:
                     m.kinds[nm] = src
                     st.kind = "pass"
+                    self.aliased[m.name + " " + nm] = st
                     self.used_before(m, st)
 
     def late_takes(self, last: bool) -> bool:
@@ -3775,8 +3778,12 @@ class Loader:
             key = n.kids[4].s + " " + n.s
             was = n.kids[3].s
             now = self.vtakek[i].get(n.s, "")
+            al = self.aliased.get(n.kids[0].s + " " + n.kids[1].s, n)
             msg = ""
-            if was == "v" or (key in var and last):
+            if al is not n and int(n.kids[5].s) > 0 and al.line > int(n.kids[5].s):
+                # (taken while t's code ran an import above the alias: CPython raises ImportError)
+                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it ({n.kids[1].s} = {al.kids[1].s}) only after the import that runs this one (not supported for an alias of a function or class)"
+            elif was == "v" or (key in var and last):
                 msg = f"'{n.s}' is bound both as a variable and by an import (not supported)"
             elif took[key] == "!" or (was != "" and was != k) or (now != "" and now != "v" and now != k):
                 msg = f"'{n.s}' is bound by two imports, to different modules, functions or classes (not supported)"
@@ -4677,6 +4684,8 @@ class Loader:
         out: list[Node] = []
         added: list[str] = []  # (what blk surely binds holds only within it)
         for st in blk.kids:
+            if blk is m.body:
+                m.at = st.line
             if st.kind == "import" and infn and m.name != "":
                 self.later.append(st)
                 self.laterm.append(m)
@@ -4934,7 +4943,8 @@ class Loader:
             if not infn:
                 m.kinds[name] = "v"
             copies.append(mk("assign", "from", line, [mk("name", name, line, []), mk("name", src.q + x, line, [])]))
-            self.vtaken.append(mk("vtake", name, line, [mk("str", src.name, line, []), mk("str", x, line, []), copies[-1], mk("str", was, line, []), mk("str", at, line, [])]))
+            self.vtaken.append(mk("vtake", name, line, [mk("str", src.name, line, []), mk("str", x, line, []), copies[-1], mk("str", was, line, []), mk("str", at, line, []),
+                                                       mk("int", str(src.at if not src.done else 0), line, [])]))
             self.vtakek.append(ks)
         if src.pdir != "" and k != "" and k != "m:" + src.name + "." + x:
             # the package binds x itself, which an import of its submodule x may rebind (submodules())
