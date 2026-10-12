@@ -5,5 +5,5 @@ import emods.newpkg
 
 try:
     raise emods.newpkg.Retry("again")
-except emods.newpkg.Failed as e:
+except Exception as e:
     print(e)

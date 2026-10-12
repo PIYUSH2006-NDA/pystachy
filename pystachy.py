@@ -12334,6 +12334,10 @@ class Gen:
                 self.err(self.unsupported[c.s])
             if c.s in self.classes and self.classes[c.s].exc == "":
                 self.err("catching classes that do not inherit from BaseException is not allowed")
+            if c.s in self.classes and self.classes[c.s].hook != "":
+                # (an imported module's class with a hook Pystachy never calls: an error where the program
+                # uses it, catching it too; one bad otherwise, by its fields, may still be caught)
+                self.err(self.classes[c.s].hook)
             if c.s in self.classes:
                 names.append(c.s)
                 continue

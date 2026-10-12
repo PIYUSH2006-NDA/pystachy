@@ -5,5 +5,5 @@ from emods.attrhooks import LoggedRetry
 
 try:
     raise LoggedRetry("again")
-except LoggedRetry as e:
-    print(e.code)
+except Exception as e:
+    print(e)
