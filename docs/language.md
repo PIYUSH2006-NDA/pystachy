@@ -146,6 +146,10 @@ imports `annotations` from `__future__`.
   optional items, also against containers of `T` items (`list[str | None] == list[str]`; `+` of
   the two makes a `list[str | None]`, which `extend()` and `+=` also take a `list[str]` into);
   `join()` and `writelines()` check each `str | None` item.
+- `isinstance(x, T)` of an optional value or an object is decided by its type and, where that
+  leaves it open, by whether it is `None`: `None` is an `object` and a `type(None)`, also in a
+  tuple of types and in a union (`int | None`). A test that is true (or false) only where `x` is
+  not `None` narrows it as `x is not None` does (below); `isinstance(x, object)` narrows nothing.
 - A key that may be `None` is in no dict: `in` is `False`, `get()` and `pop()` give their
   default, and `d[k]`, `d.pop(k)`, `del d[k]` and `d[k] op= v` raise `KeyError: None`
   (`d[k] op= v` stores `k` only where `d[k]` has found it, so `k` needs no narrowing there,
@@ -173,11 +177,11 @@ imports `annotations` from `__future__`.
 - Python scoping: a name assigned in a function is local to it; `global` opts out.
 - Class fields come from class-body annotations or from `self.x = ...` in `__init__` (`self`
   being whatever its first parameter is named), typed by annotation, parameter, literal,
-  constructor, method or function call, or a list, tuple or dict display of those (by its first
-  item), `[x] * n`, `list(range(n))`, `list(xs)` or `sorted(xs)` (not a call of a template,
-  whose result type is known only once it is compiled, nor of a function that returns `None`:
-  annotate the field). An exception class (below) also has its base's fields, and an object
-  of it is an object of its bases too.
+  constructor, method (also `self(...)`, its `__call__`) or function call, or a list, tuple or
+  dict display of those (by its first item), `[x] * n`, `list(range(n))`, `list(xs)` or
+  `sorted(xs)` (not a call of a template, whose result type is known only once it is compiled,
+  nor of a function that returns `None`: annotate the field). An exception class (below) also
+  has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
@@ -321,9 +325,14 @@ code fills; the read is checked as above.
 What CPython decides at import time is decided at compile time. An imported module's
 `if __name__ == "__main__":` block is dropped, and so are `if typing.TYPE_CHECKING:` blocks
 (also where `TYPE_CHECKING` is imported in a `try` whose `except ImportError:` clause sets it
-to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()` also of a tuple, `in` a
-tuple or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
-test also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
+to `False`). In module code, outside its functions and class bodies, `if False:` and `if 0:`
+blocks are dropped too, and so are `if TYPE_CHECKING:` blocks after a top-level
+`TYPE_CHECKING = False` (the idiom that spares importing `typing`) where the module binds the
+name nowhere else: no other assignment, `del` or import of it, no star import and no `global`
+statement naming it.
+Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()` also of a tuple, `in` a
+tuple or list of Windows names) and of `os.name` are decided for POSIX, these and the tests above
+also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
 hides them, and a name a function binds only in code dropped this way (also by `:=`, a `match` capture or
@@ -354,7 +363,8 @@ A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
 unannotated methods, an annotation it does not support such as `Iterable[int]` or
 `dict[float, X]`, a `bytes` or
-`**kwargs` parameter, a field whose type cannot be inferred, ...) is an error only where the
+`**kwargs` parameter, a field whose type cannot be inferred, a special method that Pystachy
+never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
 unsupported type annotation`), but its `def` or `class` statement still runs where the
 module's code reaches it, as in CPython. Pystachy evaluates there the default values it can
@@ -400,14 +410,17 @@ displays, list comprehensions, generator expressions and
 `list.extend()` (`any()` and `all()` stop at the deciding item, as they do over files, and
 `list.extend()` appends each item of a generator expression as it is made), `x in range(...)`,
 and operator overloading resolved statically:
-`__add__` & co, the in-place forms, `__eq__`, rich comparisons with CPython's reflection
+`__add__` & co, the in-place forms, `__neg__`, `__pos__` and `__invert__` for unary `-`, `+`
+and `~`, `__eq__`, rich comparisons with CPython's reflection
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
 `__format__`. Objects inside lists, dicts and tuples compare, sort and print through
 their own methods, as CPython calls them: lists and tuples compare their items with `==`
 before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
-`__gt__`), and `max` uses `>`. Unary `-`, `+` and `~` on objects are not supported.
+`__gt__`), and `max` uses `>`.
 
-The container protocol is resolved statically too: `o[k]` calls `__getitem__`, `o[k] = v`
+Calls of objects and the container protocol are resolved statically too: `o(x)` calls
+`__call__`, with keyword and default arguments as a method takes them (`o` a variable, a field,
+a class attribute, an item or a call's result), `o[k]` `__getitem__`, `o[k] = v`
 `__setitem__` (`o[k] += v` both), `del o[k]` `__delitem__`, and `x in o` `__contains__`, whose
 result counts as its truth does; without `__contains__`, `x in o` looks for `x` among the items
 `__iter__` steps through. An `__iter__` annotated `-> Iterator[T]` (or `Iterable[T]`) that
@@ -417,7 +430,8 @@ list's iterator does, wherever the object is iterated: `for` loops, comprehensio
 `math.fsum()`, `math.prod()`, `str.join()` and `list.extend()`; `list()`, `sorted()` and
 `list.extend()` then call its `__len__`, if it has one, as CPython's length hint. A method the
 operation needs and the class does not define is an error with CPython's message (`'C' object
-is not subscriptable`), and an object that is `None` raises CPython's error when it runs.
+is not subscriptable`, `'C' object is not callable`), and an object that is `None` raises
+CPython's error when it runs.
 
 ## Builtins and library modules
 
@@ -658,6 +672,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
 - `del` of another module's attribute
+- an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
+  module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time (above): from
+  another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code (above) that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
   builtin, such as `sorted(xs, key=C.m)`; any other decorator; a metaclass; a base that defines
@@ -734,6 +751,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`), and decorators other
   than these, `@dataclass` and `@overload`
+- a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
+  `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
+  never does (in an imported module, an error where the program uses the class; its class
+  statement still runs), and an exception class whose base defines `__init_subclass__`, which
+  CPython calls when it creates the class (also in an imported module, whose code creates it when
+  it is imported)
 - `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
   and `KW_ONLY`
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
