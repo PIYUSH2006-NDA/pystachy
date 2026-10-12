@@ -16,6 +16,7 @@ honest.
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
+| `make jitprobe` | unused functions do not reach `lli`; live calls, defaults, import effects and runtime callbacks match CPython |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
 
 ## Differential tests
@@ -124,6 +125,10 @@ versions, platform, git commit and a timestamp:
   in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
   seconds. Finite controls check active-budget release and reuse of completed instances at the
   compilation-wide limit of 4,096 specializations;
+- **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
+  35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
+  function's default, import effects and the runtime's object comparison/representation callbacks
+  must still execute as in CPython. The guard has no timing threshold;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with

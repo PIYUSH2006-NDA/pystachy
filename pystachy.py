@@ -16893,9 +16893,10 @@ def main() -> None:
             out = SRC[:-3] if SRC.endswith(".py") else SRC + ".exe"
         code = sh(f"{link} && {llvm}clang -O2 -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang {q(obj)} -o {q(out)} -lm{cflags}")
     else:
-        # JIT tier: cheap SSA cleanup of the program alone, then LLVM's ORC JIT compiles it for the
-        # host CPU and links it with the precompiled runtime (the JIT tier never inlines the runtime)
-        fast = f"{llvm}opt -passes='mem2reg,instcombine<no-verify-fixpoint>,simplifycfg'"
+        # JIT tier: discard unused internal functions before SSA cleanup and ORC's module-wide
+        # code generation. The frontend still checks their bodies; external pys_obj_* dispatch
+        # callbacks stay visible to the precompiled runtime (which this tier never inlines).
+        fast = f"{llvm}opt -passes='globaldce,function(mem2reg,instcombine<no-verify-fixpoint>,simplifycfg)'"
         code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:
             # then this process becomes lli, through a shell that opens the bitcode for it and removes
