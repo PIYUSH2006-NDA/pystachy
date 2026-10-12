@@ -16,7 +16,7 @@ with a `file:line: error:`, never miscompiled.
 | [Typing rules](#typing-rules) | annotated functions have their declared types; an unannotated module-level function is a *template*, compiled once per list of argument types |
 | [Exceptions](#exceptions) | `try`/`except`/`else`/`finally` and `raise` with CPython 3.13's exception hierarchy, and exception classes of the program |
 | [Modules](#modules) | your own modules and packages, the builtin modules `sys`, `os`, `math`, `time`, ..., and unmodified standard library modules from `lib/` |
-| [Removed on purpose](#removed-on-purpose) | generators, lambdas and closures, inheritance (but an exception class's), sets, `bytes`, big integers, `async`, ... |
+| [Removed on purpose](#removed-on-purpose) | generators, inheritance (but an exception class's), sets, `bytes`, big integers, `async`, ... |
 | [Syntax errors](#syntax-errors) | every `SyntaxError` CPython reports before running a file, at CPython's line and almost always with its message |
 
 Contents: [Types](#types) · [Typing rules](#typing-rules) · [Statements](#statements) ·
@@ -187,8 +187,21 @@ imports `annotations` from `__future__`.
   never `None`, is (`==`, `is`) another value
   of its own type only, and its `__name__` and `__qualname__` are its name. As a value has one
   type, a variable, a field, a list's items and a dict's values hold one function, and printing a
-  function is rejected (CPython prints its address). Lambdas, nested functions and `Callable`
-  annotations are not supported (below).
+  function is rejected (CPython prints its address). `Callable` annotations are not supported.
+- A lambda, and a def inside a function, make a closure each time they run: a function value
+  typed by the def or lambda and by the function (the template's instance) it is in, which is a
+  template, compiled for the argument types of each call through it (an annotated parameter
+  keeps its type). It reads the variables of the functions around it when it runs, as CPython's
+  closures do: each such variable lives in a cell, which the function that binds it and the
+  closures that read it share, so a closure sees later assignments (`lambda: i` made in a loop
+  reads the last `i`) and `nonlocal` assigns the variable itself. Its default values that are no
+  constants are evaluated where it is defined, and the value keeps them. Such a variable must be
+  assigned where the closure is defined (but a def's own name, for recursion), have a type known
+  there (annotate an empty list a closure fills: `seen: list[int] = []`), and not be unbound by
+  `del` or as an `except ... as` name; a closure in a comprehension may not read the
+  comprehension's variable. Two closures are the same function where they come from one run of
+  one def or lambda; `__name__` is the def's name or `<lambda>`, and `__qualname__` is
+  `outer.<locals>.inner`, which CPython's messages about a call's arguments show.
 - No silent `int` → `float` conversion when assigning or passing arguments: CPython would
   keep an `int`, so `x: float = 1` is rejected (write `1.0`). Arithmetic mixes freely, and so
   do `in`, `count()`, `index()` and `remove()` of a list of numbers (`1 in [1.0]`).
@@ -238,8 +251,8 @@ that changes size raises `RuntimeError`), `break`, `continue`, `return`, `pass` 
 `del` of a list item, a dict key or an object's item, `assert`, `with open(...) as f:` (also several items, in
 parentheses or not), `try` (below), `raise` of an exception class, a call of one or an
 exception, a bare `raise` and `raise ... from ...` (if nothing catches it, it ends the program
-with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included), `def`,
-`class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
+with CPython's message and status, `SystemExit` and `KeyboardInterrupt` included), `def` (also
+inside a function: a closure, see *Typing rules*), `nonlocal`, lambdas, `class`, `@dataclass` (also `@dataclass(kw_only=True)`; its `__init__` calls `__post_init__`), `class P(NamedTuple)`, `@staticmethod`, `@classmethod`, docstrings, `del` of a variable (later reads raise `NameError` or
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
@@ -504,7 +517,7 @@ rejected.
 
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
-arguments above, lambdas and closures, inheritance other than an exception class's, `**kwargs` and
+arguments above, inheritance other than an exception class's, `**kwargs` and
 `*args` in methods, star arguments in calls (`f(*xs)`) and starred targets (`a, *rest = xs`),
 sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` (a function is a value
 of its own type, see *Typing rules*), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
@@ -796,7 +809,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
   `str | None` (CPython raises `TypeError` at the first such item it reaches)
 - two different functions where one value goes (a variable, a field, a list's items, a dict's
-  values, the two arms of a conditional expression): each function is a type of its own
+  values, the two arms of a conditional expression): each function is a type of its own, and so is
+  each lambda and def inside a function
+- a lambda or a def inside a function that reads a variable of the functions around it which may
+  not be assigned where it is defined (but a def's own name), which a `del` or the end of an
+  `except ... as` clause unbinds, or which is a variable of the comprehension it is in; a decorator
+  on a def inside a function, and a class inside a function
 - printing a function, also inside a container, and comparing containers of functions (CPython
   prints a function's address)
 
