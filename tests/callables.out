@@ -1,0 +1,14 @@
+[10, 15, 4, 5, 15] [-14] 12 11
+3 -1 1 -1
+[('add', 5.0), ('pow', 8.0), ('max', 3.0)]
+20 [('half', 8.0), ('neg', -16.0), ('sqrt', 4.0)]
+3 6 9 6
+8 True False
+12 False
+QUIET
+printed
+none 6
+3
+caught negative -2
+True True False True
+[exit 0]

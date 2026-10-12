@@ -185,8 +185,17 @@ imports `annotations` from `__future__`.
   `max()` compare each item's key with the best so far as they go. A function value is true and
   never `None`, is (`==`, `is`) another value
   of its own type only, and its `__name__` and `__qualname__` are its name. As a value has one
-  type, a variable, a field, a list's items and a dict's values hold one function, and printing a
-  function is rejected (CPython prints its address). `Callable` annotations are not supported.
+  type, a variable, a field, a list's items and a dict's values hold one function, unless they
+  are annotated `Callable` (below), and printing a function is rejected (CPython prints its
+  address).
+- `Callable[[A, B], R]` (typing's or `collections.abc`'s, also `Callable[[], R]` and with `| None`)
+  is the type of any function that takes an `A` and a `B` and returns an `R`: a function value
+  becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
+  dict item), compiled for those parameter types, so one variable, field or list holds different
+  functions (defs, builtins, lambdas, closures). A call of a Callable passes its arguments by
+  position, as its parameter types type them; two Callables are the same function where they
+  hold one function (a closure from one run of its def or lambda), also compared with that
+  function. `Callable[..., R]` is not supported.
 - A lambda, and a def inside a function, make a closure each time they run: a function value
   typed by the def or lambda and by the function (the template's instance) it is in, which is a
   template, compiled for the argument types of each call through it (an annotated parameter
@@ -782,8 +791,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
   `str | None` (CPython raises `TypeError` at the first such item it reaches)
 - two different functions where one value goes (a variable, a field, a list's items, a dict's
-  values, the two arms of a conditional expression): each function is a type of its own, and so is
-  each lambda and def inside a function
+  values, the two arms of a conditional expression) that is not annotated `Callable`: each function
+  is a type of its own, and so is each lambda and def inside a function
+- `Callable[..., R]`, a call of a `Callable` with keyword arguments or with another number of
+  arguments than its parameter types, and a function where a `Callable` is expected whose result is
+  not the `Callable`'s return type (an `int` for a `float`, as for a function's own return)
 - a lambda or a def inside a function that reads a variable of the functions around it which may
   not be assigned where it is defined (but a def's own name), which a `del` or the end of an
   `except ... as` clause unbinds, or which is a variable of the comprehension it is in; a decorator
