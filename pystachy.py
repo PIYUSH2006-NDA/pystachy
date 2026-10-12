@@ -6232,6 +6232,13 @@ def nones(e: Node) -> bool:
     return True
 
 
+def int_fits(s: str) -> bool:
+    # does int literal s (as the lexer gives it: decimal, maybe negated) fit in 64 bits
+    neg = s.startswith("-")
+    d = s[1:] if neg else s
+    return not (len(d) > 19 or (len(d) == 19 and d > ("9223372036854775808" if neg else "9223372036854775807")))
+
+
 def nonetest(n: Node) -> int:
     # n is x is None, x is not None, x == None or x != None (or None is x, None == x, ...): the
     # index of x in n.kids; -1 otherwise
@@ -15448,9 +15455,9 @@ class Gen:
             return 0 if self.static_type(n) == "kw[]" else 1  # (**kwargs: the extra keyword arguments)
         if k == "cmp" and n.s in "== != < <= > >=".split() and (self.static_len(n.kids[0]) >= 0 or self.static_len(n.kids[1]) >= 0):
             # len(args) == 2 for a tuple (*args) or a **kwargs record, whose length its type fixes,
-            # against an int constant
-            a = self.static_len(n.kids[0]) if n.kids[0].kind != "int" else int(n.kids[0].s)
-            b = self.static_len(n.kids[1]) if n.kids[1].kind != "int" else int(n.kids[1].s)
+            # against an int constant (one that fits in 64 bits: else the test compiles, to its error)
+            a = self.static_len(n.kids[0]) if n.kids[0].kind != "int" else int(n.kids[0].s) if int_fits(n.kids[0].s) else -1
+            b = self.static_len(n.kids[1]) if n.kids[1].kind != "int" else int(n.kids[1].s) if int_fits(n.kids[1].s) else -1
             if a >= 0 and b >= 0:
                 ok = a == b if n.s == "==" else a != b if n.s == "!=" else a < b if n.s == "<" else a <= b if n.s == "<=" else a > b if n.s == ">" else a >= b
                 return 1 if ok else 0
@@ -15731,9 +15738,7 @@ class Gen:
         if k == "val":
             return self.vnodes[int(n.s)]  # (a value computed already: see vnode)
         if k == "int":
-            neg = n.s.startswith("-")
-            d = n.s[1:] if neg else n.s
-            if len(d) > 19 or (len(d) == 19 and d > ("9223372036854775808" if neg else "9223372036854775807")):
+            if not int_fits(n.s):
                 self.err("integer literal does not fit in 64 bits")
             return Val(n.s, "int")
         if k == "float":
