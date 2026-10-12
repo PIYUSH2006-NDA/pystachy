@@ -16401,14 +16401,16 @@ class Gen:
             args = [self.parse_expr(DEFAULTS[name])]
         w = want if name == "list" or name == "sorted" or name == "dict" else ""
         fresh = False
-        # key= and reverse= of sorted(), min() and max(), evaluated in the order written: once the
-        # iterator of the argument is made, before the function iterates it (as CPython calls it)
+        # key= and reverse= of sorted(), min() and max(), evaluated in the order written: after a
+        # list comprehension has run, but once the iterator of a generator expression or of
+        # range(), zip(), ... is made, before the function iterates it (as CPython calls it)
         kws = [a for a in args if a.kind == "kw" and (a.s == "key" or a.s == "reverse") and (name == "sorted" or name == "min" or name == "max")]
         kvals: list[Val] = []
         if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
             # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
             fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
-            ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and fresh else None
+            lazy = self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")
+            ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and lazy else None
             v0 = self.consume(args[0], w, ka)
             if ka is not None:
                 kvals = [self.tget(ka.value, j) for j in range(len(kws))]
