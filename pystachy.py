@@ -15994,6 +15994,8 @@ class Gen:
                 first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
                 return Val(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {first}')}, 0"), "bool")
             vals = [self.as_list(v0, name)]
+            if v0.t == "tuple[]" and is_list(w):
+                vals[0] = Val(vals[0].v, w)  # (list(()) has no item to type: it is the list wanted)
             self.close_temp(args[0], v0)
         elif name == "sum" and npos == 2 and (self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")):
             # Construct the iterator first, then evaluate start, then traverse it. In particular,
@@ -16263,13 +16265,13 @@ class Gen:
             return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]]))
         if is_tuple(v.t):
             ts = targs(v.t)
-            for x in ts:
-                if x != ts[0]:
-                    self.err(f"{name}() of a {v.t} needs items of a single type")
+            et = ts[0] if len(ts) > 0 else "str" if name == "join" else "int"  # (the empty tuple: no item to type)
+            if any(x != et for x in ts):
+                self.err(f"{name}() of a {v.t} needs items of a single type")
             r = self.rt("pys_list_new", "ptr", [f"i64 {len(ts)}"])
             for i in range(len(ts)):
                 self.rt("pys_list_append", "void", [f"ptr {r}", "i64 " + self.to_slot(self.tget(v, i))])
-            return Val(r, self.ctype("list", [ts[0]]))
+            return Val(r, self.ctype("list", [et]))
         if v.t == "str" and (name == "sorted" or name == "min" or name == "max" or name == "join"):
             return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
         if v.t == "file":
