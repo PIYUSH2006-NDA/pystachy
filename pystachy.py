@@ -5152,13 +5152,24 @@ class Loader:
             if n.chk and n.kind == "badattr" and " has no attribute " in n.s:
                 fail(n.s, n.line)  # (an evaluated annotation: see Loader.reads)
 
-    def qdeco(self, m: Mod, d: Node, loc: dict[str, bool]) -> None:
+    def qdeco(self, m: Mod, d: Node, loc: dict[str, bool], fn: bool = False) -> None:
         # a decorator: the first name of its dotted name (unless it surely names a builtin
-        # there: deftime), and the arguments of a call
+        # there: deftime), and the arguments of a call. A def's (fn), which CPython calls on the
+        # function (Gen.decorate), names what it is: an imported function or class (not as written),
+        # and an attribute of a module as its qualified name; a call's function is qualified too
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
-        alias = root not in loc and self.kind(m, root).startswith("a:")  # (shown as written: m$root)
-        d.s = (root if d.line in self.bdecos else m.q + root if alias else self.qname(m, root, loc)) + d.s[len(root) :]
+        alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
+        if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
+            e = mk("name", root, d.line, [])
+            for part in d.s.split(".")[1:]:
+                e = mk("attr", part, d.line, [e])
+            self.qexpr(m, e, loc)
+            d.s = e.s if e.kind == "name" else d.s
+        else:
+            d.s = (root if d.line in self.bdecos else m.q + root if alias else self.qname(m, root, loc)) + d.s[len(root) :]
         for c in d.kids:
+            if fn:
+                self.qexpr(m, c.kids[0], loc)
             for a in c.kids[1:]:
                 self.qexpr(m, a, loc)
 
@@ -5170,7 +5181,7 @@ class Loader:
                     st.s = self.qname(m, st.s, loc)
                 for d in st.kids[3:]:
                     if d.s != "async":
-                        self.qdeco(m, d, loc)
+                        self.qdeco(m, d, loc, not cls)
                 for p in st.kids[0].kids:
                     self.qann(m, p.kids[0], loc)
                     self.qexpr(m, p.kids[1], loc)
@@ -7555,6 +7566,8 @@ class Gen:
         self.clokeys: dict[str, int] = {}
         self.cells: dict[str, str] = {}  # the function's variables that closures take: the cell of each (a pointer)
         self.adapters: dict[str, str] = {}  # "<function value type> <Callable type>" -> its adapter's symbol (Gen.adapter)
+        self.decorated: dict[str, bool] = {}  # the defs of a module's top level that bind what their decorators give (decorate)
+        self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
         self.nlw: dict[str, bool] = {}  # and those of them, or of the variables it takes, that a closure assigns (nonlocal)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
@@ -9391,6 +9404,65 @@ class Gen:
         self.err(f"name '{short(name)}' is not defined")
         return Val("", "")
 
+    def applies(self, st: Node, top: bool, loc: dict[str, bool]) -> bool:
+        # does def st have a decorator that CPython calls on the function: one Pystachy does not
+        # leave out, typing's (overload, final, ...) or, at a module's top level (top), another of
+        # INERT_DECOS (ffi.extern; staticmethod and the like, which declare_fn rejects there). One
+        # named by a variable of the function the def is in (loc) is that variable, not an import
+        for x in st.kids[3:]:
+            if x.s == "async":
+                continue
+            if (x.s[: x.s.find(".")] if "." in x.s else x.s) in loc:
+                return True
+            key = self.imported(x.s) if self.imported(x.s) != "" else x.s
+            key = key[9:] if key.startswith("builtins.") else key
+            typing = key.startswith("typing.") or key.startswith("typing_extensions.")
+            if not typing and not (top and "f" in INERT_DECOS.get(key, "")):
+                return True
+        return False
+
+    def scope_names(self) -> dict[str, bool]:
+        # the names local to the function being compiled: its parameters, the variables it binds
+        # anywhere, and those it takes from the functions around it
+        out: dict[str, bool] = {}
+        for nm in self.ltype:
+            out[nm] = True
+        for nm in self.curfn.params:
+            out[nm] = True
+        if self.curfn.node.kind == "def":
+            local_names(self.curfn.node.kids[2].kids, out)
+        return out
+
+    def decorate(self, n: Node) -> Val:
+        # def n with decorators: CPython evaluates the decorators, from the top (a call, @d(args), runs
+        # then), makes the function (its defaults first), and calls each decorator, from the bottom,
+        # with what the one below gave; n's name binds the last result
+        callees: list[Node] = []
+        decos = [x for x in n.kids[3:] if x.s != "async"]  # (from the bottom up, as the parser adds them)
+        for i in range(len(decos) - 1, -1, -1):
+            self.line = decos[i].line
+            e = self.deco_callee(decos[i], self.curfn.mod)
+            callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
+        v = self.closure(n)
+        for j in range(len(callees) - 1, -1, -1):
+            self.line = callees[j].line
+            v = self.call(mk("call", "", callees[j].line, [callees[j], self.vnode(v)]), "")
+        return v
+
+    def deco_callee(self, x: Node, mod: str) -> Node:
+        # what decorator x, of module mod, evaluates to the function it calls: its call @d(args), or
+        # its dotted name as name and attribute nodes, made once, so that a read flow analysis
+        # marks (Node.chk) is the one decorate compiles
+        if len(x.kids) > 0:
+            return x.kids[0]
+        key = f"{mod} {x.line}"
+        if key not in self.decoexprs:
+            e = mk("name", x.s[: x.s.find(".")] if "." in x.s else x.s, x.line, [])
+            for part in x.s.split(".")[1:]:
+                e = mk("attr", part, x.line, [e])
+            self.decoexprs[key] = e
+        return self.decoexprs[key]
+
     def cellvars(self, f: FnInfo, body: list[Node]) -> list[str]:
         # the variables of function f that the defs and lambdas in it take (closure_free): its
         # parameters and the names it binds, but those it declares global or nonlocal
@@ -9427,6 +9499,8 @@ class Gen:
         what = "the lambda" if n.kind == "lambda" else f"{n.s}()"
         if n.mchk != "":
             x = n.mchk.split(" ")[0]
+            if n.kind == "def" and x == n.s:
+                self.err(f"{what} reads its own name, which binds what its decorators give once they have run: not supported in a def inside a function")
             self.err(f"{what} reads '{x}', which may not be assigned yet where it is defined: not supported (a function reads the variables around it when it runs: assign '{x}' before the {'lambda' if n.kind == 'lambda' else 'def'})")
         key = f"{self.curfn.ll} {n.line}:{n.s if n.kind == 'lambda' else 'def ' + n.s}"
         c = self.closures[self.clokeys[key]] if key in self.clokeys else self.new_closure(n, key)
@@ -9459,10 +9533,8 @@ class Gen:
         outer = self.curfn
         name = n.s if n.kind == "def" else "<lambda>"
         qual = name if self.modlevel else self.qualname(outer) + ".<locals>." + name
-        if n.kind == "def" and len(d.kids) > 3:
-            self.err(f"a decorator on a def inside a function is not supported ({name}())")
         idx = len(self.closures)
-        f = self.declare_fn(d, "")
+        f = self.declare_fn(mk("def", d.s, d.line, d.kids[:3]), "")  # (its decorators apply to the closure: decorate)
         f.ll = f"@c.{idx}"
         f.name = qual
         f.mod = outer.mod
@@ -9502,7 +9574,7 @@ class Gen:
             if x not in self.cells and x not in mine:
                 continue  # (a global, a builtin, or a name nothing binds)
             t = ""
-            if n.kind == "def" and x == n.s:
+            if n.kind == "def" and x == n.s and not self.applies(n, False, self.scope_names()):
                 t = c.t  # its own name, assigned once it is made
             elif x in self.nonevars and x not in self.ltype:
                 if x in self.assigned and x in self.cells:
@@ -11982,11 +12054,23 @@ class Gen:
             top: list[Node] = []
             for st in m.body.kids:
                 self.line = st.line
-                if self.rtmode and m.name == "" and st.kind != "def" and st.kind != "import" and st.kind != "pass" and not (st.kind == "expr" and st.kids[0].kind == "str"):
+                if self.rtmode and m.name == "" and (st.kind != "def" or self.applies(st, True, {})) and st.kind != "import" and st.kind != "pass" and not (st.kind == "expr" and st.kids[0].kind == "str"):
                     # nothing runs runtime.py's module code: pys_init comes before any program code
                     self.err("runtime.py may hold only functions, imports and docstrings at module level")
-                if st.kind == "def":
-                    if st.s in self.funcs or st.s in self.classes:
+                if st.kind == "def" and self.applies(st, True, {}):
+                    # a def whose decorators CPython calls on the function: module code makes the
+                    # function and binds its name to what they give (decorate), a module variable
+                    for dk in st.kids[3:]:
+                        root = dk.s[: dk.s.find(".")] if "." in dk.s else dk.s
+                        if root in TYPING and self.imported(root) == "" and not self.bound(root):
+                            self.line = dk.line
+                            self.err(f"name '{root}' is not defined (import it from typing)")
+                    if st.s in self.funcs or st.s in self.classes or st.s in self.decorated:
+                        self.err(f"redefinition of '{st.s}' is not supported")
+                    self.decorated[st.s] = True
+                    top.append(st)
+                elif st.kind == "def":
+                    if st.s in self.funcs or st.s in self.classes or st.s in self.decorated:
                         self.err(f"redefinition of '{st.s}' is not supported")
                     self.lib = m.name != ""
                     self.funcs[st.s] = self.declare_fn(st, "")
@@ -12266,6 +12350,9 @@ class Gen:
                     fns.append(f)
         gl: dict[str, bool] = {}
         collect(top, gl)
+        for st in top:
+            if st.kind == "def":
+                gl[st.s] = True  # (a decorated def's name: what its decorators give)
         for f in fns:
             if f.pending:
                 continue  # its defining method already contributes the same global assignments
@@ -12377,13 +12464,14 @@ class Gen:
         d = n if n.kind == "def" else lambda_def(n)
         for p in d.kids[0].kids:
             self.fl_expr(fl, p.kids[1])
-        for dx in d.kids[3:]:
-            self.fl_expr(fl, dx)  # (its decorators)
+        for dx in d.kids[3:] if n.kind == "def" else []:
+            if dx.s != "async":
+                self.fl_expr(fl, mk("call", "", dx.line, [self.deco_callee(dx, self.flowmod)]))  # (its decorators, called)
         free: dict[str, bool] = {}
         closure_free(d, free)
         caps: dict[str, bool] = {}
         late: list[str] = []
-        own = n.s if n.kind == "def" else ""
+        own = n.s if n.kind == "def" and not self.applies(n, False, fl.scope) else ""  # (a decorated def's name binds what the decorators give, later)
         for x in free:
             if x in fl.scope:
                 caps[x] = True
@@ -12584,8 +12672,11 @@ class Gen:
 
     def user_call(self, n: Node) -> bool:
         # may running n call a user function, method or constructor? (an import of a user module
-        # runs the module's code; a function read as a value, or a lambda, may be called through
-        # what holds it, fs[0]() or sorted(xs, key=f), but name = f only makes name one too: fvars)
+        # runs the module's code; a def, its decorators; a function read as a value, or a lambda,
+        # may be called through what holds it, fs[0]() or sorted(xs, key=f), but name = f only
+        # makes name one too: fvars)
+        if n.kind == "def" and self.applies(n, False, {}):
+            return True
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.funcs or n.kids[0].s in self.classes):
             return True
         if n.kind == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and (n.kids[1].s in self.funcs or n.kids[1].s in self.fvars):
@@ -14456,6 +14547,8 @@ class Gen:
                     self.emit(f"store i1 false, ptr @init.{x.s}.guard")
                 else:
                     self.add(Ins("init", "", x.s))
+        elif k == "def" and (n.s in self.decorated if self.modlevel else self.applies(n, False, self.scope_names())):
+            self.store_name(n.s, self.decorate(n))  # (its name binds what its decorators give)
         elif k == "def" and not self.modlevel:
             self.store_name(n.s, self.closure(n))  # (a def inside a function: a closure)
         elif k == "nonlocal":
