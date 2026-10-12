@@ -27,14 +27,18 @@
 #                  math functions give on random inputs
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
+#   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
 #   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
 #   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
 #                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
-#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types under
-#                  256 MiB / ten CPU seconds, with short diagnostics; finite controls still compile
+#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types and
+#                  specialization breadth under 256 MiB / ten CPU seconds, with short diagnostics;
+#                  finite controls and reuse at the retained-instance boundary still compile
+#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
+#                  still execute as in CPython, with both compilers
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
@@ -247,6 +251,11 @@ L=$V/rt-abi.log; s=$(now); r=fail
 $PY tools/rtabi.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-9]*\) uses in runtime.c and \([0-9]*\) programs, \([0-9]*\) mismatches$/, "functions": \1, "uses": \2, "programs": \3, "mismatches": \4/p' "$L")"
 
+# ---- inherited ASTs: declaration headers grow linearly; unused method bodies are shared
+L=$V/inherited-ast.log; s=$(now); r=fail
+$PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
+step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
+
 # ---- list-storage: deterministic capacity and live-byte checks for reachable empty lists
 L=$V/list-storage.log; s=$(now); r=fail
 { "${LLVM}clang" -O2 -S -emit-llvm tools/listprobe.c -o "$V/listprobe.ll" &&
@@ -274,6 +283,11 @@ step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per
 L=$V/compile-limits.log; s=$(now); r=fail
 $PY tools/compilelimits.py -c "hosted=$PY pystachy.py" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step compile-limits $r "$s" "$L" ', "address_space_mib": 256, "cpu_seconds": 10, "modes": ["ir", "run", "build"]'
+
+# ---- JIT dead code: inspect the actual execution module, without a timing threshold
+L=$V/jit-dead-code.log; s=$(now); r=fail
+$PY tools/jitprobe.py -c "hosted=$PY -m pystachy" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
+step jit-dead-code $r "$s" "$L" ', "unused_functions": 35, "compilers": ["CPython-hosted", "stage2"]'
 
 # ---- scaling: compile time grows linearly with generated programs (counts need Python 3.12+)
 L=$V/scaling.log; s=$(now); r=fail

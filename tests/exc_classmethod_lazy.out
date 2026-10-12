@@ -1,0 +1,11 @@
+before subclasses
+child local unbound
+leaf local unbound
+child global unbound
+leaf global unbound
+Base! Child! Leaf!
+Base default/base
+Child default/child
+Leaf custom/leaf
+child leaf
+[exit 0]

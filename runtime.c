@@ -676,6 +676,11 @@ I pys_shl(I a, I b) {
   return r;
 }
 I pys_shr(I a, I b) { if (b < 0) pys_fail("ValueError: negative shift count"); return a >> (b > 63 ? 63 : b); }
+I pys_int_bit_length(I a) {                  /* int.bit_length() and bit_count() count the bits of |a|: 2**63 for -2**63 */
+  uint64_t x = a < 0 ? 0 - (uint64_t)a : (uint64_t)a;
+  return x ? 64 - __builtin_clzll(x) : 0;    /* (clz(0) is undefined) */
+}
+I pys_int_bit_count(I a) { return __builtin_popcountll(a < 0 ? 0 - (uint64_t)a : (uint64_t)a); }
 double pys_fdiv(double a, double b) { if (b == 0) pys_fail("ZeroDivisionError: float division by zero"); return a / b; }
 double pys_idiv(I a, I b) {                  /* int / int, rounded once like CPython's true division */
   if (!b) pys_fail("ZeroDivisionError: division by zero");

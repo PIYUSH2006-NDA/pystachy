@@ -79,10 +79,12 @@ imports `annotations` from `__future__`.
   keeps its type), and its first `return` with a value decides what it returns. It is
   compiled only when a call needs it, so what Pystachy cannot compile in it is an error only
   then. In it, `isinstance(x, T)` (also with a tuple of types or `T | U`), `hasattr(x, "a")`
-  (the builtin types have CPython 3.13's attributes) and `x is None`, when `x`'s type decides
-  them (for an object, which may be `None`, when its argument is known not to be: a new object
-  or `self`), are constants: only the branch that runs is compiled (in `if`, `while`, `assert`,
-  `and`/`or` and conditional expressions), and nothing after a `return`. A parameter whose
+  (the builtin types have CPython 3.13's attributes) and `x is None` (for a parameter `x` also
+  `None is x` and `x == None`, but not for an exception or an object whose class defines
+  `__eq__` or `__ne__`), when `x`'s type decides them (for an object, which may be `None`, when
+  its argument is known not to be: a new object or `self`), are constants: only the branch that
+  runs is compiled (in `if`, `while`, `assert`, `and`/`or` and conditional expressions), and
+  nothing after a `return`. A parameter whose
   argument is `None` reads as `None`, and outside if branches and loops may get a value of
   another type (`if hi is None: hi = len(a)`, `if acc is None: acc = []`). A template that
   returns objects or `T | None` returns `None` where it ends without a `return`, as CPython
@@ -179,7 +181,8 @@ imports `annotations` from `__future__`.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
   dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
-  `+` and `*` (which make a tuple), `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
+  `+` and `*` (which make a tuple), the prefixes of `str.startswith()` or suffixes of `endswith()`,
+  `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
   one type), and `==`, `!=` and ordering as tuple's methods do them (also with plain tuples
   and other NamedTuples), except an operator that its class defines; its `repr()` is a
   dataclass's.
@@ -318,8 +321,8 @@ code fills; the read is checked as above.
 What CPython decides at import time is decided at compile time. An imported module's
 `if __name__ == "__main__":` block is dropped, and so are `if typing.TYPE_CHECKING:` blocks
 (also where `TYPE_CHECKING` is imported in a `try` whose `except ImportError:` clause sets it
-to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()`, `in` a tuple
-or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
+to `False`). Tests of `sys.platform` against Windows (`==`, `!=`, `startswith()` also of a tuple, `in` a
+tuple or list of Windows names) and of `os.name` are decided for POSIX, these and the `__main__`
 test also inside `not`/`and`/`or`, where the other operands still run in CPython's order (`if effect() and
 os.name == "nt":` calls `effect()`). These names are recognized only where they name what
 the module imported: a parameter, local, loop variable or other import of the same name
@@ -384,9 +387,11 @@ with every escape except `\N{...}`, raw and triple-quoted strings, implicit
 concatenation), f-strings with `!r`, `!s`, `!a`, `=`, nested format specs and CPython's
 complete format-spec mini-language, `%` formatting with a constant format string
 (`"%-5s %05.2f" % (a, b)`: the conversions `s r a d i u x X o e E f F g G c` with their flags,
-widths and precisions, but not `%(name)s`, `*` or a precision on integers), arithmetic with Python semantics (`//` and `%` floor,
+widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
+that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `and`/`or`
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+`None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
 displays, list comprehensions, generator expressions and
@@ -417,18 +422,23 @@ object that is `None` raises CPython's error when it runs.
 ## Builtins and library modules
 
 `print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
-`int`, `float`, `bool`, `ord`, `chr`, `abs`, `min`, `max`, `sum`, `sorted` (and
+`int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
+or a bool), `abs`, `min`, `max`, `sum`, `sorted` (and
 `list.sort`, with `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
 with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
-(`find`/`index`/`count` with start and end, also `None`, `split`/`rsplit`, `partition`/`rpartition`,
+(`find`/`index`/`count` with start and end, also `None`, `startswith`/`endswith` also with a tuple of
+`str`, `split`/`rsplit`, `partition`/`rpartition`,
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
 `zfill`, `expandtabs`, `capitalize`/`title`/`swapcase`, `dict.pop` with a default; not
 `str.format()`, `dict.update()`, `popitem()` and `fromkeys()`, `dict()` of pairs, or tuple's
-`index()` and `count()`); `open()` with CPython's modes, errors, `buffering=`, `newline=`
+`index()` and `count()`); `int.bit_length()` and `int.bit_count()`, also of a `bool`;
+`open()` with CPython's modes, errors, `buffering=`, `newline=`
 translation and positions for `"+"` modes, and files' `read`/`readline`/
 `readlines`/`write`/`writelines`/`flush`/`close`, iteration and `closed`/`name`/`mode`;
 `sys.argv/exit/stdin/stdout/stderr/maxsize/platform/setrecursionlimit/getrecursionlimit` (the streams
-are files), `os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
+are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/mant_dig/epsilon/radix/rounds`
+(CPython's for IEEE 754 doubles; `sys.float_info` itself is not a value),
+`os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
 constants, which raise CPython's domain and range errors (but `dist`, `fsum`, `gamma`,
@@ -666,6 +676,12 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   tuple repetition), alongside the existing limit of 100 nested template compilations.
   Type-changing recursion is supported when it reaches a finite set of specializations within
   these bounds. Large argument types in diagnostic call contexts are summarized.
+- more than 4,096 template specializations in one compilation, across all functions and
+  imported modules. Completed specializations still retain their generated code and count
+  toward this bound; calls reusing an existing specialization do not. This bounds branching
+  over many small type combinations, even when active signatures and nesting remain small.
+  Exceeding it reports a source error before allocating the next specialization; annotate
+  template parameters or reduce the distinct type combinations.
 - an empty container whose first use stores an empty `[]` or `{}` into it (`d[k] = []`)
 - an empty `[]` or `{}` that nothing gives a type (`{}["k"]` alone)
 - an empty list or dict that a template's function returns empty, used where the `list[int]` /
@@ -705,6 +721,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
+- a tuple for `str.startswith()` or `endswith()` with an item that is neither a `str` nor a
+  `str | None` (CPython raises `TypeError` at the first such item it reaches)
 
 ### Classes, dataclasses and NamedTuples
 
@@ -736,9 +754,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   expected (as mypy does: the container could then be given a `None` that its other references do
   not expect; mypy takes it for a `Sequence[T | None]` or `Mapping[K, T | None]`, a list and a dict
   here), and an argument that may be `None` of a builtin function other than `len()`, `int()`,
-  `float()`, `ord()`, `dict()`, `sum()`, `round()`, `os.system()`, `os.path.exists()` and those
-  that take `None` (and `round(x, n)` of a `float` `x` and an `n` that may be `None`, which would
-  return an `int` or a `float` by whether `n` is `None`)
+  `float()`, `ord()`, `hex()`, `oct()`, `bin()`, `dict()`, `sum()`, `round()`, `os.system()`,
+  `os.path.exists()` and those that take `None` (and `round(x, n)` of a `float` `x` and an `n`
+  that may be `None`, which would return an `int` or a `float` by whether `n` is `None`)
 - a read that needs the type of a local that only `None` has been assigned so far, where no other
   value assigned to it can be typed yet and the context expects none (annotate it:
   `x: T | None = None`)
@@ -780,8 +798,8 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - `except ... as x` in a function where `x` is a global (the end of the clause deletes it, as `del`
   would), and at a module's top level where `x` is a global of another type that a function reads
   (the function would not see the exception)
-- `==` between exceptions where an exception class defines `__eq__` or `__ne__` (`is` works), but
-  between objects of classes with a base in common
+- `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
+  or `__ne__` (`is` works), but between objects of classes with a base in common
 - an exception that may be `None` (`Exception | None`, `ValueError | None`; an object of an
   exception class may be)
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:
@@ -814,7 +832,10 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   a field of the base unassigned where the base's code reads it (call `super().__init__()` first),
   keyword arguments where no class of its line has an `__init__` (but those its builtin base's
   takes, such as `ImportError`'s `name` and `path`), more than three arguments for one deriving
-  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes
+  from `OSError` (or for `OSError` itself), and `super()` outside the methods of exception classes,
+  in a static method without parameters, without arguments in a class method (where it binds the
+  class), or with arguments other than the method's own class and `self` (`super(Base, self)`, or a
+  local that hides the class's name), or calling a class method of the base that uses `cls`
 
 ### Builtins
 
