@@ -562,7 +562,9 @@ CPython's over that `re`, with its compiled patterns in an `lru_cache`, for `str
 Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
 a function they decorate keeps its results in a cache of its own types, which its annotated
 parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
-counts, evicts and reports `cache_info()` as CPython's C wrapper does.
+counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `textwrap` is all of
+CPython's, edited in 7 marked places for what Pystachy does not support, with a width that counts a
+str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cpythons)).
 
 ## Expressions
 
@@ -574,7 +576,8 @@ complete format-spec mini-language, `%` formatting with a constant format string
 widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
 that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers; between two bools, `flag is True`, as
+`==`, since a bool is one of CPython's two objects `True` and `False`), `==`/`!=` with
 `None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/set/tuple

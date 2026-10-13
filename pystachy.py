@@ -17690,6 +17690,9 @@ class Gen:
             if (a.t == "None") != (b.t == "None") and (not self.isref(a.t) or not self.isref(b.t)):
                 # a number or bool is never None
                 return Val("false" if op == "is" else "true", "bool")
+            if a.t == "bool" and b.t == "bool":
+                # (x is True: a bool is one of CPython's two objects True and False)
+                return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} i1 {a.v}, {b.v}"), "bool")
             if not self.isref(a.t) or not self.isref(b.t) or (is_sopt(a.t) and b.t != "None") or (is_sopt(b.t) and a.t != "None"):
                 self.err("'is' is only supported for objects and None")
             return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
