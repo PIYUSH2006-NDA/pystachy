@@ -1,0 +1,29 @@
+['name', 'email', 'account', 'plan', 'amount', 'due', 'card'] 150 {'name': 'Niklaus Wirth', 'email': 'niklaus.wirth0@example.com', 'account': '100000', 'plan': 'Standard', 'amount': '9.99', 'due': '2026-11-17', 'card': '3308'}
+'' ['name', 'email', 'plan', 'due', 'account', 'amount', 'card', 'seq', 'count']
+14 ['name', 'email', 'plan', 'due', 'name', 'plan', 'account', 'due', 'amount', 'card', 'due', 'seq', 'count']
+62569
+From: Billing <billing@example.com>
+To: Dennis Dijkstra <dennis.dijkstra52@example.com>
+Subject: Your Standard plan renews on 2026-12-02
+
+Dear Dennis Dijkstra,
+
+your Standard plan (account 379931) renews on 2026-12-02. We will charge $119.88
+to the card ending in 1605. To change the plan or cancel it, reply to this
+message before 2026-12-02; there is nothing else to do.
+
+This is message 150 of 150.
+
+--
+Billing, Example Inc.
+
+False 'Invalid placeholder in string: line 2, col 20' 'Invalid placeholder in string: line 2, col 20'
+'no field nickname in the data' ''
+Dear Niklaus Wirth, your ${nickname} is $9.99 (1/150)
+KeyError 'nickname'
+(['Dear ', ', your ', ' is $', ' (', '/', ')'], ['name', 'nickname', 'amount', 'seq', 'count'])
+ValueError line 3: 1 fields, where the header names 2
+>From x
+>From y
+'From: me\n>From you\n From x\nFromage' ''
+[exit 0]

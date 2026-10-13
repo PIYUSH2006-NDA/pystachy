@@ -1,0 +1,195 @@
+3001 3189 3001 ['order,date,customer,city,product,quantity,unit_price,discount,status,note\r\n', '1,2026-06-18,"García, Mateo","Washington, D.C.","Cable, 2 m",6,89.36,,delivered,\r\n', '2,2026-01-24,"Smith, Farah",New York,Lamp,3,200.13,0.15,returned,\r\n']
+orders: 3000 rows, 10 columns
+  1. order
+         type: int
+       values: 3000
+        empty: 0
+     distinct: 3000
+          min: 1
+          max: 3000
+         mean: 1500.5
+       median: 1500.5
+        stdev: 866.17
+          top: 1
+    top count: 1
+  2. date
+         type: text
+       values: 3000
+        empty: 0
+     distinct: 365
+          min: '2026-01-01'
+          max: '2026-12-31'
+          top: '2026-09-05'
+    top count: 19
+  3. customer
+         type: text
+       values: 3000
+        empty: 0
+     distinct: 251
+          min: 'Dubois, Eve'
+          max: 'Tanaka, Tariq'
+          top: 'Smith, Kenji'
+    top count: 38
+  4. city
+         type: text
+       values: 3000
+        empty: 0
+     distinct: 11
+          min: 'Austin'
+          max: 'Zürich'
+          top: 'Washington, D.C.'
+    top count: 675
+  5. product
+         type: text
+       values: 3000
+        empty: 0
+     distinct: 9
+          min: '"Deluxe" kit'
+          max: 'Widget'
+          top: 'Ruler 12"'
+    top count: 824
+  6. quantity
+         type: int
+       values: 3000
+        empty: 0
+     distinct: 19
+          min: 1
+          max: 19
+         mean: 5.38267
+       median: 5
+        stdev: 3.79707
+          top: 1
+    top count: 425
+  7. unit_price
+         type: float
+       values: 3000
+        empty: 0
+     distinct: 2789
+          min: 1.04
+          max: 200.93
+         mean: 99.3536
+       median: 99.18
+        stdev: 57.3421
+          top: 17.31
+    top count: 3
+  8. discount
+         type: float
+       values: 1279
+        empty: 1721
+     distinct: 3
+          min: 0.05
+          max: 0.15
+         mean: 0.098319
+       median: 0.1
+        stdev: 0.0412433
+          top: 0.05
+    top count: 457
+  9. status
+         type: text
+       values: 3000
+        empty: 0
+     distinct: 5
+          min: 'cancelled'
+          max: 'shipped'
+          top: 'shipped'
+    top count: 1087
+ 10. note
+         type: text
+       values: 296
+        empty: 2704
+     distinct: 5
+          min: 'Call first\nGate code 1234'
+          max: 'Second floor\nRing twice\nThanks'
+          top: 'Second floor\nRing twice\nThanks'
+    top count: 68
+column,type,values,empty,distinct,min,max,mean,median,stdev,top,top count
+order,int,3000,0,3000,1,3000,1500.5,1500.5,866.17,1,1
+date,text,3000,0,365,2026-01-01,2026-12-31,,,,2026-09-05,19
+customer,text,3000,0,251,"Dubois, Eve","Tanaka, Tariq",,,,"Smith, Kenji",38
+city,text,3000,0,11,Austin,Zürich,,,,"Washington, D.C.",675
+product,text,3000,0,9,"""Deluxe"" kit",Widget,,,,"Ruler 12""",824
+quantity,int,3000,0,19,1,19,5.38267,5,3.79707,1,425
+unit_price,float,3000,0,2789,1.04,200.93,99.3536,99.18,57.3421,17.31,3
+discount,float,1279,1721,3,0.05,0.15,0.098319,0.1,0.0412433,0.05,457
+status,text,3000,0,5,cancelled,shipped,,,,shipped,1087
+note,text,296,2704,5,"Call first
+Gate code 1234","Second floor
+Ring twice
+Thanks",,,,"Second floor
+Ring twice
+Thanks",68
+ragged: 5 rows, 3 columns, 1 rows longer than the header
+  1. a
+         type: float
+       values: 4
+        empty: 1
+     distinct: 4
+          min: 1
+          max: 4.5
+         mean: 2.625
+       median: 2.5
+        stdev: 1.49304
+          top: 1
+    top count: 1
+  2. b
+         type: text
+       values: 3
+        empty: 2
+     distinct: 3
+          min: 'w'
+          max: 'y'
+          top: 'x'
+    top count: 1
+  3. c
+         type: text
+       values: 2
+        empty: 3
+     distinct: 2
+          min: 'q'
+          max: 'z'
+          top: 'z'
+    top count: 1
+column,type,values,empty,distinct,min,max,mean,median,stdev,top,top count
+a,float,4,1,4,1,4.5,2.625,2.5,1.49304,1,1
+b,text,3,2,3,w,y,,,,x,1
+c,text,2,3,2,q,z,,,,z,1
+big: 4 rows, 2 columns
+  1. id
+         type: int
+       values: 4
+        empty: 0
+     distinct: 4
+          min: 9007199254740992
+          max: 9223372036854775807
+         mean: 2.3126e+18
+       median: 9.0072e+15
+        stdev: 4.60718e+18
+          top: 9007199254740993
+    top count: 1
+  2. n
+         type: int
+       values: 4
+        empty: 0
+     distinct: 4
+          min: 1
+          max: 4
+         mean: 2.5
+       median: 2.5
+        stdev: 1.29099
+          top: 1
+    top count: 1
+mixed: 3 rows, 1 columns
+  1. id
+         type: float
+       values: 3
+        empty: 0
+     distinct: 3
+          min: 1.5
+          max: 9.0072e+15
+         mean: 6.0048e+15
+       median: 9.0072e+15
+        stdev: 5.20031e+15
+          top: 9007199254740992
+    top count: 1
+['int', '2', '0', '2', '9007199254740992', '9007199254740993', '9.0072e+15', '9.0072e+15', '0.707107', '9007199254740992', '1']
+[exit 0]

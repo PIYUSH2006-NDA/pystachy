@@ -1,0 +1,237 @@
+test_fma_nan_results: 363 NaNs
+fma(inf, 0.0, -inf) ValueError: invalid operation in fma
+fma(0.0, inf, -inf) ValueError: invalid operation in fma
+fma(inf, -0.0, -inf) ValueError: invalid operation in fma
+fma(-0.0, inf, -inf) ValueError: invalid operation in fma
+fma(-inf, 0.0, -inf) ValueError: invalid operation in fma
+fma(0.0, -inf, -inf) ValueError: invalid operation in fma
+fma(-inf, -0.0, -inf) ValueError: invalid operation in fma
+fma(-0.0, -inf, -inf) ValueError: invalid operation in fma
+fma(inf, 0.0, -2.3) ValueError: invalid operation in fma
+fma(0.0, inf, -2.3) ValueError: invalid operation in fma
+fma(inf, -0.0, -2.3) ValueError: invalid operation in fma
+fma(-0.0, inf, -2.3) ValueError: invalid operation in fma
+fma(-inf, 0.0, -2.3) ValueError: invalid operation in fma
+fma(0.0, -inf, -2.3) ValueError: invalid operation in fma
+fma(-inf, -0.0, -2.3) ValueError: invalid operation in fma
+fma(-0.0, -inf, -2.3) ValueError: invalid operation in fma
+fma(inf, 0.0, -0.0) ValueError: invalid operation in fma
+fma(0.0, inf, -0.0) ValueError: invalid operation in fma
+fma(inf, -0.0, -0.0) ValueError: invalid operation in fma
+fma(-0.0, inf, -0.0) ValueError: invalid operation in fma
+fma(-inf, 0.0, -0.0) ValueError: invalid operation in fma
+fma(0.0, -inf, -0.0) ValueError: invalid operation in fma
+fma(-inf, -0.0, -0.0) ValueError: invalid operation in fma
+fma(-0.0, -inf, -0.0) ValueError: invalid operation in fma
+fma(inf, 0.0, 0.0) ValueError: invalid operation in fma
+fma(0.0, inf, 0.0) ValueError: invalid operation in fma
+fma(inf, -0.0, 0.0) ValueError: invalid operation in fma
+fma(-0.0, inf, 0.0) ValueError: invalid operation in fma
+fma(-inf, 0.0, 0.0) ValueError: invalid operation in fma
+fma(0.0, -inf, 0.0) ValueError: invalid operation in fma
+fma(-inf, -0.0, 0.0) ValueError: invalid operation in fma
+fma(-0.0, -inf, 0.0) ValueError: invalid operation in fma
+fma(inf, 0.0, 2.3) ValueError: invalid operation in fma
+fma(0.0, inf, 2.3) ValueError: invalid operation in fma
+fma(inf, -0.0, 2.3) ValueError: invalid operation in fma
+fma(-0.0, inf, 2.3) ValueError: invalid operation in fma
+fma(-inf, 0.0, 2.3) ValueError: invalid operation in fma
+fma(0.0, -inf, 2.3) ValueError: invalid operation in fma
+fma(-inf, -0.0, 2.3) ValueError: invalid operation in fma
+fma(-0.0, -inf, 2.3) ValueError: invalid operation in fma
+fma(inf, 0.0, inf) ValueError: invalid operation in fma
+fma(0.0, inf, inf) ValueError: invalid operation in fma
+fma(inf, -0.0, inf) ValueError: invalid operation in fma
+fma(-0.0, inf, inf) ValueError: invalid operation in fma
+fma(-inf, 0.0, inf) ValueError: invalid operation in fma
+fma(0.0, -inf, inf) ValueError: invalid operation in fma
+fma(-inf, -0.0, inf) ValueError: invalid operation in fma
+fma(-0.0, -inf, inf) ValueError: invalid operation in fma
+fma(inf, 1e-300, -inf) ValueError: invalid operation in fma
+fma(inf, -1e-300, inf) ValueError: invalid operation in fma
+fma(-inf, -1e-300, -inf) ValueError: invalid operation in fma
+fma(-inf, 1e-300, inf) ValueError: invalid operation in fma
+fma(1e-300, inf, -inf) ValueError: invalid operation in fma
+fma(-1e-300, inf, inf) ValueError: invalid operation in fma
+fma(-1e-300, -inf, -inf) ValueError: invalid operation in fma
+fma(1e-300, -inf, inf) ValueError: invalid operation in fma
+fma(inf, 2.3, -inf) ValueError: invalid operation in fma
+fma(inf, -2.3, inf) ValueError: invalid operation in fma
+fma(-inf, -2.3, -inf) ValueError: invalid operation in fma
+fma(-inf, 2.3, inf) ValueError: invalid operation in fma
+fma(2.3, inf, -inf) ValueError: invalid operation in fma
+fma(-2.3, inf, inf) ValueError: invalid operation in fma
+fma(-2.3, -inf, -inf) ValueError: invalid operation in fma
+fma(2.3, -inf, inf) ValueError: invalid operation in fma
+fma(inf, 1e+300, -inf) ValueError: invalid operation in fma
+fma(inf, -1e+300, inf) ValueError: invalid operation in fma
+fma(-inf, -1e+300, -inf) ValueError: invalid operation in fma
+fma(-inf, 1e+300, inf) ValueError: invalid operation in fma
+fma(1e+300, inf, -inf) ValueError: invalid operation in fma
+fma(-1e+300, inf, inf) ValueError: invalid operation in fma
+fma(-1e+300, -inf, -inf) ValueError: invalid operation in fma
+fma(1e+300, -inf, inf) ValueError: invalid operation in fma
+fma(inf, inf, -inf) ValueError: invalid operation in fma
+fma(inf, -inf, inf) ValueError: invalid operation in fma
+fma(-inf, -inf, -inf) ValueError: invalid operation in fma
+fma(-inf, inf, inf) ValueError: invalid operation in fma
+fma(inf, inf, -inf) ValueError: invalid operation in fma
+fma(-inf, inf, inf) ValueError: invalid operation in fma
+fma(-inf, -inf, -inf) ValueError: invalid operation in fma
+fma(inf, -inf, inf) ValueError: invalid operation in fma
+fma(inf, 1e-300, inf) inf
+fma(inf, -1e-300, -inf) -inf
+fma(-inf, -1e-300, inf) inf
+fma(-inf, 1e-300, -inf) -inf
+fma(1e-300, inf, inf) inf
+fma(-1e-300, inf, -inf) -inf
+fma(-1e-300, -inf, inf) inf
+fma(1e-300, -inf, -inf) -inf
+fma(inf, 2.3, inf) inf
+fma(inf, -2.3, -inf) -inf
+fma(-inf, -2.3, inf) inf
+fma(-inf, 2.3, -inf) -inf
+fma(2.3, inf, inf) inf
+fma(-2.3, inf, -inf) -inf
+fma(-2.3, -inf, inf) inf
+fma(2.3, -inf, -inf) -inf
+fma(inf, 1e+300, inf) inf
+fma(inf, -1e+300, -inf) -inf
+fma(-inf, -1e+300, inf) inf
+fma(-inf, 1e+300, -inf) -inf
+fma(1e+300, inf, inf) inf
+fma(-1e+300, inf, -inf) -inf
+fma(-1e+300, -inf, inf) inf
+fma(1e+300, -inf, -inf) -inf
+fma(inf, inf, inf) inf
+fma(inf, -inf, -inf) -inf
+fma(-inf, -inf, inf) inf
+fma(-inf, inf, -inf) -inf
+fma(inf, inf, inf) inf
+fma(-inf, inf, -inf) -inf
+fma(-inf, -inf, inf) inf
+fma(inf, -inf, -inf) -inf
+fma(a, b, +-inf) of finite a and b: 128 infinities
+fma() of an infinite a*b and a finite c: 256 infinities
+fma(0.0, 0.0, 0.0) 0.0
+fma(0.0, 0.0, -0.0) 0.0
+fma(0.0, -0.0, -0.0) -0.0
+fma(0.0, -0.0, 0.0) 0.0
+fma(-0.0, -0.0, 0.0) 0.0
+fma(-0.0, -0.0, -0.0) 0.0
+fma(-0.0, 0.0, -0.0) -0.0
+fma(-0.0, 0.0, 0.0) 0.0
+fma(0.0, 0.0, 0.0) 0.0
+fma(0.0, 0.0, -0.0) 0.0
+fma(-0.0, 0.0, -0.0) -0.0
+fma(-0.0, 0.0, 0.0) 0.0
+fma(-0.0, -0.0, 0.0) 0.0
+fma(-0.0, -0.0, -0.0) 0.0
+fma(0.0, -0.0, -0.0) -0.0
+fma(0.0, -0.0, 0.0) 0.0
+fma(0.0, 1e-300, 0.0) 0.0
+fma(0.0, 1e-300, -0.0) 0.0
+fma(0.0, -1e-300, -0.0) -0.0
+fma(0.0, -1e-300, 0.0) 0.0
+fma(-0.0, -1e-300, 0.0) 0.0
+fma(-0.0, -1e-300, -0.0) 0.0
+fma(-0.0, 1e-300, -0.0) -0.0
+fma(-0.0, 1e-300, 0.0) 0.0
+fma(1e-300, 0.0, 0.0) 0.0
+fma(1e-300, 0.0, -0.0) 0.0
+fma(-1e-300, 0.0, -0.0) -0.0
+fma(-1e-300, 0.0, 0.0) 0.0
+fma(-1e-300, -0.0, 0.0) 0.0
+fma(-1e-300, -0.0, -0.0) 0.0
+fma(1e-300, -0.0, -0.0) -0.0
+fma(1e-300, -0.0, 0.0) 0.0
+fma(0.0, 2.3, 0.0) 0.0
+fma(0.0, 2.3, -0.0) 0.0
+fma(0.0, -2.3, -0.0) -0.0
+fma(0.0, -2.3, 0.0) 0.0
+fma(-0.0, -2.3, 0.0) 0.0
+fma(-0.0, -2.3, -0.0) 0.0
+fma(-0.0, 2.3, -0.0) -0.0
+fma(-0.0, 2.3, 0.0) 0.0
+fma(2.3, 0.0, 0.0) 0.0
+fma(2.3, 0.0, -0.0) 0.0
+fma(-2.3, 0.0, -0.0) -0.0
+fma(-2.3, 0.0, 0.0) 0.0
+fma(-2.3, -0.0, 0.0) 0.0
+fma(-2.3, -0.0, -0.0) 0.0
+fma(2.3, -0.0, -0.0) -0.0
+fma(2.3, -0.0, 0.0) 0.0
+fma(0.0, 1e+300, 0.0) 0.0
+fma(0.0, 1e+300, -0.0) 0.0
+fma(0.0, -1e+300, -0.0) -0.0
+fma(0.0, -1e+300, 0.0) 0.0
+fma(-0.0, -1e+300, 0.0) 0.0
+fma(-0.0, -1e+300, -0.0) 0.0
+fma(-0.0, 1e+300, -0.0) -0.0
+fma(-0.0, 1e+300, 0.0) 0.0
+fma(1e+300, 0.0, 0.0) 0.0
+fma(1e+300, 0.0, -0.0) 0.0
+fma(-1e+300, 0.0, -0.0) -0.0
+fma(-1e+300, 0.0, 0.0) 0.0
+fma(-1e+300, -0.0, 0.0) 0.0
+fma(-1e+300, -0.0, -0.0) 0.0
+fma(1e+300, -0.0, -0.0) -0.0
+fma(1e+300, -0.0, 0.0) 0.0
+fma(2.0, 2.0, -4.0) 0.0
+fma(2.0, -2.0, 4.0) 0.0
+fma(-2.0, -2.0, -4.0) 0.0
+fma(-2.0, 2.0, 4.0) 0.0
+fma(tiny, tiny, 0.0) 0.0
+fma(tiny, -tiny, 0.0) -0.0
+fma(-tiny, -tiny, 0.0) 0.0
+fma(-tiny, tiny, 0.0) -0.0
+fma(tiny, tiny, -0.0) 0.0
+fma(tiny, -tiny, -0.0) -0.0
+fma(-tiny, -tiny, -0.0) 0.0
+fma(-tiny, tiny, -0.0) -0.0
+fma(x-y, x+y, -z) -0.0
+fma(y-x, x+y, z) 0.0
+fma(y-x, -(x+y), -z) -0.0
+fma(x-y, -(x+y), z) 0.0
+fma(0x1p512, 0x1p512, 0.0) OverflowError: overflow in fma
+fma(a, b/2.0, 0.0) 8.98846567431158e+307
+fma(0x1p512, 0x1p511, 0x1p1023) OverflowError: overflow in fma
+fma(a, b, -c) 8.98846567431158e+307
+fma(0x1.ffffffc000000p+511, 0x1.0000002000000p+512, 0.0) OverflowError: overflow in fma
+fma(0x1.ffffffc000000p+511, 0x1.0000002000000p+512, 0x0.0000000000001p-1022) OverflowError: overflow in fma
+fma(a, b, -c) 1.7976931348623157e+308
+fma(a, b, -c) 1.7976931348623157e+308
+fma(a - 1.0, a + 1.0, 1.0) 7.888609052210118e-31
+fma(0x1.694adde428b44p-1, 0x1.371b0d64caed7p-1, 0x1.f347e7b8deab8p-4) 0.5506672157701097
+fma(0x1.371b0d64caed7p-1, 0x1.694adde428b44p-1, 0x1.f347e7b8deab8p-4) 0.5506672157701097
+fma(0x1.605401ccc6ad6p-2, 0x1.ce3a40bf56640p-2, 0x1.96e3bf7bf2e20p-2) 0.5526645382065284
+fma(0x1.ce3a40bf56640p-2, 0x1.605401ccc6ad6p-2, 0x1.96e3bf7bf2e20p-2) 0.5526645382065284
+fma(0x1.e5abd653a67d4p-2, 0x1.a2e400209b3e6p-1, 0x1.a90051422ce13p-1) 1.2181175222512894
+fma(0x1.a2e400209b3e6p-1, 0x1.e5abd653a67d4p-2, 0x1.a90051422ce13p-1) 1.2181175222512894
+fma(0x1.f94e8efd54700p-2, 0x1.123065c812cebp-1, 0x1.458f86fb6ccd0p-1) 0.9001230642479626
+fma(0x1.123065c812cebp-1, 0x1.f94e8efd54700p-2, 0x1.458f86fb6ccd0p-1) 0.9001230642479626
+fma(0x1.bd926f1eedc96p-1, 0x1.eee9ca68c5740p-1, 0x1.960c703eb3298p-2) 1.2377469129523904
+fma(0x1.eee9ca68c5740p-1, 0x1.bd926f1eedc96p-1, 0x1.960c703eb3298p-2) 1.2377469129523904
+fma(0x1.27348350fbccdp-1, 0x1.3b073914a53f1p-1, 0x1.e300da5c2b4cbp-1) 1.298124887926756
+fma(0x1.3b073914a53f1p-1, 0x1.27348350fbccdp-1, 0x1.e300da5c2b4cbp-1) 1.298124887926756
+fma(0x1.2774f00b3497bp-1, 0x1.7038ec336bff0p-2, 0x1.2f6f2ccc3576bp-1) 0.8001527670014793
+fma(0x1.7038ec336bff0p-2, 0x1.2774f00b3497bp-1, 0x1.2f6f2ccc3576bp-1) 0.8001527670014793
+fma(0x1.51d5a99300e5cp-1, 0x1.5cd74abd445a1p-1, 0x1.8880ab0bbe530p-1) 1.2161708724607456
+fma(0x1.5cd74abd445a1p-1, 0x1.51d5a99300e5cp-1, 0x1.8880ab0bbe530p-1) 1.2161708724607456
+fma(0x1.73cb965b821b8p-2, 0x1.218fd3d8d5371p-1, 0x1.d1ea966a1f758p-2) 0.6603372392201293
+fma(0x1.218fd3d8d5371p-1, 0x1.73cb965b821b8p-2, 0x1.d1ea966a1f758p-2) 0.6603372392201293
+fma(0x1.4aa98e890b046p-1, 0x1.954d85dff1041p-1, 0x1.122b59317ebdfp-1) 1.0467265069608385
+fma(0x1.954d85dff1041p-1, 0x1.4aa98e890b046p-1, 0x1.122b59317ebdfp-1) 1.0467265069608385
+fma(0x1.e28f29e44750fp-1, 0x1.4bcc4fdcd18fep-1, 0x1.fd47f81298259p-1) 1.6054694046702924
+fma(0x1.4bcc4fdcd18fep-1, 0x1.e28f29e44750fp-1, 0x1.fd47f81298259p-1) 1.6054694046702924
+fma(0x1.d2e850717fe78p-3, 0x1.1dd7531c303afp-1, 0x1.e0869746a2fc2p-2) 0.5965420877502147
+fma(0x1.1dd7531c303afp-1, 0x1.d2e850717fe78p-3, 0x1.e0869746a2fc2p-2) 0.5965420877502147
+fma(0x1.cf89c75ee6fbap-2, 0x1.b23decdc66825p-1, 0x1.3d1fe76ac6168p-1) 1.0033098636364872
+fma(0x1.b23decdc66825p-1, 0x1.cf89c75ee6fbap-2, 0x1.3d1fe76ac6168p-1) 1.0033098636364872
+fma(0x1.3265ae6f05572p-2, 0x1.16d7ec285f7a2p-1, 0x1.0b8405b3827fbp-1) 0.6854494830522527
+fma(0x1.16d7ec285f7a2p-1, 0x1.3265ae6f05572p-2, 0x1.0b8405b3827fbp-1) 0.6854494830522527
+fma(0x1.c4d1bf55ec1a5p-1, 0x1.bc59618459e12p-2, 0x1.ce5b73dc1773dp-1) 1.286818867156035
+fma(0x1.bc59618459e12p-2, 0x1.c4d1bf55ec1a5p-1, 0x1.ce5b73dc1773dp-1) 1.286818867156035
+fma(0x1.d350026ac3946p-1, 0x1.9a234e149a68cp-2, 0x1.f5467b1911fd6p-2) 0.8550940494008797
+fma(0x1.9a234e149a68cp-2, 0x1.d350026ac3946p-1, 0x1.f5467b1911fd6p-2) 0.8550940494008797
+[exit 0]

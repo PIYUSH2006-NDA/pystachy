@@ -1,0 +1,7 @@
+True True T--s- True False True True
+True False T---d False True False True
+False True -Fn-d False True False False
+False False -Fns- True False False False
+hyphens plain plain
+True True True
+[exit 0]

@@ -1,0 +1,220 @@
+repr(False) 'False'
+repr(True) 'True'
+str(False) 'False'
+str(True) 'True'
+int(False) 0
+int(False) 0
+int(True) 1
+int(True) 1
+float(False) 0.0
+float(False) 0.0
+float(True) 1.0
+float(True) 1.0
++False 0
++False 0
+-False 0
+-False 0
+abs(False) 0
+abs(False) 0
++True 1
++True 1
+-True -1
+abs(True) 1
+abs(True) 1
+False+2 2
+True+2 3
+2+False 2
+2+True 3
+False+False 0
+False+False 0
+False+True 1
+False+True 1
+True+False 1
+True+False 1
+True+True 2
+True-True 0
+True-True 0
+False-False 0
+False-False 0
+True-False 1
+True-False 1
+False-True -1
+True*1 1
+False*1 0
+False*1 0
+True/1 1.0
+True/1 1.0
+False/1 0.0
+False/1 0.0
+True%1 0
+True%1 0
+True%2 1
+True%2 1
+False%1 0
+False%1 0
+False**0 1
+False**0 1
+False**1 0
+False**1 0
+False**2 0
+False**2 0
+True**0 1
+True**0 1
+True**1 1
+True**1 1
+True**2 1
+True**2 1
+False&False False
+False|False False
+False^False False
+False&int(False) 0
+False&int(False) 0
+False|int(False) 0
+False|int(False) 0
+False^int(False) 0
+False^int(False) 0
+int(False)&False 0
+int(False)&False 0
+int(False)|False 0
+int(False)|False 0
+int(False)^False 0
+int(False)^False 0
+False&True False
+False|True True
+False^True True
+False&int(True) 0
+False&int(True) 0
+False|int(True) 1
+False|int(True) 1
+False^int(True) 1
+False^int(True) 1
+int(False)&True 0
+int(False)&True 0
+int(False)|True 1
+int(False)|True 1
+int(False)^True 1
+int(False)^True 1
+True&False False
+True|False True
+True^False True
+True&int(False) 0
+True&int(False) 0
+True|int(False) 1
+True|int(False) 1
+True^int(False) 1
+True^int(False) 1
+int(True)&False 0
+int(True)&False 0
+int(True)|False 1
+int(True)|False 1
+int(True)^False 1
+int(True)^False 1
+True&True True
+True|True True
+True^True False
+True&int(True) 1
+True&int(True) 1
+True|int(True) 1
+True|int(True) 1
+True^int(True) 0
+True^int(True) 0
+int(True)&True 1
+int(True)&True 1
+int(True)|True 1
+int(True)|True 1
+int(True)^True 0
+int(True)^True 0
+1==1 True
+1==0 False
+0<1 True
+1<0 False
+0<=0 True
+1<=0 False
+1>0 True
+1>1 False
+1>=1 True
+0>=1 False
+0!=1 True
+0!=0 False
+x is x True
+x is not x False
+1 in x True
+0 in x False
+1 not in x False
+0 not in x True
+y is y True
+y is not y False
+1 in y True
+0 in y False
+1 not in y False
+0 not in y True
+not True False
+not False True
+bool(10) True
+bool(1) True
+bool(-1) True
+bool(0) False
+bool("hello") True
+bool("") False
+bool() False
+"%d" % False '0'
+"%d" % True '1'
+"%x" % False '0'
+"%x" % True '1'
+hasattr([], "append") True
+hasattr([], "wobble") False
+isinstance(True, bool) True
+isinstance(False, bool) True
+isinstance(True, int) True
+isinstance(False, int) True
+isinstance(1, bool) False
+isinstance(0, bool) False
+1 in {} False
+1 in {1:1} True
+"xyz".endswith("z") True
+"xyz".endswith("x") False
+"xyz0123".isalnum() True
+"@#$%".isalnum() False
+"xyz".isalpha() True
+"@#$%".isalpha() False
+"0123".isdigit() True
+"xyz".isdigit() False
+"xyz".islower() True
+"XYZ".islower() False
+"0123".isdecimal() True
+"xyz".isdecimal() False
+"0123".isnumeric() True
+"xyz".isnumeric() False
+" ".isspace() True
+"\xa0".isspace() True
+"\u3000".isspace() True
+"XYZ".isspace() False
+"X".istitle() True
+"x".istitle() False
+"XYZ".isupper() True
+"xyz".isupper() False
+"xyz".startswith("x") True
+"xyz".startswith("z") False
+True & 1 1
+isinstance(True & 1, bool) False
+True & True True
+True | 1 1
+isinstance(True | 1, bool) False
+True | True True
+True ^ 1 0
+isinstance(True ^ 1, bool) False
+True ^ True False
+f.closed False
+f.closed True
+operator.truth(0) False
+operator.truth(1) True
+operator.not_(1) False
+operator.not_(0) True
+operator.contains([], 1) False
+operator.contains([1], 1) True
+operator.lt(0, 0) False
+operator.lt(0, 1) True
+bool(Eggs()) ValueError: __len__() should return >= 0
+str(e_bool) '__len__() should return >= 0'
+x.count 1
+[exit 0]
