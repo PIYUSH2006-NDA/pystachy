@@ -102,7 +102,11 @@ and takes 4.2 µs compiled, against 10.9 µs before and CPython's 2.1 µs. And t
 contexts for reuse, the state's for all its matches (`tests/lib_re_reuse.py`), where `_sre` pushes a
 new one for each nested match: they are made as deep as it goes, 7 for `wordsep_re`'s split of a
 paragraph instead of 3,110, which takes about 6% less time compiled, and `wordsep_simple_re`'s 15%
-less.
+less. A branch skips an alternative, and a search a position, where the alternative or the pattern
+begins with a literal or a class repeated at least once (after groups' marks, for a search) and the
+character there is not that one, without the nested match that would fail at once
+(`tests/lib_re_first.py`): `wordsep_simple_re`'s split of a paragraph enters the matcher 79 times
+instead of 468, and takes 30% less time compiled.
 
 ## `fnmatch`, a port of CPython's
 
