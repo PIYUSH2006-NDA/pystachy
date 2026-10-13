@@ -330,6 +330,14 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
+/* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
+   own frame (Gen.stack_tuple), which the function called copies before it keeps it
+   (Gen.keep_stack). Not inlined: the frames of its callers, where such a tuple lives, are then all
+   above this one's. */
+__attribute__((noinline)) I pys_on_stack(void *x) {
+  uintptr_t p = (uintptr_t)x;
+  return p >= (uintptr_t)__builtin_frame_address(0) && p < (uintptr_t)gc_bottom;
+}
 static void gc_extern(I n) {           /* n malloc'd bytes more that heap objects hold (fewer: n < 0), counted as the
                                           heap's own; whoever allocates them collects first, as gc_slow would */
   if (n > 0) gc_allocd += n;

@@ -53,8 +53,8 @@ def tkey(d: dict[tuple[int, str], int], t: tuple[int, str]) -> None:
 
 
 def tbuilt(d: dict[tuple[int, str], int], a: int) -> None:
-    if (a, "x") in d:
-        d[a, "x"] += 1  # another tuple: has; then entry, val, entry_set
+    if (a, "x") in d:  # a key made in the frame: has, no allocation
+        d[a, "x"] += 1  # another tuple: allocated; then entry, val, entry_set
 
 
 def optd(d: Optional[dict[str, int]], k: str) -> None:
