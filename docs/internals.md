@@ -261,7 +261,12 @@ file whose close fails notes its `OSError`, which then takes the place of the ex
 propagated, including `SystemExit` (CPython's `__exit__` raises it inside the `try`, if any).
 
 A module's code runs in the region of a landing block that marks the module not run and throws
-again; a read through a name that an import in a `try` statement binds checks that mark.
+again. A name that an import in a `try` statement binds has a flag of its own, which every import
+that binds the name sets where it binds it (a plain import once its own modules' code has run, a
+from-import once all of them has), and which every read through the name checks: a global in
+module code, in a function a slot, or a cell that the lambdas in it that read the name share. A
+read through a package's attribute for a submodule that an import in a `try` statement runs checks
+the submodule's mark, as CPython sets that attribute once the submodule's code has run to its end.
 `runtime.c` is compiled with `-fexceptions` in both tiers.
 
 An object of an exception class begins with a pointer to its class's `ExcClass`, a constant the

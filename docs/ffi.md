@@ -2,21 +2,22 @@
 
 Status: **prototype**, proposed as the decision record that issue
 [#4](https://github.com/den-run-ai/pystachy/issues/4) §4 asks for (see
-[history.md](history.md#open)). One of the three directions is built, calling C; the other two
-are designed [below](#next-cpython-calls-pystachy-pystachy-ext) and come next. Nothing here
-changes a program that does not use it: such a program compiles to the same LLVM IR, byte for
-byte, as without this work (`make irsame`).
+[history.md](history.md#open)). Two of the three directions are built: calling C and
+extension modules; the [next step](#next-pystachy-calls-cpython-libpyobjpy) is calling
+CPython. Nothing here changes a program that does not use it: such a program compiles to the
+same LLVM IR, byte for byte, as without this work (`make irsame`).
 
 | direction | how | tiers |
 |---|---|---|
 | Pystachy calls C | `@ffi.extern("lib")` on a typed `...` stub, looked up in the library's own handle as ctypes does | JIT and AOT, from the same IR |
 | Pystachy calls CPython (next) | `lib/pyobj.py`: CPython's stable ABI through `@ffi.extern`, CPython embedded | JIT and AOT (AOT the reference) |
-| CPython calls Pystachy (next) | `pystachy ext NAME.py`: an abi3 or abi3t extension module of `@ffi.export` functions | AOT only |
+| CPython calls Pystachy | `pystachy ext NAME.py`: an abi3 or abi3t extension module of `@ffi.export` functions | AOT only |
 
 Each direction keeps Pystachy's contract: a program prints what CPython prints, or is rejected
 at compile time with `file:line: error`. CPython's side is defined by *twins*: the
-`tools/rt_cpython` directory holds a plain-Python `ffi.py` (ctypes for `extern`), so every file
-that uses the FFI also runs under CPython, and that run is the oracle:
+`tools/rt_cpython` directory holds a plain-Python `ffi.py` (ctypes for `extern`, a checking
+wrapper for `export`), so every file that uses the FFI also runs under CPython, and that run is
+the oracle:
 
     PYTHONPATH=$PYSTACHY_HOME/tools/rt_cpython python3 prog.py   # what prog.py must print
 
@@ -129,18 +130,46 @@ up, Pystachy writes and reads floats in the C locale whatever `setlocale` a C fu
 A program's own `ffi.py` (or `ffi/` package) on its module path comes first, as under CPython:
 Pystachy's builtin `ffi` is then not used (tests/ffi_own.py).
 
-## Next: CPython calls Pystachy (`pystachy ext`)
+## CPython calls Pystachy: `pystachy ext`
 
-Not built yet; designed and prototyped as follows. `pystachy ext NAME.py` compiles a module whose
-public functions are `@ffi.export` (positional `int`, `float`, `bool` and `str` in, one of those or
-`None` out) into an extension module: `NAME.abi3.so` for CPython 3.12+ GIL builds, or
-`NAME.abi3t.so` (PEP 803, entry `PyModExport_NAME` of PEP 793) for 3.15+ GIL and free-threaded
-builds, from the same program IR. The program, the runtime and a header-free C glue (`pyext.c`)
-become one module whose only visible symbol is the entry. Every entry ends in a catch-all landing
-pad, so no Pystachy exception unwinds through CPython's frames; the outermost entry's frame bounds
-the collector's stack scan; only the importing thread may call; `print()` and `input()` go through
-the host's `sys.stdout` and `sys.stdin`. The twin `ffi.export` is a wrapper with the same checks, so
-the module's source run under CPython is the oracle.
+    # fastmath.py: CPython can run it as it is (with the twins), or import it compiled
+    from ffi import export
+
+    @export
+    def fib(n: int) -> int:
+        a, b = 0, 1
+        for _ in range(n):
+            a, b = b, a + b
+        return a
+
+    $ pystachy ext fastmath.py                  # fastmath.abi3.so: CPython 3.12+ GIL builds
+    $ pystachy ext fastmath.py --abi abi3t      # fastmath.abi3t.so: CPython 3.15+, GIL and free-threaded
+
+Both come from the same program IR; the generic glue is `pyext.c`, compiled once per ABI
+without `Python.h` (it declares the stable-ABI functions it uses, as the ABI fixes them), and
+`pyembed.c`. The program, the glue and the runtime become one module, of which only the entry
+(`PyInit_<name>` or `PyModExport_<name>`) stays visible; `tools/abi_check.sh` checks that, and
+that every Py symbol it imports is in the stable ABI of its version.
+
+- The module's public functions must be `@export`, and take and return `int` (64-bit), `float`,
+  `bool` or `str` (or return `None`), positionally, without defaults or `*args`. Pystachy code
+  may not call an `@export` function (under CPython each call goes through the export's checks):
+  call a private function both use. A public class or variable is an error (they cannot cross
+  yet); name them with a leading underscore.
+- The module's code runs once, at import, with `__name__` the module's name (so its
+  `if __name__ == "__main__":` block does not run) and `sys.argv` the host's. `print()` writes
+  through Python's `sys.stdout` (so `contextlib.redirect_stdout` works, and a `None` one prints
+  nothing), a failed write raises in the program as it does under CPython, and `input()` and
+  `sys.stdin` are the host's (a replaced `sys.stdin` is read).
+- Every call is caught at the boundary: no Pystachy exception unwinds through CPython's frames.
+  An exception leaves as the builtin class of its name (one of the program's classes: its
+  nearest builtin base), with its `args` rebuilt from their repr.
+- Exported functions are builtin functions whose `__self__` is the module, so they pickle by
+  name (`multiprocessing` works).
+- When the host's interpreter exits, an `atexit` handler closes the module's open files before
+  modules are torn down, as CPython would; the module refuses calls after that.
+- An import that failed may be tried again (the code runs again, as CPython's would); a second
+  import of a module that loaded is refused.
 
 ## Next: Pystachy calls CPython (`lib/pyobj.py`)
 
@@ -172,34 +201,86 @@ Against CPython running the same files with the twins (tools/rt_cpython):
   does.
 - **C's stdio** output from an `@extern` function interleaves with `print()` only as the two
   buffers are flushed.
-- **Float text** is the C locale's whatever a C function's `setlocale` says, as CPython's own
-  float conversions are; format type `'n'`, which CPython takes from the locale, is the C
-  locale's too.
+- **Float text** is the C locale's whatever the host's `setlocale` says, as CPython's own float
+  conversions are; format type `'n'`, which CPython takes from the locale, is the C locale's too.
+- **Extension modules:**
+  - **64-bit ints** at the boundary: an argument or result outside int64 raises
+    `OverflowError` ("int too big to convert", "integer result does not fit in 64 bits"); the
+    export twin raises the same. Overflow inside the function is the existing checked-int
+    deviation.
+  - **An exception the module's code raises at import** leaves as the nearest builtin class, as
+    a call's does (`m._Bad(ValueError)` arrives as `ValueError`, same `args`); the source run
+    raises the module's own class.
+  - **One import per process:** a second import after one that succeeded (after deleting it
+    from `sys.modules`, or `importlib.reload`) raises `ImportError`, where CPython would run the
+    source again.
+  - **The importing thread only:** a call from another thread raises `RuntimeError` (the twin
+    enforces the same rule). Compiled code never releases the GIL, so a long call blocks other
+    Python threads and a Ctrl-C arrives when it returns.
+  - **The GIL:** on 3.15t an abi3t module turns the GIL on, with CPython's RuntimeWarning
+    (`Py_mod_gil` = used), and its import raises `ImportError` under `PYTHON_GIL=0`. An
+    `.abi3.so` raises `ImportError` on 3.13t and 3.14t, which load it but cannot use it.
+  - **No re-entry from I/O:** a call back into the module from the host's `sys.stdout`,
+    `sys.stderr` or `sys.stdin` while the module prints or reads raises `RuntimeError`.
+  - **`sys.stdout.write` with `sys.stdout` set to `None`** does nothing in the module, as
+    `print()` does, where CPython raises `AttributeError`.
+  - **After the host's atexit handlers** (an `atexit` handler registered before the module was
+    imported, or code run while modules are torn down), a call raises `RuntimeError`.
+  - **Running out of memory** inside a collection, and running out of stack, end the host
+    process.
 
 ## Limitations
 
-- **Platforms:** x86-64 Linux (LP64, Itanium unwinding, glibc) is what is tested. macOS has no
-  `RTLD_DEEPBIND`; Windows is out of scope.
-- **Not yet:** structs by value, varargs and callbacks into Pystachy from C (write a small C shim
-  with scalar arguments).
+- **Platforms:** x86-64 Linux (LP64, Itanium unwinding, glibc) is what is tested. macOS needs
+  `-undefined dynamic_lookup` for `ext` and has no `RTLD_DEEPBIND`; Windows (python3.dll, SEH) is
+  out of scope.
+- **CPython versions:** an `.abi3.so` imported by CPython 3.11 fails with the dynamic loader's
+  `ImportError` (undefined symbol `PyErr_GetRaisedException`); the wheel tag `cp312-abi3`
+  keeps installers from offering it there.
+- **Stack switching** (greenlet, gevent, any coroutine library that switches C stacks) while
+  compiled frames of an extension module are live is not supported and not detected: the
+  collector scans one contiguous stack from the outermost entry.
+- **Two Pystachy extension modules** in one process each carry their own runtime and heap;
+  objects cross between them only as copies through Python.
+- **Not yet:** keyword arguments and defaults for `@export`; classes and exception classes across
+  the boundary; callbacks into Pystachy from C; calls from any thread.
+- **Containers do not cross by copy.** As [#108](https://github.com/den-run-ai/pystachy/issues/108)
+  asks of typed/dynamic adapters, the boundary starts with scalars (and str, which is immutable): a
+  copied list or dict would lose its identity and shared mutation, which need an explicit contract
+  first. Pystachy code will reach Python's containers through `pyobj` Objects (the next step),
+  without copying them.
 
 ## Invariants for maintainers
 
-- **Pay for use.** `@extern` is opt-in: `-ldl` is linked only into programs that look C
-  functions up, and the C locale for floats stays unset otherwise, at the cost of a test of a
-  null pointer per conversion. `make irsame` against the commit before the FFI must find every
-  corpus program identical; `ffi` is left out of the missing-module message for that reason.
+- **Pay for use.** Each piece is opt-in: an `@extern` of a program, or the `ext` command.
+  `pyext.c` and `pyembed.c` are linked only into extension modules, `-ldl` only into programs
+  that look C functions up, and the runtime's hooks (`std_hook`, `in_hook`, the C locale for
+  floats) stay empty otherwise, at the cost of a test of a null pointer on a write. `make irsame`
+  against the commit before the FFI must find every corpus program identical; `ffi` is left out
+  of the missing-module message for that reason.
 - **No Python to build.** Nothing includes `Python.h`, and the driver never runs python3, so the
-  Python-free stage of `make verify` still rebuilds everything.
+  Python-free stage of `make verify` still rebuilds everything. `pystachy ext` is not part of that
+  stage; header-free glue is kept for reproducibility (the ABI is what the glue declares, not
+  what some installed header says) and so that no Python install is needed to build an
+  extension.
 - **The twins are the API.** A change to a check, a message or a name changes the twin and the
-  native code together; `tests/ffi/run.sh` compares them against output CPython recorded with
-  the twin.
-- **One thread.** The runtime is single-threaded and has no TLS (lli cannot relocate native TLS
-  in an extra object); a C library's own threads must not touch Pystachy's memory.
+  native code together; `tests/ffi/run.sh` compares them (C calls against recorded output,
+  extension modules live against the twins on the same CPython).
+- **One thread, and when the GIL can change hands.** The runtime is single-threaded and has no
+  TLS (lli cannot relocate native TLS in an extra object). In an extension module, compiled code
+  holds the GIL, but not throughout: `print`'s `sys.stdout.write` may release the GIL for I/O,
+  so other Python threads run then. What keeps
+  the runtime safe is that only the importing thread may enter it (`pyx_call` checks the thread
+  id, and `lib_depth` counts nested entries, the outermost of which bounds the stack scan).
+- **For a later world lock (calls from any thread):** a `PyCriticalSection` is suspended
+  whenever its thread detaches, including on a contended internal mutex, so it does not hold
+  across call-outs. The runtime's state must then be parked at every call-out, the stdio hooks'
+  Python calls included, not only at the boundary.
 
 ## Tests
 
 | command | what it checks |
 |---|---|
-| `make test-ffi` (`tests/ffi/run.sh`) | `tests/ffi/c_*.py` JIT and AOT against output CPython recorded with the twin (a test library, `tests/ffi/ffitest.c`, whose names lli's libraries also define; a missing library and symbol), under GC stress; `tests/ffi/errors/*.py` rejected with their messages |
+| `make test-ffi` (`tests/ffi/run.sh`) | `tests/ffi/c_*.py` JIT and AOT against output CPython recorded with the twin (a test library, `tests/ffi/ffitest.c`, whose names lli's libraries also define; a missing library and symbol); `tests/ffi/errors/*.py` rejected with their messages; with `$(PY)`'s libpython, the `tests/ffi/ext` modules against the twins (exceptions, conversions, argv, stdin, stdout redirected, pickling, the C locale), under GC stress |
 | `make test` | `tests/ffi_own.py`: a program's own `ffi` module comes first |
+| `tools/abi_check.sh TOML SO MAXVER ENTRY` | an extension module defines only its entry and imports only stable-ABI symbols of MAXVER or before (sh, nm and awk) |
