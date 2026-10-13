@@ -186,10 +186,11 @@ versions, platform, git commit and a timestamp:
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
 - **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
-  active signatures and branching template specializations fail with bounded source diagnostics
-  in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
-  seconds. Finite controls check active-budget release and reuse of completed instances at the
-  compilation-wide limit of 4,096 specializations;
+  active signatures, branching template specializations and the signature bytes they retain
+  (16 MiB per compilation) fail with bounded source diagnostics in hosted/native `ir`, JIT `run`
+  and AOT `build`, under 256 MiB address space and ten CPU seconds. Finite controls check
+  active-budget release and reuse of completed instances at the compilation-wide limit of 4,096
+  specializations;
 - **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
   35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
   function's default, import effects and the runtime's object comparison/representation callbacks

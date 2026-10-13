@@ -40,8 +40,9 @@
 #                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
-#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types and
-#                  specialization breadth under 256 MiB / ten CPU seconds, with short diagnostics;
+#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types,
+#                  specialization breadth and the signature bytes specializations retain under
+#                  256 MiB / ten CPU seconds, with short diagnostics;
 #                  finite controls and reuse at the retained-instance boundary still compile
 #   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
 #                  still execute as in CPython, with both compilers
