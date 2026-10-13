@@ -8,8 +8,8 @@ as CPython) plus UTF-8 text for the width methods, which count characters; a Pys
 given as its bytes, one character per byte. 64-bit overflow is not tested here (CPython's ints
 grow): the differential tests compile the same code and check it.
 
-The format functions get runtime.c's pys_fmt_float (float digits by snprintf) from CPython's own
-float formatting, which it reproduces.
+The format functions get runtime.c's pys_fmt_float (float digits by snprintf, or by Ryu as repr's
+without a type or precision) from CPython's own float formatting, which it reproduces.
 
 usage: python3 tools/rtcheck.py [N] [SEED]   (N rounds of cases, default 5000)
 """
@@ -210,7 +210,7 @@ def fuzz_hash():
 
 
 def fmt_float(m, ty, prec, alt):
-    # runtime.c's pys_fmt_float (snprintf) writes what CPython's float formatting writes for |x|
+    # runtime.c's pys_fmt_float (snprintf, or Ryu) writes what CPython's float formatting writes for |x|
     return format(m, ("#" if alt else "") + (f".{prec}" if prec >= 0 else "") + (chr(ty) if ty else ""))
 
 

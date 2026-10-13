@@ -43,6 +43,10 @@ wrapper of CPython 3.13.16's Modules/_functoolsmodule.c (_lru_cache_wrapper) and
 docstrings of Lib/functools.py (lib/README.md). It is derived from Python and is used under the
 same license and copyright notice.
 
+lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and
+copyright notice.
+
 CPython's math tests (tests/)
 ----------------------------
 
@@ -230,6 +234,18 @@ License, whose text and copyright notice ("Copyright (c) 2014 Jeff Quast
 <contact@jeffquast.com>") are in ports/wcwidth/LICENSE, with the permission notice of Markus
 Kuhn's code that wcwidth derives from.
 
+Ryu (ryu/)
+----------
+
+ryu/d2s.c, common.h, d2s_intrinsics.h, d2s_small_table.h, digit_table.h and ryu.h are the files of
+those names in the ryu/ directory of Ryu (https://github.com/ulfjack/ryu), at commit
+4c0618b0e44f7ef027ebae05d2cc7812048f7c8f, with their #include "ryu/NAME" lines changed to
+#include "NAME" (ryu/README.md); runtime.c includes ryu/d2s.c for the digits of a float's repr.
+Upstream offers these files under the Apache License, Version 2.0 or, alternatively, the Boost
+Software License, Version 1.0. Pystachy uses them under the Boost Software License, Version 1.0,
+whose text is in ryu/LICENSE-Boost; their copyright notice ("Copyright 2018 Ulf Adams") is kept in
+each file's header.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
@@ -395,6 +411,46 @@ Summary of changes: unittest scaffolding becomes assertions, with prints of the 
 self.thetype and the loops over set, frozenset, dict.fromkeys, str, list and tuple become calls of
 templates; generator functions become generator expressions; the cases each file's header lists
 are left out, with the reason. Differential output is recorded with CPython 3.13.16.
+
+CPython's numeric, tuple and exception tests (tests/upstream_*.py)
+------------------------------------------------------------------
+
+These differential tests and rejection fixtures adapt test methods of CPython 3.13.16's
+Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
+
+- tests/upstream_int_*.py and tests/errors/upstream_int_*.py: Lib/test/test_int.py and
+  Lib/test/test_long.py (with the underscore literals of Lib/test/support/numbers.py)
+- tests/upstream_float_*.py: Lib/test/test_float.py (with Lib/test/mathdata/
+  formatfloat_testcases.txt and floating_points.txt, and Lib/test/support/numbers.py's
+  underscore literals)
+- tests/upstream_math_*.py (but upstream_math_fmod.py, under CPython's math tests above) and
+  tests/errors/upstream_math_prod_*.py: Lib/test/test_math.py (with
+  Lib/test/mathdata/math_testcases.txt, the real cases of cmath_testcases.txt, and the doctest
+  ieee754.txt)
+- tests/upstream_bool.py and tests/errors/upstream_bool_*.py: Lib/test/test_bool.py
+- tests/upstream_tuple_seq.py and tests/errors/upstream_tuple_*.py: Lib/test/test_tuple.py and
+  the methods of Lib/test/seq_tests.py that its TupleTest runs
+- tests/upstream_exceptions_*.py and tests/errors/upstream_exceptions_*.py:
+  Lib/test/test_exceptions.py
+- tests/upstream_baseexception.py and tests/errors/upstream_baseexception_*.py:
+  Lib/test/test_baseexception.py (with Lib/test/exception_hierarchy.txt)
+
+They are used under the Python Software Foundation License Version 2 reproduced above;
+tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
+upstream test methods it adapts and lists, with the reason, those it leaves out.
+
+Summary of changes: remove unittest and test.support scaffolding (each test method becomes a
+function, assertEqual a printed value and an assert, assertRaises a try statement, and each
+doctest example a printed value and an assert), embed the data files the tests read, add type
+annotations where Pystachy's subset needs them, write out the loops over builtin exception
+classes and over values of several types, replace float.fromhex(), math.isclose() and
+itertools.product() with small equivalents in the files that use them, draw random data from a
+fixed linear congruential sequence, run the loops over large integers only as far as their
+values fit in 64 bits, write testHypotAccuracy's expected values (upstream computes them with
+decimal) as the floats CPython 3.13.16 computes, turn into expected compile-time rejections the
+errors that Pystachy reports at compile time with CPython's message (among them the syntax
+errors that upstream checks with compile()), and leave out the cases that use what the subset
+does not support. Differential output is recorded with CPython 3.13.16.
 
 APACHE LICENSE VERSION 2.0
 --------------------------
