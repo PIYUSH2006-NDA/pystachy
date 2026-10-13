@@ -1,0 +1,10 @@
+[16, 1, 100, 8, 9, 24] [16, 1, 8, 9, 24] False False 4 4 4
+128 10 [21, 0, 11]
+292 181779 [130, 4, 194, 2, 66] [19, 11]
+True False True False
+20000 [16, 1, 8, 9, 24] 71248 54 True
+[True, False, True, False, True, False, False, True, False, True, False, True]
+40 8 24 
+200 200
+False True 4097 True False
+[exit 0]
