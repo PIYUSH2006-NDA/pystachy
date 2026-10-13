@@ -1,0 +1,24 @@
+C.foo() 42
+C().foo() 42
+foo() 42
+foo.author 'Cleese'
+f2() 84
+f2.dbval (('terry', 'gilliam'), {'eric': 'idle', 'john': 'cleese'})
+f3() None
+f3.dbval ((1, 2), {})
+counts {'double': 0}
+double(2) 4
+counts['double'] 1
+double(2) 4
+counts['double'] 1
+double(3) 6
+counts['double'] 2
+NotImplementedError NotImplementedError()
+foo() 2
+foo() 42
+actions ['evalargs1', 'makedec1', 'evalargs2', 'makedec2', 'evalargs3', 'makedec3', 'calldec3', 'calldec2', 'calldec1']
+bar() 42
+actions ['evalargs1', 'makedec1', 'evalargs2', 'makedec2', 'evalargs3', 'makedec3', 'calldec3', 'calldec2', 'calldec1']
+baz() 7
+actions ['evalargs1', 'makedec1', 'evalargs2', 'othermaker2', 'makedec2', 'calldec2', 'calldec1']
+[exit 0]

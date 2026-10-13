@@ -1,0 +1,92 @@
+dict() {}
+dict() is not {} True
+not {} True
+bool({1: 2}) True
+bool({}) False
+bool({1: 2}) True
+set(d.keys()) True
+set(k) True
+'a' in k True
+'b' in k True
+'a' in d True
+'b' in d True
+set(d.values()) True
+set(d.values()) {2}
+set(d.items()) True
+set(d.items()) {(1, 2)}
+'a' not in d True
+'a' in d False
+'a' not in d True
+'a' in d True
+'b' in d True
+'c' not in d True
+len(d) 0
+len(d) 2
+d['a'] 1
+d['b'] 2
+d['c'] 3
+d['a'] 4
+d {'a': 4, 'c': 3}
+d.clear() True
+d {1: 1, 2: 2, 3: 3}
+d {1: 1, 2: 2, 3: 3}
+dict.fromkeys('abc') {'a': None, 'b': None, 'c': None}
+dict.fromkeys(d, 0) {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+dict.fromkeys(set(range(6)), 0) {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+dict.fromkeys(list(range(6)), 0) {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+d.copy() is not d True
+d.copy() {1: 1, 2: 2, 3: 3}
+d.copy() {1: 1, 2: 2, 3: 3}
+copy != d True
+{}.copy() True
+dict_size 7: d2 is not d True
+d == d2 True
+d != d2 True
+len(d2) == len(d) + 1 8
+dict_size 111: d2 is not d True
+d == d2 True
+d != d2 True
+len(d2) == len(d) + 1 112
+dict_size 1202: d2 is not d True
+d == d2 True
+d != d2 True
+len(d2) == len(d) + 1 1203
+dict_size 9495: d2 is not d True
+d == d2 True
+d != d2 True
+len(d2) == len(d) + 1 9496
+dict_size 61980: d2 is not d True
+d == d2 True
+d != d2 True
+len(d2) == len(d) + 1 61981
+d2 == d True
+[(950, 950), (951, 951), (952, 952)]
+d.get('c') is None True
+d.get('c', 3) 3
+d.get('c') is None True
+d.get('c', 3) 3
+d.get('a') 1
+d.get('a', 3) 1
+d['key'][0] 3
+len(d['key']) 2
+d.pop('ghi'): KeyError 'ghi'
+d.pop(k) 'def'
+len(d) 0
+d.pop(k): KeyError 'abc'
+d.pop(k, v) 'def'
+repr(d) '{}'
+repr(d) '{1: 2}'
+repr({1: BadRepr()}): Exc
+{} == {} True
+{1: 2} == {1: 2} True
+repr(c.exception) 'KeyError((1,))'
+test_resize1 {5: 5, 6: 6, 7: 7, 8: 8}
+ZeroDivisionError: integer division or modulo by zero
+test_empty_presized_dict_in_freelist {}
+len(d) 66
+len(d) 65
+d == dict(items) True
+len(d) 65
+d == dict(items) True
+[(62, '62'), (63, '63'), (2305843009213694015, 'c')]
+[exit 0]

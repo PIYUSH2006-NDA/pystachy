@@ -1,0 +1,18 @@
+RuntimeError: dictionary changed size during iteration
+{1: 1, 2: 1}
+RuntimeError: dictionary keys changed during iteration
+{0: 0}
+RuntimeError: dictionary keys changed during iteration
+{0: 0}
+RuntimeError: dictionary keys changed during iteration
+{0: 0}
+list(r) ['d', 'c', 'b', 'a']
+list(reversed({})) []
+list(reversed({}.items())) []
+list(reversed({}.values())) []
+list(reversed({}.keys())) []
+list(reversed(dict())) []
+list(reversed(dict().items())) []
+list(reversed(dict().values())) []
+list(reversed(dict().keys())) []
+[exit 0]
