@@ -1,0 +1,16 @@
+Rukavofe of the vonequzo the lozokami nerunelo, rupequru jimimimi, pesa tiguka rugufexi, qulorudaka fetipeka, nepexife daneka xivozozoka.
+3537 1923 3102
+[('the', 210), ('of', 119), ('and', 103), ('a', 69), ('in', 65), ('to', 51), ('is', 47), ('that', 31), ('you', 30), ('are', 30)]
+[(('the', 'the'), 15), (('of', 'the'), 11), (('and', 'the'), 10), (('the', 'and'), 8), (('the', 'of'), 7), (('is', 'the'), 5), (('in', 'the'), 4), (('and', 'of'), 4), (('the', 'is'), 4), (('of', 'and'), 4)]
+['qulorudaka', 'xivozozoka', 'damisaneka', 'xifefemika', 'jijimisaka', 'peguloneka', 'pevokazoka', 'kakapeguka', 'fegunemika', 'pezomivoka']
+[('rukavofe', 1), ('vonequzo', 1), ('lozokami', 1), ('nerunelo', 1), ('rupequru', 1), ('jimimimi', 1), ('pesa', 1), ('rugufexi', 1), ('qulorudaka', 1), ('fetipeka', 1)]
+True
+0 True 0 0 0 0 [] []
+1 True 1 1 1 1 [(('the', 'the'), 15)] [('rukavofe', 1)]
+2 True 2 2 2 2 [(('the', 'the'), 15), (('of', 'the'), 11)] [('vonequzo', 1)]
+3 True 3 3 3 3 [(('the', 'the'), 15), (('of', 'the'), 11)] [('lozokami', 1)]
+100 True 100 100 100 100 [(('the', 'the'), 15), (('of', 'the'), 11)] [('nejilo', 1)]
+5000 True 1923 3102 1923 1923 [(('the', 'the'), 15), (('of', 'the'), 11)] [('the', 210)]
+8 214 3
+2 1 False the ka kaka
+[exit 0]

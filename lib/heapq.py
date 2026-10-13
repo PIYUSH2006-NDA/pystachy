@@ -468,13 +468,17 @@ def nsmallest(n, iterable, key=None):
 
     # Short-cut for n==1 is to use min()
     if n == 1:
-        it = iter(iterable)
-        sentinel = object()
-        result = min(it, default=sentinel, key=key)
-        return [] if result is sentinel else [result]
+        # Pystachy port: the subset has no iterators, no object() and no min(default=): it is the
+        # iterable or a list of its items (as below), and an empty one gives []
+        it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
+        return [min(it, key=key)] if it else []
 
     # When n>=size, it's faster to use sorted()
     try:
+        # Pystachy port: len() of an iterable without __len__ is a compile-time error, so its
+        # TypeError is raised here (hasattr() is decided by the iterable's type)
+        if not hasattr(iterable, '__len__'):
+            raise TypeError
         size = len(iterable)
     except (TypeError, AttributeError):
         pass
@@ -484,17 +488,24 @@ def nsmallest(n, iterable, key=None):
 
     # When key is none, use simpler decoration
     if key is None:
-        it = iter(iterable)
+        # Pystachy port: for iter(), as the subset has no iterators, it is the iterable where it is
+        # a list, else a list of its items (a comprehension: list() would call an object's __len__,
+        # which iter() does not); result takes its first n by index, as range() cannot be nested in
+        # zip(), an empty one returns [] (its tuples are not of the items' type), and the loop skips
+        # them
+        it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
         # put the range(n) first so that zip() doesn't
         # consume one too many elements from the iterator
-        result = [(elem, i) for i, elem in zip(range(n), it)]
+        result = [(it[i], i) for i in range(min(n, len(it)))]  # Pystachy port: (above)
         if not result:
-            return result
+            return []  # Pystachy port: (above)
         _heapify_max(result)
         top = result[0][0]
         order = n
         _heapreplace = _heapreplace_max
-        for elem in it:
+        for i, elem in enumerate(it):  # Pystachy port: (above)
+            if i < n:
+                continue
             if elem < top:
                 _heapreplace(result, (elem, order))
                 top, _order = result[0]
@@ -503,15 +514,18 @@ def nsmallest(n, iterable, key=None):
         return [elem for (elem, order) in result]
 
     # General case, slowest method
-    it = iter(iterable)
-    result = [(key(elem), i, elem) for i, elem in zip(range(n), it)]
+    # Pystachy port: it, result and [] as above, and the loop that skips the first n
+    it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
+    result = [(key(it[i]), i, it[i]) for i in range(min(n, len(it)))]
     if not result:
-        return result
+        return []
     _heapify_max(result)
     top = result[0][0]
     order = n
     _heapreplace = _heapreplace_max
-    for elem in it:
+    for i, elem in enumerate(it):  # Pystachy port: (above)
+        if i < n:
+            continue
         k = key(elem)
         if k < top:
             _heapreplace(result, (k, order, elem))
@@ -528,13 +542,14 @@ def nlargest(n, iterable, key=None):
 
     # Short-cut for n==1 is to use max()
     if n == 1:
-        it = iter(iterable)
-        sentinel = object()
-        result = max(it, default=sentinel, key=key)
-        return [] if result is sentinel else [result]
+        # Pystachy port: as in nsmallest()
+        it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
+        return [max(it, key=key)] if it else []
 
     # When n>=size, it's faster to use sorted()
     try:
+        if not hasattr(iterable, '__len__'):  # Pystachy port: as in nsmallest()
+            raise TypeError
         size = len(iterable)
     except (TypeError, AttributeError):
         pass
@@ -544,15 +559,18 @@ def nlargest(n, iterable, key=None):
 
     # When key is none, use simpler decoration
     if key is None:
-        it = iter(iterable)
-        result = [(elem, i) for i, elem in zip(range(0, -n, -1), it)]
+        # Pystachy port: as in nsmallest(), with -i for the i of range(0, -n, -1)
+        it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
+        result = [(it[i], -i) for i in range(min(n, len(it)))]
         if not result:
-            return result
+            return []  # Pystachy port: (above)
         heapify(result)
         top = result[0][0]
         order = -n
         _heapreplace = heapreplace
-        for elem in it:
+        for i, elem in enumerate(it):  # Pystachy port: (above)
+            if i < n:
+                continue
             if top < elem:
                 _heapreplace(result, (elem, order))
                 top, _order = result[0]
@@ -561,15 +579,18 @@ def nlargest(n, iterable, key=None):
         return [elem for (elem, order) in result]
 
     # General case, slowest method
-    it = iter(iterable)
-    result = [(key(elem), i, elem) for i, elem in zip(range(0, -n, -1), it)]
+    # Pystachy port: it, result and [] as above, and the loop that skips the first n
+    it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
+    result = [(key(it[i]), -i, it[i]) for i in range(min(n, len(it)))]
     if not result:
-        return result
+        return []
     heapify(result)
     top = result[0][0]
     order = -n
     _heapreplace = heapreplace
-    for elem in it:
+    for i, elem in enumerate(it):  # Pystachy port: (above)
+        if i < n:
+            continue
         k = key(elem)
         if top < k:
             _heapreplace(result, (k, order, elem))

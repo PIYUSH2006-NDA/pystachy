@@ -12,7 +12,6 @@ checks each against CPython.
 |---|---|---|---|
 | `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | everything, `key=` too (a function of the program or a builtin, compiled into each call) |
 | `colorsys` | `Lib/colorsys.py` | `65e3dfbf7bad61d4d7d7731a69dd7e75a347fd350d91327a51010a94e6fd2f1d` | everything |
-| `heapq` | `Lib/heapq.py` | `6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` variants; not `merge` (a generator), `nlargest`, `nsmallest` (`iter`, `key=`) |
 | `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` | the operator functions; not `attrgetter`, `itemgetter`, `methodcaller` (class templates whose `_call` field holds a closure of `__init__`, which a field's type cannot be inferred from), `call`, `length_hint`, `index`; the in-place functions only where the result keeps its type (`itruediv(1, 2)` would rebind an int to a float) |
 | `stat` | `Lib/stat.py` | `07217986d9b2172b509dab3578d18ac05ba768b418e1f1e8c90e38a8f7c2b3c6` | the constants and `S_IS*()`, `S_IMODE`, `S_IFMT`; not `filemode` (it iterates a tuple of tuples of different lengths) |
 | `this` | `Lib/this.py` | `481d0cb3de511eae0b5713dad18542b07eafd9c013bb7690f7497bad49923a71` | everything (it prints the Zen of Python) |
@@ -21,6 +20,70 @@ checks each against CPython.
 | `curses.ascii` | `Lib/curses/ascii.py` | `780dd8bbaf0ee7e832f164c1772953e694a9cd1031d1ab1471af65344d3645e6` | everything, for ASCII characters (strings are byte strings) |
 
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`.
+
+## `heapq`, with `nlargest()` and `nsmallest()` ported
+
+`heapq.py` is CPython 3.13.16's `Lib/heapq.py` (SHA-256
+`6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9`) with `nsmallest()` and
+`nlargest()` edited, each edit marked `# Pystachy port:`; the rest of the file is CPython's byte for
+byte. It has `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max`
+variants, as CPython's code, and `nlargest()` and `nsmallest()`, with and without `key=`, of a list
+or of another iterable the subset passes (a tuple, a str, a dict, a set, `d.items()`, an object
+with `__iter__`, with or without `__len__`), as CPython's algorithm: the same heap operations, so
+the same comparisons and calls of `key` in the same order, and the same ties, as the
+`(elem, order)` and `(key, order, elem)` tuples keep the input's order among equal items. It has
+no `merge()` (a generator).
+
+The edits, the same in both functions:
+
+- `it = iter(iterable)` is `iterable` itself for a list, else a list of its items: the subset has
+  no iterators. The list is a comprehension, `[elem for elem in iterable]`: `list(iterable)` would
+  call an object's `__len__` (its length hint), which `iter()` does not.
+- For n of 1, `min(it, default=sentinel, key=key)` with an `object()` sentinel is
+  `[min(it, key=key)] if it else []`: the subset has neither `object()` nor `default=`.
+- In `try: size = len(iterable)`, the `TypeError` of an iterable without `__len__` is raised before
+  `len()`, under `if not hasattr(iterable, '__len__')`, which the argument's type decides: `len()`
+  of an object without `__len__` is a compile-time error. A `__len__` that raises `TypeError` is
+  caught, as in CPython.
+- `zip(range(n), it)` (`range(0, -n, -1)` in `nlargest()`), which takes the first n items, is a
+  comprehension over `range(min(n, len(it)))` that indexes `it`: `range()` cannot be nested in
+  `zip()`. The loop over the other items, which goes on with `zip()`'s iterator in CPython, is
+  `for i, elem in enumerate(it)`, which skips the first n: a list is read in place, as CPython's
+  iterator reads it, with no copy.
+- An empty `result` returns `[]`, not `result`: its tuples are not of the items' type, which the
+  function returns elsewhere.
+
+Where it differs from CPython:
+
+- An open file is not an argument: `hasattr()` of a file is not supported (a compile-time error).
+  Its `readlines()` is.
+- The items of an iterable other than a list are taken into a list first, so a `key` or a
+  comparison that changes the dict or set being read does not raise CPython's `RuntimeError`.
+- For an n above 2,500 that is less than the length, `heapify()` of the decorated items compares
+  in another order than CPython's `_heapq` does (see the end of this page), with the same result.
+
+`tests/lib_heapq_topk.py` compares them with CPython's on ints, floats, strs and tuples, n of -1,
+0, 1, 2, the length and around it, empty input, `key=` (a lambda, a function, a builtin,
+`str.lower`, a bound method), ties, the iterables above, and objects whose `__lt__`, `__eq__`,
+`__iter__` and `__len__` log their calls, so that the comparisons are CPython's, in its order. Run
+by CPython, the edited module passes CPython's `Lib/test/test_heapq.py` (51 tests), and its
+`nlargest()` and `nsmallest()` make the same comparisons and calls of `key`, with the same results,
+as CPython's own in 36,000 calls on random inputs with many ties (lists, tuples and an object
+without `__len__`, n from -2 to past the length, with and without `key`).
+
+In an AOT executable, `nlargest(10, xs)` and `nsmallest(10, xs)` of 100,000 ints take 45 and
+47 µs, against CPython's 1,970 and 1,936 µs: most items are only compared with the heap's top, an
+int comparison in the compiled loop, where CPython steps an iterator and calls a rich comparison
+for each; `nlargest(10, pairs, key=second)` of 100,000 `(str, int)` tuples takes 108 µs (CPython:
+4,263 µs). Where the heap does more of the work the gain is smaller: `nsmallest(1000, xs)` takes
+867 µs (CPython: 3,363 µs), most of it replacing and sifting `(elem, order)` tuples, and
+`nlargest(1, xs)`, `max()` of the list, 234 µs (CPython: 590 µs). The `sorted()` that an n at or
+past the length takes is slower than CPython's: 38 µs for 1,000 ints (CPython: 27 µs), whose sort
+compares ints with a function of their own, where Pystachy's compares through a descriptor of the
+items' type. (Medians of 3
+runs, each the median of 5 rounds of 20 calls, 2,000 for 1,000 ints, on items from a linear
+congruential generator.) [`examples/topk`](../examples/topk/README.md) picks the most frequent
+words of a text with them.
 
 ## `re`, a port of CPython's
 
