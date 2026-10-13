@@ -24,6 +24,11 @@ TOODEEP = f"source too complex: nested more than {MAXNEST} levels deep"
 # besides (Parser.extra), as measured, to stop where CPython does or a few levels before
 CPYSTACK = 5960
 MODDUNDERS = "__file__ __doc__ __spec__ __loader__ __package__ __builtins__"  # (which CPython's modules have)
+# the encoding the compiler reads source files and writes IR in, so that a str holds their bytes,
+# one character each: Latin-1 under CPython; in Pystachy (where len("\xe9") is 2), whose str holds
+# bytes, UTF-8, which it reads and writes unchecked (a Latin-1 file's text would hold each byte
+# from 0x80 on as two, its character's UTF-8)
+RAW = "latin-1" if len("\xe9") == 1 else "utf-8"
 
 
 def shown(s: str) -> str:
@@ -3680,7 +3685,7 @@ class Loader:
         # a module's file, parsed once for the looks before it is loaded (optional()) and the load
         if path in self.parsed:
             return self.parsed[path]
-        f = open(path, "r", encoding="latin-1")
+        f = open(path, "r", encoding=RAW)
         src = f.read()
         f.close()
         k = len(FILES)
@@ -5613,7 +5618,7 @@ RAISERS: dict[str, bool] = {}
 for _k in "int max min".split():
     RAISERS[_k] = True
 # encoding= names of UTF-8 (1) and Latin-1 (2) as CPython's codec lookup finds them (see codec()):
-# a str holds the file's bytes either way, which is what CPython's str holds for a Latin-1 file
+# a str holds a UTF-8 file's bytes, and a Latin-1 file's characters as UTF-8 (the runtime transcodes)
 CODECS: dict[str, int] = {}
 for _k in "utf8 u8 utf utf8_ucs2 utf8_ucs4 cp65001".split():
     CODECS[_k] = 1
@@ -19904,7 +19909,7 @@ def runtime_ir(path: str, cache: bool) -> str:
     # under their C names, with runtime.c's types, and llvm-link joins them to runtime.c's code
     # (runtime.c keeps a prototype of each). It imports only builtin modules, and nothing runs its
     # module code, so it holds only functions.
-    f = open(path, "r", encoding="latin-1")
+    f = open(path, "r", encoding=RAW)
     src = f.read()
     f.close()
     g = Gen()
@@ -19943,14 +19948,14 @@ def main() -> None:
     if not os.path.exists(SRC):
         fail("file not found", 0)
     if cmd == "check":
-        f = open(SRC, "r", encoding="latin-1")
+        f = open(SRC, "r", encoding=RAW)
         Parser(Lexer(f.read(), 1).file()).module()
         f.close()
         return
     if cmd == "rt":
         ir = runtime_ir(SRC, False)
         if len(argv) == 5 and argv[3] == "-o":
-            f = open(argv[4], "w", encoding="latin-1")
+            f = open(argv[4], "w", encoding=RAW)
             f.write(ir)
             f.close()
         else:
@@ -19979,7 +19984,7 @@ def main() -> None:
         if os.path.exists(d + "/ffi.py") or os.path.exists(d + "/ffi/__init__.py"):
             del MODULES["ffi"]  # (the program's own ffi module comes first, as under CPython: Pystachy's is not imported then)
             break
-    f = open(SRC, "r", encoding="latin-1")
+    f = open(SRC, "r", encoding=RAW)
     ir = compile_program(SRC, f.read(), dirs)
     f.close()
     out = ""
@@ -19996,7 +20001,7 @@ def main() -> None:
         if out == "":
             print(ir, end="")
         else:
-            f = open(out, "w", encoding="latin-1")
+            f = open(out, "w", encoding=RAW)
             f.write(ir)
             f.close()
         return
@@ -20069,13 +20074,13 @@ def main() -> None:
     own = tmp[tmp.rfind("/") + 1 :]
     part = f"{rtb}.{os.getpid()}.{own}"
     parto = f"{rto}.{os.getpid()}.{own}"
-    f = open(ll, "w", encoding="latin-1")
+    f = open(ll, "w", encoding=RAW)
     f.write(ir)
     f.close()
     msg = ""
     code = 0
     if rtir != "":
-        f = open(rpl, "w", encoding="latin-1")
+        f = open(rpl, "w", encoding=RAW)
         f.write(rtir)
         f.close()
         # one module, optimized once: LLVM inlines runtime.c's helpers into runtime.py's code. No

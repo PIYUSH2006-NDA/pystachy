@@ -2069,7 +2069,9 @@ Str *pys_fmt_float(double m, I type, I prec, I alt) {   /* |x| = m for type (0: 
    open(p).read(), right after that use, and the files still open at exit are closed in the
    order they were opened; when such an implicit close fails, the error is reported as
    CPython's finalizer reports it and the program goes on. sys.stdin, sys.stdout and
-   sys.stderr are files too. */
+   sys.stderr are files too. A UTF-8 file's text is its bytes, unchecked; a Latin-1 file's
+   bytes are characters U+0000..U+00FF, which a str holds as UTF-8, as it holds every other
+   (decode() makes the str of what a read got, latin1() the bytes of what a write gives). */
 typedef struct {
   FILE *f; Str *name, *mode, *enc;   /* enc: encoding= as given, NULL when not given */
   I rd, wr, closed, nl, last, std;   /* nl: newline None 0, "" 1, "\n" 2, "\r" 3, "\r\n" 4; last: 1 wrote, 2 read */
@@ -2378,9 +2380,12 @@ File *pys_open(Str *path, Str *mode, Str *enc, Str *nl, I buffering) {   /* CPyt
   io_out();
   return o;
 }
-static void use(File *f, int rd) {     /* check a read (rd) or write, and reposition between them */
+static void usable(File *f, int rd) {  /* f is open, for reading (rd) or for writing */
   if (f->closed) closed_err();
   if (rd ? !f->rd : !f->wr) pys_fail(rd ? "io.UnsupportedOperation: not readable" : "io.UnsupportedOperation: not writable");
+}
+static void use(File *f, int rd) {     /* check a read (rd) or write, and reposition between them */
+  usable(f, rd);
   if (rd && feof(f->f)) clearerr(f->f);   /* CPython reads again after the end: the file may have grown */
   if (f->std || f->last == (rd ? 2 : 1)) return;
   if (rd) {                            /* after writing: what was written reaches the file, and reads start there */
@@ -2402,6 +2407,17 @@ static int getnl(File *f, int c) {     /* newline=None reads "\r\n" and "\r" as 
   if (c == '\r' && !f->nl) { int d = get(f); if (d != '\n' && d != EOF) unget(f, d); c = '\n'; }
   return c;
 }
+static Str *decode(File *f, Buf *b) {  /* the str of the bytes a read got: in a Latin-1 file each is a character,
+                                          which from 0x80 on is two bytes of UTF-8 in the str */
+  I h = 0;
+  if (f->lat) for (I i = 0; i < b->n; i++) h += (unsigned char)b->p[i] >> 7;
+  if (!h) return done(b);
+  Str *s = pys_alloc_atomic(sizeof(Str) + b->n + h + 1);
+  char *w = s->s;
+  s->len = b->n + h;
+  for (I i = 0; i < b->n; i++) w += u8enc(w, (unsigned char)b->p[i]);
+  return s;
+}
 static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (in a Latin-1 file, n bytes) */
   use(f, 1); Buf b = {0};
   if (n < 0) {
@@ -2410,7 +2426,7 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     I j = 0;
     if (!f->nl) for (I i = 0; i < b.n; i++) { char c = b.p[i]; if (c == '\r') { c = '\n'; i += i + 1 < b.n && b.p[i + 1] == '\n'; } b.p[j++] = c; }
     if (!f->nl) b.n = j;
-    return done(&b);
+    return decode(f, &b);
   }
   for (I k = 0;;) {
     int c = get(f);
@@ -2418,7 +2434,7 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     if ((f->lat || (c & 0xC0) != 0x80) && k++ == n) { unget(f, c); break; }   /* the next character starts */
     char ch = getnl(f, c); put(&b, &ch, 1);
   }
-  return done(&b);
+  return decode(f, &b);
 }
 Str *pys_file_read(File *f, I n) { io_in(); Str *s = read1(f, n); io_out(); return s; }
 Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n" after translation; "" any of
@@ -2436,16 +2452,53 @@ Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n
     }
   }
   io_out();
-  return done(&b);
+  return decode(f, &b);
 }
 List *pys_file_readlines(File *f) {
   List *l = pys_list_new(0);
   for (Str *s; (s = pys_file_readline(f))->len;) pys_list_append(l, (I)s);
   return l;
 }
-I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as that */
-  io_in(); use(f, 0);
-  const char *p = s->s, *q; I n = s->len;
+static _Noreturn void unencodable(const char *p, I n, I c, I start, I end) {   /* CPython's UnicodeEncodeError of
+                                                    characters [start, end) of the text p[0, n), the first one c */
+  char m[160]; int h = snprintf(m, sizeof m, "UnicodeEncodeError: ");
+  if (end > start + 1)
+    snprintf(m + h, sizeof m - h, "'latin-1' codec can't encode characters in position %lld-%lld: ordinal not in range(256)",
+             (long long)start, (long long)end - 1);
+  else
+    snprintf(m + h, sizeof m - h, "'latin-1' codec can't encode character '\\%c%0*llx' in position %lld: ordinal not in range(256)",
+             c > 0xFFFF ? 'U' : 'u', c > 0xFFFF ? 8 : 4, (unsigned long long)c, (long long)start);
+  if (io_intr) kbint_exit();
+  if (xthrow) {                        /* (pys_fail's, with the args that repr(e) shows: encoding, text, start, end, reason) */
+    Buf b = {0}; char t[64];
+    put(&b, "'latin-1', ", 11); repr_str(&b, pys_str(p, n));
+    put(&b, t, snprintf(t, sizeof t, ", %lld, %lld, 'ordinal not in range(256)'", (long long)start, (long long)end));
+    xthrow(exc_new(pys_str(m, h - 2), cstr(m + h), done(&b)));
+  }
+  pys_fail(m);
+}
+static I latin1(char *o, const char *p, I n) {   /* the n bytes of a write's text to a Latin-1 file as the file's
+                                                    bytes, into o: one for each character u8char finds (a byte
+                                                    that is not UTF-8, as chr() makes, is one), whose count it
+                                                    returns. As CPython's codec, the first run of characters above
+                                                    U+00FF raises UnicodeEncodeError, before any of them is written */
+  I m = 0, k, c;
+  for (I i = 0; i < n; i += k, m++) {
+    k = u8char(p + i, n - i, &c);
+    if (c > 0xFF) {
+      I c0 = c, end = m + 1;
+      for (I j = i + k; j < n && (k = u8char(p + j, n - j, &c), c > 0xFF); j += k) end++;
+      unencodable(p, n, c0, m, end);
+    }
+    o[m] = (char)c;
+  }
+  return m;
+}
+I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as that. A Latin-1 file's text is
+                                         encoded first, as CPython's (an error leaves the file as it was), and the
+                                         result counts its characters (bytes in a UTF-8 file) */
+  io_in(); usable(f, 0);
+  const char *p = s->s, *q; I n = s->len, r = n;
   if (f->nl >= 3 && memchr(p, '\n', n)) {
     Buf b = {0};
     for (I i = 0; i < n; i = q - p + 1) {
@@ -2455,9 +2508,14 @@ I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as t
     }
     p = b.p; n = b.n;
   }
-  put1(f, p, n);
+  if (f->lat) {                        /* (CPython's position of an error counts the "\r"s added, its result not) */
+    char *o = pys_alloc_atomic(n + 1);
+    I m = latin1(o, p, n);
+    r = m - (n - s->len); p = o; n = m;
+  }
+  use(f, 0); put1(f, p, n);
   io_out();
-  return s->len;
+  return r;
 }
 void pys_file_writelines(File *f, List *l) {
   for (I i = 0; i < l->len; i++) {
