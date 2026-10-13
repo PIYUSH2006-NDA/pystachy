@@ -1,0 +1,229 @@
+isinstance(math.ceil(0.5), int) True
+ceil(0.5) 1
+ceil(1.0) 1
+ceil(1.5) 2
+ceil(-0.5) 0
+ceil(-1.0) -1
+ceil(-1.5) -1
+ceil(0.0) 0
+ceil(-0.0) 0
+isinstance(math.floor(0.5), int) True
+floor(0.5) 0
+floor(1.0) 1
+floor(1.5) 1
+floor(-0.5) -1
+floor(-1.0) -1
+floor(-1.5) -2
+trunc(1) 1
+trunc(-1) -1
+isinstance(trunc(1), int) True
+isinstance(trunc(1.5), int) True
+trunc(1.5) 1
+trunc(-1.5) -1
+trunc(1.999999) 1
+trunc(-1.999999) -1
+trunc(-0.999999) 0
+trunc(-100.999) -100
+copysign(1, 42) 1.0
+copysign(0., 42) 0.0
+copysign(1., -42) -1.0
+copysign(3, 0.) 3.0
+copysign(4., -0.) -4.0
+copysign(1., 0.) 1.0
+copysign(1., -0.) -1.0
+copysign(INF, 0.) inf
+copysign(INF, -0.) -inf
+copysign(NINF, 0.) inf
+copysign(NINF, -0.) -inf
+copysign(1., INF) 1.0
+copysign(1., NINF) -1.0
+copysign(INF, INF) inf
+copysign(INF, NINF) -inf
+copysign(NINF, INF) inf
+copysign(NINF, NINF) -inf
+isnan(copysign(NAN, 1.)) True
+isnan(copysign(NAN, INF)) True
+isnan(copysign(NAN, NINF)) True
+isnan(copysign(NAN, NAN)) True
+isinf(copysign(INF, NAN)) True
+abs(copysign(2., NAN)) 2.0
+frexp(-1) (-0.5, 1)
+frexp(0) (0.0, 0)
+frexp(1) (0.5, 1)
+frexp(2) (0.5, 2)
+frexp(INF)[0] inf
+frexp(NINF)[0] -inf
+isnan(frexp(NAN)[0]) True
+ldexp(0,1) 0.0
+ldexp(1,1) 2.0
+ldexp(1,-1) 0.5
+ldexp(-1,1) -2.0
+ldexp(1.0, 1000000) OverflowError: math range error
+ldexp(-1.0, 1000000) OverflowError: math range error
+ldexp(1., -1000000) 0.0
+ldexp(-1., -1000000) -0.0
+ldexp(INF, 30) inf
+ldexp(NINF, -213) -inf
+isnan(ldexp(NAN, 0)) True
+ldexp(INF, -100000) inf
+ldexp(NINF, -n) -inf
+ldexp(1., -n) 0.0
+ldexp(-1., -n) -0.0
+ldexp(0., -n) 0.0
+ldexp(-0., -n) -0.0
+isnan(ldexp(NAN, -n)) True
+ldexp(1.0, 100000) OverflowError: math range error
+ldexp(-1.0, 100000) OverflowError: math range error
+ldexp(0., n) 0.0
+ldexp(-0., n) -0.0
+ldexp(INF, n) inf
+ldexp(NINF, n) -inf
+isnan(ldexp(NAN, n)) True
+ldexp(INF, -10000000000) inf
+ldexp(NINF, -n) -inf
+ldexp(1., -n) 0.0
+ldexp(-1., -n) -0.0
+ldexp(0., -n) 0.0
+ldexp(-0., -n) -0.0
+isnan(ldexp(NAN, -n)) True
+ldexp(1.0, 10000000000) OverflowError: math range error
+ldexp(-1.0, 10000000000) OverflowError: math range error
+ldexp(0., n) 0.0
+ldexp(-0., n) -0.0
+ldexp(INF, n) inf
+ldexp(NINF, n) -inf
+isnan(ldexp(NAN, n)) True
+ldexp(6993274598585239, -1126) 1e-323
+modf(1.5) (0.5, 1.0)
+modf(-1.5) (-0.5, -1.0)
+modf(INF) (0.0, inf)
+modf(NINF) (-0.0, -inf)
+isnan(modf_nan[0]) True
+isnan(modf_nan[1]) True
+remainder(-4.0, 1).hex() '-0x0.0p+0'
+remainder(-3.8, 1).hex() '0x1.0000000000000p-1'
+remainder(-3.0, 1).hex() '-0x0.0p+0'
+remainder(-2.8, 1).hex() '-0x1.0000000000000p-1'
+remainder(-2.0, 1).hex() '-0x0.0p+0'
+remainder(-1.8, 1).hex() '0x1.0000000000000p-1'
+remainder(-1.0, 1).hex() '-0x0.0p+0'
+remainder(-0.8, 1).hex() '-0x1.0000000000000p-1'
+remainder(-0.0, 1).hex() '-0x0.0p+0'
+remainder(0.0, 1).hex() '0x0.0p+0'
+remainder(0.8, 1).hex() '0x1.0000000000000p-1'
+remainder(1.0, 1).hex() '0x0.0p+0'
+remainder(1.8, 1).hex() '-0x1.0000000000000p-1'
+remainder(2.0, 1).hex() '0x0.0p+0'
+remainder(2.8, 1).hex() '0x1.0000000000000p-1'
+remainder(3.0, 1).hex() '0x0.0p+0'
+remainder(3.8, 1).hex() '-0x1.0000000000000p-1'
+remainder(4.0, 1).hex() '0x0.0p+0'
+remainder(0x0.0p+0, 0x1.921fb54442d18p+2).hex() '0x0.0p+0'
+remainder(0x1.921fb54442d18p+0, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d18p+0'
+remainder(0x1.921fb54442d17p+1, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d17p+1'
+remainder(0x1.921fb54442d18p+1, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d18p+1'
+remainder(0x1.921fb54442d19p+1, 0x1.921fb54442d18p+2).hex() '-0x1.921fb54442d17p+1'
+remainder(0x1.921fb54442d17p+2, 0x1.921fb54442d18p+2).hex() '-0x1.0000000000000p-50'
+remainder(0x1.921fb54442d18p+2, 0x1.921fb54442d18p+2).hex() '0x0.0p+0'
+remainder(0x1.921fb54442d19p+2, 0x1.921fb54442d18p+2).hex() '0x1.0000000000000p-50'
+remainder(0x1.2d97c7f3321d1p+3, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d14p+1'
+remainder(0x1.2d97c7f3321d2p+3, 0x1.921fb54442d18p+2).hex() '-0x1.921fb54442d18p+1'
+remainder(0x1.2d97c7f3321d3p+3, 0x1.921fb54442d18p+2).hex() '-0x1.921fb54442d14p+1'
+remainder(0x1.921fb54442d17p+3, 0x1.921fb54442d18p+2).hex() '-0x1.0000000000000p-49'
+remainder(0x1.921fb54442d18p+3, 0x1.921fb54442d18p+2).hex() '0x0.0p+0'
+remainder(0x1.921fb54442d19p+3, 0x1.921fb54442d18p+2).hex() '0x1.0000000000000p-49'
+remainder(0x1.f6a7a2955385dp+3, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d14p+1'
+remainder(0x1.f6a7a2955385ep+3, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d18p+1'
+remainder(0x1.f6a7a2955385fp+3, 0x1.921fb54442d18p+2).hex() '-0x1.921fb54442d14p+1'
+remainder(0x1.1475cc9eedf00p+5, 0x1.921fb54442d18p+2).hex() '0x1.921fb54442d10p+1'
+remainder(0x1.1475cc9eedf01p+5, 0x1.921fb54442d18p+2).hex() '-0x1.921fb54442d10p+1'
+remainder(1, 0.c).hex() '0x1.0000000000000p-2'
+remainder(-1, 0.c).hex() '-0x1.0000000000000p-2'
+remainder(1, -0.c).hex() '0x1.0000000000000p-2'
+remainder(-1, -0.c).hex() '-0x1.0000000000000p-2'
+remainder(1.4, 0.c).hex() '-0x1.0000000000000p-2'
+remainder(-1.4, 0.c).hex() '0x1.0000000000000p-2'
+remainder(1.4, -0.c).hex() '-0x1.0000000000000p-2'
+remainder(-1.4, -0.c).hex() '0x1.0000000000000p-2'
+remainder(0x1.dp+1023, 0x1.4p+1023).hex() '0x1.2000000000000p+1022'
+remainder(0x1.ep+1023, 0x1.4p+1023).hex() '-0x1.4000000000000p+1022'
+remainder(0x1.fp+1023, 0x1.4p+1023).hex() '-0x1.2000000000000p+1022'
+remainder(NAN, nan) nan
+remainder(nan, NAN) nan
+remainder(NAN, 0.0) nan
+remainder(0.0, NAN) nan
+remainder(NAN, -0.0) nan
+remainder(-0.0, NAN) nan
+remainder(NAN, 2.0) nan
+remainder(2.0, NAN) nan
+remainder(NAN, -2.3) nan
+remainder(-2.3, NAN) nan
+remainder(NAN, -inf) nan
+remainder(-inf, NAN) nan
+remainder(NAN, inf) nan
+remainder(inf, NAN) nan
+remainder(-2.3, INF) -2.3
+remainder(-2.3, NINF) -2.3
+remainder(-0.0, INF) -0.0
+remainder(-0.0, NINF) -0.0
+remainder(0.0, INF) 0.0
+remainder(0.0, NINF) 0.0
+remainder(2.3, INF) 2.3
+remainder(2.3, NINF) 2.3
+remainder(INF, -inf) ValueError: math domain error
+remainder(NINF, -inf) ValueError: math domain error
+remainder(-inf, 0.0) ValueError: math domain error
+remainder(-inf, -0.0) ValueError: math domain error
+remainder(INF, -2.3) ValueError: math domain error
+remainder(NINF, -2.3) ValueError: math domain error
+remainder(-2.3, 0.0) ValueError: math domain error
+remainder(-2.3, -0.0) ValueError: math domain error
+remainder(INF, -0.0) ValueError: math domain error
+remainder(NINF, -0.0) ValueError: math domain error
+remainder(-0.0, 0.0) ValueError: math domain error
+remainder(-0.0, -0.0) ValueError: math domain error
+remainder(INF, 0.0) ValueError: math domain error
+remainder(NINF, 0.0) ValueError: math domain error
+remainder(0.0, 0.0) ValueError: math domain error
+remainder(0.0, -0.0) ValueError: math domain error
+remainder(INF, 2.3) ValueError: math domain error
+remainder(NINF, 2.3) ValueError: math domain error
+remainder(2.3, 0.0) ValueError: math domain error
+remainder(2.3, -0.0) ValueError: math domain error
+remainder(INF, inf) ValueError: math domain error
+remainder(NINF, inf) ValueError: math domain error
+remainder(inf, 0.0) ValueError: math domain error
+remainder(inf, -0.0) ValueError: math domain error
+nextafter(4503599627370496.0, -INF) 4503599627370495.5
+nextafter(4503599627370496.0, INF) 4503599627370497.0
+nextafter(9223372036854775808.0, 0.0) 9.223372036854775e+18
+nextafter(-9223372036854775808.0, 0.0) -9.223372036854775e+18
+nextafter(1.0, -INF) 0.9999999999999999
+nextafter(1.0, INF) 1.0000000000000002
+nextafter(+0.0, INF) 5e-324
+nextafter(-0.0, INF) 5e-324
+nextafter(+0.0, -INF) -5e-324
+nextafter(-0.0, -INF) -5e-324
+nextafter(smallest_subnormal, +0.0) 0.0
+nextafter(-smallest_subnormal, +0.0) -0.0
+nextafter(smallest_subnormal, -0.0) 0.0
+nextafter(-smallest_subnormal, -0.0) -0.0
+nextafter(INF, 0.0) 1.7976931348623157e+308
+nextafter(-INF, 0.0) -1.7976931348623157e+308
+nextafter(largest_normal, INF) inf
+nextafter(-largest_normal, -INF) -inf
+nextafter(NAN, 1.0) nan
+nextafter(1.0, NAN) nan
+nextafter(NAN, NAN) nan
+ulp(1.0) 2.220446049250313e-16
+ulp(2 ** 52) 1.0
+ulp(2 ** 53) 2.0
+ulp(0.0) 5e-324
+ulp(FLOAT_MAX) 1.99584030953472e+292
+ulp(INF) inf
+ulp(math.nan) nan
+ulp(-0.0) 5e-324
+ulp(-1.0) 2.220446049250313e-16
+ulp(-2 ** 52) 1.0
+ulp(-INF) inf
+[exit 0]

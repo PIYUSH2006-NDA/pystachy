@@ -24,6 +24,24 @@
 #include <unistd.h>
 #include <unwind.h>
 
+/* A float's shortest round-trip digits: Ryu's d2s (ryu/, upstream commit 4c0618b; ryu/README.md),
+   with its small tables. The driver's cached runtime is built from its files too, which RTPARTS
+   (pystachy.py) lists. Its functions are made static, so that no symbol of it leaves the runtime
+   (d2s and d2s_buffered, unused, are dropped), and its asserts are off, as in a release build
+   (assert() is then as it was, for the code that follows) */
+#define RYU_OPTIMIZE_SIZE
+static int d2s_buffered_n(double f, char *result);
+__attribute__((unused)) static void d2s_buffered(double f, char *result);
+__attribute__((unused)) static char *d2s(double f);
+#ifdef NDEBUG
+#include "ryu/d2s.c"
+#else
+#define NDEBUG
+#include "ryu/d2s.c"
+#undef NDEBUG
+#include <assert.h>
+#endif
+
 typedef int64_t I;
 typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
@@ -312,6 +330,14 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
+/* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
+   own frame (Gen.stack_tuple), which the function called copies before it keeps it
+   (Gen.keep_stack). Not inlined: the frames of its callers, where such a tuple lives, are then all
+   above this one's. */
+__attribute__((noinline)) I pys_on_stack(void *x) {
+  uintptr_t p = (uintptr_t)x;
+  return p >= (uintptr_t)__builtin_frame_address(0) && p < (uintptr_t)gc_bottom;
+}
 static void gc_extern(I n) {           /* n malloc'd bytes more that heap objects hold (fewer: n < 0), counted as the
                                           heap's own; whoever allocates them collects first, as gc_slow would */
   if (n > 0) gc_allocd += n;
@@ -462,7 +488,10 @@ static void span(I *lo, I *hi, I n) {
   if (*hi < *lo) *hi = *lo;
 }
 Str *pys_str_get(Str *s, I i) { return pys_chr((unsigned char)s->s[idx(i, s->len, "IndexError: string index out of range")]); }
-Str *pys_str_slice(Str *s, I lo, I hi) { span(&lo, &hi, s->len); return pys_str(s->s + lo, hi - lo); }
+Str *pys_str_slice(Str *s, I lo, I hi) {      /* all of s is s itself, as in CPython: s[:], a strip that strips nothing */
+  span(&lo, &hi, s->len);
+  return lo == 0 && hi == s->len ? s : pys_str(s->s + lo, hi - lo);
+}
 Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
@@ -545,12 +574,14 @@ Str *pys_str_float(double d) {               /* Python repr(): shortest round-tr
   if (isnan(d)) return cstr("nan");
   if (isinf(d)) return cstr(d > 0 ? "inf" : "-inf");
   if (d == 0) return cstr(signbit(d) ? "-0.0" : "0.0");
-  int p = 1;
-  for (; p < 17; p++) { fsnprintf(b, 40, "%.*e", p - 1, d); if (fstrtod(b, 0) == d) break; }
-  if (p == 17) fsnprintf(b, 40, "%.16e", d);
+  /* "-D.DDDE-X": the fewest digits that read back as d, and of those the closest to d, as CPython's
+     dtoa (mode 0) gives them. (Not the first p at which the nearest p-digit decimal reads back: at
+     a power of two, whose lower neighbour is twice as close as its upper one, that decimal can
+     fail where another of p digits reads back) */
+  b[d2s_buffered_n(d, b)] = 0;
   int nd = 0, neg = b[0] == '-';
   char *q = b + neg;
-  for (; *q != 'e'; q++) if (*q != '.') dig[nd++] = *q;
+  for (; *q != 'E'; q++) if (*q != '.') dig[nd++] = *q;
   int e = atoi(q + 1) + 1;                      /* position of the decimal point */
   while (nd > 1 && dig[nd - 1] == '0') nd--;
   if (neg) *w++ = '-';

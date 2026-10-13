@@ -1,0 +1,321 @@
+(1.1).is_integer() False
+(1.).is_integer() True
+float("nan").is_integer() False
+float("inf").is_integer() False
+inf in [inf] True
+inf in (inf,) True
+[inf].count(inf) 1
+inf in floats True
+-inf in [-inf] True
+-inf in (-inf,) True
+[-inf].count(-inf) 1
+-inf in floats True
+0.0 in [0.0] True
+0.0 in (0.0,) True
+[0.0].count(0.0) 1
+0.0 in floats True
+1.0 in [1.0] True
+1.0 in (1.0,) True
+[1.0].count(1.0) 1
+1.0 in floats True
+[inf] == [inf] True
+(inf,) == (inf,) True
+[inf] not equal to itself True
+(inf,) not equal to itself True
+[-inf] == [-inf] True
+(-inf,) == (-inf,) True
+[-inf] not equal to itself True
+(-inf,) not equal to itself True
+[0.0] == [0.0] True
+(0.0,) == (0.0,) True
+[0.0] not equal to itself True
+(0.0,) not equal to itself True
+[1.0] == [1.0] True
+(1.0,) == (1.0,) True
+[1.0] not equal to itself True
+(1.0,) not equal to itself True
+isinstance(float(0.5).__floor__(), int) True
+float(0.5).__floor__() 0
+float(1.0).__floor__() 1
+float(1.5).__floor__() 1
+float(-0.5).__floor__() -1
+float(-1.0).__floor__() -1
+float(-1.5).__floor__() -2
+float("nan").__floor__() ValueError: cannot convert float NaN to integer
+float("inf").__floor__() OverflowError: cannot convert float infinity to integer
+float("-inf").__floor__() OverflowError: cannot convert float infinity to integer
+isinstance(float(0.5).__ceil__(), int) True
+float(0.5).__ceil__() 1
+float(1.0).__ceil__() 1
+float(1.5).__ceil__() 2
+float(-0.5).__ceil__() 0
+float(-1.0).__ceil__() -1
+float(-1.5).__ceil__() -1
+float("nan").__ceil__() ValueError: cannot convert float NaN to integer
+float("inf").__ceil__() OverflowError: cannot convert float infinity to integer
+float("-inf").__ceil__() OverflowError: cannot convert float infinity to integer
+mod(-1.0, 1.0) 0.0
+mod(-1e-100, 1.0) 1.0
+mod(-0.0, 1.0) 0.0
+mod(0.0, 1.0) 0.0
+mod(1e-100, 1.0) 1e-100
+mod(1.0, 1.0) 0.0
+mod(-1.0, -1.0) -0.0
+mod(-1e-100, -1.0) -1e-100
+mod(-0.0, -1.0) -0.0
+mod(0.0, -1.0) -0.0
+mod(1e-100, -1.0) -1.0
+mod(1.0, -1.0) -0.0
+-- pow
+isnan(pow_op(-INF, NAN)) True
+isnan(pow_op(-2.0, NAN)) True
+isnan(pow_op(-1.0, NAN)) True
+isnan(pow_op(-0.5, NAN)) True
+isnan(pow_op(-0.0, NAN)) True
+isnan(pow_op(0.0, NAN)) True
+isnan(pow_op(0.5, NAN)) True
+isnan(pow_op(2.0, NAN)) True
+isnan(pow_op(INF, NAN)) True
+isnan(pow_op(NAN, NAN)) True
+isnan(pow_op(NAN, -INF)) True
+isnan(pow_op(NAN, -2.0)) True
+isnan(pow_op(NAN, -1.0)) True
+isnan(pow_op(NAN, -0.5)) True
+isnan(pow_op(NAN, 0.5)) True
+isnan(pow_op(NAN, 1.0)) True
+isnan(pow_op(NAN, 2.0)) True
+isnan(pow_op(NAN, INF)) True
+pow_op(-0.0, -1.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -1.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, -2.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, -0.5) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -2.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -0.5) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, 1.0) -0.0
+pow_op(0.0, 1.0) 0.0
+pow_op(-0.0, 0.5) 0.0
+pow_op(-0.0, 2.0) 0.0
+pow_op(0.0, 0.5) 0.0
+pow_op(0.0, 2.0) 0.0
+pow_op(-1.0, -INF) 1.0
+pow_op(-1.0, INF) 1.0
+pow_op(1.0, -INF) 1.0
+pow_op(1.0, -2.0) 1.0
+pow_op(1.0, -1.0) 1.0
+pow_op(1.0, -0.5) 1.0
+pow_op(1.0, -0.0) 1.0
+pow_op(1.0, 0.0) 1.0
+pow_op(1.0, 0.5) 1.0
+pow_op(1.0, 1.0) 1.0
+pow_op(1.0, 2.0) 1.0
+pow_op(1.0, INF) 1.0
+pow_op(1.0, NAN) 1.0
+pow_op(-INF, 0.0) 1.0
+pow_op(-2.0, 0.0) 1.0
+pow_op(-1.0, 0.0) 1.0
+pow_op(-0.5, 0.0) 1.0
+pow_op(-0.0, 0.0) 1.0
+pow_op(0.0, 0.0) 1.0
+pow_op(0.5, 0.0) 1.0
+pow_op(1.0, 0.0) 1.0
+pow_op(2.0, 0.0) 1.0
+pow_op(INF, 0.0) 1.0
+pow_op(NAN, 0.0) 1.0
+pow_op(-INF, -0.0) 1.0
+pow_op(-2.0, -0.0) 1.0
+pow_op(-1.0, -0.0) 1.0
+pow_op(-0.5, -0.0) 1.0
+pow_op(-0.0, -0.0) 1.0
+pow_op(0.0, -0.0) 1.0
+pow_op(0.5, -0.0) 1.0
+pow_op(1.0, -0.0) 1.0
+pow_op(2.0, -0.0) 1.0
+pow_op(INF, -0.0) 1.0
+pow_op(NAN, -0.0) 1.0
+pow_op(-0.5, -INF) inf
+pow_op(-0.0, -INF) inf
+pow_op(0.0, -INF) inf
+pow_op(0.5, -INF) inf
+pow_op(-INF, -INF) 0.0
+pow_op(-2.0, -INF) 0.0
+pow_op(2.0, -INF) 0.0
+pow_op(INF, -INF) 0.0
+pow_op(-0.5, INF) 0.0
+pow_op(-0.0, INF) 0.0
+pow_op(0.0, INF) 0.0
+pow_op(0.5, INF) 0.0
+pow_op(-INF, INF) inf
+pow_op(-2.0, INF) inf
+pow_op(2.0, INF) inf
+pow_op(INF, INF) inf
+pow_op(-INF, -1.0) -0.0
+pow_op(-INF, -0.5) 0.0
+pow_op(-INF, -2.0) 0.0
+pow_op(-INF, 1.0) -inf
+pow_op(-INF, 0.5) inf
+pow_op(-INF, 2.0) inf
+pow_op(INF, 0.5) inf
+pow_op(INF, 1.0) inf
+pow_op(INF, 2.0) inf
+pow_op(INF, -2.0) 0.0
+pow_op(INF, -1.0) 0.0
+pow_op(INF, -0.5) 0.0
+pow_op(-2.0, -2.0) 0.25
+pow_op(-2.0, -1.0) -0.5
+pow_op(-2.0, -0.0) 1.0
+pow_op(-2.0, 0.0) 1.0
+pow_op(-2.0, 1.0) -2.0
+pow_op(-2.0, 2.0) 4.0
+pow_op(-1.0, -2.0) 1.0
+pow_op(-1.0, -1.0) -1.0
+pow_op(-1.0, -0.0) 1.0
+pow_op(-1.0, 0.0) 1.0
+pow_op(-1.0, 1.0) -1.0
+pow_op(-1.0, 2.0) 1.0
+pow_op(2.0, -2.0) 0.25
+pow_op(2.0, -1.0) 0.5
+pow_op(2.0, -0.0) 1.0
+pow_op(2.0, 0.0) 1.0
+pow_op(2.0, 1.0) 2.0
+pow_op(2.0, 2.0) 4.0
+pow_op(1.0, -1e100) 1.0
+pow_op(1.0, 1e100) 1.0
+pow_op(-1.0, -1e100) 1.0
+pow_op(-1.0, 1e100) 1.0
+pow_op(-2.0, -2000.0) 0.0
+pow_op(-2.0, -2001.0) -0.0
+pow_op(2.0, -2000.0) 0.0
+pow_op(2.0, -2000.5) 0.0
+pow_op(2.0, -2001.0) 0.0
+pow_op(-0.5, 2000.0) 0.0
+pow_op(-0.5, 2001.0) -0.0
+pow_op(0.5, 2000.0) 0.0
+pow_op(0.5, 2000.5) 0.0
+pow_op(0.5, 2001.0) 0.0
+-- operator.pow
+isnan(pow_op(-INF, NAN)) True
+isnan(pow_op(-2.0, NAN)) True
+isnan(pow_op(-1.0, NAN)) True
+isnan(pow_op(-0.5, NAN)) True
+isnan(pow_op(-0.0, NAN)) True
+isnan(pow_op(0.0, NAN)) True
+isnan(pow_op(0.5, NAN)) True
+isnan(pow_op(2.0, NAN)) True
+isnan(pow_op(INF, NAN)) True
+isnan(pow_op(NAN, NAN)) True
+isnan(pow_op(NAN, -INF)) True
+isnan(pow_op(NAN, -2.0)) True
+isnan(pow_op(NAN, -1.0)) True
+isnan(pow_op(NAN, -0.5)) True
+isnan(pow_op(NAN, 0.5)) True
+isnan(pow_op(NAN, 1.0)) True
+isnan(pow_op(NAN, 2.0)) True
+isnan(pow_op(NAN, INF)) True
+pow_op(-0.0, -1.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -1.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, -2.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, -0.5) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -2.0) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(0.0, -0.5) ZeroDivisionError: 0.0 cannot be raised to a negative power
+pow_op(-0.0, 1.0) -0.0
+pow_op(0.0, 1.0) 0.0
+pow_op(-0.0, 0.5) 0.0
+pow_op(-0.0, 2.0) 0.0
+pow_op(0.0, 0.5) 0.0
+pow_op(0.0, 2.0) 0.0
+pow_op(-1.0, -INF) 1.0
+pow_op(-1.0, INF) 1.0
+pow_op(1.0, -INF) 1.0
+pow_op(1.0, -2.0) 1.0
+pow_op(1.0, -1.0) 1.0
+pow_op(1.0, -0.5) 1.0
+pow_op(1.0, -0.0) 1.0
+pow_op(1.0, 0.0) 1.0
+pow_op(1.0, 0.5) 1.0
+pow_op(1.0, 1.0) 1.0
+pow_op(1.0, 2.0) 1.0
+pow_op(1.0, INF) 1.0
+pow_op(1.0, NAN) 1.0
+pow_op(-INF, 0.0) 1.0
+pow_op(-2.0, 0.0) 1.0
+pow_op(-1.0, 0.0) 1.0
+pow_op(-0.5, 0.0) 1.0
+pow_op(-0.0, 0.0) 1.0
+pow_op(0.0, 0.0) 1.0
+pow_op(0.5, 0.0) 1.0
+pow_op(1.0, 0.0) 1.0
+pow_op(2.0, 0.0) 1.0
+pow_op(INF, 0.0) 1.0
+pow_op(NAN, 0.0) 1.0
+pow_op(-INF, -0.0) 1.0
+pow_op(-2.0, -0.0) 1.0
+pow_op(-1.0, -0.0) 1.0
+pow_op(-0.5, -0.0) 1.0
+pow_op(-0.0, -0.0) 1.0
+pow_op(0.0, -0.0) 1.0
+pow_op(0.5, -0.0) 1.0
+pow_op(1.0, -0.0) 1.0
+pow_op(2.0, -0.0) 1.0
+pow_op(INF, -0.0) 1.0
+pow_op(NAN, -0.0) 1.0
+pow_op(-0.5, -INF) inf
+pow_op(-0.0, -INF) inf
+pow_op(0.0, -INF) inf
+pow_op(0.5, -INF) inf
+pow_op(-INF, -INF) 0.0
+pow_op(-2.0, -INF) 0.0
+pow_op(2.0, -INF) 0.0
+pow_op(INF, -INF) 0.0
+pow_op(-0.5, INF) 0.0
+pow_op(-0.0, INF) 0.0
+pow_op(0.0, INF) 0.0
+pow_op(0.5, INF) 0.0
+pow_op(-INF, INF) inf
+pow_op(-2.0, INF) inf
+pow_op(2.0, INF) inf
+pow_op(INF, INF) inf
+pow_op(-INF, -1.0) -0.0
+pow_op(-INF, -0.5) 0.0
+pow_op(-INF, -2.0) 0.0
+pow_op(-INF, 1.0) -inf
+pow_op(-INF, 0.5) inf
+pow_op(-INF, 2.0) inf
+pow_op(INF, 0.5) inf
+pow_op(INF, 1.0) inf
+pow_op(INF, 2.0) inf
+pow_op(INF, -2.0) 0.0
+pow_op(INF, -1.0) 0.0
+pow_op(INF, -0.5) 0.0
+pow_op(-2.0, -2.0) 0.25
+pow_op(-2.0, -1.0) -0.5
+pow_op(-2.0, -0.0) 1.0
+pow_op(-2.0, 0.0) 1.0
+pow_op(-2.0, 1.0) -2.0
+pow_op(-2.0, 2.0) 4.0
+pow_op(-1.0, -2.0) 1.0
+pow_op(-1.0, -1.0) -1.0
+pow_op(-1.0, -0.0) 1.0
+pow_op(-1.0, 0.0) 1.0
+pow_op(-1.0, 1.0) -1.0
+pow_op(-1.0, 2.0) 1.0
+pow_op(2.0, -2.0) 0.25
+pow_op(2.0, -1.0) 0.5
+pow_op(2.0, -0.0) 1.0
+pow_op(2.0, 0.0) 1.0
+pow_op(2.0, 1.0) 2.0
+pow_op(2.0, 2.0) 4.0
+pow_op(1.0, -1e100) 1.0
+pow_op(1.0, 1e100) 1.0
+pow_op(-1.0, -1e100) 1.0
+pow_op(-1.0, 1e100) 1.0
+pow_op(-2.0, -2000.0) 0.0
+pow_op(-2.0, -2001.0) -0.0
+pow_op(2.0, -2000.0) 0.0
+pow_op(2.0, -2000.5) 0.0
+pow_op(2.0, -2001.0) 0.0
+pow_op(-0.5, 2000.0) 0.0
+pow_op(-0.5, 2001.0) -0.0
+pow_op(0.5, 2000.0) 0.0
+pow_op(0.5, 2000.5) 0.0
+pow_op(0.5, 2001.0) 0.0
+[exit 0]

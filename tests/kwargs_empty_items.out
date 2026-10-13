@@ -1,0 +1,14 @@
+['a=1'] []
+['a=1'] []
+['a=1', 'b=2'] ['x=s', 'y=t']
+3 0
+'a=1, b=2' "s='x'" ''
+9 0
+True True True False False True
+break at 2
+no break broke no break
+['a', 'b'] ['xy', 'z'] [2, 1] [] [] []
+['0a1', '1a1'] []
+['X'] []
+['z=26', 'z=26'] []
+[exit 0]

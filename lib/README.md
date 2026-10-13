@@ -87,6 +87,37 @@ compiled tests run there at upstream's size (`make re-fuzz RE_FUZZ="20000 2"` ru
 patterns of seed 2). With it, unmodified roman 5.2 prints what CPython prints. It is about 3
 times slower than `_sre`.
 
+## `fnmatch`, a port of CPython's
+
+`fnmatch.py` is CPython 3.13.16's `Lib/fnmatch.py` (SHA-256
+`95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963`) with 8 regions edited,
+each marked `# Pystachy port:`. Its functions are CPython's: `fnmatch()`, `fnmatchcase()`,
+`filter()` and `translate()` translate a shell pattern into CPython's regular expression, character
+for character, and match it with `lib/re`; `_compile_pattern()` keeps the compiled patterns in an
+`lru_cache(maxsize=32768, typed=True)`, so its `cache_info()` counts what CPython's does.
+
+- `_compile_pattern(pat: str) -> Callable[[str], re.Match | None]`, with `from typing import
+  Callable`: `lib/functools` types a cache from its function's annotations. A pattern is a `str`
+  (CPython's also takes `bytes`, which Pystachy has not), and the matcher is the bound method
+  `re.compile(...).match` as a `Callable`.
+- `translate()`'s sentinel `STAR = object()` is `None` (#251): `_translate()` and
+  `_join_translated_parts()` annotate their lists `list[str | None]` and test `is STAR` as before.
+- `_join_translated_parts()` binds `fixed` and `res` to a list and then to the str it joins
+  (#248): the lists are `pieces` and `res`, the strs `fixed` and `joined`.
+- `filter()` tests `os.name == 'posix'` where CPython tests `os.path is posixpath`: a module is no
+  value in Pystachy. `os.path.normcase()` is Pystachy's builtin, posixpath's: a str as it is.
+
+`tests/lib_fnmatch.py` compares `translate()` of 45 patterns (classes, negated, reversed and
+dashed ranges, `[]]`, an unclosed `[`, `&&`, `~` and `|` in a class, regex metacharacters,
+non-ASCII) and the names each matches with CPython's, and the cache's statistics. A pattern
+matches by code point, as `lib/re` does, so a non-ASCII name matches as in CPython.
+
+In an AOT executable, `fnmatchcase()` of 2,000 names against 10 patterns takes 428 ns a match
+with the cache and 1,236 ns compiling the pattern each time (CPython: 286 and 3,269 ns): `lib/re`
+compiles a pattern about 3.6 times faster than CPython's `re`, whose parser and compiler are
+Python, and matches about 1.6 times slower than its C engine `_sre`, so the cache saves Pystachy
+less than it saves CPython, but still nearly two thirds of the time.
+
 ## `functools`, Pystachy's own
 
 CPython's `Lib/functools.py` does not compile (it imports `abc`, `collections`, `reprlib` and
@@ -138,6 +169,57 @@ argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tup
 hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
 (medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
 
+## `textwrap`, a port of CPython's
+
+`textwrap.py` is CPython 3.13.16's `Lib/textwrap.py` (SHA-256
+`30f3d833950d53e168cc021961574b553f56aed84458712b2eb29c6495843d46`) edited in 7 places, each
+marked `# Pystachy port:`. It has the whole module, as CPython's code: `wrap()`, `fill()`,
+`shorten()`, `dedent()`, `indent()` and `TextWrapper`, with each of its options (also changed on
+a wrapper after it is made) and its class attributes (which a wrapper can override with its own).
+Its regular expressions are `lib/re`'s.
+
+- `TextWrapper`'s class body makes the patterns `word_punct`, `letter`, `whitespace` and
+  `nowhitespace`, builds `wordsep_re` and `wordsep_simple_re` of them, and then `del`s them: a
+  class body can neither read its own attributes (#126) nor `del`. They are the module's
+  `_word_punct`, `_letter`, `_whitespace_class` and `_nowhitespace`, which the class body reads.
+- The four class attributes, each a call's result, are annotated (`dict[int, int]`,
+  `re.Pattern`), and `unicode_whitespace_trans` is `dict.fromkeys()` of a list comprehension
+  where CPython's is of `map(ord, ...)`, which Pystachy takes only where its items are taken at
+  once.
+- `wordsep_re`'s pattern is `%` of a mapping (`%(wp)s`), which Pystachy does not support:
+  `str.replace()` of each name makes the same pattern.
+- `max_lines=None` is annotated `int | None`: a field that a class template gives `None` needs
+  its type.
+- `_munge_whitespace()` replaces each character through `unicode_whitespace_trans` with
+  `''.join([chr(trans.get(ord(c), ord(c))) for c in text])`: Pystachy has no `str.translate()`.
+- `dedent()` enumerates `list(zip(margin, indent))`: `zip()` nested in `enumerate()` is not
+  supported.
+
+Where it differs from CPython (`tests/deviations/lib_textwrap.py`):
+
+- A width counts a str's bytes, as `len()` does in Pystachy: past ASCII, fewer characters fit
+  on a line, and a word longer than the width (`break_long_words`) is broken after that many
+  bytes, which can fall inside a character, whose bytes two lines then hold apart.
+- `unicode_whitespace_trans` maps code points to code points, an int each, the type of its default:
+  a table with a str or `None` value, which `str.translate()` takes to replace a character with
+  several or to delete it, is a compile-time type error (`tests/errors/lib_textwrap_trans_str.py`).
+  It is looked up byte by byte: a table that a wrapper is given maps the bytes of a character past
+  ASCII, not the character (CPython's table maps only ASCII whitespace).
+- A subclass of `TextWrapper` is an error: only an exception class may have a base (#7).
+
+`tests/lib_textwrap.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_textwrap.py`, and on a wrapper's own options and class attributes. Run by
+CPython, the edited module passes that file's 66 tests.
+
+In an AOT executable, `wrap()` of a 500-character paragraph of 79 words takes 137 µs, `fill()`
+136 µs and `shorten()` 134 µs, against CPython's 64, 66 and 54 µs; `dedent()` of a 15-line
+block takes 45 µs (CPython: 11 µs) and `indent()` 1.2 µs (CPython: 2.3 µs). Most of the time
+is `lib/re`'s: `wordsep_re.split()` takes 122 µs of `wrap()`'s 137 (CPython's `_sre`: 38 of 64),
+and the lookups that stand in for `str.translate()` 10 µs (CPython: 2.7 µs), while the rest of
+`wrap()`, the wrapping itself, takes 6 µs, against CPython's 17 µs. `dedent()`'s three regular
+expressions take 20, 14 and 13 µs (CPython: 3 µs each). (Medians of 3 runs, each the median of
+5 rounds over 200 generated ASCII paragraphs or blocks.)
+
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop
 from empty list` here, `index out of range` from CPython's `_heapq`), keyword arguments the C
@@ -147,4 +229,5 @@ functions reject are accepted, `bisect`'s `hi=-1` is a plain bound (`len(a)` for
 
 These files are part of Python and are used under the PSF License Version 2; see
 `THIRD_PARTY_NOTICES`. `tools/import_sweep.py` tries every module of a CPython standard library
-this way; [`docs/stdlib.md`](../docs/stdlib.md) reports which import and why the others do not.
+this way, with the modules here in place of the library's own; [`docs/stdlib.md`](../docs/stdlib.md)
+reports which import and why the others do not.

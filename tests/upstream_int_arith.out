@@ -1,0 +1,139 @@
+test_division: 4 random pairs
+check_division(20172188947443, 615611397): divmod (32767, 450301944)
+check_division(1020908530270155025, 950795710): divmod (1073741203, 807515895)
+check_division(128589565723112408, 736393718): divmod (174620671, 565767630)
+check_division(609919780285761575, 18613274546784): divmod (32767, 18613211290247)
+check_division(710031681576388032, 26769404391308): divmod (26523, 26768905725948)
+check_division(1933622614268221, 30212853348836): divmod (63, 30212853291553)
+test_bitop_identities: 198 special values, 51884 identities
+1 % 0 ZeroDivisionError: integer modulo by zero
+13 % 10 3
+-13 % 10 7
+13 % -10 -7
+-13 % -10 -3
+12 % 4 0
+-12 % 4 0
+12 % -4 0
+-12 % -4 0
+1 // 0 ZeroDivisionError: integer division or modulo by zero
+2 // 3 0
+2 // -3 -1
+-2 // 3 -1
+-2 // -3 0
+-11 // -3 3
+-11 // 3 -4
+11 // -3 -4
+11 // 3 3
+-12 // -3 4
+-12 // 3 -4
+12 // -3 -4
+12 // 3 4
+42 << -3 ValueError: negative shift count
+42 >> -3 ValueError: negative shift count
+0 << 0 0
+0 << 10 0
+0 << -1 ValueError: negative shift count
+0 << sys.maxsize 0
+42 >> 1 21
+(-42) >> 1 -21
+43 >> 1 21
+(-43) >> 1 -22
+1122 >> 1 561
+(-1122) >> 1 -561
+1123 >> 1 561
+(-1123) >> 1 -562
+42 >> 9 0
+(-42) >> 9 -1
+1122 >> 9 2
+(-1122) >> 9 -3
+(1 - BASE*BASE) >> SHIFT -1073741824
+(BASE - 1 - BASE*BASE) >> SHIFT -1073741824
+42 >> 32 0
+(-42) >> 32 -1
+1122 >> 32 0
+(-1122) >> 32 -1
+42 << 1 84
+(-42) << 1 -84
+561 << 1 1122
+(-561) << 1 -1122
+42 << 9 21504
+(-42) << 9 -21504
+1122 << 9 574464
+(-1122) << 9 -574464
+42 << 32 180388626432
+(-42) << 32 -180388626432
+1122 << 32 4818953306112
+(-1122) << 32 -4818953306112
+test_bit_length: 130000 values in range(-65000, 65000)
+(0).bit_length() 0
+(1).bit_length() 1
+(-1).bit_length() 1
+(2).bit_length() 2
+(-2).bit_length() 2
+(a-1).bit_length() for a = 2**2 2
+(1-a).bit_length() 2
+(a).bit_length() 3
+(-a).bit_length() 3
+(a+1).bit_length() 3
+(-a-1).bit_length() 3
+(a-1).bit_length() for a = 2**3 3
+(1-a).bit_length() 3
+(a).bit_length() 4
+(-a).bit_length() 4
+(a+1).bit_length() 4
+(-a-1).bit_length() 4
+(a-1).bit_length() for a = 2**15 15
+(1-a).bit_length() 15
+(a).bit_length() 16
+(-a).bit_length() 16
+(a+1).bit_length() 16
+(-a-1).bit_length() 16
+(a-1).bit_length() for a = 2**16 16
+(1-a).bit_length() 16
+(a).bit_length() 17
+(-a).bit_length() 17
+(a+1).bit_length() 17
+(-a-1).bit_length() 17
+(a-1).bit_length() for a = 2**17 17
+(1-a).bit_length() 17
+(a).bit_length() 18
+(-a).bit_length() 18
+(a+1).bit_length() 18
+(-a-1).bit_length() 18
+(a-1).bit_length() for a = 2**31 31
+(1-a).bit_length() 31
+(a).bit_length() 32
+(-a).bit_length() 32
+(a+1).bit_length() 32
+(-a-1).bit_length() 32
+(a-1).bit_length() for a = 2**32 32
+(1-a).bit_length() 32
+(a).bit_length() 33
+(-a).bit_length() 33
+(a+1).bit_length() 33
+(-a-1).bit_length() 33
+(a-1).bit_length() for a = 2**33 33
+(1-a).bit_length() 33
+(a).bit_length() 34
+(-a).bit_length() 34
+(a+1).bit_length() 34
+(-a-1).bit_length() 34
+test_bit_count: 2000 values in range(-1000, 1000)
+(2**10).bit_count() 1
+(a - 1).bit_count() 10
+(a ^ 63).bit_count() 7
+((a - 1) ^ 510).bit_count() 2
+(2**17).bit_count() 1
+(a - 1).bit_count() 17
+(a ^ 63).bit_count() 7
+((a - 1) ^ 510).bit_count() 9
+repr(True << 0) 1
+repr(True >> 0) 1
+repr(True << 2) 4
+repr(True >> 2) 0
+repr(False << 0) 0
+repr(False >> 0) 0
+repr(False << 2) 0
+repr(False >> 2) 0
+test_square: 31 bit lengths, the last n**2 4611686014132420609
+[exit 0]

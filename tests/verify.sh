@@ -8,10 +8,11 @@
 #   tests-opt-off  tests/run.sh with the stage-2 compiler and every optimization on the IR turned off
 #                  (PYSTACHY_OPT=-all): the passes change no output
 #   runtime-cache  tests/cache.sh with both compilers: the cached runtime is used while nothing it is
-#                  built from changes, built again when runtime.c, runtime.py, the compiler or a tool
-#                  changes (also by a same-size edit whose mtime is set back, or one made while it is
-#                  built), keyed by the flags too, never left by a failed build; ext's glue cached
-#                  beside it; a run's own runtime while a tool is not settled; PATH's rules
+#                  built from changes, built again when runtime.c, a file it includes from ryu/,
+#                  runtime.py, the compiler or a tool changes (also by a same-size edit whose mtime is
+#                  set back, or one made while it is built), keyed by the flags too, never left by a
+#                  failed build; ext's glue cached beside it; a run's own runtime while a tool is not
+#                  settled; PATH's rules
 #   python-free    PATH holds only symlinks to the LLVM tools, the linker and the POSIX tools that the
 #                  driver and tests/run.sh call (no python3): the native compiler rebuilds its runtime
 #                  and itself, reproduces the same IR and passes the tests
@@ -36,6 +37,8 @@
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
+#   streaming      tools/streamprobe.py: sum(), min() and max() of range() and of generator expressions
+#                  take the items as they come: 100,000,000 of them in 64 MiB, AOT
 #   ffi            tests/ffi/run.sh with the stage-2 compiler: @ffi.extern's C calls and the FFI's
 #                  compile-time errors, then, with $PY's libpython, pystachy ext's extension modules,
 #                  against the twins in tools/rt_cpython (docs/ffi.md)
@@ -73,8 +76,8 @@ rm -rf "$V" "$OUT"
 mkdir -p "$V/home" "$V/ubsan-home"
 cp runtime.c runtime.py "$V/home/"
 cp runtime.c runtime.py "$V/ubsan-home/"
-cp -R lib "$V/home/"
-cp -R lib "$V/ubsan-home/"
+cp -R lib ryu "$V/home/"
+cp -R lib ryu "$V/ubsan-home/"
 export PYSTACHY_HOME="$ROOT"
 # The steps set the knobs they test themselves: one left in the caller's environment would weaken a
 # step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they
@@ -183,12 +186,12 @@ x=$(tests $((nl * ALL)) $logs 2>> "$L") && r=pass || r=fail
 step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
 
 # ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
-# whose checks are 56 with the native compiler and 55 with CPython's, which runs no PATH search)
+# whose checks are 58 with the native compiler and 57 with CPython's, which runs no PATH search)
 L=$V/runtime-cache.log; s=$(now)
 PY=$PY tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
 tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
 for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
-x=$(tests $((56 + 55)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
+x=$(tests $((58 + 57)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
 step runtime-cache $r "$s" "$L" ', "compilers": ["stage2", "CPython-hosted"]'"$x"
 
 # ---- python-free: the native compiler and the tests with only LLVM + POSIX tools on PATH
@@ -305,6 +308,11 @@ step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-
 L=$V/inherited-ast.log; s=$(now); r=fail
 $PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
+
+# ---- streaming: sum(), min() and max() of 10^8 items in 64 MiB, which their list would exceed
+L=$V/streaming.log; s=$(now); r=fail
+$PY tools/streamprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
+step streaming $r "$s" "$L" ', "items": 100000000, "address_space_mib": 64'
 
 # ---- ffi: C functions, extension modules (docs/ffi.md)
 L=$V/ffi.log; s=$(now); r=fail
