@@ -315,6 +315,7 @@ Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
 - tests/upstream_iter_*.py: Lib/test/test_iter.py
 - tests/upstream_builtin_*.py and tests/errors/upstream_builtin_*.py: Lib/test/test_builtin.py
 - tests/upstream_enumerate_*.py: Lib/test/test_enumerate.py
+- tests/upstream_dict_*.py: Lib/test/test_dict.py
 
 They are used under the Python Software Foundation License Version 2 reproduced above;
 tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
