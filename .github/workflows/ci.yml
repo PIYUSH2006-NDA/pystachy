@@ -77,18 +77,21 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: Require every verification group
-        env:
-          GROUP_RESULT: ${{ needs.verification.result }}
-        run: test "$GROUP_RESULT" = success
-
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
+        if: always()
         with:
           pattern: verification-*
           path: build/ci-reports
 
       - name: Require complete verification reports
+        if: always()
         run: python3 tools/merge_verification.py build/ci-reports -o build/verification.json
+
+      - name: Require every verification group
+        if: always()
+        env:
+          GROUP_RESULT: ${{ needs.verification.result }}
+        run: test "$GROUP_RESULT" = success
 
       - name: Upload combined verification report
         if: always()
