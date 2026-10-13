@@ -6343,6 +6343,22 @@ def optnames(t: str) -> str:
     return t
 
 
+def literal(e: Node) -> bool:
+    # is e a constant that CPython's compiler always makes one of: a literal, a sign on a number, or
+    # a tuple of those (an operator's result may exceed its limits, "a" * 4097, and is left to run)
+    k = e.kind
+    if k == "int" or k == "float" or k == "str" or k == "True" or k == "False" or k == "None" or k == "ellipsis":
+        return True
+    if k == "unary" and (e.s == "-" or e.s == "+") and (e.kids[0].kind == "int" or e.kids[0].kind == "float"):
+        return True
+    if k == "tuple":
+        for x in e.kids:
+            if not literal(x):
+                return False
+        return True
+    return False
+
+
 def folds(e: Node) -> bool:
     # is e a constant once CPython's AST optimizer has run (ast_opt.c): a literal, a tuple of
     # constants, or an operator applied to constants (a set display of constants is then a
@@ -19367,10 +19383,11 @@ class Gen:
         # (SET_UPDATE), which can leave it a smaller table; folded: the iterable of a for loop or
         # a comprehension, of constants, which CPython's AST optimizer makes that frozenset. The
         # constant is the frozenset of the items inserted in order, made again of its elements
-        # in the order it has them (the compiler's merge_consts_recursive does that). It is made
-        # where the display first runs and kept in a global, which the collector scans: each run
-        # after that copies it into a new set, or (folded) is it, as CPython's code object keeps it
-        const = (folded or (len(n.kids) > 2 and folds(mk("tuple", "", n.line, n.kids)))) and not self.rtmode
+        # in the order it has them (the compiler's merge_consts_recursive does that). One of literals
+        # is made where the display first runs and kept in a global, which the collector scans: each
+        # run after that copies it into a new set, or (folded) is it, as CPython's code object keeps
+        # it (an operator's result is made on each run, as CPython leaves one beyond its limits)
+        const = (folded or (len(n.kids) > 2 and folds(mk("tuple", "", n.line, n.kids)))) and literal(mk("tuple", "", n.line, n.kids)) and not self.rtmode
         g = f"@fs.{len(self.globs)}"
         old = ""
         l0 = ""
