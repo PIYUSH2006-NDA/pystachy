@@ -28,6 +28,12 @@ test-py:
 	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
+# the cached runtime's rules (tests/cache.sh: when it is used, built again, and what it is keyed by),
+# with the native compiler, then the CPython-hosted one ($(PY) loads the extension modules)
+test-cache: pystachy
+	PY="$(PY)" tests/cache.sh ./pystachy
+	tests/cache.sh "$(PY) -m pystachy"
+
 # the FFI's tests (docs/ffi.md): C calls, and with $(PY)'s libpython, extension modules
 test-ffi: pystachy
 	PY="$(PY)" tests/ffi/run.sh ./pystachy "jit aot"
@@ -78,12 +84,23 @@ eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	build/eqprobe
 	PYSTACHY_GC_STRESS=1 build/eqprobe
 
+# Writable files' malloc'd buffers count as heap bytes: dropped files run collections, closes balance.
+fileprobe: tools/fileprobe.c runtime.c runtime.py pystachy
+	mkdir -p build
+	./pystachy rt runtime.py -o build/fileprobe-rt.ll
+	$(LLVMBIN)clang -O2 -S -emit-llvm tools/fileprobe.c -o build/fileprobe.ll
+	$(LLVMBIN)llvm-link build/fileprobe-rt.ll build/fileprobe.ll -o build/fileprobe.bc
+	$(LLVMBIN)clang -O2 build/fileprobe.bc -o build/fileprobe -lm
+	build/fileprobe
+	build/fileprobe --lib
+	PYSTACHY_GC_STRESS=1 build/fileprobe
+
 # Inspect the bitcode passed to lli, then run it: dead functions must not reach code generation.
 jitprobe: pystachy
 	$(PY) tools/jitprobe.py
 
-# Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
-# scaling) -> build/verification.json
+# Full verification (bootstrap, both compilers, the runtime cache, Python-free stage, UBSan, GC stress, IR check,
+# benchmarks, dict probes, scaling) -> build/verification.json
 verify:
 	PY="$(PY)" tests/verify.sh
 
@@ -141,10 +158,10 @@ re-fuzz:
 lint:
 	ruff check
 	shellcheck -s sh -S warning $(wildcard tests/*.sh tests/ffi/*.sh tools/*.sh bench/*.sh)
-	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c pyext.c pyembed.c
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c tools/fileprobe.c pyext.c pyembed.c
 	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror -DPYX_ABI3T pyext.c
 
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean

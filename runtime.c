@@ -64,7 +64,10 @@ typedef struct Exc Exc;                                /* a raised exception (se
    arrays in 4 KiB slices.
    Policy. A collection runs when a free list or a large allocation needs memory and the
    bytes handed out since the last one reach max(32 MiB, live bytes after it), so the heap
-   stays near twice the live set. Dead large objects go straight back to the C allocator;
+   stays near twice the live set. A file open for writing holds malloc'd buffers, which count
+   as heap bytes (gc_ext: handed out, live, in the heap) and are allocated as a large object
+   is, so files dropped without close() start collections too; a standard stream's do not,
+   as no collection frees them. Dead large objects go straight back to the C allocator;
    empty chunks are kept for the next cycle's allocations, and beyond that every arena whose
    chunks are all empty is freed. A chunk that handed out nothing and lost nothing since the
    last sweep keeps its free list as is.
@@ -102,6 +105,7 @@ static W *fl[NK], *sfl[NK];            /* free list being allocated from; its st
 static Seg *avail[NK], *chunks, *pool, *bigs, ***pmap;
 static uintptr_t gc_lo, gc_hi;         /* bounds of the pages in the page map */
 static I gc_allocd, gc_limit = GC_MIN, gc_live, gc_heap, gc_peak, gc_n, gc_ns, gc_stress, gc_tick;
+static I gc_ext;                       /* malloc'd bytes that heap objects hold: open files' buffers (see I/O) */
 static int gc_off, gc_stats;
 static char *gc_bottom;                /* the stack is scanned from the collector up to here */
 static I **gc_roots, gc_nroots;        /* addresses of the program's pointer-typed globals */
@@ -208,6 +212,7 @@ static void sweep(void) {
     pmap_set((uintptr_t)s, (uintptr_t)s->start + s->size, 0, -(PAGE + HB + s->size - 1));
     free(s->raw);
   }
+  live += gc_ext;                      /* the buffers of the files still open (files_sweep closed the others) */
   gc_live = live; gc_allocd = 0; gc_limit = live > GC_MIN ? live : GC_MIN;
   I pooled = 0;                        /* keep the empty chunks the next cycle may need; beyond */
   for (Seg *s = pool; s; s = s->next) pooled += CHUNK;   /* that, free arenas with none in use */
@@ -314,6 +319,12 @@ __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc
 __attribute__((noinline)) I pys_on_stack(void *x) {
   uintptr_t p = (uintptr_t)x;
   return p >= (uintptr_t)__builtin_frame_address(0) && p < (uintptr_t)gc_bottom;
+}
+static void gc_extern(I n) {           /* n malloc'd bytes more that heap objects hold (fewer: n < 0), counted as the
+                                          heap's own; whoever allocates them collects first, as gc_slow would */
+  if (n > 0) gc_allocd += n;
+  gc_ext += n;
+  if ((gc_heap += n) > gc_peak) gc_peak = gc_heap;
 }
 static void gc_report(void) {
   fprintf(stderr, "gc: %lld collections, %.1f ms; heap peak %.1f MiB; live %.1f MiB at the last\n",
@@ -2197,6 +2208,7 @@ static int shut(File *f) {             /* close(): a flush, then the file is clo
   f->closed = 1; f->kept = 0;
   if (f->std) return e;                /* sys.stdout.close(): the stream stays open underneath */
   if (fclose(f->f) && !e) e = errno;
+  if (f->pb) gc_extern(-8192 - f->bs);   /* what setbuf1 counted */
   free(f->pb); f->pb = f->buf = 0;
   return e;
 }
@@ -2307,8 +2319,10 @@ static void put1(File *f, const char *s, I n) {   /* write(): through CPython's 
   int e = f->emu ? wput(f, s, n) : (f == &std_err ? ewrite(s, n) : (void)fwrite(s, 1, n, f->f), ferror(f->f) ? osflush(f, 0) : 0);
   if (e) ioerr(e);
 }
-static void setbuf1(File *f, I bs) {   /* CPython's write layers: 8 KiB of pending text, then bs bytes buffered */
+static void setbuf1(File *f, I bs) {   /* CPython's write layers: 8 KiB of pending text, then bs bytes buffered; a
+                                          file's (not a standard stream's) count as heap bytes (see memory) */
   if (!(f->pb = malloc(8192 + bs))) oom();
+  if (!f->std) gc_extern(8192 + bs);
   f->buf = f->pb + 8192; f->bs = bs; f->emu = 1;
   setvbuf(f->f, f->buf, _IOFBF, bs);
 }
@@ -2431,8 +2445,10 @@ File *pys_open(Str *path, Str *mode, Str *enc, Str *nl, I buffering) {   /* CPyt
   o->f = f; o->name = path; o->mode = mode; o->enc = enc; o->rd = r || plus; o->wr = !r || plus; o->nl = k;
   o->lat = lat == 2; o->dev = st.st_dev; o->ino = st.st_ino;
   if (o->wr) {                         /* buffering=1, or -1 on a terminal: line buffered */
+    I bs = buffering > 1 ? buffering : st.st_blksize > 1 ? st.st_blksize : 8192;
     o->lb = buffering == 1 || (buffering < 0 && isatty(fileno(f)));
-    setbuf1(o, buffering > 1 ? buffering : st.st_blksize > 1 ? st.st_blksize : 8192);
+    if (!gc_off && gc_allocd + 8192 + bs >= gc_limit) collect();   /* its buffers are heap bytes: as gc_slow */
+    setbuf1(o, bs);
   }
   if (a) fseek(f, 0, SEEK_END);        /* CPython starts an append file at its end */
   o->rstart = a ? ftell(f) : 0;
@@ -2645,6 +2661,19 @@ Str *pys_platform(void) {              /* sys.platform */
 #endif
 }
 I pys_exists(Str *p) { return !nul(p) && access(p->s, F_OK) == 0; }
+static struct stat stat1(Str *p) {     /* os.stat(p), which os.path.getsize, getmtime and getctime read */
+  struct stat st;
+  if (nul(p)) pys_fail("ValueError: stat: embedded null character in path");
+  if (stat(p->s, &st)) oserr(p->s);
+  return st;
+}
+static double stat_secs(struct timespec t) {   /* CPython's float of a time, sec + nsec * 1e-9: in two */
+  double f = t.tv_nsec * 1e-9;                 /* statements, which clang does not fuse into an FMA */
+  return t.tv_sec + f;
+}
+I pys_getsize(Str *p) { return stat1(p).st_size; }
+double pys_getmtime(Str *p) { return stat_secs(stat1(p).st_mtim); }
+double pys_getctime(Str *p) { return stat_secs(stat1(p).st_ctim); }
 Str *pys_path_join(Str *a, Str *b) {     /* os.path.join(a, b), as posixpath.join steps through its parts */
   if ((b->len && b->s[0] == '/') || !a->len) return b;
   if (a->s[a->len - 1] == '/') return pys_str_add(a, b);
