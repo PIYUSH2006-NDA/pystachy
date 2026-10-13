@@ -6232,6 +6232,13 @@ def nones(e: Node) -> bool:
     return True
 
 
+def int_fits(s: str) -> bool:
+    # does int literal s (as the lexer gives it: decimal, maybe negated) fit in 64 bits
+    neg = s.startswith("-")
+    d = s[1:] if neg else s
+    return not (len(d) > 19 or (len(d) == 19 and d > ("9223372036854775808" if neg else "9223372036854775807")))
+
+
 def nonetest(n: Node) -> int:
     # n is x is None, x is not None, x == None or x != None (or None is x, None == x, ...): the
     # index of x in n.kids; -1 otherwise
@@ -15446,6 +15453,14 @@ class Gen:
             return 0 if self.static_type(n) == "tuple[]" else 1  # (*args: the extra arguments)
         if k == "name" and is_kw(self.static_type(n)):
             return 0 if self.static_type(n) == "kw[]" else 1  # (**kwargs: the extra keyword arguments)
+        if k == "cmp" and n.s in "== != < <= > >=".split() and (self.static_len(n.kids[0]) >= 0 or self.static_len(n.kids[1]) >= 0):
+            # len(args) == 2 for a tuple (*args) or a **kwargs record, whose length its type fixes,
+            # against an int constant (one that fits in 64 bits: else the test compiles, to its error)
+            a = self.static_len(n.kids[0]) if n.kids[0].kind != "int" else int(n.kids[0].s) if int_fits(n.kids[0].s) else -1
+            b = self.static_len(n.kids[1]) if n.kids[1].kind != "int" else int(n.kids[1].s) if int_fits(n.kids[1].s) else -1
+            if a >= 0 and b >= 0:
+                ok = a == b if n.s == "==" else a != b if n.s == "!=" else a < b if n.s == "<" else a <= b if n.s == "<=" else a > b if n.s == ">" else a >= b
+                return 1 if ok else 0
         if k == "cmp" and (n.s == "in" or n.s == "not in") and len(n.kids) == 2 and n.kids[0].kind == "str" and n.kids[1].kind == "name" and is_kw(self.static_type(n.kids[1])):
             r = 1 if n.kids[0].s in kw_names(self.static_type(n.kids[1])) else 0  # ("name" in kwargs)
             return r if n.s == "in" else 1 - r
@@ -15472,6 +15487,14 @@ class Gen:
             r = self.isinst(t, n.kids[2]) if t != "" else -1
             return r if r >= 0 else (1 if r == -2 else 0) if r < -1 and self.knownobj(n.kids[1]) else -1
         return -1
+
+    def static_len(self, n: Node) -> int:
+        # the length of len(x), for a variable x whose type fixes it (a tuple, **kwargs's record),
+        # or -1
+        if n.kind != "call" or len(n.kids) != 2 or n.kids[0].kind != "name" or n.kids[0].s != "len" or self.bound("len") or n.kids[1].kind != "name":
+            return -1
+        t = self.static_type(n.kids[1])
+        return len(targs(t)) if is_tuple(t) and t != "tuple[]" else 0 if t == "tuple[]" or t == "kw[]" else len(kw_names(t)) if is_kw(t) else -1
 
     def static_reads(self, n: Node) -> None:
         # test n, which static() decides, still reads the classes of its isinstance() tests where it
@@ -15715,9 +15738,7 @@ class Gen:
         if k == "val":
             return self.vnodes[int(n.s)]  # (a value computed already: see vnode)
         if k == "int":
-            neg = n.s.startswith("-")
-            d = n.s[1:] if neg else n.s
-            if len(d) > 19 or (len(d) == 19 and d > ("9223372036854775808" if neg else "9223372036854775807")):
+            if not int_fits(n.s):
                 self.err("integer literal does not fit in 64 bits")
             return Val(n.s, "int")
         if k == "float":
