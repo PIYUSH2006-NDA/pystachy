@@ -59,7 +59,8 @@ format-spec language, lists, dicts (also keys that collide in the hash table, an
 (also their container protocol, static and class methods, and class variables), dataclasses, NamedTuples, typing's forms (`collections.abc`, `Final`, `@overload`, `TypeVar`,
 `os.PathLike`), `Optional` structures, optional values (also boxed numbers) and
 their narrowing (with CPython's error for each use of `None` where only a value works), rich comparisons, defaults,
-imports, modules and packages (`tests/mods/`, `tests/scope/`, `tests/infer/`), what the
+imports, modules and packages (`tests/mods/`, `tests/scope/`, `tests/infer/`; imports in `try`
+statements that raise or are skipped, `tests/tryimp/`, `tests/upimport/`), what the
 loader decides at import time (`tests/loader/`), a program run through a symbolic link
 (`tests/linked/`), CPython's syntax errors and its compiler's block, parser-stack and marshal limits, templates, empty containers typed by their first
 use, loops with `else`, the `lib/` modules (`tests/lib_*.py`), definite assignment, sorting
