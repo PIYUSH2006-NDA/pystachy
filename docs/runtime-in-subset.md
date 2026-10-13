@@ -125,7 +125,7 @@ There are no raw pointers and no pointer arithmetic. Every primitive works on a 
 ### 1.4 Building, caching and the bootstrap
 
 - **The cached runtime.** When the driver builds `build/runtime-py-<L>-<K>.bc`, it does the following:
-  - it reads `runtime.c` and `runtime.py` once and hashes those bytes, which name the result (below);
+  - it reads `runtime.c` and `runtime.py` once, a character per byte under either compiler (as `RAW`, the encoding it reads source in), and hashes those bytes, which name the result (below);
   - it compiles those bytes of `runtime.c` with clang as before, with `-fexceptions` (so that a raise unwinds through the runtime's frames, §2.8). They reach clang on its standard input, behind `#line 1 "runtime.c"`, so that clang's messages and UBSan's still name `runtime.c`;
   - it compiles those bytes of `runtime.py` in-process, with the compiler that is running;
   - it links the two with `llvm-link` and optimizes the result once with `opt -O2`. LLVM then inlines runtime.c's helpers into `runtime.py`'s code, and the reverse: `hsh()` gets `pys_hash_int` inlined.
