@@ -395,6 +395,9 @@ Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
 
 - tests/upstream_int_*.py and tests/errors/upstream_int_*.py: Lib/test/test_int.py and
   Lib/test/test_long.py (with the underscore literals of Lib/test/support/numbers.py)
+- tests/upstream_float_*.py: Lib/test/test_float.py (with Lib/test/mathdata/
+  formatfloat_testcases.txt and floating_points.txt, and Lib/test/support/numbers.py's
+  underscore literals)
 
 They are used under the Python Software Foundation License Version 2 reproduced above;
 tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
