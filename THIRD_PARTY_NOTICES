@@ -402,6 +402,8 @@ Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
   tests/upstream_math_integer.py, tests/upstream_math_sums.py, tests/upstream_math_fma.py and
   tests/errors/upstream_math_prod_*.py: Lib/test/test_math.py
 - tests/upstream_bool.py and tests/errors/upstream_bool_*.py: Lib/test/test_bool.py
+- tests/upstream_tuple_seq.py and tests/errors/upstream_tuple_*.py: Lib/test/test_tuple.py and
+  the methods of Lib/test/seq_tests.py that its TupleTest runs
 
 They are used under the Python Software Foundation License Version 2 reproduced above;
 tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
