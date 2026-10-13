@@ -1,4 +1,4 @@
-# error: nt_eq_other.py:17: error: P.__eq__ with a Q operand is not supported
+# error: nt_eq_other.py:17: error: expected P, got Q
 from typing import NamedTuple
 
 

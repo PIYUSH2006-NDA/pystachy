@@ -134,10 +134,12 @@ imports `annotations` from `__future__`.
   or `**kwargs` is a template too: `o.m(x)`, `self.m(x)`, `C.m(x)` of a
   static or class method and a bound method's value (`f = o.m`, `key=o.m`, a `Callable`) compile
   it for their arguments' types, with `self` of its class. So are the operator methods
-  (`__add__` & co, the comparisons, which `sorted()`, `in` and `==` of containers call with two
-  objects of the class, and must return `bool`), `__call__`, `__getitem__` and `__contains__`;
-  not `__init__` (but a class template's, below), nor the other special methods. A field is typed
-  by `__init__` as before, so a template that assigns one must give it a value of its type.
+  (`__add__` & co for `+ - * / // % @ & | ^ << >>` and their in-place forms, as parsy's parsers
+  define `|`, `>>` and `<<`; the comparisons, which `sorted()`, `in` and `==` of containers call
+  with two objects of the class, and must return `bool`), `__call__`, `__getitem__` and
+  `__contains__`; not `__init__` (but a class template's, below), nor the other special methods.
+  A field is typed by `__init__` as before, so a template that assigns one must give it a value
+  of its type.
 - A class whose `__init__` has a parameter without an annotation (also `*args` or `**kwargs`), or
   one annotated with a class template, or that makes an object of a class template, is a **class
   template**. Each call `C(args)` makes an object of a *specialization*, a class of its own whose
@@ -544,8 +546,9 @@ they are, their function evaluated first), as the argument of `list()`, `sorted(
 `list.extend()` (`any()` and `all()` stop at the deciding item, as they do over files, and
 `list.extend()` appends each item of a generator expression as it is made), `x in range(...)`,
 and operator overloading resolved statically:
-`__add__` & co, the in-place forms, `__neg__`, `__pos__` and `__invert__` for unary `-`, `+`
-and `~`, `__eq__`, rich comparisons with CPython's reflection
+the left operand's `__add__` & co for `+ - * / // % @ & | ^ << >>`, the in-place forms
+(`__iadd__` & co, else the binary method), `__neg__`, `__pos__` and `__invert__` for unary `-`,
+`+` and `~`, `__eq__`, rich comparisons with CPython's reflection
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
 `__format__`. Objects inside lists, dicts and tuples compare, sort and print through
 their own methods, as CPython calls them: lists and tuples compare their items with `==`
@@ -737,6 +740,11 @@ In these cases the program compiles but can behave differently from CPython:
   `C | None` for a class `C` (a dataclass or `NamedTuple` too). A function declared to return
   `T | None` for an `int`, `float`, `bool`, `str`, `list`, `dict` or `tuple` T, and a template
   that returns objects or `T | None`, return `None` there, as CPython does.
+- A left operand of `+ - * / // % @ & | ^ << >>` (or of their in-place forms) whose class
+  defines the operator's method, but which is `None` when the code runs, raises CPython's
+  `TypeError` for `None` (`unsupported operand type(s) for |: 'NoneType' and 'B'`), also where
+  the right operand's class defines the reflected method, which CPython calls with `None`
+  instead (`B.__ror__(b, None)`; reflected methods are not supported, below).
 - An optional value that is `None`, passed to a builtin method's parameter that has a
   default (`s.split(sep)`, `s.strip(chars)`), means the default, as an explicit `None` does,
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
@@ -911,6 +919,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   of it (`o.__iter__()`)
 - iterating over an object, or `x in o`, by its `__getitem__` alone (CPython's old sequence
   protocol), and `reversed()` of an object
+- reflected operator methods (`__radd__` & co), which CPython calls when the left operand's class
+  has no method for the operator and the right operand's class is another (`3 & o` calls
+  `o.__rand__(3)`), and first when the right operand's class derives from the left one's and
+  has the reflected method that one has not; and `**`, `**=` and `pow()` of objects whose class
+  defines `__pow__`, `__ipow__` or `__rpow__`
 - an `==` or `!=` between objects of different classes, which CPython would reflect to the right
   operand's `__eq__`, and between values of other types that cannot be equal (`1 == "1"`, or an
   `int | None` and a `str | None`, which CPython finds equal only when both are `None`)
