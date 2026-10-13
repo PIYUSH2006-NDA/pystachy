@@ -395,7 +395,7 @@ flags, repeated use, nested substitutions and a pattern retained across `purge()
 ## `fnmatch`, a port of CPython's
 
 `fnmatch.py` is CPython 3.13.16's `Lib/fnmatch.py` (SHA-256
-`95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963`) with 8 regions edited,
+`95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963`) with 11 regions edited,
 each marked `# Pystachy port:`. Its functions are CPython's: `fnmatch()`, `fnmatchcase()`,
 `filter()` and `translate()` translate a shell pattern into CPython's regular expression, character
 for character, and match it with `lib/re`; `_compile_pattern()` keeps the compiled patterns in an
@@ -411,11 +411,15 @@ for character, and match it with `lib/re`; `_compile_pattern()` keeps the compil
   (#248): the lists are `pieces` and `res`, the strs `fixed` and `joined`.
 - `filter()` tests `os.name == 'posix'` where CPython tests `os.path is posixpath`: a module is no
   value in Pystachy. `os.path.normcase()` is Pystachy's builtin, posixpath's: a str as it is.
+- Range translation skips, compares and removes whole UTF-8 characters, where CPython's string
+  indexing already selects characters. Reversed ranges disappear without leaving partial bytes.
 
 `tests/lib_fnmatch.py` compares `translate()` of 45 patterns (classes, negated, reversed and
 dashed ranges, `[]]`, an unclosed `[`, `&&`, `~` and `|` in a class, regex metacharacters,
 non-ASCII) and the names each matches with CPython's, and the cache's statistics. A pattern
 matches by code point, as `lib/re` does, so a non-ASCII name matches as in CPython.
+`tests/lib_fnmatch_unicode_ranges.py` checks Unicode range endpoints, reversed and negated ranges,
+multiple ranges and literal hyphens against CPython, including calls through the pattern cache.
 
 In an AOT executable, `fnmatchcase()` of 2,000 names against 10 patterns takes 428 ns a match
 with the cache and 1,236 ns compiling the pattern each time (CPython: 286 and 3,269 ns): `lib/re`
