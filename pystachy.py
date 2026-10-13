@@ -8960,11 +8960,13 @@ class Gen:
                 # *args: each call passes the extra positional arguments as a tuple of their types;
                 # **kwargs: its extra keyword arguments as a record of their names and types
                 # (kw[...]), which the instance for it is compiled with. An imported module's
-                # annotation that fails is an error where a call needs the function
-                why = self.ann_problem(p.kids[0], False) if self.lib and p.kids[0].kind != "noann" else ""
+                # annotation that fails is an error where a call needs the function; one that names
+                # a class template types nothing, as for any other parameter (see tmpl_ann)
+                typed = p.kids[0].kind != "noann" and not self.tmpl_ann(p.kids[0])
+                why = self.ann_problem(p.kids[0], False) if self.lib and typed else ""
                 if why != "":
                     bad = f"{d.s}() is not supported: parameter '{'*' if p.kind == 'starparam' else '**'}{p.s}': {why}"
-                elem = self.vtype(p.kids[0]) if p.kids[0].kind != "noann" and why == "" else ""
+                elem = self.vtype(p.kids[0]) if typed and why == "" else ""
                 if p.kind == "starparam":
                     f.vararg = len(f.params)
                     f.varelem = elem
@@ -9032,7 +9034,8 @@ class Gen:
             bad = UNSUPPORTED["yield"]  # a generator function
             if cls != "" and d.s == "__iter__":
                 bad += ": __iter__ can return iter(xs) of a list xs of the items"
-        if bad == "" and self.lib and d.kids[1].kind != "noann":
+        tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s))
+        if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret:
             it = self.iter_item(d.kids[1]) if cls != "" and d.s == "__iter__" else None  # (see iter_ann)
             why = self.ann_problem(d.kids[1], True) if it is None else self.ann_problem(it, False)
             if why != "":
@@ -9047,7 +9050,7 @@ class Gen:
         elif d.kids[1].kind != "noann" and cls != "" and d.s == "__iter__" and self.iter_ann(d.kids[1]) != "":
             f.ret = self.iter_ann(d.kids[1])
             f.iters = True
-        elif d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s)):
+        elif tret:
             f.ret = ""  # (-> Box: decided by its first return, as an unannotated one is)
         elif d.kids[1].kind != "noann":
             f.ret = self.typeof(d.kids[1])
