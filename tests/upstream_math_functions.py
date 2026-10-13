@@ -22,14 +22,13 @@
 #   math.log(1, 2, 3)
 # - testLog's 10**40, 10**20, 10**1000 and -10**1000, testLog1p's 2**90 and 2**300, testLog2's
 #   2**1023, 2**1024 and 2**2000, and testLog10's 10**1000 and -10**1000 (ints are 64-bit here)
-# - test_testfile (cmath_testcases.txt, getattr(math, fn)), test_mtestfile (math_testcases.txt,
-#   getattr(math, fn); its gamma and lgamma are not supported), testSumProd,
+# - test_testfile and test_mtestfile are tests/upstream_math_testfiles.py; testSumProd,
 #   test_sumprod_accuracy, test_sumprod_stress and test_sumprod_extended_precision_accuracy
 #   (math.sumprod() is not supported), test_issue39871 (__float__, getattr()) and
 #   test_input_exceptions (TypeErrors: compile-time errors here, worded "unsupported call ...",
 #   as #277's)
-# - IsCloseTests (math.isclose() is not supported) and load_tests' doctest of
-#   Lib/test/mathdata/ieee754.txt (doctest)
+# - IsCloseTests (math.isclose() is not supported); load_tests' doctest of
+#   Lib/test/mathdata/ieee754.txt is tests/upstream_math_ieee754.py
 import math
 import sys
 

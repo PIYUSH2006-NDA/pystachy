@@ -398,9 +398,10 @@ Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
 - tests/upstream_float_*.py: Lib/test/test_float.py (with Lib/test/mathdata/
   formatfloat_testcases.txt and floating_points.txt, and Lib/test/support/numbers.py's
   underscore literals)
-- tests/upstream_math_functions.py, tests/upstream_math_float_ops.py,
-  tests/upstream_math_integer.py, tests/upstream_math_sums.py, tests/upstream_math_fma.py and
-  tests/errors/upstream_math_prod_*.py: Lib/test/test_math.py
+- tests/upstream_math_*.py (but upstream_math_fmod.py, under CPython's math tests above) and
+  tests/errors/upstream_math_prod_*.py: Lib/test/test_math.py (with
+  Lib/test/mathdata/math_testcases.txt, the real cases of cmath_testcases.txt, and the doctest
+  ieee754.txt)
 - tests/upstream_bool.py and tests/errors/upstream_bool_*.py: Lib/test/test_bool.py
 - tests/upstream_tuple_seq.py and tests/errors/upstream_tuple_*.py: Lib/test/test_tuple.py and
   the methods of Lib/test/seq_tests.py that its TupleTest runs
@@ -414,16 +415,17 @@ tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's h
 upstream test methods it adapts and lists, with the reason, those it leaves out.
 
 Summary of changes: remove unittest and test.support scaffolding (each test method becomes a
-function, assertEqual a printed value and an assert, assertRaises a try statement), embed the
-data files the tests read, add type annotations where Pystachy's subset needs them, write out
-the loops over builtin exception classes and over values of several types, replace
-float.fromhex(), math.isclose() and itertools.product() with small equivalents in the files that
-use them, draw random data from a fixed linear congruential sequence, run the loops over large
-integers only as far as their values fit in 64 bits, write testHypotAccuracy's expected values
-(upstream computes them with decimal) as the floats CPython 3.13.16 computes, turn into expected
-compile-time rejections the errors that Pystachy reports at compile time with CPython's message
-(among them the syntax errors that upstream checks with compile()), and leave out the cases that
-use what the subset does not support. Differential output is recorded with CPython 3.13.16.
+function, assertEqual a printed value and an assert, assertRaises a try statement, and each
+doctest example a printed value and an assert), embed the data files the tests read, add type
+annotations where Pystachy's subset needs them, write out the loops over builtin exception
+classes and over values of several types, replace float.fromhex(), math.isclose() and
+itertools.product() with small equivalents in the files that use them, draw random data from a
+fixed linear congruential sequence, run the loops over large integers only as far as their
+values fit in 64 bits, write testHypotAccuracy's expected values (upstream computes them with
+decimal) as the floats CPython 3.13.16 computes, turn into expected compile-time rejections the
+errors that Pystachy reports at compile time with CPython's message (among them the syntax
+errors that upstream checks with compile()), and leave out the cases that use what the subset
+does not support. Differential output is recorded with CPython 3.13.16.
 
 APACHE LICENSE VERSION 2.0
 --------------------------
