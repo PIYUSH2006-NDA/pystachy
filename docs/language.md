@@ -599,8 +599,9 @@ the left operand's `__add__` & co for `+ - * / // % @ & | ^ << >>`, the in-place
 rules (`a < b` tries `b.__gt__(a)`), `__len__`, `__bool__`, `__str__`, `__repr__` and
 `__format__`. Objects inside lists, dicts and tuples compare, sort and print through
 their own methods, as CPython calls them: lists and tuples compare their items with `==`
-before ordering them, `list.sort`, `sorted` and `min` use `<` (`__lt__`, else the reflected
-`__gt__`), and `max` uses `>`.
+before ordering them (also tuples of different lengths, `(3, 13) < (3, 13, 1)`, ordered by
+their first items that are not equal, else by length), `list.sort`, `sorted` and `min` use `<`
+(`__lt__`, else the reflected `__gt__`), and `max` uses `>`.
 
 Calls of objects and the container protocol are resolved statically too: `o(x)` calls the
 function `o` is (see *Typing rules*), or `__call__`, with keyword and default arguments as a
