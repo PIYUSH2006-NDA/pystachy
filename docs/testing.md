@@ -27,12 +27,17 @@ honest.
 
 `tests/run.sh` runs every `tests/*.py` twice — JIT and AOT — and compares stdout plus exit
 status with what CPython recorded in `tests/*.out` (stdin from `tests/*.in`), and the last
-stderr line with `tests/*.err` where CPython wrote to stderr.
+stderr line with `tests/*.err` where CPython wrote to stderr; where CPython wrote nothing
+there (no `tests/NAME.err`), the program must write nothing either. An AOT build's stderr is
+kept apart from its program's, and must be empty (`pystachy run` writes its own diagnostics,
+before it becomes the program, to the program's stderr: they must be nothing too).
 `tests/record.sh NAME` records a test's expected output from CPython, the way `tests/run.sh` runs
 it ([below](#recording-expected-output)). Each `tests/errors/*.py`
 must be rejected with the message on its first line (a `tests/errors/syntax_*.py` one also by
-`pystachy check`), and each `tests/deviations/*.py` must print its hand-written expected
-output. Where `tests/NAME.path` exists, it is the module path: `PYTHONPATH` when
+`pystachy check`): the compiler exits with status 1 and writes one line to stderr, the
+diagnostic `FILE:LINE: error: MESSAGE`, which must hold that message (a crash's traceback that
+happens to hold it is no rejection). Each `tests/deviations/*.py` must print its hand-written
+expected output. Where `tests/NAME.path` exists, it is the module path: `PYTHONPATH` when
 `tests/record.sh` records the test, `PYSTACHY_PATH` when `tests/run.sh` runs it.
 `tests/run.sh COMPILER MODES FILE...` runs only the cases it names (e.g. `tests/run.sh ./pystachy jit
 tests/str_*.py`). The cases run in `PYSTACHY_JOBS` workers at once (default: one per CPU), each
@@ -93,6 +98,11 @@ instead of `tests/`, and fails, naming the file:
 - where a `*.rej`, `*.orig` or `core` file lies in the tree (`.git`, `build/` and `.claude/` aside).
 
 It takes about 20 seconds, one test after the other; CI's Lint workflow runs it on every push.
+
+A test program dies by no signal but SIGTERM and SIGINT: bash, as `sh`, reports a death by another
+signal with the process's ID, which `tests/NAME.err` would hold. `tests/run.sh`, `tests/record.sh`
+and `tests/verify.sh` set `ulimit -c 0`, so that a crash dumps no core file into the tree
+(`.gitignore` lists `/core` too).
 
 ## `make verify`
 
@@ -177,6 +187,12 @@ versions, platform, git commit and a timestamp:
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
   both compilers; the lines the CPython-hosted compiler executes, and the items its builtin
   calls copy or scan, must grow no faster than the programs.
+
+A step that runs the differential tests passes only with as many passes as the checks the suite
+holds, which `tests/verify.sh` counts from its files as `tests/run.sh` makes them (each program and
+deviation once per mode, each rejection once, and `pystachy check` of the syntax tests): a run
+that covered fewer cases fails, as one with a failure does. The report gives each of these steps'
+`passed`, `failed` and `expected` counts.
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
 others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
