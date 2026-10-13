@@ -21,8 +21,7 @@
 # - test_float_with_comma (locale; upstream skips it where the locale's decimal point is '.')
 # - test_keyword_args (float(x='3.14'): a compile-time error worded "keyword argument 'x' of
 #   float() is not supported" where CPython says "float() takes no keyword arguments", as
-#   #277's),
-#   test_keywords_in_subclass (subclasses of float)
+#   #277's), test_keywords_in_subclass (subclasses of float)
 # - the other GeneralFloatCases methods are in tests/upstream_float_ops.py, or listed there
 from math import isinf, isnan, copysign
 

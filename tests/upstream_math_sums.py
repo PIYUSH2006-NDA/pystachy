@@ -22,10 +22,11 @@
 # EXCLUDED upstream cases:
 # - testFsum's msum() and its 1000 random sums (msum shifts ints by up to 2,000 bits, and ints
 #   are 64-bit here), the FloatLike items (__float__ of objects), fsum(['spam']) and fsum(1)
-#   (compile-time errors, "unsupported call math.fsum(list[str])", as #277's), fsum([10**1000]) and
-#   bad_iter() (a generator function), and the %.100r of the values in the failure messages;
-#   its list [1e100, 1.0, -1e100, 1e-100, 1e50, -1, -1e50] of floats and an int is a tuple
-#   here (a list's items have one type: mixed-type containers are #9's; fsum() takes the tuple)
+#   (compile-time errors, "unsupported call math.fsum(list[str])", as #277's),
+#   fsum([10**1000]) and bad_iter() (a generator function), and the %.100r of the values in the
+#   failure messages; its list [1e100, 1.0, -1e100, 1e-100, 1e50, -1, -1e50] of floats and an
+#   int is a tuple here (a list's items have one type: mixed-type containers are #9's; fsum()
+#   takes the tuple)
 # - test_prod's lists of ints and floats ([1, 2, 3, 4.0, 5.0], [1.0, 2.0, 3.0, 4, 5],
 #   [1.0, 1.0, 2**32, 1, 1], the 13 float tests such as [1, 2, 3, float("nan"), 2, 3], and
 #   [1, 2.0, 3, 4, 5, 6]): a list's items have one type (#9), and prod() of such a tuple is
@@ -33,8 +34,7 @@
 #   (__rmul__ is not called, #113); prod(iter(...)) (iter() is supported as __iter__'s return
 #   only); the TypeErrors of prod(42), of strs, bytes, bytearrays, lists and dicts as items and
 #   starts (compile-time errors, "unsupported call math.prod(float)", as #277's); the odd cases'
-#   starts
-#   'ab', [1, 2] and {2: 3} (rejected at compile time, "unsupported call
+#   starts 'ab', [1, 2] and {2: 3} (rejected at compile time, "unsupported call
 #   math.prod(list[int],str)"; bug, NEW); and the big integers: range(1, 10000),
 #   range(-10000, -1) and range(-1000, 1000) are range(1, 21), range(-20, -1) and range(-20, 20)
 #   here (ints are 64-bit), and so is type(prod(range(1, 10000)))'s range
