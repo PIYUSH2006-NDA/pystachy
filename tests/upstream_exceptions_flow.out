@@ -1,0 +1,13 @@
+isinstance(e, Exception) True
+e: UnboundLocalError: cannot access local variable 'e' where it is not associated with a value
+isinstance(e, Exception) True
+e: UnboundLocalError: cannot access local variable 'e' where it is not associated with a value
+isinstance(a, A) True
+isinstance(b, B) True
+isinstance(c, C) True
+exc is a A()
+exc is ve ValueError(2)
+exc is oe OSError(3)
+exc is oe OSError(2)
+inst: MemoryError()
+[exit 0]

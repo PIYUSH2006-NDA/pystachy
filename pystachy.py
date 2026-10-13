@@ -16544,6 +16544,8 @@ class Gen:
                     v = Val(v.v, ws[i])  # (None as an object, T as T | None)
                 elif i < len(ws) and self.converts(v.t, ws[i]) and not is_sopt(v.t):
                     v = self.coerce(v, ws[i])  # (an int as an int | None: its box)
+                elif i < len(ws) and is_fn(v.t) and is_callable(unopt(ws[i])):
+                    v = self.coerce(v, ws[i])  # (a function where a Callable is expected: made one)
                 vals.append(v)
             return self.tuple_(vals)
         if k == "listcomp":
@@ -17688,6 +17690,9 @@ class Gen:
             if (a.t == "None") != (b.t == "None") and (not self.isref(a.t) or not self.isref(b.t)):
                 # a number or bool is never None
                 return Val("false" if op == "is" else "true", "bool")
+            if a.t == "bool" and b.t == "bool":
+                # (x is True: a bool is one of CPython's two objects True and False)
+                return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} i1 {a.v}, {b.v}"), "bool")
             if not self.isref(a.t) or not self.isref(b.t) or (is_sopt(a.t) and b.t != "None") or (is_sopt(b.t) and a.t != "None"):
                 self.err("'is' is only supported for objects and None")
             return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
@@ -19707,11 +19712,13 @@ class Gen:
 
     def print_(self, args: list[Node]) -> Val:
         # every argument is evaluated in the order written, then each is converted as it is
-        # written; sys.stdout and sys.stderr directly, any other file through its checks
+        # written; sys.stdout and sys.stderr directly, any other file through its checks, and an
+        # object with write() (io.StringIO) through that method, a call for each piece
         sep = self.sconst(" ")
         end = self.sconst("\n")
         fd = "1"
         fv = ""
+        fo = Val("", "")
         flush = ""
         vals: list[Val] = []
         temp: list[Node] = []  # file=open(...): closed after the print, as close_temp does
@@ -19737,33 +19744,45 @@ class Gen:
                     fd = "2" if p == "sys.stderr" else "1"
                 elif x.kind != "None":
                     v = self.expr(x, "file")
-                    if v.t != "file":
-                        self.err(f"print(file=...) needs a file, not {v.t}")
-                    fv = v.v
-                    temp.append(x)
+                    if v.t in self.classes and "write" in self.classes[v.t].methods:
+                        fo = v
+                    elif v.t != "file":
+                        self.err(f"print(file=...) needs a file, or an object with a write() method, not {v.t}")
+                    else:
+                        fv = v.v
+                        temp.append(x)
             elif a.s == "flush":
                 flush = self.truth(self.expr(x, "bool"))
             else:
                 self.err(f"print() got an unexpected keyword argument '{a.s}'")
         for i in range(len(vals)):
             if i > 0:
-                self.pwrite(fd, fv, sep)
-            self.pwrite(fd, fv, self.to_str(vals[i]).v)
-        self.pwrite(fd, fv, end)
-        if flush != "":
+                self.pwrite(fd, fv, sep, fo)
+            self.pwrite(fd, fv, self.to_str(vals[i]).v, fo)
+        self.pwrite(fd, fv, end, fo)
+        if flush != "" and fo.t != "" and "flush" not in self.classes[fo.t].methods:
+            # CPython looks flush() up only where flush is true
+            self.guard(flush, f"AttributeError: '{tname(fo.t)}' object has no attribute 'flush'")
+        elif flush != "":
             l1 = self.label()
             l2 = self.label()
             self.cbr(flush, l1, l2)
             self.place(l1)
-            self.rt("pys_file_flush", "void", [f"ptr {fv if fv != '' else self.rt('pys_std', 'ptr', [f'i64 {fd}'])}"])
+            if fo.t != "":
+                self.call(mk("call", "", self.line, [mk("attr", "flush", self.line, [self.vnode(fo)])]), "")
+            else:
+                self.rt("pys_file_flush", "void", [f"ptr {fv if fv != '' else self.rt('pys_std', 'ptr', [f'i64 {fd}'])}"])
             self.br(l2)
             self.place(l2)
         for x in temp:
             self.close_temp(x, Val(fv, "file"))
         return Val("null", "None")
 
-    def pwrite(self, fd: str, fv: str, s: str) -> None:
-        if fv != "":
+    def pwrite(self, fd: str, fv: str, s: str, fo: Val) -> None:
+        if fo.t != "":
+            # file.write(s): what it returns is not used
+            self.call(mk("call", "", self.line, [mk("attr", "write", self.line, [self.vnode(fo)]), self.vnode(Val(s, "str"))]), "")
+        elif fv != "":
             self.rt("pys_file_write", "i64", [f"ptr {fv}", f"ptr {s}"])
         else:
             self.rt("pys_write", "void", [f"ptr {s}", f"i64 {fd}"])
@@ -20608,6 +20627,10 @@ def sh(cmd: str) -> int:
 # the lines of /proc/cpuinfo that tell which CPU -march=native compiles for (x86-64's, AArch64's)
 CPUID: list[str] = ["vendor_id", "cpu family", "model", "model name", "stepping", "flags", "CPU implementer", "CPU architecture",
                     "CPU variant", "CPU part", "CPU revision", "Features"]
+# the files that runtime.c includes from beside it, each DIR/NAME (ryu/: Ryu's d2s, a float's shortest
+# digits, ryu/README.md): the runtime is built from their bytes too
+RTPARTS: list[str] = ["ryu/d2s.c", "ryu/ryu.h", "ryu/common.h", "ryu/digit_table.h", "ryu/d2s_intrinsics.h",
+                      "ryu/d2s_small_table.h"]
 
 
 def fnv(s: str) -> str:
@@ -20786,14 +20809,15 @@ def main() -> None:
     tmp = tempfile.mkdtemp()
     # The cached runtime: runtime.c's bitcode linked to runtime.py's, which the compiler that runs
     # compiles, in build/runtime-py-<L>-<K>.bc, with the JIT tier's machine code from it in its .o. K is
-    # the fnv() of all they are made from: the bytes of runtime.c, runtime.py and the compiler (its
-    # executable, or pystachy.py under CPython: another compiler may compile runtime.py differently,
-    # and the bootstrap checks that its stages do not), the flags above, the files of clang, llvm-as,
-    # llvm-link and opt (through symbolic links: another LLVM is other files), with their stat3(), and
-    # with a flag that asks for the native CPU, the host's (CPUID). L is the fnv() of the same but the
-    # bytes and times: publishing a runtime removes the others of its L, so that build/ keeps one per
-    # compiler, flag set and LLVM. (Older compilers run with the same home keep theirs under other
-    # names: runtime-py-<hash of the flags>.bc, and runtime.bc or runtime-<hash>.bc before runtime.py.)
+    # the fnv() of all they are made from: the bytes of runtime.c, of the files it includes (RTPARTS),
+    # of runtime.py and of the compiler (its executable, or pystachy.py under CPython: another compiler
+    # may compile runtime.py differently, and the bootstrap checks that its stages do not), the flags
+    # above, the files of clang, llvm-as, llvm-link and opt (through symbolic links: another LLVM is
+    # other files), with their stat3(), and with a flag that asks for the native CPU, the host's
+    # (CPUID). L is the fnv() of the same but the bytes and times: publishing a runtime removes the
+    # others of its L, so that build/ keeps one per compiler, flag set and LLVM. (Older compilers run
+    # with the same home keep theirs under other names: runtime-py-<hash of the flags>.bc, and
+    # runtime.bc or runtime-<hash>.bc before runtime.py.)
     # The tools are PYSTACHY_LLVM's, or where the shell's own search of PATH finds them (command -v,
     # which skips directories and files that are not executable), and so is this compiler when it was
     # run by name; CPython opens a script in the current directory, with no search. The runtime is
@@ -20852,6 +20876,7 @@ def main() -> None:
         memo = {}
     known = "".join([f"{k} {memo[k]}\n" for k in memo])
     rc = hashed(rtc, memo, now, False)
+    rs = [hashed(home + "/" + p, memo, now, False) for p in RTPARTS]
     rp = hashed(rtpy, memo, now, False)
     rm = ("", "")
     if comp != "":
@@ -20863,17 +20888,19 @@ def main() -> None:
     trusted = rm[1] != "" and cst != "" and (born == "" or cst == born) and "" not in times
     if me.endswith(".py"):
         trusted = trusted and settled(born, t0)
-    key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]]))
+    key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]] + [x[1] for x in rs]))
     rtb = f"{cache}/runtime-py-{lin}-{key}.bc"
     rtir = ""
     if not trusted or not os.path.exists(rtb):
-        # the bytes of runtime.c and runtime.py, read once: the runtime is built from them, and named by
-        # their hash, so that an edit while it is built names another runtime, which a later run builds
+        # the bytes of runtime.c, of the files it includes and of runtime.py, read once: the runtime is
+        # built from them, and named by their hash, so that an edit while it is built names another
+        # runtime, which a later run builds
         rc = hashed(rtc, memo, now, True)
+        rs = [hashed(home + "/" + p, memo, now, True) for p in RTPARTS]
         rp = hashed(rtpy, memo, now, True)
-        key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]]))
+        key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]] + [x[1] for x in rs]))
         rtb = f"{cache}/runtime-py-{lin}-{key}.bc"
-        if (not trusted or not os.path.exists(rtb)) and rc[1] != "" and rp[1] != "":
+        if (not trusted or not os.path.exists(rtb)) and rc[1] != "" and rp[1] != "" and "" not in [x[1] for x in rs]:
             # (an error in runtime.py exits: the private directory is made again after it)
             os.rmdir(tmp)
             src = SRC
@@ -20910,16 +20937,32 @@ def main() -> None:
         f = open(rpl, "w", encoding=RAW)
         f.write(rtir)
         f.close()
-        # clang compiles the bytes hashed, on its stdin (#line: its messages, UBSan's too, say runtime.c)
+        # clang compiles the bytes hashed: runtime.c's (behind #line, so that its messages, UBSan's too,
+        # say runtime.c) from a file of this run's, and beside it, as beside runtime.c, those of the
+        # files it includes, where its quoted includes find them (read from clang's standard input,
+        # runtime.c would look for them in the current directory)
         f = open(rcc, "w", encoding=RAW, newline="")
         f.write('#line 1 "runtime.c"\n' + rc[0])
         f.close()
+        sub: list[str] = []
+        for p in RTPARTS:
+            if p[: p.rfind("/")] not in sub:
+                sub.append(p[: p.rfind("/")])
+        sh("mkdir " + " ".join([q(tmp + "/" + d) for d in sub]))
+        for i in range(len(RTPARTS)):
+            f = open(tmp + "/" + RTPARTS[i], "w", encoding=RAW, newline="")
+            f.write(rs[i][0])
+            f.close()
         # one module, optimized once: LLVM inlines runtime.c's helpers into runtime.py's code. No
         # pipes: a step that fails must fail the build, not hand the next one an empty module
-        code = sh(f"{tc[0]} -O2 -S -emit-llvm -x c - -o {q(rll)}{cflags} -fexceptions < {q(rcc)} && {strip} {q(rll)} > {q(rsl)} && {tc[1]} {q(rsl)} -o {q(rcb)} && {tc[2]} {q(rpl)} {q(rcb)} -o {q(lnk)} && {tc[3]} -O2 {q(lnk)} -o {q(part)}")
+        code = sh(f"{tc[0]} -O2 -S -emit-llvm -x c {q(rcc)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {tc[1]} {q(rsl)} -o {q(rcb)} && {tc[2]} {q(rpl)} {q(rcb)} -o {q(lnk)} && {tc[3]} -O2 {q(lnk)} -o {q(part)}")
+        for p in RTPARTS:
+            os.remove(tmp + "/" + p)
+        for d in sub:
+            os.rmdir(tmp + "/" + d)
         usebc = part
     elif not trusted or not os.path.exists(rtb):
-        code = 1  # (runtime.c or runtime.py cannot be read)
+        code = 1  # (runtime.c, a file it includes or runtime.py cannot be read)
     if code == 0 and cmd == "run" and (rtir != "" or not os.path.exists(rto)):
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already.
         # -x ir: clang would take a name not ending in .bc, as part's, for a linker input, and do nothing)

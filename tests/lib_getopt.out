@@ -1,0 +1,65 @@
+getopt [('-a', '-b')] ['1', '--alpha=2', '--beta', '-a', '3', '-a', '', '--beta', 'arg1', 'arg2']
+gnu    [('-a', '-b'), ('--alpha', '2'), ('--beta', ''), ('-a', '3'), ('-a', ''), ('--beta', '')] ['1', 'arg1', 'arg2']
+getopt [('-a', ''), ('-b', ''), ('-c', 'value'), ('-c', 'next')] ['x']
+gnu    [('-a', ''), ('-b', ''), ('-c', 'value'), ('-c', 'next')] ['x']
+getopt [('-a', ''), ('-b', ''), ('-c', 'foo')] ['rest']
+gnu    [('-a', ''), ('-b', ''), ('-c', 'foo')] ['rest']
+getopt [] ['-', '-a', 'x']
+gnu    [('-a', '')] ['-', 'x']
+getopt [('-a', '')] ['-b', 'x']
+gnu    [('-a', '')] ['-b', 'x']
+getopt [] ['x', '-a', 'y', '--alpha', 'z']
+gnu    [('-a', ''), ('--alpha', '')] ['x', 'y', 'z']
+getopt [('-a', '-1'), ('-b', '')] []
+gnu    [('-a', '-1'), ('-b', '')] []
+getopt [] []
+gnu    [] []
+getopt [] ['--']
+gnu    [] ['--']
+getopt [('--alpha', '1'), ('--beta', ''), ('--gamma', '')] []
+gnu    [('--alpha', '1'), ('--beta', ''), ('--gamma', '')] []
+getopt [('--alpha', 'v'), ('--gamma', '')] []
+gnu    [('--alpha', 'v'), ('--gamma', '')] []
+getopt error: option --abc not a unique prefix | option --abc not a unique prefix | abc
+gnu    error: option --abc not a unique prefix | option --abc not a unique prefix | abc
+getopt [('--python', '')] ['foo']
+gnu    [('--python', '')] ['foo']
+getopt error: option --py not a unique prefix | option --py not a unique prefix | py
+gnu    error: option --py not a unique prefix | option --py not a unique prefix | py
+getopt [('--abc', '--')] []
+gnu    [('--abc', '--')] []
+getopt [('--a', 'b=c')] []
+gnu    [('--a', 'b=c')] []
+getopt error: option -x not recognized | option -x not recognized | x
+gnu    error: option -x not recognized | option -x not recognized | x
+getopt error: option -b requires argument | option -b requires argument | b
+gnu    error: option -b requires argument | option -b requires argument | b
+getopt error: option --alpha requires argument | option --alpha requires argument | alpha
+gnu    error: option --alpha requires argument | option --alpha requires argument | alpha
+getopt error: option --beta must not have an argument | option --beta must not have an argument | beta
+gnu    error: option --beta must not have an argument | option --beta must not have an argument | beta
+getopt error: option --al not a unique prefix | option --al not a unique prefix | al
+gnu    error: option --al not a unique prefix | option --al not a unique prefix | al
+getopt error: option --zeta not recognized | option --zeta not recognized | zeta
+gnu    error: option --zeta not recognized | option --zeta not recognized | zeta
+getopt [('-a', '')] ['x', '-z']
+gnu    error: option -z not recognized | option -z not recognized | z
+getopt [] []
+gnu    [] []
+gnu +  ([('-a', '')], ['x', '-b'])
+gnu +  ([], ['x', '-a'])
+gnu +  ([('-a', '')], ['-b'])
+True False True
+(True, 'abc')
+(False, 'abc')
+(False, 'abcd')
+error: option --abc not recognized
+error: option --abc not a unique prefix
+([('-a', '')], []) ([('-z', ''), ('-a', '1')], [])
+([('-z', ''), ('-a', '1')], ['2'])
+([('-z', ''), ('--abcd', '1')], ['x']) ([('-z', ''), ('--abc', '')], [])
+error: option -1 not recognized 1
+message message opt True
+getopt.error: option -q not recognized
+True GetoptError('message', 'opt')
+[exit 0]

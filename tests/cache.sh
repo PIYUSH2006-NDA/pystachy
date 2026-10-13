@@ -6,10 +6,11 @@
 #   - The cache is used again while nothing it is built from changes, also through another path to
 #     the same tools, and by the AOT tier.
 #   - It is built again, and the new entry replaces the old, when runtime.py changes by an edit of the
-#     same size whose mtime is set back, when runtime.c changes, when they change while the runtime is
-#     built (the edits set their mtimes back: the build is of the bytes it read, and the next run
-#     builds the new ones), when a tool changes and when the compiler changes (also by an edit of the
-#     same size whose mtime is set back).
+#     same size whose mtime is set back, when runtime.c changes, when a file it includes from ryu/
+#     changes (the home's: the runs start in a directory whose ryu/d2s.c does not compile), when they
+#     change while the runtime is built (the edits set their mtimes back: the build is of the bytes it
+#     read, and the next run builds the new ones), when a tool changes and when the compiler changes
+#     (also by an edit of the same size whose mtime is set back).
 #   - PYSTACHY_CFLAGS and PYSTACHY_OPT get entries of their own (the same passes named otherwise, the
 #     same one); the tools found through PATH too.
 #   - A failed llvm-link and a build killed after opt leave nothing that a later run uses.
@@ -32,11 +33,13 @@ esac
 unset PYSTACHY_CFLAGS PYSTACHY_OPT PYSTACHY_PATH PYSTACHY_GC PYSTACHY_GC_STRESS PYSTACHY_IRFX
 T=${TMPDIR:-/tmp}/pystachy-cache.$$
 rm -rf "$T"
-mkdir -p "$T/home" "$T/bin" "$T/llvm" "$T/tmp" "$T/d1/pystachy" "$T/d1/clang" "$T/d2" "$T/d3" "$T/d4" || exit 1
+mkdir -p "$T/home" "$T/bin" "$T/llvm" "$T/tmp" "$T/d1/pystachy" "$T/d1/clang" "$T/d2" "$T/d3" "$T/d4" "$T/ryu" || exit 1
 trap 'rm -rf "$T"' EXIT
 H=$T/home
 B=$H/build
-cp runtime.c runtime.py pyembed.c pyext.c "$H/" && cp -R lib "$H/" && cp "$from" "$T/bin/$me" && cp "$from" "$T/base" || exit 1
+cp runtime.c runtime.py pyembed.c pyext.c "$H/" && cp -R lib ryu "$H/" && cp "$from" "$T/bin/$me" && cp "$from" "$T/base" || exit 1
+# the runs start in $T: a runtime.c that took its includes from there would not compile
+printf '#error "ryu/d2s.c of the current directory"\n' > "$T/ryu/d2s.c" || exit 1
 # the edits: the same size, other messages
 sed 's/substring not found/substring NOT found/g' runtime.py > "$T/NOT.py"
 sed 's/invalid literal for int()/INVALID literal for int()/g' runtime.c > "$T/INVALID.c"
@@ -135,6 +138,9 @@ check "an edit of runtime.py of the same size, its mtime set back: built again" 
 npairs 1 "the new entry replaces the old"
 cat "$T/INVALID.c" > "$H/runtime.c"
 check "an edit of runtime.c: built again" "$(printf '%s\n%s' "$P1" "$C1")" 1
+printf '/* an edit */\n' >> "$H/ryu/common.h"
+check "an edit of ryu/common.h, which runtime.c includes: built again, from the home's ryu/" "$(printf '%s\n%s' "$P1" "$C1")" 1
+check "and used then" "$(printf '%s\n%s' "$P1" "$C1")" 0
 # edits while the runtime is built, after its sources were read, both with their mtimes set back
 cat "$T/orig.py" > "$H/runtime.py"
 cp -p "$H/runtime.py" "$T/ref.py" && cp -p "$H/runtime.c" "$T/ref.c" || exit 1
