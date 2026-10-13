@@ -8045,6 +8045,7 @@ class Gen:
         self.adapters: dict[str, str] = {}  # "<function value type> <Callable type>" -> its adapter's symbol (Gen.adapter)
         self.adrets: dict[str, str] = {}  # "<function value type> <parameter types>" -> what it returns (Gen.adapter_ret)
         self.ncv = 0  # the adapters named (@cv.N), each before its body is compiled, which may name others
+        self.cacheforms: dict[str, int] = {}  # cached calls: positional count and ordered keyword names
         self.decorated: dict[str, bool] = {}  # the defs of a module's top level that bind what their decorators give (decorate)
         self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
@@ -18570,7 +18571,24 @@ class Gen:
             return self.call_callable(o, args)
         if o.t not in self.classes or "__call__" not in self.classes[o.t].methods:
             self.err(f"'{tname(unopt(o.t))}' object is not callable")
+        if self.cached_wrapper(o.t):
+            return self.call_cache(o, args, want)
         return self.call_fn(self.classes[o.t].methods["__call__"], [o], args, want, "TypeError: 'NoneType' object is not callable")
+
+    def cached_wrapper(self, t: str) -> bool:
+        # Only the bundled functools wrapper uses this calling convention. Its generic
+        # __wrapped__ field retains the exact function type, including names and defaults.
+        return t in self.classes and self.classes[t].mod == "functools" and short(self.classes[t].origin) == "_lru_cache_wrapper"
+
+    def call_cache(self, o: Val, args: list[Node], want: str) -> Val:
+        t = self.classes[o.t].ftypes["__wrapped__"]
+        if t.startswith("fn[c:"):
+            # The env is read after the arguments, before defaults are loaded (call_fn).
+            return self.call_fn(self.closures[int(t[5 : t.find(":", 5)])].f, [Val("null", "env")], args, want, "", o)
+        if t.startswith("fn[f:"):
+            return self.call_fn(self.funcs[t[5:-1]], [], args, want, "", o)
+        self.err("cached calls with defaults or keywords need a def's signature")
+        return Val("", "")
 
     def to_callable(self, v: Val, t: str) -> Val:
         # function value v as a Callable of type t: an object {code, env}, whose code is an adapter
@@ -18832,6 +18850,9 @@ class Gen:
                     self.err(f"a call of __init__ on an object of {short(o.t)} is not supported where {short(c.name)}, deriving from it, defines __init__ again (calls are not dispatched on the object's class)")
         if o.t in self.classes:
             ci = self.classes[o.t]
+            if m == "__call__" and self.cached_wrapper(o.t):
+                self.notnone(o, "AttributeError: 'NoneType' object has no attribute '__call__'")
+                return self.call_cache(o, args, "")
             if m not in ci.methods and ci.exc != "" and m in HASATTR["any"].split() + ["add_note", "with_traceback"]:
                 self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
             if m not in ci.methods and m in ci.ftypes:
@@ -19001,7 +19022,7 @@ class Gen:
             what = f"argument {j if takes_self(f) else j + 1} of {short(f.name)}()" if j < f.npos else f"argument '{f.params[j]}' of {short(f.name)}()"
         return self.coerce(v, t, what)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "") -> Val:
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "", cache: Val | None = None) -> Val:
         # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
         if f.pyexport:
             self.err(f"{f.name}() is @export, so Pystachy code may not call it (under CPython each call goes through the export's checks and conversions): call a private function that both use")
@@ -19051,6 +19072,11 @@ class Gen:
             vals[f.kwarg] = self.kw_record(kwn, kwv)
         if none != "":
             self.notnone(pre[0], none)  # (CPython calls o once it has evaluated the arguments)
+        if cache is not None:
+            self.notnone(cache, "TypeError: 'NoneType' object is not callable")
+            if f.clo >= 0:
+                wrapped = self.getfield(cache, self.field(cache, "__wrapped__"), "__wrapped__")
+                pre[0] = Val(wrapped.v, "env")
         df = self.dflt_fn(f)
         for j in range(np):
             if vals[j].t == "":
@@ -19072,6 +19098,20 @@ class Gen:
                 else:
                     vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
         self.line = line
+        if cache is not None:
+            # Evaluate and bind as an ordinary call, including def-time closure defaults,
+            # but look up a key before invoking the function. The shape is a static tag:
+            # f(1), f(1, 2), f(1, b=2), and different keyword orders remain distinct.
+            shape = str(len([a for a in args if a.kind != "kw"])) + ":" + ",".join([a.s for a in args if a.kind == "kw"])
+            full = str(f.npos - (1 if f.clo >= 0 else 0)) + ":"
+            if shape != full and shape not in self.cacheforms:
+                self.cacheforms[shape] = len(self.cacheforms) + 1
+            for a in args:
+                if a.kind == "kw" and f.params.index(a.s) >= f.npos:
+                    self.err("cached calls with keyword-only arguments are not supported")
+            bound = vals[1 if f.clo >= 0 else 0 : f.npos]
+            forwarded = [self.vnode(Val("0" if shape == full else str(self.cacheforms[shape]), "int"))] + [self.vnode(v) for v in bound]
+            return self.call_fn(self.classes[cache.t].methods["_call"], [cache], forwarded, want)
         if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tmpl:
             # C(args) of a class template C: its arguments' types decide the specialization the
             # object belongs to (see specialize), whose __init__ initializes it

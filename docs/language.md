@@ -1176,9 +1176,9 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 - an `encoding=` constant other than UTF-8 and Latin-1
 - `functools.lru_cache()` and `cache()` of a function whose parameters or return are not
   annotated, that returns `None`, that takes `*args` or `**kwargs`, or whose parameter is no dict key type (a `float`,
-  an object), or of a builtin, a method or a lambda; a call through the cache that passes a
-  keyword argument or leaves out one with a default value (its `__call__` takes `*args: *Ts`,
-  each of the function's positional parameters); and `cache_parameters()`
+  an object), or of a builtin, a method or a lambda; a required keyword-only parameter or a
+  call through the cache that explicitly supplies a keyword-only argument (an optional
+  keyword-only parameter's default may be used); and `cache_parameters()`
 
 ### Source text
 
