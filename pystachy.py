@@ -17328,7 +17328,12 @@ class Gen:
                 item = self.tget(b, i)
                 if not self.comparable(item.t, a.t):
                     continue
-                if item.t in self.classes and self.isref(a.t):
+                u = unopt(item.t)
+                if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
+                    # (an object, list, dict, set or tuple, also one that may be None, is found
+                    # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
+                    # with xs = [nan]; a number has no identity here, see the deviation about NaN,
+                    # and a str's is its value)
                     nx = self.label()
                     self.incoming(ph, "true", self.cur)
                     self.cbr(self.ins(f"icmp eq ptr {item.v}, {a.v}"), lend, nx)
