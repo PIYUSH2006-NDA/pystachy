@@ -2496,19 +2496,24 @@ Str *pys_file_read(File *f, I n) {
 Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n" after translation; "" any of
                                           "\n" "\r" "\r\n"; otherwise exactly that string */
   if (in_hook && f == &std_in && !f->closed) return in_hook(1, 0, 0);
-  io_in(); use(f, 1); Buf b = {0}; int c;
+  /* the bytes gather in t, and go to b only when t is full: a put() per byte took most of a
+     line's time. A line that fits in t becomes its str without b */
+  io_in(); use(f, 1); Buf b = {0}; int c; char t[256]; I k = 0;
   while ((c = get(f)) != EOF) {
-    char ch = getnl(f, c); put(&b, &ch, 1);
+    char ch = getnl(f, c); t[k++] = ch;
+    if (k == (I)sizeof t) { put(&b, t, k); k = 0; }
     if (ch == '\n' && f->nl != 3 && f->nl != 4) break;
     if (ch == '\r' && f->nl == 3) break;
     if (ch == '\r' && (f->nl == 1 || f->nl == 4)) {
       int d = get(f);
-      if (d == '\n') { put(&b, "\n", 1); break; }
+      if (d == '\n') { t[k++] = '\n'; break; }   /* (t has room: a full t went to b above) */
       if (d != EOF) unget(f, d);
       if (f->nl == 1) break;
     }
   }
   io_out();
+  if (b.n) put(&b, t, k);
+  else b = (Buf){t, k, k};             /* the line fit in t: decode() reads it from there */
   return decode(f, &b);
 }
 List *pys_file_readlines(File *f) {
