@@ -580,7 +580,9 @@ and another iterable (but a file) through a list of its items, with CPython's co
 order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)). Its `string`
 is CPython's, edited in 16 marked places: the constants, `capwords()` and `Template` (not a subclass
 of it, which needs inheritance), with `Formatter` left uncompiled
-([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)).
+([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)). Its `io` is Pystachy's own
+`StringIO`, CPython's in-memory text stream, whose positions count a str's bytes past ASCII
+([`lib/README.md`](../lib/README.md#io-pystachys-own)).
 
 ## Expressions
 
@@ -633,7 +635,9 @@ CPython's error when it runs.
 
 ## Builtins and library modules
 
-`print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
+`print` (with `sep`, `end`, `file`, `flush`; `file` a file or an object with a `write()` method,
+such as `io.StringIO`, which gets each piece in a call of its own, as CPython makes them), `len`,
+`str`, `repr`, `ascii`,
 `int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
 or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
 `list.sort`, with `key=` and `reverse=`), `list`, `dict`, `set` and `frozenset` (of any iterable of
