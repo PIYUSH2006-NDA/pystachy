@@ -1559,25 +1559,47 @@ List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s
 I pys_hash_str(Str *s);                  /* the hash functions are in runtime.py */
 I pys_hash_int(I k);
 static uint64_t hsh(Dict *d, I k);
+static uint64_t hstrd(Str *s) {                      /* a str key's hash */
+  if (!s->dict_hash) {                  /* zeroed allocations and writable literals start uncached */
+    uint64_t h = (uint64_t)pys_hash_str(s);
+    s->dict_hash = h ? h : 1;           /* cache the dictionary's normalized hash, also for tuple items */
+  }
+  return s->dict_hash;
+}
 static uint64_t hval(I k, const char *d) {           /* a tuple key's hash (or its item's), by its descriptor */
   if ((*d == '?' || *d == 's' || *d == 'T') && !k) return 0x9E3779B97F4A7C15ULL;   /* None (also a looked-up key's) */
   if (*d == '?') d++;
   if (*d != 'T') { Dict t = {.kind = *d == 's'}; return hsh(&t, k); }
   uint64_t h = 0x27D4EB2F165667C5ULL; const char *e = d + 2;
-  for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) h = (h ^ hval(((I *)k)[i], e)) * 0x100000001B3ULL;
+  for (int i = 0; i < d[1] - '0'; i++) {
+    /* an int, bool, str or str | None item (a key's tuple holds only those, and such tuples) is
+       hashed in place, as the call for it would hash it, without walking its descriptor again */
+    I x = ((I *)k)[i]; uint64_t v;
+    if (*e == 'i' || *e == 'b') { v = (uint64_t)pys_hash_int(x); v = v ? v : 1; e++; }
+    else if (*e == 's' || (*e == '?' && e[1] == 's')) { v = x ? hstrd((Str *)x) : 0x9E3779B97F4A7C15ULL; e += 1 + (*e == '?'); }
+    else { v = hval(x, e); e = skip(e); }
+    h = (h ^ v) * 0x100000001B3ULL;
+  }
   return h ^ h >> 29;
 }
 static uint64_t hsh(Dict *d, I k) {                  /* kind: 0 int keys, 1 str keys, else a tuple key's descriptor */
-  if (d->kind == 1) {
-    Str *s = (Str *)k;
-    if (!s->dict_hash) {                /* zeroed allocations and writable literals start uncached */
-      uint64_t h = (uint64_t)pys_hash_str(s);
-      s->dict_hash = h ? h : 1;         /* cache the dictionary's normalized hash, also for tuple items */
-    }
-    return s->dict_hash;
-  }
+  if (d->kind == 1) return hstrd((Str *)k);
   uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)pys_hash_int(k);
   return h ? h : 1;                                  /* 0 marks a hole */
+}
+static int keq(I a, I b, const char *d) {            /* tuple keys of descriptor d: eqv's answer */
+  I *x = (I *)a, *y = (I *)b; const char *e = d + 2;
+  if (!x || !y) return x == y;
+  for (int i = 0; i < d[1] - '0'; i++) {
+    /* an int, bool, str or str | None item in place, another as eqitem compares it */
+    if (*e == 'i' || *e == 'b') { if (x[i] != y[i]) return 0; e++; }
+    else if (*e == 's' || (*e == '?' && e[1] == 's')) {
+      if (x[i] != y[i] && (!x[i] || !y[i] || !pys_str_eq((Str *)x[i], (Str *)y[i]))) return 0;
+      e += 1 + (*e == '?');
+    }
+    else { if (!eqitem(x[i], y[i], e)) return 0; e = skip(e); }
+  }
+  return 1;
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */
 static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *free: where to insert k */
@@ -1589,7 +1611,7 @@ static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *f
     if (!e) { if (free) *free = f < 0 ? (I)i : f; return -1; }
     if (e < 0) { if (f < 0) f = i; }
     else if (d->hs[e - 1] == h && (d->keys[e - 1] == k || (d->kind == 1 && pys_str_eq((Str *)d->keys[e - 1], (Str *)k)) ||
-                                   (d->kind > 1 && eqv(d->keys[e - 1], k, ((Str *)d->kind)->s)))) return i;
+                                   (d->kind > 1 && keq(d->keys[e - 1], k, ((Str *)d->kind)->s)))) return i;
   }
 }
 static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a table of this size, holes dropped */
