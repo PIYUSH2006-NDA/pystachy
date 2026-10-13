@@ -1,0 +1,111 @@
+[1, 2, 3] 86Rf07 True
+[0] bM True
+[1] Uk True
+[2] gb True
+[3] Ef True
+[4] Vq True
+[5] uw True
+[6] OI True
+[7] AX True
+[8] p6 True
+[9] nJ True
+[0, 0] SvIz True
+[0, 1] n3qa True
+[0, 2] tryF True
+[0, 3] eg6q True
+[0, 4] rSCF True
+[0, 5] sR8x True
+[0, 6] uY2M True
+[0, 7] 74dI True
+[0, 8] 30WX True
+[0, 9] moxr True
+[1, 0] nWqP True
+[2, 0] tSyw True
+[3, 0] eX68 True
+[4, 0] rxCY True
+[5, 0] sV8a True
+[6, 0] uf2K True
+[7, 0] 7Cdk True
+[8, 0] 3aWP True
+[9, 0] m2xn True
+11 39 XZb5bBztQuLGN4vC8YH9uhjxDBIvBAEhSbTDgcU True
+100 239 iPDjfx9tCly2b0HKAAmOrwkl7RucWXsIGZ68AslV True
+1 12 Oi1gVtLmSTHI True
+3 36 1m38e49CtqRr7VoQy9jbBIfZLHONGs49parU True
+3 26 TtBzZ7eJ4WcJ1onLzOp2r7s8yY True
+'' [] [] []
+[8] [226980] [] []
+[9223372036854775807] [7] AX
+ValueError: Encoding supports numbers between 0 and 9223372036854775807
+ValueError: Encoding supports numbers between 0 and 9223372036854775807
+ValueError: Encoding supports numbers between 0 and 9223372036854775807
+6 86Rf07 True [1, 2, 3]
+7 86Rf07x True [1, 2, 3]
+8 86Rf07xd True [1, 2, 3]
+9 86Rf07xd4 True [1, 2, 3]
+10 86Rf07xd4z True [1, 2, 3]
+11 86Rf07xd4zB True [1, 2, 3]
+12 86Rf07xd4zBm True [1, 2, 3]
+13 86Rf07xd4zBmi True [1, 2, 3]
+62 86Rf07xd4zBmiJXQG6otHEbew02c3PWsUOLZxADhCpKj7aVFv9I8RquYrNlSTM True [1, 2, 3]
+63 86Rf07xd4zBmiJXQG6otHEbew02c3PWsUOLZxADhCpKj7aVFv9I8RquYrNlSTMy True [1, 2, 3]
+64 86Rf07xd4zBmiJXQG6otHEbew02c3PWsUOLZxADhCpKj7aVFv9I8RquYrNlSTMyf True [1, 2, 3]
+65 86Rf07xd4zBmiJXQG6otHEbew02c3PWsUOLZxADhCpKj7aVFv9I8RquYrNlSTMyf1 True [1, 2, 3]
+[0, 0] True [0, 0]
+[0, 1] True [0, 1]
+[0, 7] True [0, 7]
+[0, 9] True [0, 9]
+0 2 bM True
+0 10 4JOuloIsr6 True
+0 20 hwB5vcCxfAyBnVKM True
+0 5 gMvFo True
+0 12 AqkYhRmbHpEX True
+1 2 bM True
+1 10 4JOuloIsr6 True
+1 20 hwB5vcCxfAyBnVKM True
+1 5 gMvFo True
+1 12 AqkYhRmbHpEX True
+5 5 bMZn4 True
+5 10 4JOuloIsr6 True
+5 20 hwB5vcCxfAyBnVKM True
+5 5 gMvFo True
+5 12 AqkYhRmbHpEX True
+10 10 bMZn4Y5Fq8 True
+10 10 4JOuloIsr6 True
+10 20 hwB5vcCxfAyBnVKM True
+10 10 gMvFoHJdmf True
+10 12 AqkYhRmbHpEX True
+62 62 bMZn4Y5Fq8QTCJoL True
+62 62 4JOuloIsr6NDcPXf True
+62 62 hwB5vcCxfAyBnVKM True
+62 62 gMvFoHJdmfrXBVPa True
+62 62 AqkYhRmbHpEXs1ig True
+255 255 bMZn4Y5Fq8QTCJoL True
+255 255 4JOuloIsr6NDcPXf True
+255 255 hwB5vcCxfAyBnVKM True
+255 255 gMvFoHJdmfrXBVPa True
+255 255 AqkYhRmbHpEXs1ig True
+ValueError: Minimum length has to be between 0 and 255
+ValueError: Minimum length has to be between 0 and 255
+489158 [1, 2, 3]
+'aacacbaa' [1, 2, 3]
+'aabbbaaabaaabbccbaacccaa' [4572, 0, 99]
+'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' [9223372036854775807]
+'+;w<gw' [1, 2, 3]
+'TH7Rl.]u' [4572, 0, 99]
+'UY^baw,opZ@' [9223372036854775807]
+' \x01\x7f\x01\n\t' [1, 2, 3]
+'\t\x00\x01\x00\x01\t\x01 \x00\t \n\n' [4572, 0, 99]
+'\x00\t\t\n\x00\x7f\x7f \x00\n\t\x7f\n\x00\x00  \x00\x7f\x00\x7f\t\n\x7f\t\t \t ' [9223372036854775807]
+255 aaaaaaaaaaaaaaaaaaaaaaaa [9223372036854775807]
+'ë1092' ValueError: Alphabet cannot contain multibyte characters
+'aabcdefg' ValueError: Alphabet must contain unique characters
+'ab' ValueError: Alphabet length must be at least 3
+'abcdefa' ValueError: Alphabet must contain unique characters
+'abcé' ValueError: Alphabet cannot contain multibyte characters
+20 '\x7f}\x00\x7f\x16Cpn\tghI' [0]
+20 '\x07DH[W \x05^jF\x07~' [1, 2, 3]
+20 '\x16\x01F P\x16\x16P F\x13k' [9223372036854775807, 127, 128]
+129 ValueError: Alphabet must contain unique characters
+129 ValueError: Alphabet must contain unique characters
+[exit 0]

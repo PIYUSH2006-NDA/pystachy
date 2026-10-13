@@ -1,0 +1,45 @@
+{1, 2, 3} {1, 33, 100, 49, 17} {1, 33, 49, 100, 17}
+1 33 100 49 17 
+[8, 20, 4338179527542382004, 21, 33620, -2]
+{2305843009213693951, 2305843009213693952, 9223372036854775807, -2, -9223372036854775808, -1}
+{(1, 2), (2, 1), (0, 0)} {(2, (False, True)), (1, (True, False))}
+set() frozenset() frozenset({1, 2, 3}) [{1, 2}, {3}] {'k': {4, 5}} ({1}, frozenset({2}))
+{1, 3, 5} {8, 9} {1, 10, 4, 7} frozenset({0, 1, 4, 9, 16})
+{3, 15, 7} frozenset({3, 15, 7}) ['e', 'h', 'l', 'o'] 4
+{1, 2, 3} False True
+True True False
+{3, 4} 2 True
+KeyError 99
+KeyError 'pop from an empty set'
+5 6 {7}
+set() 0
+{1, 2, 3, 4, 5, 7, 15}
+{1, 2, 3, 4, 5, 20, 7, 15} {1, 2, 3, 4, 5, 7, 15} {2, 3} {15}
+{3, 4, 5, 7, 15} {1, 2, 5, 7, 15} {2, 3, 100, 4, 5, 7, 15} {2, 3, 4, 101, 5, 7, 15}
+{3, 4}
+{3, 4}
+{3, 6}
+True False True True False
+{1, 2, 3, 4, 5} {3, 4} {1, 2} {1, 2, 5}
+frozenset({1, 2, 3, 4, 5}) frozenset({3, 4}) frozenset({5}) frozenset({1, 2, 5})
+False True True True True True False True
+{10, 7} {10, 7} True
+frozenset({9, 3, 4, 5}) frozenset({3, 4, 5}) False
+False False True True
+30 [1, 2, 3] 2 8 6 [10, 20, 30]
+True True {0, 1, 2} {(1, 1), (2, 4), (0, 0)}
+0 9
+1 7
+RuntimeError Set changed size during iteration
+{1, 2, 3}
+['a', 'b']
+{1: {2, 3}, 2: {3}}
+{(1, 'x')}
+{2, 4} 1
+True
+{1} True
+{1, 2} True False True
+2 True False
+KeyError True
+{2} {2} frozenset({2}) False True
+[exit 0]

@@ -1,4 +1,4 @@
-# error: nested functions and classes are not supported
+# error: nested_def.py:3: error: a class inside a function is not supported
 def f() -> None:
-    def g() -> None:
+    class G:
         pass

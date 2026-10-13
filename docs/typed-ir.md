@@ -1137,6 +1137,11 @@ A third lowering, for the eligible `IFn`s. Containers stay Python objects, as #4
 
 ### 7.5 Classes as templates (M2, #7)
 
+> **Landed in `Gen`.** A class whose `__init__` has an unannotated parameter is a class template:
+> `specialize` makes one `ClassInfo`, struct and method set per list of field types, named
+> `C-1`, `C-2`, ... (docs/internals.md, *Templates*). It is still declared and compiled by `Gen`
+> as it compiles the call that needs it, not yet a declaration as data.
+
 - Declarations get keyed by instance types: one `ClassInfo`, struct and method set per list of field types, named like template instances.
 - The IR does not change. It needs steps 3 (declarations as data) and 14 (`call`) first.
 

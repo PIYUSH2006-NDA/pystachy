@@ -14,5 +14,5 @@ class Holder:
 class Reader:
     "CPython calls Desc.__get__ to read Holder.x when the def statement runs"
 
-    def get(self, a=Holder.x):
-        return a
+    def __init__(self, *rest: int, a: int = Holder.x):  # (*args: a class Pystachy leaves uncompiled)
+        self.a = a

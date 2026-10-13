@@ -74,6 +74,11 @@ error). What still differs is listed under [Deviations](#deviations).
     print(string_at(p, 9), adler32(1, "Wikipedia", 9))
     c_free(p)
 
+`extern(lib, symbol="")` takes the library and the C symbol as string literals, by position or
+keyword as the twin's signature takes them (`@extern(lib="libm.so.6")`,
+`@extern("", symbol="free")`); a symbol left out or empty is the function's own name, as the
+twin's `symbol or f.__name__` is.
+
 When the `def` statement runs, the C function is looked up as `ctypes.CDLL(lib or None)` finds
 it: `dlopen(lib, RTLD_NOW | RTLD_LOCAL)`, then `dlsym` in that handle (`pys_c_bind`), and the
 stub calls it through the address it stored. A missing library raises `OSError` there, and a
@@ -106,11 +111,15 @@ everywhere else.
 Rejected at compile time, each with its own message (tests/ffi/errors): a bare `int` (say
 which C integer type: without the header the compiler cannot know its width), `bool`,
 containers, classes and other optionals; a body other than `...`; a parameter without an
-annotation, or `*args`; a library or symbol that is not a string literal, or more than two
-arguments; `@extern` on a method; one C symbol declared twice with different types, or with
-other types than the runtime's own declaration of it (`memchr`, `fabs`, ...); and a reserved
-symbol (`pys_*`, `pyx_*`, `PyInit_*`, `PyModExport_*`, `main`). Structs by value, varargs and
-callbacks are not offered: write a small C shim with scalar arguments and put it in a library.
+annotation, or `*args`; a library or symbol that is not a string literal, or that has a NUL
+character in it (ctypes raises `ValueError: embedded null byte` for the library's, and would
+look the symbol up only as far as the NUL); arguments that `extern(lib, symbol="")` does not
+take, with CPython's `TypeError` message (an unknown keyword, a second value for `lib` or
+`symbol`, a third argument, no library); `@extern` on a method; one C symbol declared twice
+with different types, or with other types than the runtime's own declaration of it (`memchr`,
+`fabs`, ...); and a reserved symbol (`pys_*`, `pyx_*`, `PyInit_*`, `PyModExport_*`, `main`).
+Structs by value, varargs and callbacks are not offered: write a small C shim with scalar
+arguments and put it in a library.
 
 A call of an `@extern` function may do anything as far as the compiler knows (every effect;
 inside a `try` it is an `invoke`). A C++ exception or a `longjmp` across Pystachy frames, a C

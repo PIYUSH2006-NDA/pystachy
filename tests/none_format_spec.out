@@ -1,0 +1,8 @@
+spec evaluated: '5'
+TypeError: unsupported format string passed to NoneType.__format__
+spec evaluated: '>5'
+TypeError: unsupported format string passed to NoneType.__format__
+spec evaluated: ''
+spec evaluated: ''
+None [None]
+[exit 0]

@@ -22,7 +22,7 @@ flowchart TD
     rtpy["runtime.py: str methods, format specs, math, dict hashing, in the subset"] -->|pystachy rt| rtbc
     lower --> ir["LLVM IR"]
     ir --> aot["pystachy build: llvm-link with the runtime bitcode, clang -O2 on the whole module"]
-    ir --> jit["pystachy run: opt (mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
+    ir --> jit["pystachy run: opt (globaldce, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
     rtbc --> aot
     rtbc --> jit
     aot --> exe["native executable"]
@@ -34,13 +34,13 @@ flowchart TD
 | file | lines | contents |
 |---|---:|---|
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
-| `runtime.c` | 2,920 | garbage collector, string, list and dict memory, timsort, dict tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
-| `runtime.py` | 1,277 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
+| `runtime.c` | 3,340 | garbage collector, string, list and dict memory, timsort, dict and set tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
+| `runtime.py` | 1,366 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, `fsum` and `prod`, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
-| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter and the stdlib census |
-| `ports/` | 1 package | iniconfig 2.3.1, pytest's INI parser, with the few edits it needs to compile ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); `tests/port_iniconfig_*.py` run its own test cases |
+| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter, the stdlib census, and the count of a port's edits by cause |
+| `ports/` | 15 packages | PyPI packages with the few edits each needs to compile, marked "Pystachy port:" and listed in its `PORT.md`: convertdate 2.5.1's calendar conversions and holidays ([`ports/convertdate/PORT.md`](../ports/convertdate/PORT.md)); iniconfig 2.3.1, pytest's INI parser ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); jdcal 1.4.1, Julian date conversions ([`ports/jdcal/PORT.md`](../ports/jdcal/PORT.md)); ordered-set 4.1.0's OrderedSet, of str ([`ports/ordered_set/PORT.md`](../ports/ordered_set/PORT.md)); pyaes 1.6.1's AES block cipher ([`ports/pyaes/PORT.md`](../ports/pyaes/PORT.md)); pyfiglet 1.0.4, FIGlet's text banners in its standard, slant and small fonts ([`ports/pyfiglet/PORT.md`](../ports/pyfiglet/PORT.md)); pylev 1.4.0, Levenshtein distances ([`ports/pylev/PORT.md`](../ports/pylev/PORT.md)); qrcode 8.2's encoder and text output ([`ports/qrcode/PORT.md`](../ports/qrcode/PORT.md)); roman 5.2, the Roman numeral converter ([`ports/roman/PORT.md`](../ports/roman/PORT.md)); sgp4 2.27, the SGP4/SDP4 satellite propagator under Skyfield ([`ports/sgp4/PORT.md`](../ports/sgp4/PORT.md)); snowballstemmer 3.1.1's English (Porter2) and Porter stemmers, Sphinx's search-index stemmers ([`ports/snowballstemmer/PORT.md`](../ports/snowballstemmer/PORT.md)); sortedcontainers 2.4.0's SortedList, of ints ([`ports/sortedcontainers/PORT.md`](../ports/sortedcontainers/PORT.md)); sqids 0.5.2, short unique ids from numbers ([`ports/sqids/PORT.md`](../ports/sqids/PORT.md)); tomli-w 1.2.0's TOML writer, `dumps()` ([`ports/tomli_w/PORT.md`](../ports/tomli_w/PORT.md)); and wcwidth 0.9.2's `wcwidth()` and `wcswidth()`, the columns a terminal gives text ([`ports/wcwidth/PORT.md`](../ports/wcwidth/PORT.md)); `tests/port_*.py` run their test cases, and `tools/port_edits.py` sorts the markers by cause and, given the upstream package, lists the census blockers the edits removed |
 
 ## Environment variables
 
@@ -55,7 +55,7 @@ flowchart TD
 | `PYSTACHY_GC` | `off` turns collection off, `stats` prints a summary at exit |
 | `PYSTACHY_IRCHECK=1` | the compiler checks the typed IR it built before lowering it, and again after each pass that changed it (`tests/run.sh` sets it unless it is set otherwise) |
 | `PYSTACHY_IRFX=1` | the compiler prints each function's effect summary on stderr, as `tests/ir/*.fx` record them |
-| `PYSTACHY_OPT` | turns optimizations on the typed IR off: `-listget`, `-dictfuse`, comma-separated, or `-all` |
+| `PYSTACHY_OPT` | turns optimizations off: `-listget`, `-dictfuse` (passes on the typed IR), `-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items), comma-separated, or `-all` |
 | `PYSTACHY_JOBS` | how many test cases `tests/run.sh` and the IR tools run at once (default: one per CPU) |
 
 ## Design, piece by piece
@@ -140,6 +140,67 @@ frame into code that is dropped. A call compiled before the `def` or `class` sta
 the function it calls loads that function's non-constant default values from the global
 the statement fills when it runs, so they are still evaluated once.
 
+A method is a template the same way (`template_ok` says which may be): its object is the
+first argument, whose type is its class, and an instance is a method of that class
+(`@m.C.name.N`), so `self` reads its fields as the method's own code does. The calls that
+reach it all go through `call_fn` (a method call, a bound method's value, the operators, the
+comparisons that sorting and containers make, which `cmp_method` and the object descriptor
+accept for any operand), and `instance` checks the return type a special method must have
+(`SPECIAL`) once the instance is compiled. The methods of a class are compiled when the program
+is (or, in an imported module, when called), but for its templates: only their instances are.
+
+A class template (`Gen.tmpl`: its `__init__` has a parameter without an annotation, or names a
+class template in one, or makes an object of one) has no objects of its own: `C(args)` reaches
+`call_fn` with a placeholder for the object, and once the arguments are evaluated (their
+annotated ones coerced), `specialize` picks the class the object belongs to. It types the fields
+that `__init__` assigns as `scan_fields` would for parameters annotated with the arguments'
+types, and the list of those types is the key of the specialization (`C-1`, `C-2`, ... in
+`ClassInfo.specs`; `ClassInfo.origin` leads back to `C`). A field that holds the specialization
+itself (`self.next: "Node | None"`, where `C` in an annotation of its methods and fields names it,
+see `ann`) is written `@` in the key, so each call of the recursion finds the same one. A new
+specialization is an ordinary class: its methods are declared from the template's `def` nodes,
+`__init__` and those `template_ok` allows as templates (compiled where called), the other
+special methods compiled when it is made (`Gen` saved and restored as for an instance), and
+`fl_fields` decides its flags. It shares the template's class attributes (`fdefault`,
+`fglob`). `isinst` takes it for `C`; `short()` and `shown()`, which give CPython's names, drop
+its number, and `typestr()` shows its fields' types (`SPECSHOW`: `Box[int]`), so that messages
+can tell two specializations apart. Each specialization counts towards `TEMPLATE_INSTANCES`.
+A parameter annotated `Callable[[A, B], C]`, `C` a class template, is a template's (`FnInfo.pats`),
+but `pat_arg` gives a function argument the Callable type of what it returns: `adapter_ret`
+compiles the adapter of `to_callable` with its return type left to its return statement, and
+that adapter then serves the Callable `callable[S,A,B]` of the specialization `S` it returns, so a
+field that holds such functions specializes its class by `S` alone.
+
+### Functions as values and closures
+
+A function used as a value has a type of its own, the function it is: `fn[f:NAME]` for a def of a
+module, `fn[b:NAME]` for a builtin, `fn[c:N:...]` for a lambda or a def inside a function,
+`fn[m:C.NAME]` for a method bound to an object of class C, `fn[d:NAME:T]` for a method bound to a
+value of builtin type T (`"".join`), and `fn[u:T.NAME]` for that method read through its type
+(`str.lower`). A call
+through such a value is compiled as a call of that function by name, so a template given a
+function is compiled for it, as for any other argument type, and the call is direct. A value of a
+module's def or a builtin holds nothing (null), a bound method's is its object (a call through it is
+the method's call on it: `Gen.method_value`, `Gen.call_value`). A closure's points to its env, which `Gen.closure`
+allocates each time the def or lambda runs: the cells of the variables it takes from the functions
+around it, then its default values that are no constants. Each variable that a closure takes lives
+in a cell that the function binding it allocates as it begins (`Gen.cellvars`); its loads and
+stores go through the cell as they would through an `alloca`, and a closure's code, a template
+whose hidden first parameter is the env (`.env`, passed as a method's object is), loads the cells
+from it as it begins, so that both see each other's assignments (`nonlocal`). `Flow` checks where a
+closure is defined that the variables it takes are assigned (`Gen.fl_nested`), and analyses its
+body as a function's. Where a `Callable[[A, B], R]` is expected (`callable[R,A,B]`), a function
+value becomes a pointer to an object `{code, env}`: the code is an adapter compiled for each
+function and `Callable` type, `R(ptr env, A, B)`, which calls the function as a call of the value
+would (`Gen.adapter`), and a call of a `Callable` is an `icall` op, LLVM's indirect call of the code
+with the env. A function of a module and a builtin need no env: one constant object serves them.
+A def with decorators that CPython calls (all but `typing`'s, and in a class body, those it leaves
+out) is compiled as an assignment of its name (`Gen.decorate`): the decorator expressions are
+evaluated top first, then the closure is made and each decorator called on it, bottom first, so
+the def's name, also at a module's top level, is a variable of the result's type. `Flow` reads
+each decorator as a call where the def is (`Gen.deco_callee`), and module code that applies one
+counts as a call into user code.
+
 ### Definite assignment
 
 Before code generation, `Flow` walks every scope with the set
@@ -149,7 +210,10 @@ the state before the loop, leaving `while True` only through what its breaks hav
 common). Reads it cannot prove are marked, and only those test an "is
 assigned" flag that LLVM removes again where it can; fields that `__init__` may leave
 unassigned get a hidden flag in the object. Globals read in functions are safe when
-module code assigned them before its first call into user code, and calls to a
+module code assigned them before its first call into user code (a statement that reads a
+function as a value or makes a lambda counts, since what holds it may call it, but not
+`name = f` or `name = lambda ...`, which makes `name` such a value in turn, nor a function's
+default value), and calls to a
 function before its `def` has run raise `NameError`. The compiler itself needs none of
 these checks. The pass costs what the code contains: a function is analysed over the names
 its body mentions, not over every global of its module; a branch is undone from a log of
@@ -224,7 +288,7 @@ implementation of `list`/`dict`/`tuple` serves every element type.
 
 Generic operations (`repr`, `==`, ordering, `sort`, `in`) receive a
 tiny string describing the static type — `LDsi` is `list[dict[str,int]]`, `?s` is
-`str | None` — and the
+`str | None`, `Si` and `Fi` are `set[int]` and `frozenset[int]` — and the
 runtime interprets it recursively, comparing sequences the way CPython does (first
 unequal pair, identity first). Objects appear as `O<id>`: the runtime calls back into
 `pys_obj_eq/cmp/repr`, a switch the compiler emits over the classes that occur in
@@ -267,14 +331,35 @@ the table is rebuilt, with its sizes and growth, and `dict(d)` merges as CPython
 so deletion is O(1) and a loop that changes its dict, `reversed(d)` included, sees what
 CPython's would. The index follows CPython's probe sequence (each step mixes in five more
 bits of the hash), over a hash that costs one multiply: one round of SplitMix64's mixer
-for an int, FNV-1a with the high half folded into the low for a str; a dict of tuple keys
+for an int, FNV-1a with the high half folded into the low for a str. Each string caches its
+dictionary-normalized hash lazily in an eight-byte header field (zero means uncomputed,
+a raw zero hash is stored as one). Reusing that object hashes its bytes once, including
+when it is a tuple component; newly constructed equal strings still need hashing and
+may need a byte comparison. String bytes stay immutable, but literals occupy writable
+LLVM globals for the cache. The header grows from eight to sixteen bytes, before allocator
+rounding. This internal cache does not change the compiler's semantic effects or the raw
+hash function in `runtime.py`. A dict of tuple keys
 holds their type descriptor, by which a key's hash mixes its items' hashes and keys compare
 as `==` compares the tuples (a `None` item hashes and compares as `None` also where the
 descriptor says `str`, which is how a looked-up tuple whose item may be `None` finds no
 key). Keys that differ only
 in their high bits (`i << 46`, which used to form one cluster) probe as random keys do; the
 price is about 2 ns per lookup in tables larger than the cache, whose second slot is in
-another cache line. Files wrap C stdio with CPython's open() rules: argument checks in its
+another cache line. Sets and frozensets are CPython 3.13's own tables (`setobject.c`), since no
+entry array keeps their insertion order: a loop sees the elements in slot order, which the
+hashes, the probes (ten adjacent slots, then the perturbed step), the dummy an insertion reuses
+(the last one its probes passed), the resizes and the way each operation builds its result (a
+copy merges the table, `s & t` walks the smaller set, `s - t` copies `s` where it is more than
+four times larger, `s ^ t` starts from `t`) all decide, as they do in CPython. The hashes are
+CPython's for ints, bools, `None` and tuples of them (xxHash's rounds over the items'), so a set
+of those iterates in CPython's order; a str's is the dict's hash of it, as CPython's own changes
+from run to run. A display of more than two constants is the frozenset constant CPython's
+compiler makes (made a second time from its own elements, as `merge_consts_recursive` makes
+it) merged into a new set, and a `for` loop over a display of constants, or `x in` one,
+uses that frozenset. The constant is made where the display first runs and kept in a global
+(`@fs.N`, among the collector's roots), as CPython's code object keeps it: later runs copy it,
+or use it, and do not make it again.
+Files wrap C stdio with CPython's open() rules: argument checks in its
 order, errno-based `OSError` subclasses, newline translation, `"+"` mode positioning
 (including its 8 KiB read-ahead), and closed/readable/writable checks. Writes reach the
 OS when CPython's do: 8 KiB of pending text in front of a `st_blksize` buffer, line
@@ -309,8 +394,10 @@ against CPython's own str methods, `math` and `format()`.
 
 ### Two tiers
 
-`run` favors latency: a three-pass pipeline over the program alone, then
-ORC JIT compilation linked against a cached, precompiled runtime `.o`. `build` favors
+`run` favors latency: `globaldce` removes unused internal functions before the three
+function cleanup passes, then ORC JIT compilation links against a cached, precompiled
+runtime `.o`. Frontend checks and definition-time effects still run; the external
+object-dispatch callbacks remain available to the runtime. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags
 (such as sanitizers) to the runtime and the AOT build, with a runtime cache per flag set (and per

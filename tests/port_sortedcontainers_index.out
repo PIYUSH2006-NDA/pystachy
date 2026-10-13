@@ -1,0 +1,21 @@
+built: True len=203 sublists=1 [203]..[203] offset=0 index=0 []
+reset: True len=203 sublists=51 [4, 4, 4, 4]..[4, 3] offset=0 index=0 []
+positional: -494 -268 499 441 -21 150
+indexed: True len=203 sublists=51 [4, 4, 4, 4]..[4, 3] offset=63 index=114 [203, 128, 75, 64, 64, 64, 11]
+bisect: 107 107 77 1
+islice: [-480, -478, -476, -465, -460, -459, -458, -454, -436, -435, -434, -431, -430, -428, -426, -422, -410, -406, -402, -402, -400, -398, -396, -393, -379, -373, -372, -371, -347, -345, -339, -335, -332, -325, -316, -305, -304] [481, 480, 480, 458, 456, 441, 436, 432, 428, 424, 419, 416, 404, 403, 398, 386, 381, 380, 379, 375, 371, 370, 369, 368, 366, 365, 343, 328, 319, 318, 303, 302, 292, 289]
+irange: [-298, -296, -294, -292, -287, -283, -281, -280, -276, -272, -268, -265, -262, -259, -250, -241, -236, -231, -224, -222, -222, -212, -210, -206, -201] [292, 289, 288, 277, 277, 271, 267, 263, 256, 244, 243, 230, 229, 223, 215, 215, 211, 211, 209, 202]
+index ranges: 50 50 120
+ValueError: -268 is not in list
+split: True len=243 sublists=59 [4, 4, 4, 4]..[4, 3] offset=63 index=0 []
+positional: -22 110 13 151
+reindexed: True len=243 sublists=59 [4, 4, 4, 4]..[4, 3] offset=63 index=122 [243, 131, 112, 64, 67, 69, 43]
+merged: True len=213 sublists=53 [4, 4, 4, 4]..[4, 3] offset=63 index=0 [] 3
+deleted: True len=193 sublists=53 [3, 3, 3, 3]..[4, 3] offset=63 index=116 [193, 110, 83, 48, 62, 64, 19]
+popped: 291481 True len=93 sublists=25 [3, 4, 5, 4]..[4, 6] offset=31 index=56 [93, 59, 34, 30, 29, 28, 6]
+update add: True len=103 sublists=25 [4, 4, 8, 4]..[4, 8] offset=31 index=56 [103, 66, 37, 35, 31, 29, 8]
+update rebuild: True len=163 sublists=41 [4, 4, 4, 4]..[4, 3] offset=0 index=0 []
+reset 5: -210 True len=163 sublists=33 [5, 5, 5, 5]..[5, 3] offset=63 index=96 [163, 160, 3, 80, 80, 3, 0]
+default load: -548236193402 1999 True len=2100 sublists=2 [1052, 1048]..[1052, 1048] offset=1 index=3 [2100, 1052, 1048]
+default merged: True len=1500 sublists=2 [750, 750]..[750, 750] offset=1 index=3 [1500, 750, 750] True False True
+[exit 0]

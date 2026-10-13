@@ -1,5 +1,8 @@
 # Performance
 
+For opt-in object, container, allocation and exception diagnostics with separate compiler,
+JIT startup and warmed execution measurements, see the [extended subset prototype](extended-performance.md).
+
 Pystachy compiles each program to native code through LLVM, so compute-bound Python runs one to
 two orders of magnitude faster than under CPython, and code that spends its time in strings and
 dicts runs a few times faster. This page has the numbers, what they include, and where the time
@@ -21,6 +24,7 @@ CPython's.
 | `words.py`: word count, strings and dicts | 0.17 s | 0.10 s | 0.05 s | 3× |
 | `dictlookup.py`: dict lookups, int and str keys | 0.90 s | 0.47 s | 0.39 s | 2× |
 | `dictkeys.py`: dict keys that defeat a weak hash | 0.50 s | 0.25 s | 0.16 s | 3× |
+| `setdisplay.py`: set displays of constants in loops | 0.40 s | 0.20 s | 0.12 s | 3× |
 
 The speedup column is computed by `bench/run.sh` from the unrounded times. The first `run` after a
 build also compiles and caches the runtime, which adds one to two seconds once. `bench/dictcount.py`
@@ -66,23 +70,34 @@ against 0.11 s under CPython, about a microsecond per raise
 
 ## Start-up and memory
 
-The JIT tier starts a program in under 0.1 s: `pystachy run` of a hello world takes 60 to
-80 ms on the machine above, compilation included. The collector keeps peak memory near the live set:
-ten million short-lived strings (`str(i)` in a loop) peak at 35 MiB instead of 155 MiB with Ouro
-v1's bump allocator, and building and discarding fifty 2M-element lists at 50 MiB instead of
-1.5 GiB, while running faster (0.47 s instead of 0.52 s, and 0.30 s instead of 2.0 s). Sorting is
-CPython's timsort: 2M random ints sort in 0.32 s, against 0.53 s with the earlier merge sort.
+The JIT tier starts a program in under 0.1 s: `pystachy run` of a hello world takes about 46 ms
+on the machine above, compilation included, and peaks at 58 MiB, most of it `lli`; the AOT
+executable takes 1 ms and 1.8 MiB (CPython: 9 ms and 8.5 MiB). The collector keeps peak memory
+near the live set: ten million short-lived strings (`str(i)` in a loop) peak at 35 MiB instead
+of 155 MiB with Ouro v1's bump allocator, and building and discarding fifty 2M-element lists at
+50 MiB instead of 1.5 GiB, while running faster (0.47 s instead of 0.52 s, and 0.30 s instead of
+2.0 s). Sorting is CPython's timsort: 2M random ints sort in 0.32 s, against 0.53 s with the
+earlier merge sort.
+
+Each `str` caches its dict hash, so a key that is looked up again is not hashed again (#99):
+500,000 lookups of a 1 KB key take 1.8 ms AOT instead of 519 ms (CPython: 14 ms), and of a tuple
+holding one, 14 ms instead of 540 ms. The cache costs 8 bytes per string, which moves short
+strings from 16- to 24-byte slots: a million retained short strings hold 30.9 MiB live instead
+of 23.3 MiB, and the native compiler's peak RSS, translating the same 16,757 lines, rose from
+125.7 MiB to 142.1 MiB (+13%), its CPU time unchanged. A baseline of every benchmark's time and
+peak RSS, start-up and the compiler's own build, at commit 0ffadca, is in
+[#4](https://github.com/den-run-ai/pystachy/issues/4#issuecomment-6126004947).
 
 ## Compile time
 
-The native compiler translates its own 16,000 lines to LLVM IR in about 0.45 s of CPU time,
-against 2.6 s when CPython runs it, and a full AOT build of itself, with clang -O2, takes about
-17 s of CPU. Before the typed IR and exceptions, its 11,000 lines took 0.2 s, 1.4 s and 12 s on
-the same machine, and the compiler of 7,000 lines took 0.09 s to translate itself and 7.5 s to
-build. Per source line, translation to LLVM IR has grown from about 13 µs (7,000 lines) to
-18 µs (11,000 lines, which added CPython's syntax checks and the definition-time checks of
-imported modules) and 28 µs now, with the typed IR built, optimized and lowered as steps of
-their own; the clang build stays near 1 ms per line.
+The native compiler translates its own 17,300 lines to LLVM IR in about 0.57 s of CPU time,
+peaking at 153 MiB, against 2.8 s when CPython runs it, and a full AOT build of itself, with
+clang -O2, takes about 17.4 s of CPU. Before the typed IR and exceptions, its 11,000 lines took
+0.2 s, 1.4 s and 12 s on the same machine, and the compiler of 7,000 lines took 0.09 s to
+translate itself and 7.5 s to build. Per source line, translation to LLVM IR has grown from
+about 13 µs (7,000 lines) to 18 µs (11,000 lines, which added CPython's syntax checks and the
+definition-time checks of imported modules) and 33 µs now, with the typed IR built, optimized
+and lowered as steps of their own; the clang build stays near 1 ms per line.
 
 Compile time grows linearly with the program: `tools/scaling.py` generates programs that grow in
 one dimension at a time (functions, globals, classes, modules, fields, call and import chains,

@@ -13,3 +13,8 @@ class Box:
 
     def get(self, default: _D) -> int:
         return self.v
+
+
+class Holder:
+    def __init__(self, v: _D) -> None:
+        self.v = v

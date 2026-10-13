@@ -20,7 +20,7 @@ list of documented deviations. Where Pystachy cannot keep that promise, it stops
 - **A good fit:** typed, algorithmic Python (numbers, strings, lists, dicts, dataclasses) that
   you want to run fast or ship as one binary, or curiosity about how a self-hosting compiler
   works.
-- **Not yet:** code that needs inheritance (beyond exception classes), lambdas, generators or
+- **Not yet:** code that needs inheritance (beyond exception classes), generators or
   third-party packages. See the [roadmap](#roadmap) and [what is missing](#status-and-limitations).
 
 ## At a glance
@@ -49,7 +49,7 @@ flowchart LR
 | | |
 |---|---|
 | **compiler** | `pystachy.py`, about 17,000 lines, written in the subset it compiles |
-| **runtime** | `runtime.c`, under 3,000 lines, with its own garbage collector, and `runtime.py`, its str methods, formatting and hashing written in the subset; needs only the C library |
+| **runtime** | `runtime.c`, about 3,300 lines, with its own garbage collector, and `runtime.py`, its str methods, formatting and hashing written in the subset; needs only the C library |
 | **bootstrap** | the compiler running on CPython, the native compiler it builds, and the one that builds itself all emit byte-identical LLVM IR |
 | **tests** | over 550 programs that must print what CPython printed for them, JIT and AOT, and over 640 that must be rejected, with the compiler running on CPython and with the native one ([docs/testing.md](docs/testing.md)) |
 | **standard library** | 9 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
@@ -132,11 +132,15 @@ And when a program uses something Pystachy cannot run faithfully yet, you find o
 runs:
 
 ```
-$ cat words.py
-words = ["pear", "fig", "banana"]
-print(sorted(words, key=lambda w: len(w)))
-$ ./pystachy run words.py
-words.py:2: error: sorted(key=...) is not supported: functions are not values
+$ cat squares.py
+def squares(n):
+    for i in range(n):
+        yield i * i
+
+
+print(sum(squares(4)))
+$ ./pystachy run squares.py
+squares.py:6: error: 'yield' is not supported (there are no generator functions)
 ```
 
 ## Quick start
@@ -174,7 +178,7 @@ compiler on CPython. Other settings are listed in
 - **It compiles itself, to a fixed point.** The compiler built by CPython and the compiler built
   by itself must emit identical LLVM IR, so any place where Pystachy and CPython disagree inside
   the compiler shows up as a diff. CI also rebuilds it with no Python on `PATH`.
-- **Unmodified library code compiles.** An unannotated module-level function is a template,
+- **Unmodified library code compiles.** An unannotated module-level function or method is a template,
   compiled for the argument types of each call, and what CPython decides at import time (`__main__` guards,
   platform tests, optional C accelerators) is decided at compile time. That is how `bisect`,
   `heapq`, `posixpath` and six more CPython modules compile as they are.
@@ -225,7 +229,7 @@ speed on the benchmarks.
 CPython-extension mode, like mypyc, so that compiled code can use real PyPI packages?
 Input is welcome.
 
-**Further out:** single inheritance with vtables; `set` and `frozenset` on top of the dict table;
+**Further out:** single inheritance with vtables;
 more of the standard library, ranked by payoff in [docs/stdlib.md](docs/stdlib.md); and a
 WebAssembly GC backend, which a runtime written in the subset makes easier.
 
@@ -240,8 +244,8 @@ compiler rejects each where it would have to compile it.
 | exception attributes such as `e.args`, `except*` (`try`, `raise` and exception classes are supported) | M5 |
 | unions other than `Optional` (`Optional` is supported for `int`, `str` and the other builtin types) | M4 |
 | inheritance, but for exception classes | M2 |
-| lambdas, closures, functions as values (`map`, `key=`) | M3 |
-| generators, `async`, sets, `bytes` | M7 |
+| decorators of classes and methods, `f(**d)` of a dict, a list's items as star arguments, and `map()`/`filter()` other than as a consumer's argument (functions, lambdas, closures and bound methods are values, also as `Callable[[A], R]`; a def's decorators run; `f(*t)` passes a tuple's items, and `f(*args, **kwargs)` forwards a function's own) | M3 |
+| generators, `async`, `bytes` (`set` and `frozenset` are supported: CPython's tables, which iterate in its order) | M7 |
 | dict and multi-clause comprehensions, slice steps, `getattr`/`eval`, complex numbers, `match`, `:=` | [Further language coverage](#roadmap) |
 
 Programs that compile can still differ from CPython in a few documented ways: `int` is 64-bit

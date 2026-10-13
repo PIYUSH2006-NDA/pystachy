@@ -25,9 +25,10 @@
 #include <unwind.h>
 
 typedef int64_t I;
-typedef struct { I len; char s[]; } Str;              /* immutable, NUL-terminated */
+typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
+typedef struct { I len, kind, fill, mask, finger; I *keys, *hs; } Set; /* a set or frozenset, kind as Dict's; see sets */
 typedef struct { char *p; I n, cap; } Buf;
 typedef struct Exc Exc;                                /* a raised exception (see exceptions) */
 #define NONE INT64_MIN                                 /* omitted slice bound */
@@ -455,12 +456,29 @@ Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
 }
-Str *pys_str_mul(Str *a, I n) {
+/* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
+   The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */
+Str *pys_str_cat(I n, Str *a, Str *b, Str *c, Str *d, Str *e, Str *f, Str *g, Str *h) {
+  Str *p[8] = {a, b, c, d, e, f, g, h};
+  I len = 0;
+  for (int i = 0; i < 8; i++) len += i < n ? p[i]->len : 0;
+  Str *s = pys_alloc_atomic(sizeof(Str) + len + 1); s->len = len;
+  char *w = s->s;
+  for (int i = 0; i < 8; i++) if (i < n) { memcpy(w, p[i]->s, p[i]->len); w += p[i]->len; }
+  return s;
+}
+Str *pys_str_mul(Str *a, I n) {       /* as CPython's _PyBytes_Repeat: one byte is a memset, else the copied
+                                         prefix doubles, log2(n) memcpys rather than n */
   if (n < 0 || !a->len) n = 0;
   if (n && a->len > INT64_MAX / n) pys_fail("OverflowError: repeated string is too long");
   if (a->len * n > INT64_MAX - 64) pys_fail("MemoryError");
-  Str *s = pys_alloc_atomic(sizeof(Str) + a->len * n + 1); s->len = a->len * n;
-  for (I i = 0; i < n; i++) memcpy(s->s + i * a->len, a->s, a->len);
+  I m = a->len * n, k = a->len, c;
+  Str *s = pys_alloc_atomic(sizeof(Str) + m + 1); s->len = m;
+  if (k == 1) memset(s->s, a->s[0], m);
+  else if (m) {
+    memcpy(s->s, a->s, k);
+    for (; k < m; k += c) { c = k < m - k ? k : m - k; memcpy(s->s + k, s->s, c); }
+  }
   return s;
 }
 I pys_str_eq(Str *a, Str *b) { return a == b || (a->len == b->len && !memcmp(a->s, b->s, a->len)); }
@@ -695,6 +713,11 @@ I pys_shl(I a, I b) {
   return r;
 }
 I pys_shr(I a, I b) { if (b < 0) pys_fail("ValueError: negative shift count"); return a >> (b > 63 ? 63 : b); }
+I pys_int_bit_length(I a) {                  /* int.bit_length() and bit_count() count the bits of |a|: 2**63 for -2**63 */
+  uint64_t x = a < 0 ? 0 - (uint64_t)a : (uint64_t)a;
+  return x ? 64 - __builtin_clzll(x) : 0;    /* (clz(0) is undefined) */
+}
+I pys_int_bit_count(I a) { return __builtin_popcountll(a < 0 ? 0 - (uint64_t)a : (uint64_t)a); }
 double pys_fdiv(double a, double b) { if (b == 0) pys_fail("ZeroDivisionError: float division by zero"); return a / b; }
 double pys_idiv(I a, I b) {                  /* int / int, rounded once like CPython's true division */
   if (!b) pys_fail("ZeroDivisionError: division by zero");
@@ -775,14 +798,14 @@ double pys_m_atan2(double y, double x) { return atan2(y, x); }
 typedef struct { double hi, lo; } DL;
 static DL dl_fast_sum(double a, double b) { double x = a + b; return (DL){x, (a - x) + b}; }
 static DL dl_mul(double x, double y) { double z = x * y; return (DL){z, fma(x, y, -z)}; }
-static double vnorm(double *v, int n, double max) {
+static double vnorm(double *v, I n, double max) {
 #pragma clang fp contract(off)
   double csum = 1.0, frac1 = 0.0, frac2 = 0.0, x, h, scale; DL pr, sm; int e;
   if (max == 0.0 || n <= 1) return max;
   frexp(max, &e);
-  if (e < -1023) { for (int i = 0; i < n; i++) v[i] /= 0x1p-1022; return 0x1p-1022 * vnorm(v, n, max / 0x1p-1022); }
+  if (e < -1023) { for (I i = 0; i < n; i++) v[i] /= 0x1p-1022; return 0x1p-1022 * vnorm(v, n, max / 0x1p-1022); }
   scale = ldexp(1.0, -e);
-  for (int i = 0; i < n; i++) {
+  for (I i = 0; i < n; i++) {
     x = v[i] * scale; pr = dl_mul(x, x); sm = dl_fast_sum(csum, pr.hi);
     csum = sm.hi; frac1 += pr.lo; frac2 += sm.lo;
   }
@@ -812,13 +835,17 @@ I pys_m_isfinite(double x) { return isfinite(x); }
 I pys_m_isinf(double x) { return isinf(x); }
 I pys_m_isnan(double x) { return isnan(x); }
 I pys_m_trunc(double x) { return pys_f2i(trunc(x)); }
-/* math.gcd, lcm, isqrt, factorial, comb and perm are in runtime.py */
+/* math.gcd, lcm, isqrt, factorial, comb, perm, fsum and prod are in runtime.py */
 I pys_m_gcd(I a, I b);
 I pys_m_lcm(I a, I b);
 I pys_m_isqrt(I n);
 I pys_m_factorial(I n);
 I pys_m_comb(I n, I k);
 I pys_m_perm(I n, I k);
+double pys_m_fsum(List *l);
+I pys_m_prod_int(List *l, I start);
+double pys_m_prod_float(List *l, double start);
+List *pys_m_floats(List *l);
 
 static double pymod(double a, double b, double *q) {   /* CPython's float_divmod */
   double m = fmod(a, b), d = (a - m) / b;
@@ -870,8 +897,8 @@ I pys_floor(double d) { return pys_f2i(floor(d)); }
 I pys_ceil(double d) { return pys_f2i(ceil(d)); }
 
 /* ---------- generic repr / equality / ordering driven by a type descriptor ----------
-   i int, f float, b bool, s str, L<e> list, D<k><v> dict, T<n><e...> tuple, O<id> object
-   of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
+   i int, f float, b bool, s str, L<e> list, D<k><v> dict, T<n><e...> tuple, S<e> set, F<e>
+   frozenset, O<id> object of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
    has three digits or more (O007, O1234): a letter or the end of the descriptor follows it;
    ?<e> None (null) or a value of <e>; E an exception (an Exc) */
 I pys_obj_eq(I c, I a, I b);
@@ -903,7 +930,7 @@ static I unbox(I v, const char *d) { return *d == 'i' || *d == 'f' || *d == 'b' 
 static const char *skip(const char *d) {
   char c = *d++;
   if (c == 'O') { d += 3; while (*d >= '0' && *d <= '9') d++; return d; }
-  if (c == 'L' || c == '?') return skip(d);
+  if (c == 'L' || c == '?' || c == 'S' || c == 'F') return skip(d);
   if (c == 'D') return skip(skip(d));
   if (c == 'T') for (int n = *d++ - '0'; n > 0; n--) d = skip(d);
   return d;
@@ -925,7 +952,14 @@ static I resc(char *t, const char *s, I len, char q, I *n) {   /* the character 
 static void repr_str(Buf *b, Str *s) {
   char q = rquote(s->s, s->len), t[12];
   put(b, &q, 1);
-  for (I i = 0, n; i < s->len; i += n) put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  for (I i = 0, n; i < s->len; i += n) {
+    for (n = 0; i + n < s->len; n++) {   /* a run of printable ASCII, which resc copies as it is: one put */
+      unsigned char c = s->s[i + n];
+      if (c < 32 || c > 126 || c == q || c == '\\') break;
+    }
+    if (n) put(b, s->s + i, n);
+    else put(b, t, resc(t, s->s + i, s->len - i, q, &n));
+  }
   put(b, &q, 1);
 }
 static const char *repr(Buf *b, I v, const char *d) {
@@ -952,6 +986,13 @@ static const char *repr(Buf *b, I v, const char *d) {
     }
     put(b, "}", 1); pys_repr_leave(m); return skip(dv);
   }
+  case 'S': case 'F': {                             /* set() or {1, 2}; frozenset() or frozenset({1, 2}) */
+    Set *s = (Set *)v; int f = d[-1] == 'F';
+    if (!s->len) { put(b, f ? "frozenset()" : "set()", f ? 11 : 5); return skip(d); }
+    put(b, f ? "frozenset({" : "{", f ? 11 : 1);
+    for (I i = 0, n = 0; i <= s->mask; i++) if (s->hs[i] != -1) { if (n++) put(b, ", ", 2); repr(b, s->keys[i], d); }
+    put(b, f ? "})" : "}", f ? 2 : 1); return skip(d);
+  }
   case 'T': {
     if (!v) { put(b, "None", 4); return skip(d - 1); }
     int n = *d++ - '0'; I *t = (I *)v; put(b, "(", 1);
@@ -966,13 +1007,14 @@ static const char *repr(Buf *b, I v, const char *d) {
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
 static I entry(Dict *d, I k);
+I pys_set_cmp(Set *a, Set *b, I op);
 static int eqv(I a, I b, const char *d);
 /* Container items use identity before equality (PyObject_RichCompareBool). Keep this
    separate from direct comparison: equal unboxed float bits need not compare equal,
    and an optional scalar's box does not give that scalar Python object identity. */
 static int eqitem(I a, I b, const char *d) {
   char c = d[*d == '?'];
-  return (a == b && (c == 'L' || c == 'D' || c == 'T')) || eqv(a, b, d);
+  return (a == b && (c == 'L' || c == 'D' || c == 'T' || c == 'S' || c == 'F')) || eqv(a, b, d);
 }
 #ifndef EQ_PROBE
 #define EQ_PROBE()
@@ -1005,6 +1047,7 @@ static int eqv(I a, I b, const char *d) {
     for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return 0;
     return 1;
   }
+  case 'S': case 'F': return pys_set_cmp((Set *)a, (Set *)b, 4);   /* (a set equals a frozenset of its elements) */
   case 'O': return a == b || pys_obj_eq(ocls(d + 1), a, b);   /* identity first, like CPython */
   case '?': return a && b ? eqv(unbox(a, d + 1), unbox(b, d + 1), d + 1) : a == b;   /* None equals only None */
   case 'E': return pys_exc_id((Exc *)a) == pys_exc_id((Exc *)b);
@@ -1032,7 +1075,9 @@ static int opv(I a, I b, const char *d, I op) {
     for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return opv(x[i], y[i], e, op);
     return cmpop(0, op);
   }
+  case 'S': case 'F': return pys_set_cmp((Set *)a, (Set *)b, op) != 0;   /* subsets */
   case 'O': return pys_obj_cmp(ocls(d + 1), op, a, b) != 0;
+  case 'K': return opv(((I *)a)[0], ((I *)b)[0], d + 1, op);   /* key='s records {key, value}: their keys */
   case 'D': failf("TypeError: '%s' not supported between instances of 'dict' and 'dict'", op == 0 ? "<" : op == 1 ? "<=" : op == 2 ? ">" : ">=");
   case '?':
     if (a && b) return opv(unbox(a, d + 1), unbox(b, d + 1), d + 1, op);
@@ -1153,8 +1198,8 @@ void pys_list_reverse(List *l) { rev(l->a, l->len); }
    observable (where NaNs end up, what an __lt__ with side effects sees): each ISLT(x, y) there is
    one LT(x, y) here, in the same order. Natural runs, extended to minrun items by binary insertion,
    are merged as the powersort policy decides; a merge copies the shorter run to a buffer and
-   gallops while one side keeps winning. No key=; CPython's type-specialized compares make the same
-   comparisons as opv. As in CPython (ob_item NULL, allocated -1), the list looks empty while it is
+   gallops while one side keeps winning. key= sorts records of the keys and the items (below,
+   pys_list_keyed); CPython's type-specialized compares make the same comparisons as opv. As in CPython (ob_item NULL, allocated -1), the list looks empty while it is
    sorted, and growing it from __lt__ makes the sort fail afterwards. Items can exist only in the
    merge buffer when a comparison runs the collector: the buffer is scanned memory, and it and the
    item array stay in volatile fields of the MergeState (MS) on the stack. A comparison that
@@ -1397,6 +1442,45 @@ void pys_list_sort_r(List *l, Str *d, I reverse) {
   l->len = n; l->cap = cap; l->a = a;
 }
 void pys_list_sort(List *l, Str *d) { pys_list_sort_r(l, d, 0); }
+/* key= (sorted(xs, key=f), xs.sort(key=f)): CPython sorts the keys and moves the values along with
+   them (its sortslice). Here each key and its value make a record {key, value}, and a list of the
+   records sorts by the descriptor K followed by the keys' (opv compares two records' first slots),
+   so the sort makes CPython's comparisons, in its order; the values then go back in the order of
+   the records (pys_list_unkey). xs.sort(key=f) gives its items up while compiled code calls f on
+   each (pys_list_take), as CPython's list does: it looks empty meanwhile, a change to it makes the
+   sort fail afterwards (pys_list_give), and a raise gives it its items back (untake): as they were
+   if a key call raised, else in the order the sort reached when a comparison raised. */
+typedef struct { List t; List *l, *p; } Taken;     /* the items l gave up, and the records sorting them */
+static void untake(void *p) {
+  Taken *k = p;
+  if (k->p) for (I i = 0; i < k->p->len; i++) k->t.a[i] = ((I *)k->p->a[i])[1];
+  k->l->len = k->t.len; k->l->cap = k->t.cap; k->l->a = k->t.a;
+}
+List *pys_list_take(List *l) {
+  Taken *k = pys_alloc(sizeof(Taken));
+  k->t = *l; k->l = l; k->p = 0;
+  l->len = l->cap = 0; l->a = sorting;
+  if (eh) unwind_push(untake, k);
+  return &k->t;
+}
+List *pys_list_keyed(List *l, List *keys, I taken) {   /* the records of l's items and their keys */
+  I n = l->len, *r = pys_alloc(n * 16 + 8);
+  List *p = pys_list_new(n);
+  for (I i = 0; i < n; i++) { r[2 * i] = keys->a[i]; r[2 * i + 1] = l->a[i]; p->a[i] = (I)(r + 2 * i); }
+  p->len = n;
+  if (taken) ((Taken *)l)->p = p;                    /* (l is what pys_list_take returned) */
+  return p;
+}
+void pys_list_unkey(List *l, List *p) {
+  for (I i = 0; i < p->len; i++) l->a[i] = ((I *)p->a[i])[1];
+}
+void pys_list_give(List *t) {
+  Taken *k = (Taken *)t;
+  int changed = k->l->a != sorting;                 /* items added meanwhile are dropped, as in CPython */
+  if (eh) unwind_pop();
+  untake(k);
+  if (changed) pys_fail("ValueError: list modified during sort");
+}
 I pys_list_minmax(List *l, Str *d, I max) {   /* keeps the item it compared, whatever the comparison did to l */
   if (!l->len) pys_fail(max ? "ValueError: max() iterable argument is empty" : "ValueError: min() iterable argument is empty");
   I m = l->a[0];
@@ -1419,6 +1503,16 @@ double pys_sum_float(List *l, double s) { return fsum(l, 0, s); }
 /* an int start: CPython adds the first float to it plainly, then sums the rest compensated */
 double pys_sum_float_int(List *l, I s) { return l->len ? fsum(l, 1, (double)s + dbl(l->a[0])) : (double)s; }
 double pys_sum_int_float(List *l, double s) { for (I i = 0; i < l->len; i++) s += (double)l->a[i]; return s; }   /* ints: not compensated */
+double pys_m_dist(List *p, List *q) {   /* math.dist: hypot's vnorm of the differences of two lists of floats */
+  if (p->len != q->len) pys_fail("ValueError: both points must have the same number of dimensions");
+  double b[16], *v = p->len > 16 ? pys_alloc_atomic(p->len * 8) : b, max = 0.0; int nan = 0;
+  for (I i = 0; i < p->len; i++) {
+    v[i] = fabs(dbl(p->a[i]) - dbl(q->a[i])); nan |= isnan(v[i]);
+    if (v[i] > max) max = v[i];   /* a NaN is never the max */
+  }
+  if (isinf(max)) return max;
+  return nan ? NAN : vnorm(v, p->len, max);
+}
 I pys_range_len(I a, I b, I s) {                     /* len(range(a, b, s)) as an unsigned count */
   if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
   uint64_t d = s > 0 ? (uint64_t)b - (uint64_t)a : (uint64_t)a - (uint64_t)b, st = s > 0 ? (uint64_t)s : -(uint64_t)s;
@@ -1429,11 +1523,13 @@ I pys_range_has(I x, I a, I b, I s) {               /* x in range(a, b, s) */
   if (s > 0 ? !(a <= x && x < b) : !(b < x && x <= a)) return 0;
   return (s > 0 ? (uint64_t)x - (uint64_t)a : (uint64_t)a - (uint64_t)x) % (s > 0 ? (uint64_t)s : -(uint64_t)s) == 0;
 }
-List *pys_range_list(I a, I b, I s) {
-  List *l = pys_list_new(0);
-  if (!s) pys_fail("ValueError: range() arg 3 must not be zero");
-  for (I i = a; s > 0 ? i < b : i > b;) { pys_list_append(l, i); if (__builtin_add_overflow(i, s, &i)) break; }
-  return l;
+List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once at its length, as CPython does */
+  uint64_t n = (uint64_t)pys_range_len(a, b, s);
+  if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
+  if (n > INT64_MAX >> 4) pys_fail("MemoryError");
+  List *l = pys_list_new((I)n);
+  for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
+  l->len = (I)n; return l;
 }
 List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (I)pys_chr((unsigned char)s->s[i])); return l; }
 
@@ -1472,7 +1568,15 @@ static uint64_t hval(I k, const char *d) {           /* a tuple key's hash (or i
   return h ^ h >> 29;
 }
 static uint64_t hsh(Dict *d, I k) {                  /* kind: 0 int keys, 1 str keys, else a tuple key's descriptor */
-  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)(d->kind ? pys_hash_str((Str *)k) : pys_hash_int(k));
+  if (d->kind == 1) {
+    Str *s = (Str *)k;
+    if (!s->dict_hash) {                /* zeroed allocations and writable literals start uncached */
+      uint64_t h = (uint64_t)pys_hash_str(s);
+      s->dict_hash = h ? h : 1;         /* cache the dictionary's normalized hash, also for tuple items */
+    }
+    return s->dict_hash;
+  }
+  uint64_t h = d->kind > 1 ? hval(k, ((Str *)d->kind)->s) : (uint64_t)pys_hash_int(k);
   return h ? h : 1;                                  /* 0 marks a hole */
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */
@@ -1524,12 +1628,13 @@ LOOKUP I pys_dict_find(Dict *d, I k) { return entry(d, k); }
 LOOKUP I pys_dict_entry(Dict *d, I k) { I e = entry(d, k); if (e < 0) keyerr(d, k); return e; }
 void pys_dict_entry_set(Dict *d, I e, I v) { d->vals[e] = v; }
 LOOKUP I pys_dict_get(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : d->vals[e]; }
-LOOKUP void pys_dict_set(Dict *d, I k, I v) {
-  uint64_t h = hsh(d, k); I f = -1, i = dfind(d, k, h, &f);
+static void dset(Dict *d, I k, uint64_t h, I v) {   /* d[k] = v, k's hash h */
+  I f = -1, i = dfind(d, k, h, &f);
   if (i >= 0) { d->vals[d->idx[i] - 1] = v; return; }
   if (d->n >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
   d->keys[d->n] = k; d->vals[d->n] = v; d->hs[d->n] = h; d->idx[f] = (int32_t)++d->n; d->len++;
 }
+LOOKUP void pys_dict_set(Dict *d, I k, I v) { dset(d, k, hsh(d, k), v); }
 static I dpop(Dict *d, I k, I dflt, int has) {
   I i = dfind(d, k, hsh(d, k), 0);
   if (i < 0) { if (!has) keyerr(d, k); return dflt; }
@@ -1579,20 +1684,304 @@ List *pys_dict_items(Dict *d) {
    sparse (8 slots, or more items than USABLE_FRACTION(size / 2)) and otherwise inserts the items
    into a table sized for them (estimate_log2_keysize); dict.copy() clones a table with at most a
    third of holes, and otherwise merges the same way */
-static Dict *clone(Dict *d) {                         /* the same table, holes included */
-  Dict *r = pys_dict_new(d->kind, 0); I u = d->size * 2 / 3;
+static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
+  I u = d->size * 2 / 3;
   r->keys = pys_alloc(u * 8); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
-  return r;
 }
+static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
+static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }
 Dict *pys_dict_from(Dict *d) {
-  if (d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len)) return clone(d);
+  if (clean(d)) return clone(d);
   Dict *r = pys_dict_new(d->kind, 0);
   if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
   return r;
 }
 Dict *pys_dict_copy(Dict *d) { return d->len && d->len >= d->n * 2 / 3 ? clone(d) : pys_dict_from(d); }
+/* d.update(o) of a dict of d's type, as CPython 3.13's dict_dict_merge: an empty d takes a clone
+   of o's table where dict(o) would, else d is resized once for both dicts' items (if o has more
+   than d's table could take), then o's items are inserted in order (with the hashes o keeps) */
+void pys_dict_update(Dict *d, Dict *o) {
+  if (o == d || !o->len) return;
+  if (!d->len && clean(o)) { retable(d, o); return; }
+  if ((d->size ? d->size : 8) * 2 / 3 < o->len) build(d, d, keysize(((d->len + o->len) * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], o->vals[e]);
+}
+/* d.update(pairs) of a list of (key, value) tuples, and dict.fromkeys(keys, v) of a list: one
+   insertion per item, as PyDict_MergeFromSeq2 and _PyDict_FromKeys make them */
+void pys_dict_update_pairs(Dict *d, List *l) { for (I i = 0; i < l->len; i++) { I *t = (I *)l->a[i]; pys_dict_set(d, t[0], t[1]); } }
+Dict *pys_dict_fromkeys(I kind, List *l, I v) { Dict *d = pys_dict_new(kind, 0); for (I i = 0; i < l->len; i++) pys_dict_set(d, l->a[i], v); return d; }
+/* dict.fromkeys(o, v) of a dict o: sized for o's keys at once, as dict_dict_fromkeys does */
+Dict *pys_dict_fromkeys_dict(Dict *o, I v) {
+  Dict *d = pys_dict_new(o->kind, 0);
+  build(d, d, keysize((o->len * 3 + 1) / 2));
+  for (I e = 0; e < o->n; e++) if (o->hs[e]) dset(d, o->keys[e], o->hs[e], v);
+  return d;
+}
+
+/* ---------- sets: CPython's setobject.c ----------
+   A set or frozenset is CPython 3.13's table, since its slots decide the order in which a loop,
+   print() or list() sees the elements: there is no entry array in insertion order, as a dict
+   has, but mask + 1 slots (a power of two, 8 at first and after clear()) with each element
+   where its probes first found room. A probe looks at up to ten adjacent slots (one at the end
+   of the table), then moves on by CPython's perturbed step. hs[i] is the hash of keys[i], or -1
+   in a slot that holds no element: keys[i] is then 0 if none ever was there (which ends a
+   lookup), 1 if one was removed (CPython's dummy, which an insertion reuses: the last one its
+   probes passed). fill counts the slots that are not empty, dummies too, and len the elements.
+   An insertion that brings fill to 3/5 of the slots rebuilds the table, without dummies, for 4
+   times the elements (2 times above 50000); merges and differences resize as CPython's do, and
+   set(s), s | t, s & t, ... are made as CPython makes them, since that decides their tables
+   too. The hashes are CPython's where its own do not change from run to run, so that a set of
+   them iterates in CPython's order: an int's is the int modulo 2**61 - 1 with its sign (-1 is
+   -2), a bool's 0 or 1, None's 0xFCA86420, a tuple's xxHash's rounds over its items'; a str's
+   is the dict's hash of it (CPython's depends on PYTHONHASHSEED, so no order is CPython's for
+   strs). kind is Dict.kind: 0 int elements, 1 str, else a Str *, the descriptor of tuple
+   elements; equality is a dict key's. A frozenset is a set that the compiler gives no method
+   that changes it. */
+#define LINEAR_PROBES 9
+#define NONE_HASH 0xFCA86420                         /* hash(None) since CPython 3.12 */
+static I hint(I v) {                                 /* long_hash */
+  uint64_t u = v < 0 ? 0 - (uint64_t)v : (uint64_t)v;
+  I h = (I)(u % ((1ULL << 61) - 1));
+  h = v < 0 ? -h : h;
+  return h == -1 ? -2 : h;
+}
+static I hstr(Str *s) { Dict t = {.kind = 1}; I h = (I)hsh(&t, (I)s); return h == -1 ? -2 : h; }
+static I hitem(I k, const char *d);
+static I htuple(I *t, const char *d) {               /* tuplehash */
+  uint64_t acc = 2870177450012600261ULL; const char *e = d + 2; int n = d[1] - '0';
+  for (int i = 0; i < n; i++, e = skip(e)) {
+    acc += (uint64_t)hitem(t[i], e) * 14029467366897019727ULL;
+    acc = acc << 31 | acc >> 33;
+    acc *= 11400714785074694791ULL;
+  }
+  acc += (uint64_t)n ^ (2870177450012600261ULL ^ 3527539ULL);
+  return acc == (uint64_t)-1 ? 1546275796 : (I)acc;
+}
+static I hitem(I k, const char *d) {                 /* the hash of a tuple element's item k, by its descriptor */
+  if (*d == '?' || *d == 's') {
+    if (!k) return NONE_HASH;                        /* (None: also a looked-up key's, see hval) */
+    k = unbox(k, d + (*d == '?'));
+    d += *d == '?';
+  }
+  return *d == 'b' ? k : *d == 's' ? hstr((Str *)k) : *d == 'T' ? htuple((I *)k, d) : hint(k);
+}
+static I shash(Set *s, I k) { return s->kind == 0 ? hint(k) : s->kind == 1 ? hstr((Str *)k) : htuple((I *)k, ((Str *)s->kind)->s); }
+static int skeq(Set *s, I a, I b) {
+  return a == b || (s->kind == 1 ? pys_str_eq((Str *)a, (Str *)b) : s->kind > 1 && eqv(a, b, ((Str *)s->kind)->s));
+}
+static void stable(Set *s, I size) {                 /* an empty table of size slots */
+  s->keys = pys_alloc(size * 8); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
+  s->mask = size - 1; s->fill = 0;
+}
+Set *pys_set_new(I kind) { Set *s = pys_alloc(sizeof(Set)); s->kind = kind; stable(s, 8); return s; }
+static I slook(Set *s, I k, I h) {                   /* set_lookkey: k's slot, else the empty one that ends its probes */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    I probes = i + LINEAR_PROBES <= mask ? LINEAR_PROBES : 0;
+    for (uint64_t j = i;; j++) {
+      DICT_PROBE();
+      if (s->hs[j] == h ? skeq(s, s->keys[j], k) : s->hs[j] == -1 && !s->keys[j]) return (I)j;
+      if (!probes--) break;
+    }
+  }
+}
+static void sclean(Set *s, I k, I h) {               /* set_insert_clean: k into a table that has no dummy, nor k */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h, e;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    if (s->hs[e = i] == -1) break;
+    if (i + LINEAR_PROBES <= mask) {
+      int j = 0;
+      while (j < LINEAR_PROBES && s->hs[++e] != -1) j++;
+      if (j < LINEAR_PROBES) break;
+    }
+  }
+  s->keys[e] = k; s->hs[e] = h;
+}
+static void sresize(Set *s, I minused) {             /* set_table_resize: the first size > minused, without dummies */
+  I size = 8, m = s->mask, *keys = s->keys, *hs = s->hs;
+  while (size <= minused) size <<= 1;
+  if (size == 8 && m == 7 && s->fill == s->len) return;   /* (the small table without dummies stays as it is) */
+  stable(s, size); s->fill = s->len;
+  for (I i = 0; i <= m; i++) if (hs[i] != -1) sclean(s, keys[i], hs[i]);
+}
+static void sadd(Set *s, I k, I h) {                 /* set_add_entry: k, whose hash is h, unless an equal element is there */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h;
+  I free = -1;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    I probes = i + LINEAR_PROBES <= mask ? LINEAR_PROBES : 0;
+    for (uint64_t j = i;; j++) {
+      DICT_PROBE();
+      if (s->hs[j] == h) { if (skeq(s, s->keys[j], k)) return; }
+      else if (s->hs[j] == -1 && s->keys[j]) free = (I)j;
+      else if (s->hs[j] == -1) {
+        if (free >= 0) { s->keys[free] = k; s->hs[free] = h; s->len++; return; }
+        s->keys[j] = k; s->hs[j] = h; s->len++;
+        if ((uint64_t)++s->fill * 5 >= mask * 3) sresize(s, s->len > 50000 ? s->len * 2 : s->len * 4);
+        return;
+      }
+      if (!probes--) break;
+    }
+  }
+}
+static int sdiscard(Set *s, I k, I h) {              /* set_discard_entry: was k there */
+  I j = slook(s, k, h);
+  if (s->hs[j] == -1) return 0;
+  s->keys[j] = 1; s->hs[j] = -1; s->len--;
+  return 1;
+}
+static int shas(Set *s, I k, I h) { return s->hs[slook(s, k, h)] != -1; }
+static void smerge(Set *s, Set *o) {                 /* set_merge: o's elements into s */
+  if (o == s || !o->len) return;
+  if ((s->fill + o->len) * 5 >= s->mask * 3) sresize(s, (s->len + o->len) * 2);
+  if (!s->fill && s->mask == o->mask && o->fill == o->len) {   /* tables of one size, o's without dummies: a copy */
+    memcpy(s->keys, o->keys, (o->mask + 1) * 8); memcpy(s->hs, o->hs, (o->mask + 1) * 8);
+    s->fill = o->fill; s->len = o->len; return;
+  }
+  if (!s->fill) {
+    s->fill = s->len = o->len;
+    for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sclean(s, o->keys[i], o->hs[i]);
+    return;
+  }
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sadd(s, o->keys[i], o->hs[i]);
+}
+static void sshrink(Set *s) {                        /* after a difference: a rebuild once a quarter of the slots are dummies */
+  if ((uint64_t)(s->fill - s->len) > (uint64_t)s->mask / 4) sresize(s, s->len > 50000 ? s->len * 2 : s->len * 4);
+}
+static void ssymupd(Set *s, Set *o) {                /* set_symmetric_difference_update_set */
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1 && !sdiscard(s, o->keys[i], o->hs[i])) sadd(s, o->keys[i], o->hs[i]);
+}
+static int ssubset(Set *a, Set *b) {                 /* set_issubset of a set */
+  if (a->len > b->len) return 0;
+  for (I i = 0; i <= a->mask; i++) if (a->hs[i] != -1 && !shas(b, a->keys[i], a->hs[i])) return 0;
+  return 1;
+}
+LOOKUP void pys_set_add(Set *s, I k) { sadd(s, k, shash(s, k)); }
+LOOKUP I pys_set_has(Set *s, I k) { return shas(s, k, shash(s, k)); }
+LOOKUP void pys_set_discard(Set *s, I k) { sdiscard(s, k, shash(s, k)); }
+LOOKUP void pys_set_remove(Set *s, I k) {
+  if (sdiscard(s, k, shash(s, k))) return;
+  Buf b = {0}; put(&b, "KeyError: ", 10); repr(&b, k, s->kind > 1 ? ((Str *)s->kind)->s : s->kind ? "s" : "i"); put(&b, "", 1); pys_fail(b.p);
+}
+I pys_set_pop(Set *s) {                              /* set_pop: the first element from the finger on */
+  if (!s->len) pys_fail("KeyError: 'pop from an empty set'");
+  I i = s->finger & s->mask;
+  while (s->hs[i] == -1) if (++i > s->mask) i = 0;
+  I k = s->keys[i];
+  s->keys[i] = 1; s->hs[i] = -1; s->len--; s->finger = i + 1;
+  return k;
+}
+void pys_set_clear(Set *s) { stable(s, 8); s->len = 0; }
+/* set(o), s.copy() and frozenset(o) of a set o: o merged into a new set */
+Set *pys_set_copy(Set *s) { Set *r = pys_set_new(s->kind); smerge(r, s); return r; }
+/* s.update(o) (s |= o) of a set o; of a list (any other iterable's items), one insertion per item;
+   of a dict, one resize for all its keys, then theirs in order */
+void pys_set_update(Set *s, Set *o) { smerge(s, o); }
+void pys_set_update_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) pys_set_add(s, l->a[i]); }
+void pys_set_update_dict(Set *s, Dict *d) {
+  if ((s->fill + d->len) * 5 >= s->mask * 3) sresize(s, (s->len + d->len) * 2);
+  for (I e = 0; e < d->n; e++) if (d->hs[e]) pys_set_add(s, d->keys[e]);
+}
+/* s.union(..., o, ...) after the first: o, unless it is s itself (r: the union so far) */
+void pys_set_union_more(Set *r, Set *s, Set *o) { if (o != s) smerge(r, o); }
+Set *pys_set_or(Set *a, Set *b) { Set *r = pys_set_copy(a); if (b != a) smerge(r, b); return r; }
+/* s & o (set_intersection): the elements of the smaller set (o if both have as many), in its order,
+   that the other has; of a list, its items in order that s has, until there are as many as s has */
+Set *pys_set_and(Set *a, Set *b) {
+  if (a == b) return pys_set_copy(a);
+  Set *r = pys_set_new(a->kind);
+  if (b->len > a->len) { Set *t = a; a = b; b = t; }
+  for (I i = 0; i <= b->mask; i++) if (b->hs[i] != -1 && shas(a, b->keys[i], b->hs[i])) sadd(r, b->keys[i], b->hs[i]);
+  return r;
+}
+Set *pys_set_and_list(Set *s, List *l) {
+  Set *r = pys_set_new(s->kind);
+  for (I i = 0; i < l->len; i++) {
+    I k = l->a[i], h = shash(s, k);
+    if (shas(s, k, h)) { sadd(r, k, h); if (r->len >= s->len) break; }
+  }
+  return r;
+}
+/* s &= o and s.intersection_update(...): s takes the table of the intersection (set_swap_bodies) */
+void pys_set_assign(Set *s, Set *t) { s->len = t->len; s->fill = t->fill; s->mask = t->mask; s->keys = t->keys; s->hs = t->hs; }
+/* s -= o and s.difference_update(o) (set_difference_update_internal): o's elements discarded (those
+   of s & o, if o is more than 8 times larger); a list's items in order */
+void pys_set_isub(Set *s, Set *o) {
+  if (s == o) { pys_set_clear(s); return; }
+  if ((o->len >> 3) > s->len) o = pys_set_and(s, o);
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sdiscard(s, o->keys[i], o->hs[i]);
+  sshrink(s);
+}
+void pys_set_isub_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) pys_set_discard(s, l->a[i]); sshrink(s); }
+/* s - o (set_difference): a copy of s less o's elements if s has more than 4 times as many, else
+   the elements of s that o has not, inserted into a new set; of a list, the copy less its items;
+   of a dict, as of a set, with its keys */
+Set *pys_set_sub(Set *a, Set *b) {
+  if ((a->len >> 2) > b->len) { Set *r = pys_set_copy(a); pys_set_isub(r, b); return r; }
+  Set *r = pys_set_new(a->kind);
+  for (I i = 0; i <= a->mask; i++) if (a->hs[i] != -1 && !shas(b, a->keys[i], a->hs[i])) sadd(r, a->keys[i], a->hs[i]);
+  return r;
+}
+Set *pys_set_sub_list(Set *s, List *l) { Set *r = pys_set_copy(s); pys_set_isub_list(r, l); return r; }
+Set *pys_set_sub_dict(Set *s, Dict *d) {
+  if ((s->len >> 2) > d->len) {
+    Set *r = pys_set_copy(s);
+    for (I e = 0; e < d->n; e++) if (d->hs[e]) pys_set_discard(r, d->keys[e]);
+    sshrink(r);
+    return r;
+  }
+  Set *r = pys_set_new(s->kind);
+  for (I i = 0; i <= s->mask; i++) if (s->hs[i] != -1 && !pys_dict_has(d, s->keys[i])) sadd(r, s->keys[i], s->hs[i]);
+  return r;
+}
+/* s ^ o (set_symmetric_difference): a new set of o's elements (a list's items, a dict's keys), with
+   each element of s then removed if it is there, else added */
+Set *pys_set_xor(Set *a, Set *b) { Set *r = pys_set_new(a->kind); smerge(r, b); ssymupd(r, a); return r; }
+Set *pys_set_xor_list(Set *s, List *l) { Set *r = pys_set_new(s->kind); pys_set_update_list(r, l); ssymupd(r, s); return r; }
+Set *pys_set_xor_dict(Set *s, Dict *d) { Set *r = pys_set_new(s->kind); pys_set_update_dict(r, d); ssymupd(r, s); return r; }
+/* s ^= o and s.symmetric_difference_update(o): each element of o removed from s if it is there, else
+   added (s ^= s empties s); a list's items go through a set of them first, a dict's keys do not */
+void pys_set_ixor(Set *s, Set *o) { if (s == o) pys_set_clear(s); else ssymupd(s, o); }
+void pys_set_ixor_list(Set *s, List *l) { Set *o = pys_set_new(s->kind); pys_set_update_list(o, l); ssymupd(s, o); }
+void pys_set_ixor_dict(Set *s, Dict *d) {
+  for (I e = 0; e < d->n; e++) if (d->hs[e]) { I k = d->keys[e], h = shash(s, k); if (!sdiscard(s, k, h)) sadd(s, k, h); }
+}
+/* a op b for op 0..5 = < <= > >= == != (set_richcompare): subsets and equality */
+I pys_set_cmp(Set *a, Set *b, I op) {
+  switch (op) {
+  case 0: return a->len < b->len && ssubset(a, b);
+  case 1: return ssubset(a, b);
+  case 2: return a->len > b->len && ssubset(b, a);
+  case 3: return ssubset(b, a);
+  case 4: return a->len == b->len && ssubset(a, b);
+  }
+  return a->len != b->len || !ssubset(a, b);
+}
+/* s.issubset(l), s.issuperset(l) and s.isdisjoint(...) */
+I pys_set_le_list(Set *s, List *l) { return pys_set_and_list(s, l)->len == s->len; }
+I pys_set_ge_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) if (!pys_set_has(s, l->a[i])) return 0; return 1; }
+I pys_set_isdisjoint(Set *a, Set *b) {
+  if (a == b) return !a->len;
+  if (b->len > a->len) { Set *t = a; a = b; b = t; }
+  for (I i = 0; i <= b->mask; i++) if (b->hs[i] != -1 && shas(a, b->keys[i], b->hs[i])) return 0;
+  return 1;
+}
+I pys_set_isdisjoint_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) if (pys_set_has(s, l->a[i])) return 0; return 1; }
+/* for loops: the slot of the next element from slot i, or -1 at the end, failing like CPython's set
+   iterator when the set changed size meanwhile (used: its len when the loop started) */
+I pys_set_next(Set *s, I i, I used) {
+  if (s->len != used) pys_fail("RuntimeError: Set changed size during iteration");
+  while (i <= s->mask && s->hs[i] == -1) i++;
+  return i > s->mask ? -1 : i;
+}
+I pys_set_key(Set *s, I i) { return s->keys[i]; }
+/* list(s), sorted(s), ...: the elements in the order a loop sees them */
+List *pys_set_list(Set *s) {
+  List *l = pys_list_new(s->len);
+  for (I i = 0; i <= s->mask; i++) if (s->hs[i] != -1) l->a[l->len++] = s->keys[i];
+  return l;
+}
 
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:
@@ -1608,7 +1997,7 @@ static I u8enc(char *o, I c) {
   o[0] = 0xF0 | c >> 18; o[1] = 0x80 | (c >> 12 & 63); o[2] = 0x80 | (c >> 6 & 63); o[3] = 0x80 | (c & 63); return 4;
 }
 static const char *tyname(char d) {
-  return d == 'i' ? "int" : d == 'b' ? "bool" : d == 'f' ? "float" : d == 's' ? "str" : d == 'L' ? "list" : d == 'D' ? "dict" : d == 'T' ? "tuple" : "object";
+  return d == 'i' ? "int" : d == 'b' ? "bool" : d == 'f' ? "float" : d == 's' ? "str" : d == 'L' ? "list" : d == 'D' ? "dict" : d == 'T' ? "tuple" : d == 'S' ? "set" : d == 'F' ? "frozenset" : "object";
 }
 /* The mini-language itself is in runtime.py (pys_format_str, _int, _float); pys_format picks one
    by the descriptor, and pys_fmt_float writes the digits of a float for a presentation type with

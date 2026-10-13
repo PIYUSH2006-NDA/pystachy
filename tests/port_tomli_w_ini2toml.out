@@ -1,0 +1,30 @@
+[metadata]
+name = "demo"
+version = "1.0"
+
+[options]
+packages = "find:"
+install_requires = """
+requests
+tomli; python_version < \"3.11\""""
+
+["tool:pytest"]
+addopts = "-ra"
+---
+[empty]
+
+["a.b"]
+k = "v"
+
+["séction"]
+name = "Zoë €"
+multi = """
+l1 \"q\"
+l2\\\\x"""
+empty = ""
+url = "https://example.org/a=b"
+tab = "a	b"
+
+["tool:pytest"]
+addopts = "-ra"
+[exit 0]
