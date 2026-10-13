@@ -123,6 +123,12 @@ check-ir: pystachy
 check-runtime:
 	$(PY) tools/check_runtime.py
 
+# every recording of a differential test must be what CPython (of .python-version) prints, every
+# deviation still deviate, lib/'s copies be CPython's files, and no *.rej, *.orig or core file lie in
+# the tree (tests/record.sh --check; CI's Lint workflow runs it)
+check-recordings:
+	PYTHON="$(PY)" tests/record.sh --check
+
 # ruff (findings only, ruff.toml), shellcheck of the scripts as POSIX sh, and clang's warnings on the C
 # sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
 lint:
@@ -133,4 +139,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings lint clean

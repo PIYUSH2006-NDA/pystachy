@@ -307,7 +307,8 @@ matches CPython's. Good places to start:
 How a test works: put a program in `tests/NAME.py`, record CPython's output with
 `tests/record.sh NAME`, and `make test` checks it under the JIT and AOT. A program that must be
 rejected goes in `tests/errors/`, with the expected message in a comment on its first line.
-Before a pull request, run `make verify`, which runs what CI runs; after a code-generator
+Before a pull request, run `make verify`, which runs what CI runs, and `make lint` and
+`make check-recordings`, which its Lint workflow runs; after a code-generator
 refactor, `make irsame REF=main` shows that no program's IR changed. Work on the typed IR or
 `runtime.py` touches the code generator and the runtime, so open an issue before starting
 something large there.

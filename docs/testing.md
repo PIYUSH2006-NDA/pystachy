@@ -16,18 +16,20 @@ honest.
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
+| `make check-recordings` | `tests/record.sh --check`: CPython still prints every recorded expected output, every deviation still deviates, `lib/`'s copies are CPython's files, and no stray file lies in the tree ([below](#recording-expected-output)) |
 | `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
 | `make jitprobe` | unused functions do not reach `lli`; live calls, defaults, import effects and runtime callbacks match CPython |
-| `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push |
+| `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push, with `make check-recordings` after it |
 
 ## Differential tests
 
 `tests/run.sh` runs every `tests/*.py` twice — JIT and AOT — and compares stdout plus exit
 status with what CPython recorded in `tests/*.out` (stdin from `tests/*.in`), and the last
-stderr line with `tests/*.err` where CPython wrote to stderr. `tests/record.sh NAME`
-records a test's expected output from CPython, the way `tests/run.sh` runs it. Each `tests/errors/*.py`
+stderr line with `tests/*.err` where CPython wrote to stderr.
+`tests/record.sh NAME` records a test's expected output from CPython, the way `tests/run.sh` runs
+it ([below](#recording-expected-output)). Each `tests/errors/*.py`
 must be rejected with the message on its first line (a `tests/errors/syntax_*.py` one also by
 `pystachy check`), and each `tests/deviations/*.py` must print its hand-written expected
 output. Where `tests/NAME.path` exists, it is the module path: `PYTHONPATH` when
@@ -61,6 +63,36 @@ when it compiles), garbage-collector churn, classic
 algorithms, a small interpreter, and 16 programs from Ouro v2. Where `tests/NAME.full`
 exists, the program's stdout is `/dev/full`. Current result: **1931 passed, 0 failed** with
 both the CPython-hosted and the self-compiled compiler.
+
+### Recording expected output
+
+`tests/record.sh NAME...` runs each `tests/NAME.py` under CPython as `tests/run.sh` runs it, and
+writes `tests/NAME.out` (stdout, then `[exit N]`) and, where CPython wrote to stderr,
+`tests/NAME.err` (the last line it wrote there); the `.out` and `.err` of a differential test are
+never edited by hand. CPython runs with an environment of `PATH` alone, and `PYTHONPATH` where
+`tests/NAME.path` gives one, so that nothing else of the caller's reaches a recording:
+`FORCE_COLOR=1` would color CPython's tracebacks in hundreds of `.err` files, a `PYTHONPATH` add
+modules to a test that has no `.path`, and `PYTHONUNBUFFERED` change what reaches a stdout the
+program shares with the commands it runs. Without `LANG` and `LC_*` the locale is C, in which
+CPython runs in UTF-8 mode (PEP 540), so `PYTHONUTF8=1` would change nothing: that environment
+reproduces every recording. The CPython must be the one of `.python-version`, which CI uses:
+another minor version is refused (3.12 prints otherwise for 28 tests), another patch version is
+warned about.
+
+`tests/record.sh --check` (`make check-recordings`) records every test into a temporary directory
+instead of `tests/`, and fails, naming the file:
+
+- where that differs from `tests/NAME.out` or `tests/NAME.err`: a recording edited by hand, or one
+  that CPython no longer prints;
+- where CPython prints what a `tests/deviations/NAME.py` must print: its stdout, the last line of
+  its stderr (where Pystachy reports an uncaught exception, after flushing stdout) and its exit
+  status make `tests/deviations/NAME.out`, so the deviation is gone, and the program belongs with
+  the differential tests;
+- where a module of `lib/` is not the CPython file whose SHA-256 [`lib/README.md`](../lib/README.md) lists;
+- where a `.out`, `.err`, `.in`, `.full` or `.path` in `tests/` has no program;
+- where a `*.rej`, `*.orig` or `core` file lies in the tree (`.git`, `build/` and `.claude/` aside).
+
+It takes about 20 seconds, one test after the other; CI's Lint workflow runs it on every push.
 
 ## `make verify`
 
@@ -186,4 +218,7 @@ repository or a fork, with its branch merged with `main` as it is then; on each 
 and on demand for any branch. A newer push to a pull request cancels its older run; on `main`
 every commit runs to the end. It runs on ubuntu-24.04 with LLVM 18, which `tools/setup.sh`
 installs where the runner image lacks it, and the CPython of `.python-version`, within a
-45-minute time limit, and uploads the report as an artifact.
+45-minute time limit, and uploads the report as an artifact. Beside it, on the same events,
+`.github/workflows/lint.yml` runs `make lint` and then `make check-recordings`, with the CPython
+of `.python-version` too: it needs no compiler, so a recording that CPython no longer prints is
+named within a minute or two.
