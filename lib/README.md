@@ -147,4 +147,5 @@ functions reject are accepted, `bisect`'s `hi=-1` is a plain bound (`len(a)` for
 
 These files are part of Python and are used under the PSF License Version 2; see
 `THIRD_PARTY_NOTICES`. `tools/import_sweep.py` tries every module of a CPython standard library
-this way; [`docs/stdlib.md`](../docs/stdlib.md) reports which import and why the others do not.
+this way, with the modules here in place of the library's own; [`docs/stdlib.md`](../docs/stdlib.md)
+reports which import and why the others do not.
