@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 import os
 import tempfile
+import time
 
 SRC = "<input>"
 # the files of the program's modules: a node of FILES[k] has line k * LINES + its line in the file
@@ -5329,6 +5330,7 @@ CALLS: dict[str, str] = {
     "all(list[bool])": "pys_all:bool", "any(list[int])": "pys_any:bool", "all(list[int])": "pys_all:bool",
     "os.system(str)": "pys_system:int", "os.execv(str,list[str])": "pys_execv:None",
     "os.getpid()": "pys_getpid:int", "os.path.exists(str)": "pys_exists:bool", "os.path.realpath(str)": "pys_realpath:str",
+    "os.path.getsize(str)": "pys_getsize:int", "os.path.getmtime(str)": "pys_getmtime:float", "os.path.getctime(str)": "pys_getctime:float",
     "os.getenv(str,str)": "pys_getenv:str", "ffi.string_at(int,int)": "pys_string_at:str",
     "os.remove(str)": "pys_remove:None", "os.rmdir(str)": "pys_rmdir:None", "tempfile.mkdtemp()": "pys_mkdtemp:str",
     "math.floor(float)": "pys_floor:int", "math.ceil(float)": "pys_ceil:int", "math.trunc(float)": "pys_m_trunc:int",
@@ -5830,6 +5832,7 @@ RUNTIME: dict[str, str] = {
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
     "platform": "str:|A|", "errno": "int:str|R A|", "system": "int:str|R I|", "execv": "None:str,list[str]|R N A I rL|", "getpid": "int:|I|", "exists": "bool:str|I|",
     "path_join": "str:str,str|A|", "realpath": "str:str|R A I|", "getenv": "opt[str]:str,opt[str]|A I|", "remove": "None:str|R A I|", "rmdir": "None:str|R A I|",
+    "getsize": "int:str|R A I|", "getmtime": "float:str|R A I|", "getctime": "float:str|R A I|",
     "mkdtemp": "str:|R A I|", "time": "float:|I|", "time_ns": "int:|I|", "monotonic": "float:|I|", "monotonic_ns": "int:|I|",
     "process_time": "float:|I|", "process_time_ns": "int:|I|", "sleep": "None:float|R I|", "sleep_int": "None:int|R I|",
     "setrecursionlimit": "None:int|R I|", "getrecursionlimit": "int:|I|",
@@ -19899,14 +19902,11 @@ def compile_program(path: str, src: str, dirs: list[str]) -> str:
     return Gen().program(Loader(dirs).program(path, src))
 
 
-def runtime_ir(path: str, cache: bool) -> str:
-    # runtime.py: the part of the runtime written in the subset. Its pys_* functions are defined
-    # under their C names, with runtime.c's types, and llvm-link joins them to runtime.c's code
-    # (runtime.c keeps a prototype of each). It imports only builtin modules, and nothing runs its
-    # module code, so it holds only functions.
-    f = open(path, "r", encoding="latin-1")
-    src = f.read()
-    f.close()
+def runtime_ir(path: str, src: str, cache: bool) -> str:
+    # runtime.py (path, whose text is src): the part of the runtime written in the subset. Its pys_*
+    # functions are defined under their C names, with runtime.c's types, and llvm-link joins them to
+    # runtime.c's code (runtime.c keeps a prototype of each). It imports only builtin modules, and
+    # nothing runs its module code, so it holds only functions.
     g = Gen()
     g.rtmode = True
     g.rtcache = cache  # (the driver's: then PYSTACHY_IRFX prints the program's summaries only)
@@ -19923,6 +19923,67 @@ def q(s: str) -> str:
 def sh(cmd: str) -> int:
     st = os.system(cmd)
     return st >> 8 if st & 255 == 0 else 1
+
+
+# the lines of /proc/cpuinfo that tell which CPU -march=native compiles for (x86-64's, AArch64's)
+CPUID: list[str] = ["vendor_id", "cpu family", "model", "model name", "stepping", "flags", "CPU implementer", "CPU architecture",
+                    "CPU variant", "CPU part", "CPU revision", "Features"]
+
+
+def fnv(s: str) -> str:
+    # FNV-1a, 64 bits wide, of s's characters (bytes, in a file read as Latin-1), in hex: computed in
+    # two 32-bit halves, as an int has 64 bits and no product may overflow it (the prime is
+    # 2**40 + 0x1B3, whose 2**40 moves the low half's bits to the high half)
+    hi = 0xCBF29CE4
+    lo = 0x84222325
+    for c in s:
+        lo ^= ord(c)
+        m = lo * 0x1B3
+        hi = (hi * 0x1B3 + (lo << 8) + (m >> 32)) & 0xFFFFFFFF
+        lo = m & 0xFFFFFFFF
+    return f"{hi:08x}{lo:08x}"
+
+
+def stat3(p: str) -> str:
+    # what every change to file p changes, "" if there is no p: its size, mtime and ctime. A write
+    # sets both times; touch -r sets the mtime back, but nothing sets a ctime back, and a file renamed
+    # over p brings its own (Linux sets the ctime of a renamed file)
+    try:
+        return f"{os.path.getsize(p)} {os.path.getmtime(p)} {os.path.getctime(p)}"
+    except OSError:
+        return ""
+
+
+def settled(st: str, now: float) -> bool:
+    # did st's file last change more than 2 s before now? A file system keeps times at a coarse grain
+    # (the kernel's clock tick, or a second on some), so a file changed again within it may show st
+    # still: what it holds then is known only from reading it (git's "racily clean" files)
+    t = st.split(" ")
+    return len(t) == 3 and now - max(float(t[1]), float(t[2])) > 2
+
+
+def hashed(p: str, memo: dict[str, str], now: float, need: bool) -> tuple[str, str]:
+    # (the bytes of file p, read as Latin-1, and their fnv(); "" for both if p cannot be read). memo
+    # maps the fnv() of p's real path to that hash with p's stat3() as it was read, kept if it had
+    # settled: while p shows it still, p holds those bytes, which are then read only if need is set
+    st = stat3(p)
+    k = fnv(os.path.realpath(p))
+    m = memo.get(k, "")
+    if not need and st != "" and m[17:] == st:
+        return ("", m[:16])
+    s = ""
+    try:
+        f = open(p, "r", encoding="latin-1", newline="")
+        s = f.read()
+        f.close()
+    except OSError:
+        return ("", "")
+    h = fnv(s)
+    if st != "" and stat3(p) == st and settled(st, now):
+        if k in memo:
+            del memo[k]  # (to the end: the cache file keeps the 64 hashes learnt last)
+        memo[k] = f"{h} {st}"
+    return (s, h)
 
 
 def main() -> None:
@@ -19948,7 +20009,9 @@ def main() -> None:
         f.close()
         return
     if cmd == "rt":
-        ir = runtime_ir(SRC, False)
+        f = open(SRC, "r", encoding="latin-1")
+        ir = runtime_ir(SRC, f.read(), False)
+        f.close()
         if len(argv) == 5 and argv[3] == "-o":
             f = open(argv[4], "w", encoding="latin-1")
             f.write(ir)
@@ -19956,6 +20019,11 @@ def main() -> None:
         else:
             print(ir, end="")
         return
+    # the compiler that runs, for the runtime's cache (below): when named by its path, or a script
+    # that CPython runs, its file's stat3() as the driver starts, and when that is
+    me = argv[0]
+    t0 = time.time()
+    born = stat3(me) if "/" in me or me.endswith(".py") else ""
     home = os.getenv("PYSTACHY_HOME", "")
     if home == "":
         s = argv[0].rfind("/")
@@ -20007,21 +20075,14 @@ def main() -> None:
     # PYSTACHY_CFLAGS: extra clang flags (e.g. -fsanitize=undefined) for the runtime and the AOT link.
     # The runtime is compiled with them and then -fexceptions (so they cannot drop it): a raise unwinds
     # through runtime functions to compiled code's landing pads, which -O2 would turn back into calls
-    # if clang marked them nounwind. Each such set of flags caches its own runtime, named by a 32-bit
-    # FNV-1a hash of it, so a runtime cached without -fexceptions is never used; the names say
-    # runtime-py, so that a compiler from before runtime.py keeps its runtime.c-only cache apart.
-    # runtime.py goes through the optimizations on the IR as programs do, so the ones PYSTACHY_OPT
-    # turns off are hashed too (when there are any: with all of them on, the names stay as they were)
+    # if clang marked them nounwind. runtime.py goes through the optimizations on the IR as programs
+    # do, so the ones PYSTACHY_OPT turns off count too: the cached runtime's key (below) has both
     flags = os.getenv("PYSTACHY_CFLAGS", "").split()
     on = optimizations()
     off = [o for o in OPTS if o not in on]
     keyed = flags + ["-fexceptions"]
     if len(off) > 0:
         keyed = keyed + ["PYSTACHY_OPT=-" + ",-".join(off)]
-    key = 2166136261
-    for c in " ".join(keyed):
-        key = ((key ^ ord(c)) * 16777619) & 0xFFFFFFFF
-    rtb = home + f"/build/runtime-py-{key:08x}.bc"
     cflags = "".join([" " + q(a) for a in flags])
     # the AOT tier compiles bitcode whose runtime part is instrumented already, so the sanitizer flags
     # go to its link alone (which adds their runtime libraries): ASan's pass would instrument it again
@@ -20031,31 +20092,112 @@ def main() -> None:
         llvm = llvm + "/"
     # strip clang's target-cpu/features attributes so LLVM can inline runtime helpers into our code
     strip = "sed -E 's/ \"(target-cpu|target-features|tune-cpu)\"=\"[^\"]*\"//g'"
-    # runtime.py, the runtime's part written in the subset, is compiled by the compiler that runs
-    # and linked to runtime.c's bitcode. The cache is rebuilt when runtime.c, runtime.py or that
-    # compiler (its executable, or pystachy.py under CPython) is newer: another compiler may
-    # compile runtime.py differently, and the bootstrap checks that its stages do not
-    me = argv[0]
-    fresh = f"test {q(rtb)} -nt {q(rtc)} && test {q(rtb)} -nt {q(rtpy)}"
-    if "/" not in me and not me.endswith(".py"):
-        # run through PATH: the shell's own search finds the executable it ran (command -v; none
-        # found compares as older, so the cache is rebuilt). CPython opens a script in the current
-        # directory, without a search
-        fresh = fresh + f' && test {q(rtb)} -nt "$(command -v {q(me)})"'
-    elif os.path.exists(me):
-        fresh = fresh + f" && test {q(rtb)} -nt {q(me)}"
-    rtir = ""
-    if sh(f"mkdir -p {q(home + '/build')} && {fresh}") != 0:
-        # (before the temporary directory exists: an error in runtime.py exits)
-        src = SRC
-        SRC = rtpy
-        rtir = runtime_ir(rtpy, True)
-        SRC = src
+    cache = home + "/build"
+    if not os.path.exists(cache):
+        sh(f"mkdir -p {q(cache)}")
     # intermediate files go to a private directory (mode 0700, honours TMPDIR), removed on every path below
     tmp = tempfile.mkdtemp()
+    # The cached runtime: runtime.c's bitcode linked to runtime.py's, which the compiler that runs
+    # compiles, in build/runtime-py-<L>-<K>.bc, with the JIT tier's machine code from it in its .o. K is
+    # the fnv() of all they are made from: the bytes of runtime.c, runtime.py and the compiler (its
+    # executable, or pystachy.py under CPython: another compiler may compile runtime.py differently,
+    # and the bootstrap checks that its stages do not), the flags above, the files of clang, llvm-as,
+    # llvm-link and opt (through symbolic links: another LLVM is other files), with their stat3(), and
+    # with a flag that asks for the native CPU, the host's (CPUID). L is the fnv() of the same but the
+    # bytes and times: publishing a runtime removes the others of its L, so that build/ keeps one per
+    # compiler, flag set and LLVM. (Older compilers run with the same home keep theirs under other
+    # names: runtime-py-<hash of the flags>.bc, and runtime.bc or runtime-<hash>.bc before runtime.py.)
+    # The tools are PYSTACHY_LLVM's, or where the shell's own search of PATH finds them (command -v,
+    # which skips directories and files that are not executable), and so is this compiler when it was
+    # run by name; CPython opens a script in the current directory, with no search. The runtime is
+    # built with the files found, not after a second search
+    tools = ["clang", "llvm-as", "llvm-link", "opt"]
+    paths = [llvm + t for t in tools]
+    ask = [t for t in tools if llvm == ""]
+    comp = me if "/" in me or me.endswith(".py") else ""
+    byname = comp == "" and not me.startswith("-")
+    if byname:
+        ask.append(me)
+    if len(ask) > 0:
+        pf = tmp + "/paths"
+        sh(f"for t in {' '.join([q(a) for a in ask])}; do command -v \"$t\" || echo; done > {q(pf)}")
+        got: list[str] = []
+        try:
+            f = open(pf, "r", encoding="utf-8")
+            got = f.read().split("\n")
+            f.close()
+        except (OSError, ValueError):
+            got = []  # (ValueError: CPython reads a path that is no UTF-8: nothing is found)
+        if os.path.exists(pf):
+            os.remove(pf)
+        got = got + ["" for a in ask]
+        if llvm == "":
+            paths = got[: len(tools)]
+        if byname:
+            comp = got[len(ask) - 1]
+    now = time.time()
+    lines = [os.path.realpath(comp) if comp != "" else "", " ".join(keyed)]
+    times: list[str] = []
+    for p in paths:
+        lines.append(os.path.realpath(p) if p != "" else "")
+        times.append(stat3(p) if p != "" else "")
+    if len([a for a in flags if a.endswith("=native")]) > 0 and os.path.exists("/proc/cpuinfo"):
+        cpu: dict[str, bool] = {}
+        f = open("/proc/cpuinfo", "r", encoding="latin-1")
+        for x in f.read().split("\n"):
+            if x.split(":")[0].strip() in CPUID:
+                cpu[x] = True
+        f.close()
+        lines = lines + [x for x in cpu]
+    lin = fnv("\n".join(lines))[8:]
+    # Hashing the 2 MB compiler would cost a third of a JIT start: runtime-py.hashes keeps the hashes
+    # of the files (see hashed()), written whole and renamed over the old (concurrent runs may each
+    # drop what another added, which is then hashed again)
+    hf = cache + "/runtime-py.hashes"
+    memo: dict[str, str] = {}
+    try:
+        f = open(hf, "r", encoding="latin-1")
+        for x in f.read().split("\n"):
+            if len(x) > 17:
+                memo[x[:16]] = x[17:]
+        f.close()
+    except OSError:
+        memo = {}
+    known = "".join([f"{k} {memo[k]}\n" for k in memo])
+    rc = hashed(rtc, memo, now, False)
+    rp = hashed(rtpy, memo, now, False)
+    rm = ("", "")
+    if comp != "":
+        rm = hashed(comp, memo, now, False)
+    cst = stat3(comp) if comp != "" else ""
+    # The compiler's file must hold the code that runs: when named by its path, or a script, it has not
+    # changed since the driver started, and a script had not changed for 2 s then, which covers its
+    # reading by CPython. Otherwise, or without a tool, the runtime is built for this run alone
+    trusted = rm[1] != "" and cst != "" and (born == "" or cst == born) and "" not in times
+    if me.endswith(".py"):
+        trusted = trusted and settled(born, t0)
+    key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]]))
+    rtb = f"{cache}/runtime-py-{lin}-{key}.bc"
+    rtir = ""
+    if not trusted or not os.path.exists(rtb):
+        # the bytes of runtime.c and runtime.py, read once: the runtime is built from them, and named by
+        # their hash, so that an edit while it is built names another runtime, which a later run builds
+        rc = hashed(rtc, memo, now, True)
+        rp = hashed(rtpy, memo, now, True)
+        key = fnv("\n".join(lines + times + [rc[1], rp[1], rm[1]]))
+        rtb = f"{cache}/runtime-py-{lin}-{key}.bc"
+        if (not trusted or not os.path.exists(rtb)) and rc[1] != "" and rp[1] != "":
+            # (an error in runtime.py exits: the private directory is made again after it)
+            os.rmdir(tmp)
+            src = SRC
+            SRC = rtpy
+            rtir = runtime_ir(rtpy, rp[0].replace("\r\n", "\n").replace("\r", "\n"), True)
+            SRC = src
+            tmp = tempfile.mkdtemp()
     ll = tmp + "/prog.ll"
     bc = tmp + "/prog.bc"
     obj = tmp + "/prog.o"
+    rcc = tmp + "/runtime.c"
     rll = tmp + "/runtime.ll"
     rsl = tmp + "/runtime-s.ll"
     rcb = tmp + "/runtime-c.bc"
@@ -20072,19 +20214,58 @@ def main() -> None:
     f = open(ll, "w", encoding="latin-1")
     f.write(ir)
     f.close()
+    tc = [q(paths[i]) if paths[i] != "" else tools[i] for i in range(len(tools))]
     msg = ""
     code = 0
+    usebc = rtb  # the runtime this run links: the cache's, or the one it builds (part, parto)
+    useo = rto
     if rtir != "":
         f = open(rpl, "w", encoding="latin-1")
         f.write(rtir)
         f.close()
+        # clang compiles the bytes hashed, on its stdin (#line: its messages, UBSan's too, say runtime.c)
+        f = open(rcc, "w", encoding="latin-1", newline="")
+        f.write('#line 1 "runtime.c"\n' + rc[0])
+        f.close()
         # one module, optimized once: LLVM inlines runtime.c's helpers into runtime.py's code. No
         # pipes: a step that fails must fail the build, not hand the next one an empty module
-        code = sh(f"{llvm}clang -O2 -S -emit-llvm {q(rtc)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(rcb)} && {llvm}llvm-link {q(rpl)} {q(rcb)} -o {q(lnk)} && {llvm}opt -O2 {q(lnk)} -o {q(part)} && mv -f {q(part)} {q(rtb)}")
-    if code == 0 and cmd == "run":
-        # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
-        code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(parto)} {q(rto)})")
-    link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
+        code = sh(f"{tc[0]} -O2 -S -emit-llvm -x c - -o {q(rll)}{cflags} -fexceptions < {q(rcc)} && {strip} {q(rll)} > {q(rsl)} && {tc[1]} {q(rsl)} -o {q(rcb)} && {tc[2]} {q(rpl)} {q(rcb)} -o {q(lnk)} && {tc[3]} -O2 {q(lnk)} -o {q(part)}")
+        usebc = part
+    elif not trusted or not os.path.exists(rtb):
+        code = 1  # (runtime.c or runtime.py cannot be read)
+    if code == 0 and cmd == "run" and (rtir != "" or not os.path.exists(rto)):
+        # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already.
+        # -x ir: clang would take a name not ending in .bc, as part's, for a linker input, and do nothing)
+        code = sh(f"{tc[0]} -O2 -fPIC -c -x ir {q(usebc)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags}")
+        useo = parto
+    # what this run built is published if the tools' times had settled and they and the compiler are
+    # as they were (else it uses it alone), with the hashes learnt
+    mvs: list[str] = []
+    if code == 0 and trusted and len([t for t in times if not settled(t, now)]) == 0 and [stat3(p) for p in paths] == times and stat3(comp) == cst:
+        if usebc == part:
+            mvs.append(f"mv -f {q(part)} {q(rtb)}")
+        if useo == parto:
+            mvs.append(f"mv -f {q(parto)} {q(rto)}")
+    if len(mvs) > 0:
+        old = f"{q(cache)}/runtime-py-{lin}-{'?' * 16}"
+        mvs.append(f"for f in {old}.bc {old}.o; do case $f in {q(rtb)} | {q(rto)}) ;; *) rm -f \"$f\" ;; esac; done")
+    learnt = "".join([f"{k} {memo[k]}\n" for k in [k for k in memo][-64:]])
+    hp = f"{hf}.{os.getpid()}.{own}"
+    if learnt != known:
+        try:
+            f = open(hp, "w", encoding="latin-1")
+            f.write(learnt)
+            f.close()
+            mvs.append(f"mv -f {q(hp)} {q(hf)}")
+        except OSError:
+            pass  # (a cache that cannot be written: the hashes are made again)
+    if len(mvs) > 0:
+        sh("; ".join(mvs))
+        if usebc == part and not os.path.exists(part):
+            usebc = rtb
+        if useo == parto and not os.path.exists(parto):
+            useo = rto
+    link = f"{llvm}llvm-link --only-needed {q(ll)} {q(usebc)} -o {q(bc)}"
     libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
     if code != 0:
         msg = "cannot build the runtime (are clang and LLVM 18 installed? see PYSTACHY_LLVM, PYSTACHY_CFLAGS)"
@@ -20100,19 +20281,20 @@ def main() -> None:
         fast = f"{llvm}opt -passes='globaldce,function(mem2reg,instcombine<no-verify-fixpoint>,simplifycfg)'"
         code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:
-            # then this process becomes lli, through a shell that opens the bitcode for it and removes
-            # the files: the program's end is pystachy run's own, a signal that kills it too.
+            # then this process becomes lli, through a shell that opens the bitcode and the runtime's
+            # machine code for it (the cache's, or this run's own) and removes the files: the program's
+            # end is pystachy run's own, a signal that kills it too.
             # PYSTACHY_GC_STRESS_PROGRAM: the program's own collection interval, apart from the
             # compiler's (PYSTACHY_GC_STRESS), so that the tests can stress programs without stressing
             # their compilation
-            for p in [ll, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
+            for p in [ll, obj, rcc, rll, rsl, rcb, rpl, lnk, part, hp]:
                 if os.path.exists(p):
                     os.remove(p)
             gsp = os.getenv("PYSTACHY_GC_STRESS_PROGRAM", "")
             env = f"PYSTACHY_GC_STRESS={q(gsp)} " if gsp != "" else ""
-            run = f"{env}PYSTACHY_ARGV0={q(SRC)} exec {llvm}lli -extra-object={q(rto)} /dev/fd/9 {' '.join([q(a) for a in rest])}"
-            os.execv("/bin/sh", ["sh", "-c", f"exec 9< {q(bc)} && rm -f {q(bc)} && rmdir {q(tmp)} && {run}"])
-    for p in [ll, bc, obj, rll, rsl, rcb, rpl, lnk, part, parto]:
+            run = f"{env}PYSTACHY_ARGV0={q(SRC)} exec {llvm}lli -extra-object=/dev/fd/8 /dev/fd/9 {' '.join([q(a) for a in rest])}"
+            os.execv("/bin/sh", ["sh", "-c", f"exec 9< {q(bc)} 8< {q(useo)} && rm -f {q(bc)} {q(parto)} && rmdir {q(tmp)} && {run}"])
+    for p in [ll, bc, obj, rcc, rll, rsl, rcb, rpl, lnk, part, parto, hp]:
         if os.path.exists(p):
             os.remove(p)
     os.rmdir(tmp)

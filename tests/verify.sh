@@ -7,6 +7,10 @@
 #   tests-native   tests/run.sh with the stage-2 native compiler, JIT and AOT
 #   tests-opt-off  tests/run.sh with the stage-2 compiler and every optimization on the IR turned off
 #                  (PYSTACHY_OPT=-all): the passes change no output
+#   runtime-cache  tests/cache.sh with both compilers: the cached runtime is used while nothing it is
+#                  built from changes, built again when runtime.c, runtime.py, the compiler or a tool
+#                  changes (also by a same-size edit whose mtime is set back, or one made while it is
+#                  built), keyed by the flags too, never left by a failed build; PATH's rules
 #   python-free    PATH holds only symlinks to the LLVM tools, the linker and the POSIX tools that the
 #                  driver and tests/run.sh call (no python3): the native compiler rebuilds its runtime
 #                  and itself, reproduces the same IR and passes the tests
@@ -147,6 +151,14 @@ done
 for l in $logs; do echo "== $(basename "$l")"; cat "$l"; done > "$L"
 x=$(tests $logs) && r=pass || r=fail
 step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
+
+# ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh)
+L=$V/runtime-cache.log; s=$(now)
+tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
+tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
+for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
+x=$(tests "$V/cache-native.log" "$V/cache-cpython.log") && r=pass || r=fail
+step runtime-cache $r "$s" "$L" ', "compilers": ["stage2", "CPython-hosted"]'"$x"
 
 # ---- python-free: the native compiler and the tests with only LLVM + POSIX tools on PATH
 L=$V/python-free.log; s=$(now); r=fail; py=true
