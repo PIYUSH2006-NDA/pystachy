@@ -740,9 +740,10 @@ In these cases the program compiles but can behave differently from CPython:
   CPython, also where the name is a builtin module it re-exports: `from helper import os`). A program that reads a module's attribute before the import of the module has
   run reads its zero value instead of raising `NameError` (but after an import in a `try`
   statement that raised, as CPython does).
-- An exception keeps `str()` of its arguments and what `repr()` shows of them as it is made
-  (their `__str__` and `__repr__` run then), where CPython computes them from `args` each time:
-  an argument changed afterwards (a list) is not seen, and an argument whose `__str__` or
+- An exception keeps `str()` of its arguments and what `repr()` shows of them as it is made,
+  once all the arguments of the call are evaluated (their `__str__` and `__repr__` run then),
+  where CPython computes them from `args` each time: an argument changed afterwards (a list,
+  also by the exception's `__init__`) is not seen, and an argument whose `__str__` or
   `__repr__` raises makes the call of the exception class (`raise KeyError(obj)`) raise that
   exception instead, so that an `except KeyError` does not run.
 - A function declared or inferred to return a value that ends without a `return` raises
