@@ -29,6 +29,7 @@ with open(paths[1], "w") as f:
         f.write(line + "\n")
 print(suggest.main(paths), suggest.main(["-n", "1", "-c", "0.9"] + paths), suggest.main([paths[0], paths[0]]))
 print(suggest.main(["-c", "2"] + paths), suggest.main([]))
+print(suggest.main(["-n", "many"] + paths), suggest.main(["-c", "nope"] + paths), suggest.main(["-n", "0"] + paths))
 for path in paths:
     os.remove(path)
 os.rmdir(d)

@@ -36,11 +36,17 @@ $ ./linediff -q --words old.txt new.txt
 
 - The unified diff is grouped into hunks with `-U N` lines of context (3 by default), with
   `unified_diff()`'s headers and ranges: under CPython, `linediff.unified()` returns what
-  `unified_diff(..., lineterm="")` yields, line for line. `unified_diff()` itself is a generator,
-  which Pystachy does not compile yet, so `linediff` groups the opcodes itself.
+  `unified_diff(..., lineterm="")` yields, line for line, each line without its line break.
+  `unified_diff()` itself is a generator, which Pystachy does not compile yet, so `linediff` groups
+  the opcodes itself.
+- Lines are compared with their line breaks, which `linediff` reads as they are
+  (`open(path, newline="")`), as `diff` compares them: a file whose last line has no newline, or
+  whose lines end in `\r\n`, differs from one whose lines end in `\n`, and the unified diff marks a
+  last line without a newline with `\ No newline at end of file`, as `diff -u` does.
 - `--words` compares the lines first, then the words of each group of lines that one replaces:
   over a whole text, the autojunk heuristic of a `SequenceMatcher` would ignore the common words,
-  which appear in more than 1% of a long sequence, and nothing would line up.
+  which appear in more than 1% of a long sequence, and nothing would line up. It prints the new
+  text's lines, each change marked on its line.
 - `-q` prints the similarity ratio of the two lists of lines, and the counts of lines (and, with
   `--words`, words) removed and added. The exit status is 0 if the files are the same, 1 if they
   differ and 2 on an error, as `diff`'s.
@@ -55,18 +61,18 @@ one, two texts of 50,000 lines (2.3 MB each). The executable is Pystachy's AOT b
 
 | mode | CPython 3.13.16 | Pystachy AOT | speedup | CPython RSS | AOT RSS |
 |---|---:|---:|---:|---:|---:|
-| unified | 0.169 s | 0.110 s | 1.5x | 34.8 MB | 51.4 MB |
-| `--words` | 0.200 s | 0.102 s | 1.9x | 34.8 MB | 54.0 MB |
-| `-q` | 0.175 s | 0.140 s | 1.3x | 35.1 MB | 51.2 MB |
+| unified | 0.167 s | 0.079 s | 2.1x | 35.0 MB | 51.4 MB |
+| `--words` | 0.190 s | 0.086 s | 2.2x | 35.0 MB | 54.9 MB |
+| `-q` | 0.161 s | 0.076 s | 2.1x | 35.2 MB | 51.3 MB |
 
-- **A diff of lines runs at about CPython's speed, compiled.** Timed alone, the
-  `SequenceMatcher` of the two lists of 50,000 lines takes 0.13 s under CPython and compiled: its
-  work is dict operations keyed by the lines (`b2j`, and a new `j2len` dict for each line of the
-  old text), which CPython does in C too. What the executable saves is CPython's start-up and the
-  Python code around them.
-- **Small matchers gain more:** the word diffs of the 1,217 groups of changed lines take 8 ms under
-  CPython and 2.5 ms compiled, where each `SequenceMatcher` is made, filled and walked on a few
-  words.
+- **Compiled, a diff takes half CPython's time.** Timed alone (best of 5), the `SequenceMatcher`
+  of the two lists of 50,000 lines takes 124 ms under CPython and 39 ms compiled: its work is
+  `find_longest_match()`'s loops over dicts keyed by the lines (`b2j`, and a new `j2len` dict for
+  each line of the old text), whose dicts CPython runs in C, and whose loops the executable
+  compiles. The rest of a run is start-up and reading the files.
+- **Small matchers gain more:** the word diffs of the 1,217 groups of changed lines take 11.6 ms
+  under CPython and 1.8 ms compiled, where each `SequenceMatcher` is made, filled and walked on a
+  few words.
   [`examples/suggest`](../suggest/README.md), which matches one word against a vocabulary at a
   time, is 4 to 5 times as fast as CPython.
 - **Memory stays bounded**, at about 1.5 times CPython's peak: both hold the two texts and the
@@ -75,9 +81,10 @@ one, two texts of 50,000 lines (2.3 MB each). The executable is Pystachy's AOT b
 
 ## Tests
 
-`tests/example_linediff.py` runs `span()`, `groups()` and `marked()` on their edge cases, then the
-unified diffs (with 3, 1 and 0 lines of context), the word diff and the summary of two generated
-versions of a 400-line text, and `main()` with each mode and its errors, and compares what it
-prints with CPython's (`tests/example_linediff.path` puts this directory on the module path).
+`tests/example_linediff.py` runs `span()`, `groups()`, `marked()`, `unified()` and `worddiff()` on
+their edge cases (line breaks, lines split and reflowed), then the unified diffs (with 3, 1 and 0
+lines of context), the word diff and the summary of two generated versions of a 400-line text, and
+`main()` with each mode, on files that differ in their line breaks, and with its errors, and
+compares what it prints with CPython's (`tests/example_linediff.path` puts this directory on the module path).
 `bench.py` runs the table above: `python3 -I bench.py ../../pystachy 5`, from anywhere; it writes
 its texts and executable to `build/linediff/`.

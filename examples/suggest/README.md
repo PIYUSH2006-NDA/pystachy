@@ -28,8 +28,8 @@ $ pystachy build suggest.py -o suggest && ./suggest vocab.txt text.txt
   vocabulary it sets one `SequenceMatcher`'s first sequence and tries two cheap upper bounds of the
   ratio (`real_quick_ratio()`, from the lengths, and `quick_ratio()`, from the letters as a
   multiset) before computing the ratio itself from the matching blocks.
-- The exit status is 1 if the text has unknown words, 0 if not, and 2 on an error (a `cutoff`
-  outside [0, 1] is get_close_matches()'s `ValueError`).
+- The exit status is 1 if the text has unknown words, 0 if not, and 2 on an error: an `-n` or `-c`
+  that is not a number, or a `cutoff` outside [0, 1] (get_close_matches()'s `ValueError`).
 
 CPython and the executable print the same report.
 

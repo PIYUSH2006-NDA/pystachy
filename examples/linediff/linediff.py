@@ -8,9 +8,12 @@ unified_diff() do) with N lines of context (3 by default), from the opcodes Sequ
 between the two lists of lines. --words prints the new text with each change marked word by word,
 as wdiff and git diff --word-diff do: [-removed-] and {+added+}. It compares the lines first, then
 the words of each group of lines that one replaces, so that common words, which SequenceMatcher's
-autojunk heuristic ignores in a long sequence, still match within a line. -q prints only the
-similarity ratio of the lines and how many lines (and, with --words, words) changed. The exit
-status is 0 if the files are the same, 1 if they differ and 2 on an error.
+autojunk heuristic ignores in a long sequence, still match within a line, and it keeps the new
+text's lines. -q prints only the similarity ratio of the lines and how many lines (and, with
+--words, words) changed. Lines are compared with their line breaks, as diff compares them: a file
+whose last line has no newline differs from one whose last line has, and the unified diff marks
+such a line with "\\ No newline at end of file". The exit status is 0 if the files are the same, 1
+if they differ and 2 on an error.
 """
 import sys
 from difflib import SequenceMatcher
@@ -50,8 +53,23 @@ def span(start: int, stop: int) -> str:
     return f"{start if length == 0 else start + 1},{length}"
 
 
+def text(line: str) -> str:
+    # a line without its line break
+    return line.splitlines()[0] if line else ""
+
+
+def emit(out: list[str], prefix: str, lines: list[str]) -> None:
+    # the lines of a hunk, each after its prefix and without its line break; a line without one,
+    # the last of a file that does not end with a newline, is marked as diff -u marks it
+    for line in lines:
+        bare = text(line)
+        out.append(prefix + bare)
+        if bare == line:
+            out.append("\\ No newline at end of file")
+
+
 def unified(old: list[str], new: list[str], n: int, old_name: str, new_name: str) -> list[str]:
-    """The unified diff of two lists of lines (without their newlines)."""
+    """The unified diff of two lists of lines (with their line breaks)."""
     out: list[str] = []
     for group in groups(SequenceMatcher(None, old, new).get_opcodes(), n):
         if not out:
@@ -60,30 +78,39 @@ def unified(old: list[str], new: list[str], n: int, old_name: str, new_name: str
         out.append(f"@@ -{span(group[0][1], group[-1][2])} +{span(group[0][3], group[-1][4])} @@")
         for tag, i1, i2, j1, j2 in group:
             if tag == "equal":
-                out.extend([" " + line for line in old[i1:i2]])
+                emit(out, " ", old[i1:i2])
                 continue
-            out.extend(["-" + line for line in old[i1:i2]])
-            out.extend(["+" + line for line in new[j1:j2]])
+            emit(out, "-", old[i1:i2])
+            emit(out, "+", new[j1:j2])
     return out
 
 
-def marked(old: list[str], new: list[str]) -> tuple[str, int, int]:
-    """The new words with each change marked [-removed-] and {+added+}, and the counts of words
-    removed and added."""
-    out: list[str] = []
+def marked(old: list[str], new: list[str], line_of: list[int], lines: int) -> tuple[list[str], int, int]:
+    """The new words on their lines (new[k] on line line_of[k], of lines from 0), with each change
+    marked [-removed-] and {+added+}, and the counts of words removed and added. Removed words go
+    before the new word that follows them, or at the end of the last line."""
+    words: list[list[str]] = []
+    for _ in range(lines):
+        words.append([])
     removed = 0
     added = 0
     for tag, i1, i2, j1, j2 in SequenceMatcher(None, old, new).get_opcodes():
         if tag == "equal":
-            out.extend(new[j1:j2])
+            for k in range(j1, j2):
+                words[line_of[k]].append(new[k])
             continue
         if i1 < i2:
-            out.append("[-" + " ".join(old[i1:i2]) + "-]")
+            words[line_of[j1] if j1 < len(new) else lines - 1].append("[-" + " ".join(old[i1:i2]) + "-]")
             removed += i2 - i1
-        if j1 < j2:
-            out.append("{+" + " ".join(new[j1:j2]) + "+}")
-            added += j2 - j1
-    return " ".join(out), removed, added
+        k = j1
+        while k < j2:  # the added words, marked on each of their lines
+            m = k
+            while m < j2 and line_of[m] == line_of[k]:
+                m += 1
+            words[line_of[k]].append("{+" + " ".join(new[k:m]) + "+}")
+            k = m
+        added += j2 - j1
+    return [" ".join(w) for w in words], removed, added
 
 
 def worddiff(old: list[str], new: list[str]) -> tuple[list[str], int, int]:
@@ -93,10 +120,16 @@ def worddiff(old: list[str], new: list[str]) -> tuple[list[str], int, int]:
     added = 0
     for tag, i1, i2, j1, j2 in SequenceMatcher(None, old, new).get_opcodes():
         if tag == "equal":
-            out.extend(new[j1:j2])
+            out.extend([text(line) for line in new[j1:j2]])
             continue
-        text, r, a = marked(" ".join(old[i1:i2]).split(), " ".join(new[j1:j2]).split())
-        out.append(text)
+        words: list[str] = []
+        line_of: list[int] = []
+        for j in range(j1, j2):
+            for word in new[j].split():
+                words.append(word)
+                line_of.append(j - j1)
+        lines, r, a = marked(" ".join(old[i1:i2]).split(), words, line_of, max(j2 - j1, 1))
+        out.extend(lines)
         removed += r
         added += a
     return out, removed, added
@@ -118,7 +151,7 @@ def summary(old: list[str], new: list[str], words: bool) -> str:
 
 
 def read(path: str) -> str:
-    with open(path) as f:
+    with open(path, newline="") as f:  # (its line breaks as they are: \r\n is not read as \n)
         return f.read()
 
 
@@ -148,8 +181,8 @@ def main(argv: list[str]) -> int:
         return 2
     a = read(files[0])
     b = read(files[1])
-    old = a.splitlines()
-    new = b.splitlines()
+    old = a.splitlines(True)
+    new = b.splitlines(True)
     if quiet:
         print(summary(old, new, words))
     elif words:

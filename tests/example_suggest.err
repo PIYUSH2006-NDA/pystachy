@@ -1,1 +1,1 @@
-usage: suggest.py [-n N] [-c CUTOFF] VOCABULARY [TEXT...]
+suggest: n must be > 0: 0

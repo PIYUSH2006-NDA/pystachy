@@ -58,9 +58,9 @@ strs is a compile-time error (`tests/errors/lib_difflib_int_items.py`).
 `tests/lib_difflib.py` compares it with CPython's on the cases of CPython's
 `Lib/test/test_difflib.py` and the module's doctests that use these. Run by CPython, the edited
 module passes that file's 57 tests. Two applications use it:
-[`examples/linediff`](../examples/linediff/README.md), unified and word diffs of two files, at 1.3
-to 1.9 times CPython's speed (a diff of 50,000 lines runs at CPython's speed: its dict operations
-are C in CPython too), and [`examples/suggest`](../examples/suggest/README.md), spelling
+[`examples/linediff`](../examples/linediff/README.md), unified and word diffs of two files, at
+about twice CPython's speed (the `SequenceMatcher` of two texts of 50,000 lines takes 39 ms,
+against CPython's 124 ms), and [`examples/suggest`](../examples/suggest/README.md), spelling
 suggestions from a vocabulary, where each `get_close_matches()` of 20,000 words takes 3.9 ms, against
 CPython's 23 ms.
 

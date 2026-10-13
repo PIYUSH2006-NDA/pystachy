@@ -40,4 +40,5 @@ ValueError: n must be > 0: 0
 0 unknown words in 3000 lines, 3000 words in the vocabulary
 1 1 0
 2 2
+2 2 2
 [exit 0]

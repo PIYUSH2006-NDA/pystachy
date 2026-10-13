@@ -47,10 +47,14 @@ def main(argv: list[str]) -> int:
     i = 0
     while i < len(argv):
         if argv[i] in ("-n", "-c") and i + 1 < len(argv):
-            if argv[i] == "-n":
-                n = int(argv[i + 1])
-            else:
-                cutoff = float(argv[i + 1])
+            try:
+                if argv[i] == "-n":
+                    n = int(argv[i + 1])
+                else:
+                    cutoff = float(argv[i + 1])
+            except ValueError as e:
+                print(f"suggest: {argv[i]}: {e}", file=sys.stderr)
+                return 2
             i += 2
             continue
         args.append(argv[i])
