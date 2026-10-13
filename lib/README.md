@@ -20,7 +20,8 @@ checks each against CPython.
 | `genericpath` | `Lib/genericpath.py` | `cdac5a68dd738051e0d66fc81d5947d6a1776248fc6fe862253477608d870ec4` | what `posixpath` uses of it; not `commonprefix` (`map`) or the file tests (`try`) |
 | `curses.ascii` | `Lib/curses/ascii.py` | `780dd8bbaf0ee7e832f164c1772953e694a9cd1031d1ab1471af65344d3645e6` | everything, for ASCII characters (strings are byte strings) |
 
-`curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`.
+`curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
+so is `functools.py` (below).
 
 ## `io`, Pystachy's own
 
@@ -102,18 +103,84 @@ character by character (code point by code point). Where it differs from CPython
   choice: a `list[str | None]` would hold it.
 - `finditer()` returns a list of the matches, found before it returns.
 - `\N{...}` is a pattern error: Pystachy has no table of the characters' names.
+- An inline flag that is no flag, `(?iⅠ)` or `(?-Ⅰ:x)`, is an "unknown flag" where the character
+  may begin an identifier, else "missing -, : or )" or "missing flag": CPython asks
+  `str.isalpha()`, which differs for 262 characters such as U+2160 ROMAN NUMERAL ONE (`Ⅰ`).
 - The flags are ints, not `RegexFlag` members; `groupindex` is a dict; `re.error` is the base class
   of the `PatternError` the module raises (CPython 3.13 has one class); a replacement function
   must return a str (CPython's may return `None`); and there is no `DEBUG` output, `Scanner`,
   `__index__` group number, warning or `bytes` pattern.
 
-`tests/lib_re.py` compares it with CPython's `re`. Run by CPython as a package of its own, it
-passes CPython 3.13's `Lib/test/test_re.py` but for the cases above, the tests of CPython's
-internals (`re._compiler`), of its C types' own behaviour (immutable objects, `copy`, no
-instantiation, the `TypeError` of a non-str argument), of str subclasses and of a time limit;
-and it makes the same code, errors and results as CPython's `re` for 18,000 random patterns,
-each matched against 19 strings. With it, unmodified roman 5.2 prints what CPython prints. It
-is about 3 times slower than `_sre`.
+`tests/lib_re.py` compares it with CPython's `re`, and `tests/upstream_re_*.py` with CPython
+3.13.16's own tests of it, JIT and AOT, against what CPython's `re` printed: the 403 cases of
+`Lib/test/re_tests.py` (each also searched with IGNORECASE, with UNICODE and within its match,
+as `test_re_tests` does) and its benchmarks, and some 1,200 cases of `Lib/test/test_re.py`, the
+ones that apply to str patterns: matches and the groups backtracking restores, atomic groups and
+possessive repeats, lookaround, backreferences and conditionals, flags and case folding, escapes
+and Unicode classes, `sub()` and its templates, `split()`, `findall()` and `finditer()` past
+empty matches, and the errors, with their messages and positions. Their headers list what they
+leave out and why: the deviations above, bytes patterns, warnings, CPython's internals
+(`re._compiler`, `DEBUG`) and its C types' own behaviour (immutable objects, `copy`, pickling,
+the `TypeError` of a non-str argument), str subclasses, and the cases too big for `make
+verify`'s run with a collection at every allocation, which run there on smaller inputs.
+`tools/re_fuzz.py` (`make re-fuzz`, a step of `make verify`) runs the port on CPython against
+CPython's `re`, deterministically: 2,000 random patterns must compile to the same code (or raise
+the same error), and match, split and substitute 19 strings each as CPython's `re` does, every
+other pattern on strs that hold UTF-8 as Pystachy's do; and the test cases too big for the
+compiled tests run there at upstream's size (`make re-fuzz RE_FUZZ="20000 2"` runs 20,000
+patterns of seed 2). With it, unmodified roman 5.2 prints what CPython prints. It is about 3
+times slower than `_sre`.
+
+## `functools`, Pystachy's own
+
+CPython's `Lib/functools.py` does not compile (it imports `abc`, `collections`, `reprlib` and
+`_thread`, and its pure-Python `lru_cache` keeps its links in lists of mixed types and sets
+attributes on a function), and its `lru_cache()` is C: `_functools._lru_cache_wrapper`
+(`Modules/_functoolsmodule.c`). `functools.py` here has `cache()` and `lru_cache()` in the subset,
+written after that C code, with `lru_cache`'s docstring:
+
+- `lru_cache(maxsize)` (128 by default, `@lru_cache` bare too; a negative `maxsize` is 0) keeps the
+  results of the `maxsize` most recently used calls, `lru_cache(maxsize=None)` and `cache()` every
+  result, and `maxsize=0` none. The wrapper has `cache_info()`, a `CacheInfo` named tuple of
+  `hits`, `misses`, `maxsize` and `currsize`, `cache_clear()`, which empties the cache and zeroes
+  the statistics, `__wrapped__` and the function's `__name__` and `__qualname__`.
+- It counts and updates as C does, so what a program sees of it is CPython's: a hit makes the
+  call the most recently used, a miss counts before the function runs (a call that raises is
+  counted, and its exception is not cached), a call that added its own key while it ran (a
+  recursive call with the same arguments) returns what it computed and leaves the cache as it is,
+  and a full cache gives the least recently used entry to the new result. A result is the object
+  the function returned, also a falsy one or `None`.
+- A dict of Pystachy holds keys of one type and values of another, so each decorated function
+  has a cache of its own types: `_lru_cache_wrapper` is a generic class, `Generic[*_Ts, _R]`,
+  whose `__init__` takes the function as a `Callable[[*_Ts], _R]`, so each wrapper binds `_Ts` to
+  the function's parameter types and `_R` to its return type ([`docs/language.md`](../docs/language.md),
+  *Typing rules*). The key of a call is the tuple of its arguments, a `tuple[*_Ts]`, which
+  `__call__(self, *args: *_Ts)` takes by position (CPython's key for one `int` or `str` argument
+  is the argument itself).
+
+What it does not have, each a compile-time error (`tests/errors/lib_functools_*.py`):
+
+- a function whose parameters or return are not annotated, that returns `None` (`-> None`: its
+  results would be a `list[None]`), that takes `*args` or `**kwargs`, or whose parameter is of a
+  type Pystachy's dicts cannot key (a `float`, an object; CPython hashes those): the parameters are
+  `int`, `bool`, `str`, `str | None` and tuples of those;
+- `lru_cache()` of a builtin, a method or a lambda (it caches a def's results, of the program or
+  of a function), and of a method in a class body, where Pystachy applies no decorator;
+- a call through the cache that passes a keyword argument or leaves out one that has a default
+  value: `__call__(self, *args: *_Ts)` takes each of the function's positional parameters, by
+  position (CPython caches each form of a call apart, `f(1)`, `f(1, 2)` and `f(1, b=2)` being three
+  entries);
+- `cache_parameters()`, whose dict mixes `int | None` and `bool` values.
+
+`typed=True` is accepted and keeps no calls apart: a parameter has one type, so the calls it
+would keep apart (`f(1)` and `f(1.0)`) cannot both compile. The cache needs no lock, as a
+Pystachy program has one thread. `tests/lib_functools.py` and `tests/lib_functools_mod.py`
+compare it with CPython's C wrapper.
+
+In an AOT executable, a cache hit costs 24 ns (unbounded) to 31 ns (bounded) for an `int`
+argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tuple is made and
+hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
+(medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
 
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop
