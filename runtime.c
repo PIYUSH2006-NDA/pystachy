@@ -2637,6 +2637,19 @@ Str *pys_platform(void) {              /* sys.platform */
 #endif
 }
 I pys_exists(Str *p) { return !nul(p) && access(p->s, F_OK) == 0; }
+static struct stat stat1(Str *p) {     /* os.stat(p), which os.path.getsize, getmtime and getctime read */
+  struct stat st;
+  if (nul(p)) pys_fail("ValueError: stat: embedded null character in path");
+  if (stat(p->s, &st)) oserr(p->s);
+  return st;
+}
+static double stat_secs(struct timespec t) {   /* CPython's float of a time, sec + nsec * 1e-9: in two */
+  double f = t.tv_nsec * 1e-9;                 /* statements, which clang does not fuse into an FMA */
+  return t.tv_sec + f;
+}
+I pys_getsize(Str *p) { return stat1(p).st_size; }
+double pys_getmtime(Str *p) { return stat_secs(stat1(p).st_mtim); }
+double pys_getctime(Str *p) { return stat_secs(stat1(p).st_ctim); }
 Str *pys_path_join(Str *a, Str *b) {     /* os.path.join(a, b), as posixpath.join steps through its parts */
   if ((b->len && b->s[0] == '/') || !a->len) return b;
   if (a->s[a->len - 1] == '/') return pys_str_add(a, b);
