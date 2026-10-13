@@ -89,6 +89,13 @@ def render_split(texts: list[str], names: list[str], record: dict[str, str], seq
     return "".join(parts)
 
 
+def escape_from(msg: str) -> str:
+    # a message for the mailbox: each of its lines that starts with "From " gets a ">", as such a
+    # line would start a message of its own
+    msg = msg.replace("\nFrom ", "\n>From ")
+    return ">" + msg if msg.startswith("From ") else msg
+
+
 def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
@@ -115,7 +122,7 @@ def main() -> None:
             else:
                 msg = render(t, record, seq, count, mode == "--safe")
             print(FROM_LINE)
-            print(msg.replace("\nFrom ", "\n>From "))
+            print(escape_from(msg))
     print(f"mailmerge: {seq} messages", file=sys.stderr)
 
 

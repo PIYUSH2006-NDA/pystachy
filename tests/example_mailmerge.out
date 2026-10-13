@@ -23,6 +23,7 @@ Dear Niklaus Wirth, your ${nickname} is $9.99 (1/150)
 KeyError 'nickname'
 (['Dear ', ', your ', ' is $', ' (', '/', ')'], ['name', 'nickname', 'amount', 'seq', 'count'])
 ValueError line 3: 1 fields, where the header names 2
-From x
+>From x
 >From y
+'From: me\n>From you\n From x\nFromage' ''
 [exit 0]

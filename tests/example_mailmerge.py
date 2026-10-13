@@ -40,4 +40,5 @@ try:
     mailmerge.parse(["a", "b"], "3\n", 3)
 except ValueError as e:
     print("ValueError", e)
-print(mailmerge.render(Template("From $a\nFrom $b"), {"a": "x", "b": "y"}, 1, 1, False).replace("\nFrom ", "\n>From "))
+print(mailmerge.escape_from(mailmerge.render(Template("From $a\nFrom $b"), {"a": "x", "b": "y"}, 1, 1, False)))
+print(repr(mailmerge.escape_from("From: me\nFrom you\n From x\nFromage")), repr(mailmerge.escape_from("")))
