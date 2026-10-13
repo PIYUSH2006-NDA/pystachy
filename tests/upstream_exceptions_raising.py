@@ -50,9 +50,6 @@
 #     the error's line, and the last worded "f-string: expecting '}'" (bugs, NEW)
 #   - test_error_offset_continuation_characters' "\\\n"(1 for c in I,\\\n\\: "Generator
 #     expression must be parenthesized", where CPython reports "'(' was never closed" (bug, NEW)
-#   - a = « hello » « world »: CPython's "invalid character '«' (U+00AB)" natively, but the
-#     CPython-hosted compiler (make test-py) prints the character as 'Â«', its UTF-8 bytes read
-#     as Latin-1, as it does for every character from U+0080 to U+00FF (bug, NEW)
 # - testMemoryErrorBigSource (bigmemtest), testSettingException and test_MemoryError (_testcapi),
 #   test_WindowsError and test_windows_message (Windows: on POSIX upstream reads WindowsError
 #   and finds it unbound, a compile-time error here)
