@@ -180,8 +180,9 @@ versions, platform, git commit and a timestamp:
   other pattern on strs that hold UTF-8, as Pystachy's do; about 390,000 cases. The cases of
   `test_re.py` that `tests/upstream_re_*.py` run smaller (too many allocations for gc-stress)
   run there at upstream's size;
-- **re-probe** — `tools/re_probe.py` (`make re-probe`) runs `lib/re` on CPython for the
-  inputs of `tools/re_bench.py`, textwrap's patterns on 20 paragraphs and 20 blocks of lines:
+- **re-probe** — `tools/re_probe.py` (`make re-probe`) runs `lib/re` on CPython for
+  textwrap's patterns on 20 paragraphs and 20 blocks of lines made as `tools/re_bench.py` makes
+  its inputs:
   each result must be CPython's `re`'s, and the matcher's entries and the contexts it makes must
   stay within fixed limits, deterministic counts that a slower change to the engine exceeds;
 - **rt-abi** — `tools/rtabi.py`: every function `runtime.py` defines or declares has one LLVM

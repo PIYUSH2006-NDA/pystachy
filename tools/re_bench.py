@@ -8,8 +8,8 @@ congruential generator, and prints a checksum of what the patterns make of them:
 paragraph into words and spaces (wordsep_re, and wordsep_simple_re, of break_on_hyphens=False),
 and dedent()'s substitutions and findall(). With --time, it prints each operation's time per call,
 the median of 5 rounds over all the inputs: each call reads a str of its own. tools/re_probe.py
---time runs it with CPython and compiled; tools/re_probe.py counts what lib/re does for the same
-inputs.
+--time runs it with CPython and compiled; tools/re_probe.py counts what lib/re does for
+inputs(20), 20 paragraphs and 20 blocks made the same way.
 """
 import re
 import sys

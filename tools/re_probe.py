@@ -1,12 +1,13 @@
 """re_probe: what lib/re does for textwrap's regular expressions, counted, and optionally timed.
 
 lib/re is ordinary Python, so CPython runs it as a package of its own (pys_re, as in
-tools/re_fuzz.py). On the first 20 paragraphs and 20 blocks of tools/re_bench.py, it runs each
-operation of textwrap's patterns, checks its result against CPython's re, and counts the matcher's
-entries (calls of _sre.sre_match: a search's attempts, and sre_count()'s nested ones) and the
-contexts it makes (_sre.Ctx objects). The counts are deterministic: the run fails if one is above
-its limit, so a change to lib/re that makes the matcher do more fails here, and one that makes it
-do less lowers the limits.
+tools/re_fuzz.py). On re_bench.inputs(20), 20 paragraphs and 20 blocks made as tools/re_bench.py
+makes its inputs (the paragraphs are the first 20 it times; the blocks, drawn after them, are not
+the ones it times), it runs each operation of textwrap's patterns, checks its result against
+CPython's re, and counts the matcher's entries (calls of _sre.sre_match: a search's attempts, and
+sre_count()'s nested ones) and the contexts it makes (_sre.Ctx objects). The counts are
+deterministic: the run fails if one is above its limit, so a change to lib/re that makes the matcher
+do more fails here, and one that makes it do less lowers the limits.
 
 The time of a call of lib/re under CPython says little about compiled code: --time PYSTACHY builds
 tools/re_bench.py with that compiler and prints each operation's time per call, compiled and under
