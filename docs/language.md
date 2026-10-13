@@ -586,7 +586,11 @@ of it, which needs inheritance), with `Formatter` left uncompiled
 CPython's `Modules/_csv.c` and `Lib/csv.py`, which reads and writes as CPython's does, but that a
 reader parses all of its input when its iteration starts, into rows that are `list[str]` (a
 `DictReader`'s `dict[str, str]`), and the other deviations
-[`lib/README.md`](../lib/README.md#csv-pystachys-own) lists.
+[`lib/README.md`](../lib/README.md#csv-pystachys-own) lists. Its `statistics` is CPython's, edited
+in 20 marked places: `fmean()` (its weights through a port of `math.sumprod()`'s C code), the
+medians, `quantiles()`, `geometric_mean()`, `mode()` and `multimode()`, with what needs `Fraction`,
+`Decimal` or `random` (`mean()`, the variances, `NormalDist`, ...) left uncompiled
+([`lib/README.md`](../lib/README.md#statistics-a-port-of-cpythons)).
 
 ## Expressions
 

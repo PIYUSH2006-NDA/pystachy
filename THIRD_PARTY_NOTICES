@@ -68,6 +68,10 @@ those of reader(), writer(), the registry functions and field_size_limit(), and 
 reader's states). It is derived from Python and is used under the same license and copyright
 notice.
 
+lib/statistics.py is CPython 3.13.16's Lib/statistics.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
+
 CPython's math tests (tests/)
 ----------------------------
 
