@@ -5765,7 +5765,7 @@ SETMETHODS: list[str] = FSETMETHODS + "add clear difference_update discard inter
 IROPS: dict[str, str] = {
     "raw": "*", "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
-    "list.load": "rL",
+    "list.load": "rL", "list.len": "rL",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
 # the LLVM instructions a raw op may not be: the ones that end a block, and phi and call (ops of their own)
@@ -5773,9 +5773,9 @@ LLNOTRAW: dict[str, bool] = {}
 for _k in "ret br switch indirectbr invoke callbr resume catchswitch catchret cleanupret unreachable phi call tail musttail notail".split():
     LLNOTRAW[_k] = True
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
-# tupleiter, a choice of the lowering (a for loop steps through a tuple's slots, not through a list
-# of its items: Gen.iterable), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
-OPTS: list[str] = ["listget", "dictfuse", "tupleiter"]
+# tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
+# list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
+OPTS: list[str] = ["listget", "dictfuse", "tupleiter", "listfast"]
 # what bounds dictfuse's work: the depth of the chain of values Gen.canon follows (the
 # self-compile's deepest is 18), the ops Gen.reaching walks back over (85) and the lookups that
 # hold at once (7)
@@ -11735,6 +11735,8 @@ class Gen:
             o.append("  " + c if i.t == "None" else f"  %t{i.r[0]} = {c}")
         elif op == "init":
             o.append("  " + self.invoke(f"call void @init.{i.s}()", i))
+        elif op == "list.len":
+            o.append(f"  %t{i.r[0]} = load i64, ptr {i.a[0].v}")
         elif op == "list.load":
             # the item of a list at an index within its length (listget): l->a[index], as runtime.c
             # lays a List out ({len, cap, a}), in the 8-byte slot pys_list_get would have returned
@@ -11854,7 +11856,7 @@ class Gen:
             return 4
         if i.op == "landing" or i.op == "exc.match":
             return 2
-        if i.op == "phi" or i.op == "select":
+        if i.op == "phi" or i.op == "select" or i.op == "list.len":
             return 1
         if i.op == "rt":
             return 0 if self.rtfns[i.s].sig[0] == "None" else 1
@@ -17291,7 +17293,7 @@ class Gen:
             o = self.unwrap(o, sub)
             if t == "str":
                 return Val(self.rt("pys_str_get", "ptr", [f"ptr {o.v}", f"i64 {i.v}"]), "str")
-            return self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), elem(t))
+            return self.list_read(o, i)
         if is_dict(t):
             kv = targs(t)
             if self.lookup_key(n.kids[1]):
@@ -17328,6 +17330,33 @@ class Gen:
             return self.protocol(o, "__getitem__", [ik])
         self.err(f"'{t}' object is not subscriptable")
         return o
+
+    def list_read(self, o: Val, i: Val) -> Val:
+        # Both operands have run, and o is not None. Check the current length: unsigned
+        # comparison also sends every negative index to the runtime's normalization and errors.
+        # No call or allocation separates this check from the existing inline list.load.
+        if o.t != "list[int]" or "listfast" not in self.opts:
+            return self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), elem(o.t))
+        fast = self.label()
+        slow = self.label()
+        done = self.label()
+        length = Ins("list.len", "int", "")
+        length.a = [o]
+        self.put(length, 1)
+        self.cbr(self.ins(f"icmp ult i64 {i.v}, %t{length.r[0]}"), fast, slow)
+        ph = Ins("phi", "int", "")
+        self.place(fast)
+        read = Ins("list.load", "int", "")
+        read.a = [o, i]
+        self.put(read, 4)
+        self.incoming(ph, f"%t{read.r[0]}", self.cur)
+        self.br(done)
+        self.place(slow)
+        v = self.rt("pys_list_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"])
+        self.incoming(ph, v, self.cur)
+        self.br(done)
+        self.place(done)
+        return Val(self.phi(ph), "int")
 
     def argtype(self, t: str, m: str, j: int, missing: str) -> str:
         # the type of parameter j of the special method m of class t, which an operator calls (its

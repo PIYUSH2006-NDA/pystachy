@@ -58,6 +58,18 @@ runs, with the dict lookup fusion turned off (`PYSTACHY_OPT=-dictfuse`) and on:
 The fused lookups make it 31% faster AOT and 28% faster under the JIT. `PYSTACHY_OPT=-all` turns
 every pass off, for comparisons like this one.
 
+Arbitrary `list[int]` subscripts also use a checked inline fast path (`listfast`). Once both
+operands have run, the current list length is checked and a valid non-negative index loads
+its item directly. Negative and out-of-bounds indices still call `pys_list_get`, preserving
+normalization and exceptions. Unlike the unchecked sequence-loop optimization, this needs
+no proof that a loop cannot shrink the list. It particularly helps the JIT, which cannot
+inline the separately cached C runtime; AOT could already inline that function.
+
+`bench/listindex.py` sums a list by index. To compare 100 million reads with the same checksum,
+run `PYSTACHY_OPT=-listfast ./pystachy run bench/listindex.py 100000 --time`, then repeat without
+`PYSTACHY_OPT`. The optional time is process CPU time inside the program, excluding compilation
+and JIT startup. Interleave repeated runs on a quiet machine; shared-runner timings are advisory.
+
 ## Tuples made in the frame
 
 A call of a function with `*args` makes the tuple of its extra arguments in the caller's frame,
