@@ -17,12 +17,17 @@
    after the deletions, at the fullest table (a third of the slots in use). The times
    (nanoseconds per insertion or hit, best of three) are for information only.
    The string-cache check counts calls/bytes through the real runtime.py hash, so repeated
-   lookups must not rescan bytes; --hash-cache runs only this check, also under GC stress.
-   runtime.c's dict hash functions are in runtime.py, so the build links its IR (pystachy rt).
+   lookups must not rescan bytes. The storage check reads the kinds of the tables from the page
+   map: the collector never scans the key arrays of dicts and sets of ints, and scans those of
+   strs and tuples and every dict's values, and the 8 slots of a new set whatever its kind (the
+   compiler may change the kind of an empty set); so ints that are the addresses of strs nothing
+   else holds keep none of them alive (#210). --hash-cache runs only these two checks, also under GC
+   stress. runtime.c's dict hash functions are in runtime.py, so the build links its IR
+   (pystachy rt).
    usage: make dictprobe   (build/dictprobe [N...] or build/dictprobe --hash-cache) */
 #include <time.h>
-static long long probes;
-#define DICT_PROBE() (probes++)
+static long long dict_slots;          /* (not a name the runtime's code uses: the set's lookups have a local probes) */
+#define DICT_PROBE() (dict_slots++)
 #define pys_hash_str counted_hash_str
 #include "../runtime.c"
 #undef pys_hash_str
@@ -119,6 +124,93 @@ static void hash_cache(void) {
   printf("string cache: one hash per string, cached hits/misses/tuples, zero hash normalized\n");
 }
 
+#define MIB ((I)1 << 20)
+static _Noreturn void storage_bad(const char *what) { fprintf(stderr, "dictprobe: storage: %s\n", what); exit(1); }
+static int atomic(const void *p) {     /* is p's object one the collector never scans */
+  uintptr_t w = (uintptr_t)p; Seg **m = pmap[w >> 30], *s = m ? m[w >> 12 & 0x3ffff] : 0;
+  if (!s) storage_bad("a table outside the heap");
+  return s->k & 1;                     /* (a chunk's free list 2 * class + atomic; a large object's: atomic) */
+}
+static void dict_kinds(Dict *d, int ints, const char *how) {
+  if (atomic(d->keys) != ints || atomic(d->vals) || !atomic(d->hs) || !atomic(d->idx)) storage_bad(how);
+}
+static void set_kinds(Set *s, int ints, const char *how) {
+  if (atomic(s->keys) != ints || !atomic(s->hs)) storage_bad(how);
+}
+static I skey(I kind, I i) {           /* key i of a dict or set of kind 0 (ints), 1 (strs) or 2 (T2si) */
+  char b[24]; Str *s = pys_str(b, snprintf(b, sizeof b, "k%lld", (long long)i));
+  if (kind < 2) return kind ? (I)s : i;
+  I *t = pys_alloc(16); t[0] = (I)s; t[1] = i; return (I)t;
+}
+static Str *big(I i) {                 /* a str of 1 MiB, an object of its own; its first byte tells i */
+  Str *s = pys_str_mul(cstr("x"), MIB); s->s[0] = (char)('a' + i); return s;
+}
+__attribute__((noinline)) static void addresses(void) {   /* ints that are the addresses of strs: keys, elements */
+  Dict *d = pys_dict_new(0, 0); Set *s = pys_set_new(0); List *h = pys_list_new(16);
+  keys = pys_list_new(4); keys->a[0] = (I)d; keys->a[1] = (I)s; keys->a[2] = (I)h; keys->len = 3;
+  for (I i = 0; i < 16; i++) { I a = (I)big(i); pys_list_append(h, a); pys_dict_set(d, a, i); pys_set_add(s, a); }
+  keys->a[2] = 0; keys->len = 2;       /* (h kept the strs apart, so that the 16 addresses differ; now nothing holds them) */
+}
+__attribute__((noinline)) static void held(void) {        /* strs that are keys, elements, values, tuple items */
+  Dict *ds = pys_dict_new(1, 0), *dv = pys_dict_new(0, 0), *dt = pys_dict_new((I)cstr("T2si"), 0);
+  Set *ss = pys_set_new(1), *sk = pys_set_new(0);
+  sk->kind = 1;                        /* (made of ints, then of strs: the compiler's typed_empty) */
+  keys = pys_list_new(5); keys->a[0] = (I)ds; keys->a[1] = (I)dv; keys->a[2] = (I)dt; keys->a[3] = (I)ss; keys->a[4] = (I)sk; keys->len = 5;
+  for (I i = 0; i < 20; i++) {
+    Str *x = big(i);
+    if (i >= 16) pys_set_add(sk, (I)x);  /* (4 of them: its 8 slots, not a table of strs it grew) */
+    else if (i % 4 == 0) pys_dict_set(ds, (I)x, i);
+    else if (i % 4 == 1) pys_dict_set(dv, i, (I)x);
+    else if (i % 4 == 2) { I *t = pys_alloc(16); t[0] = (I)x; t[1] = i; pys_dict_set(dt, (I)t, i); }
+    else pys_set_add(ss, (I)x);
+  }
+}
+__attribute__((noinline)) static void scrub_collect(void) {
+  volatile I pad[4096];                /* erase conservative roots in the dead allocation frames */
+  for (I i = 0; i < 4096; i++) pad[i] = 0;
+  collect();
+  if (pad[0]) storage_bad("scrub");
+}
+static void big_ok(Str *s, I i) { if (s->len != MIB || s->s[0] != 'a' + i || s->s[MIB - 1] != 'x') storage_bad("a kept str changed"); }
+static void storage(void) {
+  for (I kind = 0; kind < 3; kind++) { /* every path that makes a table: of ints, strs, then tuples */
+    I k2 = kind < 2 ? kind : (I)cstr("T2si"); int ints = kind == 0;
+    keys = pys_list_new(4);
+    dict = pys_dict_new(k2, 10); keys->a[0] = (I)dict; keys->len = 1;
+    dict_kinds(dict, ints, "a presized dict");
+    for (I i = 0; i < 100; i++) pys_dict_set(dict, skey(kind, i), i);
+    dict_kinds(dict, ints, "a dict that grew");
+    dict_kinds(pys_dict_copy(dict), ints, "dict.copy()");
+    dict_kinds(pys_dict_from(dict), ints, "dict(d)");
+    for (I i = 0; i < 100; i += 2) pys_dict_pop(dict, skey(kind, i));
+    dict_kinds(pys_dict_copy(dict), ints, "dict.copy() of a dict with holes");
+    pys_dict_clear(dict); pys_dict_set(dict, skey(kind, 1), 1);
+    dict_kinds(dict, ints, "a dict filled again after clear()");
+    Set *s = pys_set_new(k2); keys->a[1] = (I)s; keys->len = 2;
+    set_kinds(s, 0, "a new set (its 8 slots are scanned: typed_empty may give it another kind)");
+    for (I i = 0; i < 100; i++) pys_set_add(s, skey(kind, i));
+    set_kinds(s, ints, "a set that grew");
+    set_kinds(pys_set_copy(s), ints, "set.copy()");
+  }
+  addresses(); scrub_collect(); scrub_collect();
+  if (gc_live >= 4 * MIB) storage_bad("ints that are the addresses of strs kept them alive");
+  Dict *d = (Dict *)keys->a[0]; Set *s = (Set *)keys->a[1];
+  if (d->len != 16 || s->len != 16) storage_bad("int keys lost");
+  for (I e = 0; e < d->n; e++) if (!pys_dict_has(d, d->keys[e]) || !pys_set_has(s, d->keys[e])) storage_bad("an int key not found");
+  held(); scrub_collect(); scrub_collect();
+  if (gc_live < 20 * MIB) storage_bad("a str that is a key, element, value or tuple item was freed");
+  Dict *ds = (Dict *)keys->a[0], *dv = (Dict *)keys->a[1], *dt = (Dict *)keys->a[2]; Set *ss = (Set *)keys->a[3], *sk = (Set *)keys->a[4];
+  for (I e = 0; e < ds->n; e++) big_ok((Str *)ds->keys[e], ds->vals[e]);
+  for (I e = 0; e < dv->n; e++) big_ok((Str *)dv->vals[e], dv->keys[e]);
+  for (I e = 0; e < dt->n; e++) big_ok((Str *)((I *)dt->keys[e])[0], dt->vals[e]);
+  I n = 0;
+  for (I j = 0; j <= ss->mask; j++) if (ss->hs[j] != -1) { Str *x = (Str *)ss->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
+  for (I j = 0; j <= sk->mask; j++) if (sk->hs[j] != -1) { Str *x = (Str *)sk->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
+  if (sk->mask != 7 || ds->len + dv->len + dt->len + n != 20) storage_bad("kept strs lost");
+  keys = 0; dict = 0;
+  printf("storage: the key tables of ints are never scanned; those of strs and tuples, and dict values, are\n");
+}
+
 #define X64 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 static I key(I p, I i) {               /* key i of pattern p; the 2N keys of a pattern are distinct */
   char b[96]; uint64_t z;
@@ -141,8 +233,8 @@ static I key(I p, I i) {               /* key i of pattern p; the 2N keys of a p
   }
 }
 static I lookup(I k, I dflt) {         /* d.get(k, dflt), noting the longest lookup */
-  long long b = probes; I v = pys_dict_get(dict, k, dflt);
-  if (probes - b > longest) longest = probes - b;
+  long long b = dict_slots; I v = pys_dict_get(dict, k, dflt);
+  if (dict_slots - b > longest) longest = dict_slots - b;
   return v;
 }
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec * 1e-9; }
@@ -151,20 +243,20 @@ static double run(I p, I n, long long c[4]) {  /* c: slots visited by insert, hi
   double t = 1e9;
   for (int r = 0; r < 3; r++) {
     dict = pys_dict_new(p >= 7 && p < NPAT, 0);
-    probes = 0; double t0 = now();
+    dict_slots = 0; double t0 = now();
     for (I i = 0; i < n; i++) pys_dict_set(dict, keys->a[i], i);
-    c[0] = probes; probes = 0;
+    c[0] = dict_slots; dict_slots = 0;
     for (I i = 0; i < n; i++) if (lookup(keys->a[i], -1) != i) bad(p, n, "wrong value");
     if (now() - t0 < t) t = now() - t0;
-    c[1] = probes;
+    c[1] = dict_slots;
   }
-  probes = 0;
+  dict_slots = 0;
   for (I i = n; i < 2 * n; i++) if (lookup(keys->a[i], -1) != -1) bad(p, n, "absent key found");
-  c[2] = probes;
+  c[2] = dict_slots;
   for (I i = 0; i < n; i += 2) if (pys_dict_pop(dict, keys->a[i]) != i) bad(p, n, "wrong value popped");
-  probes = 0;
+  dict_slots = 0;
   for (I i = 0; i < n; i++) if (lookup(keys->a[i], -1) != (i % 2 ? i : -1)) bad(p, n, "deleted key found, or kept key lost");
-  c[3] = probes;
+  c[3] = dict_slots;
   I j = 1;                             /* the survivors, in insertion order */
   for (I e = pys_dict_next(dict, 0, n / 2, 0), k = 0; e >= 0; e = pys_dict_next(dict, e + 1, n / 2, ++k), j += 2)
     if (pys_dict_key(dict, e) != keys->a[j] || pys_dict_val(dict, e) != j) bad(p, n, "insertion order lost");
@@ -180,6 +272,7 @@ static void tally(long long c[4], I n) {   /* the limit applies to hits, misses 
 int main(int argc, char **argv) {
   gc_init(__builtin_frame_address(0), roots, 2);
   hash_cache();
+  storage();
   if (argc == 2 && !strcmp(argv[1], "--hash-cache")) return 0;
   I ns[8] = {4000, 8000, 16000, 30000}, nn = 4;
   if (argc > 1) for (nn = 0; nn + 1 < argc && nn < 8; nn++) ns[nn] = atoll(argv[nn + 1]) & ~(I)1;
