@@ -10,9 +10,9 @@
 # upstream comment calls a "plain old global": here it is a module global (assigned after the
 # closures are made, read when they run), as in the module-level original of this file; the
 # in-method form, a cell assigned after the def that reads it, is rejected (below).
-# EXCLUDED upstream cases (see also tests/upstream_scope_nonlocal.py):
-# - testNestingThroughClass, testFreeVarInMethod's nested class: a class inside a function
-#   (rejected: no class scope inside functions)
+# EXCLUDED upstream cases (see also tests/upstream_scope_global_nonlocal.py):
+# - testNestingThroughClass, testBoundAndFree, testFreeVarInMethod's nested class: a class
+#   inside a function (rejected: no class scope inside functions)
 # - testMixedFreevarsAndCellvars; testNestingGlobalNoFree and testLambdas' f3 in their in-method
 #   form: a closure that reads a variable of the function around it assigned only after its def
 #   (rejected: "reads 'y', which may not be assigned yet where it is defined")
@@ -20,8 +20,9 @@
 # - testUnboundLocal, testUnboundLocal_AfterDel: a read before the assignment and a del of a
 #   variable a closure reads (rejected at compile time, where CPython raises UnboundLocalError
 #   or NameError)
-# - testUnoptimizedNamespaces: compile() of `from sys import *` in a function
-#   (the same SyntaxError is tests/errors/upstream_scope_import_star.py)
+# - testUnoptimizedNamespaces: compile() of `from sys import *` in a function; its first and
+#   third sources are tests/errors/upstream_scope_import_star.py and _star_outer.py (the same
+#   SyntaxError, at CPython's line), the other two give that error too
 # - testLeaks, testCellLeak, testFreeingCell: __del__, weakref and gc
 # - testLocalsFunction, testLocalsClass, testLocalsClass_WithTrace, testClassNamespaceOverridesClosure,
 #   testInteractionWithTraceFunc: locals(), sys.settrace() and classes inside functions

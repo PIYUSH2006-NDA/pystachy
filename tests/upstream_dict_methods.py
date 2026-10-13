@@ -26,8 +26,8 @@
 # - TypeErrors of calls with arguments that do not fit (d.keys(None), d.__contains__(),
 #   d.__getitem__(), d.clear(None), d.copy(None), d.get(None, None, None), d.setdefault(),
 #   d.pop(), d.update(None), dict.fromkeys(3)): compile-time errors here, with messages of their
-#   own; d.get() with no argument crashes the compiler with an IndexError instead of an error
-#   (bug NEW: tests/errors can hold no such case)
+#   own; test_get's d.get() with no argument crashes the compiler (bug: IndexError in bmethod()
+#   instead of a file:line: error; NEW)
 # - keys that are objects with __hash__ or __eq__ (BadEq, BadHash, Hashed, NastyKey, BadCmp,
 #   BadDictKey, X, CustomHash): test_getitem's and test_pop's second parts, test_setdefault's
 #   BadHash, test_setdefault_atomic, test_setitem_atomic_at_resize, test_mutating_lookup,
@@ -44,6 +44,7 @@
 # - test_popitem: dict.popitem() (not supported)
 # - test_repr's `d[1] = d` (a dict holding itself has no type), test_repr_deep (RecursionError)
 # - test_missing (hasattr() of a type, dict subclasses), test_copy_maintains_tracking, test_track_*,
+#   test_string_keys_can_track_values,
 #   test_container_iterator, test_free_after_iterating, test_store_evilattr, test_clear_reentrant_*,
 #   test_clear_at_lookup, test_overwrite_managed_dict, test_splittable_*,
 #   test_instance_dict_getattr_str_subclass, test_object_set_item_single_instance_non_str_key,

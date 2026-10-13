@@ -16,7 +16,7 @@
 #   errors here, with messages of their own); all([2, 4, 6], []), filter(42, (1, 2)) and
 #   filter(badfunc, range(5)) are tests/errors/upstream_builtin_*.py (CPython's messages)
 # - test_filter_pickle, test_map_pickle (pickle), test_filter_dealloc (filter objects as values,
-#   gc)
+#   gc); test_iter and test_next of the same class: iter() and next() (not supported)
 # - test_map's `from math import sqrt` with its fallback def inside the test method: a lambda in
 #   a function cannot read a name that the function's import of a builtin module binds
 #   (bug: "the lambda reads 'sqrt', which is not assigned yet where it is defined"; NEW)
