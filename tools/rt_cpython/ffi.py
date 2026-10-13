@@ -4,8 +4,12 @@ function, with the checks Pystachy's stubs make. A str goes in as its UTF-8 byte
 NUL-terminated; a NUL in it is a ValueError) and a returned char * comes back as a str (NULL:
 None, or a ValueError for -> str); C integers are range-checked (OverflowError), as Pystachy
 checks them."""
+import ast as _ast
 import ctypes
+import functools as _functools
 import inspect as _inspect
+import operator as _operator
+import threading as _threading
 import typing
 
 
@@ -107,3 +111,71 @@ def string_at(addr, n):
     if n < 0:
         raise ValueError("ffi.string_at() takes a length >= 0")  # (ctypes reads up to a NUL)
     return _s(ctypes.string_at(addr, n))
+
+
+# @export: a function of a module that `pystachy ext` compiles into a CPython extension module.
+# Under CPython the module's source runs, and this wrapper makes each call what pyext.c's
+# trampoline makes it: positional arguments only, converted and checked as the extension
+# converts them, results checked against Pystachy's 64-bit int, only the importing thread may
+# call, and an exception leaves as the builtin class Pystachy raises it as (its nearest builtin
+# base for one of the module's own classes) with args rebuilt from their repr, else (str(e),).
+
+
+def _in(name, i, t, x):
+    if t is int:
+        v = _operator.index(x)
+        if not -2**63 <= v < 2**63:
+            raise OverflowError("int too big to convert")
+        return v
+    if t is float:
+        if not (hasattr(type(x), "__float__") or hasattr(type(x), "__index__")):
+            raise TypeError(f"must be real number, not {type(x).__name__}")
+        return float(x)
+    if t is bool:
+        if x is not True and x is not False:
+            raise TypeError(f"{name}() argument {i + 1} must be bool")
+        return x
+    if not isinstance(x, str):
+        raise TypeError("expected str")
+    return x[:]  # (a plain str)
+
+
+def _out(t, r):
+    if t is int and not -2**63 <= r < 2**63:
+        raise OverflowError("integer result does not fit in 64 bits")
+    return float(r) if t is float else r
+
+
+def export(f):
+    hints = _typing_hints(f)
+    ret = hints.pop("return")
+    ts = list(hints.values())
+    owner = _threading.get_ident()
+    name = f.__name__
+
+    @_functools.wraps(f)
+    def call(*args, **kw):
+        if _threading.get_ident() != owner:
+            raise RuntimeError(f"{name}() is compiled by Pystachy, whose runtime is single-threaded: call it from the thread that imported its module")
+        if kw:
+            raise TypeError(f"{name}() takes no keyword arguments")
+        if len(args) != len(ts):
+            raise TypeError(f"{name}() takes {len(ts)} positional arguments but {len(args)} were given")
+        a = [_in(name, i, t, x) for i, (t, x) in enumerate(zip(ts, args))]
+        try:
+            return _out(ret, f(*a))
+        except BaseException as e:
+            c = type(e)
+            if c.__module__ != "builtins":
+                c = next(k for k in c.__mro__ if k.__module__ == "builtins")
+            try:
+                ea = _ast.literal_eval(repr(e.args))
+            except Exception:
+                ea = (str(e),)
+            raise c(*ea) from None
+
+    return call
+
+
+def _typing_hints(f):
+    return typing.get_type_hints(f)

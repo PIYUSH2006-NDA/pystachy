@@ -2176,9 +2176,10 @@ static const char *defenc(void) {      /* the encoding CPython names for a file 
                                           its UTF-8 mode, which the C and POSIX locales turn on, else the locale's */
   static char e[40];
   if (!*e) {
+    char old[64]; snprintf(old, sizeof old, "%s", setlocale(LC_CTYPE, 0));   /* (a host's own is put back) */
     const char *l = setlocale(LC_CTYPE, "");
     snprintf(e, sizeof e, "%s", l && strcmp(l, "C") && strcmp(l, "POSIX") ? nl_langinfo(CODESET) : "utf-8");
-    setlocale(LC_CTYPE, "C");
+    setlocale(LC_CTYPE, old);
   }
   return e;
 }
@@ -2221,6 +2222,11 @@ static _Noreturn void kbint_exit(void) {   /* a Ctrl-C noted during a stdio call
   out_flush(); fputs("KeyboardInterrupt\n", stderr);
   kbint = 1; pys_finish(); exit(130);
 }
+void pys_files_exit(void) {            /* the open files closed in the order they were opened (a failure is reported) */
+  int e;
+  for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
+  nfiles = 0;
+}
 void pys_finish(void) {                /* at exit, what CPython's shows of its end: stdout flushed after the code (see
                                           out_flush), the collector's report, stdout flushed in finalization (a
                                           failure is reported, status 120), the open files closed in the order they
@@ -2235,8 +2241,7 @@ void pys_finish(void) {                /* at exit, what CPython's shows of its e
     fprintf(stderr, "Exception ignored on flushing sys.stdout:\n%s: [Errno %d] %s\n", errcls(e), e, strerror(e));
     bad = 1;
   }
-  for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
-  nfiles = 0;
+  pys_files_exit();
   if (kbint) die_sigint();
   if (bad) { fflush(NULL); _exit(120); }
 }
@@ -2260,8 +2265,15 @@ static void files_sweep(void) {        /* after marking: close the open files no
 }
 static _Noreturn void oserr(const char *path);
 static _Noreturn void closed_err(void) { pys_fail("ValueError: I/O operation on closed file."); }
+/* CPython in the process (pyembed.c: an extension module's host): std_hook
+   sees each write to sys.stdout or sys.stderr (n < 0: a flush) first, and takes it (1) when it goes
+   through Python's sys.stdout or sys.stderr; in_hook reads sys.stdin through Python's (kind 0 input(),
+   1 readline(), 2 read(n)) */
+static int (*std_hook)(const char *, I, I);
+static Str *(*in_hook)(I, Str *, I);
 static void put1(File *f, const char *s, I n) {   /* write(): through CPython's layers, or C stdio's (stderr, a terminal) */
   if (f->closed) closed_err();
+  if (std_hook && f->std && f->wr && std_hook(s, n, f == &std_err ? 2 : 1)) return;
   int e = f->emu ? wput(f, s, n) : (f == &std_err ? ewrite(s, n) : (void)fwrite(s, 1, n, f->f), ferror(f->f) ? osflush(f, 0) : 0);
   if (e) ioerr(e);
 }
@@ -2294,6 +2306,24 @@ __attribute__((minsize)) void pys_init(int argc, char **argv, char *sb, I **root
     sigint_on = !sigaction(SIGINT, &sa, 0);
   }
 }
+/* pystachy ext: CPython hosts the program (pyext.c), and owns main, the signals and sys.stdout.
+   pys_init_lib is pys_init without argv, signal handlers or stdout's emulation (writes go to
+   std_hook); every call from Python is bracketed by pys_enter(its frame)/pys_leave, and the
+   outermost one's frame bounds the stack scan, as @main's does. One thread only (pyext.c). */
+static I lib_depth;
+void pys_set_hooks(int (*s)(const char *, I, I), Str *(*i)(I, Str *, I)) { std_hook = s; in_hook = i; }
+void pys_enter(char *sb) { if (!lib_depth++) gc_bottom = sb + 2 * sizeof(void *); }
+I pys_leave(void) { return --lib_depth; }
+void pys_init_lib(I **roots, I nroots) {
+  pys_c_numeric();                     /* (the host may call setlocale) */
+  if (!pmap) {                         /* (else an import that failed is tried again) */
+    gc_init(gc_bottom - 2 * sizeof(void *), roots, nroots);
+    std_in.f = stdin; std_in.rd = 1; std_in.nl = 2; std_in.std = 1;
+    std_out.f = stdout; std_out.wr = 1; std_out.std = 1;
+    std_err.f = stderr; std_err.wr = 1; std_err.std = 1;
+  }
+  args = pys_list_new(0);              /* sys.argv: the host's (pyext.c's pyx_argv appends it) */
+}
 List *pys_argv(void) { return args; }
 File *pys_std(I i) { return i == 0 ? &std_in : i == 1 ? &std_out : &std_err; }
 void pys_write(Str *s, I fd) { io_in(); put1(fd == 2 ? &std_err : &std_out, s->s, s->len); io_out(); }
@@ -2302,6 +2332,7 @@ void pys_flush(void) { pys_file_flush(&std_out); }
 Str *pys_input(Str *prompt) {          /* CPython: the prompt, if given, is written to sys.stdout, which is then
                                           flushed (a failure is ignored); then a line from sys.stdin */
   char *line = 0; size_t cap = 0;
+  if (in_hook) return in_hook(0, prompt, 0);   /* (Python's input(), with its sys.stdin and sys.stdout) */
   io_in();
   if (prompt) put1(&std_out, prompt->s, prompt->len);
   if (!std_out.closed && !std_out.kept) flush1(&std_out);
@@ -2436,9 +2467,13 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
   }
   return decode(f, &b);
 }
-Str *pys_file_read(File *f, I n) { io_in(); Str *s = read1(f, n); io_out(); return s; }
+Str *pys_file_read(File *f, I n) {
+  if (in_hook && f == &std_in && !f->closed) return in_hook(2, 0, n < 0 ? -1 : n);
+  io_in(); Str *s = read1(f, n); io_out(); return s;
+}
 Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n" after translation; "" any of
                                           "\n" "\r" "\r\n"; otherwise exactly that string */
+  if (in_hook && f == &std_in && !f->closed) return in_hook(1, 0, 0);
   io_in(); use(f, 1); Buf b = {0}; int c;
   while ((c = get(f)) != EOF) {
     char ch = getnl(f, c); put(&b, &ch, 1);
@@ -2525,6 +2560,7 @@ void pys_file_writelines(File *f, List *l) {
 }
 void pys_file_flush(File *f) {
   if (f->closed) closed_err();
+  if (std_hook && f->std && f->wr && std_hook(0, -1, f == &std_err ? 2 : 1)) return;
   io_in(); int e = flush1(f); io_out();
   if (e) ioerr(e);
 }

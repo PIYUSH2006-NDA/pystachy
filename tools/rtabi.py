@@ -83,5 +83,19 @@ for name, want in sorted(mine.items()):
             if s[name] != want:
                 bad += 1
                 print(f"MISMATCH {name}: runtime.py {want}, {where} {s[name]}")
+# the FFI's C glue (pyext.c, both ABIs; pyembed.c) declares the runtime.c functions it calls by hand
+glue = 0
+for src, flags in [("pyext.c", []), ("pyext.c", ["-DPYX_ABI3T"]), ("pyembed.c", [])]:
+    code, g_ir, err = run([CLANG, "-O0", "-S", "-emit-llvm", src, "-o", "-"] + flags)
+    if code != 0:
+        sys.exit(f"cannot compile {src}: {err.strip()}")
+    rc = seen["runtime.c"]
+    for name, got in sigs(g_ir).items():
+        if name.startswith("pys_") and re.search(rf"^declare .*@{name}\(", g_ir, re.M):
+            glue += 1
+            if name not in rc or rc[name] != got:
+                bad += 1
+                print(f"MISMATCH {name}: {src} {' '.join(flags)} {got}, runtime.c {rc.get(name, 'none')}")
+print(f"{glue} runtime calls of the FFI's C glue (pyext.c, both ABIs; pyembed.c) checked against runtime.c")
 print(f"{len(mine)} functions of runtime.py, {uses} uses in runtime.c and {len(progs)} programs, {bad} mismatches")
 sys.exit(1 if bad else 0)

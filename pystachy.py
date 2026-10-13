@@ -3193,7 +3193,7 @@ def builtin_has(mod: str, x: str) -> bool:
     if mod == "dataclasses":
         return x == "dataclass"
     if mod == "ffi":
-        return x in ("extern", "string_at", "c_buf") or x in CTYPES
+        return x in ("extern", "export", "string_at", "c_buf") or x in CTYPES
     return mod == "builtins" or known_path(mod + "." + x)  # (a builtin is checked where it is called)
 
 
@@ -3452,6 +3452,7 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
 class Loader:
     def __init__(self, dirs: list[str]):
         self.dirs = dirs  # the module search path
+        self.ext = ""  # pystachy ext: the main program is the extension module of this name (its __name__)
         self.mods: dict[str, Mod] = {}
         self.order: list[Mod] = []  # every module after those its top-level code imports
         # imports in the functions of imported modules, resolved once all module-level imports
@@ -4654,8 +4655,8 @@ class Loader:
             # (in module code: in a function, what the branch binds is still local; in a class body, a
             # global statement in it still holds for the whole body)
             return 0
-        if m.name != "" and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
-            return 0  # (in an imported module)
+        if (m.name != "" or self.ext != "") and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
+            return 0  # (in an imported module, or an extension module's)
         other = "win32 cygwin msys nt java emscripten wasi ios android"
         if e.kind == "cmp" and (e.s == "in" or e.s == "not in") and (e.kids[1].kind == "tuple" or e.kids[1].kind == "list") and e.kids[0].kind == "attr" and e.kids[0].s == "platform" and e.kids[0].kids[0].kind == "name" and self.special(m, e.kids[0].kids[0].s, scope) == "sys":
             # sys.platform in ("win32", "cygwin")
@@ -5047,11 +5048,11 @@ class Loader:
     def qexpr(self, m: Mod, n: Node, loc: dict[str, bool]) -> None:
         k = n.kind
         if k == "name" or k == "attr":
-            if k == "name" and n.s == "__name__" and m.name != "" and n.s not in loc:
+            if k == "name" and n.s == "__name__" and (m.name != "" or self.ext != "") and n.s not in loc:
                 if "__name__" in m.rebound:
-                    fail(f"module '{m.name}' binds __name__, which is not supported in an imported module", n.line)
+                    fail(f"module '{m.name if m.name != '' else self.ext}' binds __name__, which is not supported in an imported module", n.line)
                 n.kind = "str"
-                n.s = m.name
+                n.s = m.name if m.name != "" else self.ext
                 return
             if k == "name" and n.s == "__debug__":
                 n.kind = "True"  # (CPython runs without -O; nothing can bind __debug__)
@@ -5601,7 +5602,7 @@ UNSUPPORTED: dict[str, str] = {
 # of the program (over object.__new__, which makes an object of the class, only those marked "o")
 INERT_DECOS: dict[str, str] = {"typing.overload": "f", "typing.final": "fco", "typing.no_type_check": "fco", "typing.override": "fco",
                                "staticmethod": "f", "classmethod": "f", "property": "f", "dataclasses.dataclass": "c",
-                               "typing.runtime_checkable": "c", "object.__new__": "c", "ffi.extern": "f"}
+                               "typing.runtime_checkable": "c", "object.__new__": "c", "ffi.extern": "f", "ffi.export": "f"}
 # node kinds that evaluate without effects
 INERT: dict[str, bool] = {}
 for _k in "int float str bytes complex None True False ellipsis noann omit".split():
@@ -5858,7 +5859,7 @@ RUNTIME: dict[str, str] = {
     # runtime mode's primitives (Gen.primitive): a new str's memory, and the C library's searches
     # and copy, over the bytes of strs (a str that _rt.str_new made is written only before
     # _rt.str_done hands it out, so these need no letter either)
-    "alloc_atomic": "%ptr:int|A|", "cstr": "opt[str]:%ptr,int|R A|", "c_check": "int:int,int|R I|", "c_str": "None:str|R|", "string_at": "str:int,int|R A|", "c_bind": "None:%ptr,%ptr,%ptr|R A I|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
+    "alloc_atomic": "%ptr:int|A|", "init_lib": "None:%ptr,int|A I|", "cstr": "opt[str]:%ptr,int|R A|", "c_check": "int:int,int|R I|", "c_str": "None:str|R|", "string_at": "str:int,int|R A|", "c_bind": "None:%ptr,%ptr,%ptr|R A I|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
     "memmem": "%ptr:%ptr,int,%ptr,int||memmem", "memmove": "None:%ptr,%ptr,int,%i1||llvm.memmove.p0.p0.i64",
 }
 # LLVM symbol -> RUNTIME key (spelt out here as rtsym does: module code calls no function before
@@ -7225,6 +7226,7 @@ class FnInfo:
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
         self.csym = ""  # and its C symbol
+        self.pyexport = False  # @ffi.export: a function an extension module (pystachy ext) gives CPython
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
@@ -7754,8 +7756,10 @@ class Gen:
         # code calling back into the module
         self.late: dict[str, bool] = {}
         self.lib = False  # declaring an imported module's function: what it cannot compile is an error only where it is called
+        self.ext = ""  # pystachy ext: the name of the CPython extension module the program becomes
         self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
         self.csymline: dict[str, int] = {}  # and the line that declared it
+        self.extvars: dict[str, int] = {}  # pystachy ext: the main module's variables, and the line that binds each
         self.rtmode = False  # compiling runtime.py: its pys_* functions join runtime.c's under their C names (see runtime_ir)
         self.rtdefs: dict[str, FnInfo] = {}  # runtime mode: the pys_* functions this module defines, by C name
         self.rtcache = False  # runtime mode, for the driver's runtime cache: PYSTACHY_IRFX is the program's
@@ -8910,6 +8914,10 @@ class Gen:
                 f.extern = True
                 f.lib = ls[0]
                 f.csym = "@" + (ls[1] if ls[1] != "" else short(d.s))  # (the twin's symbol or f.__name__)
+            elif self.imported(x.s) == "ffi.export":
+                if len(x.kids) > 0 or len(d.kids) != 4:
+                    self.err("@export takes no arguments, and is a function's only decorator")
+                f.pyexport = True
         ps = d.kids[0].kids
         deco = ""
         stub = False  # (an imported module's that no def follows: see typing_forms)
@@ -8920,7 +8928,7 @@ class Gen:
         if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and (deco == "staticmethod" or deco == "classmethod"):
             f.deco = deco  # (a method that takes no self, or its class as cls)
         deco = short(deco)
-        if deco != "" and f.deco == "" and not self.lib and not f.extern:
+        if deco != "" and f.deco == "" and not self.lib and not f.extern and not f.pyexport:
             # (CPython applies a decorator when the def runs, called or not: see decorators())
             if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
                 self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -9019,7 +9027,7 @@ class Gen:
             f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
         if f.vararg >= 0:
             f.npos = f.vararg
-        if len(d.kids) > 3 and f.deco == "" and not f.extern:
+        if len(d.kids) > 3 and f.deco == "" and not f.extern and not f.pyexport:
             bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
             bad = STUB.replace("NAME", short(d.s)) if stub else bad
         if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
@@ -11230,6 +11238,81 @@ class Gen:
             LINKDL.append("dl")
         self.externs[f.ll] = decl + f"\ndefine internal {lt(f.ret)} {f.ll}({', '.join(ps)}) {{\n" + "\n".join(code) + "\n}"
 
+    def pyext(self) -> list[str]:
+        # pystachy ext: in place of @main, what pyext.c calls. @pyx.init runs the module's code and
+        # each public function of the main module gets @pyx.f.<name>(ptr slots, ptr err): its
+        # arguments in i64 slots, its result as one; a raise is caught there (none crosses CPython's
+        # frames) and its Exc is stored in *err. pyx_exports lists them: name, signature (result,
+        # then each parameter: i int, f float, b bool, s str, n None), wrapper
+        o: list[str] = []
+        for k in ["eh_on", "try_mark", "exc.handled", "exc.restore", "exc.begin", "personality", "init_lib"]:
+            if k not in self.rtfns:
+                o.append(runtime_decl(k))
+        pad = ["lp:", "  %x = landingpad { ptr, i32 } catch ptr null", "  %ue = extractvalue { ptr, i32 } %x, 0",
+               "  %e = call ptr @pys_exc_begin(ptr %ue, i64 %mark)", "  call void @pys_exc_restore(ptr %prev)"]
+        o.extend(["declare void @pyx_argv()", "declare ptr @pyx_call(i64, ptr, i64, ptr)", "define ptr @pyx_init() personality ptr @pys_personality {",
+                  f"  call void @pys_init_lib(ptr @pys.roots, i64 {len(self.gcroots)})", "  call void @pyx_argv()", "  call void @pys_eh_on()", "  %mark = call i64 @pys_try_mark()", "  %prev = call ptr @pys_exc_handled()",
+                  "  invoke void @main.init() to label %ok unwind label %lp", "ok:", "  ret ptr null"] + pad + ["  ret ptr %e", "}"])
+        tab: list[str] = []
+        letter = {"int": "i", "float": "f", "bool": "b", "str": "s", "None": "n"}
+        for f in self.funcs.values():
+            if f.mod != "" or f.cls != "" or f.name.startswith("_") or f.extern:
+                continue
+            self.line = f.node.line
+            if not f.pyexport:
+                self.err(f"{f.name}() is public in extension module '{self.ext}' but not @export: CPython would not see it; export it or name it _{f.name}")
+            dflt = False
+            for x in f.defaults:
+                dflt = dflt or x.kind != "noann"
+            if dflt or f.vararg >= 0 or f.npos != len(f.params):
+                self.err(f"{f.name}() is @export: its parameters are positional, with no default values and no *args (as CPython calls it)")
+            for t in [f.ret] + f.ptypes:
+                if t not in letter or (t == "None" and t != f.ret):
+                    self.err(f"{f.name}() cannot be called from CPython: it takes or returns {typestr(t) if t != '' else 'an untyped value'} (an extension module's function takes int, float, bool or str and returns one or None); name it _{f.name} to keep it private")
+            sig = "".join([letter[t] for t in [f.ret] + f.ptypes])
+            o.extend([f"define internal i64 @pyx.f.{f.name}(ptr %a, ptr %err) personality ptr @pys_personality {{", "entry:",
+                      "  %mark = call i64 @pys_try_mark()", "  %prev = call ptr @pys_exc_handled()"])
+            args: list[str] = []
+            for j in range(len(f.ptypes)):
+                t = lt(f.ptypes[j])
+                o.extend([f"  %q{j} = getelementptr i64, ptr %a, i64 {j}", f"  %s{j} = load i64, ptr %q{j}"])
+                o.append(f"  %v{j} = {'bitcast i64 %s' + str(j) + ' to double' if t == 'double' else 'trunc i64 %s' + str(j) + ' to i1' if t == 'i1' else 'inttoptr i64 %s' + str(j) + ' to ptr' if t == 'ptr' else 'add i64 0, %s' + str(j)}")
+                args.append(f"{t} %v{j}")
+            r = lt(f.ret)
+            o.append(f"  {'%r = ' if r != 'void' else ''}invoke {r} {f.ll}({', '.join(args)}) to label %ok unwind label %lp")
+            o.append("ok:")
+            o.append(f"  %ri = {'bitcast double %r to i64' if r == 'double' else 'zext i1 %r to i64' if r == 'i1' else 'ptrtoint ptr %r to i64' if r == 'ptr' else 'add i64 0, %r' if r == 'i64' else 'add i64 0, 0'}")
+            o.extend(["  ret i64 %ri"] + pad + ["  store ptr %e, ptr %err", "  ret i64 0", "}"])
+            o.append(f"@pyx.n.{f.name} = private constant [{len(f.name) + 1} x i8] c\"{llstr(f.name)}\\00\"")
+            o.append(f"@pyx.s.{f.name} = private constant [{len(sig) + 1} x i8] c\"{sig}\\00\"")
+            # (its METH_FASTCALL | METH_KEYWORDS function: self is the module, the index says which)
+            o.extend([f"define internal ptr @pyx.m.{f.name}(ptr %self, ptr %args, i64 %n, ptr %kw) {{",
+                      f"  %r = call ptr @pyx_call(i64 {len(tab)}, ptr %args, i64 %n, ptr %kw)", "  ret ptr %r", "}"])
+            tab.append(f"{{ptr, ptr, ptr, ptr}} {{ptr @pyx.n.{f.name}, ptr @pyx.s.{f.name}, ptr @pyx.f.{f.name}, ptr @pyx.m.{f.name}}}")
+        o.append(f"@pyx_exports = constant [{len(tab) + 1} x {{ptr, ptr, ptr, ptr}}] [{', '.join(tab + ['{ptr, ptr, ptr, ptr} zeroinitializer'])}]")
+        # what CPython would see of the module but an extension cannot give it yet: an error
+        for ci in self.classes.values():
+            if "$" not in ci.name and not ci.name.startswith("_"):
+                self.line = ci.node.line
+                self.err(f"class {ci.name} is public in extension module '{self.ext}', but classes cannot cross to CPython yet: name it _{ci.name}")
+        for nm in self.mvars:
+            if "$" not in nm and not nm.startswith("_") and nm not in self.imports and nm not in self.funcs and nm not in self.classes:
+                self.line = self.extvars.get(nm, 1)
+                self.err(f"variable '{nm}' is public in extension module '{self.ext}', but CPython would not see it (variables cannot cross yet): name it _{nm}")
+        # a raise of one of the program's exception classes leaves as its nearest builtin base
+        xs: list[str] = []
+        for ci in self.classes.values():
+            if ci.exc != "":
+                o.append(f"@pyx.xn.{len(xs)} = private constant [{len(short(ci.name)) + 1} x i8] c\"{llstr(short(ci.name))}\\00\"")
+                o.append(f"@pyx.xb.{len(xs)} = private constant [{len(ci.exc) + 1} x i8] c\"{ci.exc}\\00\"")
+                xs.append(f"{{ptr, ptr}} {{ptr @pyx.xn.{len(xs)}, ptr @pyx.xb.{len(xs)}}}")
+        o.append(f"@pyx_excbase = constant [{len(xs) + 1} x {{ptr, ptr}}] [{', '.join(xs + ['{ptr, ptr} zeroinitializer'])}]")
+        o.append(f"@pyx.name = private constant [{len(self.ext) + 1} x i8] c\"{self.ext}\\00\"")
+        # both entries: abi3's PyInit_<name> and abi3t's PyModExport_<name>; the driver keeps one
+        o.extend(["declare ptr @pyx_module(ptr)", f"define ptr @PyInit_{self.ext}() {{", "  %m = call ptr @pyx_module(ptr @pyx.name)", "  ret ptr %m", "}"])
+        o.extend(["declare ptr @pyx_slots(ptr)", f"define ptr @PyModExport_{self.ext}() {{", "  %m = call ptr @pyx_slots(ptr @pyx.name)", "  ret ptr %m", "}"])
+        return o
+
     def untold(self, f: FnInfo, ts: list[str], how: str) -> None:
         # a function of runtime mode that runtime.c calls or defines and RUNTIME does not name
         # (the dict's string hash, the format of a str): only LLVM's types check it (rtabi,
@@ -12403,7 +12486,7 @@ class Gen:
         tops: list[list[Node]] = []
         for m in mods:
             self.scan_imports(m.body.kids)
-            self.eh = self.eh or needs_eh(m.body.kids)
+            self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         for m in mods:
             m.body.kids = self.typing_forms(m, m.body.kids, False)
             for i in range(len(m.body.kids)):
@@ -12731,6 +12814,8 @@ class Gen:
             hdr.append(f"!{TBAA_BYTES} = !{{!{TBAA_LEN - 1}, !{TBAA_LEN - 1}, i64 0}}")
             hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775791}}")
             return "\n".join(hdr) + "\n"
+        if self.ext != "":
+            return "\n".join(hdr + self.pyext()) + "\n"
         # pys_init gets the GC roots: main's frame address bounds the stack scan (it also
         # covers @main.init if inlined here) and the table of pointer-typed globals
         hdr.append(runtime_decl("init"))
@@ -12768,6 +12853,12 @@ class Gen:
         for st in top:
             if st.kind == "def":
                 gl[st.s] = True  # (a decorated def's name: what its decorators give)
+        for st in top if mod == "" and self.ext != "" else []:
+            one: dict[str, bool] = {}
+            collect([st], one)
+            for nm in one:
+                if nm not in self.extvars:
+                    self.extvars[nm] = st.line  # (pystachy ext: where the module binds it)
         for f in fns:
             if f.pending:
                 continue  # its defining method already contributes the same global assignments
@@ -18103,6 +18194,8 @@ class Gen:
 
     def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "") -> Val:
         # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
+        if f.pyexport:
+            self.err(f"{f.name}() is @export, so Pystachy code may not call it (under CPython each call goes through the export's checks and conversions): call a private function that both use")
         if f.bad != "":
             self.err(f.bad)  # (before its arguments, whose types may be placeholders')
         if f.ll not in self.called and f.ll in self.lazyat:
@@ -19900,8 +19993,12 @@ class Gen:
 
 
 # ---------------------------------------------------------------- driver
-def compile_program(path: str, src: str, dirs: list[str]) -> str:
-    return Gen().program(Loader(dirs).program(path, src))
+def compile_program(path: str, src: str, dirs: list[str], ext: str) -> str:
+    g = Gen()
+    g.ext = ext
+    ld = Loader(dirs)
+    ld.ext = ext
+    return g.program(ld.program(path, src))
 
 
 def runtime_ir(path: str, cache: bool) -> str:
@@ -19936,9 +20033,10 @@ def main() -> None:
     # dozen calls deep each: more than CPython's default limit of 1,000 calls when it runs this file
     sys.setrecursionlimit(MAXNEST * 40)
     argv = sys.argv
-    if len(argv) < 3 or (argv[1] != "run" and argv[1] != "build" and argv[1] != "ir" and argv[1] != "check" and argv[1] != "rt"):
+    if len(argv) < 3 or (argv[1] != "run" and argv[1] != "build" and argv[1] != "ext" and argv[1] != "ir" and argv[1] != "check" and argv[1] != "rt"):
         print("usage: pystachy run FILE.py [ARGS...]   JIT-compile and run (LLVM ORC via lli)", file=sys.stderr)
         print("       pystachy build FILE.py [-o EXE]  compile ahead of time to a native executable", file=sys.stderr)
+        print("       pystachy ext NAME.py [-o NAME.abi3.so]  compile to a CPython extension module (abi3, CPython 3.12+)", file=sys.stderr)
         print("       pystachy ir FILE.py [-o OUT.ll]  emit LLVM IR", file=sys.stderr)
         print("       pystachy check FILE.py           only parse it, with the checks CPython makes before running it", file=sys.stderr)
         print("       pystachy rt runtime.py [-o OUT.ll] emit the LLVM IR of the runtime's part written in the subset", file=sys.stderr)
@@ -19985,14 +20083,19 @@ def main() -> None:
             del MODULES["ffi"]  # (the program's own ffi module comes first, as under CPython: Pystachy's is not imported then)
             break
     f = open(SRC, "r", encoding=RAW)
-    ir = compile_program(SRC, f.read(), dirs)
+    ext = SRC[SRC.rfind("/") + 1 : -3] if cmd == "ext" and SRC.endswith(".py") else ""
+    ir = compile_program(SRC, f.read(), dirs, ext)
     f.close()
     out = ""
+    abi = "abi3"  # pystachy ext: abi3 (CPython 3.12+, GIL builds) or abi3t (3.15+, GIL and free-threaded)
     rest: list[str] = []
     i = 3
     while i < len(argv):
         if argv[i] == "-o" and i + 1 < len(argv) and cmd != "run":
             out = argv[i + 1]
+            i += 2
+        elif argv[i] == "--abi" and i + 1 < len(argv) and cmd == "ext" and (argv[i + 1] == "abi3" or argv[i + 1] == "abi3t"):
+            abi = argv[i + 1]
             i += 2
         else:
             rest.append(argv[i])
@@ -20089,10 +20192,27 @@ def main() -> None:
     if code == 0 and cmd == "run":
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
         code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(parto)} {q(rto)})")
+    peb = rtb[:-3] + "-pyembed.bc"
+    if code == 0 and cmd == "ext":
+        # pyembed.c: CPython in the process, hosting an extension module (its stdio hooks)
+        pec = home + "/pyembed.c"
+        code = sh(f"test {q(peb)} -nt {q(pec)} || ({llvm}clang -O2 -fPIC -S -emit-llvm {q(pec)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(part)} && mv -f {q(part)} {q(peb)})")
     link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
-    libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
+    libs = " -ldl" if len(LINKDL) > 0 or cmd == "ext" else ""  # (dlopen, dlsym: @ffi.extern, pyembed.c)
     if code != 0:
         msg = "cannot build the runtime (are clang and LLVM 18 installed? see PYSTACHY_LLVM, PYSTACHY_CFLAGS)"
+    elif cmd == "ext":
+        # a CPython extension module: program, pyext.c and runtime as one module, of which only
+        # PyInit_<name> stays visible (pyext.c's bitcode is cached as the runtime's is)
+        pxc = home + "/pyext.c"
+        pxb = rtb[:-3] + "-pyext-" + abi + ".bc"
+        entry = "PyModExport_" if abi == "abi3t" else "PyInit_"
+        if out == "":
+            out = SRC[:-3] + "." + abi + ".so"
+        code = sh(f"(test {q(pxb)} -nt {q(pxc)} || ({llvm}clang -O2 -fPIC -S -emit-llvm {q(pxc)} -o {q(rll)}{cflags} -fexceptions{' -DPYX_ABI3T' if abi == 'abi3t' else ''} && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(part)} && mv -f {q(part)} {q(pxb)}))"
+                  + f" && {llvm}llvm-link {q(ll)} {q(pxb)} {q(peb)} -o {q(lnk)} && {llvm}llvm-link --only-needed {q(lnk)} {q(rtb)} -o {q(bc)}"
+                  + f" && {llvm}opt -passes='internalize,default<O2>' -internalize-public-api-list={entry}{ext} {q(bc)} -o {q(bc)}"
+                  + f" && {llvm}clang -O2 -fPIC -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang -shared {q(obj)} -o {q(out)}{libs} -lm{cflags}")
     elif cmd == "build":
         # AOT tier: full -O2 over program + runtime as one module (whole-program optimization)
         if out == "":

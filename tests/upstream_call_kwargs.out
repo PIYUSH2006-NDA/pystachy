@@ -1,0 +1,22 @@
+fn(b=1, a=2, c=3) ['b', 'a', 'c']
+fn(c=3, a=2, b=1) ['c', 'a', 'b']
+fn(z=0, **{'x': 1, 'a': 2}, y=3) ['z', 'x', 'a', 'y']
+fn(**{'b': 1}, **{'a': 2}) ['b', 'a']
+fn2(d=1, a=2, b=3, c=4, e=5) ['d', 'b', 'e']
+c.init_kw ['b', 'a', 'c']
+c.meth(b=1, a=2, c=3) ['b', 'a', 'c']
+C.cmeth(b=1, a=2, c=3) ['b', 'a', 'c']
+C.smeth(b=1, a=2, c=3) ['b', 'a', 'c']
+pyfunc(*(1, 2)) [1, 2]
+pyfunc_noarg(*()) 'noarg'
+PYTHON_INSTANCE.method(*(1, 2)) [1, 2]
+PYTHON_INSTANCE.method_noarg(*()) 'noarg'
+pyfunc(*(1,), **{'arg2': 2}) [1, 2]
+pyfunc(*(), **{'arg1': 1, 'arg2': 2}) [1, 2]
+PYTHON_INSTANCE.method(*(1,), **{'arg2': 2}) [1, 2]
+PYTHON_INSTANCE.method(*(), **{'arg1': 1, 'arg2': 2}) [1, 2]
+method(*(1, 2)) [1, 2]
+method_noarg(*()) 'noarg'
+method(*(1,), **{'arg2': 2}) [1, 2]
+method(*(), **{'arg1': 1, 'arg2': 2}) [1, 2]
+[exit 0]

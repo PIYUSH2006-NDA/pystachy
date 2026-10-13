@@ -1,0 +1,21 @@
+zip(a, b) [(1, 4), (2, 5), (3, 6)]
+zip(a, [4, 5, 6]) [(1, 4), (2, 5), (3, 6)]
+zip(a, (4, 5, 6, 7)) [(1, 4), (2, 5), (3, 6)]
+zip(a, TestFailingIter()): RuntimeError
+cm.exception is exception True
+data == sorted(copy) True
+data != copy True
+data == sorted(copy, key=lambda x: -x) True
+data != copy True
+data == sorted(copy, reverse=True) True
+data != copy True
+sorted([]) []
+sorted([], key=None) []
+sorted(list(s)) True
+sorted(str(s)) True
+sorted(str(s)) True
+sorted(set(s)) True
+sorted(frozenset(s)) True
+sorted(list(s)) True
+sorted(dict.fromkeys(s)) True
+[exit 0]

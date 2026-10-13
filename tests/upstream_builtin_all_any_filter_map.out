@@ -1,0 +1,23 @@
+all([2, 4, 6]) True
+all([2, None, 6]) False
+all(TestFailingIter()): RuntimeError
+all([]) True
+all(x > 42 for x in S) True
+all(x > 42 for x in S) False
+any([None, 4, None]) True
+any(TestFailingIter()): RuntimeError
+any([]) False
+any(x > 42 for x in S) True
+any(x > 42 for x in S) False
+filter(lambda c: 'a' <= c <= 'z', 'Hello World') ['e', 'l', 'l', 'o', 'o', 'r', 'l', 'd']
+filter(lambda x: x > 0, [1, -3, 9, 0, 2]) [1, 9, 2]
+filter(None, (1, 2)) [1, 2]
+filter(lambda x: x>=3, (1, 2, 3, 4)) [3, 4]
+map(lambda x: x*x, range(1,4)) [1, 4, 9]
+map(lambda x: list(map(sqrt, x)), [[16, 4], [81, 9]]) [[4.0, 2.0], [9.0, 3.0]]
+map(lambda x, y: x+y, [1,3,2], [9,1,4]) [10, 4, 6]
+map(plus, [1, 3, 7]) [1, 3, 7]
+map(plus, [1, 3, 7], [4, 9, 2]) [5, 12, 9]
+map(plus, [1, 3, 7], [4, 9, 2], [1, 1, 0]) [6, 13, 9]
+map(badfunc, range(5)): RuntimeError
+[exit 0]
