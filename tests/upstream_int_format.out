@@ -1,0 +1,266 @@
+test_format: 1090 formats; bin, oct, str, repr and hex of -2305843009213693951: -0b1111111111111111111111111111111111111111111111111111111111111 -0o177777777777777777777 -2305843009213693951 -2305843009213693951 -0x1fffffffffffffff
+format(123456789, 'd') '123456789'
+format(123456789, 'd') '123456789'
+format(123456789, ',') '123,456,789'
+format(123456789, '_') '123_456_789'
+format(1, "-") '1'
+format(-1, "-") '-1'
+format(1, "-3") '  1'
+format(-1, "-3") ' -1'
+format(1, "+3") ' +1'
+format(-1, "+3") ' -1'
+format(1, " 3") '  1'
+format(-1, " 3") ' -1'
+format(1, " ") ' 1'
+format(-1, " ") '-1'
+format(3, "x") '3'
+format(3, "X") '3'
+format(1234, "x") '4d2'
+format(-1234, "x") '-4d2'
+format(1234, "8x") '     4d2'
+format(-1234, "8x") '    -4d2'
+format(1234, "x") '4d2'
+format(-1234, "x") '-4d2'
+format(-3, "x") '-3'
+format(-3, "X") '-3'
+format(int('be', 16), "x") 'be'
+format(int('be', 16), "X") 'BE'
+format(-int('be', 16), "x") '-be'
+format(-int('be', 16), "X") '-BE'
+format(1234567890, ',x') ValueError: Cannot specify ',' with 'x'.
+format(1234567890, '_x') '4996_02d2'
+format(1234567890, '_X') '4996_02D2'
+format(3, "o") '3'
+format(-3, "o") '-3'
+format(1234, "o") '2322'
+format(-1234, "o") '-2322'
+format(1234, "-o") '2322'
+format(-1234, "-o") '-2322'
+format(1234, " o") ' 2322'
+format(-1234, " o") '-2322'
+format(1234, "+o") '+2322'
+format(-1234, "+o") '-2322'
+format(1234567890, ',o') ValueError: Cannot specify ',' with 'o'.
+format(1234567890, '_o') '111_4540_1322'
+format(3, "b") '11'
+format(-3, "b") '-11'
+format(1234, "b") '10011010010'
+format(-1234, "b") '-10011010010'
+format(1234, "-b") '10011010010'
+format(-1234, "-b") '-10011010010'
+format(1234, " b") ' 10011010010'
+format(-1234, " b") '-10011010010'
+format(1234, "+b") '+10011010010'
+format(-1234, "+b") '-10011010010'
+format(1234567890, ',b') ValueError: Cannot specify ',' with 'b'.
+format(12345, '_b') '11_0000_0011_1001'
+format(3, '1.3') ValueError: Precision not allowed in integer format specifier
+format(3, '_c') ValueError: Cannot specify '_' with 'c'.
+format(3, ',c') ValueError: Cannot specify ',' with 'c'.
+format(3, '+c') ValueError: Sign not allowed with integer format specifier 'c'
+format(3, '_,') ValueError: Cannot specify both ',' and '_'.
+format(3, ',_') ValueError: Cannot specify both ',' and '_'.
+format(3, '_,d') ValueError: Cannot specify both ',' and '_'.
+format(3, ',_d') ValueError: Cannot specify both ',' and '_'.
+format(3, ',s') ValueError: Cannot specify ',' with 's'.
+format(3, '_s') ValueError: Cannot specify '_' with 's'.
+format(0, 'a') ValueError: Unknown format code 'a' for object of type 'int'
+format(0, 'h') ValueError: Unknown format code 'h' for object of type 'int'
+format(0, 'i') ValueError: Unknown format code 'i' for object of type 'int'
+format(0, 'j') ValueError: Unknown format code 'j' for object of type 'int'
+format(0, 'k') ValueError: Unknown format code 'k' for object of type 'int'
+format(0, 'l') ValueError: Unknown format code 'l' for object of type 'int'
+format(0, 'm') ValueError: Unknown format code 'm' for object of type 'int'
+format(0, 'p') ValueError: Unknown format code 'p' for object of type 'int'
+format(0, 'q') ValueError: Unknown format code 'q' for object of type 'int'
+format(0, 'r') ValueError: Unknown format code 'r' for object of type 'int'
+format(0, 's') ValueError: Unknown format code 's' for object of type 'int'
+format(0, 't') ValueError: Unknown format code 't' for object of type 'int'
+format(0, 'u') ValueError: Unknown format code 'u' for object of type 'int'
+format(0, 'v') ValueError: Unknown format code 'v' for object of type 'int'
+format(0, 'w') ValueError: Unknown format code 'w' for object of type 'int'
+format(0, 'y') ValueError: Unknown format code 'y' for object of type 'int'
+format(0, 'z') ValueError: Negative zero coercion (z) not allowed in integer format specifier
+format(0, 'A') ValueError: Unknown format code 'A' for object of type 'int'
+format(0, 'B') ValueError: Unknown format code 'B' for object of type 'int'
+format(0, 'C') ValueError: Unknown format code 'C' for object of type 'int'
+format(0, 'D') ValueError: Unknown format code 'D' for object of type 'int'
+format(0, 'H') ValueError: Unknown format code 'H' for object of type 'int'
+format(0, 'I') ValueError: Unknown format code 'I' for object of type 'int'
+format(0, 'J') ValueError: Unknown format code 'J' for object of type 'int'
+format(0, 'K') ValueError: Unknown format code 'K' for object of type 'int'
+format(0, 'L') ValueError: Unknown format code 'L' for object of type 'int'
+format(0, 'M') ValueError: Unknown format code 'M' for object of type 'int'
+format(0, 'N') ValueError: Unknown format code 'N' for object of type 'int'
+format(0, 'O') ValueError: Unknown format code 'O' for object of type 'int'
+format(0, 'P') ValueError: Unknown format code 'P' for object of type 'int'
+format(0, 'Q') ValueError: Unknown format code 'Q' for object of type 'int'
+format(0, 'R') ValueError: Unknown format code 'R' for object of type 'int'
+format(0, 'S') ValueError: Unknown format code 'S' for object of type 'int'
+format(0, 'T') ValueError: Unknown format code 'T' for object of type 'int'
+format(0, 'U') ValueError: Unknown format code 'U' for object of type 'int'
+format(0, 'V') ValueError: Unknown format code 'V' for object of type 'int'
+format(0, 'W') ValueError: Unknown format code 'W' for object of type 'int'
+format(0, 'Y') ValueError: Unknown format code 'Y' for object of type 'int'
+format(0, 'Z') ValueError: Unknown format code 'Z' for object of type 'int'
+test__format__: 117 ValueErrors
+format(0, 'e') '0.000000e+00'
+format(1, 'e') '1.000000e+00'
+format(-1, 'e') '-1.000000e+00'
+format(100, 'e') '1.000000e+02'
+format(-100, 'e') '-1.000000e+02'
+format(1234567890, 'e') '1.234568e+09'
+format(-1234567890, 'e') '-1.234568e+09'
+format(0, 'E') '0.000000E+00'
+format(1, 'E') '1.000000E+00'
+format(-1, 'E') '-1.000000E+00'
+format(100, 'E') '1.000000E+02'
+format(-100, 'E') '-1.000000E+02'
+format(1234567890, 'E') '1.234568E+09'
+format(-1234567890, 'E') '-1.234568E+09'
+format(0, 'f') '0.000000'
+format(1, 'f') '1.000000'
+format(-1, 'f') '-1.000000'
+format(100, 'f') '100.000000'
+format(-100, 'f') '-100.000000'
+format(1234567890, 'f') '1234567890.000000'
+format(-1234567890, 'f') '-1234567890.000000'
+format(0, 'F') '0.000000'
+format(1, 'F') '1.000000'
+format(-1, 'F') '-1.000000'
+format(100, 'F') '100.000000'
+format(-100, 'F') '-100.000000'
+format(1234567890, 'F') '1234567890.000000'
+format(-1234567890, 'F') '-1234567890.000000'
+format(0, 'g') '0'
+format(1, 'g') '1'
+format(-1, 'g') '-1'
+format(100, 'g') '100'
+format(-100, 'g') '-100'
+format(1234567890, 'g') '1.23457e+09'
+format(-1234567890, 'g') '-1.23457e+09'
+format(0, 'G') '0'
+format(1, 'G') '1'
+format(-1, 'G') '-1'
+format(100, 'G') '100'
+format(-100, 'G') '-100'
+format(1234567890, 'G') '1.23457E+09'
+format(-1234567890, 'G') '-1.23457E+09'
+format(0, '%') '0.000000%'
+format(1, '%') '100.000000%'
+format(-1, '%') '-100.000000%'
+format(100, '%') '10000.000000%'
+format(-100, '%') '-10000.000000%'
+format(1234567890, '%') '123456789000.000000%'
+format(-1234567890, '%') '-123456789000.000000%'
+test_round: 1040 values rounded to tens, round(-505, -1) = -500
+round(-150, -2) -200
+round(-149, -2) -100
+round(-51, -2) -100
+round(-50, -2) 0
+round(-49, -2) 0
+round(-1, -2) 0
+round(0, -2) 0
+round(1, -2) 0
+round(49, -2) 0
+round(50, -2) 0
+round(51, -2) 100
+round(149, -2) 100
+round(150, -2) 200
+round(250, -2) 200
+round(251, -2) 300
+round(172500, -3) 172000
+round(173500, -3) 174000
+round(31415926535, -1) 31415926540
+round(31415926535, -2) 31415926500
+round(31415926535, -3) 31415927000
+round(31415926535, -4) 31415930000
+round(31415926535, -5) 31415900000
+round(31415926535, -6) 31416000000
+round(31415926535, -7) 31420000000
+round(31415926535, -8) 31400000000
+round(31415926535, -9) 31000000000
+round(31415926535, -10) 30000000000
+round(31415926535, -11) 0
+round(31415926535, -12) 0
+round(31415926535, -999) 0
+round(10**10 + 324678, -3) 10000325000
+isinstance(got, int) True
+round(10**11 + 324678, -3) 100000325000
+isinstance(got, int) True
+round(10**12 + 324678, -3) 1000000325000
+isinstance(got, int) True
+round(10**13 + 324678, -3) 10000000325000
+isinstance(got, int) True
+round(10**14 + 324678, -3) 100000000325000
+isinstance(got, int) True
+round(10**15 + 324678, -3) 1000000000325000
+isinstance(got, int) True
+round(10**16 + 324678, -3) 10000000000325000
+isinstance(got, int) True
+round(10**17 + 324678, -3) 100000000000325000
+isinstance(got, int) True
+round(10**18 + 324678, -3) 1000000000000325000
+isinstance(got, int) True
+test_round: round(x, n) == x for 500 random x and n in range(5)
+round(8979323, 2147483647) 8979323
+round(8979323, 2147483648) 8979323
+round(8979323, 9223372036854775807) 8979323
+test_round: round(x) == x for 100 random x
+float(0) 0.0
+float(0) 0.0
+float(1) 1.0
+float(-1) -1.0
+float(2) 2.0
+float(-2) -2.0
+float(9007199254740989) 9007199254740989.0
+float(-9007199254740989) -9007199254740989.0
+float(9007199254740990) 9007199254740990.0
+float(-9007199254740990) -9007199254740990.0
+float(9007199254740991) 9007199254740991.0
+float(-9007199254740991) -9007199254740991.0
+float(9007199254740992) 9007199254740992.0
+float(-9007199254740992) -9007199254740992.0
+float(9007199254740994) 9007199254740994.0
+float(-9007199254740994) -9007199254740994.0
+float(18014398509481980) 1.801439850948198e+16
+float(-18014398509481980) -1.801439850948198e+16
+float(18014398509481982) 1.8014398509481982e+16
+float(-18014398509481982) -1.8014398509481982e+16
+float(18014398509481984) 1.8014398509481984e+16
+float(-18014398509481984) -1.8014398509481984e+16
+float(18014398509481988) 1.8014398509481988e+16
+float(-18014398509481988) -1.8014398509481988e+16
+test_float_conversion: 214 round-half-even cases, int(float(2**53+7)) = 9007199254741000
+test_float_conversion: 20 cases of 2**p * (2**53 + 1)
+test_float_conversion: 6168 conversions match int_to_float(); float(2**60 + 127) = 1.152921504606847e+18
+float(int(-2.0)) -2.0
+float(int(-1.0)) -1.0
+float(int(0.0)) 0.0
+float(int(1.0)) 1.0
+float(int(2.0)) 2.0
+math.log10(10 ** 0) 0.0
+math.log(10 ** 0) 0.0
+math.log10(10 ** 1) 1.0
+math.log(10 ** 1) 2.302585092994046
+math.log10(10 ** 2) 2.0
+math.log(10 ** 2) 4.605170185988092
+math.log10(10 ** 3) 3.0
+math.log(10 ** 3) 6.907755278982137
+math.log10(10 ** 4) 4.0
+math.log(10 ** 4) 9.210340371976184
+math.log10(10 ** 5) 5.0
+math.log(10 ** 5) 11.512925464970229
+math.log10(10 ** 6) 6.0
+math.log(10 ** 6) 13.815510557964274
+math.log10(10 ** 7) 7.0
+math.log(10 ** 7) 16.11809565095832
+math.log10(10 ** 8) 8.0
+math.log(10 ** 8) 18.420680743952367
+math.log10(10 ** 9) 9.0
+math.log(10 ** 9) 20.72326583694641
+math.log(-2) ValueError: math domain error
+math.log10(-2) ValueError: math domain error
+math.log(0) ValueError: math domain error
+math.log10(0) ValueError: math domain error
+[exit 0]
