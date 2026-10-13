@@ -184,6 +184,10 @@ Error: iterable expected, not NoneType
 ['a\r\n', 'b,c\r\n', 'd\r\n', 'e,f\r\n', 'x,1\r\n', 'y,2\r\n', 'g,h\r\n', 'i\r\n']
 to,"stdout, a file","with ""quotes"""
 n
+a,2,3.5,,True,6,7,8,9,ten,"e,leven",12
+1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+one
+""
 2
 -- dialects: checks of the settings
 delimiter=1 | TypeError: "delimiter" must be string, not int

@@ -839,6 +839,14 @@ class Writer:
             self._join(str(field), False, quoting == QUOTE_ALL or quoting == QUOTE_NONNUMERIC or quoting == QUOTE_NOTNULL)
         return False
 
+    def _append_items(self, field, *rest) -> bool:
+        # the fields of a tuple, whose items may have different types (iterating a tuple needs one
+        # item type): the first, then the others, in a call of their own; whether the last is None
+        null = self._append(field)
+        if len(rest) > 0:
+            return self._append_items(*rest)
+        return null
+
     def _end(self, null):
         # the end of csv_writerow: a record of one empty field is quoted, the line terminated and
         # written; null: whether the last field was None
@@ -866,25 +874,8 @@ class Writer:
         if isinstance(row, (int, float)):
             raise Error("iterable expected, not %.200s" % _typename(row))
         elif isinstance(row, tuple):
-            # (a tuple's items may have different types: each its own field)
             if len(row) > 0:
-                null = self._append(row[0])
-            if len(row) > 1:
-                null = self._append(row[1])
-            if len(row) > 2:
-                null = self._append(row[2])
-            if len(row) > 3:
-                null = self._append(row[3])
-            if len(row) > 4:
-                null = self._append(row[4])
-            if len(row) > 5:
-                null = self._append(row[5])
-            if len(row) > 6:
-                null = self._append(row[6])
-            if len(row) > 7:
-                null = self._append(row[7])
-            if len(row) > 8:
-                null = self._append(row[8])
+                null = self._append_items(*row)
         elif isinstance(row, str):
             for c in _chars(row):
                 null = self._append(c)

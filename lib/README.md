@@ -77,9 +77,10 @@ each field `str()`-ed as CPython does; a tuple's items may have different types
   fields can be assigned (CPython's are read-only), and `dialect=` is a registered name, a
   `Dialect` or `None`.
 - An uncaught error is reported as `csv.Error` (CPython's class is `_csv.Error`). A writer of an
-  object without `write()`, a format parameter that is an object of the program's class, a row that
-  cannot be iterated (but an int, float, bool or `None`, which raise CPython's `csv.Error`) and a
-  NamedTuple row are compile-time errors, where CPython raises `TypeError` or writes the
+  object without `write()` (`tests/errors/lib_csv_no_write.py`), a format parameter that is an object
+  of the program's class, a row that cannot be iterated (but an int, float, bool or `None`, which
+  raise CPython's `csv.Error`; `tests/errors/lib_csv_row_not_iterable.py`) and a NamedTuple row
+  (`tests/errors/lib_csv_namedtuple_row.py`) are compile-time errors, where CPython raises `TypeError` or writes the
   NamedTuple's fields; for `QUOTE_NONNUMERIC`, an object of the program's class is no number, also
   where its class defines `__float__`, `__int__` or `__index__`.
 

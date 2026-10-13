@@ -282,6 +282,12 @@ w.writerows(csv.reader(["g,h", "i"]))
 print(out.parts)
 csv.writer(sys.stdout).writerow(["to", "stdout, a file", 'with "quotes"'])
 n = csv.writer(sys.stdout, lineterminator="\n").writerow(["n"])
+# a tuple's items, of any types and however many, are each a field
+wide = csv.writer(sys.stdout, lineterminator="\n")
+wide.writerow(("a", 2, 3.5, None, True, 6, 7, 8, 9, "ten", "e,leven", 12))
+wide.writerow((1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30))
+wide.writerow(("one",))
+wide.writerow((None,))
 print(n)
 
 print("-- dialects: checks of the settings")
