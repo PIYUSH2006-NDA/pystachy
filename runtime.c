@@ -24,6 +24,24 @@
 #include <unistd.h>
 #include <unwind.h>
 
+/* A float's shortest round-trip digits: Ryu's d2s (ryu/, upstream commit 4c0618b; ryu/README.md),
+   with its small tables. An update of ryu/ names its commit here too, as the driver rebuilds its
+   cached runtime when runtime.c changes. Its functions are made static, so that no symbol of it
+   leaves the runtime (d2s and d2s_buffered, unused, are dropped), and its asserts are off, as in a
+   release build (assert() is then as it was, for the code that follows) */
+#define RYU_OPTIMIZE_SIZE
+static int d2s_buffered_n(double f, char *result);
+__attribute__((unused)) static void d2s_buffered(double f, char *result);
+__attribute__((unused)) static char *d2s(double f);
+#ifdef NDEBUG
+#include "ryu/d2s.c"
+#else
+#define NDEBUG
+#include "ryu/d2s.c"
+#undef NDEBUG
+#include <assert.h>
+#endif
+
 typedef int64_t I;
 typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
@@ -534,12 +552,14 @@ Str *pys_str_float(double d) {               /* Python repr(): shortest round-tr
   if (isnan(d)) return cstr("nan");
   if (isinf(d)) return cstr(d > 0 ? "inf" : "-inf");
   if (d == 0) return cstr(signbit(d) ? "-0.0" : "0.0");
-  int p = 1;
-  for (; p < 17; p++) { fsnprintf(b, 40, "%.*e", p - 1, d); if (fstrtod(b, 0) == d) break; }
-  if (p == 17) fsnprintf(b, 40, "%.16e", d);
+  /* "-D.DDDE-X": the fewest digits that read back as d, and of those the closest to d, as CPython's
+     dtoa (mode 0) gives them. (Not the first p at which the nearest p-digit decimal reads back: at
+     a power of two, whose lower neighbour is twice as close as its upper one, that decimal can
+     fail where another of p digits reads back) */
+  b[d2s_buffered_n(d, b)] = 0;
   int nd = 0, neg = b[0] == '-';
   char *q = b + neg;
-  for (; *q != 'e'; q++) if (*q != '.') dig[nd++] = *q;
+  for (; *q != 'E'; q++) if (*q != '.') dig[nd++] = *q;
   int e = atoi(q + 1) + 1;                      /* position of the decimal point */
   while (nd > 1 && dig[nd - 1] == '0') nd--;
   if (neg) *w++ = '-';

@@ -36,6 +36,7 @@ flowchart TD
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
 | `runtime.c` | 3,340 | garbage collector, string, list and dict memory, timsort, dict and set tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
 | `runtime.py` | 1,366 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, `fsum` and `prod`, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
+| `ryu/` | 1,247 | Ryu's `d2s`, which runtime.c includes for a float's shortest round-trip digits: upstream's files, under the Boost Software License 1.0 ([`ryu/README.md`](../ryu/README.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
@@ -321,8 +322,8 @@ collection also runs when `open()` runs out of file descriptors.
 
 ### Python semantics in the runtime
 
-Floor division and modulo, float `repr` (shortest
-round-trip digits), `round` with exact half-even rounding, Neumaier-compensated `sum`,
+Floor division and modulo, float `repr` (the shortest digits that round-trip, and of those the
+closest, by Ryu's `d2s` in `ryu/`), `round` with exact half-even rounding, Neumaier-compensated `sum`,
 `int()`/`float()` string grammar (with the 4,300-digit limit), `str.split`, string `repr`
 quoting and escapes (a table of the code points `str.isprintable()` rejects), modular
 `pow` with inverses, and the format-spec mini-language are implemented to match CPython's

@@ -163,7 +163,7 @@ There are no raw pointers and no pointer arithmetic. Every primitive works on a 
 
 | area of runtime.c | moved | stays in C, and why |
 |---|---|---|
-| strings | 41 methods (with `join`, `split`, `rsplit` and `splitlines`, which sat among the list functions) | `pys_str` (allocation), `pys_str_get`/`slice`/`add`/`mul` (the compiler's lowering of `s[i]`, `s[a:b]`, `+`, `*`), `pys_str_eq`/`cmp`, `pys_ord`/`pys_chr`, repr and ascii escapes, `pys_str_float` (float repr through `snprintf`/`strtod`) |
+| strings | 41 methods (with `join`, `split`, `rsplit` and `splitlines`, which sat among the list functions) | `pys_str` (allocation), `pys_str_get`/`slice`/`add`/`mul` (the compiler's lowering of `s[i]`, `s[a:b]`, `+`, `*`), `pys_str_eq`/`cmp`, `pys_ord`/`pys_chr`, repr and ascii escapes, `pys_str_float` (float repr, by Ryu's `d2s` in `ryu/`) |
 | arithmetic | `math` gcd, lcm, isqrt, factorial, comb, perm | the operators the compiler lowers to (`//`, `%`, `**`, shifts), `pow(a, b, m)` (128-bit), the libm wrappers |
 | repr, `==`, ordering | none | generic helpers that interpret type descriptors at run time and call back into the program. They should become templates (§2.8). |
 | lists and timsort | none | list memory, and timsort (a list bounds check blocks `memmove` recognition: §2.4.3) |
@@ -698,7 +698,7 @@ The follow-ups are filed: #31 tracks items 2 to 7, and the issues named below ho
    - TBAA and `!range` on programs' str lengths; object helpers only where descriptors use them; a letter for class ids of 1000 and up.
 6. **With the typed IR's exceptions** (#27): done in the third merge (§2.8). `runtime.py`'s frames unwind, `tests/rt_raise_unwinds.py` catches exceptions raised in them, and `check_runtime.py` keeps them from turning `nounwind`.
 7. **With the Wasm GC backend.** Lower `_rt` to Wasm GC array ops and reuse `runtime.py`. Only runtime.c's core needs a Wasm counterpart, and the engine supplies the collector.
-8. **Stay in C.** The collector, `Str`/`List`/`Dict` memory, files, signals, `errno`, time, float digits (`snprintf`/`strtod`) and the libm wrappers. Revisit the collector only together with precise roots for frames the compiler generates (RPython's shadow stack is the precedent), which C cannot provide.
+8. **Stay in C.** The collector, `Str`/`List`/`Dict` memory, files, signals, `errno`, time, float digits (Ryu's `d2s` for `repr`, `snprintf` for format specs, `strtod`) and the libm wrappers. Revisit the collector only together with precise roots for frames the compiler generates (RPython's shadow stack is the precedent), which C cannot provide.
 
 **`tools/dictprobe.c`** stays C. It is a white-box test that includes runtime.c to count the slots its dict code visits, and it now links `runtime.py`'s IR for the hash functions. It could become a subset program once the dict table itself moves, with a probe counter in `runtime.py`.
 

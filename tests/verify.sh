@@ -65,8 +65,8 @@ rm -rf "$V" "$OUT"
 mkdir -p "$V/home" "$V/ubsan-home"
 cp runtime.c runtime.py "$V/home/"
 cp runtime.c runtime.py "$V/ubsan-home/"
-cp -R lib "$V/home/"
-cp -R lib "$V/ubsan-home/"
+cp -R lib ryu "$V/home/"
+cp -R lib ryu "$V/ubsan-home/"
 export PYSTACHY_HOME="$ROOT"
 # The steps set the knobs they test themselves: one left in the caller's environment would weaken a
 # step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they

@@ -217,6 +217,18 @@ License, whose text and copyright notice ("Copyright (c) 2014 Jeff Quast
 <contact@jeffquast.com>") are in ports/wcwidth/LICENSE, with the permission notice of Markus
 Kuhn's code that wcwidth derives from.
 
+Ryu (ryu/)
+----------
+
+ryu/d2s.c, common.h, d2s_intrinsics.h, d2s_small_table.h, digit_table.h and ryu.h are the files of
+those names in the ryu/ directory of Ryu (https://github.com/ulfjack/ryu), at commit
+4c0618b0e44f7ef027ebae05d2cc7812048f7c8f, with their #include "ryu/NAME" lines changed to
+#include "NAME" (ryu/README.md); runtime.c includes ryu/d2s.c for the digits of a float's repr.
+Upstream offers these files under the Apache License, Version 2.0 or, alternatively, the Boost
+Software License, Version 1.0. Pystachy uses them under the Boost Software License, Version 1.0,
+whose text is in ryu/LICENSE-Boost; their copyright notice ("Copyright 2018 Ulf Adams") is kept in
+each file's header.
+
 CPython's list sort (runtime.c)
 -------------------------------
 

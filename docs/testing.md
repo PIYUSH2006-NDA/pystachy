@@ -55,7 +55,8 @@ hash lookup for `if k in d: d[k] += 1` and the like), and so can a choice of the
 comma-separated, or `-all`; the tests pass with each one off.
 The programs cover arithmetic and overflow edges,
 strings (also their Unicode whitespace), escapes and f-strings, a 400-case sample of the
-format-spec language, lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
+format-spec language, float repr's shortest digits (every power of two, the ends of the ranges,
+4,096 random doubles and 2,048 random decimals), lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
 (also their container protocol, static and class methods, and class variables), dataclasses, NamedTuples, typing's forms (`collections.abc`, `Final`, `@overload`, `TypeVar`,
 `os.PathLike`), `Optional` structures, optional values (also boxed numbers) and
 their narrowing (with CPython's error for each use of `None` where only a value works), rich comparisons, defaults,
