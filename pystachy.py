@@ -7505,6 +7505,10 @@ class ClassInfo:
         self.specs: dict[str, str] = {}
         self.nspec = 0  # (the names it has given: one each, also to those found to be one already made)
         self.origin = ""
+        # a specialization of lib/functools' _lru_cache_wrapper: what its TypeVars _Key and _Result
+        # are (see cache_types), and the function it wraps
+        self.tvars: dict[str, str] = {}
+        self.cachefn = ""
 
 
 class Flow:
@@ -7657,6 +7661,8 @@ class Gen:
         self.specing: dict[str, str] = {}  # the specializations being made, by template and argument types
         self.specdone: dict[str, str] = {}  # and those made, which the same call gets again
         self.selfcls = ""  # the class whose method or fields are being declared: what typing.Self is
+        self.libdir = ""  # Pystachy's lib/ (compile_program), whose functools.py has the class below
+        self.cachecls = ""  # lib/functools' _lru_cache_wrapper, whose specializations cache_types types
         self.funcs: dict[str, FnInfo] = {}
         self.aliases: dict[str, str] = {}
         self.imports: dict[str, str] = {}
@@ -8484,6 +8490,9 @@ class Gen:
             if s in self.unsupported:
                 return "!" + self.unsupported[s]
             if s in self.typevars:
+                tc = self.selfcls if self.selfcls != "" else self.curfn.cls
+                if tc in self.classes and s in self.classes[tc].tvars:
+                    return self.classes[tc].tvars[s]  # (lib/functools' cache: see cache_types)
                 return f"!TypeVar '{short(s)}'{TYPEVAR}"
         elif k == "attr" and self.typing_attr(n) == "TextIO":
             return "file"
@@ -8923,6 +8932,8 @@ class Gen:
         if cls != "" and len(ps) == 0 and f.deco != "staticmethod":
             self.err(f"method '{d.s}' of class '{cls}' must take {'cls' if f.deco != '' else 'self'} as its first parameter")
         tv = self.typevar_in([p.kids[0] for p in ps if p.kind == "param"] + [d.kids[1]])
+        if tv != "" and self.cachecls != "" and (cls == self.cachecls or (cls in self.classes and self.classes[cls].origin == self.cachecls)):
+            tv = ""  # (lib/functools' cache, whose specializations bind its TypeVars: see cache_types)
         if tv != "" and (cls == "" or template_ok(d.s)):
             # def f(x: T) with T = TypeVar("T"): what mentions a TypeVar is left unannotated, as in
             # def f[T](x: T) (a template)
@@ -12441,6 +12452,8 @@ class Gen:
                         self.err(f"redefinition of class '{st.s}' is not supported")
                     self.classes[st.s] = ClassInfo(st.s, st)
                     self.classes[st.s].mod = m.name
+                    if m.name == "functools" and m.path == self.libdir + "/functools.py" and st.s == m.q + "_lru_cache_wrapper":
+                        self.cachecls = st.s  # (lib/functools' own: see cache_types)
                     if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
                         self.err(dc_args(st.kids[1])[1:])
                     self.classes[st.s].kwonly = len(st.kids) > 1 and dc_args(st.kids[1]) == "kw"
@@ -17938,7 +17951,7 @@ class Gen:
             if m not in ci.methods and m in ci.ftypes:
                 return self.obj_call(self.getfield(o, self.field(o, m), m), args, "")  # (o.f(args) of a field f)
             if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
-                self.err(f"'{o.t}' object has no method '{m}'")
+                self.err(f"'{shown(o.t)}' object has no method '{m}'")  # (a specialization's is its class's)
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
             if m == "_asdict" and m not in ci.methods:
                 return self.asdict(o, args)
@@ -18320,6 +18333,8 @@ class Gen:
         sel = self.selfcls
         self.selfcls = name  # (c names its specialization in its annotations, see ann)
         line = self.line
+        if c == self.cachecls:
+            self.cache_types(s, ts)
         self.scan_fields(s, fi, init.node.kids[2].kids)
         self.line = line
         # (a field that holds the specialization itself, self.next: Node | None, is the same in each)
@@ -18363,6 +18378,83 @@ class Gen:
         self.selfcls = sel
         self.making.pop()
         return name
+
+    def cache_fn(self, ft: str) -> FnInfo:
+        # the function lib/functools' _lru_cache_wrapper wraps, of value type ft: a def, or a closure
+        # (a decorated def is one, as is a def inside a function); else CPython's TypeError of
+        # lru_cache() where it is no function (an argument that is no int or None), or an error
+        if ft.startswith("fn[f:"):
+            return self.funcs[ft[5:-1]]
+        if ft.startswith("fn[c:"):
+            return self.closures[int(ft[5 : ft.find(":", 5)])].f
+        if not is_fn(ft) and not is_callable(unopt(ft)) and ft not in self.classes:
+            self.err("TypeError: Expected first argument to be an integer, a callable, or None")
+        self.err(f"lru_cache() of a {typestr(ft)} is not supported: it caches a def's results (a def of the program, also one inside a function)")
+        return self.funcs[ft]
+
+    def cache_types(self, s: ClassInfo, ts: list[str]) -> None:
+        # the specialization s of lib/functools' _lru_cache_wrapper for a function of type ts[0]
+        # (__init__'s argument types): its TypeVars _Result, what the function returns, and _Key,
+        # the type of the key __pys_cache_key makes of a call (cache_key). That is the argument
+        # itself for one int or str parameter without a default, as CPython's key is; else the
+        # tuple of the call's form (an int) and the arguments, one item per parameter. Each
+        # parameter and the return must be annotated, and the arguments must make a dict's key
+        f = self.cache_fn(ts[0])
+        line = self.line
+        self.line = f.node.line  # (an error is the decorated def's)
+        what = f"lru_cache() of {short(f.name)}()"
+        first = 1 if f.clo >= 0 else 0  # (a closure's env, which its params begin with)
+        if f.vararg >= 0 or f.kwarg >= 0:
+            self.err(f"{what} is not supported: it takes *args or **kwargs, and a cache's keys have one type")
+        pts = f.ptypes[first:]
+        for j in range(len(pts)):
+            if pts[j] == "" and f.node.s == "<lambda>":
+                self.err("lru_cache() of a lambda is not supported: Pystachy types the cache's keys with the parameters' annotations, which a lambda's cannot have")
+            if pts[j] == "":
+                self.err(f"{what} needs its parameters annotated: Pystachy types the cache's keys with them (parameter '{f.params[first + j]}')")
+            if key_problem(self.ctype("tuple", [pts[j]])) != "":
+                self.err(f"{what} is not supported: its parameter '{f.params[first + j]}' is {typestr(pts[j])}, and the cache's keys hold ints, bools, strs, str | None and tuples of those")
+        if f.ret == "":
+            self.err(f"{what} needs its return annotated: Pystachy types the cache's results with it")
+        positional = f.npos < 0 or f.npos > first
+        if len(pts) == 0:
+            key = "int"
+        elif len(pts) == 1 and (pts[0] == "int" or pts[0] == "str") and f.defaults[first].kind == "noann" and positional:
+            key = pts[0]
+        else:
+            key = self.ctype("tuple", ["int"] + pts)
+        q = self.cachecls[: self.cachecls.find("$") + 1]  # (the module's prefix, functools$)
+        s.tvars[q + "_Key"] = key
+        s.tvars[q + "_Result"] = f.ret
+        s.cachefn = ts[0]
+        self.line = line
+
+    def cache_key(self, args: list[Node]) -> Val:
+        # __pys_cache_key(self, *args, **kwds) in _lru_cache_wrapper.__call__ of lib/functools: the key
+        # of the call, of self's _Key (cache_types), the arguments checked as a call of the function
+        # checks them. A call passes every argument by position, its form 0 (a tuple key's first item)
+        w = self.expr(args[0], "")
+        if w.t not in self.classes or self.classes[w.t].cachefn == "":
+            self.err("__pys_cache_key() is lib/functools' (its _lru_cache_wrapper's)")
+        ci = self.classes[w.t]
+        f = self.cache_fn(ci.cachefn)
+        first = 1 if f.clo >= 0 else 0
+        call = args[1:]
+        self.arity(f, first, call)
+        what = f"a call of {short(f.name)}(), which lru_cache() wraps,"
+        for a in call:
+            if a.kind == "kw":
+                self.err(f"{what} passes a keyword argument ({a.s}=), which is not supported yet: pass its arguments by position")
+        if len(call) < len(f.params) - first:
+            self.err(f"{what} leaves out an argument that has a default value ('{f.params[first + len(call)]}'), which is not supported yet: pass every argument")
+        vals: list[Val] = []
+        for j in range(len(call)):
+            t = f.ptypes[first + j]
+            vals.append(self.pcoerce(self.expr(call[j], t), t, f, first + j))
+        key = ci.tvars[self.cachecls[: self.cachecls.find("$") + 1] + "_Key"]
+        if not is_tuple(key):
+            return vals[0] if len(vals) > 0 else Val("0", "int")
+        return self.tuple_([Val("0", "int")] + vals)
 
     def instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
         # the function template f compiles to for arguments of types ts, compiled when first
@@ -18484,6 +18576,8 @@ class Gen:
         return Val("", "")
 
     def builtin(self, name: str, args: list[Node], want: str) -> Val:
+        if name == "__pys_cache_key":
+            return self.cache_key(args)
         if name == "__pys_exc_repr":
             return self.exc_brepr(self.expr(args[0], ""))  # (exc_helpers)
         if name == "__pys_repr_enter" or name == "__pys_repr_leave":
@@ -19896,7 +19990,9 @@ class Gen:
 
 # ---------------------------------------------------------------- driver
 def compile_program(path: str, src: str, dirs: list[str]) -> str:
-    return Gen().program(Loader(dirs).program(path, src))
+    g = Gen()
+    g.libdir = dirs[-1] if len(dirs) > 0 else ""
+    return g.program(Loader(dirs).program(path, src))
 
 
 def runtime_ir(path: str, cache: bool) -> str:

@@ -523,7 +523,11 @@ CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md))
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
-deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists.
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `functools` is
+Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
+a function they decorate keeps its results in a cache of its own types, which its annotated
+parameters and return give, and the cache counts, evicts and reports `cache_info()` as CPython's C
+wrapper does.
 
 ## Expressions
 
@@ -1083,6 +1087,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
+- `functools.lru_cache()` and `cache()` of a function whose parameters or return are not
+  annotated, that takes `*args` or `**kwargs`, or whose parameter is no dict key type (a `float`,
+  an object), or of a builtin, a method or a lambda; a call through the cache that passes a
+  keyword argument or leaves out one with a default value (CPython keys each form of a call
+  apart); and `cache_parameters()`
 
 ### Source text
 

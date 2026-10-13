@@ -20,7 +20,8 @@ checks each against CPython.
 | `genericpath` | `Lib/genericpath.py` | `cdac5a68dd738051e0d66fc81d5947d6a1776248fc6fe862253477608d870ec4` | what `posixpath` uses of it; not `commonprefix` (`map`) or the file tests (`try`) |
 | `curses.ascii` | `Lib/curses/ascii.py` | `780dd8bbaf0ee7e832f164c1772953e694a9cd1031d1ab1471af65344d3645e6` | everything, for ASCII characters (strings are byte strings) |
 
-`curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`.
+`curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
+so is `functools.py` (below).
 
 ## `re`, a port of CPython's
 
@@ -70,6 +71,55 @@ instantiation, the `TypeError` of a non-str argument), of str subclasses and of 
 and it makes the same code, errors and results as CPython's `re` for 18,000 random patterns,
 each matched against 19 strings. With it, unmodified roman 5.2 prints what CPython prints. It
 is about 3 times slower than `_sre`.
+
+## `functools`, Pystachy's own
+
+CPython's `Lib/functools.py` does not compile (it imports `abc`, `collections`, `reprlib` and
+`_thread`, and its pure-Python `lru_cache` keeps its links in lists of mixed types and sets
+attributes on a function), and its `lru_cache()` is C: `_functools._lru_cache_wrapper`
+(`Modules/_functoolsmodule.c`). `functools.py` here has `cache()` and `lru_cache()` in the subset,
+written after that C code, with `lru_cache`'s docstring:
+
+- `lru_cache(maxsize)` (128 by default, `@lru_cache` bare too; a negative `maxsize` is 0) keeps the
+  results of the `maxsize` most recently used calls, `lru_cache(maxsize=None)` and `cache()` every
+  result, and `maxsize=0` none. The wrapper has `cache_info()`, a `CacheInfo` named tuple of
+  `hits`, `misses`, `maxsize` and `currsize`, `cache_clear()`, which empties the cache and zeroes
+  the statistics, `__wrapped__` and the function's `__name__` and `__qualname__`.
+- It counts and updates as C does, so what a program sees of it is CPython's: a hit makes the
+  call the most recently used, a miss counts before the function runs (a call that raises is
+  counted, and its exception is not cached), a call that added its own key while it ran (a
+  recursive call with the same arguments) returns what it computed and leaves the cache as it is,
+  and a full cache gives the least recently used entry to the new result. A result is the object
+  the function returned, also a falsy one or `None`.
+- A dict of Pystachy holds keys of one type and values of another, so each decorated function
+  has a cache of its own types: `_lru_cache_wrapper` is a class template, and the compiler binds
+  its TypeVars `_Key` and `_Result` in the specialization each function makes, from the
+  function's annotations (`Gen.cache_types`), and makes the key of each call
+  (`__pys_cache_key`). For one `int` or `str` parameter without a default the key is the
+  argument, as CPython's is; otherwise it is a tuple of the arguments, after an int that names
+  the form of the call.
+
+What it does not have, each a compile-time error (`tests/errors/lib_functools_*.py`):
+
+- a function whose parameters or return are not annotated, that takes `*args` or `**kwargs`, or
+  whose parameter is of a type Pystachy's dicts cannot key (a `float`, an object; CPython hashes
+  those): the parameters are `int`, `bool`, `str`, `str | None` and tuples of those;
+- `lru_cache()` of a builtin, a method or a lambda (it caches a def's results, of the program or
+  of a function), and of a method in a class body, where Pystachy applies no decorator;
+- a call through the cache that passes a keyword argument or leaves out one that has a default
+  value: CPython caches each form of a call apart (`f(1)`, `f(1, 2)` and `f(1, b=2)` are three
+  entries), and this version passes every argument by position;
+- `cache_parameters()`, whose dict mixes `int | None` and `bool` values.
+
+`typed=True` is accepted and keeps no calls apart: a parameter has one type, so the calls it
+would keep apart (`f(1)` and `f(1.0)`) cannot both compile. The cache needs no lock, as a
+Pystachy program has one thread. `tests/lib_functools.py` and `tests/lib_functools_mod.py`
+compare it with CPython's C wrapper.
+
+In an AOT executable, a cache hit costs 10 ns (unbounded) to 20 ns (bounded) for an `int`
+argument, 15 ns for a `str` one and 49 ns for a `(str, int)` pair, whose key tuple is made and
+hashed for each call; CPython's C wrapper takes 61 to 64, 62 and 83 ns, a loop's step included
+(medians of 3 runs over 1,000 warm keys). A miss that evicts takes 40 ns, against 102 ns.
 
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop
