@@ -7293,6 +7293,20 @@ class IterArg:
         self.trav = ""
 
 
+class Reduce:
+    # sum(), min() or max() of a generator, whose items are added or compared as they come
+    # (Gen.reduce): its accumulators are made as the item is compiled, once its type is known, and
+    # set at the IterArg's split, which runs after the iterator is made and before the traversal
+    def __init__(self, name: str, stt: str):
+        self.name = name
+        self.stt = stt  # sum's start: its type, or "" where none is given
+        self.t = ""  # the items' type
+        self.acc = ""  # the sum so far, or the item kept (or the list of the items, collect)
+        self.comp = ""  # a float sum's compensation, as runtime.c's fsum keeps it (Neumaier's)
+        self.first = ""  # no item yet: min and max, and a float sum from an int start
+        self.collect = False  # min() or max() of items runtime.c compares (pys_list_minmax)
+
+
 class SetArg:
     # An argument of a set method that takes several iterables, evaluated with the others before
     # the method iterates any: v, the value of an iterable, or gen, a generator expression whose
@@ -7832,6 +7846,7 @@ class Gen:
         self.opts: dict[str, bool] = {}  # the optimizations on (optimizations()), once program() starts
         self.lcs: list[str] = []
         self.lct: list[str] = []
+        self.reds: dict[str, Reduce] = {}  # the reductions (reduce), by the key their items' node holds
         self.ret = "None"
         self.retann = False
         self.nn: dict[str, bool] = {}
@@ -15322,6 +15337,8 @@ class Gen:
             if not self.term:
                 self.leave(n0)
             self.exits = self.exits[:n0]
+        elif k == "reduce":
+            self.reduce_item(self.reds[n.s], n.kids[0])
         elif k == "anyall":
             hit = self.label()
             go = self.label()
@@ -17099,9 +17116,11 @@ class Gen:
         # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does); kind
         # "discard": discarding each from set into, as s.difference_update(e for ...) does
         h = Ins("", "", "")
-        if mode != "":
+        if mode == "any" or mode == "all":
             res = self.alloca("bool", "")
             self.emit(f"store i1 {'false' if mode == 'any' else 'true'}, ptr {res}")
+        elif mode != "":
+            res = ""  # (a reduction: mode is # and the key of its Reduce, which holds what it keeps)
         elif into != "":
             res = into
         else:
@@ -17112,7 +17131,7 @@ class Gen:
         saved: list[str] = []
         for nm in names:
             saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
-        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
+        app = mk("lcappend" if mode == "" else "reduce" if mode.startswith("#") else "anyall", mode[1:] if mode.startswith("#") else mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
         body = [app]
         if len(n.kids) == 4:
             body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
@@ -17135,8 +17154,10 @@ class Gen:
             self.compvars[nm] -= 1
             if self.compvars[nm] == 0:
                 del self.compvars[nm]
-        if mode != "":
+        if mode == "any" or mode == "all":
             return Val(self.ins(f"load i1, ptr {res}"), "bool")
+        if mode != "":
+            return Val("", "")
         if et == "":
             self.err("cannot infer the element type of this comprehension")
         if into == "":
@@ -19159,6 +19180,10 @@ class Gen:
             if g.kind != "listcomp":
                 g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
             return self.listcomp(g, "", name)
+        if name == "sum" or name == "min" or name == "max":
+            stt = self.stream_start(name, args)
+            if stt != "-":
+                return self.reduce(name, args, stt)
         base = [a.kids[0] for a in args if a.kind == "kw" and a.s == "base"] if name == "int" else []
         if len(base) > 0:
             # int(x, base=b) is int(x, b) (x is positional only: int(x=s) is an unknown keyword)
@@ -19599,6 +19624,155 @@ class Gen:
         self.br(lc)
         self.place(le)
         return Val(self.ins(f"load i1, ptr {res}"), "bool")
+
+    def stream_start(self, name: str, args: list[Node]) -> str:
+        # whether sum(), min() or max() takes its items as they come (reduce), "-" if not: of a
+        # generator expression or an iterator call (range(), zip(), ...), with no keyword (key=
+        # keeps its list). Then sum's start type ("" where none is given), which must be an int or
+        # a float (dry: the value is evaluated where the iterator is made, after the traversal is
+        # compiled)
+        if len(args) == 0 or len(args) > (2 if name == "sum" else 1):
+            return "-"
+        for a in args:
+            if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+                return "-"
+        g = args[0]
+        if not self.iterator_call(g) and not (g.kind == "listcomp" and g.s == "gen"):
+            return "-"
+        if len(args) == 1:
+            return ""
+        t = self.dry(args[1])
+        return t if t == "int" or t == "float" else "-"
+
+    def reduce(self, name: str, args: list[Node], stt: str) -> Val:
+        # sum(), min() or max() of a generator expression or an iterator call: each item is added
+        # or compared as it comes, as CPython takes them, and no list of them is made (#88). The
+        # iterator is made first, then sum's start is evaluated and the accumulators set (at the
+        # IterArg's split, once the traversal, compiled first, gave the items' type), then the
+        # items are traversed. A sum is runtime.c's (pys_sum_int, pys_sum_float, ...), item by
+        # item; min() and max() compare as max(a, b) does, but those of items other than numbers
+        # and strs collect them for pys_list_minmax, as before
+        g = args[0]
+        if g.kind != "listcomp":
+            item = mk("name", "__item", g.line, [])
+            g = mk("listcomp", "gen", g.line, [item, item, g])
+        key = str(len(self.reds))
+        r = Reduce(name, stt)
+        self.reds[key] = r
+        arg = IterArg(g)
+        arg.split = self.label()
+        self.listcomp(g, "", "#" + key, "", arg)
+        back = self.label()
+        self.br(back)
+        self.place(arg.split)
+        if r.t == "":
+            self.err("cannot infer the element type of this comprehension")
+        if name == "sum":
+            sv = self.expr(args[1], "") if len(args) == 2 else Val("0" if r.t != "float" else fbits("0.0"), "int" if r.t != "float" else "float")
+            if r.t == "float":
+                self.emit(f"store double {self.as_float(sv).v}, ptr {r.acc}")
+                self.emit(f"store double {fbits('0.0')}, ptr {r.comp}")
+                if r.first != "":
+                    self.emit(f"store i1 true, ptr {r.first}")
+            elif sv.t == "float":
+                self.emit(f"store double {sv.v}, ptr {r.acc}")
+            else:
+                self.emit(f"store i64 {self.as_int(sv).v}, ptr {r.acc}")
+        elif r.collect:
+            self.emit(f"store ptr {self.rt('pys_list_new', 'ptr', ['i64 0'])}, ptr {r.acc}")
+        else:
+            self.emit(f"store i1 true, ptr {r.first}")
+        self.br(arg.trav)
+        self.place(back)
+        if name != "sum" and r.collect:
+            d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
+            lv = self.ins(f"load ptr, ptr {r.acc}")
+            return self.from_slot(self.rt("pys_list_minmax", "i64", [f"ptr {lv}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"]), r.t)
+        if name != "sum":
+            self.guard(self.ins(f"load i1, ptr {r.first}"), f"ValueError: {name}() iterable argument is empty")
+            return Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+        if r.comp == "":
+            ft = "float" if r.stt == "float" else "int"
+            return Val(self.ins(f"load {lt(ft)}, ptr {r.acc}"), ft)
+        # fsum's end: the compensation is added where it is a finite number other than 0
+        s = self.ins(f"load double, ptr {r.acc}")
+        c = self.ins(f"load double, ptr {r.comp}")
+        fin = self.ins(f"fcmp olt double {self.rt('fabs', 'double', [f'double {c}'])}, 0x7FF0000000000000")
+        nz = self.ins(f"fcmp une double {c}, {fbits('0.0')}")
+        use = self.ins(f"and i1 {nz}, {fin}")
+        return Val(self.select(use, Val(self.ins(f"fadd double {s}, {c}"), "float"), Val(s, "float")), "float")
+
+    def reduce_item(self, r: Reduce, e: Node) -> None:
+        # an item of reduce()'s generator: added to the sum, or compared with the item kept. Its
+        # accumulators are made at its first compilation, which gives the items' type
+        v = self.expr(e, "")
+        if r.t == "":
+            r.t = v.t
+            if r.name == "sum" and v.t != "int" and v.t != "bool" and v.t != "float":
+                self.err(f"unsupported call sum(list[{v.t}]{',' + r.stt if r.stt != '' else ''})")
+            if r.name == "sum":
+                r.acc = self.alloca("float" if v.t == "float" or r.stt == "float" else "int", "")
+                if v.t == "float":
+                    r.comp = self.alloca("float", "")
+                    if r.stt == "int":
+                        r.first = self.alloca("bool", "")
+            elif v.t == "int" or v.t == "float" or v.t == "bool" or v.t == "str":
+                r.acc = self.alloca(v.t, "")
+                r.first = self.alloca("bool", "")
+            else:
+                r.collect = True
+                r.acc = self.alloca(self.ctype("list", [v.t]), "")
+        if r.collect:
+            self.rt("pys_list_append", "void", [f"ptr {self.ins(f'load ptr, ptr {r.acc}')}", "i64 " + self.to_slot(self.coerce(v, r.t))])
+            return
+        if r.name != "sum":
+            # the first item is kept; another where it is greater (max) or less (min) than the kept one
+            take = self.label()
+            test = self.label()
+            skip = self.label()
+            self.cbr(self.ins(f"load i1, ptr {r.first}"), take, test)
+            self.place(test)
+            kept = Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+            self.cbr(self.truth(self.cmp2(">" if r.name == "max" else "<", v, kept)), take, skip)
+            self.place(take)
+            self.emit(f"store {lt(r.t)} {v.v}, ptr {r.acc}")
+            self.emit(f"store i1 false, ptr {r.first}")
+            self.br(skip)
+            self.place(skip)
+            return
+        if r.t != "float" and r.stt != "float":
+            si = self.ins(f"load i64, ptr {r.acc}")
+            self.emit(f"store i64 {self.iop('+', si, self.as_int(v).v)}, ptr {r.acc}")
+            return
+        if r.t != "float":
+            # ints from a float start: added as floats, not compensated (pys_sum_int_float)
+            sf = self.ins(f"load double, ptr {r.acc}")
+            self.emit(f"store double {self.ins(f'fadd double {sf}, {self.as_float(self.as_int(v)).v}')}, ptr {r.acc}")
+            return
+        nm = self.label()
+        if r.first != "":
+            # floats from an int start: the first is added as it is (pys_sum_float_int)
+            plain = self.label()
+            comp = self.label()
+            self.cbr(self.ins(f"load i1, ptr {r.first}"), plain, comp)
+            self.place(plain)
+            s0 = self.ins(f"load double, ptr {r.acc}")
+            self.emit(f"store double {self.ins(f'fadd double {s0}, {v.v}')}, ptr {r.acc}")
+            self.emit(f"store i1 false, ptr {r.first}")
+            self.br(nm)
+            self.place(comp)
+        # Neumaier's step, as runtime.c's fsum takes it
+        s = self.ins(f"load double, ptr {r.acc}")
+        t = self.ins(f"fadd double {s}, {v.v}")
+        ge = self.ins(f"fcmp oge double {self.rt('fabs', 'double', [f'double {s}'])}, {self.rt('fabs', 'double', [f'double {v.v}'])}")
+        d1 = self.ins(f"fadd double {self.ins(f'fsub double {s}, {t}')}, {v.v}")
+        d2 = self.ins(f"fadd double {self.ins(f'fsub double {v.v}, {t}')}, {s}")
+        d = self.select(ge, Val(d1, "float"), Val(d2, "float"))
+        c = self.ins(f"load double, ptr {r.comp}")
+        self.emit(f"store double {self.ins(f'fadd double {c}, {d}')}, ptr {r.comp}")
+        self.emit(f"store double {t}, ptr {r.acc}")
+        self.br(nm)
+        self.place(nm)
 
     def iterator_call(self, n: Node) -> bool:
         if n.kind != "call" or n.kids[0].kind != "name" or self.bound(n.kids[0].s):

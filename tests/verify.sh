@@ -36,6 +36,8 @@
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
+#   streaming      tools/streamprobe.py: sum(), min() and max() of range() and of generator expressions
+#                  take the items as they come: 100,000,000 of them in 64 MiB, AOT
 #   ffi            tests/ffi/run.sh with the stage-2 compiler: @ffi.extern's C calls and the FFI's
 #                  compile-time errors, then, with $PY's libpython, pystachy ext's extension modules,
 #                  against the twins in tools/rt_cpython (docs/ffi.md)
@@ -305,6 +307,11 @@ step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-
 L=$V/inherited-ast.log; s=$(now); r=fail
 $PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
+
+# ---- streaming: sum(), min() and max() of 10^8 items in 64 MiB, which their list would exceed
+L=$V/streaming.log; s=$(now); r=fail
+$PY tools/streamprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
+step streaming $r "$s" "$L" ', "items": 100000000, "address_space_mib": 64'
 
 # ---- ffi: C functions, extension modules (docs/ffi.md)
 L=$V/ffi.log; s=$(now); r=fail

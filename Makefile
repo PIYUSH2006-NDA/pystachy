@@ -95,6 +95,10 @@ fileprobe: tools/fileprobe.c runtime.c runtime.py pystachy
 	build/fileprobe --lib
 	PYSTACHY_GC_STRESS=1 build/fileprobe
 
+# sum(), min() and max() of generators and range() stream: 10^8 items in 64 MiB (AOT).
+streamprobe: pystachy
+	$(PY) tools/streamprobe.py
+
 # Inspect the bitcode passed to lli, then run it: dead functions must not reach code generation.
 jitprobe: pystachy
 	$(PY) tools/jitprobe.py
@@ -164,4 +168,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
