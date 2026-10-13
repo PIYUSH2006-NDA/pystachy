@@ -97,6 +97,10 @@ a, (0, 1) > False
 a, (0, 1) <= True
 a, (0, 1) < False
 a, (0, 1) >= True
+a, (0,) > True
+a, (0,) <= False
+a, (0,) < False
+a, (0,) >= True
 a, (0, 2) == False
 a, (0, 2) != True
 a, (0, 2) > False
@@ -107,4 +111,6 @@ str(a0) '()'
 str(a2) '(0, 1, 2)'
 repr(a0) '()'
 repr(a2) '(0, 1, 2)'
+a < b True
+b < c True
 [exit 0]

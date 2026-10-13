@@ -18125,6 +18125,8 @@ class Gen:
             if a.t == "exc" or b.t == "exc":
                 self.exc_eq("exc", "between an exception and None")
             return Val(self.ins(f"icmp {ICMP[op]} ptr {a.v}, {b.v}"), "bool")
+        if op in ORDOP and is_tuple(a.t) and is_tuple(b.t) and len(targs(a.t)) != len(targs(b.t)):
+            return self.tuple_order(op, a, b)  # (of different lengths, which no one tuple type holds)
         # T and T | None (also as items): None == None, None == x is False, and None < x raises
         ct = self.wider(a.t, b.t)
         if ct == "" and self.boxwider(a.t, b.t) != "":
@@ -18147,6 +18149,48 @@ class Gen:
         y = "an exception" if b.t == "exc" else b.t
         self.err(f"cannot compare {x} {op} {y}")
         return a
+
+    def tuple_order(self, op: str, a: Val, b: Val) -> Val:
+        # a < b (or <=, >, >=) of tuples of different lengths, as CPython orders them: by the
+        # first items that are not equal (an object, list, dict, set or tuple is equal to itself,
+        # as CPython finds by identity first), else by their lengths
+        la = len(targs(a.t))
+        lb = len(targs(b.t))
+        lend = self.label()
+        ph = Ins("phi", "bool", "")
+        for i in range(min(la, lb)):
+            x = self.tget(a, i)
+            y = self.tget(b, i)
+            ldiff = self.label()
+            lnext = self.label()
+            u = unopt(x.t)
+            if is_tuple(x.t) and is_tuple(y.t) and len(targs(x.t)) != len(targs(y.t)):
+                self.br(ldiff)  # (tuples of different lengths, never equal)
+            else:
+                if (x.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(y.t):
+                    lcmp = self.label()
+                    self.cbr(self.ins(f"icmp eq ptr {x.v}, {y.v}"), lnext, lcmp)
+                    self.place(lcmp)
+                self.cbr(self.cmp2("==", x, y).v, lnext, ldiff)
+            self.place(ldiff)
+            # (items without the ordering, dicts or objects without __lt__ & co, raise CPython's
+            # TypeError only where they are reached, as the runtime's comparison of tuples of one
+            # length raises it: equal ones go on to the lengths)
+            if is_dict(x.t) and is_dict(y.t):
+                self.raise_("TypeError", self.sconst(f"'{op}' not supported between instances of 'dict' and 'dict'"))
+            else:
+                lenient = self.lenient
+                self.lenient = True  # (see richcmp)
+                r = self.cmp2(op, x, y)
+                self.lenient = lenient
+                self.incoming(ph, r.v, self.cur)
+                self.br(lend)
+            self.place(lnext)
+        shorter = {"<": la < lb, "<=": la <= lb, ">": la > lb, ">=": la >= lb}[op]
+        self.incoming(ph, "true" if shorter else "false", self.cur)
+        self.br(lend)
+        self.place(lend)
+        return Val(self.phi(ph), "bool")
 
     def optcmp(self, op: str, a: Val, b: Val) -> Val:
         # a op b for numbers of which one or both may be None: == and != compare None as CPython

@@ -1,5 +1,5 @@
 # Adapted from CPython 3.13.16 Lib/test/test_tuple.py, class TupleTest: test_truth, test_len,
-# test_iadd and test_repr; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
+# test_iadd, test_repr and test_lexicographic_ordering; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
 # runs: test_truth, test_getitem, test_contains, test_contains_fake, test_contains_order,
 # test_len, test_minmax, test_add, test_mul, test_iadd, test_repeat and test_cmp (with
 # _assert_cmp); commit cbc944f4bc59639a444dd971c737788ba2283a91. test.support's ALWAYS_EQ and
@@ -25,10 +25,9 @@
 # - test_iadd's u += (2, 3) and u += (4, 5), TupleTest.test_iadd's u += (2, 3), and test_imul
 #   (CommonTest's and TupleTest's: u *= 3, u *= 0): a variable has one type here, and these
 #   change the tuple's length, which is part of its type
-# - test_cmp's _assert_cmp(a, self.type2test([0]), 1) and test_lexicographic_ordering: a tuple
-#   compared with one of another length is a compile-time error here: == and != as documented
-#   (values of types that cannot be equal), and <, <=, > and >= too, "cannot compare
-#   tuple[int,int] < tuple[int,int,int]" (bug: an undocumented rejection, NEW)
+# - test_cmp's _assert_cmp(a, self.type2test([0]), 1): its == and != (a tuple compared with one
+#   of another length by == or != is a compile-time error here, as documented: values of types
+#   that cannot be equal); its <, <=, > and >= are assert_order's
 # - test_contains_order's checklast.__contains__(1), which is `1 in checklast` here (tuple's
 #   special methods are not supported)
 # - test_contains' u.__contains__() and test_getitem's u.__getitem__() (TypeError; tuple's
@@ -237,10 +236,19 @@ def assert_cmp(label: str, a, b, r: int) -> None:
     check_is(label + " >=", a >= b, r >= 0)
 
 
+def assert_order(label: str, a, b, r: int) -> None:
+    # _assert_cmp's orderings of tuples of different lengths, whose == and != are rejected here
+    check_is(label + " >", a > b, r > 0)
+    check_is(label + " <=", a <= b, r <= 0)
+    check_is(label + " <", a < b, r < 0)
+    check_is(label + " >=", a >= b, r >= 0)
+
+
 def seq_test_cmp() -> None:
     a = (0, 1)
     assert_cmp("a, a", a, a, 0)
     assert_cmp("a, (0, 1)", a, (0, 1), 0)
+    assert_order("a, (0,)", a, (0,), 1)
     assert_cmp("a, (0, 2)", a, (0, 2), -1)
 
 
@@ -260,6 +268,15 @@ def test_len() -> None:
 
 def test_iadd() -> None:
     seq_test_iadd()
+
+
+def test_lexicographic_ordering() -> None:
+    # Issue 21100
+    a = (1, 2)
+    b = (1, 2, 0)
+    c = (1, 3)
+    check_true("a < b", a < b)
+    check_true("b < c", b < c)
 
 
 def test_repr() -> None:
@@ -286,3 +303,4 @@ test_iadd()
 seq_test_repeat()
 seq_test_cmp()
 test_repr()
+test_lexicographic_ordering()
