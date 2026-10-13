@@ -307,3 +307,11 @@ g1 = Sack(1)
 g2 = Sack("x")
 print(g1.visit(), g2.visit(), g1.visit(), g2.visit(seen=[]))
 print(g1.tally(), g2.tally(), g2.tally(step=10), g1.tally(), made)
+
+
+def firsts(*ps: Pair, **kw: "Pair") -> list[str]:
+    # (*args and **kwargs that name a class template are typed by their arguments, as without)
+    return [repr(p.first()) for p in ps] + [k + "=" + repr(v.first()) for k, v in kw.items()]
+
+
+print(firsts(Pair(1, 2), Pair(3, 4), x=Pair("a", "b")), firsts(Pair(2.5, 0), y=Pair(0, 1)))
