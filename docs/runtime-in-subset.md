@@ -125,8 +125,8 @@ There are no raw pointers and no pointer arithmetic. Every primitive works on a 
 ### 1.4 Building, caching and the bootstrap
 
 - **The cached runtime.** When the driver builds `build/runtime-py-<L>-<K>.bc`, it does the following:
-  - it reads `runtime.c` and `runtime.py` once, a character per byte under either compiler (as `RAW`, the encoding it reads source in), and hashes those bytes, which name the result (below);
-  - it compiles those bytes of `runtime.c` with clang as before, with `-fexceptions` (so that a raise unwinds through the runtime's frames, §2.8). They reach clang on its standard input, behind `#line 1 "runtime.c"`, so that clang's messages and UBSan's still name `runtime.c`;
+  - it reads `runtime.c`, the files it includes from `ryu/` (Ryu's float digits, which `RTPARTS` lists) and `runtime.py` once, a character per byte under either compiler (as `RAW`, the encoding it reads source in), and hashes those bytes, which name the result (below);
+  - it compiles those bytes of `runtime.c` with clang as before, with `-fexceptions` (so that a raise unwinds through the runtime's frames, §2.8). They reach clang in a file of the run's own, behind `#line 1 "runtime.c"`, so that clang's messages and UBSan's still name `runtime.c`, with the bytes of the files it includes beside it, where its quoted includes find them (from clang's standard input, they would be looked for in the current directory);
   - it compiles those bytes of `runtime.py` in-process, with the compiler that is running;
   - it links the two with `llvm-link` and optimizes the result once with `opt -O2`. LLVM then inlines runtime.c's helpers into `runtime.py`'s code, and the reverse: `hsh()` gets `pys_hash_int` inlined.
   - Each step is a separate command whose status counts. A pipe would let a failed `llvm-link` leave an empty module in the cache.
@@ -134,7 +134,7 @@ There are no raw pointers and no pointer arithmetic. Every primitive works on a 
 
   Its `.o`, the JIT tier's precompiled runtime, is built from that bitcode, so the JIT tier gets the cross-language inlining too. The name says `runtime-py`: a compiler from before `runtime.py`, run with the same home, keeps its runtime.c-only cache apart. The driver stops at once when `runtime.py` is missing.
 - **When the cache is built again.** A runtime's name is the key of what it is built from, and a run uses the runtime its inputs name, or builds it (#24).
-  - K, a 64-bit FNV-1a hash, covers the bytes of `runtime.c`, `runtime.py` and the running compiler, the C flags (`-fexceptions` among them) and the optimizations `PYSTACHY_OPT` turns off, the files of `clang`, `llvm-as`, `llvm-link` and `opt` (their real paths, sizes and times: another LLVM is other files, a symbolic link to the same LLVM the same), and, with a flag such as `-march=native`, the host CPU's lines of `/proc/cpuinfo`.
+  - K, a 64-bit FNV-1a hash, covers the bytes of `runtime.c`, of the files it includes, of `runtime.py` and of the running compiler, the C flags (`-fexceptions` among them) and the optimizations `PYSTACHY_OPT` turns off, the files of `clang`, `llvm-as`, `llvm-link` and `opt` (their real paths, sizes and times: another LLVM is other files, a symbolic link to the same LLVM the same), and, with a flag such as `-march=native`, the host CPU's lines of `/proc/cpuinfo`.
   - The running compiler is its executable, found through `PATH` as the shell found it when it was run by name, or `pystachy.py` under CPython (opened as named, without a search). Another compiler may compile `runtime.py` differently. A stale cache would otherwise outlive a code generation change.
   - An edit while the runtime is built is not in it: the build is of the bytes read before, under their hash, and the next run builds the new bytes. The rule this replaces, a cache newer than `runtime.c`, `runtime.py` and the compiler, trusted a cache written after such an edit, with the old code (the gap §2.10 left), and it missed an edit of the same size whose mtime was set back (`touch -r`).
   - L, the same hash but of the paths, the flags and the CPU, groups the runtimes of one compiler, flag set and LLVM. Publishing a runtime removes the others of its group, so `build/` keeps one per group, as before.
@@ -172,7 +172,7 @@ There are no raw pointers and no pointer arithmetic. Every primitive works on a 
 
 | area of runtime.c | moved | stays in C, and why |
 |---|---|---|
-| strings | 41 methods (with `join`, `split`, `rsplit` and `splitlines`, which sat among the list functions) | `pys_str` (allocation), `pys_str_get`/`slice`/`add`/`mul` (the compiler's lowering of `s[i]`, `s[a:b]`, `+`, `*`), `pys_str_eq`/`cmp`, `pys_ord`/`pys_chr`, repr and ascii escapes, `pys_str_float` (float repr through `snprintf`/`strtod`) |
+| strings | 41 methods (with `join`, `split`, `rsplit` and `splitlines`, which sat among the list functions) | `pys_str` (allocation), `pys_str_get`/`slice`/`add`/`mul` (the compiler's lowering of `s[i]`, `s[a:b]`, `+`, `*`), `pys_str_eq`/`cmp`, `pys_ord`/`pys_chr`, repr and ascii escapes, `pys_str_float` (float repr, by Ryu's `d2s` in `ryu/`) |
 | arithmetic | `math` gcd, lcm, isqrt, factorial, comb, perm | the operators the compiler lowers to (`//`, `%`, `**`, shifts), `pow(a, b, m)` (128-bit), the libm wrappers |
 | repr, `==`, ordering | none | generic helpers that interpret type descriptors at run time and call back into the program. They should become templates (§2.8). |
 | lists and timsort | none | list memory, and timsort (a list bounds check blocks `memmove` recognition: §2.4.3) |
@@ -707,7 +707,7 @@ The follow-ups are filed: #31 tracks items 2 to 7, and the issues named below ho
    - TBAA and `!range` on programs' str lengths; object helpers only where descriptors use them; a letter for class ids of 1000 and up.
 6. **With the typed IR's exceptions** (#27): done in the third merge (§2.8). `runtime.py`'s frames unwind, `tests/rt_raise_unwinds.py` catches exceptions raised in them, and `check_runtime.py` keeps them from turning `nounwind`.
 7. **With the Wasm GC backend.** Lower `_rt` to Wasm GC array ops and reuse `runtime.py`. Only runtime.c's core needs a Wasm counterpart, and the engine supplies the collector.
-8. **Stay in C.** The collector, `Str`/`List`/`Dict` memory, files, signals, `errno`, time, float digits (`snprintf`/`strtod`) and the libm wrappers. Revisit the collector only together with precise roots for frames the compiler generates (RPython's shadow stack is the precedent), which C cannot provide.
+8. **Stay in C.** The collector, `Str`/`List`/`Dict` memory, files, signals, `errno`, time, float digits (Ryu's `d2s` for `repr`, `snprintf` for format specs, `strtod`) and the libm wrappers. Revisit the collector only together with precise roots for frames the compiler generates (RPython's shadow stack is the precedent), which C cannot provide.
 
 **`tools/dictprobe.c`** stays C. It is a white-box test that includes runtime.c to count the slots its dict code visits, and it now links `runtime.py`'s IR for the hash functions. It could become a subset program once the dict table itself moves, with a probe counter in `runtime.py`.
 
