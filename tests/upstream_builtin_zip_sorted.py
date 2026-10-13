@@ -17,7 +17,7 @@
 # - test_bad_arguments' TypeErrors (sorted(iterable=[]), sorted([], None)) and test_baddecorator
 #   (sorted(data, None, lambda x,y: 0)): compile-time errors here, worded "sorted() takes exactly
 #   one argument (N given)" where CPython says "sorted expected 1 argument, got N" (bug: message
-#   wording; NEW, low), and "keyword argument 'iterable' of sorted() is not supported"
+#   wording; #277), and "keyword argument 'iterable' of sorted() is not supported"
 # - test_inputtypes' tuple(s) (tuple() of an iterable: not supported)
 from typing import Iterator
 

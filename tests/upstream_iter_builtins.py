@@ -34,7 +34,7 @@
 # - test_builtin_max_min's min(iter(d.values())) (iter()); test_builtin_map's `expected`, which
 #   upstream computes and never checks; test_builtin_zip's list(zip(range(5))) (rejected: range()
 #   nested in zip() as list()'s argument, which docs/language.md lists only for for loops: bug
-#   NEW, low)
+#   #276)
 # - test_countOf's and test_in_and_not_in's dicts with a complex key (1j: 2j)
 # - test_writelines: writelines() of a tuple, a dict and an object with __iter__ (writelines()
 #   takes a list[str] here: rejected at compile time)

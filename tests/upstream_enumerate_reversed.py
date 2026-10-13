@@ -23,7 +23,7 @@
 #   test_gc, test_bug1229429, test_objmethods (__reversed__, objects with __getitem__)
 # - list(enumerate(range(10, 20000, 2))): range() nested in enumerate() as list()'s argument is
 #   rejected ("make it a list first"), which docs/language.md lists for for loops only
-#   (bug NEW, low; the same as zip()'s in tests/upstream_iter_builtins.py)
+#   (bug #276; the same as zip()'s in tests/upstream_iter_builtins.py)
 
 
 def check(label: str, got, expected) -> None:

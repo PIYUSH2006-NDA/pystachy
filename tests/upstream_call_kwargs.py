@@ -14,14 +14,14 @@
 #   errors here (and a list of a function, a method and [].__len__ has no one type)
 # - CFunctionCallsErrorMessages (cpython_only): the C functions' messages; Pystachy rejects
 #   these calls at compile time with messages of its own (input(1, 2): "input() takes exactly one
-#   argument (2 given)", bug: message wording, NEW, low; `{}.get()` with a typed dict crashes the
-#   compiler: bug: IndexError in bmethod(), NEW), and has no getattr(), struct, deque,
+#   argument (2 given)", bug: message wording, #277; `{}.get()` with a typed dict crashes the
+#   compiler: bug: IndexError in bmethod(), #274), and has no getattr(), struct, deque,
 #   itertools, object() or module objects
 # - FastCallTests' rows of PythonClass.class_method and .static_method (a static or class method
 #   is not a value), of _testcapi's functions, test_fastcall_clearing_dict (__index__, gc,
 #   compile()); TestCallingConventions*, TestPEP590, TestCAPI, TestRecursion: _testcapi
 # - TestErrorMessagesSuggestions' cases with a suggestion: Pystachy's compile-time messages
-#   leave out CPython 3.13's "Did you mean '...'?" (bug: no keyword suggestion; NEW, low; the
+#   leave out CPython 3.13's "Did you mean '...'?" (bug: no keyword suggestion; #277; the
 #   cases without one are rejection fixtures), and str.split()'s keyword arguments (not
 #   supported)
 # - TestFunctionWithManyArgs: exec(), and `*` of a range

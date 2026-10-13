@@ -27,7 +27,7 @@
 #   d.__getitem__(), d.clear(None), d.copy(None), d.get(None, None, None), d.setdefault(),
 #   d.pop(), d.update(None), dict.fromkeys(3)): compile-time errors here, with messages of their
 #   own; test_get's d.get() with no argument crashes the compiler (bug: IndexError in bmethod()
-#   instead of a file:line: error; NEW)
+#   instead of a file:line: error; #274)
 # - keys that are objects with __hash__ or __eq__ (BadEq, BadHash, Hashed, NastyKey, BadCmp,
 #   BadDictKey, X, CustomHash): test_getitem's and test_pop's second parts, test_setdefault's
 #   BadHash, test_setdefault_atomic, test_setitem_atomic_at_resize, test_mutating_lookup,
