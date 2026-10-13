@@ -3188,7 +3188,7 @@ def builtin_has(mod: str, x: str) -> bool:
     if mod == "dataclasses":
         return x == "dataclass"
     if mod == "ffi":
-        return x in ("extern", "string_at", "c_buf") or x in CTYPES
+        return x in ("extern", "export", "string_at", "c_buf") or x in CTYPES
     return mod == "builtins" or known_path(mod + "." + x)  # (a builtin is checked where it is called)
 
 
@@ -3447,6 +3447,7 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
 class Loader:
     def __init__(self, dirs: list[str]):
         self.dirs = dirs  # the module search path
+        self.ext = ""  # pystachy ext: the main program is the extension module of this name (its __name__)
         self.mods: dict[str, Mod] = {}
         self.order: list[Mod] = []  # every module after those its top-level code imports
         # imports in the functions of imported modules, resolved once all module-level imports
@@ -4649,8 +4650,8 @@ class Loader:
             # (in module code: in a function, what the branch binds is still local; in a class body, a
             # global statement in it still holds for the whole body)
             return 0
-        if m.name != "" and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
-            return 0  # (in an imported module)
+        if (m.name != "" or self.ext != "") and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
+            return 0  # (in an imported module, or an extension module's)
         other = "win32 cygwin msys nt java emscripten wasi ios android"
         if e.kind == "cmp" and (e.s == "in" or e.s == "not in") and (e.kids[1].kind == "tuple" or e.kids[1].kind == "list") and e.kids[0].kind == "attr" and e.kids[0].s == "platform" and e.kids[0].kids[0].kind == "name" and self.special(m, e.kids[0].kids[0].s, scope) == "sys":
             # sys.platform in ("win32", "cygwin")
@@ -5042,11 +5043,11 @@ class Loader:
     def qexpr(self, m: Mod, n: Node, loc: dict[str, bool]) -> None:
         k = n.kind
         if k == "name" or k == "attr":
-            if k == "name" and n.s == "__name__" and m.name != "" and n.s not in loc:
+            if k == "name" and n.s == "__name__" and (m.name != "" or self.ext != "") and n.s not in loc:
                 if "__name__" in m.rebound:
-                    fail(f"module '{m.name}' binds __name__, which is not supported in an imported module", n.line)
+                    fail(f"module '{m.name if m.name != '' else self.ext}' binds __name__, which is not supported in an imported module", n.line)
                 n.kind = "str"
-                n.s = m.name
+                n.s = m.name if m.name != "" else self.ext
                 return
             if k == "name" and n.s == "__debug__":
                 n.kind = "True"  # (CPython runs without -O; nothing can bind __debug__)
@@ -5596,7 +5597,7 @@ UNSUPPORTED: dict[str, str] = {
 # of the program (over object.__new__, which makes an object of the class, only those marked "o")
 INERT_DECOS: dict[str, str] = {"typing.overload": "f", "typing.final": "fco", "typing.no_type_check": "fco", "typing.override": "fco",
                                "staticmethod": "f", "classmethod": "f", "property": "f", "dataclasses.dataclass": "c",
-                               "typing.runtime_checkable": "c", "object.__new__": "c", "ffi.extern": "f"}
+                               "typing.runtime_checkable": "c", "object.__new__": "c", "ffi.extern": "f", "ffi.export": "f"}
 # node kinds that evaluate without effects
 INERT: dict[str, bool] = {}
 for _k in "int float str bytes complex None True False ellipsis noann omit".split():
@@ -5853,7 +5854,7 @@ RUNTIME: dict[str, str] = {
     # runtime mode's primitives (Gen.primitive): a new str's memory, and the C library's searches
     # and copy, over the bytes of strs (a str that _rt.str_new made is written only before
     # _rt.str_done hands it out, so these need no letter either)
-    "alloc_atomic": "%ptr:int|A|", "cstr": "opt[str]:%ptr,int|R A|", "c_check": "int:int,int|R I|", "c_str": "None:str|R|", "string_at": "str:int,int|R A|", "c_bind": "None:%ptr,%ptr,%ptr|R A I|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
+    "alloc_atomic": "%ptr:int|A|", "init_lib": "None:%ptr,int|A I|", "cstr": "opt[str]:%ptr,int|R A|", "c_check": "int:int,int|R I|", "c_str": "None:str|R|", "string_at": "str:int,int|R A|", "c_bind": "None:%ptr,%ptr,%ptr|R A I|", "memchr": "%ptr:%ptr,%i32,int||memchr", "memcmp": "%i32:%ptr,%ptr,int||memcmp",
     "memmem": "%ptr:%ptr,int,%ptr,int||memmem", "memmove": "None:%ptr,%ptr,int,%i1||llvm.memmove.p0.p0.i64",
 }
 # LLVM symbol -> RUNTIME key (spelt out here as rtsym does: module code calls no function before
@@ -7183,9 +7184,33 @@ class Val:
 
 class IterArg:
     # A consumer's next argument: evaluate it after its iterator is constructed, before traversal.
+    # With split, a label, there is none: the code after the iterator is constructed goes on at
+    # split, and the traversal waits at trav for a branch to it (the consumer's turn to iterate).
     def __init__(self, node: Node):
         self.node = node
         self.value = Val("", "")
+        self.split = ""
+        self.trav = ""
+
+
+class SetArg:
+    # An argument of a set method that takes several iterables, evaluated with the others before
+    # the method iterates any: v, the value of an iterable, or gen, a generator expression whose
+    # iterator was made then (arg split), whose traversal starts at arg.trav and comes back to back.
+    def __init__(self, v: Val, gen: Node):
+        self.v = v
+        self.gen = gen
+        self.arg = IterArg(gen)
+        self.back = ""
+
+
+class SeqStart:
+    # The state of a for loop's iterators (Gen.for_seq), each taken when the iterator is made, as
+    # CPython's records it: a sequence's length then (used), and the position it reads next (st):
+    # a dict's or a set's slot, a list's or a str's length for reversed() (else unused).
+    def __init__(self) -> None:
+        self.st: list[str] = []
+        self.used: list[str] = []
 
 
 class FnInfo:
@@ -7220,6 +7245,7 @@ class FnInfo:
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
         self.csym = ""  # and its C symbol
+        self.pyexport = False  # @ffi.export: a function an extension module (pystachy ext) gives CPython
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
@@ -7749,8 +7775,10 @@ class Gen:
         # code calling back into the module
         self.late: dict[str, bool] = {}
         self.lib = False  # declaring an imported module's function: what it cannot compile is an error only where it is called
+        self.ext = ""  # pystachy ext: the name of the CPython extension module the program becomes
         self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
         self.csymline: dict[str, int] = {}  # and the line that declared it
+        self.extvars: dict[str, int] = {}  # pystachy ext: the main module's variables, and the line that binds each
         self.rtmode = False  # compiling runtime.py: its pys_* functions join runtime.c's under their C names (see runtime_ir)
         self.rtdefs: dict[str, FnInfo] = {}  # runtime mode: the pys_* functions this module defines, by C name
         self.rtcache = False  # runtime mode, for the driver's runtime cache: PYSTACHY_IRFX is the program's
@@ -8905,6 +8933,10 @@ class Gen:
                 f.extern = True
                 f.lib = ls[0]
                 f.csym = "@" + (ls[1] if ls[1] != "" else short(d.s))  # (the twin's symbol or f.__name__)
+            elif self.imported(x.s) == "ffi.export":
+                if len(x.kids) > 0 or len(d.kids) != 4:
+                    self.err("@export takes no arguments, and is a function's only decorator")
+                f.pyexport = True
         ps = d.kids[0].kids
         deco = ""
         stub = False  # (an imported module's that no def follows: see typing_forms)
@@ -8915,7 +8947,7 @@ class Gen:
         if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and (deco == "staticmethod" or deco == "classmethod"):
             f.deco = deco  # (a method that takes no self, or its class as cls)
         deco = short(deco)
-        if deco != "" and f.deco == "" and not self.lib and not f.extern:
+        if deco != "" and f.deco == "" and not self.lib and not f.extern and not f.pyexport:
             # (CPython applies a decorator when the def runs, called or not: see decorators())
             if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
                 self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -9014,7 +9046,7 @@ class Gen:
             f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
         if f.vararg >= 0:
             f.npos = f.vararg
-        if len(d.kids) > 3 and f.deco == "" and not f.extern:
+        if len(d.kids) > 3 and f.deco == "" and not f.extern and not f.pyexport:
             bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
             bad = STUB.replace("NAME", short(d.s)) if stub else bad
         if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
@@ -10652,18 +10684,18 @@ class Gen:
             return Val("null", "None")
         if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
             # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
-            # for a set of that type (each argument evaluated before any is added, as CPython does)
+            # for a set of that type (each argument evaluated before any is added, as CPython does:
+            # the first one's value is taken now, and its items at its turn)
             a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
-            if a.kind == "listcomp" and a.s == "gen":
-                et = elem(self.dry(mk("listcomp", "", a.line, a.kids)))  # (the type of a list of what it yields)
-                et = self.none_items(et) if is_tuple(et) else et
-                if elem_problem(et) != "":
-                    self.err(elem_problem(et))
-                self.refine(name, self.ctype("set", [et]))
-            else:
-                v = self.siter(a, "", "set.update()")
-                self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
-                a = self.vnode(v)
+            if (a.kind != "listcomp" or a.s != "gen") and not self.iterator_call(a):
+                a = self.vnode(self.consume(a, ""))
+            item = mk("name", "__item", a.line, [])
+            g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
+            et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
+            et = self.none_items(et) if is_tuple(et) else et
+            if elem_problem(et) != "":
+                self.err(elem_problem(et))
+            self.refine(name, self.ctype("set", [et]))
             return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
         if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
             if self.empty_of(args[1]) != "" and (want == "" or "?" in want):
@@ -10990,21 +11022,6 @@ class Gen:
                 self.lreg[c.caps[i]] = self.ins(f"load ptr, ptr {a}")
                 self.ltype[c.caps[i]] = c.ctypes[i]
         self.none_ends()
-        if f.name == "__init__" and f.cls != "" and not (self.is_dc(f.cls) and f.node.kids[0].kind == "noann") and self.classes[f.cls].exc == "":
-            # class-body defaults (a synthesized dataclass __init__ assigns every field itself; an
-            # exception class's constructor assigns them, see exc_object)
-            ci = self.classes[f.cls]
-            me = Val("%a0", f.cls)
-            for fl in ci.fields:
-                if fl in ci.fdefault and f.cls + "." + fl not in self.cvars:  # (a class variable is read from the class)
-                    t = ci.ftypes[fl]
-                    if not is_const(ci.fdefault[fl]):
-                        self.class_default(ci, fl)  # (compiled before the class statement runs)
-                    if fl in ci.fglob:
-                        v = Val(self.ins(f"load {lt(t)}, ptr {ci.fglob[fl]}"), t)
-                    else:
-                        v = self.coerce(self.expr(ci.fdefault[fl], t), t)
-                    self.setfield(me, self.field(me, fl), fl, v)
         if f.ll.startswith("@init."):
             # a module's code runs once, when the first import of it runs
             done = f.ll + ".done"
@@ -11224,6 +11241,81 @@ class Gen:
         if len(LINKDL) == 0:
             LINKDL.append("dl")
         self.externs[f.ll] = decl + f"\ndefine internal {lt(f.ret)} {f.ll}({', '.join(ps)}) {{\n" + "\n".join(code) + "\n}"
+
+    def pyext(self) -> list[str]:
+        # pystachy ext: in place of @main, what pyext.c calls. @pyx.init runs the module's code and
+        # each public function of the main module gets @pyx.f.<name>(ptr slots, ptr err): its
+        # arguments in i64 slots, its result as one; a raise is caught there (none crosses CPython's
+        # frames) and its Exc is stored in *err. pyx_exports lists them: name, signature (result,
+        # then each parameter: i int, f float, b bool, s str, n None), wrapper
+        o: list[str] = []
+        for k in ["eh_on", "try_mark", "exc.handled", "exc.restore", "exc.begin", "personality", "init_lib"]:
+            if k not in self.rtfns:
+                o.append(runtime_decl(k))
+        pad = ["lp:", "  %x = landingpad { ptr, i32 } catch ptr null", "  %ue = extractvalue { ptr, i32 } %x, 0",
+               "  %e = call ptr @pys_exc_begin(ptr %ue, i64 %mark)", "  call void @pys_exc_restore(ptr %prev)"]
+        o.extend(["declare void @pyx_argv()", "declare ptr @pyx_call(i64, ptr, i64, ptr)", "define ptr @pyx_init() personality ptr @pys_personality {",
+                  f"  call void @pys_init_lib(ptr @pys.roots, i64 {len(self.gcroots)})", "  call void @pyx_argv()", "  call void @pys_eh_on()", "  %mark = call i64 @pys_try_mark()", "  %prev = call ptr @pys_exc_handled()",
+                  "  invoke void @main.init() to label %ok unwind label %lp", "ok:", "  ret ptr null"] + pad + ["  ret ptr %e", "}"])
+        tab: list[str] = []
+        letter = {"int": "i", "float": "f", "bool": "b", "str": "s", "None": "n"}
+        for f in self.funcs.values():
+            if f.mod != "" or f.cls != "" or f.name.startswith("_") or f.extern:
+                continue
+            self.line = f.node.line
+            if not f.pyexport:
+                self.err(f"{f.name}() is public in extension module '{self.ext}' but not @export: CPython would not see it; export it or name it _{f.name}")
+            dflt = False
+            for x in f.defaults:
+                dflt = dflt or x.kind != "noann"
+            if dflt or f.vararg >= 0 or f.npos != len(f.params):
+                self.err(f"{f.name}() is @export: its parameters are positional, with no default values and no *args (as CPython calls it)")
+            for t in [f.ret] + f.ptypes:
+                if t not in letter or (t == "None" and t != f.ret):
+                    self.err(f"{f.name}() cannot be called from CPython: it takes or returns {typestr(t) if t != '' else 'an untyped value'} (an extension module's function takes int, float, bool or str and returns one or None); name it _{f.name} to keep it private")
+            sig = "".join([letter[t] for t in [f.ret] + f.ptypes])
+            o.extend([f"define internal i64 @pyx.f.{f.name}(ptr %a, ptr %err) personality ptr @pys_personality {{", "entry:",
+                      "  %mark = call i64 @pys_try_mark()", "  %prev = call ptr @pys_exc_handled()"])
+            args: list[str] = []
+            for j in range(len(f.ptypes)):
+                t = lt(f.ptypes[j])
+                o.extend([f"  %q{j} = getelementptr i64, ptr %a, i64 {j}", f"  %s{j} = load i64, ptr %q{j}"])
+                o.append(f"  %v{j} = {'bitcast i64 %s' + str(j) + ' to double' if t == 'double' else 'trunc i64 %s' + str(j) + ' to i1' if t == 'i1' else 'inttoptr i64 %s' + str(j) + ' to ptr' if t == 'ptr' else 'add i64 0, %s' + str(j)}")
+                args.append(f"{t} %v{j}")
+            r = lt(f.ret)
+            o.append(f"  {'%r = ' if r != 'void' else ''}invoke {r} {f.ll}({', '.join(args)}) to label %ok unwind label %lp")
+            o.append("ok:")
+            o.append(f"  %ri = {'bitcast double %r to i64' if r == 'double' else 'zext i1 %r to i64' if r == 'i1' else 'ptrtoint ptr %r to i64' if r == 'ptr' else 'add i64 0, %r' if r == 'i64' else 'add i64 0, 0'}")
+            o.extend(["  ret i64 %ri"] + pad + ["  store ptr %e, ptr %err", "  ret i64 0", "}"])
+            o.append(f"@pyx.n.{f.name} = private constant [{len(f.name) + 1} x i8] c\"{llstr(f.name)}\\00\"")
+            o.append(f"@pyx.s.{f.name} = private constant [{len(sig) + 1} x i8] c\"{sig}\\00\"")
+            # (its METH_FASTCALL | METH_KEYWORDS function: self is the module, the index says which)
+            o.extend([f"define internal ptr @pyx.m.{f.name}(ptr %self, ptr %args, i64 %n, ptr %kw) {{",
+                      f"  %r = call ptr @pyx_call(i64 {len(tab)}, ptr %args, i64 %n, ptr %kw)", "  ret ptr %r", "}"])
+            tab.append(f"{{ptr, ptr, ptr, ptr}} {{ptr @pyx.n.{f.name}, ptr @pyx.s.{f.name}, ptr @pyx.f.{f.name}, ptr @pyx.m.{f.name}}}")
+        o.append(f"@pyx_exports = constant [{len(tab) + 1} x {{ptr, ptr, ptr, ptr}}] [{', '.join(tab + ['{ptr, ptr, ptr, ptr} zeroinitializer'])}]")
+        # what CPython would see of the module but an extension cannot give it yet: an error
+        for ci in self.classes.values():
+            if "$" not in ci.name and not ci.name.startswith("_"):
+                self.line = ci.node.line
+                self.err(f"class {ci.name} is public in extension module '{self.ext}', but classes cannot cross to CPython yet: name it _{ci.name}")
+        for nm in self.mvars:
+            if "$" not in nm and not nm.startswith("_") and nm not in self.imports and nm not in self.funcs and nm not in self.classes:
+                self.line = self.extvars.get(nm, 1)
+                self.err(f"variable '{nm}' is public in extension module '{self.ext}', but CPython would not see it (variables cannot cross yet): name it _{nm}")
+        # a raise of one of the program's exception classes leaves as its nearest builtin base
+        xs: list[str] = []
+        for ci in self.classes.values():
+            if ci.exc != "":
+                o.append(f"@pyx.xn.{len(xs)} = private constant [{len(short(ci.name)) + 1} x i8] c\"{llstr(short(ci.name))}\\00\"")
+                o.append(f"@pyx.xb.{len(xs)} = private constant [{len(ci.exc) + 1} x i8] c\"{ci.exc}\\00\"")
+                xs.append(f"{{ptr, ptr}} {{ptr @pyx.xn.{len(xs)}, ptr @pyx.xb.{len(xs)}}}")
+        o.append(f"@pyx_excbase = constant [{len(xs) + 1} x {{ptr, ptr}}] [{', '.join(xs + ['{ptr, ptr} zeroinitializer'])}]")
+        o.append(f"@pyx.name = private constant [{len(self.ext) + 1} x i8] c\"{self.ext}\\00\"")
+        # both entries: abi3's PyInit_<name> and abi3t's PyModExport_<name>; the driver keeps one
+        o.extend(["declare ptr @pyx_module(ptr)", f"define ptr @PyInit_{self.ext}() {{", "  %m = call ptr @pyx_module(ptr @pyx.name)", "  ret ptr %m", "}"])
+        o.extend(["declare ptr @pyx_slots(ptr)", f"define ptr @PyModExport_{self.ext}() {{", "  %m = call ptr @pyx_slots(ptr @pyx.name)", "  ret ptr %m", "}"])
+        return o
 
     def untold(self, f: FnInfo, ts: list[str], how: str) -> None:
         # a function of runtime mode that runtime.c calls or defines and RUNTIME does not name
@@ -12398,7 +12490,7 @@ class Gen:
         tops: list[list[Node]] = []
         for m in mods:
             self.scan_imports(m.body.kids)
-            self.eh = self.eh or needs_eh(m.body.kids)
+            self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         for m in mods:
             m.body.kids = self.typing_forms(m, m.body.kids, False)
             for i in range(len(m.body.kids)):
@@ -12726,6 +12818,8 @@ class Gen:
             hdr.append(f"!{TBAA_BYTES} = !{{!{TBAA_LEN - 1}, !{TBAA_LEN - 1}, i64 0}}")
             hdr.append(f"!{STRLEN_RANGE} = !{{i64 0, i64 9223372036854775791}}")
             return "\n".join(hdr) + "\n"
+        if self.ext != "":
+            return "\n".join(hdr + self.pyext()) + "\n"
         # pys_init gets the GC roots: main's frame address bounds the stack scan (it also
         # covers @main.init if inlined here) and the table of pointer-typed globals
         hdr.append(runtime_decl("init"))
@@ -12763,6 +12857,12 @@ class Gen:
         for st in top:
             if st.kind == "def":
                 gl[st.s] = True  # (a decorated def's name: what its decorators give)
+        for st in top if mod == "" and self.ext != "" else []:
+            one: dict[str, bool] = {}
+            collect([st], one)
+            for nm in one:
+                if nm not in self.extvars:
+                    self.extvars[nm] = st.line  # (pystachy ext: where the module binds it)
         for f in fns:
             if f.pending:
                 continue  # its defining method already contributes the same global assignments
@@ -14495,7 +14595,8 @@ class Gen:
         # c(args), c an exception class: an object made as BaseException.__new__ makes it (its
         # ExcClass, and the args kept as str(e) and repr(e) show them, see exc_keep), with the
         # class-body defaults, then given to the __init__ of c or of the nearest base that has
-        # one; without one, the class takes any positional arguments
+        # one; without one, the class takes any positional arguments. All the arguments are
+        # evaluated first, in order, as CPython evaluates them before it makes the object
         ci = self.classes[c]
         if ci.bad != "":
             self.err(ci.bad)
@@ -14503,13 +14604,19 @@ class Gen:
         init = ci.methods["__init__"] if "__init__" in ci.methods else None
         vals: list[Val] = []
         kws: list[Node] = []
+        if init is not None and len([a for a in args if a.kind == "kw" and not pure_arg(a.kids[0])]) > 0:
+            # (a keyword argument that fits no parameter of __init__ is reported as call_fn reports
+            # it, before the loop evaluates one with the type of its parameter)
+            self.arity(init, 1, args)
         for a in args:
             if a.kind == "kw" and init is None:
                 # (the keywords its builtin base's __init__ takes, ImportError's name and path, ...)
                 self.exc_kw(ci.exc, [a], f"{short(c)}()")
                 self.expr(a.kids[0], "")
             elif a.kind == "kw":
-                kws.append(a)
+                # (its value is __init__'s, see vnode: E(xs, k=f(xs)) keeps xs as f left it, and a
+                # k=f() that raises leaves no object made; a constant is evaluated where it goes)
+                kws.append(a if pure_arg(a.kids[0]) else mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], self.kw_type(init, a.s)))]))
             else:
                 j = len(vals) + 1
                 vals.append(self.expr(a, init.ptypes[j] if init is not None and j < init.npos else ""))
@@ -14523,18 +14630,25 @@ class Gen:
         # (with an __init__ of the program, an OSError's args are left empty, and a SystemExit's
         # code None, until its super().__init__() sets them, as OSError.__new__ and SystemExit.__init__ do)
         self.exc_keep(o, vals if init is None or not self.derives(c, "OSError") else vals[:0], init is None)
-        for fl in ci.fields:
-            if fl in ci.fdefault and c + "." + fl not in self.cvars:  # (a class variable is read from the class, see getfield)
-                h = self.default_home(ci, fl)
-                t = ci.ftypes[fl]
-                if not is_const(ci.fdefault[fl]):
-                    self.class_default(h, fl)
-                v = Val(self.ins(f"load {lt(t)}, ptr {h.fglob[fl]}"), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
-                self.setfield(o, self.field(o, fl), fl, v)
+        self.class_defaults(o)
         self.line = line
         if init is not None:
             self.call_fn(init, [o] + vals, kws)
         return o
+
+    def class_defaults(self, o: Val) -> None:
+        # new object o's class-body defaults: CPython's class attributes, which o reads until it
+        # assigns them, as it is made (exc_object, new_obj), so that a later call of its __init__
+        # sees what o holds then. A class variable is read from the class (see getfield)
+        ci = self.classes[o.t]
+        for fl in ci.fields:
+            if fl in ci.fdefault and o.t + "." + fl not in self.cvars:
+                h = self.default_home(ci, fl)
+                t = ci.ftypes[fl]
+                if not is_const(ci.fdefault[fl]):
+                    self.class_default(h, fl)  # (compiled before the class statement runs)
+                v = Val(self.ins(f"load {lt(t)}, ptr {h.fglob[fl]}"), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
+                self.setfield(o, self.field(o, fl), fl, v)
 
     def exc_keep(self, o: Val, vals: list[Val], coded: bool = True) -> None:
         # what exception object o keeps of its args vals (BaseException.__new__, and its __init__
@@ -14966,6 +15080,8 @@ class Gen:
                     self.err(elem_problem(et))
             if n.s == "set":
                 self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))])
+            elif n.s == "discard":
+                self.sdiscard(f"ptr {self.lcs[-1]}", v, et)
             else:
                 self.rt("pys_list_append", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.coerce(v, et))])
         elif k == "defaults" or k == "cdefaults":
@@ -15261,7 +15377,13 @@ class Gen:
             self.compvars[nm] = self.compvars.get(nm, 0) + 1
 
     def iterarg(self, arg: IterArg | None) -> None:
-        if arg is not None:
+        if arg is not None and arg.split != "":
+            # the iterator is made: what follows goes on at split, and the traversal compiled next
+            # runs once a branch to trav starts it, after the consumer's other arguments
+            arg.trav = self.label()
+            self.br(arg.split)
+            self.place(arg.trav)
+        elif arg is not None:
             arg.value = self.expr(arg.node, "")
 
     def for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None:
@@ -15297,8 +15419,18 @@ class Gen:
                         self.err(f"'{tname(v.t)}' object is not reversible" if "__getitem__" not in self.classes[v.t].methods else f"reversed() of {short(v.t)} by its __len__ and __getitem__ is not supported")
                     evs.append(v if is_opt(v.t) or v.t in self.classes else self.iterable(v))  # (None raises, and __iter__ runs, once all are evaluated)
                 notit = "TypeError: 'NoneType' object is not reversible" if fn == "reversed" else "TypeError: 'NoneType' object is not iterable"
-                seqs = [self.iterable(v, notit) for v in evs]
-                self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
+                seqs: list[Val] = []
+                if len(evs) == 1:
+                    seqs.append(self.iterable(evs[0], notit))
+                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
+                else:
+                    # zip() makes its iterators in turn, and a dict's or a set's records its size
+                    # then, before a later operand's __iter__ runs (which may change it)
+                    made = SeqStart()
+                    for v in evs:
+                        seqs.append(self.iterable(v, notit))
+                        self.seq_start(seqs[-1], fn, made)
+                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg, made)
                 for i in range(len(args)):
                     self.close_temp(args[i], seqs[i])
                 return
@@ -15452,38 +15584,23 @@ class Gen:
         self.place(le)
         self.narrowed = after
 
-    def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None) -> None:
+    def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None, made: SeqStart | None = None) -> None:
         # One loop serves lists, strings, tuples, dicts, sets, enumerate, zip and reversed. Each
         # round takes the next item of every sequence, in order, the way its CPython iterator
         # would: lists and strings by index, checked against their current length (reversed:
         # counting down from the length at the start), tuples by index below the length their type
         # gives; dicts by entry position, skipping deleted entries and failing if the dict changed
         # size; sets by slot, failing if the set changed size. The loop ends at the first
-        # exhausted sequence.
+        # exhausted sequence. made: the state of each iterator, taken as it was made (seq_start),
+        # else taken now
         ctr = self.alloca("int", "")
         self.emit(f"store i64 0, ptr {ctr}")
-        st: list[str] = []
-        used: list[str] = []
-        for s in seqs:
-            if is_set(s.t) and mode == "reversed":
-                self.err(f"'{tname(s.t)}' object is not reversible")
-            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
-                self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
-            if s.t == "file":
-                st.append("")
-                used.append("")
-                continue
-            n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
-            used.append(n0)
-            if is_dict(s.t) or is_set(s.t):
-                pos = self.alloca("int", "")
-                p0 = "0"
-                if mode == "reversed":
-                    p0 = self.ins(f"sub i64 {self.rt('pys_dict_end', 'i64', [f'ptr {s.v}'])}, 1")
-                self.emit(f"store i64 {p0}, ptr {pos}")
-                st.append(pos)
-            else:
-                st.append(n0)
+        if made is None:
+            made = SeqStart()
+            for s in seqs:
+                self.seq_start(s, mode, made)
+        st = made.st
+        used = made.used
         self.iterarg(arg)
         self.hide(hide)
         after = self.forget(body, tgt)
@@ -15570,6 +15687,30 @@ class Gen:
         self.br(lc)
         self.place(le)
         self.narrowed = after
+
+    def seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
+        # the state of an iterator over sequence s (for_seq, in mode), as CPython's takes it when it
+        # is made: a dict's or a set's size, and the slot it reads first; a list's or a str's
+        # length, from which reversed() counts down
+        if is_set(s.t) and mode == "reversed":
+            self.err(f"'{tname(s.t)}' object is not reversible")
+        if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+            self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
+        if s.t == "file":
+            made.st.append("")
+            made.used.append("")
+            return
+        n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
+        made.used.append(n0)
+        if is_dict(s.t) or is_set(s.t):
+            pos = self.alloca("int", "")
+            p0 = "0"
+            if mode == "reversed":
+                p0 = self.ins(f"sub i64 {self.rt('pys_dict_end', 'i64', [f'ptr {s.v}'])}, 1")
+            self.emit(f"store i64 {p0}, ptr {pos}")
+            made.st.append(pos)
+        else:
+            made.st.append(n0)
 
     # ---- narrowing: optional locals known not to be None
     def narrows(self, n: Node, truth: bool, out: list[str]) -> None:
@@ -16687,7 +16828,8 @@ class Gen:
         # [e for t in it if c] runs as a loop appending to a fresh list (or to list into, of type
         # want, as xs.extend(e for ...) does item by item); t is scoped to it. mode any/all:
         # any(e for ...) / all(...) instead, stopping at the deciding element. kind "set": {e for
-        # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does)
+        # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does); kind
+        # "discard": discarding each from set into, as s.difference_update(e for ...) does
         h = Ins("", "", "")
         if mode != "":
             res = self.alloca("bool", "")
@@ -16702,12 +16844,12 @@ class Gen:
         saved: list[str] = []
         for nm in names:
             saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
-        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else "set", n.line, [n.kids[0]])
+        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
         body = [app]
         if len(n.kids) == 4:
             body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
         self.lcs.append(res)
-        self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind == "set" and "?" not in want else "")
+        self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
         pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
         self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
         self.narrowed = pre
@@ -16733,7 +16875,7 @@ class Gen:
             self.holes[h.k] = self.ctype(kind, [et])
             if kind == "set":
                 self.key_kind(et)  # (a tuple element's descriptor, a string constant, which lowering prints)
-        return Val(res, self.ctype(kind, [et]))
+        return Val(res, self.ctype("list" if kind == "list" else "set", [et]))
 
     def ifexp(self, n: Node, want: str) -> Val:
         st = self.static(n.kids[0])
@@ -17328,7 +17470,12 @@ class Gen:
                 item = self.tget(b, i)
                 if not self.comparable(item.t, a.t):
                     continue
-                if item.t in self.classes and self.isref(a.t):
+                u = unopt(item.t)
+                if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
+                    # (an object, list, dict, set or tuple, also one that may be None, is found
+                    # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
+                    # with xs = [nan]; a number has no identity here, see the deviation about NaN,
+                    # and a str's is its value)
                     nx = self.label()
                     self.incoming(ph, "true", self.cur)
                     self.cbr(self.ins(f"icmp eq ptr {item.v}, {a.v}"), lend, nx)
@@ -17923,6 +18070,16 @@ class Gen:
             return self.kw_method(o, m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
+        if o.t in self.nts and m == "__init__":
+            # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+            # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
+            # of its own, and does nothing, also on None. The __init__ that makes the object is the
+            # compiler's (see nt_class), which only construction and _replace() call
+            for a in args:
+                x = a.kids[0] if a.kind == "kw" else a
+                if not pure_arg(x):
+                    self.expr(x, "")
+            return Val("null", "None")
         if (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")) and (m == "__str__" or m == "__repr__") and len(args) == 0 and not self.curfn.ll.startswith("@x."):
             # e.__str__() is str(e): that of the class of e's object, which may derive from o.t's
             # (but for the ExcClass's own functions, see exc_helpers)
@@ -18039,7 +18196,8 @@ class Gen:
                 self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
             if f.iters:
                 self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
-            self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
+                self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[m:{t}.{name}]")
         base = "list" if is_list(t) else "dict" if is_dict(t) else "frozenset" if is_fset(t) else "set" if is_set(t) else t
         if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t) or is_set(t)):
@@ -18081,10 +18239,15 @@ class Gen:
         return Val(r, self.ctype("dict", ["str", vt]))
 
     def new_obj(self, c: str) -> Val:
-        # a new object of class c, not initialized
+        # a new object of class c, which its __init__ initializes: it holds its class-body defaults
+        # (but where @dataclass wrote __init__, which assigns every field itself)
         size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
         o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
         self.nn[o.v] = True
+        if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
+            line = self.line
+            self.class_defaults(o)
+            self.line = line
         return o
 
     def pcoerce(self, v: Val, t: str, f: FnInfo, j: int) -> Val:
@@ -18098,6 +18261,8 @@ class Gen:
 
     def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "") -> Val:
         # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
+        if f.pyexport:
+            self.err(f"{f.name}() is @export, so Pystachy code may not call it (under CPython each call goes through the export's checks and conversions): call a private function that both use")
         if f.bad != "":
             self.err(f.bad)  # (before its arguments, whose types may be placeholders')
         if f.ll not in self.called and f.ll in self.lazyat:
@@ -18255,6 +18420,15 @@ class Gen:
                 elif len(miss) > 2:
                     names = "'" + "', '".join(miss[:-1]) + f"', and '{miss[-1]}'"
                 self.err(f"{self.fname(f)}() missing {len(miss)} required {kind} argument{'s' if len(miss) != 1 else ''}: {names}")
+
+    def kw_type(self, f: FnInfo, name: str) -> str:
+        # the type call_fn evaluates keyword argument name of a call of f with: its parameter's, or
+        # that of the values f's **kwargs takes where the name goes there ("" where it fits no
+        # parameter, which arity reports)
+        j = f.params.index(name) if name in f.params else -1
+        if f.kwarg >= 0 and (j < 0 or j < f.posonly or j == f.kwarg or j == f.vararg):
+            return f.kwelem
+        return f.ptypes[j] if j >= 0 else ""
 
     def dispatches(self, f: FnInfo, p: str) -> bool:
         # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
@@ -19236,6 +19410,10 @@ class Gen:
             self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
         if key not in METHODS:
             self.err(f"'{o.t}' has no method '{m}'")
+        if key == "dict.get" and (len(args) == 0 or len(args) > 2):
+            # (CPython's TypeError; not left to the arity check below, as d.get(k, d2, None) would
+            # read as d.get(k, None))
+            self.err(f"get expected at {'least 1 argument' if len(args) == 0 else 'most 2 arguments'}, got {len(args)}")
         # d.get(k) and d.get(k, None): the value or None, for values that can be None
         optget = key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and self.optional(V) != ""
         if optget:
@@ -19480,9 +19658,16 @@ class Gen:
         # for elements of type et ("": any): a set or frozenset, a dict (CPython takes its keys
         # with their hashes), or else the list of its items, in the order CPython's iterator
         # gives them (a list's, a tuple's, a str's characters, what a generator yields, ...)
-        v = self.unwrap(self.consume(n, self.ctype("list", [et]) if et != "" else ""), "TypeError: 'NoneType' object is not iterable")
+        return self.sitems(self.consume(n, self.ctype("list", [et]) if et != "" else ""), et, what)
+
+    def sitems(self, v: Val, et: str, what: str) -> Val:
+        # siter's iterable, from its value v: where the set method takes its items (the iterator
+        # CPython makes then runs __iter__, and None raises)
+        v = self.unwrap(v, "TypeError: 'NoneType' object is not iterable")
         if v.t == "str":
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        elif v.t == "tuple[]" and et != "":
+            v = Val(self.as_list(v, "set").v, self.ctype("list", [et]))  # (() has no item to type: the elements wanted)
         elif not is_set(v.t) and not is_dict(v.t):
             v = self.as_list(v, "set")
         if not is_set(v.t) and not is_dict(v.t) and not is_list(v.t):
@@ -19504,6 +19689,73 @@ class Gen:
             self.rt("pys_set_update_dict", "void", [f"ptr {s}", f"ptr {v.v}"])
         else:
             self.rt("pys_set_update_list", "void", [f"ptr {s}", f"ptr {v.v}"])
+
+    def sdiscard(self, ov: str, v: Val, et: str) -> None:
+        # set ov (of elements of type et) discards v, which it holds or not; None is no element
+        if v.t == "None":
+            return
+        if is_opt(v.t) and unopt(v.t) == et:
+            l1 = self.label()
+            l2 = self.label()
+            self.cbr(self.isnull(v), l2, l1)
+            self.place(l1)
+            self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
+            self.br(l2)
+            self.place(l2)
+            return
+        self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(v, et))])
+
+    def sargs(self, o: Val, m: str, args: list[Node]) -> list[SetArg]:
+        # the arguments of set o's method m (update(), union(), ...), evaluated in order before it
+        # takes the items of any (stake). With several (or for union() and difference(), which copy
+        # o first), a generator expression (or map(), filter(), range(), zip(), enumerate(),
+        # reversed()) makes its iterator now, where its outermost iterable is evaluated (and range()
+        # checks its step, and __iter__ runs), and runs at its turn (a range's items are never all
+        # made at once); any other iterable is evaluated now, and its __iter__ runs at its turn
+        et = selem(o.t)
+        split = len(args) > 1 or m == "union" or m == "difference"
+        out: list[SetArg] = []
+        for a in args:
+            g = self.mapgen(a) if self.is_mapcall(a) else a
+            if len(args) > 1 and self.iterator_call(g):
+                item = mk("name", "__item", g.line, [])
+                g = mk("listcomp", "gen", g.line, [item, item, g])
+            if g.kind != "listcomp" or g.s != "gen":
+                out.append(SetArg(self.consume(g, self.ctype("list", [et]) if et != "" else ""), g))
+                continue
+            x = SetArg(Val("", ""), g)
+            if split:
+                x.arg.split = self.label()
+                x.v = self.sgen(o, m, g, x.arg)
+                x.back = self.label()
+                self.br(x.back)
+                self.place(x.arg.split)
+            out.append(x)
+        return out
+
+    def stake(self, o: Val, m: str, x: SetArg) -> Val:
+        # the items of argument x of set o's method m (sargs), at its turn: a set, a dict or a list,
+        # or none (type "") where a generator added (or discarded) each item as it came
+        what = f"{'frozenset' if is_fset(o.t) else 'set'}.{m}()"
+        if x.gen.kind != "listcomp" or x.gen.s != "gen":
+            return self.sitems(x.v, selem(o.t), what)
+        if x.arg.split == "":
+            v = self.sgen(o, m, x.gen, None)
+        else:
+            self.br(x.arg.trav)
+            self.place(x.back)
+            v = x.v
+        return v if v.t == "" else self.sitems(v, selem(o.t), what)
+
+    def sgen(self, o: Val, m: str, g: Node, arg: IterArg | None) -> Val:
+        # generator expression g, an argument of set o's method m: update() adds each item to o as
+        # it is yielded, and difference_update() discards it (none: a Val of type ""), as CPython's
+        # set_update_internal and set_difference_update_internal do; the others take a list of them
+        if m == "update" or m == "difference_update":
+            self.listcomp(g, o.t, "", o.v, arg, "set" if m == "update" else "discard")
+            return Val("", "")
+        et = selem(o.t)
+        return self.listcomp(g, self.ctype("list", [et]) if et != "" else "", "", "", arg)
 
     def keys_list(self, v: Val) -> Val:
         # a dict's keys (or v as it is), where CPython iterates over a dict as over any iterable
@@ -19576,15 +19828,7 @@ class Gen:
                         return none
                     v = self.deref(v)
                 else:
-                    if v.t == "None":
-                        return none
-                    l1 = self.label()
-                    l2 = self.label()
-                    self.cbr(self.isnull(v), l2, l1)
-                    self.place(l1)
-                    self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
-                    self.br(l2)
-                    self.place(l2)
+                    self.sdiscard(ov, v, et)
                     return none
             k = self.dkey(v, et)
             if m == "remove" and bool_for_int(v.t, et):
@@ -19607,50 +19851,61 @@ class Gen:
             return none
         if m == "copy":
             return o if fz else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)  # (frozenset.copy() is the frozenset)
-        if m == "update":
-            # CPython evaluates the arguments, then adds the elements of each in turn: a generator's
-            # (or map()'s, filter()'s) as it yields them, which may see the set change
-            gens: list[Node] = []
-            vs = []
-            for a in args:
-                g = self.mapgen(a) if self.is_mapcall(a) else a
-                gens.append(g)
-                vs.append(Val("", "") if g.kind == "listcomp" and g.s == "gen" else self.siter(g, et, f"{tn}.{m}()"))
-            for i in range(n):
-                if vs[i].t == "":
-                    self.listcomp(gens[i], o.t, "", o.v, None, "set")
-                else:
-                    self.supdate(o.v, vs[i])
-            return none
-        vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
-        if m == "difference_update":
-            for v in vs:
-                self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
-            return none
-        if m == "union":
-            r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            for v in vs:
-                if is_set(v.t):
-                    self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
-                else:
-                    self.supdate(r.v, v)
-            return r
-        if m == "intersection" or m == "intersection_update":
-            r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            for v in vs:
-                r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
-            if m == "intersection":
+        if m == "update" or m == "union" or m == "intersection" or m == "intersection_update" or m == "difference" or m == "difference_update":
+            # CPython evaluates every argument first, in order, then the method takes the items of
+            # each in turn (sargs, stake): update() adds a generator's (or map()'s, filter()'s) as
+            # it yields them, which may see the set change, and difference_update() discards them so
+            sa = self.sargs(o, m, args)
+            if m == "update" or m == "difference_update":
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    if v.t == "":
+                        pass  # (a generator: each item went as it came)
+                    elif m == "update":
+                        self.supdate(o.v, v)
+                    else:
+                        self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
+                return none
+            if m == "union":
+                r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    if is_set(v.t):
+                        self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
+                    else:
+                        self.supdate(r.v, v)
                 return r
-            self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
-            return none
-        if m == "difference":
+            if m == "intersection" or m == "intersection_update":
+                r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
+                if m == "intersection":
+                    return r
+                self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
+                return none
             if n == 0:
                 return Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            v = vs[0]
-            r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
-            for v in vs[1:]:
+            x = sa[0]
+            if (x.gen.kind == "listcomp" and x.gen.s == "gen") or unopt(x.v.t) in self.classes:
+                # code runs as its items are taken (a generator's, __iter__): CPython's
+                # set_copy_and_difference has copied o before
+                r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                self.rt("pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.stake(o, m, x).v}"])
+            else:
+                v = self.stake(o, m, x)
+                r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+            for x in sa[1:]:
+                v = self.stake(o, m, x)
                 self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"])
             return r
+        if (m == "issuperset" or m == "isdisjoint") and ((args[0].kind == "listcomp" and args[0].s == "gen") or self.is_mapcall(args[0])):
+            # CPython takes a generator's items until one decides: one o lacks (issuperset), or one
+            # it holds (isdisjoint), and the generator runs no further
+            g = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
+            e = mk("cmp", "in" if m == "issuperset" else "not in", g.line, [g.kids[0], self.vnode(o)])
+            return self.listcomp(mk("listcomp", "gen", g.line, [e] + g.kids[1:]), "", "all")
+        vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
         v = vs[0]
         if m == "symmetric_difference":
             return Val(self.rt("pys_set_xor" if is_set(v.t) else "pys_set_xor_dict" if is_dict(v.t) else "pys_set_xor_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
@@ -19895,8 +20150,12 @@ class Gen:
 
 
 # ---------------------------------------------------------------- driver
-def compile_program(path: str, src: str, dirs: list[str]) -> str:
-    return Gen().program(Loader(dirs).program(path, src))
+def compile_program(path: str, src: str, dirs: list[str], ext: str) -> str:
+    g = Gen()
+    g.ext = ext
+    ld = Loader(dirs)
+    ld.ext = ext
+    return g.program(ld.program(path, src))
 
 
 def runtime_ir(path: str, cache: bool) -> str:
@@ -19931,9 +20190,10 @@ def main() -> None:
     # dozen calls deep each: more than CPython's default limit of 1,000 calls when it runs this file
     sys.setrecursionlimit(MAXNEST * 40)
     argv = sys.argv
-    if len(argv) < 3 or (argv[1] != "run" and argv[1] != "build" and argv[1] != "ir" and argv[1] != "check" and argv[1] != "rt"):
+    if len(argv) < 3 or (argv[1] != "run" and argv[1] != "build" and argv[1] != "ext" and argv[1] != "ir" and argv[1] != "check" and argv[1] != "rt"):
         print("usage: pystachy run FILE.py [ARGS...]   JIT-compile and run (LLVM ORC via lli)", file=sys.stderr)
         print("       pystachy build FILE.py [-o EXE]  compile ahead of time to a native executable", file=sys.stderr)
+        print("       pystachy ext NAME.py [-o NAME.abi3.so]  compile to a CPython extension module (abi3, CPython 3.12+)", file=sys.stderr)
         print("       pystachy ir FILE.py [-o OUT.ll]  emit LLVM IR", file=sys.stderr)
         print("       pystachy check FILE.py           only parse it, with the checks CPython makes before running it", file=sys.stderr)
         print("       pystachy rt runtime.py [-o OUT.ll] emit the LLVM IR of the runtime's part written in the subset", file=sys.stderr)
@@ -19980,14 +20240,19 @@ def main() -> None:
             del MODULES["ffi"]  # (the program's own ffi module comes first, as under CPython: Pystachy's is not imported then)
             break
     f = open(SRC, "r", encoding="latin-1")
-    ir = compile_program(SRC, f.read(), dirs)
+    ext = SRC[SRC.rfind("/") + 1 : -3] if cmd == "ext" and SRC.endswith(".py") else ""
+    ir = compile_program(SRC, f.read(), dirs, ext)
     f.close()
     out = ""
+    abi = "abi3"  # pystachy ext: abi3 (CPython 3.12+, GIL builds) or abi3t (3.15+, GIL and free-threaded)
     rest: list[str] = []
     i = 3
     while i < len(argv):
         if argv[i] == "-o" and i + 1 < len(argv) and cmd != "run":
             out = argv[i + 1]
+            i += 2
+        elif argv[i] == "--abi" and i + 1 < len(argv) and cmd == "ext" and (argv[i + 1] == "abi3" or argv[i + 1] == "abi3t"):
+            abi = argv[i + 1]
             i += 2
         else:
             rest.append(argv[i])
@@ -20084,10 +20349,27 @@ def main() -> None:
     if code == 0 and cmd == "run":
         # (from the bitcode, so runtime.py's part is in it; sanitizer flags instrumented runtime.c already)
         code = sh(f"test {q(rto)} -nt {q(rtb)} || ({llvm}clang -O2 -fPIC -c {q(rtb)} -o {q(parto)} -Wno-unused-command-line-argument{ccflags} && mv -f {q(parto)} {q(rto)})")
+    peb = rtb[:-3] + "-pyembed.bc"
+    if code == 0 and cmd == "ext":
+        # pyembed.c: CPython in the process, hosting an extension module (its stdio hooks)
+        pec = home + "/pyembed.c"
+        code = sh(f"test {q(peb)} -nt {q(pec)} || ({llvm}clang -O2 -fPIC -S -emit-llvm {q(pec)} -o {q(rll)}{cflags} -fexceptions && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(part)} && mv -f {q(part)} {q(peb)})")
     link = f"{llvm}llvm-link --only-needed {q(ll)} {q(rtb)} -o {q(bc)}"
-    libs = " -ldl" if len(LINKDL) > 0 else ""  # (dlopen, dlsym: @ffi.extern)
+    libs = " -ldl" if len(LINKDL) > 0 or cmd == "ext" else ""  # (dlopen, dlsym: @ffi.extern, pyembed.c)
     if code != 0:
         msg = "cannot build the runtime (are clang and LLVM 18 installed? see PYSTACHY_LLVM, PYSTACHY_CFLAGS)"
+    elif cmd == "ext":
+        # a CPython extension module: program, pyext.c and runtime as one module, of which only
+        # PyInit_<name> stays visible (pyext.c's bitcode is cached as the runtime's is)
+        pxc = home + "/pyext.c"
+        pxb = rtb[:-3] + "-pyext-" + abi + ".bc"
+        entry = "PyModExport_" if abi == "abi3t" else "PyInit_"
+        if out == "":
+            out = SRC[:-3] + "." + abi + ".so"
+        code = sh(f"(test {q(pxb)} -nt {q(pxc)} || ({llvm}clang -O2 -fPIC -S -emit-llvm {q(pxc)} -o {q(rll)}{cflags} -fexceptions{' -DPYX_ABI3T' if abi == 'abi3t' else ''} && {strip} {q(rll)} > {q(rsl)} && {llvm}llvm-as {q(rsl)} -o {q(part)} && mv -f {q(part)} {q(pxb)}))"
+                  + f" && {llvm}llvm-link {q(ll)} {q(pxb)} {q(peb)} -o {q(lnk)} && {llvm}llvm-link --only-needed {q(lnk)} {q(rtb)} -o {q(bc)}"
+                  + f" && {llvm}opt -passes='internalize,default<O2>' -internalize-public-api-list={entry}{ext} {q(bc)} -o {q(bc)}"
+                  + f" && {llvm}clang -O2 -fPIC -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang -shared {q(obj)} -o {q(out)}{libs} -lm{cflags}")
     elif cmd == "build":
         # AOT tier: full -O2 over program + runtime as one module (whole-program optimization)
         if out == "":

@@ -62,7 +62,13 @@ a display of constants is the frozenset constant CPython's compiler makes, ...),
 set that changes size raises CPython's `RuntimeError`, and `set()` without a type takes the type
 its first use shows, as `[]` does (`s.add(x)`, `s.update(xs)`, `s |= t`, also
 `d.setdefault(k, set()).add(x)`). A frozenset has the methods that change nothing, and
-`f |= t` rebinds `f` to a new one, as CPython's does.
+`f |= t` rebinds `f` to a new one, as CPython's does. A method that takes iterables
+(`s.update(xs, ys)`, `s.union(...)`, ...) evaluates all its arguments first, then takes the items
+of each in turn, as CPython's does: a generator expression (or `map()`, `filter()`, `zip()`,
+...) makes its iterator among the arguments, where its outermost iterable is evaluated, and runs
+at its turn; another iterable's `__iter__` runs at its turn, and so does the `TypeError` of a
+`None`. `update()` and `difference_update()` add or discard each item of a generator as it is
+made, and `issuperset()` and `isdisjoint()` stop at the item that decides.
 
 ### When annotations are evaluated
 
@@ -302,7 +308,8 @@ imports `annotations` from `__future__`.
   nor of a function that returns `None`: annotate the field). An exception class (below) also
   has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
-  dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
+  dataclass whose fields only its construction assigns (a call `p.__init__(...)` evaluates its
+  arguments and does nothing, as CPython's `object.__init__` does there), read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
   `+` and `*` (which make a tuple), the prefixes of `str.startswith()` or suffixes of `endswith()`,
   `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of
@@ -310,10 +317,11 @@ imports `annotations` from `__future__`.
   and other NamedTuples), except an operator that its class defines; its `repr()` is a
   dataclass's.
 - `C.x` reads the class attribute that a class-body default binds (instances read it until
-  they assign `x`), also a `Final` one. `C.x = v` (also `cls.x += 1` in a class method) assigns
-  it, which `C.x` and the objects that have not assigned `x` then read. A class-body `x = v`
-  without an annotation is `x: T = v`, `T` given by `v` as for a field (but in a dataclass or
-  NamedTuple, where it would be no field). An exception class shares the class attributes it
+  they assign `x`: a later call of their `__init__` does not give it back), also a `Final`
+  one. `C.x = v` (also `cls.x += 1` in a class method) assigns it, which `C.x` and the
+  objects that have not assigned `x` then read. A class-body `x = v` without an annotation
+  is `x: T = v`, `T` given by `v` as for a field (but in a dataclass or NamedTuple, where it
+  would be no field). An exception class shares the class attributes it
   inherits with its base: `S.x`, `E.x` and the objects of both read one variable, which the
   class body that binds it evaluates once, and `E.x = v` changes it for both; a class body
   that binds `x` again (`x = v`, or `x: T = v` with the base's type `T`) gives the class its
@@ -334,7 +342,8 @@ augmented assignment (`+=` on lists extends in place; `__iadd__` & co are honour
 files, tuples (and NamedTuples) of one item type, objects (below), `.items()`/`.keys()`/`.values()`,
 `enumerate` (with `start`), `zip` and
 `reversed` (also of a `range`), stepping each sequence as its CPython iterator does (a dict
-that changes size raises `RuntimeError`), `break`, `continue`, `return`, `pass` (and `...`), `global`,
+or a set that changes size raises `RuntimeError`, measured against its size when its iterator
+was made: `zip()` makes its operands' iterators in turn, before the loop), `break`, `continue`, `return`, `pass` (and `...`), `global`,
 `del` of a list item, a dict key or an object's item, `assert`, `with open(...) as f:` (also several items, in
 parentheses or not), `try` (below), `raise` of an exception class, a call of one or an
 exception, a bare `raise` and `raise ... from ...` (if nothing catches it, it ends the program
@@ -343,8 +352,9 @@ inside a function: a closure, see *Typing rules*), decorators of a def (see *Typ
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
-(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`): see
-[ffi.md](ffi.md) (a program's own `ffi.py` comes first, as under CPython).
+(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`) and the functions
+an extension module gives CPython (`@ffi.export`): see [ffi.md](ffi.md) (a program's own
+`ffi.py` comes first, as under CPython).
 
 ## Exceptions
 
@@ -696,11 +706,10 @@ In these cases the program compiles but can behave differently from CPython:
   reuses the earlier one's frozenset constant, whose table can differ where elements collide,
   and a module CPython loads from its `.pyc` rebuilds such constants once more. `min()` and
   `max()` of a set take its elements before they call a `key=` function, which so does not see
-  the set change (CPython's raises `RuntimeError` where it changes the set's size), and the set
-  methods but `update()` take all the items of a generator expression before they run.
-  `update()` adds a generator's elements as it makes them, after those of the arguments before
-  it, and evaluates the generator's first iterable then too, where CPython evaluates that with
-  the call's arguments.
+  the set change (CPython's raises `RuntimeError` where it changes the set's size), and
+  `intersection()` and `intersection_update()` take all the items of a generator expression
+  before they test them against the set, where CPython tests each as it is made, which differs
+  only where the generator's expressions change the set.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without
@@ -731,9 +740,10 @@ In these cases the program compiles but can behave differently from CPython:
   CPython, also where the name is a builtin module it re-exports: `from helper import os`). A program that reads a module's attribute before the import of the module has
   run reads its zero value instead of raising `NameError` (but after an import in a `try`
   statement that raised, as CPython does).
-- An exception keeps `str()` of its arguments and what `repr()` shows of them as it is made
-  (their `__str__` and `__repr__` run then), where CPython computes them from `args` each time:
-  an argument changed afterwards (a list) is not seen, and an argument whose `__str__` or
+- An exception keeps `str()` of its arguments and what `repr()` shows of them as it is made,
+  once all the arguments of the call are evaluated (their `__str__` and `__repr__` run then),
+  where CPython computes them from `args` each time: an argument changed afterwards (a list,
+  also by the exception's `__init__`) is not seen, and an argument whose `__str__` or
   `__repr__` raises makes the call of the exception class (`raise KeyError(obj)`) raise that
   exception instead, so that an `except KeyError` does not run.
 - A function declared or inferred to return a value that ends without a `return` raises

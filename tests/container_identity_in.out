@@ -1,0 +1,23 @@
+shared True True True
+not in False False False
+later True True True
+distinct False False False
+distinct not in True True
+children True True True
+mixed True False
+set True True False
+star True False False
+star True True False
+namedtuple True False False
+first True 0
+equal True 1
+optional list True False False False
+optional list True False False True
+optional dict True False False False
+optional dict True False False True
+optional tuple True False False False
+optional tuple True False False True
+optional items True False False False
+optional items True False True False
+optional items False False True False
+[exit 0]
