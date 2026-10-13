@@ -1,0 +1,30 @@
+forms 112 212 312 412 CacheInfo(hits=0, misses=4, maxsize=4, currsize=4)
+hits 112 212 312 412 CacheInfo(hits=4, misses=4, maxsize=4, currsize=4)
+order 512 512 CacheInfo(hits=5, misses=5, maxsize=4, currsize=4)
+evicted 612 CacheInfo(hits=5, misses=6, maxsize=4, currsize=4)
+empty 712 712 CacheInfo(hits=1, misses=1, maxsize=4, currsize=1)
+aliases 812 812 812 812 812 CacheInfo(hits=5, misses=2, maxsize=4, currsize=2)
+bound keyword 912 912 CacheInfo(hits=6, misses=3, maxsize=4, currsize=3)
+wrapped 1012 CacheInfo(hits=6, misses=3, maxsize=4, currsize=3)
+eval 12 ['default', 'b', 'a', 'body']
+eval hit 12 ['default', 'b', 'a', 'body', 'b2', 'a2']
+default 12 12 ['default', 'b', 'a', 'body', 'b2', 'a2', 'pos', 'body'] CacheInfo(hits=2, misses=2, maxsize=None, currsize=2)
+expansion 12 12 CacheInfo(hits=3, misses=3, maxsize=None, currsize=3)
+kw expansion 12 12 CacheInfo(hits=4, misses=4, maxsize=None, currsize=4)
+closure 3! 3! 3! 3! 3! CacheInfo(hits=1, misses=4, maxsize=3, currsize=3)
+closure 4! 4! 4! 4! 4! CacheInfo(hits=1, misses=4, maxsize=3, currsize=3)
+optional none none none none CacheInfo(hits=1, misses=3, maxsize=None, currsize=3)
+disabled 3 3 3 CacheInfo(hits=0, misses=3, maxsize=0, currsize=0)
+positional 2 2 2 CacheInfo(hits=1, misses=2, maxsize=None, currsize=2)
+kw-only omitted 6 6 CacheInfo(hits=0, misses=2, maxsize=None, currsize=2)
+inner 2
+recursive 2 2 2 CacheInfo(hits=2, misses=2, maxsize=2, currsize=2)
+clear 1 2 2 CacheInfo(hits=0, misses=0, maxsize=2, currsize=1)
+negative
+negative
+raises CacheInfo(hits=0, misses=2, maxsize=None, currsize=0)
+nine 45 45 CacheInfo(hits=0, misses=2, maxsize=2, currsize=2)
+nine hit 45 45 CacheInfo(hits=2, misses=2, maxsize=2, currsize=2)
+nine keywords 45 CacheInfo(hits=2, misses=3, maxsize=2, currsize=2)
+nine keywords hit 45 CacheInfo(hits=3, misses=3, maxsize=2, currsize=2)
+[exit 0]

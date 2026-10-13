@@ -449,9 +449,17 @@ written after that C code, with `lru_cache`'s docstring:
   has a cache of its own types: `_lru_cache_wrapper` is a generic class, `Generic[*_Ts, _R]`,
   whose `__init__` takes the function as a `Callable[[*_Ts], _R]`, so each wrapper binds `_Ts` to
   the function's parameter types and `_R` to its return type ([`docs/language.md`](../docs/language.md),
-  *Typing rules*). The key of a call is the tuple of its arguments, a `tuple[*_Ts]`, which
-  `__call__(self, *args: *_Ts)` takes by position (CPython's key for one `int` or `str` argument
-  is the argument itself).
+  *Typing rules*). Full positional calls retain a `tuple[*_Ts]` key (CPython's key for one
+  `int` or `str` argument is the argument itself). For omitted defaults and keyword arguments,
+  the compiler binds against the original function's signature, evaluates arguments in source
+  order and reads defaults evaluated at definition time, including a closure's defaults.
+  A static tag records the positional count and ordered keyword names: `f(1)`, `f(1, 2)`,
+  `f(1, b=2)`, `f(a=1, b=2)` and `f(b=2, a=1)` keep separate entries, as in CPython.
+  These forms use `(tag, bound_arguments)` keys in a second map into the same LRU, so all forms
+  share `maxsize`, eviction order, statistics and `cache_clear()`. Nine-parameter functions
+  remain supported. Aliases and bound `__call__` methods use the same keys as direct calls.
+  The new forms conservatively allocate their nested lookup keys; full positional calls
+  retain their original stack-key lookup path.
 
 What it does not have, each a compile-time error (`tests/errors/lib_functools_*.py`):
 
@@ -461,18 +469,18 @@ What it does not have, each a compile-time error (`tests/errors/lib_functools_*.
   `int`, `bool`, `str`, `str | None` and tuples of those;
 - `lru_cache()` of a builtin, a method or a lambda (it caches a def's results, of the program or
   of a function), and of a method in a class body, where Pystachy applies no decorator;
-- a call through the cache that passes a keyword argument or leaves out one that has a default
-  value: `__call__(self, *args: *_Ts)` takes each of the function's positional parameters, by
-  position (CPython caches each form of a call apart, `f(1)`, `f(1, 2)` and `f(1, b=2)` being three
-  entries);
+- a required keyword-only parameter, or explicitly supplying a keyword-only argument (a
+  keyword-only parameter with a default may still be omitted);
 - `cache_parameters()`, whose dict mixes `int | None` and `bool` values.
 
 `typed=True` is accepted and keeps no calls apart: a parameter has one type, so the calls it
 would keep apart (`f(1)` and `f(1.0)`) cannot both compile. The cache needs no lock, as a
-Pystachy program has one thread. `tests/lib_functools.py` and `tests/lib_functools_mod.py`
-compare it with CPython's C wrapper.
+Pystachy program has one thread. `tests/lib_functools.py`, `tests/lib_functools_mod.py` and
+`tests/lib_functools_calls.py` compare it with CPython's C wrapper. Running this module itself
+under CPython uses that C wrapper through an optional `_functools` import; compiled programs
+use the subset implementation and compiler call binding described above.
 
-In an AOT executable, a cache hit costs 24 ns (unbounded) to 31 ns (bounded) for an `int`
+A prior AOT benchmark of full positional calls measured 24 ns (unbounded) to 31 ns (bounded) for an `int`
 argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tuple is made and
 hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
 (medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
