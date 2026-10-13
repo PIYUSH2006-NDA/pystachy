@@ -23,7 +23,7 @@ created
 closed twice True True w
 'a\nb\n'
 'a,1,2.5\nb'
-2
+'Ã©'
 2 ['a', 'b'] True
 out
 via a variable

@@ -1,0 +1,61 @@
+-- empty set
+set() 0 True []
+-- unit set (number)
+{3} 1 False [3]
+-- unit set (tuple)
+{(0, 'zero')} 1 False [(0, 'zero')]
+-- string set
+['a', 'b', 'c'] 3 False ['a', 'b', 'c']
+RuntimeError: Set changed size during iteration
+-- TestBinaryOps
+[2, 3, 5, 6] True
+-- TestUpdateOps
+[2, 6]
+-- TestMutate
+LookupError: 'd'
+['a', 'b', 'c', 'z'] ['a', 'b', 'c']
+-- TestSubsets
+both empty ['==', '<=', '>=']
+equal pair ['==', '<=', '>=']
+one empty, one non-empty ['!=', '<', '<=']
+one a non-empty proper subset of other ['!=', '<', '<=']
+neither empty, neither contains ['!=']
+-- TestOnlySetsDict
+update [1, 2, 3]
+union [1, 2, 3]
+intersection_update [1, 3]
+intersection [1, 3]
+symmetric_difference_update [2]
+symmetric_difference [2]
+difference_update [2]
+difference [2]
+-- TestOnlySetsTuple
+update [1, 2, 3, 4, 6]
+union [1, 2, 3, 4, 6]
+intersection_update [2]
+intersection [2]
+symmetric_difference_update [1, 3, 4, 6]
+symmetric_difference [1, 3, 4, 6]
+difference_update [1, 3]
+difference [1, 3]
+-- TestOnlySetsGenerator
+update [0, 1, 2, 3, 4, 6, 8]
+union [0, 1, 2, 3, 4, 6, 8]
+intersection_update [2]
+intersection [2]
+symmetric_difference_update [0, 1, 3, 4, 6, 8]
+symmetric_difference [0, 1, 3, 4, 6, 8]
+difference_update [1, 3]
+difference [1, 3]
+-- TestIdentities
+['b', 'd', 'r'] ['a', 'c'] ['b', 'd', 'l', 'm', 'r', 'z']
+-- an object with __iter__
+update [0, 1, 2, 3, 4]
+union [0, 1, 2, 3, 4]
+intersection_update [2]
+intersection [2]
+symmetric_difference_update [0, 1, 3, 4]
+symmetric_difference [0, 1, 3, 4]
+difference_update [1, 3]
+difference [1, 3]
+[exit 0]
