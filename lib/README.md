@@ -354,6 +354,13 @@ compiled tests run there at upstream's size (`make re-fuzz RE_FUZZ="20000 2"` ru
 patterns of seed 2). With it, unmodified roman 5.2 prints what CPython prints. It is about 3
 times slower than `_sre`.
 
+`tools/re_probe.py` (`make re-probe`, a step of `make verify`) runs the port on CPython for
+textwrap's patterns, on 20 paragraphs and 20 blocks `tools/re_bench.py` generates: each result must
+be CPython's `re`'s, and the matcher's entries and the contexts it makes must stay within fixed
+limits, deterministic counts that a change making the matcher do more exceeds. `tools/re_bench.py`
+times the same operations, compiled and under CPython (`make re-probe RE_PROBE="--time
+./pystachy"`).
+
 ## `fnmatch`, a port of CPython's
 
 `fnmatch.py` is CPython 3.13.16's `Lib/fnmatch.py` (SHA-256

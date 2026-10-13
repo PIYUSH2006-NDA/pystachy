@@ -19,6 +19,7 @@ honest.
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
 | `make check-recordings` | `tests/record.sh --check`: CPython still prints every recorded expected output, every deviation still deviates, `lib/`'s copies are CPython's files, and no stray file lies in the tree ([below](#recording-expected-output)) |
 | `make re-fuzz` | `lib/re`, run by CPython, against CPython's `re` on random patterns (`RE_FUZZ="N SEED"` for others) and on `test_re`'s biggest cases |
+| `make re-probe` | `lib/re`, run by CPython, enters its matcher and makes contexts no more often than fixed limits allow for textwrap's patterns (`RE_PROBE="--time ./pystachy"` also times them compiled) |
 | `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
@@ -179,6 +180,11 @@ versions, platform, git commit and a timestamp:
   other pattern on strs that hold UTF-8, as Pystachy's do; about 390,000 cases. The cases of
   `test_re.py` that `tests/upstream_re_*.py` run smaller (too many allocations for gc-stress)
   run there at upstream's size;
+- **re-probe** — `tools/re_probe.py` (`make re-probe`) runs `lib/re` on CPython for
+  textwrap's patterns on 20 paragraphs and 20 blocks of lines made as `tools/re_bench.py` makes
+  its inputs:
+  each result must be CPython's `re`'s, and the matcher's entries and the contexts it makes must
+  stay within fixed limits, deterministic counts that a slower change to the engine exceeds;
 - **rt-abi** — `tools/rtabi.py`: every function `runtime.py` defines or declares has one LLVM
   signature in `runtime.py`, in runtime.c and in every program of the corpus (`llvm-link`
   would accept a mismatch silently);
