@@ -6,5 +6,5 @@ def note(s: str) -> int:
 class Table:
     width = note("width")
 
-    def cell(self, i):
-        return i
+    def __init__(self, i):
+        self.i = i

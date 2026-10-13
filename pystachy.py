@@ -7192,6 +7192,16 @@ class Closure:
         self.nlw: dict[str, bool] = {}
 
 
+def template_ok(name: str) -> bool:
+    # may a method of this name be a template, its unannotated parameters typed by each call (M2)?
+    # Not __init__, whose parameters type the fields it assigns, nor a special method that CPython
+    # calls implicitly, but an operator's (SPECIAL's of two parameters) and __call__, __getitem__
+    # and __contains__, which a call compiles as any other
+    if not (name.startswith("__") and name.endswith("__")):
+        return True
+    return name in "__call__ __getitem__ __contains__".split() or (name in SPECIAL and SPECIAL[name].startswith("2:"))
+
+
 def takes_self(f: FnInfo) -> bool:
     # is f a method that takes its object as its first parameter (not a static or class method)
     return f.cls != "" and f.deco == ""
@@ -8327,7 +8337,7 @@ class Gen:
                 m = "__repr__" if op == "repr" else DUNDER[op]
                 m = DUNDER[REFL[op]] if m not in ms and op in REFL else m
                 f = ms[m] if m in ms else None
-                if f is not None and (f.bad != "" or (op != "repr" and f.ptypes[1] != t)):
+                if f is not None and (f.bad != "" or (op != "repr" and f.ptypes[1] != t and f.ptypes[1] != "")):
                     self.err(f.bad if f.bad != "" else f"comparing {shown(t)} objects (in a list, tuple, in, count, index, sort, min or max) calls {m}() with a {shown(t)}, but it takes a {typestr(f.ptypes[1])}")
             if t not in self.ocls:
                 self.ocls[t] = len(self.ocls)
@@ -8838,7 +8848,7 @@ class Gen:
         if cls != "" and len(ps) == 0 and f.deco != "staticmethod":
             self.err(f"method '{d.s}' of class '{cls}' must take {'cls' if f.deco != '' else 'self'} as its first parameter")
         tv = self.typevar_in([p.kids[0] for p in ps if p.kind == "param"] + [d.kids[1]])
-        if tv != "" and cls == "":
+        if tv != "" and (cls == "" or template_ok(d.s)):
             # def f(x: T) with T = TypeVar("T"): what mentions a TypeVar is left unannotated, as in
             # def f[T](x: T) (a template)
             for p in ps:
@@ -8846,11 +8856,13 @@ class Gen:
                     p.kids[0] = mk("noann", "", d.line, [])
             if self.typevar_in([d.kids[1]]) != "":
                 d.kids[1] = mk("noann", "", d.line, [])
-        tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: a method is not a template (a module-level function whose parameters mention a TypeVar is, compiled for each call's argument types)"
-        if tv != "" and cls != "" and not self.lib:
+        tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: {d.s}() is not a template (another method whose parameters mention a TypeVar is, compiled for each call's argument types)"
+        if tv != "" and cls != "" and not template_ok(d.s) and not self.lib:
             self.err(tvbad)
         for i in range(len(ps)):
-            if cls == "" and ((ps[i].kind == "param" and ps[i].kids[0].kind == "noann") or ps[i].kind == "starparam" or ps[i].kind == "dstarparam"):
+            # a method's are too, as M2 makes them (but its self or cls; see template_ok)
+            own = cls != "" and i == 0 and f.deco != "staticmethod"
+            if (cls == "" or (template_ok(d.s) and not own)) and ((ps[i].kind == "param" and ps[i].kids[0].kind == "noann") or ps[i].kind == "starparam" or ps[i].kind == "dstarparam"):
                 f.generic = True
         marks = d.kids[0].s.split(",")
         bad = ""
@@ -8940,7 +8952,7 @@ class Gen:
             why = self.ann_problem(d.kids[1], True) if it is None else self.ann_problem(it, False)
             if why != "":
                 bad = f"{cls + '.' if cls != '' else ''}{d.s}() is not supported: return annotation: {why}"
-        if tv != "" and cls != "":
+        if tv != "" and cls != "" and not template_ok(d.s):
             bad = tvbad  # (an imported module's: an error only where it is used)
         if bad != "" and not f.generic and not self.lib:
             self.err(bad)
@@ -11880,8 +11892,10 @@ class Gen:
         return c in EXCBASES and exc_derives(c, base)
 
     def class_problem(self, m: Mod, st: Node) -> str:
-        # why a class of an imported module cannot be declared, or "": its methods need
-        # annotated parameters, and its body may hold only fields, methods and a docstring
+        # why a class of an imported module cannot be declared, or "": its __init__ (and the special
+        # methods template_ok leaves out) needs annotated parameters, where another method's
+        # unannotated ones make it a template, and its body may hold only fields, methods and a
+        # docstring
         if len(st.kids) > 2 or (len(st.kids) > 1 and (dc_args(st.kids[1]).startswith("!") or self.imported(st.kids[1].s) != "dataclasses.dataclass")):
             return f"its decorator @{short(st.kids[1].s)} is not supported"
         for b in st.kids[0].kids:
@@ -11893,7 +11907,7 @@ class Gen:
                     return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
                 if len(ps) == 0 and not static:
                     return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
-                for i in range(len(ps)):
+                for i in range(len(ps) if not template_ok(b.s) else 0):
                     if ps[i].kind != "param":
                         return f"method {b.s}() takes *args or **kwargs"
                     if (i > 0 or static) and ps[i].kids[0].kind == "noann":
@@ -12414,7 +12428,7 @@ class Gen:
                     continue  # (an exception class's base's)
                 if ci.mod != "" and f.ll not in self.lazy:
                     self.lazy[f.ll] = f
-                elif f.ll not in self.lazy and f.ll not in self.compiled:
+                elif f.ll not in self.lazy and f.ll not in self.compiled and not f.generic:
                     self.function(f, f.node.kids[2].kids)
         # generate on demand: dataclass methods that were called, and helpers for classes that
         # appear inside containers (which can make more of both necessary). Each pass compiles,
@@ -12447,7 +12461,7 @@ class Gen:
                 elif lz[i].ll not in done:
                     at = i
                     done[lz[i].ll] = True
-                    if lz[i].ll not in self.compiled:
+                    if lz[i].ll not in self.compiled and not lz[i].generic:
                         self.function(lz[i], lz[i].node.kids[2].kids)
             for i in later:
                 hpush(self.wake, i)
@@ -13226,8 +13240,11 @@ class Gen:
         spec = SPECIAL[f.name]
         n = int(spec[: spec.find(":")])
         ret = spec[spec.find(":") + 1 :]
-        if len(f.params) != n:
+        if len(f.params) != n or f.vararg >= 0 or f.kwarg >= 0:
+            # (an operator passes its operand by position: a template's *args would not take it)
             f.bad = f"{f.name} must take {n - 1} argument{'s' if n != 2 else ''} besides self"
+        elif f.generic:
+            pass  # (a template: each instance's return type is checked where it is compiled, see instance)
         elif f.name == "__bool__" and f.ret != "bool":
             f.bad = f"__bool__ should return bool, returned {tname(f.ret)}"  # (CPython's TypeError)
         elif ret != "" and f.ret != ret and not (f.name == "__len__" and f.ret == "bool"):
@@ -16718,8 +16735,8 @@ class Gen:
         if t not in self.classes or m not in self.classes[t].methods:
             return ""
         f = self.classes[t].methods[m]
-        if (f.bad != "" and not self.lenient) or (f.bad == "" and len(f.params) == 2 and (f.ptypes[1] == other or (other == "None" and f.ptypes[1] in self.classes))):
-            return m  # (a method that cannot be compiled: the call reports why; see desc)
+        if (f.bad != "" and not self.lenient) or (f.bad == "" and len(f.params) == 2 and (f.ptypes[1] == other or (other == "None" and f.ptypes[1] in self.classes) or f.ptypes[1] == "")):
+            return m  # (a method that cannot be compiled: the call reports why; see desc. A template takes any operand)
         return ""
 
     def isnull(self, v: Val) -> str:
@@ -17961,7 +17978,12 @@ class Gen:
             self.err(f"active template signatures exceed {TEMPLATE_BYTES} bytes; annotate template parameters")
         if self.template_instances >= TEMPLATE_INSTANCES:
             self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
-        g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, "")
+        self.materialize(f)  # (an inherited class method's own body)
+        g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, f.cls)
+        g.deco = f.deco
+        g.clsuse = f.clsuse
+        g.orig = f.orig
+        g.iters = f.iters
         g.params = f.params
         g.ptypes = ts
         g.defaults = f.defaults
@@ -17984,14 +18006,17 @@ class Gen:
         self.template_instances += 1
         maybe = [f.params[j] for j in range(len(ts)) if ts[j] in self.classes and f.params[j] not in g.nnp and self.dispatches(f, f.params[j])]
         why = f", where {' and '.join(maybe)} may be None: only a new object or self is known not to be None, which decides isinstance(), hasattr() and 'is None' at compile time" if len(maybe) > 0 else ""
-        args = ", ".join(ts[1:] if f.clo >= 0 else ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"  # (a closure's env aside)
-        self.making.append(f"compiling {shown(f.name)}({args}) for the call at {where(self.line)}{why}")
+        args = ", ".join(ts[1:] if f.clo >= 0 or takes_self(f) else ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"  # (a closure's env, a method's self aside)
+        self.making.append(f"compiling {shown(f.cls) + '.' if f.cls != '' else ''}{shown(f.name)}({args}) for the call at {where(self.line)}{why}")
         self.template_bytes += size
         fr = self.save()
         self.modlevel = False
         self.lenient = False
         self.function(g, f.node.kids[2].kids)
         self.restore(fr)
+        ret = SPECIAL[f.name][SPECIAL[f.name].find(":") + 1 :] if f.cls != "" and f.name in SPECIAL else ""
+        if ret != "" and g.ret != ret:
+            self.err(f"{f.name} must return {ret}, and {shown(f.cls)}.{f.name}() returns {typestr(g.ret)}")
         self.making.pop()
         self.template_bytes -= size
         return g

@@ -7,5 +7,5 @@ class Helper:
 class Sorted:
     order = sorted([3, 1], key=Helper.key)
 
-    def get(self, *a):
-        return a
+    def __init__(self, *a):
+        self.a = a

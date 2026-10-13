@@ -8,5 +8,5 @@ class Box:
     "Pystachy leaves this class uncompiled (*a), but checks what its body reads"
     size = LIMIT
 
-    def get(self, *a):
-        return a
+    def __init__(self, *a):
+        self.a = a

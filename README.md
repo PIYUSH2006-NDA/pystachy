@@ -178,7 +178,7 @@ compiler on CPython. Other settings are listed in
 - **It compiles itself, to a fixed point.** The compiler built by CPython and the compiler built
   by itself must emit identical LLVM IR, so any place where Pystachy and CPython disagree inside
   the compiler shows up as a diff. CI also rebuilds it with no Python on `PATH`.
-- **Unmodified library code compiles.** An unannotated module-level function is a template,
+- **Unmodified library code compiles.** An unannotated module-level function or method is a template,
   compiled for the argument types of each call, and what CPython decides at import time (`__main__` guards,
   platform tests, optional C accelerators) is decided at compile time. That is how `bisect`,
   `heapq`, `posixpath` and six more CPython modules compile as they are.
