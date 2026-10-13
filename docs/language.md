@@ -211,8 +211,9 @@ imports `annotations` from `__future__`.
 - `Callable[[A, B], R]` (typing's or `collections.abc`'s, also `Callable[[], R]` and with `| None`)
   is the type of any function that takes an `A` and a `B` and returns an `R`: a function value
   becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
-  dict item), compiled for those parameter types, so one variable, field or list holds different
-  functions (defs, builtins, lambdas, closures, bound methods). A call of a Callable passes its arguments by
+  dict item, also as an arm of a conditional expression there), compiled for those parameter
+  types, so one variable, field or list holds different functions (defs, builtins, lambdas,
+  closures, bound methods). A call of a Callable passes its arguments by
   position, as its parameter types type them (one that is `None` raises `TypeError` once they are
   evaluated); two Callables are the same function where they hold one function (a closure from
   one run of its def or lambda), also compared with that function, and where they may be `None`,

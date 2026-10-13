@@ -16328,6 +16328,8 @@ class Gen:
         self.place(l1)
         pre = self.narrow_by(n.kids[0], True)
         a = self.expr(n.kids[1], want)
+        if is_fn(a.t) and is_callable(unopt(want)):
+            a = self.coerce(a, want)  # (a function where a Callable is expected: made one in its arm)
         # an arm that ends the program (sys.exit()) has no edge to the join, and no value
         e1 = "" if self.term else self.cur
         self.br(l3)
@@ -16338,6 +16340,8 @@ class Gen:
         if want == "" and n.kids[2].kind == "ifexp" and self.optional(a.t) != "":
             wb = self.optional(a.t)  # (x if c else y if d else None: T | None)
         b = self.expr(n.kids[2], wb)
+        if is_fn(b.t) and is_callable(unopt(want)):
+            b = self.coerce(b, want)
         self.narrowed = pre
         e2 = "" if self.term else self.cur
         t = b.t if e1 == "" or (a.t == "None" and e2 != "") else a.t

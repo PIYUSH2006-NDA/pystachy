@@ -138,3 +138,33 @@ kf: Callable[[int], int] = neg
 ys = [3, 1, 2]
 ys.sort(key=kf)
 print(sorted([3, 1, 2], key=kf), min([3, 1, 2], key=kf), max(3, 1, 2, key=kf), ys)
+
+
+# a conditional expression whose arms are functions, where a Callable is expected: each arm
+# becomes the Callable in its own branch (#236)
+def inc(x: int) -> int:
+    return x + 1
+
+
+class Shift:
+    def __init__(self, k: int) -> None:
+        self.k = k
+
+    def by(self, x: int) -> int:
+        return x + self.k
+
+
+def arms(cond: bool, other: bool) -> None:
+    k = 3
+    f: Callable[[int], int] = inc if cond else double
+    g: Callable[[int], int] = inc if cond else double if other else neg
+    h: Callable[[int], int] | None = inc if cond else None
+    fs: list[Callable[[int], int]] = [inc if cond else double, (lambda x: x * k) if cond else abs, Shift(5).by if cond else neg]
+    d: dict[str, Callable[[int], int]] = {"f": double if cond else inc}
+    print(f(10), g(100), h(1000) if h is not None else None, [x(-4) for x in fs], d["f"](5))
+    print(maybe(inc if cond else None, 7), compose(inc if cond else double, neg)(4))
+
+
+arms(True, False)
+arms(False, True)
+arms(False, False)
