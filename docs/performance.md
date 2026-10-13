@@ -58,6 +58,20 @@ runs, with the dict lookup fusion turned off (`PYSTACHY_OPT=-dictfuse`) and on:
 The fused lookups make it 31% faster AOT and 28% faster under the JIT. `PYSTACHY_OPT=-all` turns
 every pass off, for comparisons like this one.
 
+## The first part of a split
+
+`s.split(sep)[0]`, `s.split(sep, n)[0]` and `s.split()[0]`, where `s` is a str, make the first
+part alone (`pys_str_split_first`): the text before the first `sep`, or the first word, without
+the list or the other parts. It raises what the list's `[0]` would: `ValueError` for an empty
+`sep`, `IndexError` where `s` has no word. Taking the name off each of 1,000,000 tab-separated
+lines, best of 5 runs, AOT:
+
+| per line | CPython | before | now |
+|---|---:|---:|---:|
+| `line.split("\t", 1)[0]` | 81.5 ns | 31.4 ns | 12.2 ns |
+| `line.split("\t")[0]` | 104.3 ns | 42.3 ns | 12.8 ns |
+| `line[:line.find("\t")]`, -1 tested | 66.8 ns | 13.5 ns | 13.8 ns |
+
 ## The cost of exceptions
 
 Code that does not raise pays nothing for a `try` statement (under the JIT, two runtime calls as

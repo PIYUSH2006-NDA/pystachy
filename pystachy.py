@@ -5866,6 +5866,7 @@ RUNTIME: dict[str, str] = {
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
+    "str.split_first": "str:S,str,int|R A|",  # (s.split(sep, n)[0]: Gen.index)
     "str.rsplit": "list[str]:S,str,int|R A|", "str.splitlines": "list[str]:S,bool|R A|", "str.strip": "str:S,str|A|",
     "str.lstrip": "str:S,str|A|", "str.rstrip": "str:S,str|A|", "str.startswith": "bool:S,str,int,int|R|",
     "str.endswith": "bool:S,str,int,int|R|", "str.find": "int:S,str,int,int|R|", "str.rfind": "int:S,str,int,int|R|",
@@ -6200,6 +6201,19 @@ def may_raise(e: Node) -> bool:
         if may_raise(x):
             return True
     return False
+
+
+def plain_args(args: list[Node]) -> bool:
+    # arguments passed by position, none unpacked
+    for a in args:
+        if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+            return False
+    return True
+
+
+def is_super(e: Node) -> bool:
+    # super(...)
+    return e.kind == "call" and e.kids[0].kind == "name" and e.kids[0].s == "super"
 
 
 def is_const(e: Node) -> bool:
@@ -16980,7 +16994,23 @@ class Gen:
         return self.from_slot(self.ins(f"load i64, ptr {p}"), targs(v.t)[i])
 
     def index(self, n: Node) -> Val:
-        o = self.expr(n.kids[0], "")
+        c = n.kids[0]
+        f = c.kids[0] if c.kind == "call" else c
+        if n.kids[1].kind == "int" and n.kids[1].s == "0" and f.kind == "attr" and f.s == "split" and len(c.kids) <= 3 and plain_args(c.kids[1:]) and self.dotted(f) == "" and (f.kids[0].kind != "name" or self.static_type(f.kids[0]) == "str") and not is_super(f.kids[0]):
+            # s.split()[0], s.split(sep)[0], s.split(sep, n)[0]: the first part alone, made without
+            # the list or the other parts (pys_str_split_first). The receiver is evaluated as call()
+            # evaluates it, and what is not a str's split is indexed as it was
+            self.line = c.line
+            o = self.expr(f.kids[0], self.default_want(f.kids[0], f.s, c.kids[1:], ""))
+            if o.t == "str":
+                return self.bmethod(o, f.s, c.kids[1:], True)
+            r = self.method(o, f.s, c.kids[1:])
+            self.close_temp(f.kids[0], o)
+            return self.subscript(n, r)
+        return self.subscript(n, self.expr(c, ""))
+
+    def subscript(self, n: Node, o: Val) -> Val:
+        # o[i], where o is the value of n.kids[0] and n.kids[1] the index
         t = unopt(o.t)
         sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
         if is_kw(t) and n.kids[1].kind == "str":
@@ -19767,7 +19797,8 @@ class Gen:
         else:
             self.rt("pys_write", "void", [f"ptr {s}", f"i64 {fd}"])
 
-    def bmethod(self, o: Val, m: str, args: list[Node]) -> Val:
+    def bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> Val:
+        # (first: s.split(...)[0], which index() asks for: only the first part, a str)
         if is_set(o.t):
             return self.smethod(o, m, args)
         if is_list(o.t) and m == "sort":
@@ -19946,6 +19977,9 @@ class Gen:
         if optget:
             rtype = self.optional(V)
         fn = f"pys_{base}_{m}"
+        if first:
+            fn = "pys_str_split_first"
+            rtype = "str"
         if optget and is_sopt(rtype) and not is_sopt(V):
             fn = "pys_dict_getbox"  # (the value's box: an int | None)
         if numok != "true" and m == "remove":

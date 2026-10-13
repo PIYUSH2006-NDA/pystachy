@@ -992,6 +992,21 @@ def pys_str_split(s: str, sep: str, maxsplit: int) -> list[str]:
     return out
 
 
+def pys_str_split_first(s: str, sep: str, maxsplit: int) -> str:
+    # s.split(sep, maxsplit)[0] (Gen.index): pys_str_split's first part, without the list or the
+    # other parts. Without sep, the first word (none: the list is empty, which [0] raises for)
+    n = len(s)
+    if _rt.null(sep):
+        i = scan_ws(s, 0, n, False)
+        if i >= n:
+            raise IndexError("list index out of range")
+        return s[i:] if maxsplit == 0 else s[i : scan_ws(s, i, n, True)]
+    if len(sep) == 0:
+        raise ValueError("empty separator")
+    j = search(s, sep, 0, n) if maxsplit != 0 else -1
+    return s[:j] if j >= 0 else s  # (no sep: s itself, as CPython's list holds it)
+
+
 def pys_str_rsplit(s: str, sep: str, maxsplit: int) -> list[str]:
     # split from the right; the parts stay in order
     out: list[str] = []
