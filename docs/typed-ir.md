@@ -1520,6 +1520,13 @@ that commit's. What has changed since, and where the code departs from the text:
     which lowers to the inline load of `l->a[i]` (three more numbers, from `IFn.n`). Every
     loop over a list qualifies: 376 of the 1,823 `pys_list_get` calls of the self-compile,
     and 262 more in 88 other programs of the corpus. `tests/ir/listget.py` pins it.
+  - `listfast`: `Gen.list_read` lowers an arbitrary `list[int]` subscript to a checked
+    fast path and a runtime fallback. After both operands run and the optional target is
+    unwrapped, `list.len` (rL) reads the current length. An unsigned index comparison rejects
+    negative and out-of-bounds indices; only its true branch executes `list.load` (rL), with
+    no intervening call or allocation. Its false branch retains `list.get` and its exception
+    effects. A phi joins their integer values. `PYSTACHY_OPT=-listfast` disables this choice;
+    it does not remove bounds checks or require a proof that a loop cannot shorten its list.
   - `dictfuse` (item 2): a `dict.has` or a `dict.getitem` finds a key's entry, which a later
     `dict.getitem` or `dict.set` of the same dict and key reuses where the key is known to be
     there: after a getitem, or on the branch where the has's test is true (the pass reads the

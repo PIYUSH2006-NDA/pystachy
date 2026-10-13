@@ -1,0 +1,27 @@
+value 10
+value 30
+value 30
+value 10
+IndexError list index out of range
+IndexError list index out of range
+IndexError list index out of range
+IndexError list index out of range
+IndexError list index out of range
+IndexError list index out of range
+TypeError 'NoneType' object is not subscriptable
+bool indices 10 20
+optional index 20
+list indices must be integers or slices, not NoneType
+0 ['target', 'index']
+list index out of range ['target', 'shrink']
+9 ['target', 'index']
+8 [100]
+shrinking 1
+shrinking 2
+list index out of range
+list index out of range
+value 42
+finally
+outer list index out of range
+12
+[exit 0]
