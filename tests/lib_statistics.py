@@ -37,6 +37,19 @@ class Sized:
         return len(self.items)
 
 
+class Unsized:
+    # an iterable whose __len__ raises TypeError, as one whose length is unknown may: CPython's
+    # fmean() catches it and counts the items, and math.sumprod() iterates without len()
+    def __init__(self, items: list[float]) -> None:
+        self.items = items
+
+    def __iter__(self) -> Iterator[float]:
+        return iter(self.items)
+
+    def __len__(self) -> int:
+        raise TypeError("length unknown")
+
+
 # StatisticsError is a ValueError
 try:
     raise StatisticsError("boom")
@@ -49,6 +62,11 @@ print(fmean((3.5, 4.0, 5.25)), fmean(Bag([3.5, 4.0, 5.25])), fmean([-1.5]), fmea
 print(fmean([1e100, 1.0, -1e100]), fmean([0.1] * 10), fmean([2**53 + 1, 2**53 + 3]), fmean([-0.0]))
 print(fmean([10.0, nan]), fmean([nan, inf]), fmean([10.0, inf]), fmean([-inf, 1.0]))
 print(fmean(Sized([1, 2, 3, 5])))
+print(fmean(Unsized([3.5, 4.0, 5.25])), fmean(Unsized([10.0, 20.0, 30.0]), [1, 2, 3]))
+try:
+    print(fmean(Unsized([1.0, 2.0]), [1, 2, 3]))
+except StatisticsError as e:
+    print(type(e).__name__, e)
 for bad in [[inf, -inf], [1e308, 1e308]]:
     try:
         print(fmean(bad))

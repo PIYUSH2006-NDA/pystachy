@@ -560,7 +560,7 @@ renders a message for each record of a data file with it.
 ## `statistics`, a port of CPython's
 
 `statistics.py` is CPython 3.13.16's `Lib/statistics.py` (SHA-256
-`80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18`) edited in 19 places, each
+`80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18`) edited in 20 places, each
 marked `# Pystachy port:`. It has `fmean()`, with and without `weights`, `median()`,
 `median_low()`, `median_high()`, `median_grouped()`, `quantiles()`, `geometric_mean()`, `mode()`,
 `multimode()` and `StatisticsError` (a `ValueError`), as CPython's code computes them, with its
@@ -572,7 +572,7 @@ strs and tuples of them for `mode()` and `multimode()`. The weights of `fmean()`
 functions stay in the file, uncompiled, as CPython wrote them: a program that uses one is an error
 where it does (below).
 
-The edits, which replace 54 of the file's 1,817 lines with 185 (79 of them `_sumprod()`, 54 of
+The edits, which replace 52 of the file's 1,817 lines with 195 (88 of them `_sumprod()`, 62 of
 those code), and need no change to the compiler or the runtime:
 
 - The imports of `numbers`, `random`, `fractions`, `decimal`, `itertools`, `functools.reduce` and
@@ -588,12 +588,14 @@ those code), and need no change to the compiler or the runtime:
   `math.fma()` (`tl_fma()`, `dl_mul()` and `dl_sum()`, written out in its loop: as functions that
   return tuples, they made a weighted `fmean()` three times as slow), until a product or a sum is
   not finite, then as floats. It returns `float(math.sumprod(p, q))`, the float that `fmean()`
-  divides.
-- `fmean()` counts the items of an iterable without `__len__` (an object with `__iter__` alone,
-  whose `len()` raises `TypeError`, as `hasattr()` tells) in a list of them, where CPython counts
-  them with a generator, `count()`, that it gives `fsum()`: the subset has no generators. It passes
-  weights that are no list or tuple to a call of itself as a list of them, where CPython makes
-  `weights` that list: a variable has one type.
+  divides. An input without `__len__`, or whose `len()` raises `TypeError`, is read into a list
+  first, as C iterates it.
+- `fmean()` counts the items of an iterable without `__len__` (an object with `__iter__` alone, as
+  `hasattr()` tells), or whose `len()` raises `TypeError`, in a list of them, where CPython counts
+  them with a generator, `count()`, that it gives `fsum()`: the subset has no generators. Its return
+  is annotated `float`, as it may call itself before it returns. It passes weights that are no list
+  or tuple to a call of itself as a list of them, where CPython makes `weights` that list: a
+  variable has one type.
 - `geometric_mean()`'s generator `count_positive()` is a loop that keeps what it would give in a
   list, which `fsum(map(log, ...))` takes.
 - `median()`, `median_low()`, `median_high()`, `median_grouped()` and `quantiles()` call

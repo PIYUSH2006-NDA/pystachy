@@ -508,15 +508,24 @@ def _tl_to_d(hi: float, lo: float, tiny: float) -> float:
     return tiny + y + x
 
 
-def _sumprod(p, q):
+def _sumprod(p, q) -> float:
     """Return the sum of products of values from two iterables p and q."""
-    # An iterable without __len__ (an object with __iter__ alone) is read into a list first, and
-    # the lengths are compared first: C raises the ValueError where the shorter input ends.
+    # An iterable without __len__ (an object with __iter__ alone), or whose len() raises TypeError,
+    # is read into a list first, as C's iterates it, and the lengths are compared first: C raises
+    # the ValueError where the shorter input ends.
     if not hasattr(p, '__len__'):
         return _sumprod([x for x in p], q)
     if not hasattr(q, '__len__'):
         return _sumprod(p, [x for x in q])
-    if len(p) != len(q):
+    try:
+        len_p = len(p)
+    except TypeError:
+        return _sumprod([x for x in p], q)
+    try:
+        len_q = len(q)
+    except TypeError:
+        return _sumprod(p, [x for x in q])
+    if len_p != len_q:
         raise ValueError("Inputs are not the same length")
     int_total = 0
     flt_path_enabled = True
@@ -594,7 +603,7 @@ def mean(data):
     return _convert(total / n, T)
 
 
-def fmean(data, weights=None):
+def fmean(data, weights=None) -> float:  # Pystachy port: annotated, as it may call itself first
     """Convert data to floats and compute the arithmetic mean.
 
     This runs faster than the mean() function and it always returns a float.
@@ -604,12 +613,15 @@ def fmean(data, weights=None):
     4.25
     """
     if weights is None:
-        # Pystachy port: an iterable without __len__ (an object with __iter__ alone), whose len()
-        # raises TypeError, as hasattr() tells, is read into a list, which counts its items, in
+        # Pystachy port: an iterable without __len__ (an object with __iter__ alone, as hasattr()
+        # tells), or whose len() raises TypeError, is read into a list, which counts its items, in
         # place of the generator count(): the subset has no generators
         if not hasattr(data, '__len__'):
             return fmean([x for x in data])
-        n = len(data)
+        try:
+            n = len(data)
+        except TypeError:
+            return fmean([x for x in data])
         total = fsum(data)
         if not n:
             raise StatisticsError('fmean requires at least one data point')

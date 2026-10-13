@@ -6,6 +6,8 @@ nan nan inf -inf
   Sized.__len__
   Sized.__iter__
 2.75
+4.25 23.333333333333332
+StatisticsError data and weights must be the same length
 ValueError -inf + inf in fsum
 OverflowError intermediate overflow in fsum
 StatisticsError: fmean requires at least one data point
