@@ -332,6 +332,22 @@ back, and leave out the cases that use what the subset does not support; where a
 changes more (an attribute set on a function becomes a field of an object that holds it), the
 file's header says so. Differential output is recorded with CPython 3.13.16.
 
+CPython's import tests (tests/upstream_import_failing.py)
+---------------------------------------------------------
+
+tests/upstream_import_failing.py adapts ImportTests.test_failing_import_sticks and
+ImportTracebackTests.test_exec_failure, test_exec_failure_nested, test_broken_submodule,
+test_broken_from, test_broken_parent and test_broken_parent_from from CPython 3.13.16's
+Lib/test/test_import/__init__.py, at commit cbc944f4bc59639a444dd971c737788ba2283a91;
+the modules in tests/upimport/ hold the source those tests write. They are used under the
+Python Software Foundation License Version 2; the complete CPython license and copyright
+notices are retained in tests/upstream/CPYTHON-LICENSE.txt.
+
+Summary of changes: each test becomes a function, and the modules it writes are files under
+names of their own; the sys.modules and traceback assertions are left out, as Pystachy has
+neither; each test also checks that the name its failed import would bind stays unbound.
+Differential output is recorded with CPython 3.13.16.
+
 CPython's re tests (tests/upstream_re_*.py, tools/re_fuzz.py)
 -------------------------------------------------------------
 

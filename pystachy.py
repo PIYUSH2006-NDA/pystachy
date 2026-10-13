@@ -24,6 +24,11 @@ TOODEEP = f"source too complex: nested more than {MAXNEST} levels deep"
 # besides (Parser.extra), as measured, to stop where CPython does or a few levels before
 CPYSTACK = 5960
 MODDUNDERS = "__file__ __doc__ __spec__ __loader__ __package__ __builtins__"  # (which CPython's modules have)
+# the encoding the compiler reads source files and writes IR in, so that a str holds their bytes,
+# one character each: Latin-1 under CPython; in Pystachy (where len("\xe9") is 2), whose str holds
+# bytes, UTF-8, which it reads and writes unchecked (a Latin-1 file's text would hold each byte
+# from 0x80 on as two, its character's UTF-8)
+RAW = "latin-1" if len("\xe9") == 1 else "utf-8"
 
 
 def shown(s: str) -> str:
@@ -672,8 +677,11 @@ class Node:
         self.line = line
         self.kids: list[Node] = []
         self.chk = False  # a variable read that may find the variable unassigned
-        # a read of a module's attribute through a name that an import in a try statement binds,
-        # which an exception may have left unbound: "<module> <name> <L (a local) or G>", else ""
+        # a read of a name that an import in a try statement binds (or of a module's attribute
+        # through it), which may be unbound there: "<its flag> <name> <L (a local) or G>" (see
+        # Loader.import_binds); then, ";"-separated, "<submodule> <name> A" for each submodule that
+        # an import in a try statement runs which the read takes as its package's attribute
+        # (Loader.trysubs); else ""
         self.mchk = ""
         self.depth = 1  # levels of nodes from this one down, as mk counted them
 
@@ -3157,7 +3165,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
 NOCALL: dict[str, bool] = {}
 for _k in ("name str int float None True False list tuple dict attr assign annassign expr pass global import alias "
-           "uimport guard badimport block raise def params param starparam dstarparam noann class").split():
+           "uimport guard bound badimport block raise def params param starparam dstarparam noann class").split():
     NOCALL[_k] = True
 
 
@@ -3456,6 +3464,7 @@ class Loader:
         self.laterm: list[Mod] = []
         self.laterb: list[Node] = []
         self.laterd: list[str] = []
+        self.latert: list[int] = []  # (the try statements each is in: intry)
         # what the imports in a function bind (for that function only), by the def's line
         self.fks: dict[str, dict[str, str]] = {}
         self.fkline: dict[str, int] = {}  # and the line of the first import that binds each name, by "<def's line> <name>"
@@ -3464,12 +3473,17 @@ class Loader:
         self.fk: dict[str, str] = {}  # the bindings of the function being qualified
         self.fkey = ""  # and its def's line
         # the try statements imports() is in; the names that imports in try statements bind ("<module>
-        # <def line, or empty> <name>"), which the import may leave unbound (Node.mchk), each with the
-        # module whose code then did not end; and the names imports outside try statements bind
+        # <def line, or empty> <name>"), which the import may leave unbound (Node.mchk), each with its
+        # flag (import_binds()); and the names imports outside try statements bind
         self.intry = 0
         self.optry = False  # (in the body of one whose clauses may catch ImportError: not an optional import)
         self.fragile: dict[str, str] = {}
         self.solid: dict[str, bool] = {}
+        # the submodules that imports in try statements run, which their package has as an attribute
+        # only once an import of them has run to its end (Gen.modchk), and the reads through such an
+        # attribute that qmod() found in the expression being qualified (Node.mchk)
+        self.trysubs: dict[str, bool] = {}
+        self.subchk: list[str] = []
         self.parsed: dict[str, Node] = {}  # each module file, parsed once
         # and what its code binds, surely and maybe, as scan() finds it before it is loaded
         self.rawbound: dict[str, dict[str, bool]] = {}
@@ -3544,6 +3558,7 @@ class Loader:
         for i in range(len(self.later)):
             st = self.later[i]
             self.curdef = self.laterd[i]
+            self.intry = self.latert[i]
             out: list[Node] = []
             if self.loaded(self.laterm[i], st):
                 self.import_stmt(self.laterm[i], st, True, out)
@@ -3561,6 +3576,7 @@ class Loader:
                 if b.kids[j] is st:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
+        self.intry = 0
         self.guarded()
         self.submodules()
         more = True
@@ -3681,7 +3697,7 @@ class Loader:
         # a module's file, parsed once for the looks before it is loaded (optional()) and the load
         if path in self.parsed:
             return self.parsed[path]
-        f = open(path, "r", encoding="latin-1")
+        f = open(path, "r", encoding=RAW)
         src = f.read()
         f.close()
         k = len(FILES)
@@ -4710,6 +4726,7 @@ class Loader:
                 self.laterm.append(m)
                 self.laterb.append(blk)
                 self.laterd.append(self.curdef)
+                self.latert.append(self.intry)
                 out.append(st)
             elif st.kind == "import":
                 self.import_stmt(m, st, infn, out)
@@ -4767,13 +4784,21 @@ class Loader:
         # one import statement becomes: an import node with its builtin modules (for code
         # generation), a uimport node with the user modules to initialize (each package before
         # its submodules), and for every variable taken with from-import an assignment of its
-        # current value, as CPython binds it (marked "from")
+        # current value, as CPython binds it (marked "from"). A name that has a flag (import_binds())
+        # is bound where CPython binds it, by a "bound" node that sets the flag: in a plain import
+        # once the code of its own modules has run (the uimport is split there), in a from-import
+        # once that of all of them has, in the order of its names, among the copies
         line = st.line
         keep = mk("import", st.s, line, [])
         inits = mk("uimport", "", line, [])
         copies: list[Node] = []
         names: list[str] = []
-        took: list[str] = []  # (the names a from-import binds to a module, function or class: not copied)
+        took: list[str] = []  # (the names a from-import binds in order: "" a variable it copies)
+        # (a plain import: where each alias's modules start in inits, where its copies start, and
+        # the flag of the name it binds; then those of the names a from-import binds)
+        at: list[int] = []
+        cat: list[int] = []
+        flags: list[str] = []
         for a in st.kids if infn else st.kids[:0]:
             if a.s in self.fgl.get(self.curdef, {}) and (st.s.startswith("from.") or not builtin_module(a.kids[1].s) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
                 # (CPython binds the module's global, which then names one module or another; but
@@ -4781,6 +4806,9 @@ class Loader:
                 out.append(mk("badimport", f"an import of '{a.s}' in a function that declares it global is not supported", line, []))
                 return
         for a in st.kids:
+            at.append(len(inits.kids))
+            cat.append(len(copies))
+            flags.append("")
             path = a.kids[1].s
             if path == "typing_extensions":
                 # the typing backport: its names are typing's (those typing has)
@@ -4829,7 +4857,7 @@ class Loader:
                     i = j
                 n = len(self.taken)
                 if self.take(m, self.mods[tgt[: tgt.rfind(".")]], tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
-                    self.import_binds(m, a.s, tgt, infn)
+                    flags[-1] = self.import_binds(m, a.s, infn)
                 if len(self.taken) > n:
                     self.taken[n].kind = "takesub"  # (this import runs the submodule's code: submodules())
                 names.append(a.s)
@@ -4837,39 +4865,66 @@ class Loader:
                 # import a.b.c binds a; import a as x binds x to a
                 self.bind(m, a.s, "m:" + a.kids[0].s, infn, line)
                 names.append(a.s)
-                self.import_binds(m, a.s, path, infn)
+                flags[-1] = self.import_binds(m, a.s, infn)
             elif a.s == "*":
                 for x in self.public(src):
-                    if self.take(m, src, x, x, infn, keep, inits, copies, line) != "v":
-                        took.append(x)
+                    k = self.take(m, src, x, x, infn, keep, inits, copies, line)
+                    took.append(x if k != "v" else "")
                     names.append(x)
                 if src.pdir != "" and not has_all(src.body.kids):
                     self.stars.append(mk("star", "", line, [mk("str", src.name, line, [])]))
                     self.starm.append(m)
             else:
                 tgt = a.kids[0].s
-                if self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line) != "v":
-                    took.append(a.s)
+                k = self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
+                took.append(a.s if k != "v" else "")
                 names.append(a.s)
+        at.append(len(inits.kids))
+        cat.append(len(copies))
+        binds: list[Node] = []  # (a from-import's copies, and the bound nodes of its names that have flags, in order)
+        c = 0
         for nm in took:
-            # (a from-import binds its names once the code of all its modules has run: the last one's)
-            self.import_binds(m, nm, inits.kids[-1].s, infn)
+            if nm == "":
+                binds.append(copies[c])
+                c += 1
+                continue
+            flags.append(self.import_binds(m, nm, infn))
+            if flags[-1] != "":
+                binds.append(mk("bound", flags[-1], line, []))
         inits.s = " ".join(names)  # (the names the statement binds, for deftime())
+        for sub in inits.kids if self.intry > 0 else inits.kids[:0]:
+            if "." in sub.s:
+                self.trysubs[sub.s] = True
         if len(keep.kids) > 0:
             out.append(keep)
-        if len(inits.kids) > 0:
-            out.append(inits)
-        out.extend(copies)
+        if "".join(flags) == "":
+            if len(inits.kids) > 0:
+                out.append(inits)
+            out.extend(copies)
+        elif st.s != "":
+            if len(inits.kids) > 0:
+                out.append(inits)
+            out.extend(binds)
+        else:
+            for i in range(len(st.kids)):
+                if at[i] < at[i + 1]:
+                    out.append(mk("uimport", st.kids[i].s, line, inits.kids[at[i] : at[i + 1]]))
+                out.extend(copies[cat[i] : cat[i + 1]])
+                if flags[i] != "":
+                    out.append(mk("bound", flags[i], line, []))
 
-    def import_binds(self, m: Mod, name: str, path: str, infn: bool) -> None:
+    def import_binds(self, m: Mod, name: str, infn: bool) -> str:
         # name, which an import in module m (in the function being loaded, if infn) binds: for sure
-        # outside try statements (solid); in one, unless the import raises, which leaves module path,
-        # the last it runs, not imported (fragile: reads of name check its done flag, Node.mchk)
+        # outside try statements (solid); in one, unless the import raises or is not reached (fragile:
+        # the name gets a flag, which every import that binds it sets where it does, and reads of the
+        # name check, Node.mchk). The flag, if the name has one: its qualified name (m's, as Gen's
+        # @g.<name>.imp), or in a function the name (the function's)
         key = f"{m.name} {self.curdef if infn else ''} {name}"
         if self.intry == 0:
             self.solid[key] = True
         elif key not in self.solid:
-            self.fragile[key] = path
+            self.fragile[key] = name if infn else m.q + name
+        return self.fragile.get(key, "")
 
     def chain(self, path: str, inits: Node) -> None:
         # the modules import path initializes: a, a.b, a.b.c
@@ -5027,6 +5082,8 @@ class Loader:
         if k.startswith("m:"):
             return k[2:]
         if k == "" and base + "." + n.s in self.mods:
+            if base + "." + n.s in self.trysubs:
+                self.subchk.append(f"{base}.{n.s} {n.s} A")
             return base + "." + n.s  # a submodule (unless the package binds the name itself)
         if k == "":
             n.kind = "badattr"
@@ -5055,18 +5112,17 @@ class Loader:
             root = n
             while root.kind == "attr":
                 root = root.kids[0]
-            fr = ""
-            if root.kind == "name" and root.s not in loc:
-                inf = root.s in self.fk
-                key = f"{m.name} {self.fkey if inf else ''} {root.s}"
-                if key in self.fragile:
-                    fr = f"{self.fragile[key]} {root.s} {'L' if inf else 'G'}"
+            chks: list[str] = []
+            if root.kind == "name" and self.fragile_chk(m, root.s, loc) != "":
+                chks.append(self.fragile_chk(m, root.s, loc))
+            self.subchk = []
             mod = self.qmod(m, n, loc)
+            chks.extend(self.subchk)
             r = n
             while r.kind == "attr":
                 r = r.kids[0]  # (m.C.k: the name qmod() made of m.C is what is read)
-            if fr != "" and (r.kind == "name" or r.kind == "str"):
-                r.mchk = fr
+            if len(chks) > 0 and (r.kind == "name" or r.kind == "str"):
+                r.mchk = ";".join(chks)
             if mod != "":
                 n.kind = "badattr"
                 n.s = f"module '{mod}' cannot be used as a value"
@@ -5154,11 +5210,22 @@ class Loader:
             if n.chk and n.kind == "badattr" and " has no attribute " in n.s:
                 fail(n.s, n.line)  # (an evaluated annotation: see Loader.reads)
 
+    def fragile_chk(self, m: Mod, x: str, loc: dict[str, bool]) -> str:
+        # the check (Node.mchk) of a read of name x in m, where an import in a try statement binds
+        # it: its flag, x and whether it is a function's (L) or module code's (G); "" elsewhere
+        if x in loc:
+            return ""
+        inf = x in self.fk
+        key = f"{m.name} {self.fkey if inf else ''} {x}"
+        return f"{self.fragile[key]} {x} {'L' if inf else 'G'}" if key in self.fragile else ""
+
     def qdeco(self, m: Mod, d: Node, loc: dict[str, bool], fn: bool = False) -> None:
         # a decorator: the first name of its dotted name (unless it surely names a builtin
         # there: deftime), and the arguments of a call. A def's (fn), which CPython calls on the
         # function (Gen.decorate), names what it is: an imported function or class (not as written),
-        # and an attribute of a module as its qualified name; a call's function is qualified too
+        # and an attribute of a module as its qualified name; a call's function is qualified too.
+        # A dotted name's first name that an import in a try statement binds is checked as a read
+        # of it is (Node.mchk, which Gen.decorate tests where CPython evaluates the decorator)
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
         alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
         if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
@@ -5167,7 +5234,13 @@ class Loader:
                 e = mk("attr", part, d.line, [e])
             self.qexpr(m, e, loc)
             d.s = e.s if e.kind == "name" else d.s
+            r = e
+            while r.kind == "attr":
+                r = r.kids[0]
+            d.mchk = r.mchk if len(d.kids) == 0 else ""
         else:
+            if fn and len(d.kids) == 0 and d.line not in self.bdecos:
+                d.mchk = self.fragile_chk(m, root, loc)
             d.s = (root if d.line in self.bdecos else m.q + root if alias else self.qname(m, root, loc)) + d.s[len(root) :]
         for c in d.kids:
             if fn:
@@ -5614,7 +5687,7 @@ RAISERS: dict[str, bool] = {}
 for _k in "int max min".split():
     RAISERS[_k] = True
 # encoding= names of UTF-8 (1) and Latin-1 (2) as CPython's codec lookup finds them (see codec()):
-# a str holds the file's bytes either way, which is what CPython's str holds for a Latin-1 file
+# a str holds a UTF-8 file's bytes, and a Latin-1 file's characters as UTF-8 (the runtime transcodes)
 CODECS: dict[str, int] = {}
 for _k in "utf8 u8 utf utf8_ucs2 utf8_ucs4 cp65001".split():
     CODECS[_k] = 1
@@ -6898,6 +6971,23 @@ def nested_defs(n: Node, out: list[Node]) -> None:
         nested_defs(k, out)
 
 
+def lambda_flags(n: Node, inlam: bool, out: dict[str, bool]) -> None:
+    # the names that the lambdas in code n read (all its reads, if inlam: n is in one) whose flag is
+    # one of the function's (Node.mchk, L: an import in a try statement of it binds them): a lambda
+    # reads them where it runs, and so takes their flags' cells. Not those of a def in n, whose
+    # imports are its own, but those of its defaults and decorators, which run where it is
+    if n.kind == "def" or n.kind == "lambda":
+        for p in n.kids[0].kids:
+            lambda_flags(p.kids[1], inlam, out)
+        for x in n.kids[3:] if n.kind == "def" else n.kids[1:]:
+            lambda_flags(x, inlam or n.kind == "lambda", out)
+        return
+    if inlam and n.mchk.split(";")[0].endswith(" L"):
+        out[n.mchk.split(" ")[0]] = True
+    for k in n.kids:
+        lambda_flags(k, inlam, out)
+
+
 def nonlocal_decls(n: Node, out: dict[str, bool]) -> None:
     # the names that nonlocal statements in code n declare, also in the defs and lambdas in it
     if n.kind == "nonlocal":
@@ -7273,6 +7363,9 @@ class Closure:
         self.caps: list[str] = []  # the variables it takes, in the env's order
         self.ctypes: list[str] = []  # their types ("None": a parameter whose argument is None, held by no cell)
         self.defs: list[int] = []  # the parameters whose defaults the env holds after the cells
+        # a lambda's: the names an import of the function around it binds in a try statement that it
+        # reads (lambda_flags), whose flags' cells the env holds after the defaults
+        self.iflags: list[str] = []
         # the variables it takes that a closure assigns (nonlocal), which a test does not narrow: a
         # call may change them
         self.nlw: dict[str, bool] = {}
@@ -7489,6 +7582,7 @@ class Frame:
         self.selfname = ""
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        self.iflag: dict[str, str] = {}
         self.cells: dict[str, str] = {}
         self.nlw: dict[str, bool] = {}
         self.nonevars: dict[str, int] = {}
@@ -7737,6 +7831,10 @@ class Gen:
         self.lenient = False
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        # the flags of the names that imports in try statements bind (imp_flag): module code's
+        # globals defined so far, and the function's own, each name's slot or cell
+        self.impg: dict[str, bool] = {}
+        self.iflag: dict[str, str] = {}
         self.modlevel = False
         self.n = 0
         self.cur = "entry"
@@ -7875,6 +7973,7 @@ class Gen:
         fr.selfname = self.selfname
         fr.uflags = self.uflags
         fr.lflag = self.lflag
+        fr.iflag = self.iflag
         fr.cells = self.cells
         fr.nlw = self.nlw
         fr.nonevars = self.nonevars
@@ -7912,6 +8011,7 @@ class Gen:
         self.selfname = fr.selfname
         self.uflags = fr.uflags
         self.lflag = fr.lflag
+        self.iflag = fr.iflag
         self.cells = fr.cells
         self.nlw = fr.nlw
         self.nonevars = fr.nonevars
@@ -9752,6 +9852,7 @@ class Gen:
         decos = [x for x in n.kids[3:] if x.s != "async"]  # (from the bottom up, as the parser adds them)
         for i in range(len(decos) - 1, -1, -1):
             self.line = decos[i].line
+            self.modchk(decos[i])  # (a name that an import in a try statement binds: Loader.qdeco)
             e = self.deco_callee(decos[i], self.curfn.mod)
             callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
         v = self.closure(n)
@@ -9806,7 +9907,8 @@ class Gen:
         # def or lambda n inside a function (or a lambda in module code): a new function value. Its
         # env holds the cells of the variables it takes from around it, which the functions around it
         # keep them in (so it reads their values when it runs, and nonlocal assigns them), then the
-        # default values that are no constants, which CPython evaluates when the def runs
+        # default values that are no constants, which CPython evaluates when the def runs, then the
+        # cells of the flags of the names a lambda reads that an import in a try statement binds
         what = "the lambda" if n.kind == "lambda" else f"{n.s}()"
         if n.mchk != "":
             x = n.mchk.split(" ")[0]
@@ -9826,7 +9928,7 @@ class Gen:
             if f.dtypes[j] == "":
                 f.dtypes[j] = v.t
             dvals.append(self.coerce(v, f.dtypes[j]))
-        env = self.rt("pys_alloc", "ptr", [f"i64 {8 * max(len(c.caps) + len(c.defs), 1)}"])
+        env = self.rt("pys_alloc", "ptr", [f"i64 {8 * max(len(c.caps) + len(c.defs) + len(c.iflags), 1)}"])
         for i in range(len(c.caps)):
             if c.ctypes[i] != "None":
                 x = c.caps[i]
@@ -9835,6 +9937,9 @@ class Gen:
         for j in range(len(dvals)):
             a = self.ins(f"getelementptr inbounds i64, ptr {env}, i64 {len(c.caps) + j}")
             self.emit(f"store {lt(dvals[j].t)} {dvals[j].v}, ptr {a}")
+        for j in range(len(c.iflags)):
+            a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {len(c.caps) + len(c.defs) + j}")
+            self.emit(f"store ptr {self.iflag[c.iflags[j]]}, ptr {a}")
         self.nn[env] = True
         return Val(env, c.t)
 
@@ -9912,6 +10017,11 @@ class Gen:
             if not is_const(f.defaults[j]):
                 f.dglob[j] = f"&{len(c.caps) + len(c.defs)}"
                 c.defs.append(j)
+        lf: dict[str, bool] = {}
+        if n.kind == "lambda":
+            lambda_flags(n.kids[1], True, lf)  # (and its env the cells of their flags, after the defaults)
+        for x in lf:
+            c.iflags.append(x)
         # its locals that a read may find unassigned (flow_body marked those reads)
         marked: dict[str, bool] = {}
         for st in d.kids[2].kids:
@@ -10009,14 +10119,40 @@ class Gen:
         return self.load_name(name)
 
     def modchk(self, n: Node) -> None:
-        # n reads module m's attribute through a name that an import in a try statement binds
-        # (Node.mchk): if that import raised, m's code did not end (its done flag is clear, see
-        # function), and CPython left the name unbound
-        if n.mchk == "":
-            return
-        p = n.mchk.split(" ")
-        un = f"UnboundLocalError: cannot access local variable '{p[1]}' where it is not associated with a value" if p[2] == "L" else f"NameError: name '{p[1]}' is not defined"
-        self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @init.{p[0]}.done')}, true"), un)
+        # n reads a name that an import in a try statement binds, or a module's attribute through it
+        # (Node.mchk): where no import has bound the name yet (that one raised, or did not run),
+        # CPython finds it unbound, as its flag says (imp_flag). Then each submodule read as its
+        # package's attribute, which an import sets once the submodule's code has run to its end: its
+        # done flag, which is set from the start of the code and cleared if the code raises
+        for c in n.mchk.split(";") if n.mchk != "" else []:
+            p = c.split(" ")
+            un = f"NameError: name '{p[1]}' is not defined"
+            if p[2] == "A":
+                un = f"AttributeError: module '{p[0][: p[0].rfind('.')]}' has no attribute '{p[1]}'"
+            elif p[2] == "L" and self.curfn.clo >= 0 and self.closures[self.curfn.clo].name == "<lambda>":
+                un = f"NameError: cannot access free variable '{p[1]}' where it is not associated with a value in enclosing scope"
+            elif p[2] == "L":
+                un = f"UnboundLocalError: cannot access local variable '{p[1]}' where it is not associated with a value"
+            flag = f"@init.{p[0]}.done" if p[2] == "A" else self.imp_flag(p[0], p[2] == "G")
+            self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr {flag}')}, true"), un)
+
+    def imp_flag(self, x: str, glob: bool) -> str:
+        # the flag of name x, which an import in a try statement binds (Loader.import_binds()), set
+        # where an import binds it ("bound" nodes): module code's (glob, x qualified) is a global,
+        # a function's its slot, or the cell that the lambdas in it that read x share (lambda_flags)
+        if glob:
+            if x not in self.impg:
+                self.impg[x] = True
+                self.global_var(f"@g.{x}.imp", "i1")
+            return f"@g.{x}.imp"
+        if x not in self.iflag:
+            self.n += 1
+            i = Ins("slot", "bool", x)
+            i.k = 1
+            i.r = [self.n]
+            self.fn.slots.append(i)
+            self.iflag[x] = f"%{x}.def.{self.n}"
+        return self.iflag[x]
 
     def foreign(self, name: str) -> bool:
         # another module's global that may be unbound when this code reads it
@@ -10942,6 +11078,7 @@ class Gen:
         self.selfname = ""
         self.uflags = f.uflags
         self.lflag = {}
+        self.iflag = {}
         self.lcs = []
         self.lct = []
         self.nonevars = {}
@@ -10991,6 +11128,13 @@ class Gen:
             # closures share with it (see closure)
             for cv in self.cellvars(f, body):
                 self.cells[cv] = self.rt("pys_alloc", "ptr", ["i64 8"])
+            lf: dict[str, bool] = {}
+            for st in body if f.clo < 0 or self.closures[f.clo].name != "<lambda>" else []:
+                lambda_flags(st, False, lf)
+            for nm in lf:
+                # (the flag of a name its import binds that a lambda in it reads: a cell, which the
+                # lambda's env holds too, see imp_flag)
+                self.iflag[nm] = self.rt("pys_alloc", "ptr", ["i64 8"])
             if len(self.cells) > 0:
                 nl: dict[str, bool] = {}
                 for st in body:
@@ -11021,6 +11165,9 @@ class Gen:
                 a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {i}")
                 self.lreg[c.caps[i]] = self.ins(f"load ptr, ptr {a}")
                 self.ltype[c.caps[i]] = c.ctypes[i]
+            for j in range(len(c.iflags)):
+                a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {len(c.caps) + len(c.defs) + j}")
+                self.iflag[c.iflags[j]] = self.ins(f"load ptr, ptr {a}")
         self.none_ends()
         if f.ll.startswith("@init."):
             # a module's code runs once, when the first import of it runs
@@ -15111,6 +15258,10 @@ class Gen:
                     self.emit(f"store i1 false, ptr @init.{x.s}.guard")
                 else:
                     self.add(Ins("init", "", x.s))
+        elif k == "bound":
+            # an import has bound these names, which an import in a try statement may leave unbound
+            for bn in n.s.split():
+                self.emit(f"store i1 true, ptr {self.imp_flag(bn, self.modlevel)}")
         elif k == "def" and (n.s in self.decorated if self.modlevel else self.applies(n, False, self.scope_names())):
             self.store_name(n.s, self.decorate(n))  # (its name binds what its decorators give)
         elif k == "def" and not self.modlevel:
@@ -20163,7 +20314,7 @@ def runtime_ir(path: str, cache: bool) -> str:
     # under their C names, with runtime.c's types, and llvm-link joins them to runtime.c's code
     # (runtime.c keeps a prototype of each). It imports only builtin modules, and nothing runs its
     # module code, so it holds only functions.
-    f = open(path, "r", encoding="latin-1")
+    f = open(path, "r", encoding=RAW)
     src = f.read()
     f.close()
     g = Gen()
@@ -20203,14 +20354,14 @@ def main() -> None:
     if not os.path.exists(SRC):
         fail("file not found", 0)
     if cmd == "check":
-        f = open(SRC, "r", encoding="latin-1")
+        f = open(SRC, "r", encoding=RAW)
         Parser(Lexer(f.read(), 1).file()).module()
         f.close()
         return
     if cmd == "rt":
         ir = runtime_ir(SRC, False)
         if len(argv) == 5 and argv[3] == "-o":
-            f = open(argv[4], "w", encoding="latin-1")
+            f = open(argv[4], "w", encoding=RAW)
             f.write(ir)
             f.close()
         else:
@@ -20239,7 +20390,7 @@ def main() -> None:
         if os.path.exists(d + "/ffi.py") or os.path.exists(d + "/ffi/__init__.py"):
             del MODULES["ffi"]  # (the program's own ffi module comes first, as under CPython: Pystachy's is not imported then)
             break
-    f = open(SRC, "r", encoding="latin-1")
+    f = open(SRC, "r", encoding=RAW)
     ext = SRC[SRC.rfind("/") + 1 : -3] if cmd == "ext" and SRC.endswith(".py") else ""
     ir = compile_program(SRC, f.read(), dirs, ext)
     f.close()
@@ -20261,7 +20412,7 @@ def main() -> None:
         if out == "":
             print(ir, end="")
         else:
-            f = open(out, "w", encoding="latin-1")
+            f = open(out, "w", encoding=RAW)
             f.write(ir)
             f.close()
         return
@@ -20334,13 +20485,13 @@ def main() -> None:
     own = tmp[tmp.rfind("/") + 1 :]
     part = f"{rtb}.{os.getpid()}.{own}"
     parto = f"{rto}.{os.getpid()}.{own}"
-    f = open(ll, "w", encoding="latin-1")
+    f = open(ll, "w", encoding=RAW)
     f.write(ir)
     f.close()
     msg = ""
     code = 0
     if rtir != "":
-        f = open(rpl, "w", encoding="latin-1")
+        f = open(rpl, "w", encoding=RAW)
         f.write(rtir)
         f.close()
         # one module, optimized once: LLVM inlines runtime.c's helpers into runtime.py's code. No

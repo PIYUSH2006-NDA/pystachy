@@ -1,0 +1,1 @@
+UnicodeEncodeError: 'latin-1' codec can't encode character '\u0141' in position 7: ordinal not in range(256)
