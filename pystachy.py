@@ -7204,6 +7204,15 @@ class SetArg:
         self.back = ""
 
 
+class SeqStart:
+    # The state of a for loop's iterators (Gen.for_seq), each taken when the iterator is made, as
+    # CPython's records it: a sequence's length then (used), and the position it reads next (st):
+    # a dict's or a set's slot, a list's or a str's length for reversed() (else unused).
+    def __init__(self) -> None:
+        self.st: list[str] = []
+        self.used: list[str] = []
+
+
 class FnInfo:
     def __init__(self, name: str, ll: str, node: Node, cls: str):
         self.name = name
@@ -15403,8 +15412,18 @@ class Gen:
                         self.err(f"'{tname(v.t)}' object is not reversible" if "__getitem__" not in self.classes[v.t].methods else f"reversed() of {short(v.t)} by its __len__ and __getitem__ is not supported")
                     evs.append(v if is_opt(v.t) or v.t in self.classes else self.iterable(v))  # (None raises, and __iter__ runs, once all are evaluated)
                 notit = "TypeError: 'NoneType' object is not reversible" if fn == "reversed" else "TypeError: 'NoneType' object is not iterable"
-                seqs = [self.iterable(v, notit) for v in evs]
-                self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
+                seqs: list[Val] = []
+                if len(evs) == 1:
+                    seqs.append(self.iterable(evs[0], notit))
+                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
+                else:
+                    # zip() makes its iterators in turn, and a dict's or a set's records its size
+                    # then, before a later operand's __iter__ runs (which may change it)
+                    made = SeqStart()
+                    for v in evs:
+                        seqs.append(self.iterable(v, notit))
+                        self.seq_start(seqs[-1], fn, made)
+                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg, made)
                 for i in range(len(args)):
                     self.close_temp(args[i], seqs[i])
                 return
@@ -15558,38 +15577,23 @@ class Gen:
         self.place(le)
         self.narrowed = after
 
-    def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None) -> None:
+    def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None, made: SeqStart | None = None) -> None:
         # One loop serves lists, strings, tuples, dicts, sets, enumerate, zip and reversed. Each
         # round takes the next item of every sequence, in order, the way its CPython iterator
         # would: lists and strings by index, checked against their current length (reversed:
         # counting down from the length at the start), tuples by index below the length their type
         # gives; dicts by entry position, skipping deleted entries and failing if the dict changed
         # size; sets by slot, failing if the set changed size. The loop ends at the first
-        # exhausted sequence.
+        # exhausted sequence. made: the state of each iterator, taken as it was made (seq_start),
+        # else taken now
         ctr = self.alloca("int", "")
         self.emit(f"store i64 0, ptr {ctr}")
-        st: list[str] = []
-        used: list[str] = []
-        for s in seqs:
-            if is_set(s.t) and mode == "reversed":
-                self.err(f"'{tname(s.t)}' object is not reversible")
-            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
-                self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
-            if s.t == "file":
-                st.append("")
-                used.append("")
-                continue
-            n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
-            used.append(n0)
-            if is_dict(s.t) or is_set(s.t):
-                pos = self.alloca("int", "")
-                p0 = "0"
-                if mode == "reversed":
-                    p0 = self.ins(f"sub i64 {self.rt('pys_dict_end', 'i64', [f'ptr {s.v}'])}, 1")
-                self.emit(f"store i64 {p0}, ptr {pos}")
-                st.append(pos)
-            else:
-                st.append(n0)
+        if made is None:
+            made = SeqStart()
+            for s in seqs:
+                self.seq_start(s, mode, made)
+        st = made.st
+        used = made.used
         self.iterarg(arg)
         self.hide(hide)
         after = self.forget(body, tgt)
@@ -15676,6 +15680,30 @@ class Gen:
         self.br(lc)
         self.place(le)
         self.narrowed = after
+
+    def seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
+        # the state of an iterator over sequence s (for_seq, in mode), as CPython's takes it when it
+        # is made: a dict's or a set's size, and the slot it reads first; a list's or a str's
+        # length, from which reversed() counts down
+        if is_set(s.t) and mode == "reversed":
+            self.err(f"'{tname(s.t)}' object is not reversible")
+        if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+            self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
+        if s.t == "file":
+            made.st.append("")
+            made.used.append("")
+            return
+        n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
+        made.used.append(n0)
+        if is_dict(s.t) or is_set(s.t):
+            pos = self.alloca("int", "")
+            p0 = "0"
+            if mode == "reversed":
+                p0 = self.ins(f"sub i64 {self.rt('pys_dict_end', 'i64', [f'ptr {s.v}'])}, 1")
+            self.emit(f"store i64 {p0}, ptr {pos}")
+            made.st.append(pos)
+        else:
+            made.st.append(n0)
 
     # ---- narrowing: optional locals known not to be None
     def narrows(self, n: Node, truth: bool, out: list[str]) -> None:

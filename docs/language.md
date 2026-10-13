@@ -341,7 +341,8 @@ augmented assignment (`+=` on lists extends in place; `__iadd__` & co are honour
 files, tuples (and NamedTuples) of one item type, objects (below), `.items()`/`.keys()`/`.values()`,
 `enumerate` (with `start`), `zip` and
 `reversed` (also of a `range`), stepping each sequence as its CPython iterator does (a dict
-that changes size raises `RuntimeError`), `break`, `continue`, `return`, `pass` (and `...`), `global`,
+or a set that changes size raises `RuntimeError`, measured against its size when its iterator
+was made: `zip()` makes its operands' iterators in turn, before the loop), `break`, `continue`, `return`, `pass` (and `...`), `global`,
 `del` of a list item, a dict key or an object's item, `assert`, `with open(...) as f:` (also several items, in
 parentheses or not), `try` (below), `raise` of an exception class, a call of one or an
 exception, a bare `raise` and `raise ... from ...` (if nothing catches it, it ends the program
