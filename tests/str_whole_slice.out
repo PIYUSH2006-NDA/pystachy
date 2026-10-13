@@ -1,0 +1,46 @@
+s[:] True True 12
+s[0:] True True 12
+s[:len(s)] True True 12
+s[-len(s):] True True 12
+s[-100:100] True True 12
+s[None:None] True True 12
+bounds(s, 0, 12) True True 12
+bounds(s, -99, 99) True True 12
+s[1:] False False 11
+s[:-1] False False 11
+s[:11] False False 11
+bounds(s, 0, 11) False False 11
+e[:] True True 0
+e[5:] True True 0
+e[-5:5] True True 0
+made[:] True True 8
+made[0:] True True 8
+made[:len(made)] True True 8
+'abc' True True True True True True
+  'abc' 'abc' 'abc' 'abc' 'abc' 'abc'
+' abc' False False True True True True
+  'abc' 'abc' ' abc' ' abc' ' abc' ' abc'
+'abc ' False True False True True True
+  'abc' 'abc ' 'abc' 'abc ' 'abc ' 'abc '
+' abc ' False False False True True True
+  'abc' 'abc ' ' abc' ' abc ' ' abc ' ' abc '
+'' True True True True True True
+  '' '' '' '' '' ''
+' ' False False False True True True
+  '' '' '' ' ' ' ' ' '
+'\t\n' False False False True True True
+  '' '' '' '\t\n' '\t\n' '\t\n'
+'é' True True True True True True
+  'é' 'é' 'é' 'é' 'é' 'é'
+' é ' False False False True True True
+  'é' 'é ' ' é' ' é ' ' é ' ' é '
+'xyx' True True True False False True
+  'xyx' 'xyx' 'xyx' 'y' '' 'xyx'
+'yxy' True True True True False False
+  'yxy' 'yxy' 'yxy' 'yxy' '' 'yx'
+'a b' True True True True True True
+  'a b' 'a b' 'a b' 'a b' 'a b' 'a b'
+hello, world hello, world! False
+True 4
+1 True True
+[exit 0]

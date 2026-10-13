@@ -33,7 +33,9 @@ work may have moved the numbers; [issue #5](https://github.com/den-run-ai/pystac
   177 modules: `abc` → `_py_abc` → `_weakrefset` → `_weakref`; `_codecs` 89, `_io` 43, `_thread`
   38) or a hub whose module-level code is dynamic (`_collections_abc`, `enum`, `typing`
   internals, `re`). Replacing all 97 C modules with stubs raised the count only by 2: the next
-  layer is module-level dynamic code.
+  layer is module-level dynamic code. Measured again at main 3ec8652, with `lib/`'s `re`,
+  `functools` and the others in place of the 19 modules of `Lib/` they replace, 37 of the other
+  500 import, and `_weakref` blocks 102 (§3.2).
 - **PyPy's `lib_pypy` is not a useful source:** its pure-Python files are mostly fallbacks PyPy
   itself does not run (hashes, `_collections`, `_marshal`, which is broken on Python 3), or
   PyPy-internal glue. CPython's own pure modules are the better source, and are tested against
@@ -86,7 +88,10 @@ methods.
   with `ast` only and never imports it.
 - **Import sweep** (`tools/import_sweep.py`): compiles `import M` for each of the 519 modules
   of CPython 3.13's `Lib/` (without tests, `idlelib`, `tkinter`, ...) with `Lib/` on
-  `PYSTACHY_PATH`, and records the first error.
+  `PYSTACHY_PATH`, and records the first error. `PYSTACHY_PATH` comes before `lib/`, so `Lib/`'s
+  `re` would hide `lib/re`: the sweep now puts there a directory of symbolic links to `Lib/`'s
+  entries, less those whose names `lib/` has, and leaves out their modules (19 at main 3ec8652).
+  The survey's run predates that: it compiled `Lib/`'s own in their place.
 - **Differential programs**: the `tests/lib_*.py` tests of the vendored modules, run JIT and AOT
   against CPython's output; and a harness of 189 programs over 25 candidate modules, each
   `import M`, a call, `print`, compiled from the unmodified sources and compared with CPython.
@@ -140,6 +145,7 @@ are mostly an annotation on an empty container default, removing an unavailable 
 | layer | measurement | examples |
 |---|---|---|
 | imports of C modules | 38 of 519 modules import; the first missing module of the rest: `_weakref` 177, `_codecs` 89, `_io` 43, `_thread` 38, `_imp` 28, `binascii` 10, `pyexpat` 8 | `functools`, `re`, `collections`, `enum`, `textwrap`, `json`, `random`, `statistics`, `difflib` |
+| the same, at main 3ec8652 | with `lib/`'s modules in place of the 19 of `Lib/` they replace (`re` and its 4 submodules, `curses` and its 4, `functools`, `heapq`, `bisect`, ...), 37 of the other 500 import; the first missing module of the rest: `_weakref` 102, `_codecs` 89, `_io` 46, `_thread` 38, `_imp` 28, `_struct` 13, `binascii` 11, `pyexpat` 8; 10 stop at `functools.partial`, which `lib/functools` does not have | `html`, `html.entities`, `wsgiref.headers` and `_osx_support` import through `lib/re`; `collections`, `enum`, `textwrap`, `json`, `string` and `difflib` do not |
 | dynamic module-level code | with stubs for all 97 C modules, 2 more import; the next errors are bytes literals and `type()` at module level (`_collections_abc`, 120 modules), `struct`, `typing` internals | `_collections_abc` builds `bytes_iterator = type(iter(b''))` |
 | classes | 6,162 of the 9,726 methods have unannotated parameters; inheritance, class attributes and decorators follow | `SequenceMatcher`, `TextWrapper`, `Fraction`, `Random`, `datetime`, `ipaddress` |
 | function bodies | after the changes above, 40% of module-level functions have no syntactic blocker (10% before); the remaining blockers are spread thin | `try` (19.5% of functions), `%` formatting (9%), first-class functions (6%), `*args` (5%), `bytes` (7%) |
@@ -273,14 +279,15 @@ Latin-1) would let the import graph reach `functools`, `abc`, `collections` and 
 them, `_collections_abc` (bytes literals and `type()` at module level), `enum` (metaclasses)
 and `re` (the `_sre` matching engine; CPython's `re/_parser.py` and `_compiler.py` are pure
 Python, as PyPy's reuse of them shows) are the hubs that most of the library imports. `lib/re`
-now ports both (the measurements above predate it; see
-[`lib/README.md`](../lib/README.md#re-a-port-of-cpythons)).
+now ports both (see [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons)); the census's
+counts above predate it, and §3.2 gives the import sweep's with it.
 
 ## 7. Reproducing
 
 ```
 python3 -I tools/census.py cpython=/usr/lib/python3.13 --json build/census.json
 python3 tools/import_sweep.py ./pystachy /usr/lib/python3.13 build/import-sweep.json
-PYSTACHY_PATH=/usr/lib/python3.13 ./pystachy run prog.py   # compile against CPython's own Lib/
+python3 tools/import_sweep.py --overlay /usr/lib/python3.13 build/cpython-lib
+PYSTACHY_PATH=build/cpython-lib ./pystachy run prog.py      # CPython's own Lib/, less what lib/ has
 tests/run.sh ./pystachy                                     # includes tests/lib_*.py
 ```

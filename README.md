@@ -257,10 +257,10 @@ instead of raising `RecursionError`; and `__del__` never runs. The complete list
 [deviations](docs/language.md#deviations-from-cpython) and
 [rejected programs](docs/language.md#rejected-rather-than-miscompiled).
 
-The published import survey found that 38 of 519 standard-library modules imported, and no
-popular PyPI package imported as a whole. Algorithmic code copied out of packages often runs
-unmodified or after a few edits; see [docs/stdlib.md](docs/stdlib.md) for the survey and its
-scope.
+The published import survey found that 38 of 519 standard-library modules imported (now,
+beside the 19 that `lib/` replaces, 37 of the other 500 do), and no popular PyPI package
+imported as a whole. Algorithmic code copied out of packages often runs unmodified or after a
+few edits; see [docs/stdlib.md](docs/stdlib.md) for the survey and its scope.
 
 ## Design decisions
 
@@ -317,4 +317,5 @@ something large there.
 
 MIT ([LICENSE](LICENSE)). The list sort in `runtime.c` is a port of CPython's, and the vendored
 CPython modules in `lib/` are CPython's own; both are used under the PSF License Version 2
-([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).
+([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)). `ryu/`, the float repr's digits, is Ryu's, used
+under the Boost Software License 1.0 ([ryu/README.md](ryu/README.md)).

@@ -1,0 +1,76 @@
+base class BaseException
+BaseExceptionGroup: a subclass of BaseException, not checked
+issubclass(GeneratorExit, BaseException) True
+issubclass(KeyboardInterrupt, BaseException) True
+issubclass(SystemExit, BaseException) True
+issubclass(Exception, BaseException) True
+issubclass(ArithmeticError, Exception) True
+issubclass(FloatingPointError, ArithmeticError) True
+issubclass(OverflowError, ArithmeticError) True
+issubclass(ZeroDivisionError, ArithmeticError) True
+issubclass(AssertionError, Exception) True
+issubclass(AttributeError, Exception) True
+issubclass(BufferError, Exception) True
+issubclass(EOFError, Exception) True
+ExceptionGroup: a subclass of Exception, not checked
+issubclass(ImportError, Exception) True
+issubclass(ModuleNotFoundError, ImportError) True
+issubclass(LookupError, Exception) True
+issubclass(IndexError, LookupError) True
+issubclass(KeyError, LookupError) True
+issubclass(MemoryError, Exception) True
+issubclass(NameError, Exception) True
+issubclass(UnboundLocalError, NameError) True
+issubclass(OSError, Exception) True
+issubclass(BlockingIOError, OSError) True
+issubclass(ChildProcessError, OSError) True
+issubclass(ConnectionError, OSError) True
+issubclass(BrokenPipeError, ConnectionError) True
+issubclass(ConnectionAbortedError, ConnectionError) True
+issubclass(ConnectionRefusedError, ConnectionError) True
+issubclass(ConnectionResetError, ConnectionError) True
+issubclass(FileExistsError, OSError) True
+issubclass(FileNotFoundError, OSError) True
+issubclass(InterruptedError, OSError) True
+issubclass(IsADirectoryError, OSError) True
+issubclass(NotADirectoryError, OSError) True
+issubclass(PermissionError, OSError) True
+issubclass(ProcessLookupError, OSError) True
+issubclass(TimeoutError, OSError) True
+issubclass(ReferenceError, Exception) True
+issubclass(RuntimeError, Exception) True
+issubclass(NotImplementedError, RuntimeError) True
+issubclass(PythonFinalizationError, RuntimeError) True
+issubclass(RecursionError, RuntimeError) True
+issubclass(StopAsyncIteration, Exception) True
+issubclass(StopIteration, Exception) True
+issubclass(SyntaxError, Exception) True
+issubclass(IndentationError, SyntaxError) True
+issubclass(TabError, IndentationError) True
+issubclass(SystemError, Exception) True
+issubclass(TypeError, Exception) True
+issubclass(ValueError, Exception) True
+issubclass(UnicodeError, ValueError) True
+UnicodeDecodeError: a subclass of UnicodeError, not checked
+UnicodeEncodeError: a subclass of UnicodeError, not checked
+UnicodeTranslateError: a subclass of UnicodeError, not checked
+issubclass(Warning, Exception) True
+issubclass(BytesWarning, Warning) True
+issubclass(DeprecationWarning, Warning) True
+issubclass(EncodingWarning, Warning) True
+issubclass(FutureWarning, Warning) True
+issubclass(ImportWarning, Warning) True
+issubclass(PendingDeprecationWarning, Warning) True
+issubclass(ResourceWarning, Warning) True
+issubclass(RuntimeWarning, Warning) True
+issubclass(SyntaxWarning, Warning) True
+issubclass(UnicodeWarning, Warning) True
+issubclass(UserWarning, Warning) True
+test_inheritance: 62 classes checked
+str 'spam'
+repr "Exception('spam')"
+str '(0, 1, 2)'
+repr 'Exception(0, 1, 2)'
+str ''
+repr 'Exception()'
+[exit 0]

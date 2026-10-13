@@ -1,0 +1,95 @@
+>>> INF
+inf
+>>> NINF
+-inf
+>>> NAN
+nan
+>>> isinf(INF), isinf(NINF), isnan(NAN)
+(True, True, True)
+>>> INF == -NINF
+True
+>>> INF * 0
+nan
+>>> INF - INF
+nan
+>>> INF / INF
+nan
+>>> INF * INF
+inf
+>>> 1.5 * INF
+inf
+>>> 0.5 * INF
+inf
+>>> INF / 1000
+inf
+>>> NAN == NAN
+False
+>>> NAN < 0
+False
+>>> NAN >= 0
+False
+>>> 1 + NAN
+nan
+>>> 1 * NAN
+nan
+>>> 0 * NAN
+nan
+>>> 1 ** NAN
+1.0
+>>> NAN ** 0
+1.0
+>>> 0 ** NAN
+nan
+>>> (1.0 + FI.epsilon) * NAN
+nan
+>>> pow(1, 0)
+1.0
+>>> pow(1, INF)
+1.0
+>>> pow(1, -INF)
+1.0
+>>> pow(1, NAN)
+1.0
+>>> pow(0, 0)
+1.0
+>>> pow(0, INF)
+0.0
+>>> pow(0, -INF)
+inf
+>>> 0 ** -1
+ZeroDivisionError: 0.0 cannot be raised to a negative power
+>>> pow(0, NAN)
+nan
+>>> sin(INF)
+ValueError: math domain error
+>>> sin(NINF)
+ValueError: math domain error
+>>> sin(NAN)
+nan
+>>> cos(INF)
+ValueError: math domain error
+>>> cos(NINF)
+ValueError: math domain error
+>>> cos(NAN)
+nan
+>>> tan(INF)
+ValueError: math domain error
+>>> tan(NINF)
+ValueError: math domain error
+>>> tan(NAN)
+nan
+>>> tan(PI/2) > 1E10
+True
+>>> -tan(-PI/2) > 1E10
+True
+>>> tan(PI) < 1E-15
+True
+>>> asin(NAN), acos(NAN), atan(NAN)
+(nan, nan, nan)
+>>> asin(INF), asin(NINF)
+ValueError: math domain error
+>>> acos(INF), acos(NINF)
+ValueError: math domain error
+>>> equal(atan(INF), PI/2), equal(atan(NINF), -PI/2)
+(True, True)
+[exit 0]

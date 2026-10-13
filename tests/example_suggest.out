@@ -1,0 +1,44 @@
+[(1, 'hello'), (9, 'world'), (18, "it's"), (24, 'a'), (26, 'test-case')] [] [(5, '42')]
+3000 ['pebe', 'veres', 'lo', 'tel', 'pevecorsa'] Pelomi qualin. To dokaquacor penuster nubares linritel chinulo pelomi
+2:53: liintonu: lintonu, lindonu, linto
+2:86: doyadarak: doyadarka, dodarkaka
+3:30: daotelbaya: dartelbaya, dotelba
+9:59: mih: mi
+11:104: odex: toex, onex, loex
+12:24: veimvemi: (no suggestion)
+12:42: linchgto: linchito, linchitozo, linto
+13:28: faoncorda: faoncordar, facordar
+14:59: corxxquave: corexquave
+15:7: stetodoba: stertodoba
+17:8: kazozmoi: kazozomi, kazozo, kazomi
+17:56: quaveplii: quavepli, pequavepli, savepli
+19:6: kadarfaa: kadarfa, kadar, darfa
+21:21: fabba: faba
+21:74: faplip: faplipe, fapli, fapelinpe
+22:17: darpllya: darpliya, darplionya, darya
+23:71: saffalinpli: safalinpli, kayalinpli
+24:11: yadoab: yadofa, yadoba
+24:117: pinu: plinu, rinu, penu
+27:52: nusaddo: nusado, nusadobe
+27:87: fanocordar: faoncordar, facordar, locordar
+28:42: nuepve: nupeve, nuve, nupe
+28:49: chiyaores: chiyaonres, chifares, chires
+29:7: daargu: dargu, dargugu, dargufa
+['2:1: katto: kato, katos', '2:7: rimn: rimen, rimes', '2:12: sadra: sadar']
+['1:1: zzzzzz: (no suggestion)']
+ValueError: n must be > 0: 0
+2:53: liintonu: lintonu, lindonu, linto
+2:86: doyadarak: doyadarka, dodarkaka
+3:30: daotelbaya: dartelbaya, dotelba
+9:59: mih: mi
+4 unknown words in 10 lines, 3000 words in the vocabulary
+2:53: liintonu: lintonu
+2:86: doyadarak: (no suggestion)
+3:30: daotelbaya: dartelbaya
+9:59: mih: (no suggestion)
+4 unknown words in 10 lines, 3000 words in the vocabulary
+0 unknown words in 3000 lines, 3000 words in the vocabulary
+1 1 0
+2 2
+2 2 2
+[exit 0]
