@@ -127,7 +127,8 @@ imports `annotations` from `__future__`.
   `dict(kwargs)`; it prints as that dict. Changing it (`kwargs["k"] = v`, `pop()`) is rejected:
   copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a function's parameters and return that mention a module-level
-  `T = TypeVar("T")` (from `typing` or `typing_extensions`; a method's too, but `__init__`'s).
+  `T = TypeVar("T")` or `Ts = TypeVarTuple("Ts")` (`*args: *Ts`; from `typing` or
+  `typing_extensions`; a method's too, but `__init__`'s, and but a generic class's own, below).
   In a template's function, an empty list or dict that nothing fills where the
   argument types let code run (a loop over the empty tuple of `*args`, a branch an
   `isinstance` test removes) may be returned before anything shows its type: the first use
@@ -168,6 +169,24 @@ imports `annotations` from `__future__`.
   one `Result` specialization share a layout. Specializations count
   towards the 4,096 template specializations of a compilation (*Rejected rather than
   miscompiled*).
+- A class whose one base is `typing.Generic` of `TypeVar`s and at most one unpacked
+  `TypeVarTuple` (`class Memo(Generic[*Ts, R])`, PEP 484 and PEP 646) is a **generic class**,
+  and a class template where its `__init__`'s parameters mention them: each call binds them, as
+  a type checker infers `Box[int]` from `Box(1)`, by matching those parameters' annotations with
+  the arguments' types. `T` takes a type other than `None` (two arguments for one `T` join, `int`
+  and `bool` making `int`), `list[T]`, `dict[K, V]`, `set[T]`, `tuple[A, *Ts]` and `T | None`
+  their parts (`None` binds nothing), and `Callable[[A, *Ts], R]` a function's: a def's or
+  lambda's annotated positional parameters and return, or a `Callable`'s. Such a parameter has
+  its argument's type, as an unannotated one has (a function passed stays that function, called
+  directly, with its `__name__`). In the specialization the call picks, the class's fields and
+  methods read each type variable as bound, and `*Ts` as its types, in `tuple[...]`,
+  `Callable[[...], R]` and `*args: *Ts`, whose calls then pass exactly those:
+  `fn: Callable[[*Ts], R]` and `def __call__(self, *args: *Ts) -> R` type a wrapper of any
+  annotated function, as `lib/functools.py`'s cache does. Messages show a specialization with
+  its bindings (`Memo[int, int]`). A type variable that no argument binds is an error
+  (`Stack[int]()` is not supported), as are `class C[T]` (PEP 695) and `C[T]` in an annotation:
+  in its own methods and fields the class is named bare (`Self`), and a method's other type
+  variables make it a template.
 - Each variable has one type for its lifetime, fixed by its annotation or first assignment.
 - Empty `[]` and `{}` take their type from context: an annotation, a parameter, a field,
   or the variable being assigned. A variable without a type that is assigned `[]` or `{}`
@@ -393,7 +412,11 @@ block closes its file (a close that fails raises its `OSError` in its place, ins
 statement around, as `__exit__` does). A module whose code raises is not imported: the names its
 import binds are unbound (`import m as x`, `import p.m as x`, and what `from p import m` or
 `from m import f, C` takes), so a read of one raises `NameError` (`UnboundLocalError` in a
-function), and a later import runs its code again.
+function, and a free variable's `NameError` in a lambda inside it), and a later import runs its
+code again. A name that an import in a `try` statement binds is bound once an import of it has run
+to its end: not where a raise before the import skipped it, even where its module is imported by
+other code, and an import that runs later binds it, in a `try` statement or not (`import p.a`
+that raises, then `import p.b`, binds `p`, and `p.a` raises `AttributeError`).
 
 ### Exception classes
 
@@ -533,10 +556,14 @@ CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md))
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
-deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `difflib` is
-CPython's, edited where Pystachy needs types and has no `namedtuple()`, for `SequenceMatcher` over
-strs and lists of strs and `get_close_matches()`; its generators (`unified_diff()`, `ndiff()`)
-are not compiled yet ([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)).
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `functools` is
+Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
+a function they decorate keeps its results in a cache of its own types, which its annotated
+parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
+counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `difflib` is CPython's,
+edited where Pystachy needs types and has no `namedtuple()`, for `SequenceMatcher` over strs and
+lists of strs and `get_close_matches()`; its generators (`unified_diff()`, `ndiff()`) are not
+compiled yet ([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)).
 
 ## Expressions
 
@@ -611,7 +638,7 @@ translation and positions for `"+"` modes, and files' `read`/`readline`/
 `sys.argv/exit/stdin/stdout/stderr/maxsize/platform/setrecursionlimit/getrecursionlimit` (the streams
 are files), `sys.float_info.max/max_exp/max_10_exp/min/min_exp/min_10_exp/dig/mant_dig/epsilon/radix/rounds`
 (CPython's for IEEE 754 doubles; `sys.float_info` itself is not a value),
-`os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
+`os.system/execv/getpid/getenv/remove/rmdir/fspath/path.exists/path.realpath/path.join/path.getsize/path.getmtime/path.getctime` and `os.name/sep/curdir/pardir/extsep/pathsep/linesep/
 devnull`, `tempfile.mkdtemp`, `time.time/time_ns/monotonic/perf_counter/process_time` (and
 their `_ns` forms) and `time.sleep`, the `errno` constants, and the `math` functions and
 constants, which raise CPython's domain and range errors, with `fsum`, `prod` (and its
@@ -625,8 +652,8 @@ rejected.
 
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
-arguments above, inheritance other than an exception class's,
-`*args` and `**kwargs` with annotations in `__init__` (without, they make a class template) and in the special methods that are no templates, `**`
+arguments above, inheritance other than an exception class's (and a generic class's `Generic[...]`),
+`*args` and `**kwargs` with annotations in `__init__` (without, or `*args: *Ts` of a generic class, they make a class template) and in the special methods that are no templates, `**`
 arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
@@ -676,18 +703,23 @@ In these cases the program compiles but can behave differently from CPython:
   `0 ** -1` raises CPython's `ZeroDivisionError`), and so is a negative float to a
   fractional power (CPython returns a complex).
 - `str` is a byte string holding UTF-8: `len`, indexing, slicing, iteration, `find`/`index`
-  and `write()`'s result count bytes, case mapping and the `is*()` tests but `isspace()`
-  know only ASCII, `replace("", s)`'s gaps are bytes, and `chr(i)` for `i < 256` is that byte
-  (above, its UTF-8; `"%c" % i` is the character's UTF-8 for every `i`).
+  and `write()`'s result (but a Latin-1 file's) count bytes, case mapping and the `is*()`
+  tests but `isspace()` know only ASCII, `replace("", s)`'s gaps are bytes, and `chr(i)` for
+  `i < 256` is that byte (above, its UTF-8; `"%c" % i` is the character's UTF-8 for every `i`).
   ASCII behaves exactly like CPython; escapes such as `\xe9` and `€` produce UTF-8, and
   format widths, `center`/`ljust`/`rjust`/`zfill`, `repr()`'s escapes, `read(n)` and
   `ord()` count characters, as `strip()` (also of given characters), `split()`,
   `rsplit()`, `splitlines()` and `isspace()` read them (CPython's Unicode whitespace and
-  line breaks). Files hold the
-  same bytes, read as UTF-8 or Latin-1, without checking them (invalid UTF-8 is read as it
-  is, where CPython raises `UnicodeDecodeError`); any other `encoding=` computed at run time
-  raises `NotImplementedError` when the file opens. A surrogate (`chr(0xD800)` to
-  `chr(0xDFFF)`) is held in its three-byte form and printed or written as it is, where
+  line breaks). A UTF-8 file holds a str's bytes, read and written without checking them
+  (invalid UTF-8 is read as it is, where CPython raises `UnicodeDecodeError`). A Latin-1
+  file's bytes are its characters, as in CPython: the str read holds each as UTF-8, as a
+  literal does (from U+0080 on, two bytes, which `len()` and indexing count), and a write
+  gives each character as its byte (a byte `chr()` makes is one, but `chr()` bytes that
+  together are UTF-8, `chr(195) + chr(169)`, are the one character they encode) and returns
+  the number of characters, or raises CPython's `UnicodeEncodeError` for one above U+00FF
+  before any of the text reaches the file. Any other `encoding=` computed at run time raises
+  `NotImplementedError` when the file opens. A surrogate (`chr(0xD800)` to `chr(0xDFFF)`) is
+  held in its three-byte form and printed or written to a UTF-8 file as it is, where
   CPython raises `UnicodeEncodeError` (`sys.stderr`, which an uncaught exception's line and
   `sys.exit()`'s message go to, writes it as `\udcff`, as CPython's does); its `repr()`,
   `ascii()` and `ord()` match CPython's. A format width or precision above 10**8, in a format
@@ -898,6 +930,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   over many small type combinations, even when active signatures and nesting remain small.
   Exceeding it reports a source error before allocating the next specialization; annotate
   template parameters or reduce the distinct type combinations.
+- more than 16,777,216 bytes of template signatures in one compilation. Each specialization of
+  a template function keeps its argument types (its key and its parameters' types), so long
+  types could otherwise hold hundreds of MiB under the 4,096 bound. Exceeding it reports a
+  source error before allocating the next specialization, naming the template whose
+  specializations keep the most.
 - an empty container whose first use stores an empty `[]` or `{}` into it (`d[k] = []`)
 - an empty `[]` or `{}` that nothing gives a type (`{}["k"]` alone)
 - an empty list or dict that a template's function returns empty, used where the `list[int]` /
@@ -1031,7 +1068,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
 
 - `typing.ClassVar`, `os.PathLike` other than in a union with `str`, a `TypeVar` named other than
   by a function's or method's parameters and return (in `__init__` or a special method that is
-  no template, a field, a variable's annotation, or as a value), a `TypeVar`'s constraints and a bound other than a string, a bare
+  no template, a field, a variable's annotation, or as a value), but a generic class's that its
+  objects bind, a `TypeVarTuple` but unpacked (`*Ts`) in `tuple[...]`, `Callable[[...], R]` and
+  `*args`, a generic class whose `Generic[...]` is not its one base, `class C[T]` (PEP 695), a type
+  variable of a generic class that no argument of a call binds (`C[int]()`), `C[T]` in an
+  annotation, a `TypeVar`'s constraints and a bound other than a string, a bare
   `Final` but in an assignment (in a class body, of a constant), an `@overload` stub that the `def`
   implementing it does not follow in its block past other `def`s only (in an imported module, one
   that no `def` of its name follows, also a method, is an error where it is called; also one after
@@ -1096,6 +1137,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
+- `functools.lru_cache()` and `cache()` of a function whose parameters or return are not
+  annotated, that returns `None`, that takes `*args` or `**kwargs`, or whose parameter is no dict key type (a `float`,
+  an object), or of a builtin, a method or a lambda; a call through the cache that passes a
+  keyword argument or leaves out one with a default value (its `__call__` takes `*args: *Ts`,
+  each of the function's positional parameters); and `cache_parameters()`
 
 ### Source text
 
