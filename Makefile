@@ -160,6 +160,13 @@ RE_FUZZ ?=
 re-fuzz:
 	$(PY) tools/re_fuzz.py $(RE_FUZZ)
 
+# lib/re, run by CPython, must enter its matcher and make contexts no more often than fixed limits
+# allow for textwrap's patterns, with CPython's results (tools/re_probe.py: deterministic counts);
+# RE_PROBE="--time ./pystachy" also times tools/re_bench.py compiled and under CPython
+RE_PROBE ?=
+re-probe:
+	$(PY) tools/re_probe.py $(RE_PROBE)
+
 # ruff (findings only, ruff.toml), shellcheck of the scripts as POSIX sh, and clang's warnings on the C
 # sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
 lint:
@@ -171,4 +178,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz re-probe lint clean

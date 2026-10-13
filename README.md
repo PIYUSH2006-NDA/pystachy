@@ -51,7 +51,7 @@ flowchart LR
 | **compiler** | `pystachy.py`, about 17,000 lines, written in the subset it compiles |
 | **runtime** | `runtime.c`, about 3,300 lines, with its own garbage collector, and `runtime.py`, its str methods, formatting and hashing written in the subset; needs only the C library |
 | **bootstrap** | the compiler running on CPython, the native compiler it builds, and the one that builds itself all emit byte-identical LLVM IR |
-| **tests** | about 700 programs that must print what CPython printed for them, JIT and AOT, and over 850 that must be rejected, with the compiler running on CPython and with the native one ([docs/testing.md](docs/testing.md)) |
+| **tests** | over 700 programs that must print what CPython printed for them, JIT and AOT, and over 950 that must be rejected, with the compiler running on CPython and with the native one ([docs/testing.md](docs/testing.md)) |
 | **standard library** | 8 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
 
 ### Speed
@@ -291,6 +291,7 @@ A few choices shape everything else. Each is explained, with the pull request th
 | [docs/runtime-in-subset.md](docs/runtime-in-subset.md) | writing the runtime in the subset itself: the prototype (`runtime.py`), its measurements, and how other compilers do it |
 | [docs/history.md](docs/history.md) | the timeline, the design decisions and the Ouro v1 lineage |
 | [lib/README.md](lib/README.md) | the unmodified standard-library modules that ship with Pystachy |
+| [examples/route](examples/route/README.md) | a log and trace router on `fnmatch` and `lru_cache`, compiled, and what its caches buy against CPython's |
 
 ## Get involved
 

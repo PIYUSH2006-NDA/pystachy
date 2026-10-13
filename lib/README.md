@@ -355,6 +355,27 @@ compiled tests run there at upstream's size (`make re-fuzz RE_FUZZ="20000 2"` ru
 patterns of seed 2). With it, unmodified roman 5.2 prints what CPython prints. It is about 3
 times slower than `_sre`.
 
+`tools/re_probe.py` (`make re-probe`, a step of `make verify`) runs the port on CPython for
+textwrap's patterns, on 20 paragraphs and 20 blocks `tools/re_bench.py` generates: each result must
+be CPython's `re`'s, and the matcher's entries and the contexts it makes must stay within fixed
+limits, deterministic counts that a change making the matcher do more exceeds. `tools/re_bench.py`
+times the same operations, compiled and under CPython (`make re-probe RE_PROBE="--time
+./pystachy"`).
+
+One search is not `_sre`'s: a pattern that begins with `^` of `MULTILINE` (after groups' marks)
+enters the matcher only where a line begins, at the string's start or after a `\n`, where `_sre`
+enters it at every position and fails at once at all the others (`tests/lib_re_lines.py`). For a
+block of 15 lines, `dedent()`'s `^[ \t]+$` substitution enters the matcher 16 times instead of 313,
+and takes 4.2 µs compiled, against 10.9 µs before and CPython's 2.1 µs. And the matcher keeps its
+contexts for reuse, the state's for all its matches (`tests/lib_re_reuse.py`), where `_sre` pushes a
+new one for each nested match: they are made as deep as it goes, 7 for `wordsep_re`'s split of a
+paragraph instead of 3,110, which takes about 6% less time compiled, and `wordsep_simple_re`'s 15%
+less. A branch skips an alternative, and a search a position, where the alternative or the pattern
+begins with a literal or a class repeated at least once (after groups' marks, for a search) and the
+character there is not that one, without the nested match that would fail at once
+(`tests/lib_re_first.py`): `wordsep_simple_re`'s split of a paragraph enters the matcher 79 times
+instead of 468, and takes 30% less time compiled.
+
 ## `fnmatch`, a port of CPython's
 
 `fnmatch.py` is CPython 3.13.16's `Lib/fnmatch.py` (SHA-256

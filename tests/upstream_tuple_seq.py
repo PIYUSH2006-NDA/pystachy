@@ -1,8 +1,9 @@
 # Adapted from CPython 3.13.16 Lib/test/test_tuple.py, class TupleTest: test_truth, test_len,
-# test_iadd and test_repr; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
-# runs: test_truth, test_getitem, test_contains, test_len, test_minmax, test_add, test_mul,
-# test_iadd, test_repeat and test_cmp (with _assert_cmp); commit
-# cbc944f4bc59639a444dd971c737788ba2283a91.
+# test_iadd, test_repr and test_lexicographic_ordering; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
+# runs: test_truth, test_getitem, test_contains, test_contains_fake, test_contains_order,
+# test_len, test_minmax, test_add, test_mul, test_iadd, test_repeat and test_cmp (with
+# _assert_cmp); commit cbc944f4bc59639a444dd971c737788ba2283a91. test.support's ALWAYS_EQ and
+# NEVER_EQ are written out, and test_contains_order's classes are at the module's top level.
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name, CommonTest's prefixed seq_; assertEqual(a,
 # b) prints a and asserts a == b. `is` between bools is rejected here, so _assert_cmp's
@@ -24,13 +25,11 @@
 # - test_iadd's u += (2, 3) and u += (4, 5), TupleTest.test_iadd's u += (2, 3), and test_imul
 #   (CommonTest's and TupleTest's: u *= 3, u *= 0): a variable has one type here, and these
 #   change the tuple's length, which is part of its type
-# - test_cmp's _assert_cmp(a, self.type2test([0]), 1) and test_lexicographic_ordering: a tuple
-#   compared with one of another length is a compile-time error here: == and != as documented
-#   (values of types that cannot be equal), and <, <=, > and >= too, "cannot compare
-#   tuple[int,int] < tuple[int,int,int]" (bug: an undocumented rejection, NEW)
-# - test_contains_fake and test_contains_order: `x in t` for a tuple whose items have other types
-#   than x skips them, where CPython calls their class's __eq__ (ALWAYS_EQ, StopCompares): a
-#   silent wrong result (bug, NEW); their lists of ALWAYS_EQ and an int are rejected
+# - test_cmp's _assert_cmp(a, self.type2test([0]), 1): its == and != (a tuple compared with one
+#   of another length by == or != is a compile-time error here, as documented: values of types
+#   that cannot be equal); its <, <=, > and >= are assert_order's
+# - test_contains_order's checklast.__contains__(1), which is `1 in checklast` here (tuple's
+#   special methods are not supported)
 # - test_contains' u.__contains__() and test_getitem's u.__getitem__() (TypeError; tuple's
 #   special methods are not supported), test_subscript (a.__getitem__(), slice objects)
 # - test_getslice (slicing a tuple is not supported), test_count and test_index (tuple.count()
@@ -102,6 +101,63 @@ def seq_test_contains() -> None:
         check_true("%d in u" % i, i in u)
     for i in min(u)-1, max(u)+1:
         check_true("%d not in u" % i, i not in u)
+
+
+class _ALWAYS_EQ:
+    # test.support's ALWAYS_EQ: an object equal to everything
+    def __eq__(self, other) -> bool:
+        return True
+
+    def __ne__(self, other) -> bool:
+        return False
+
+
+class _NEVER_EQ:
+    # test.support's NEVER_EQ: an object equal to nothing
+    def __eq__(self, other) -> bool:
+        return False
+
+    def __ne__(self, other) -> bool:
+        return True
+
+
+ALWAYS_EQ = _ALWAYS_EQ()
+NEVER_EQ = _NEVER_EQ()
+
+
+def seq_test_contains_fake() -> None:
+    # Sequences must use rich comparison against each item
+    # (unless "is" is true, or an earlier item answered)
+    # So ALWAYS_EQ must be found in all non-empty sequences.
+    check_false("ALWAYS_EQ in ()", ALWAYS_EQ in ())
+    check_true("ALWAYS_EQ in (1,)", ALWAYS_EQ in (1,))
+    check_true("1 in (ALWAYS_EQ,)", 1 in (ALWAYS_EQ,))
+    check_false("NEVER_EQ in ()", NEVER_EQ in ())
+    check_false("ALWAYS_EQ in (NEVER_EQ,)", ALWAYS_EQ in (NEVER_EQ,))
+    check_true("NEVER_EQ in (ALWAYS_EQ,)", NEVER_EQ in (ALWAYS_EQ,))
+
+
+class DoNotTestEq(Exception):
+    pass
+
+
+class StopCompares:
+    def __eq__(self, other) -> bool:
+        raise DoNotTestEq
+
+
+def seq_test_contains_order() -> None:
+    # Sequences must test in-order.  If a rich comparison has side
+    # effects, these will be visible to tests against later members.
+    # In this test, the "side effect" is a short-circuiting raise.
+    checkfirst = (1, StopCompares())
+    check_true("1 in checkfirst", 1 in checkfirst)
+    checklast = (StopCompares(), 1)
+    try:
+        print("1 in checklast", 1 in checklast)
+        assert False, "1 in checklast"
+    except DoNotTestEq:
+        print("1 in checklast: DoNotTestEq")
 
 
 def seq_test_len() -> None:
@@ -180,10 +236,19 @@ def assert_cmp(label: str, a, b, r: int) -> None:
     check_is(label + " >=", a >= b, r >= 0)
 
 
+def assert_order(label: str, a, b, r: int) -> None:
+    # _assert_cmp's orderings of tuples of different lengths, whose == and != are rejected here
+    check_is(label + " >", a > b, r > 0)
+    check_is(label + " <=", a <= b, r <= 0)
+    check_is(label + " <", a < b, r < 0)
+    check_is(label + " >=", a >= b, r >= 0)
+
+
 def seq_test_cmp() -> None:
     a = (0, 1)
     assert_cmp("a, a", a, a, 0)
     assert_cmp("a, (0, 1)", a, (0, 1), 0)
+    assert_order("a, (0,)", a, (0,), 1)
     assert_cmp("a, (0, 2)", a, (0, 2), -1)
 
 
@@ -205,6 +270,15 @@ def test_iadd() -> None:
     seq_test_iadd()
 
 
+def test_lexicographic_ordering() -> None:
+    # Issue 21100
+    a = (1, 2)
+    b = (1, 2, 0)
+    c = (1, 3)
+    check_true("a < b", a < b)
+    check_true("b < c", b < c)
+
+
 def test_repr() -> None:
     l0 = ()  # tuple()
     l2 = (0, 1, 2)
@@ -219,6 +293,8 @@ def test_repr() -> None:
 test_truth()
 seq_test_getitem()
 seq_test_contains()
+seq_test_contains_fake()
+seq_test_contains_order()
 test_len()
 seq_test_minmax()
 seq_test_add()
@@ -227,3 +303,4 @@ test_iadd()
 seq_test_repeat()
 seq_test_cmp()
 test_repr()
+test_lexicographic_ordering()

@@ -273,6 +273,10 @@ class State:
         self.must_advance = False
         self.data: list[int] = []  # the data stack: saved marks and last_ptr values
         self.offs: list[int] = []  # (re's: the index in the str of each of s's code points, [] if they are theirs)
+        # (not _sre's: the contexts of the matches of this state, kept for reuse: those below top are
+        # in use, by sre_match() and the calls nested in it through sre_count(), the others free)
+        self.ctxs: list[Ctx] = []
+        self.top = 0
 
     def reset(self) -> None:
         # state_reset
@@ -288,6 +292,18 @@ class Ctx:
         self.count = 0
         self.chr = 0
         self.rep: Repeat | None = None
+        self.lastmark = -1
+        self.lastindex = -1
+        self.pattern = pattern
+        self.ptr = 0
+        self.toplevel = toplevel
+        self.jump = jump
+
+    def reuse(self, pattern: int, toplevel: bool, jump: int) -> None:
+        # a free context, set as a new one is
+        self.count = 0
+        self.chr = 0
+        self.rep = None
         self.lastmark = -1
         self.lastindex = -1
         self.pattern = pattern
@@ -443,8 +459,20 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
     # match ends, and state.mark its groups), else 0
     s = state.s
     end = state.end
-    ctxs = [Ctx(start, toplevel, JUMP_NONE)]
-    ctx = ctxs[0]
+    # (not _sre's: the contexts are the state's, kept for reuse: this call's are ctxs[base], its
+    # first, to ctxs[base + depth], the current one, and a nested match takes the next one, so that
+    # contexts are made as deep as the matcher goes, not one for each match and nested match; a call
+    # nested in sre_count() takes those above, from state.top, and gives them back when it returns)
+    ctxs = state.ctxs
+    base = state.top
+    depth = 0
+    if base < len(ctxs):
+        ctx = ctxs[base]
+        ctx.reuse(start, toplevel, JUMP_NONE)
+    else:
+        ctx = Ctx(start, toplevel, JUMP_NONE)
+        ctxs.append(ctx)
+    state.top = base + 1
     pattern = start
     ptr = 0
     ret = 0
@@ -787,11 +815,14 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
                 # (the LOCALE opcodes, of bytes patterns, and the set members)
                 raise RuntimeError("internal error in regular expression engine")
         elif k == K_EXIT:
-            done = ctxs.pop()
-            if len(ctxs) == 0:
+            ctx.rep = None  # (a free context refers to no repeat)
+            if depth == 0:
+                state.top = base
                 return ret
-            ctx = ctxs[-1]
-            jump = done.jump
+            jump = ctx.jump
+            depth -= 1
+            state.top = base + depth + 1
+            ctx = ctxs[base + depth]
             pattern = ctx.pattern
             ptr = ctx.ptr
             k = K_RESUME
@@ -956,6 +987,14 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
                 if code[pattern + 1] == IN and (ptr >= end or not charset(code, pattern + 3, s[ptr])):
                     pattern += code[pattern]
                     continue
+                op = code[pattern + 1]
+                if (op == REPEAT_ONE or op == MIN_REPEAT_ONE or op == POSSESSIVE_REPEAT_ONE) \
+                        and _repeated(code, pattern + 1) >= 0 and not _first(state, code, pattern + 5, ptr):
+                    # (not _sre's: an alternative that begins with a character repeated at least
+                    # once cannot match where that character is not; the opcode is tested here, as
+                    # the alternatives inside a lazy repeat's tail are tried at each character)
+                    pattern += code[pattern]
+                    continue
                 state.ptr = ptr
                 nextp = pattern + 1
                 nextj = JUMP_BRANCH
@@ -1046,8 +1085,14 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
             # DO_JUMP: this context waits for a nested one, which begins at nextp
             ctx.pattern = pattern
             ctx.ptr = ptr
-            ctx = Ctx(nextp, nextt, nextj)
-            ctxs.append(ctx)
+            depth += 1
+            if base + depth < len(ctxs):
+                ctx = ctxs[base + depth]
+                ctx.reuse(nextp, nextt, nextj)
+            else:
+                ctx = Ctx(nextp, nextt, nextj)
+                ctxs.append(ctx)
+            state.top = base + depth + 1
             pattern = nextp
             nextj = 0
             k = K_ENTRANCE
@@ -1169,6 +1214,54 @@ def sre_search(state: State, code: list[int]) -> int:
             ptr += 1
             state.lastmark = -1
             state.lastindex = -1
+    elif _at_line_start(code, pattern):
+        # (not in _sre: a pattern that begins with ^ of MULTILINE, after marks, which match
+        # anywhere, can match only where a line begins, as sre_at() says: at the string's start or
+        # after a \n, not at pos; the matcher is entered there alone, which the general case below
+        # does at every position, each match failing at once elsewhere)
+        if ptr == 0 or s[ptr - 1] == 10:
+            state.start = ptr
+            state.ptr = ptr
+            status = sre_match(state, code, pattern, True)
+        state.must_advance = False
+        while status == 0:
+            while ptr < end and s[ptr] != 10:
+                ptr += 1
+            if ptr >= end:
+                # (where the general case's last position leaves them)
+                state.start = end
+                state.ptr = end
+                return 0
+            ptr += 1
+            state.lastmark = -1
+            state.lastindex = -1
+            state.start = ptr
+            state.ptr = ptr
+            status = sre_match(state, code, pattern, False)
+    elif _repeated(code, _after_marks(code, pattern)) >= 0:
+        # (not _sre's: a pattern that begins with a character repeated at least once, after
+        # groups' marks, can match only where that character is: the matcher is entered there
+        # alone, which the general case below does at every position)
+        item = _repeated(code, _after_marks(code, pattern))
+        first = ptr  # (where must_advance applies, as in the general case)
+        while True:
+            while ptr < end and not _first(state, code, item, ptr):
+                ptr += 1
+            if ptr >= end:
+                # (where the general case's last position leaves them)
+                state.must_advance = False
+                state.start = end
+                state.ptr = end
+                return 0
+            state.lastmark = -1
+            state.lastindex = -1
+            state.start = ptr
+            state.ptr = ptr
+            status = sre_match(state, code, pattern, ptr == first)
+            state.must_advance = False
+            if status != 0:
+                return status
+            ptr += 1
     else:
         # the general case
         state.start = ptr
@@ -1187,3 +1280,34 @@ def sre_search(state: State, code: list[int]) -> int:
             state.ptr = ptr
             status = sre_match(state, code, pattern, False)
     return status
+
+
+def _at_line_start(code: list[int], p: int) -> bool:
+    # whether the code at p begins with AT_BEGINNING_LINE, after MARKs
+    return code[_after_marks(code, p)] == AT and code[_after_marks(code, p) + 1] == AT_BEGINNING_LINE
+
+
+def _after_marks(code: list[int], p: int) -> int:
+    # the code after the MARKs at p
+    while code[p] == MARK:
+        p += 2
+    return p
+
+
+def _repeated(code: list[int], p: int) -> int:
+    # where the item is, a LITERAL or an IN, if the code at p is a REPEAT_ONE, MIN_REPEAT_ONE or
+    # POSSESSIVE_REPEAT_ONE of it, at least once (<op> <skip> <min> <max> item), else -1
+    op = code[p]
+    if (op == REPEAT_ONE or op == MIN_REPEAT_ONE or op == POSSESSIVE_REPEAT_ONE) and code[p + 2] >= 1:
+        if code[p + 4] == LITERAL or code[p + 4] == IN:
+            return p + 4
+    return -1
+
+
+def _first(state: State, code: list[int], item: int, ptr: int) -> bool:
+    # whether the character at ptr matches the LITERAL or IN at item
+    if ptr >= state.end:
+        return False
+    if code[item] == LITERAL:
+        return state.s[ptr] == code[item + 1]
+    return charset(code, item + 2, state.s[ptr])
