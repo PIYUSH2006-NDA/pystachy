@@ -4009,12 +4009,13 @@ class Loader:
         return p + "." + e.s if p != "" else ""
 
     def typevar(self, e: Node) -> bool:
-        # is name e a module global that only e = TypeVar(...) statements bind, typing's (each one
-        # is Gen.typevar_def's): '|' of it and subscripts holding it run typing's code
+        # is name e a module global that only e = TypeVar(...) (or TypeVarTuple(...)) statements
+        # bind, typing's (each one is Gen.typevar_def's): '|' of it and subscripts holding it run
+        # typing's code
         if e.s not in self.dm.tvars or len(self.dm.tvars[e.s]) == 0 or e.s in self.dm.fnglobal:
             return False
         for c in self.dm.tvars[e.s]:
-            if self.bpath(c) != "typing.TypeVar":
+            if self.bpath(c) != "typing.TypeVar" and self.bpath(c) != "typing.TypeVarTuple":
                 return False
         return True
 
@@ -5436,7 +5437,7 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
     ABCS[_k] = True
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 OPTTYPES = "class types, str, int, float, bool, list, dict and tuple"
-TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template"
+TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template, and of a generic class (Generic[T]) whose __init__'s parameters mention it, which each call binds"
 STUB = "an @overload stub of 'NAME' must be followed by the def that implements it (calling a stub raises NotImplementedError)"
 PATHLIKE = "os.PathLike is only supported in a union with str (str | os.PathLike[str] is a str: Pystachy has no other path type)"
 FUTURE: dict[str, bool] = {}
@@ -7216,6 +7217,7 @@ class FnInfo:
         self.varelem = ""  # its annotation (the type of each extra argument), or ""
         self.kwarg = -1  # the position of its **kwargs parameter, which a template's call gives a record of the extra keyword arguments (kw[...])
         self.kwelem = ""  # its annotation (the type of each extra keyword argument), or ""
+        self.vartup = ""  # *args: *Ts, of a specialization of a generic class: the tuple type args is (each call passes its items)
         self.export = False  # runtime mode: a pys_* function defined under its C name, for runtime.c and programs
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
@@ -7505,10 +7507,9 @@ class ClassInfo:
         self.specs: dict[str, str] = {}
         self.nspec = 0  # (the names it has given: one each, also to those found to be one already made)
         self.origin = ""
-        # a specialization of lib/functools' _lru_cache_wrapper: what its TypeVars _Key and _Result
-        # are (see cache_types), and the function it wraps
+        # a specialization of a generic class (Gen.tparams): the types its type variables are bound
+        # to, by the call that made it (Gen.bind); a TypeVarTuple's is a tuple type of its types
         self.tvars: dict[str, str] = {}
-        self.cachefn = ""
 
 
 class Flow:
@@ -7661,8 +7662,6 @@ class Gen:
         self.specing: dict[str, str] = {}  # the specializations being made, by template and argument types
         self.specdone: dict[str, str] = {}  # and those made, which the same call gets again
         self.selfcls = ""  # the class whose method or fields are being declared: what typing.Self is
-        self.libdir = ""  # Pystachy's lib/ (compile_program), whose functools.py has the class below
-        self.cachecls = ""  # lib/functools' _lru_cache_wrapper, whose specializations cache_types types
         self.funcs: dict[str, FnInfo] = {}
         self.aliases: dict[str, str] = {}
         self.imports: dict[str, str] = {}
@@ -7821,7 +7820,11 @@ class Gen:
         # "C.x": class attribute x of plain class C, which the program assigns through the class
         # (C.x = v, cls.x += 1): a global that objects read until they assign x (see cvar_stores)
         self.cvars: dict[str, bool] = {}
-        self.typevars: list[str] = []  # module globals bound to typing.TypeVar(...), which only annotations may name
+        self.typevars: list[str] = []  # module globals bound to typing.TypeVar(...) or TypeVarTuple(...), which only annotations may name
+        self.tvtuples: dict[str, bool] = {}  # those bound to a TypeVarTuple, which an annotation unpacks (*Ts)
+        # the generic classes (class C(Generic[T, *Ts])): their type variables, which the arguments
+        # of the call that makes an object bind (see bind)
+        self.tparams: dict[str, list[str]] = {}
 
     # ---- emission helpers
     def err(self, msg: str) -> None:
@@ -8490,10 +8493,10 @@ class Gen:
             if s in self.unsupported:
                 return "!" + self.unsupported[s]
             if s in self.typevars:
-                tc = self.selfcls if self.selfcls != "" else self.curfn.cls
-                if tc in self.classes and s in self.classes[tc].tvars:
-                    return self.classes[tc].tvars[s]  # (lib/functools' cache: see cache_types)
-                return f"!TypeVar '{short(s)}'{TYPEVAR}"
+                t = self.tvar(s)
+                if s in self.tvtuples:
+                    return f"!TypeVarTuple '{short(s)}' is only supported unpacked (*{short(s)}), in tuple[...], Callable[[...], R] and *args" if t != "" else f"!TypeVarTuple '{short(s)}'{TYPEVAR}"
+                return t if t != "" else f"!TypeVar '{short(s)}'{TYPEVAR}"
         elif k == "attr" and self.typing_attr(n) == "TextIO":
             return "file"
         elif k == "attr" and self.typing_attr(n) == "Self":
@@ -8505,22 +8508,9 @@ class Gen:
         elif k == "binop" and n.s == "|" and n.kids[0].kind == "None":
             return self.opt(self.ann(n.kids[1]), n.kids[1])  # None | T
         elif k == "index" and (n.kids[0].kind == "name" or n.kids[0].kind == "attr"):
-            base = n.kids[0].s
-            if n.kids[0].kind == "attr":
-                base = self.typing_attr(n.kids[0]).lower()  # typing.List[int]
-            elif base != "list" and base != "dict" and base != "tuple" and base != "set" and base != "frozenset":
-                base = self.typing_name(base)
-                if base.startswith("!"):
-                    return base
-                base = base.lower()
-            if base == "mapping" or base == "mutablemapping":
-                base = "dict"  # (collections.abc's and typing's: what a dict is)
-            elif base == "sequence" or base == "mutablesequence":
-                base = "list"
-            elif base == "mutableset":
-                base = "set"
-            elif base == "classvar":
-                return "!" + CLASSVAR
+            base = self.ann_base(n.kids[0])
+            if base.startswith("!"):
+                return base
             a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
             if base == "callable":
                 # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
@@ -8528,28 +8518,25 @@ class Gen:
                     return "!Callable takes a list of parameter types and a return type: Callable[[A, B], R]"
                 if a[0].kind == "ellipsis":
                     return "!Callable[..., R] is not supported: name the parameter types (Callable[[A, B], R])"
-                cts: list[str] = [self.ann(a[1])]
-                for x in a[0].kids:
-                    cts.append(self.ann(x))
+                cts: list[str] = [self.ann(a[1])] + self.ann_items(a[0].kids)
                 for ct in cts:
                     if ct.startswith("!"):
                         return ct
                 return self.ctype("callable", cts)
             if base == "union" and len([x for x in a if self.pathlike(x)]) > 0:
                 return self.path_union(a)
-            ts: list[str] = []
-            for x in a:
-                ts.append(self.ann(x))
-                if ts[-1].startswith("!"):
-                    return ts[-1]
+            ts: list[str] = self.ann_items(a) if base == "tuple" else [self.ann(x) for x in a]
+            for t in ts:
+                if t.startswith("!"):
+                    return t
             if base == "list" and len(ts) == 1:
                 return self.ctype("list", [ts[0]])
             if base == "dict" and len(ts) == 2:
                 return self.ctype("dict", ts) if key_problem(ts[0]) == "" else "!" + key_problem(ts[0])
             if (base == "set" or base == "frozenset") and len(ts) == 1:
                 return self.ctype(base, ts) if elem_problem(ts[0]) == "" else "!" + elem_problem(ts[0])
-            if base == "tuple" and (len(ts) > 0 or n.kids[1].kind == "tuple"):
-                return self.ctype("tuple", ts)  # (tuple[()] is the empty tuple's)
+            if base == "tuple" and (len(ts) > 0 or n.kids[1].kind == "tuple" or n.kids[1].kind == "starred"):
+                return self.ctype("tuple", ts)  # (tuple[()] is the empty tuple's, as tuple[*Ts] of no types is)
             if base == "optional" and len(ts) == 1:
                 return self.opt(ts[0], a[0])
             if base == "union":
@@ -8566,6 +8553,56 @@ class Gen:
         if self.pathlike(n):
             return "!" + PATHLIKE
         return "!unsupported type annotation"
+
+    def ann_base(self, b: Node) -> str:
+        # what b of annotation b[...] is (a name or attribute): list, dict, tuple, set, frozenset, or
+        # typing's name in lower case (callable, optional, union, ...), with Mapping a dict, Sequence
+        # a list and MutableSet a set; or "!" and why not
+        base = b.s
+        if b.kind == "attr":
+            base = self.typing_attr(b).lower()  # typing.List[int]
+        elif base != "list" and base != "dict" and base != "tuple" and base != "set" and base != "frozenset":
+            base = self.typing_name(base)
+            if base.startswith("!"):
+                return base
+            base = base.lower()
+        if base == "mapping" or base == "mutablemapping":
+            return "dict"  # (collections.abc's and typing's: what a dict is)
+        if base == "sequence" or base == "mutablesequence":
+            return "list"
+        if base == "mutableset":
+            return "set"
+        return "!" + CLASSVAR if base == "classvar" else base
+
+    def ann_items(self, xs: list[Node]) -> list[str]:
+        # the types annotations xs denote, those of tuple[...] or of Callable[[...], R]'s parameters:
+        # *Ts and *tuple[A, B] give the types they unpack (see unpack_ann)
+        ts: list[str] = []
+        for x in xs:
+            if x.kind == "starred":
+                u = self.unpack_ann(x)
+                ts.extend([u] if u.startswith("!") else targs(u))
+            else:
+                ts.append(self.ann(x))
+        return ts
+
+    def unpack_ann(self, n: Node) -> str:
+        # the tuple type that *X (starred node n) unpacks in an annotation: a TypeVarTuple, which a
+        # specialization of a generic class binds (see bind), or tuple[A, B]; or "!" and why not
+        x = n.kids[0]
+        if x.kind == "name" and x.s in self.tvtuples:
+            t = self.tvar(x.s)
+            return t if t != "" else f"!TypeVarTuple '{short(x.s)}'{TYPEVAR}"
+        t = self.ann(x)
+        if t.startswith("!") or is_tuple(t):
+            return t
+        return f"!*{typestr(t)} in an annotation is not supported: a TypeVarTuple (*Ts) or a tuple (*tuple[A, B]) unpacks"
+
+    def tvar(self, s: str) -> str:
+        # what type variable s is bound to where an annotation names it, or "": in a specialization
+        # of a generic class (its fields and methods), what the call that made the object bound
+        c = self.selfcls if self.selfcls != "" else self.curfn.cls
+        return self.classes[c].tvars.get(s, "") if c in self.classes else ""
 
     def self_type(self) -> str:
         # typing.Self: the class of the method or field it annotates (there is no inheritance)
@@ -8616,33 +8653,45 @@ class Gen:
         return ("opt[str]" if none else "str") if s else "!" + PATHLIKE
 
     def typevar_def(self, st: Node) -> bool:
-        # is st T = TypeVar("T") (typing's or typing_extensions'): T is then a name only annotations use
+        # is st T = TypeVar("T") or Ts = TypeVarTuple("Ts") (typing's or typing_extensions'): T is
+        # then a name only annotations use
         if st.kind != "assign" or len(st.kids) != 2 or st.kids[0].kind != "name" or st.kids[1].kind != "call":
             return False
         c = st.kids[1]
-        if self.imported_ref(c.kids[0]) != "typing.TypeVar":
+        ref = self.imported_ref(c.kids[0])
+        kind = ref[7:] if ref.startswith("typing.") else ""
+        if kind != "TypeVar" and kind != "TypeVarTuple":
             return False
         self.line = st.line
         if len(c.kids) < 2 or c.kids[1].kind != "str":
-            self.err("TypeVar() needs the type variable's name, a string, as its first argument")
+            self.err(f"{kind}() needs the type variable's name, a string, as its first argument")
         for a in c.kids[2:]:
             if a.kind != "kw" or not is_const(a.kids[0]):
                 self.err("a TypeVar's constraints, and a bound other than a string, are not supported")
+        if kind == "TypeVarTuple":
+            self.tvtuples[st.kids[0].s] = True
         return True
 
-    def typevar_in(self, anns: list[Node]) -> str:
-        # the first TypeVar annotations anns mention (also in a string), or ""
+    def typevar_in(self, anns: list[Node], skip: list[str]) -> str:
+        # the first TypeVar (or TypeVarTuple) annotations anns mention (also in a string) but those
+        # of skip, or ""
         if len(self.typevars) == 0:
             return ""
         for a in anns:
             if a.kind == "str":
                 a = self.parse_expr(a.s)
-            if a.kind == "name" and a.s in self.typevars:
+            if a.kind == "name" and a.s in self.typevars and a.s not in skip:
                 return a.s
-            r = self.typevar_in(a.kids)
+            r = self.typevar_in(a.kids, skip)
             if r != "":
                 return r
         return ""
+
+    def class_tvars(self, cls: str) -> list[str]:
+        # the type variables of generic class cls, or of the one it specializes ([] for another class)
+        if cls in self.tparams:
+            return self.tparams[cls]
+        return self.tparams.get(self.classes[cls].origin, []) if cls in self.classes else []
 
     def ann_problem(self, n: Node, ret: bool) -> str:
         # why typeof(n), for a return annotation (ret), or vtype(n) fails, or "" (one that raises
@@ -8894,6 +8943,22 @@ class Gen:
         # is a template: a call compiles it, once per list of argument types, for those types
         # (see instance), and what cannot be compiled in it is an error only then
         self.line = d.line
+        # a generic class's methods: an annotation that mentions its type variables is left out
+        # where they are not bound, in the class itself (whose objects are its specializations'),
+        # and in its __init__'s parameters, which each call's arguments type (they bind them, see
+        # bind); the def, which its specializations share, keeps it
+        tvs = self.class_tvars(cls)
+        held: list[Node] = []  # (the nodes whose annotations are left out, and those annotations)
+        anns: list[Node] = []
+        for x in d.kids[0].kids + [d] if len(tvs) > 0 and (cls in self.tparams or d.s == "__init__") else []:
+            a = x.kids[1] if x.kind == "def" else x.kids[0]
+            if (x.kind != "def" or cls in self.tparams) and self.typevar_in([a], []) != "" and self.typevar_in([a], tvs) == "":
+                held.append(x)
+                anns.append(a)
+                if x.kind == "def":
+                    x.kids[1] = mk("noann", "", d.line, [])
+                else:
+                    x.kids[0] = mk("noann", "", d.line, [])
         f = FnInfo(d.s, f"@f.{d.s}" if cls == "" else f"@m.{cls}.{d.s}", d, cls)
         body = d.kids[2].kids
         if self.rtmode and cls == "" and len(body) == 1 and body[0].kind == "expr" and body[0].kids[0].kind == "ellipsis":
@@ -8931,16 +8996,14 @@ class Gen:
             self.err(f"unsupported decorator @{deco}")
         if cls != "" and len(ps) == 0 and f.deco != "staticmethod":
             self.err(f"method '{d.s}' of class '{cls}' must take {'cls' if f.deco != '' else 'self'} as its first parameter")
-        tv = self.typevar_in([p.kids[0] for p in ps if p.kind == "param"] + [d.kids[1]])
-        if tv != "" and self.cachecls != "" and (cls == self.cachecls or (cls in self.classes and self.classes[cls].origin == self.cachecls)):
-            tv = ""  # (lib/functools' cache, whose specializations bind its TypeVars: see cache_types)
+        tv = self.typevar_in([p.kids[0] for p in ps] + [d.kids[1]], tvs)
         if tv != "" and (cls == "" or template_ok(d.s)):
             # def f(x: T) with T = TypeVar("T"): what mentions a TypeVar is left unannotated, as in
-            # def f[T](x: T) (a template)
+            # def f[T](x: T) (a template); also *args: *Ts
             for p in ps:
-                if p.kind == "param" and self.typevar_in([p.kids[0]]) != "":
+                if self.typevar_in([p.kids[0]], tvs) != "":
                     p.kids[0] = mk("noann", "", d.line, [])
-            if self.typevar_in([d.kids[1]]) != "":
+            if self.typevar_in([d.kids[1]], tvs) != "":
                 d.kids[1] = mk("noann", "", d.line, [])
         tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: {d.s}() is not a template (another method whose parameters mention a TypeVar is, compiled for each call's argument types)"
         if tv != "" and cls != "" and not template_ok(d.s) and not self.lib:
@@ -8974,13 +9037,17 @@ class Gen:
                 # annotation that fails is an error where a call needs the function; one that names
                 # a class template types nothing, as for any other parameter (see tmpl_ann)
                 typed = p.kids[0].kind != "noann" and not self.tmpl_ann(p.kids[0])
-                why = self.ann_problem(p.kids[0], False) if self.lib and typed else ""
+                tup = self.unpack_ann(p.kids[0]) if typed and p.kids[0].kind == "starred" else ""  # (*args: *Ts: args is that tuple)
+                why = (tup[1:] if tup.startswith("!") else self.ann_problem(p.kids[0], False) if tup == "" else "") if self.lib and typed else ""
                 if why != "":
                     bad = f"{d.s}() is not supported: parameter '{'*' if p.kind == 'starparam' else '**'}{p.s}': {why}"
-                elem = self.vtype(p.kids[0]) if typed and why == "" else ""
+                if tup.startswith("!") and not self.lib:
+                    self.err(tup[1:])
+                elem = self.vtype(p.kids[0]) if typed and why == "" and tup == "" else ""
                 if p.kind == "starparam":
                     f.vararg = len(f.params)
                     f.varelem = elem
+                    f.vartup = tup if why == "" else ""
                 else:
                     f.kwarg = len(f.params)
                     f.kwelem = elem
@@ -9069,6 +9136,11 @@ class Gen:
             f.ret = "None"  # (a class template's __init__: what CPython lets it return)
         elif f.generic:
             f.ret = ""
+        for i in range(len(held)):
+            if held[i].kind == "def":
+                held[i].kids[1] = anns[i]
+            else:
+                held[i].kids[0] = anns[i]
         return f
 
     def iter_ann(self, n: Node) -> str:
@@ -9280,6 +9352,19 @@ class Gen:
                 self.err(f"Field names cannot start with an underscore: '{fl}'")
         if len(ci.fields) == 0:
             self.err("a NamedTuple without fields is not supported")
+
+    def generic_base(self, n: Node) -> list[str]:
+        # the type variables of a class's base n when it is typing.Generic[T, *Ts]: TypeVars and at
+        # most one TypeVarTuple, unpacked, each once; else []
+        if n.kind != "index" or self.imported_ref(n.kids[0]) != "typing.Generic":
+            return []
+        out: list[str] = []
+        for x in n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]:
+            v = x.kids[0] if x.kind == "starred" else x
+            if v.kind != "name" or v.s not in self.typevars or (v.s in self.tvtuples) != (x.kind == "starred") or v.s in out:
+                return []
+            out.append(v.s)
+        return out if len([v for v in out if v in self.tvtuples]) < 2 else []
 
     def nt_base(self, n: Node) -> bool:
         # does a class's base n name typing.NamedTuple
@@ -10959,6 +11044,8 @@ class Gen:
             self.err(f.bad)
         self.compiled[f.ll] = True
         self.building[f.ll] = True
+        sel = self.selfcls
+        self.selfcls = ""  # (its annotations name its class's types: f.cls's, see tvar)
         self.enter(f, body)
         if takes_self(f):
             # callers check the receiver, so self is never None inside a method
@@ -11102,6 +11189,7 @@ class Gen:
                 self.err(f"{f.name}() is defined as {typestr(ts[0])}({', '.join([typestr(t) for t in ts[1:]])}), but the compiler calls it as {rt_subset(RTSYM[f.ll[1:]], ts)} (RUNTIME's {RTSYM[f.ll[1:]]})")
             self.untold(f, ts, "defined")
         del self.building[f.ll]
+        self.selfcls = sel
         self.fn.n = self.n
         self.fns.append(self.fn)
 
@@ -11941,7 +12029,9 @@ class Gen:
         # class can, whose one base is a builtin exception class or an exception class of the
         # program declared before it
         if st.kids[1].kind == "typeparams":
-            return "generic classes (class C[T]) are not supported"
+            return "generic classes (class C[T]) are not supported: write class C(Generic[T]), with T = TypeVar(\"T\")"
+        if st.kids[1].kind == "index" and self.imported_ref(st.kids[1].kids[0]) == "typing.Generic":
+            return "a generic class's one base is Generic[...] of its TypeVars, and at most one TypeVarTuple, unpacked (Generic[T, *Ts]), each once" if len(st.kids) == 2 else "a generic class with another base than Generic[...] is not supported"
         b = self.exc_base(st.kids[1])
         if b == "" and len(st.kids) == 2 and st.kids[1].kind == "name" and short(st.kids[1].s) == "object":
             return UNSUPPORTED["subclass"] + " (the module may have rebound the name 'object' before this statement)"
@@ -12034,6 +12124,8 @@ class Gen:
                 for i in range(1, len(ps)):
                     if ps[i].kids[0].kind == "noann" or (ps[i].kind == "param" and self.tmpl_ann(ps[i].kids[0])):
                         return True  # (also *args or **kwargs without an annotation)
+                    if st.s in self.tparams and self.names_tv(ps[i].kids[0], self.tparams[st.s]):
+                        return True  # (a generic class whose objects bind its type variables, see bind)
                 if self.makes_tmpl(d.kids[2]):
                     return True  # (a field may hold an object of a class template: typed where the object is made)
         return False
@@ -12417,6 +12509,9 @@ class Gen:
                 if st.kind == "subclass" and len(st.kids) == 2 and self.nt_base(st.kids[1]):
                     m.body.kids[i] = st.kids[0]  # class P(NamedTuple): a class (see nt_class)
                     self.nts[st.s] = True
+                elif st.kind == "subclass" and len(st.kids) == 2 and len(self.generic_base(st.kids[1])) > 0:
+                    m.body.kids[i] = st.kids[0]  # class C(Generic[T]): a class whose objects bind T (see bind)
+                    self.tparams[st.s] = self.generic_base(st.kids[1])
                 elif self.typevar_def(st):
                     self.typevars.append(st.kids[0].s)
                     m.body.kids[i] = mk("pass", "", st.line, [])
@@ -12452,8 +12547,6 @@ class Gen:
                         self.err(f"redefinition of class '{st.s}' is not supported")
                     self.classes[st.s] = ClassInfo(st.s, st)
                     self.classes[st.s].mod = m.name
-                    if m.name == "functools" and m.path == self.libdir + "/functools.py" and st.s == m.q + "_lru_cache_wrapper":
-                        self.cachecls = st.s  # (lib/functools' own: see cache_types)
                     if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
                         self.err(dc_args(st.kids[1])[1:])
                     self.classes[st.s].kwonly = len(st.kids) > 1 and dc_args(st.kids[1]) == "kw"
@@ -18132,7 +18225,8 @@ class Gen:
             if a.kind == "starred" or a.kind == "dstar":
                 self.err("star arguments are not supported")
             if a.kind != "kw" and f.vararg >= 0 and j >= f.vararg:
-                extra.append(self.pcoerce(self.expr(a, f.varelem), f.varelem, f, j))
+                t = targs(f.vartup)[len(extra)] if f.vartup != "" else f.varelem  # (*args: *Ts: its item's type, see arity)
+                extra.append(self.pcoerce(self.expr(a, t), t, f, f.vararg))
                 pos += 1
                 continue
             if a.kind == "kw" and f.kwarg >= 0 and (a.s not in f.params or f.params.index(a.s) < f.posonly or f.params.index(a.s) == f.kwarg or f.params.index(a.s) == f.vararg):
@@ -18259,6 +18353,10 @@ class Gen:
             plural = "s" if dflt > 0 or last + off != 1 else ""
             kwonly = f" positional argument{'s' if given + off != 1 else ''} (and {kwg} keyword-only argument{'s' if kwg != 1 else ''})" if kwg > 0 else ""
             self.err(f"{self.fname(f)}() takes {takes} positional argument{plural} but {given + off}{kwonly} {'was' if given + off == 1 and kwg == 0 else 'were'} given")
+        if f.vartup != "" and given >= f.vararg and given - f.vararg != len(targs(f.vartup)):
+            # *args: *Ts, which a generic class's specialization binds: as many as Ts has types
+            n = f.vararg + len(targs(f.vartup)) + off
+            self.err(f"{self.fname(f)}() takes {n} positional argument{'s' if n != 1 else ''} but {given + off} {'was' if given + off == 1 else 'were'} given (its *{f.params[f.vararg]} is a {typestr(f.vartup)})")
         for kind in ["positional", "keyword-only"]:
             miss = [f.params[j] for j in range(np) if not filled[j] and f.defaults[j].kind == "noann" and j != f.vararg and j != f.kwarg and (j < last) == (kind == "positional")]
             if len(miss) > 0:
@@ -18333,12 +18431,13 @@ class Gen:
         sel = self.selfcls
         self.selfcls = name  # (c names its specialization in its annotations, see ann)
         line = self.line
-        if c == self.cachecls:
-            self.cache_types(s, ts)
+        if c in self.tparams:
+            s.tvars = self.bind(c, ts)  # (before its fields, which its type variables may type)
         self.scan_fields(s, fi, init.node.kids[2].kids)
         self.line = line
         # (a field that holds the specialization itself, self.next: Node | None, is the same in each)
         key = ",".join([x + ":" + retoken(s.ftypes[x], name, "@") for x in s.fields])
+        key += "".join([f";{x}={retoken(s.tvars[x], name, '@')}" for x in self.tparams.get(c, [])])
         del self.specing[doing]
         if key in t.specs:
             del self.classes[name]
@@ -18353,7 +18452,12 @@ class Gen:
         self.template_instances += 1
         t.specs[key] = name
         self.specdone[doing] = name
-        SPECSHOW[name] = f"{short(c)}[{', '.join([typestr(s.ftypes[x]) for x in s.fields if x not in t.ftypes])}]"
+        shown_ts = [typestr(s.ftypes[x]) for x in s.fields if x not in t.ftypes]
+        if c in self.tparams:
+            shown_ts = []  # (a generic class's: its type variables', C[int, str])
+            for x in self.tparams[c]:
+                shown_ts.extend([typestr(y) for y in targs(s.tvars[x])] if x in self.tvtuples else [typestr(s.tvars[x])])
+        SPECSHOW[name] = f"{short(c)}[{', '.join(shown_ts)}]"
         for d in t.node.kids[0].kids:
             if d.kind == "def":
                 self.line = d.line
@@ -18379,82 +18483,139 @@ class Gen:
         self.making.pop()
         return name
 
-    def cache_fn(self, ft: str) -> FnInfo:
-        # the function lib/functools' _lru_cache_wrapper wraps, of value type ft: a def, or a closure
-        # (a decorated def is one, as is a def inside a function); else CPython's TypeError of
-        # lru_cache() where it is no function (an argument that is no int or None), or an error
-        if ft.startswith("fn[f:"):
-            return self.funcs[ft[5:-1]]
-        if ft.startswith("fn[c:"):
-            return self.closures[int(ft[5 : ft.find(":", 5)])].f
-        if not is_fn(ft) and not is_callable(unopt(ft)) and ft not in self.classes:
-            self.err("TypeError: Expected first argument to be an integer, a callable, or None")
-        self.err(f"lru_cache() of a {typestr(ft)} is not supported: it caches a def's results (a def of the program, also one inside a function)")
-        return self.funcs[ft]
+    def names_tv(self, a: Node, tvs: list[str]) -> bool:
+        # does annotation a (also as a string) mention one of type variables tvs
+        if a.kind == "str":
+            a = self.parse_expr(a.s)
+        if a.kind == "name" and a.s in tvs:
+            return True
+        for k in a.kids:
+            if self.names_tv(k, tvs):
+                return True
+        return False
 
-    def cache_types(self, s: ClassInfo, ts: list[str]) -> None:
-        # the specialization s of lib/functools' _lru_cache_wrapper for a function of type ts[0]
-        # (__init__'s argument types): its TypeVars _Result, what the function returns, and _Key,
-        # the type of the key __pys_cache_key makes of a call (cache_key). That is the argument
-        # itself for one int or str parameter without a default, as CPython's key is; else the
-        # tuple of the call's form (an int) and the arguments, one item per parameter. Each
-        # parameter and the return must be annotated, and the arguments must make a dict's key
-        f = self.cache_fn(ts[0])
-        line = self.line
-        self.line = f.node.line  # (an error is the decorated def's)
-        what = f"lru_cache() of {short(f.name)}()"
-        first = 1 if f.clo >= 0 else 0  # (a closure's env, which its params begin with)
-        if f.vararg >= 0 or f.kwarg >= 0:
-            self.err(f"{what} is not supported: it takes *args or **kwargs, and a cache's keys have one type")
-        pts = f.ptypes[first:]
-        for j in range(len(pts)):
-            if pts[j] == "" and f.node.s == "<lambda>":
-                self.err("lru_cache() of a lambda is not supported: Pystachy types the cache's keys with the parameters' annotations, which a lambda's cannot have")
-            if pts[j] == "":
-                self.err(f"{what} needs its parameters annotated: Pystachy types the cache's keys with them (parameter '{f.params[first + j]}')")
-            if key_problem(self.ctype("tuple", [pts[j]])) != "":
-                self.err(f"{what} is not supported: its parameter '{f.params[first + j]}' is {typestr(pts[j])}, and the cache's keys hold ints, bools, strs, str | None and tuples of those")
-        if f.ret == "":
-            self.err(f"{what} needs its return annotated: Pystachy types the cache's results with it")
-        positional = f.npos < 0 or f.npos > first
-        if len(pts) == 0:
-            key = "int"
-        elif len(pts) == 1 and (pts[0] == "int" or pts[0] == "str") and f.defaults[first].kind == "noann" and positional:
-            key = pts[0]
+    def bind(self, c: str, ts: list[str]) -> dict[str, str]:
+        # the types that c(args) binds the type variables of generic class c to, for arguments of
+        # types ts (its __init__'s, after self), as a type checker infers C[int] from C(1): each
+        # parameter whose annotation mentions them matches its argument's type (see match)
+        tvs = self.tparams[c]
+        tv: dict[str, str] = {}
+        init = [d for d in self.classes[c].node.kids[0].kids if d.kind == "def" and d.s == "__init__"][0]
+        ps = init.kids[0].kids
+        for i in range(1, min(len(ps), len(ts) + 1)):
+            a = ps[i].kids[0]
+            if not self.names_tv(a, tvs):
+                continue
+            t = ts[i - 1]
+            if ps[i].kind == "starparam":
+                why = self.match_items([a] if a.kind == "starred" else [a] * len(targs(t)), targs(t), tv, tvs)  # (*args: *Ts, or *args: T)
+            elif ps[i].kind == "dstarparam":
+                why = self.match_items([a] * len(kw_types(t)), kw_types(t), tv, tvs)
+            else:
+                why = self.match(a, t, tv, tvs)
+            if why != "":
+                self.err(f"{short(c)}() cannot bind its type variables from the argument for '{ps[i].s}', a {typestr(t)}: {why}")
+        for x in tvs:
+            if x not in tv:
+                self.err(f"{short(c)}() does not bind its type variable '{short(x)}': Pystachy binds a generic class's type variables from the arguments of the call that makes an object (C[int]() is not supported), and no argument's type gives it")
+        return tv
+
+    def match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
+        # "" if a value of type t fits annotation a, binding (in tv) the type variables of tvs that
+        # a mentions; else why not. A part of a that mentions none fits any type: the code that
+        # uses the value checks it, as for any other argument
+        if a.kind == "str":
+            a = self.parse_expr(a.s)
+        if not self.names_tv(a, tvs):
+            return ""
+        if "?" in t:
+            return "its type is not known yet (an empty list or dict: annotate it)"
+        if a.kind == "name" and a.s in self.tvtuples:
+            return f"TypeVarTuple '{short(a.s)}' is only supported unpacked (*{short(a.s)})"
+        if a.kind == "name" and t == "None":
+            return f"'{short(a.s)}' would be None, which Pystachy binds no type variable to (a list or dict of None values has no type)"
+        if a.kind == "name":
+            j = self.join(tv[a.s], t) if a.s in tv else t
+            if j == "":
+                return f"'{short(a.s)}' is {typestr(tv[a.s])} already, and {typestr(t)} here"
+            tv[a.s] = j
+            return ""
+        ms = self.union_members(a, []) if a.kind == "binop" and a.s == "|" else []
+        if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") and self.ann_base(a.kids[0]) == "optional":
+            ms = [a.kids[1], mk("None", "", a.line, [])]
+        if len(ms) == 2 and (ms[0].kind == "None" or ms[1].kind == "None"):
+            return "" if t == "None" else self.match(ms[0] if ms[1].kind == "None" else ms[1], unopt(t), tv, tvs)  # (T | None)
+        base = self.ann_base(a.kids[0]) if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") else ""
+        xs = (a.kids[1].kids if a.kids[1].kind == "tuple" else [a.kids[1]]) if a.kind == "index" else []
+        if base == "list" and is_list(t) and len(xs) == 1:
+            return self.match(xs[0], elem(t), tv, tvs)
+        if (base == "set" or base == "frozenset") and is_set(t) and len(xs) == 1:
+            return self.match(xs[0], selem(t), tv, tvs)
+        if base == "dict" and is_dict(t) and len(xs) == 2:
+            why = self.match(xs[0], targs(t)[0], tv, tvs)
+            return why if why != "" else self.match(xs[1], targs(t)[1], tv, tvs)
+        if base == "tuple" and is_tuple(t):
+            return self.match_items(xs, targs(t), tv, tvs)
+        if base == "callable" and len(xs) == 2 and xs[0].kind == "list":
+            sig = self.fn_sig(t)
+            if sig[0].startswith("!"):
+                return sig[0][1:]
+            why = self.match_items(xs[0].kids, sig[1:], tv, tvs)
+            return why if why != "" else self.match(xs[1], sig[0], tv, tvs)
+        return "it does not fit the parameter's annotation (or that annotation's type variables are not supported there: they are in T, list[T], dict[K, V], set[T], tuple[T, *Ts], T | None and Callable[[T, *Ts], R])"
+
+    def match_items(self, xs: list[Node], ts: list[str], tv: dict[str, str], tvs: list[str]) -> str:
+        # (see match) values of types ts for the items of tuple[...] or the parameters of
+        # Callable[[...], R], annotated xs: an unpacked TypeVarTuple (*Ts) takes those the others leave
+        k = -1
+        for i in range(len(xs)):
+            if xs[i].kind == "starred":
+                k = i
+        if (k < 0 and len(ts) != len(xs)) or len(ts) < len(xs) - 1:
+            return f"it has {len(ts)} {'item' if len(ts) == 1 else 'items'} where the annotation has {str(len(xs)) if k < 0 else 'at least ' + str(len(xs) - 1)}"
+        after = len(xs) - k - 1 if k >= 0 else 0
+        for i in range(len(xs)):
+            if i != k:
+                why = self.match(xs[i], ts[i] if k < 0 or i < k else ts[len(ts) - len(xs) + i], tv, tvs)
+                if why != "":
+                    return why
+        if k < 0:
+            return ""
+        mid = self.ctype("tuple", ts[k : len(ts) - after])
+        x = xs[k].kids[0]
+        if x.kind == "name" and x.s in self.tvtuples and x.s in tvs:
+            if x.s in tv and tv[x.s] != mid:
+                return f"'{short(x.s)}' is {typestr(tv[x.s])} already, and {typestr(mid)} here"
+            tv[x.s] = mid
+            return ""
+        return self.match(x, mid, tv, tvs)  # (*tuple[A, B])
+
+    def fn_sig(self, t: str) -> list[str]:
+        # the return type and the parameter types of a function value of type t, as Callable[[A, B],
+        # R] has them: a def's or lambda's positional parameters (each annotated) and return
+        # annotation, a Callable's; or ["!" and why not]
+        if is_callable(t):
+            return targs(t)
+        if t.startswith("fn[f:"):
+            f = self.funcs[t[5:-1]]
+        elif t.startswith("fn[c:"):
+            f = self.closures[int(t[5 : t.find(":", 5)])].f
         else:
-            key = self.ctype("tuple", ["int"] + pts)
-        q = self.cachecls[: self.cachecls.find("$") + 1]  # (the module's prefix, functools$)
-        s.tvars[q + "_Key"] = key
-        s.tvars[q + "_Result"] = f.ret
-        s.cachefn = ts[0]
-        self.line = line
-
-    def cache_key(self, args: list[Node]) -> Val:
-        # __pys_cache_key(self, *args, **kwds) in _lru_cache_wrapper.__call__ of lib/functools: the key
-        # of the call, of self's _Key (cache_types), the arguments checked as a call of the function
-        # checks them. A call passes every argument by position, its form 0 (a tuple key's first item)
-        w = self.expr(args[0], "")
-        if w.t not in self.classes or self.classes[w.t].cachefn == "":
-            self.err("__pys_cache_key() is lib/functools' (its _lru_cache_wrapper's)")
-        ci = self.classes[w.t]
-        f = self.cache_fn(ci.cachefn)
-        first = 1 if f.clo >= 0 else 0
-        call = args[1:]
-        self.arity(f, first, call)
-        what = f"a call of {short(f.name)}(), which lru_cache() wraps,"
-        for a in call:
-            if a.kind == "kw":
-                self.err(f"{what} passes a keyword argument ({a.s}=), which is not supported yet: pass its arguments by position")
-        if len(call) < len(f.params) - first:
-            self.err(f"{what} leaves out an argument that has a default value ('{f.params[first + len(call)]}'), which is not supported yet: pass every argument")
-        vals: list[Val] = []
-        for j in range(len(call)):
-            t = f.ptypes[first + j]
-            vals.append(self.pcoerce(self.expr(call[j], t), t, f, first + j))
-        key = ci.tvars[self.cachecls[: self.cachecls.find("$") + 1] + "_Key"]
-        if not is_tuple(key):
-            return vals[0] if len(vals) > 0 else Val("0", "int")
-        return self.tuple_([Val("0", "int")] + vals)
+            return [f"!a {typestr(t)} is no def, lambda or Callable, whose signature Callable[[...], R] matches"]
+        name = "the lambda" if f.node.s == "<lambda>" else f"{short(f.name)}()"
+        if f.vararg >= 0 or f.kwarg >= 0:
+            return [f"!{name} takes *args or **kwargs, which Callable[[...], R] does not match"]
+        out = [f.ret]
+        for j in range(1 if f.clo >= 0 else 0, len(f.params)):  # (a closure's env aside)
+            if j >= f.npos and f.defaults[j].kind == "noann":
+                return [f"!{name} takes the keyword-only parameter '{f.params[j]}', which Callable[[...], R] does not match"]
+            if j < f.npos and f.ptypes[j] == "":
+                return [f"!{name}'s parameter '{f.params[j]}' has no annotation, which the type variables it matches take their type from"]
+            if j < f.npos:
+                out.append(f.ptypes[j])
+        if f.ret == "":
+            return [f"!{name} has no return annotation, which the type variable it matches takes its type from"]
+        return out
 
     def instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
         # the function template f compiles to for arguments of types ts, compiled when first
@@ -18576,8 +18737,6 @@ class Gen:
         return Val("", "")
 
     def builtin(self, name: str, args: list[Node], want: str) -> Val:
-        if name == "__pys_cache_key":
-            return self.cache_key(args)
         if name == "__pys_exc_repr":
             return self.exc_brepr(self.expr(args[0], ""))  # (exc_helpers)
         if name == "__pys_repr_enter" or name == "__pys_repr_leave":
@@ -19990,9 +20149,7 @@ class Gen:
 
 # ---------------------------------------------------------------- driver
 def compile_program(path: str, src: str, dirs: list[str]) -> str:
-    g = Gen()
-    g.libdir = dirs[-1] if len(dirs) > 0 else ""
-    return g.program(Loader(dirs).program(path, src))
+    return Gen().program(Loader(dirs).program(path, src))
 
 
 def runtime_ir(path: str, cache: bool) -> str:

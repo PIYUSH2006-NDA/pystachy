@@ -1,4 +1,4 @@
-# error: inc() takes 1 positional argument but 2 were given
+# error: _lru_cache_wrapper.__call__() takes 2 positional arguments but 3 were given (its *args is a tuple[int])
 from functools import cache
 
 

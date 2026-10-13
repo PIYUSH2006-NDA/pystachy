@@ -1,4 +1,4 @@
-# error: a call of scale(), which lru_cache() wraps, passes a keyword argument (k=), which is not supported yet: pass its arguments by position
+# error: _lru_cache_wrapper.__call__() got an unexpected keyword argument 'k'
 from functools import lru_cache
 
 

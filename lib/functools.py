@@ -7,18 +7,18 @@ statistics, and the same order of lookups, calls and updates, so a function that
 clears its own cache sees what it sees under CPython.
 
 A Pystachy dict holds keys of one type and values of another, so each decorated function gets a
-cache of its own types: _lru_cache_wrapper is a class template (its __init__ takes the function
-without an annotation), and the compiler binds _Key and _Result in the specialization each function
-makes, from that function's signature: _Result is its return type, and _Key the type of the key
-__pys_cache_key() makes of a call (docs/language.md, *functools*).
+cache of its own types: _lru_cache_wrapper is a generic class, Generic[*_Ts, _R], whose __init__
+takes the function as a Callable[[*_Ts], _R]. Each object binds _Ts to the function's parameter
+types and _R to its return type (docs/language.md, *Typing rules*): its keys are tuple[*_Ts], the
+arguments of a call, which passes each one by position.
 """
 
-from typing import NamedTuple, TypeVar
+from typing import Callable, Generic, NamedTuple, TypeVar, TypeVarTuple
 
 __all__ = ["cache", "lru_cache"]
 
-_Key = TypeVar("_Key")  # the key of a call (bound by the compiler, see above)
-_Result = TypeVar("_Result")  # what the decorated function returns (bound by the compiler)
+_Ts = TypeVarTuple("_Ts")  # the decorated function's parameter types
+_R = TypeVar("_R")  # and its return type
 
 
 class CacheInfo(NamedTuple):
@@ -33,11 +33,11 @@ class CacheInfo(NamedTuple):
 _CacheInfo = CacheInfo
 
 
-class _lru_cache_wrapper:
+class _lru_cache_wrapper(Generic[*_Ts, _R]):
     """A function wrapped with a cache: maxsize < 0 caches every result (maxsize=None), 0 none, and
     maxsize > 0 the results of the most recently used calls."""
 
-    def __init__(self, user_function, maxsize: int, typed: bool) -> None:
+    def __init__(self, user_function: Callable[[*_Ts], _R], maxsize: int, typed: bool) -> None:
         self.__wrapped__ = user_function
         self.__name__: str = user_function.__name__
         self.__qualname__: str = user_function.__qualname__
@@ -46,13 +46,13 @@ class _lru_cache_wrapper:
         self._hits = 0
         self._misses = 0
         # maxsize < 0: the results, by key
-        self._cache: dict[_Key, _Result] = {}
+        self._cache: dict[tuple[*_Ts], _R] = {}
         # maxsize > 0: the links of a circular doubly linked list, from the root (0) to the least
         # recently used link and on to the most recently used one, as CPython's lru_list_elem: link i
         # holds _keys[i - 1] and _results[i - 1], _links finds it by key
-        self._links: dict[_Key, int] = {}
-        self._keys: list[_Key] = []
-        self._results: list[_Result] = []
+        self._links: dict[tuple[*_Ts], int] = {}
+        self._keys: list[tuple[*_Ts]] = []
+        self._results: list[_R] = []
         self._prev: list[int] = [0]
         self._next: list[int] = [0]
 
@@ -71,19 +71,19 @@ class _lru_cache_wrapper:
         self._prev[link] = last
         self._next[link] = 0
 
-    def __call__(self, *args, **kwds) -> _Result:
+    def __call__(self, *args: *_Ts) -> _R:
         if self._maxsize == 0:
             # uncached_lru_cache_wrapper
             self._misses += 1
-            return self.__wrapped__(*args, **kwds)
-        key = __pys_cache_key(self, *args, **kwds)
+            return self.__wrapped__(*args)
+        key = args  # (CPython's _make_key, of positional arguments only)
         if self._maxsize < 0:
             # infinite_lru_cache_wrapper
             if key in self._cache:
                 self._hits += 1
                 return self._cache[key]
             self._misses += 1
-            result = self.__wrapped__(*args, **kwds)
+            result = self.__wrapped__(*args)
             self._cache[key] = result
             return result
         # bounded_lru_cache_wrapper
@@ -95,7 +95,7 @@ class _lru_cache_wrapper:
             self._hits += 1
             return self._results[link - 1]
         self._misses += 1
-        result = self.__wrapped__(*args, **kwds)
+        result = self.__wrapped__(*args)
         if key in self._links:
             # the call added this key (it called the function again): only the result is returned
             return result

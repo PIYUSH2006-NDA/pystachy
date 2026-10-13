@@ -1,4 +1,4 @@
-# error: lru_cache() of a lambda is not supported: Pystachy types the cache's keys with the parameters' annotations, which a lambda's cannot have
+# error: _lru_cache_wrapper() cannot bind its type variables from the argument for 'user_function', a <function <lambda> (tests/errors/lib_functools_lambda.py:4)>: the lambda's parameter 'x' has no annotation
 from functools import cache
 
 sq = cache(lambda x: x * x)

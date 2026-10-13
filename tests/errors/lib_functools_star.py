@@ -1,4 +1,4 @@
-# error: lru_cache() of total() is not supported: it takes *args or **kwargs, and a cache's keys have one type
+# error: total() takes *args or **kwargs, which Callable[[...], R] does not match
 from functools import cache
 
 

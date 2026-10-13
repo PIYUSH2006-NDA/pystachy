@@ -92,23 +92,25 @@ written after that C code, with `lru_cache`'s docstring:
   and a full cache gives the least recently used entry to the new result. A result is the object
   the function returned, also a falsy one or `None`.
 - A dict of Pystachy holds keys of one type and values of another, so each decorated function
-  has a cache of its own types: `_lru_cache_wrapper` is a class template, and the compiler binds
-  its TypeVars `_Key` and `_Result` in the specialization each function makes, from the
-  function's annotations (`Gen.cache_types`), and makes the key of each call
-  (`__pys_cache_key`). For one `int` or `str` parameter without a default the key is the
-  argument, as CPython's is; otherwise it is a tuple of the arguments, after an int that names
-  the form of the call.
+  has a cache of its own types: `_lru_cache_wrapper` is a generic class, `Generic[*_Ts, _R]`,
+  whose `__init__` takes the function as a `Callable[[*_Ts], _R]`, so each wrapper binds `_Ts` to
+  the function's parameter types and `_R` to its return type ([`docs/language.md`](../docs/language.md),
+  *Typing rules*). The key of a call is the tuple of its arguments, a `tuple[*_Ts]`, which
+  `__call__(self, *args: *_Ts)` takes by position (CPython's key for one `int` or `str` argument
+  is the argument itself).
 
 What it does not have, each a compile-time error (`tests/errors/lib_functools_*.py`):
 
-- a function whose parameters or return are not annotated, that takes `*args` or `**kwargs`, or
-  whose parameter is of a type Pystachy's dicts cannot key (a `float`, an object; CPython hashes
-  those): the parameters are `int`, `bool`, `str`, `str | None` and tuples of those;
+- a function whose parameters or return are not annotated, that returns `None` (`-> None`: its
+  results would be a `list[None]`), that takes `*args` or `**kwargs`, or whose parameter is of a
+  type Pystachy's dicts cannot key (a `float`, an object; CPython hashes those): the parameters are
+  `int`, `bool`, `str`, `str | None` and tuples of those;
 - `lru_cache()` of a builtin, a method or a lambda (it caches a def's results, of the program or
   of a function), and of a method in a class body, where Pystachy applies no decorator;
 - a call through the cache that passes a keyword argument or leaves out one that has a default
-  value: CPython caches each form of a call apart (`f(1)`, `f(1, 2)` and `f(1, b=2)` are three
-  entries), and this version passes every argument by position;
+  value: `__call__(self, *args: *_Ts)` takes each of the function's positional parameters, by
+  position (CPython caches each form of a call apart, `f(1)`, `f(1, 2)` and `f(1, b=2)` being three
+  entries);
 - `cache_parameters()`, whose dict mixes `int | None` and `bool` values.
 
 `typed=True` is accepted and keeps no calls apart: a parameter has one type, so the calls it
@@ -116,10 +118,10 @@ would keep apart (`f(1)` and `f(1.0)`) cannot both compile. The cache needs no l
 Pystachy program has one thread. `tests/lib_functools.py` and `tests/lib_functools_mod.py`
 compare it with CPython's C wrapper.
 
-In an AOT executable, a cache hit costs 10 ns (unbounded) to 20 ns (bounded) for an `int`
-argument, 15 ns for a `str` one and 49 ns for a `(str, int)` pair, whose key tuple is made and
-hashed for each call; CPython's C wrapper takes 61 to 64, 62 and 83 ns, a loop's step included
-(medians of 3 runs over 1,000 warm keys). A miss that evicts takes 40 ns, against 102 ns.
+In an AOT executable, a cache hit costs 24 ns (unbounded) to 31 ns (bounded) for an `int`
+argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tuple is made and
+hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
+(medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
 
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop

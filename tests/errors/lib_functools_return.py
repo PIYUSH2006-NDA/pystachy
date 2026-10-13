@@ -1,4 +1,4 @@
-# error: lru_cache() of double() needs its return annotated: Pystachy types the cache's results with it
+# error: double() has no return annotation, which the type variable it matches takes its type from
 from functools import cache
 
 

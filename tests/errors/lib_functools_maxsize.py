@@ -1,4 +1,4 @@
-# error: TypeError: Expected first argument to be an integer, a callable, or None
+# error: _lru_cache_wrapper() cannot bind its type variables from the argument for 'user_function', a str: a str is no def, lambda or Callable
 from functools import lru_cache
 
 

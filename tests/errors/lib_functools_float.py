@@ -1,4 +1,4 @@
-# error: lru_cache() of half() is not supported: its parameter 'x' is float, and the cache's keys hold ints, bools, strs, str | None and tuples of those
+# error: dict keys must be int or str, or tuples of int, bool, str and str | None items, not tuple[float] (specializing functools._lru_cache_wrapper(<function half
 from functools import lru_cache
 
 

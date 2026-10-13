@@ -1,4 +1,4 @@
-# error: a call of scale(), which lru_cache() wraps, leaves out an argument that has a default value ('k'), which is not supported yet: pass every argument
+# error: _lru_cache_wrapper.__call__() takes 3 positional arguments but 2 were given (its *args is a tuple[int,int])
 from functools import lru_cache
 
 

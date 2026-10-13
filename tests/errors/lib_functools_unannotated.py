@@ -1,4 +1,4 @@
-# error: lru_cache() of double() needs its parameters annotated: Pystachy types the cache's keys with them (parameter 'x')
+# error: double()'s parameter 'x' has no annotation, which the type variables it matches take their type from
 from functools import lru_cache
 
 

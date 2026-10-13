@@ -1,4 +1,4 @@
-# error: lru_cache() of unbox() is not supported: its parameter 'b' is Box
+# error: dict keys must be int or str, or tuples of int, bool, str and str | None items, not tuple[Box] (specializing functools._lru_cache_wrapper(<function unbox
 from functools import cache
 
 
