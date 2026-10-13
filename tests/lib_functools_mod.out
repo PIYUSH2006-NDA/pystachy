@@ -1,0 +1,9 @@
+mods: init mods
+mods.shapes: init mods.shapes
+1 file 2 files 1 file 3 dirs 2 files
+CacheInfo(hits=1, misses=4, maxsize=2, currsize=2) CacheInfo(hits=1, misses=4, maxsize=2, currsize=2)
+5 7 CacheInfo(hits=1, misses=8, maxsize=None, currsize=8)
+['label 1 file', 'label 2 file', 'label 3 dir', 'label 2 file', 'depth 5', 'depth 4', 'depth 3', 'depth 2', 'depth 1', 'depth 0', 'depth 7', 'depth 6']
+6 6 6 CacheInfo(hits=1, misses=2, maxsize=4, currsize=2) ['area 2 3', 'area 3 2']
+CacheInfo(hits=0, misses=0, maxsize=None, currsize=0) 1 CacheInfo(hits=0, misses=2, maxsize=None, currsize=2)
+[exit 0]
