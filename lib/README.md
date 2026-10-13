@@ -64,6 +64,35 @@ against CPython's 124 ms), and [`examples/suggest`](../examples/suggest/README.m
 suggestions from a vocabulary, where each `get_close_matches()` of 20,000 words takes 3.9 ms, against
 CPython's 23 ms.
 
+## `getopt`, a port of CPython's
+
+`getopt.py` is CPython 3.13.16's `Lib/getopt.py` (SHA-256
+`0ce875700c8798193b8e2748f7a27fc542cc4d525a1e6fc403767450ec92be99`) edited in 15 places, each
+marked `# Pystachy port:` but for the six messages, which the comment that replaces the `gettext`
+import describes. It has the whole module, as CPython's code: `getopt()` and `gnu_getopt()` (also
+with a leading `+` in the short options, or `POSIXLY_CORRECT` set), with unique prefixes of long
+options, `GetoptError` (with `msg`, `opt` and the old name `error`) and its messages.
+
+- CPython's messages go through `gettext`'s `_()`, but `gettext` reads `sys.base_prefix`, which
+  Pystachy does not have, and `%` formatting takes only a literal format string. So each message
+  is `%` formatted as it is, untranslated (CPython ships no translation of them either).
+- `GetoptError.__init__`'s parameters and `__str__`'s return are annotated `str`: an exception
+  class is no class template, and a method without a return annotation returns `None`.
+- `longopts` is annotated `list[str]` in `getopt()` and `gnu_getopt()`, since its default `[]`
+  has no type otherwise. CPython also takes one str (`'alpha='`); here that is a compile-time
+  error (`tests/errors/lib_getopt_longopts_str.py`).
+- `opts` is annotated `list[tuple[str, str]]`: `do_longs()` and `do_shorts()`, which fill it, are
+  templates, and an empty list is not typed through them.
+- `do_longs()` declares `optarg: str | None` first: it is `None` or a str, set in the two arms of
+  a `try`.
+- `gnu_getopt()` reads `POSIXLY_CORRECT` with `os.getenv()` where CPython calls
+  `os.environ.get()`: Pystachy has no `os.environ`.
+
+`tests/lib_getopt.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_getopt.py`. Run by CPython, the edited module passes that file's 8 tests and its
+doctest (not the test of the translation catalogs, which needs CPython's `Tools/`).
+[`examples/cut`](../examples/cut/README.md), a `cut` with GNU's options, is an application of it.
+
 ## `re`, a port of CPython's
 
 `re/` is no copy: CPython's `re` is a pure-Python parser and compiler (`Lib/re/_parser.py` and

@@ -572,7 +572,9 @@ str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cp
 `difflib` is CPython's, edited where Pystachy needs types and has no `namedtuple()`, for
 `SequenceMatcher` over strs and lists of strs and `get_close_matches()`; its generators
 (`unified_diff()`, `ndiff()`) are not compiled yet
-([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)).
+([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)). Its `getopt` is all of CPython's,
+edited where Pystachy has no `gettext` and no `os.environ` and where empty lists need a type, with
+`longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)).
 
 ## Expressions
 
