@@ -31,8 +31,7 @@ variants, as CPython's code, and `nlargest()` and `nsmallest()`, with and withou
 or of another iterable the subset passes (a tuple, a str, a dict, a set, `d.items()`, an object
 with `__iter__`, with or without `__len__`), as CPython's algorithm: the same heap operations, so
 the same comparisons and calls of `key` in the same order, and the same ties, as the
-`(elem, order)` and `(key, order, elem)` tuples keep the input's order among equal items. It has
-no `merge()` (a generator).
+`(elem, order)` and `(key, order, elem)` tuples keep the input's order among equal items.
 
 The edits, the same in both functions:
 
@@ -55,12 +54,15 @@ The edits, the same in both functions:
 
 Where it differs from CPython:
 
-- An open file is not an argument: `hasattr()` of a file is not supported (a compile-time error).
-  Its `readlines()` is.
 - The items of an iterable other than a list are taken into a list first, so a `key` or a
   comparison that changes the dict or set being read does not raise CPython's `RuntimeError`.
 - For an n above 2,500 that is less than the length, `heapify()` of the decorated items compares
   in another order than CPython's `_heapq` does (see the end of this page), with the same result.
+
+`merge()` is an error where a program calls it: it is a generator. So is an open file as the
+iterable of `nlargest()` or `nsmallest()`, as `hasattr()` of a file is not supported (its
+`readlines()` is an argument), and a generator expression, which the subset has only as the
+argument of `list()`, `sorted()`, `sum()` and the like (`list()` of it is an argument).
 
 `tests/lib_heapq_topk.py` compares them with CPython's on ints, floats, strs and tuples, n of -1,
 0, 1, 2, the length and around it, empty input, `key=` (a lambda, a function, a builtin,
