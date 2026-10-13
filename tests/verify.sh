@@ -311,12 +311,21 @@ fi
 if want gc-stress; then
 L=$V/gc-stress.log; s=$(now); r=fail
 {
+  # Run the suite before waiting, so the isolated CI group overlaps it with self-compilation.
+  # The latter writes IR only; it neither reads nor rebuilds the suite's runtime cache.
+  suite_ok=0
+  PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1 && suite_ok=1
+  echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
   # (every 1000, not 100: the compiler keeps each function's IR until the program is built, and at
   # every 100 its collections, which mark all of it, take minutes; started after the bootstrap)
-  [ -n "$gcpid" ] && wait $gcpid && gcpid= && cat "$V/gc-self.log" &&
-    cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 1000 allocations emits the stage1 IR" && r=pass
-  PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1
-  echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
+  self_ok=0
+  if [ -n "$gcpid" ]; then
+    wait "$gcpid" && self_ok=1
+    gcpid=  # reaped even on failure: the signal trap must never keep a stale PID
+  fi
+  [ "$self_ok" = 1 ] && cat "$V/gc-self.log" &&
+    cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 1000 allocations emits the stage1 IR" &&
+    [ "$suite_ok" = 1 ] && r=pass
 } > "$L" 2>&1
 x=$(tests $ALL "$V/gc-stress-tests.log" 2>> "$L") || r=fail
 step gc-stress $r "$s" "$L" ", \"compiler_interval\": 1000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
