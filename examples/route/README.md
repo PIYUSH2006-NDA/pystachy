@@ -109,10 +109,12 @@ Building the executable takes about 3 s, most of it `lib/re` (3,500 lines of the
 
 `tests/example_route.py` (`tests/example_route.path` puts this directory on the module path):
 - routes a generated trace in-process with `route()` and with `route_fnmatch()`;
-- routes a trace whose names are all new, which pushes `route()`'s cache past its 4,096 names;
+- routes names that are all new, each a miss;
 - runs `run()` over a trace file in each mode, a last line without a tab included.
 
-It compares the counts and both caches' statistics with CPython's.
+It compares the counts and both caches' statistics with CPython's. Its traces are small, since
+`make verify` also runs it with a collection at every allocation; `bench.py` routes the million
+events, and the trace of new names that fills `route()`'s cache past its 4,096 names.
 
 `bench.py` runs the table above: `python3 -I bench.py ../../pystachy 5`, from anywhere. It
 writes its traces and executable to `build/route/`.
