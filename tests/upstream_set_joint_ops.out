@@ -1,0 +1,128 @@
+-- set
+uniquification ['a', 'b', 'i', 'l', 'm', 's']
+PassThru from the iterable
+len 6
+contains 6
+PassThru from union
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's'] ['1', '2']
+or ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's']
+PassThru from intersection
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection ['a', 'm', 's'] ['a', 'b', 'c']
+isdisjoint 285
+and ['a', 'm', 's']
+PassThru from difference
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference ['b', 'i', 'l']
+sub ['b', 'i', 'l']
+PassThru from symmetric_difference
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+xor ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+equality True True
+sub and super True False
+-- frozenset
+uniquification ['a', 'b', 'i', 'l', 'm', 's']
+PassThru from the iterable
+len 6
+contains 6
+PassThru from union
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union of ['a', 'b', 'c', 'e', 'f', 'g']
+union ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's'] ['1', '2']
+or ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's']
+PassThru from intersection
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection of ['b']
+intersection ['a', 'm', 's'] ['a', 'b', 'c']
+isdisjoint 285
+and ['a', 'm', 's']
+PassThru from difference
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference of ['c']
+difference ['b', 'i', 'l']
+sub ['b', 'i', 'l']
+PassThru from symmetric_difference
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+xor ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+equality True True
+sub and super True False
+-- TestSet
+constructor identity False
+literal True
+evaluation order [1, 2, 3] 3
+clear 0
+copy ['a', 'b', 'i', 'l', 'm', 's']
+add ['Q', 'a', 'b', 'i', 'l', 'm', 's']
+KeyError 'Q'
+remove ['b', 'i', 'l', 'm', 's']
+KeyError unpacking 'Q'
+discard ['b', 'i', 'l', 'm', 's']
+KeyError 'pop from an empty set'
+PassThru from update
+update of ['a', 'b', 'c', 'd', 'h', 'i']
+update of ['a', 'b', 'c', 'd', 'h', 'i']
+update of ['a', 'b', 'c', 'd', 'h', 'i']
+update of ['a', 'b', 'c', 'd', 'h', 'i']
+update of ['a', 'b', 'c', 'd', 'h', 'i']
+update ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's']
+ior ['a', 'b', 'c', 'd', 'g', 'i', 'l', 'm', 'r', 's']
+PassThru from intersection_update
+intersection_update of []
+intersection_update of []
+intersection_update of []
+intersection_update of []
+intersection_update of []
+intersection_update ['a', 'm', 's']
+iand ['a', 'm', 's']
+PassThru from difference_update
+difference_update of ['e', 'f', 'g', 'h', 'i']
+difference_update of ['e', 'f', 'g', 'h', 'i']
+difference_update of ['e', 'f', 'g', 'h', 'i']
+difference_update of ['e', 'f', 'g', 'h', 'i']
+difference_update of ['e', 'f', 'g', 'h', 'i']
+difference_update ['b', 'i', 'l']
+isub ['b', 'i', 'l']
+PassThru from symmetric_difference_update
+symmetric_difference_update of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference_update of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference_update of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference_update of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference_update of ['a', 'b', 'c', 'e', 'f']
+symmetric_difference_update ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+ixor ['b', 'c', 'd', 'g', 'i', 'l', 'r']
+inplace on self 0
+-- TestFrozenSet
+frozenset identity True True
+[exit 0]

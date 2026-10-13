@@ -1,0 +1,16 @@
+I: f() 7
+I: x 7
+II: f() 2
+II: x 7
+III: f() 2
+III: x 2
+IV: f() 2
+IV: x 2
+inc() 1
+inc() 2
+dec() 1
+dec() 0
+result2 2
+result9 9
+h() 3
+[exit 0]

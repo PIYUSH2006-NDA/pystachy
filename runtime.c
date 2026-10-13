@@ -2069,7 +2069,9 @@ Str *pys_fmt_float(double m, I type, I prec, I alt) {   /* |x| = m for type (0: 
    open(p).read(), right after that use, and the files still open at exit are closed in the
    order they were opened; when such an implicit close fails, the error is reported as
    CPython's finalizer reports it and the program goes on. sys.stdin, sys.stdout and
-   sys.stderr are files too. */
+   sys.stderr are files too. A UTF-8 file's text is its bytes, unchecked; a Latin-1 file's
+   bytes are characters U+0000..U+00FF, which a str holds as UTF-8, as it holds every other
+   (decode() makes the str of what a read got, latin1() the bytes of what a write gives). */
 typedef struct {
   FILE *f; Str *name, *mode, *enc;   /* enc: encoding= as given, NULL when not given */
   I rd, wr, closed, nl, last, std;   /* nl: newline None 0, "" 1, "\n" 2, "\r" 3, "\r\n" 4; last: 1 wrote, 2 read */
@@ -2174,9 +2176,10 @@ static const char *defenc(void) {      /* the encoding CPython names for a file 
                                           its UTF-8 mode, which the C and POSIX locales turn on, else the locale's */
   static char e[40];
   if (!*e) {
+    char old[64]; snprintf(old, sizeof old, "%s", setlocale(LC_CTYPE, 0));   /* (a host's own is put back) */
     const char *l = setlocale(LC_CTYPE, "");
     snprintf(e, sizeof e, "%s", l && strcmp(l, "C") && strcmp(l, "POSIX") ? nl_langinfo(CODESET) : "utf-8");
-    setlocale(LC_CTYPE, "C");
+    setlocale(LC_CTYPE, old);
   }
   return e;
 }
@@ -2219,6 +2222,11 @@ static _Noreturn void kbint_exit(void) {   /* a Ctrl-C noted during a stdio call
   out_flush(); fputs("KeyboardInterrupt\n", stderr);
   kbint = 1; pys_finish(); exit(130);
 }
+void pys_files_exit(void) {            /* the open files closed in the order they were opened (a failure is reported) */
+  int e;
+  for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
+  nfiles = 0;
+}
 void pys_finish(void) {                /* at exit, what CPython's shows of its end: stdout flushed after the code (see
                                           out_flush), the collector's report, stdout flushed in finalization (a
                                           failure is reported, status 120), the open files closed in the order they
@@ -2233,8 +2241,7 @@ void pys_finish(void) {                /* at exit, what CPython's shows of its e
     fprintf(stderr, "Exception ignored on flushing sys.stdout:\n%s: [Errno %d] %s\n", errcls(e), e, strerror(e));
     bad = 1;
   }
-  for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
-  nfiles = 0;
+  pys_files_exit();
   if (kbint) die_sigint();
   if (bad) { fflush(NULL); _exit(120); }
 }
@@ -2258,8 +2265,15 @@ static void files_sweep(void) {        /* after marking: close the open files no
 }
 static _Noreturn void oserr(const char *path);
 static _Noreturn void closed_err(void) { pys_fail("ValueError: I/O operation on closed file."); }
+/* CPython in the process (pyembed.c: an extension module's host): std_hook
+   sees each write to sys.stdout or sys.stderr (n < 0: a flush) first, and takes it (1) when it goes
+   through Python's sys.stdout or sys.stderr; in_hook reads sys.stdin through Python's (kind 0 input(),
+   1 readline(), 2 read(n)) */
+static int (*std_hook)(const char *, I, I);
+static Str *(*in_hook)(I, Str *, I);
 static void put1(File *f, const char *s, I n) {   /* write(): through CPython's layers, or C stdio's (stderr, a terminal) */
   if (f->closed) closed_err();
+  if (std_hook && f->std && f->wr && std_hook(s, n, f == &std_err ? 2 : 1)) return;
   int e = f->emu ? wput(f, s, n) : (f == &std_err ? ewrite(s, n) : (void)fwrite(s, 1, n, f->f), ferror(f->f) ? osflush(f, 0) : 0);
   if (e) ioerr(e);
 }
@@ -2292,6 +2306,24 @@ __attribute__((minsize)) void pys_init(int argc, char **argv, char *sb, I **root
     sigint_on = !sigaction(SIGINT, &sa, 0);
   }
 }
+/* pystachy ext: CPython hosts the program (pyext.c), and owns main, the signals and sys.stdout.
+   pys_init_lib is pys_init without argv, signal handlers or stdout's emulation (writes go to
+   std_hook); every call from Python is bracketed by pys_enter(its frame)/pys_leave, and the
+   outermost one's frame bounds the stack scan, as @main's does. One thread only (pyext.c). */
+static I lib_depth;
+void pys_set_hooks(int (*s)(const char *, I, I), Str *(*i)(I, Str *, I)) { std_hook = s; in_hook = i; }
+void pys_enter(char *sb) { if (!lib_depth++) gc_bottom = sb + 2 * sizeof(void *); }
+I pys_leave(void) { return --lib_depth; }
+void pys_init_lib(I **roots, I nroots) {
+  pys_c_numeric();                     /* (the host may call setlocale) */
+  if (!pmap) {                         /* (else an import that failed is tried again) */
+    gc_init(gc_bottom - 2 * sizeof(void *), roots, nroots);
+    std_in.f = stdin; std_in.rd = 1; std_in.nl = 2; std_in.std = 1;
+    std_out.f = stdout; std_out.wr = 1; std_out.std = 1;
+    std_err.f = stderr; std_err.wr = 1; std_err.std = 1;
+  }
+  args = pys_list_new(0);              /* sys.argv: the host's (pyext.c's pyx_argv appends it) */
+}
 List *pys_argv(void) { return args; }
 File *pys_std(I i) { return i == 0 ? &std_in : i == 1 ? &std_out : &std_err; }
 void pys_write(Str *s, I fd) { io_in(); put1(fd == 2 ? &std_err : &std_out, s->s, s->len); io_out(); }
@@ -2300,6 +2332,7 @@ void pys_flush(void) { pys_file_flush(&std_out); }
 Str *pys_input(Str *prompt) {          /* CPython: the prompt, if given, is written to sys.stdout, which is then
                                           flushed (a failure is ignored); then a line from sys.stdin */
   char *line = 0; size_t cap = 0;
+  if (in_hook) return in_hook(0, prompt, 0);   /* (Python's input(), with its sys.stdin and sys.stdout) */
   io_in();
   if (prompt) put1(&std_out, prompt->s, prompt->len);
   if (!std_out.closed && !std_out.kept) flush1(&std_out);
@@ -2378,9 +2411,12 @@ File *pys_open(Str *path, Str *mode, Str *enc, Str *nl, I buffering) {   /* CPyt
   io_out();
   return o;
 }
-static void use(File *f, int rd) {     /* check a read (rd) or write, and reposition between them */
+static void usable(File *f, int rd) {  /* f is open, for reading (rd) or for writing */
   if (f->closed) closed_err();
   if (rd ? !f->rd : !f->wr) pys_fail(rd ? "io.UnsupportedOperation: not readable" : "io.UnsupportedOperation: not writable");
+}
+static void use(File *f, int rd) {     /* check a read (rd) or write, and reposition between them */
+  usable(f, rd);
   if (rd && feof(f->f)) clearerr(f->f);   /* CPython reads again after the end: the file may have grown */
   if (f->std || f->last == (rd ? 2 : 1)) return;
   if (rd) {                            /* after writing: what was written reaches the file, and reads start there */
@@ -2402,6 +2438,17 @@ static int getnl(File *f, int c) {     /* newline=None reads "\r\n" and "\r" as 
   if (c == '\r' && !f->nl) { int d = get(f); if (d != '\n' && d != EOF) unget(f, d); c = '\n'; }
   return c;
 }
+static Str *decode(File *f, Buf *b) {  /* the str of the bytes a read got: in a Latin-1 file each is a character,
+                                          which from 0x80 on is two bytes of UTF-8 in the str */
+  I h = 0;
+  if (f->lat) for (I i = 0; i < b->n; i++) h += (unsigned char)b->p[i] >> 7;
+  if (!h) return done(b);
+  Str *s = pys_alloc_atomic(sizeof(Str) + b->n + h + 1);
+  char *w = s->s;
+  s->len = b->n + h;
+  for (I i = 0; i < b->n; i++) w += u8enc(w, (unsigned char)b->p[i]);
+  return s;
+}
 static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (in a Latin-1 file, n bytes) */
   use(f, 1); Buf b = {0};
   if (n < 0) {
@@ -2410,7 +2457,7 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     I j = 0;
     if (!f->nl) for (I i = 0; i < b.n; i++) { char c = b.p[i]; if (c == '\r') { c = '\n'; i += i + 1 < b.n && b.p[i + 1] == '\n'; } b.p[j++] = c; }
     if (!f->nl) b.n = j;
-    return done(&b);
+    return decode(f, &b);
   }
   for (I k = 0;;) {
     int c = get(f);
@@ -2418,11 +2465,15 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     if ((f->lat || (c & 0xC0) != 0x80) && k++ == n) { unget(f, c); break; }   /* the next character starts */
     char ch = getnl(f, c); put(&b, &ch, 1);
   }
-  return done(&b);
+  return decode(f, &b);
 }
-Str *pys_file_read(File *f, I n) { io_in(); Str *s = read1(f, n); io_out(); return s; }
+Str *pys_file_read(File *f, I n) {
+  if (in_hook && f == &std_in && !f->closed) return in_hook(2, 0, n < 0 ? -1 : n);
+  io_in(); Str *s = read1(f, n); io_out(); return s;
+}
 Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n" after translation; "" any of
                                           "\n" "\r" "\r\n"; otherwise exactly that string */
+  if (in_hook && f == &std_in && !f->closed) return in_hook(1, 0, 0);
   /* the bytes gather in t, and go to b only when t is full: a put() per byte took most of a
      line's time. A line that fits in t becomes its str without b */
   io_in(); use(f, 1); Buf b = {0}; int c; char t[256]; I k = 0;
@@ -2439,18 +2490,55 @@ Str *pys_file_readline(File *f) {      /* a line ends as newline= says: None "\n
     }
   }
   io_out();
-  if (!b.n) return pys_str(t, k);
-  put(&b, t, k);
-  return done(&b);
+  if (b.n) put(&b, t, k);
+  else b = (Buf){t, k, k};             /* the line fit in t: decode() reads it from there */
+  return decode(f, &b);
 }
 List *pys_file_readlines(File *f) {
   List *l = pys_list_new(0);
   for (Str *s; (s = pys_file_readline(f))->len;) pys_list_append(l, (I)s);
   return l;
 }
-I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as that */
-  io_in(); use(f, 0);
-  const char *p = s->s, *q; I n = s->len;
+static _Noreturn void unencodable(const char *p, I n, I c, I start, I end) {   /* CPython's UnicodeEncodeError of
+                                                    characters [start, end) of the text p[0, n), the first one c */
+  char m[160]; int h = snprintf(m, sizeof m, "UnicodeEncodeError: ");
+  if (end > start + 1)
+    snprintf(m + h, sizeof m - h, "'latin-1' codec can't encode characters in position %lld-%lld: ordinal not in range(256)",
+             (long long)start, (long long)end - 1);
+  else
+    snprintf(m + h, sizeof m - h, "'latin-1' codec can't encode character '\\%c%0*llx' in position %lld: ordinal not in range(256)",
+             c > 0xFFFF ? 'U' : 'u', c > 0xFFFF ? 8 : 4, (unsigned long long)c, (long long)start);
+  if (io_intr) kbint_exit();
+  if (xthrow) {                        /* (pys_fail's, with the args that repr(e) shows: encoding, text, start, end, reason) */
+    Buf b = {0}; char t[64];
+    put(&b, "'latin-1', ", 11); repr_str(&b, pys_str(p, n));
+    put(&b, t, snprintf(t, sizeof t, ", %lld, %lld, 'ordinal not in range(256)'", (long long)start, (long long)end));
+    xthrow(exc_new(pys_str(m, h - 2), cstr(m + h), done(&b)));
+  }
+  pys_fail(m);
+}
+static I latin1(char *o, const char *p, I n) {   /* the n bytes of a write's text to a Latin-1 file as the file's
+                                                    bytes, into o: one for each character u8char finds (a byte
+                                                    that is not UTF-8, as chr() makes, is one), whose count it
+                                                    returns. As CPython's codec, the first run of characters above
+                                                    U+00FF raises UnicodeEncodeError, before any of them is written */
+  I m = 0, k, c;
+  for (I i = 0; i < n; i += k, m++) {
+    k = u8char(p + i, n - i, &c);
+    if (c > 0xFF) {
+      I c0 = c, end = m + 1;
+      for (I j = i + k; j < n && (k = u8char(p + j, n - j, &c), c > 0xFF); j += k) end++;
+      unencodable(p, n, c0, m, end);
+    }
+    o[m] = (char)c;
+  }
+  return m;
+}
+I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as that. A Latin-1 file's text is
+                                         encoded first, as CPython's (an error leaves the file as it was), and the
+                                         result counts its characters (bytes in a UTF-8 file) */
+  io_in(); usable(f, 0);
+  const char *p = s->s, *q; I n = s->len, r = n;
   if (f->nl >= 3 && memchr(p, '\n', n)) {
     Buf b = {0};
     for (I i = 0; i < n; i = q - p + 1) {
@@ -2460,9 +2548,14 @@ I pys_file_write(File *f, Str *s) {   /* newline="\r" or "\r\n" writes "\n" as t
     }
     p = b.p; n = b.n;
   }
-  put1(f, p, n);
+  if (f->lat) {                        /* (CPython's position of an error counts the "\r"s added, its result not) */
+    char *o = pys_alloc_atomic(n + 1);
+    I m = latin1(o, p, n);
+    r = m - (n - s->len); p = o; n = m;
+  }
+  use(f, 0); put1(f, p, n);
   io_out();
-  return s->len;
+  return r;
 }
 void pys_file_writelines(File *f, List *l) {
   for (I i = 0; i < l->len; i++) {
@@ -2472,6 +2565,7 @@ void pys_file_writelines(File *f, List *l) {
 }
 void pys_file_flush(File *f) {
   if (f->closed) closed_err();
+  if (std_hook && f->std && f->wr && std_hook(0, -1, f == &std_err ? 2 : 1)) return;
   io_in(); int e = flush1(f); io_out();
   if (e) ioerr(e);
 }
