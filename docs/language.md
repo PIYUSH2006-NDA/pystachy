@@ -533,7 +533,9 @@ CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md))
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
-deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists.
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `getopt` is all of
+CPython's, edited where Pystachy has no `gettext` and no `os.environ` and where empty lists need a
+type, with `longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)).
 
 ## Expressions
 
