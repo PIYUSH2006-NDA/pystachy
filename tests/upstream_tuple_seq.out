@@ -20,6 +20,14 @@ a[-1] 11
 2 in u True
 -1 not in u True
 3 not in u True
+ALWAYS_EQ in () False
+ALWAYS_EQ in (1,) True
+1 in (ALWAYS_EQ,) True
+NEVER_EQ in () False
+ALWAYS_EQ in (NEVER_EQ,) False
+NEVER_EQ in (ALWAYS_EQ,) True
+1 in checkfirst True
+1 in checklast: DoNotTestEq
 len(tuple()) 0
 len(tuple([])) 0
 len(tuple([0])) 1
