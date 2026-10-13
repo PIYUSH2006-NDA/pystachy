@@ -22,7 +22,7 @@ flowchart TD
     rtpy["runtime.py: str methods, format specs, math, dict hashing, in the subset"] -->|pystachy rt| rtbc
     lower --> ir["LLVM IR"]
     ir --> aot["pystachy build: llvm-link with the runtime bitcode, clang -O2 on the whole module"]
-    ir --> jit["pystachy run: opt (globaldce, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
+    ir --> jit["pystachy run: opt (globaldce, inline up to 20,000 lines, mem2reg, instcombine, simplifycfg), then lli ORC JIT"]
     rtbc --> aot
     rtbc --> jit
     aot --> exe["native executable"]
@@ -57,6 +57,7 @@ flowchart TD
 | `PYSTACHY_IRCHECK=1` | the compiler checks the typed IR it built before lowering it, and again after each pass that changed it (`tests/run.sh` sets it unless it is set otherwise) |
 | `PYSTACHY_IRFX=1` | the compiler prints each function's effect summary on stderr, as `tests/ir/*.fx` record them |
 | `PYSTACHY_OPT` | turns optimizations off: `-listget`, `-dictfuse` (passes on the typed IR), `-tupleiter` (a for loop over a tuple reads the tuple's slots, not a list of its items), comma-separated, or `-all` |
+| `PYSTACHY_JIT_INLINE=N` | `pystachy run` inlines the program's own functions where its IR has at most N lines (default 20,000); `0` never does |
 | `PYSTACHY_JOBS` | how many test cases `tests/run.sh` and the IR tools run at once (default: one per CPU) |
 
 ## Design, piece by piece
@@ -412,7 +413,9 @@ against CPython's own str methods, `math` and `format()`.
 
 `run` favors latency: `globaldce` removes unused internal functions before the three
 function cleanup passes, then ORC JIT compilation links against a cached, precompiled
-runtime `.o`. Frontend checks and definition-time effects still run; the external
+runtime `.o`. A program of up to 20,000 lines of IR (`PYSTACHY_JIT_INLINE`) first has its
+own functions inlined into their callers, which `lli` never does; a larger one, such as the
+compiler, keeps its start-up. Frontend checks and definition-time effects still run; the external
 object-dispatch callbacks remain available to the runtime. `build` favors
 throughput: the full `-O2` pipeline over program and runtime together. The driver
 works in a private `tempfile.mkdtemp()` directory; `PYSTACHY_CFLAGS` adds clang flags

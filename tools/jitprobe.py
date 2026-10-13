@@ -1,7 +1,9 @@
-"""Check dead-code removal at the JIT boundary, without timing thresholds.
+"""Check dead-code removal and inlining at the JIT boundary, without timing thresholds.
 
 usage: python3 tools/jitprobe.py [-c LABEL=COMMAND]...
-A transparent lli wrapper inspects the bitcode the driver actually executes.
+A transparent lli wrapper inspects the bitcode the driver actually executes: unused functions
+never reach it, and a small live helper reaches it inlined into its caller, unless
+PYSTACHY_JIT_INLINE=0 turns the JIT's inliner off (#211).
 """
 import argparse
 import os
@@ -85,6 +87,7 @@ def main():
         wrapper.write_text(f"#!/bin/sh\n{shlex.quote(real['opt'])} -S -passes=verify /dev/fd/9 -o {shlex.quote(str(capture))} || exit $?\nexec {shlex.quote(real['lli'])} \"$@\"\n")
         wrapper.chmod(0o755)
         env = os.environ | {"PYSTACHY_LLVM": str(bindir), "PYSTACHY_PATH": str(temp)}
+        env.pop("PYSTACHY_JIT_INLINE", None)  # (the default's inliner is what is checked first)
         expected = run([sys.executable, str(source)], env)
         for spec in commands:
             label, command = spec.split("=", 1)
@@ -103,7 +106,14 @@ def main():
             for name in ("pys_obj_eq", "pys_obj_cmp", "pys_obj_repr"):
                 if not re.search(rf"^define .*?@{name}\(", executed, re.MULTILINE):
                     raise RuntimeError(f"{label}: runtime callback {name} is missing")
-            print(f"{label}: 35 unused functions removed; live calls, defaults, imports and runtime callbacks preserved")
+            if re.search(r"call .*@f\.live_leaf\(", executed):
+                raise RuntimeError(f"{label}: live_leaf() reached lli as a call, not inlined")
+            capture.unlink(missing_ok=True)
+            if run(cmd + ["run", str(source)], env | {"PYSTACHY_JIT_INLINE": "0"}) != expected:
+                raise RuntimeError(f"{label}: JIT output without the inliner differs from CPython")
+            if not re.search(r"call .*@f\.live_leaf\(", capture.read_text()):
+                raise RuntimeError(f"{label}: PYSTACHY_JIT_INLINE=0 inlined live_leaf() all the same")
+            print(f"{label}: 35 unused functions removed; live calls, defaults, imports and runtime callbacks preserved; live_leaf() inlined, and not with PYSTACHY_JIT_INLINE=0")
     return 0
 
 

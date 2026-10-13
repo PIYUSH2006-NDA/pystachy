@@ -24,7 +24,7 @@ honest.
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
 | `make fileprobe` | writable files' buffers count as heap bytes: files dropped without `close()` run collections, and every close takes back exactly what was counted |
-| `make jitprobe` | unused functions do not reach `lli`; live calls, defaults, import effects and runtime callbacks match CPython |
+| `make jitprobe` | unused functions do not reach `lli`, and a small helper reaches it inlined; live calls, defaults, import effects and runtime callbacks match CPython |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push, with `make check-recordings` after it |
 
 ## Differential tests
@@ -233,7 +233,8 @@ versions, platform, git commit and a timestamp:
 - **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
   35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
   function's default, import effects and the runtime's object comparison/representation callbacks
-  must still execute as in CPython. The guard has no timing threshold;
+  must still execute as in CPython. A one-line helper must reach it inlined into its caller, and
+  as a call with `PYSTACHY_JIT_INLINE=0`. The guard has no timing threshold;
 - **scaling** — `tools/scaling.py --check` compiles generated programs of 500 and 1,000
   functions, globals, classes, modules, chained imports, `while True` breaks, `elif`s,
   comprehensions, links of a dict key's chain of values, dict lookups and global dicts with
@@ -248,7 +249,7 @@ that covered fewer cases fails, as one with a failure does. The report gives eac
 checks the same way: 58 with the native compiler, 57 with CPython's (one `PATH` case fewer).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
-others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
+others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_JIT_INLINE`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
 `PYSTACHY_CFLAGS`, `PYSTACHY_PATH` and the like) from its environment, and lists the ones it
 found in the report's `ignored_env`; it keeps `PYSTACHY_LLVM` and `PYSTACHY_JOBS`.
 

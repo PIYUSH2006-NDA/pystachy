@@ -59,8 +59,9 @@
 #                  specialization breadth and the signature bytes specializations retain under
 #                  256 MiB / ten CPU seconds, with short diagnostics;
 #                  finite controls and reuse at the retained-instance boundary still compile
-#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
-#                  still execute as in CPython, with both compilers
+#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli, and a small helper reaches it
+#                  inlined (not with PYSTACHY_JIT_INLINE=0); live code and runtime callbacks still
+#                  execute as in CPython, with both compilers
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
@@ -86,7 +87,7 @@ export PYSTACHY_HOME="$ROOT"
 # The steps set the knobs they test themselves: one left in the caller's environment would weaken a
 # step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they
 # are dropped, and the report lists them (PYSTACHY_LLVM and PYSTACHY_JOBS are kept)
-ign=$(env | sed -nE 's/^(PYSTACHY_(PATH|CFLAGS|GC|GC_STRESS|GC_STRESS_PROGRAM|IRCHECK|IRFX|OPT|ARGV0))=.*$/\1/p' | sort -u)
+ign=$(env | sed -nE 's/^(PYSTACHY_(PATH|CFLAGS|GC|GC_STRESS|GC_STRESS_PROGRAM|IRCHECK|IRFX|OPT|JIT_INLINE|ARGV0))=.*$/\1/p' | sort -u)
 for e in $ign; do echo "verify: ignoring $e=$(printenv "$e")"; unset "$e"; done
 LLVM=${PYSTACHY_LLVM:+${PYSTACHY_LLVM%/}/}
 
