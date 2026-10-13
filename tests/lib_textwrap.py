@@ -1,5 +1,6 @@
 # lib/textwrap.py: CPython 3.13's textwrap with its marked edits (lib/README.md), against
 # CPython's own. Cases after CPython's Lib/test/test_textwrap.py.
+import re
 import textwrap
 from textwrap import TextWrapper, dedent, fill, indent, shorten, wrap
 
@@ -106,3 +107,16 @@ for t in ["", "\n", "  \n", "Hi.\nThis is a test.\nTesting.", "\nHi.\nThis is a 
 print(repr(indent("Hi.\nThis is a test.\nTesting.", "+ ", lambda line: True)))
 print(repr(indent("\nHi.\nThis is a test.\n\nTesting.\n", "+ ", lambda line: line.strip() == "Testing.")))
 print(repr(indent("a\n  b\nc\n", ">", str.isspace)))
+
+# the class attributes, and a wrapper's own values for them, which no other wrapper sees
+print(TextWrapper.sentence_end_re.pattern, TextWrapper.wordsep_simple_re.pattern)
+w3 = TextWrapper(12)
+w3.max_lines = 2
+w3.placeholder = " ..."
+print(w3.wrap(text))
+w3.max_lines = None
+print(w3.wrap(text))
+w3.wordsep_re = re.compile(r"(\s+)")
+w3.unicode_whitespace_trans = {ord("x"): ord("y")}
+print(w3.wrap("aa-bb cc-dd xx\txx"), TextWrapper(12).wrap("aa-bb cc-dd xx\txx"))
+print(w3.wordsep_re.pattern, TextWrapper(5).wordsep_re.pattern == TextWrapper.wordsep_re.pattern)

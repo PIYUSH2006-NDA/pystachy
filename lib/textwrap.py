@@ -14,36 +14,12 @@ __all__ = ['TextWrapper', 'wrap', 'fill', 'dedent', 'indent', 'shorten']
 # some Unicode spaces (like \u00a0) are non-breaking whitespaces.
 _whitespace = '\t\n\x0b\x0c\r '
 
-# Pystachy port: TextWrapper's class body computes these attributes; a class body that calls
-# functions is not supported (#126), so the module computes them and the class body reads them.
-_unicode_whitespace_trans = dict.fromkeys([ord(c) for c in _whitespace], ord(' '))
+# Pystachy port: TextWrapper's class body makes these four patterns for its regexes, then dels
+# them; a class body can neither read its own attributes (#126) nor del, so the module has them.
 _word_punct = r'[\w!"\'&.,?]'
 _letter = r'[^\d\W]'
 _whitespace_class = r'[%s]' % re.escape(_whitespace)
 _nowhitespace = '[^' + _whitespace_class[1:]
-_wordsep_re = re.compile(r'''
-        ( # any whitespace
-          %(ws)s+
-        | # em-dash between words
-          (?<=%(wp)s) -{2,} (?=\w)
-        | # word, possibly hyphenated
-          %(nws)s+? (?:
-            # hyphenated word
-              -(?: (?<=%(lt)s{2}-) | (?<=%(lt)s-%(lt)s-))
-              (?= %(lt)s -? %(lt)s)
-            | # end of word
-              (?=%(ws)s|\Z)
-            | # em-dash
-              (?<=%(wp)s) (?=-{2,}\w)
-            )
-        )'''.replace('%(wp)s', _word_punct).replace('%(lt)s', _letter)
-            .replace('%(ws)s', _whitespace_class).replace('%(nws)s', _nowhitespace),
-        re.VERBOSE)  # Pystachy port: replace() for % of a mapping, which is not supported
-_wordsep_simple_re = re.compile(r'(%s+)' % _whitespace_class)
-_sentence_end_re = re.compile(r'[a-z]'             # lowercase letter
-                              r'[\.\!\?]'          # sentence-ending punct.
-                              r'[\"\']?'           # optional end-of-quote
-                              r'\Z')               # end of chunk
 
 class TextWrapper:
     """
@@ -94,8 +70,9 @@ class TextWrapper:
         Append to the last line of truncated text.
     """
 
-    # Pystachy port: these four class attributes are computed above, and annotated
-    unicode_whitespace_trans: dict[int, int] = _unicode_whitespace_trans
+    # Pystachy port: the four class attributes are annotated, map() is a list comprehension, and
+    # the regexes are made of the module's patterns (above)
+    unicode_whitespace_trans: dict[int, int] = dict.fromkeys([ord(c) for c in _whitespace], ord(' '))
 
     # This funky little regex is just the trick for splitting
     # text up into word-wrappable chunks.  E.g.
@@ -103,17 +80,37 @@ class TextWrapper:
     # splits into
     #   Hello/ /there/ /--/ /you/ /goof-/ball,/ /use/ /the/ /-b/ /option!
     # (after stripping out empty strings).
-    wordsep_re: re.Pattern = _wordsep_re  # Pystachy port: computed above
+    wordsep_re: re.Pattern = re.compile(r'''
+        ( # any whitespace
+          %(ws)s+
+        | # em-dash between words
+          (?<=%(wp)s) -{2,} (?=\w)
+        | # word, possibly hyphenated
+          %(nws)s+? (?:
+            # hyphenated word
+              -(?: (?<=%(lt)s{2}-) | (?<=%(lt)s-%(lt)s-))
+              (?= %(lt)s -? %(lt)s)
+            | # end of word
+              (?=%(ws)s|\Z)
+            | # em-dash
+              (?<=%(wp)s) (?=-{2,}\w)
+            )
+        )'''.replace('%(wp)s', _word_punct).replace('%(lt)s', _letter)
+            .replace('%(ws)s', _whitespace_class).replace('%(nws)s', _nowhitespace),
+        re.VERBOSE)  # Pystachy port: replace() for % of a mapping, which is not supported
 
     # This less funky little regex just split on recognized spaces. E.g.
     #   "Hello there -- you goof-ball, use the -b option!"
     # splits into
     #   Hello/ /there/ /--/ /you/ /goof-ball,/ /use/ /the/ /-b/ /option!/
-    wordsep_simple_re: re.Pattern = _wordsep_simple_re  # Pystachy port: computed above
+    wordsep_simple_re: re.Pattern = re.compile(r'(%s+)' % _whitespace_class)  # Pystachy port: the module's pattern
 
     # XXX this is not locale- or charset-aware -- string.lowercase
     # is US-ASCII only (and therefore English-only)
-    sentence_end_re: re.Pattern = _sentence_end_re  # Pystachy port: computed above
+    sentence_end_re: re.Pattern = re.compile(r'[a-z]'             # lowercase letter
+                                             r'[\.\!\?]'          # sentence-ending punct.
+                                             r'[\"\']?'           # optional end-of-quote
+                                             r'\Z')               # end of chunk
 
     def __init__(self,
                  width=70,
@@ -156,7 +153,7 @@ class TextWrapper:
         if self.expand_tabs:
             text = text.expandtabs(self.tabsize)
         if self.replace_whitespace:
-            # Pystachy port: str.translate() of the table, char by char
+            # Pystachy port: no str.translate(); each character is looked up in the table
             trans = self.unicode_whitespace_trans
             text = ''.join([chr(trans.get(ord(c), ord(c))) for c in text])
         return text

@@ -6,3 +6,9 @@ import textwrap
 print(textwrap.wrap("aa ää-ää", 7))
 print(textwrap.wrap("Grüße aus Köln", 9))
 print(textwrap.shorten("Grüße aus Köln, sagt sie.", 15))
+
+# A word longer than the width is broken after that many bytes, which can fall inside a
+# character: two lines then hold its bytes apart, and joined they are the word again. CPython
+# prints [3] True.
+lines = textwrap.wrap("ééé", 3)
+print([len(s) for s in lines], "".join(lines) == "ééé")

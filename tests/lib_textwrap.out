@@ -104,4 +104,10 @@ ValueError: placeholder too large for max width
 '+ Hi.\n+ This is a test.\n+ Testing.'
 '\nHi.\nThis is a test.\n\n+ Testing.\n'
 'a\n  b\nc\n'
+[a-z][\.\!\?][\"\']?\Z ([\	\
+\\\\ ]+)
+['Hello there,', 'how are ...']
+['Hello there,', 'how are you', 'this fine', "day?  I'm", 'glad to hear', 'it!']
+['aa-bb cc-dd', 'yy  yy'] ['aa-bb cc-dd', 'xx  xx']
+(\s+) True
 [exit 0]
