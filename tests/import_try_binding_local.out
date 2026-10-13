@@ -1,0 +1,30 @@
+side: init
+good: init
+bad: init
+import bad failed: bad raises
+fpk: init
+fpk.bad: init
+rebind: import fpk.bad failed: fpk.bad raises
+AttributeError: module 'fpk' has no attribute 'bad'
+ok
+bad: init
+direct: import bad failed: bad raises
+UnboundLocalError: cannot access local variable 'b' where it is not associated with a value
+-1
+1
+5
+lambdas: import skipped
+NameError: cannot access free variable 'g' where it is not associated with a value in enclosing scope
+NameError: cannot access free variable 'g' where it is not associated with a value in enclosing scope
+1
+5
+maker: import skipped
+11
+NameError: cannot access free variable 'g2' where it is not associated with a value in enclosing scope
+19191
+user: from good import A2 as ua2 skipped
+bad: init
+user.load_bad: import failed: bad raises
+UnboundLocalError: cannot access local variable 'lb' where it is not associated with a value
+1
+[exit 0]

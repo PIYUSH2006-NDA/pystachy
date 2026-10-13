@@ -383,7 +383,11 @@ block closes its file (a close that fails raises its `OSError` in its place, ins
 statement around, as `__exit__` does). A module whose code raises is not imported: the names its
 import binds are unbound (`import m as x`, `import p.m as x`, and what `from p import m` or
 `from m import f, C` takes), so a read of one raises `NameError` (`UnboundLocalError` in a
-function), and a later import runs its code again.
+function, and a free variable's `NameError` in a lambda inside it), and a later import runs its
+code again. A name that an import in a `try` statement binds is bound once an import of it has run
+to its end: not where a raise before the import skipped it, even where its module is imported by
+other code, and an import that runs later binds it, in a `try` statement or not (`import p.a`
+that raises, then `import p.b`, binds `p`, and `p.a` raises `AttributeError`).
 
 ### Exception classes
 
