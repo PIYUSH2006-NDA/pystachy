@@ -37,6 +37,15 @@ class P(NamedTuple):
     y: int
 
 
+class K:
+    # equality and no ordering
+    def __init__(self, k: int) -> None:
+        self.k = k
+
+    def __eq__(self, other: "K") -> bool:
+        return self.k == other.k
+
+
 a = (1, 2)
 b = (1, 2, 0)
 print(a < b, a <= b, a > b, a >= b, b < a, b <= a, b > a, b >= a)
@@ -65,3 +74,23 @@ print((x,) >= (z, x))
 # an item is equal to itself: no __eq__ for it
 print("(x, x) <= (x, x, z):")
 print((x, x) <= (x, x, z))
+# items without an ordering (dicts, objects without __lt__ & co) need none while they are equal,
+# and raise CPython's TypeError where the first items that are not equal are such
+d = {"a": 1}
+e = {"a": 1}
+f = {"b": 2}
+print((d,) < (e, 0), (d, 1) <= (e,), (e, 0) > (d,), (K(1),) < (K(1), 0), (K(1), 0) > (K(1),))
+try:
+    print((d,) < (f, 0))
+except TypeError as err:
+    print("TypeError:", err)
+try:
+    print((d, 0) >= (f,))
+except TypeError as err:
+    print("TypeError:", err)
+try:
+    print((K(1),) < (K(2), 0))
+except TypeError as err:
+    print("TypeError:", err)
+# lists and sets order as CPython orders them (a set by inclusion)
+print(([1],) < ([1], 0), ([1], 5) < ([2],), ({1},) < ({1, 2}, 0), ({1, 2},) > ({1},))

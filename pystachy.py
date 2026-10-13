@@ -18120,8 +18120,18 @@ class Gen:
                     self.place(lcmp)
                 self.cbr(self.cmp2("==", x, y).v, lnext, ldiff)
             self.place(ldiff)
-            self.incoming(ph, self.cmp2(op, x, y).v, self.cur)
-            self.br(lend)
+            # (items without the ordering, dicts or objects without __lt__ & co, raise CPython's
+            # TypeError only where they are reached, as the runtime's comparison of tuples of one
+            # length raises it: equal ones go on to the lengths)
+            if is_dict(x.t) and is_dict(y.t):
+                self.raise_("TypeError", self.sconst(f"'{op}' not supported between instances of 'dict' and 'dict'"))
+            else:
+                lenient = self.lenient
+                self.lenient = True  # (see richcmp)
+                r = self.cmp2(op, x, y)
+                self.lenient = lenient
+                self.incoming(ph, r.v, self.cur)
+                self.br(lend)
             self.place(lnext)
         shorter = {"<": la < lb, "<=": la <= lb, ">": la > lb, ">=": la >= lb}[op]
         self.incoming(ph, "true" if shorter else "false", self.cur)

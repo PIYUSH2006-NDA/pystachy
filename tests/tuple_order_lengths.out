@@ -21,4 +21,9 @@ True
 False
 (x, x) <= (x, x, z):
 True
+True False True True True
+TypeError: '<' not supported between instances of 'dict' and 'dict'
+TypeError: '>=' not supported between instances of 'dict' and 'dict'
+TypeError: '<' not supported between instances of 'K' and 'K'
+True True True True
 [exit 0]
