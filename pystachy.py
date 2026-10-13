@@ -19236,6 +19236,10 @@ class Gen:
             self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
         if key not in METHODS:
             self.err(f"'{o.t}' has no method '{m}'")
+        if key == "dict.get" and (len(args) == 0 or len(args) > 2):
+            # (CPython's TypeError; not left to the arity check below, as d.get(k, d2, None) would
+            # read as d.get(k, None))
+            self.err(f"get expected at {'least 1 argument' if len(args) == 0 else 'most 2 arguments'}, got {len(args)}")
         # d.get(k) and d.get(k, None): the value or None, for values that can be None
         optget = key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and self.optional(V) != ""
         if optget:
