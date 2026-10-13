@@ -101,9 +101,10 @@ deviation() { # tests/deviations/NAME.py
   done
 }
 # A rejection exits with status 1 and writes one line to stderr, the diagnostic FILE:LINE: error:
-# MESSAGE, which holds the expected message (diag ERRFILE: that is what ERRFILE holds)
+# MESSAGE, which holds the expected message (diag ERRFILE: that is what ERRFILE holds, and nothing
+# after that line's newline: the second read finds no data, not even text without a newline)
 diag() {
-  { IFS= read -r line && ! read -r _; } < "$1" || return 1
+  { IFS= read -r line && ! IFS= read -r more && [ -z "$more" ]; } < "$1" || return 1
   case $line in *.py:[0-9]*": error: "*) ;; *) return 1 ;; esac
   case $line in *"$want"*) ;; *) return 1 ;; esac
 }
