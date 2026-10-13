@@ -18,6 +18,25 @@ from typing import Callable  # Pystachy port: for _compile_pattern's annotation
 
 __all__ = ["filter", "fnmatch", "fnmatchcase", "translate"]
 
+# Pystachy port: range endpoints are characters, while a str's indices count UTF-8 bytes.
+_UTF8 = len("é") == 2
+
+
+def _next_char(s: str, i: int) -> int:
+    if not _UTF8 or i >= len(s):
+        return i + 1
+    b = ord(s[i])
+    return i + (1 if b < 0xC0 else 2 if b < 0xE0 else 3 if b < 0xF0 else 4)
+
+
+def _last_char(s: str) -> int:
+    i = len(s) - 1
+    if _UTF8:
+        while i > 0 and ord(s[i]) & 0xC0 == 0x80:
+            i -= 1
+    return i
+
+
 def fnmatch(name, pat):
     """Test whether FILENAME matches PATTERN.
 
@@ -113,14 +132,15 @@ def _translate(pat, STAR, QUESTION_MARK):
                     stuff = stuff.replace('\\', r'\\')
                 else:
                     chunks = []
-                    k = i+2 if pat[i] == '!' else i+1
+                    # Pystachy port: skip whole characters when finding each range.
+                    k = _next_char(pat, i+1 if pat[i] == '!' else i)
                     while True:
                         k = pat.find('-', k, j)
                         if k < 0:
                             break
                         chunks.append(pat[i:k])
                         i = k+1
-                        k = k+3
+                        k = _next_char(pat, _next_char(pat, i))
                     chunk = pat[i:j]
                     if chunk:
                         chunks.append(chunk)
@@ -128,8 +148,11 @@ def _translate(pat, STAR, QUESTION_MARK):
                         chunks[-1] += '-'
                     # Remove empty ranges -- invalid in RE.
                     for k in range(len(chunks)-1, 0, -1):
-                        if chunks[k-1][-1] > chunks[k][0]:
-                            chunks[k-1] = chunks[k-1][:-1] + chunks[k][1:]
+                        # Pystachy port: compare and remove complete range endpoints.
+                        left, right = chunks[k-1], chunks[k]
+                        last, first = _last_char(left), _next_char(right, 0)
+                        if left[last:] > right[:first]:
+                            chunks[k-1] = left[:last] + right[first:]
                             del chunks[k]
                     # Escape backslashes and hyphens for set difference (--).
                     # Hyphens that create ranges shouldn't be escaped.
