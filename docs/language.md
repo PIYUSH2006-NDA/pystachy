@@ -310,10 +310,11 @@ imports `annotations` from `__future__`.
   and other NamedTuples), except an operator that its class defines; its `repr()` is a
   dataclass's.
 - `C.x` reads the class attribute that a class-body default binds (instances read it until
-  they assign `x`), also a `Final` one. `C.x = v` (also `cls.x += 1` in a class method) assigns
-  it, which `C.x` and the objects that have not assigned `x` then read. A class-body `x = v`
-  without an annotation is `x: T = v`, `T` given by `v` as for a field (but in a dataclass or
-  NamedTuple, where it would be no field). An exception class shares the class attributes it
+  they assign `x`: a later call of their `__init__` does not give it back), also a `Final`
+  one. `C.x = v` (also `cls.x += 1` in a class method) assigns it, which `C.x` and the
+  objects that have not assigned `x` then read. A class-body `x = v` without an annotation
+  is `x: T = v`, `T` given by `v` as for a field (but in a dataclass or NamedTuple, where it
+  would be no field). An exception class shares the class attributes it
   inherits with its base: `S.x`, `E.x` and the objects of both read one variable, which the
   class body that binds it evaluates once, and `E.x = v` changes it for both; a class body
   that binds `x` again (`x = v`, or `x: T = v` with the base's type `T`) gives the class its

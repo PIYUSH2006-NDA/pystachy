@@ -10990,21 +10990,6 @@ class Gen:
                 self.lreg[c.caps[i]] = self.ins(f"load ptr, ptr {a}")
                 self.ltype[c.caps[i]] = c.ctypes[i]
         self.none_ends()
-        if f.name == "__init__" and f.cls != "" and not (self.is_dc(f.cls) and f.node.kids[0].kind == "noann") and self.classes[f.cls].exc == "":
-            # class-body defaults (a synthesized dataclass __init__ assigns every field itself; an
-            # exception class's constructor assigns them, see exc_object)
-            ci = self.classes[f.cls]
-            me = Val("%a0", f.cls)
-            for fl in ci.fields:
-                if fl in ci.fdefault and f.cls + "." + fl not in self.cvars:  # (a class variable is read from the class)
-                    t = ci.ftypes[fl]
-                    if not is_const(ci.fdefault[fl]):
-                        self.class_default(ci, fl)  # (compiled before the class statement runs)
-                    if fl in ci.fglob:
-                        v = Val(self.ins(f"load {lt(t)}, ptr {ci.fglob[fl]}"), t)
-                    else:
-                        v = self.coerce(self.expr(ci.fdefault[fl], t), t)
-                    self.setfield(me, self.field(me, fl), fl, v)
         if f.ll.startswith("@init."):
             # a module's code runs once, when the first import of it runs
             done = f.ll + ".done"
@@ -14523,18 +14508,25 @@ class Gen:
         # (with an __init__ of the program, an OSError's args are left empty, and a SystemExit's
         # code None, until its super().__init__() sets them, as OSError.__new__ and SystemExit.__init__ do)
         self.exc_keep(o, vals if init is None or not self.derives(c, "OSError") else vals[:0], init is None)
-        for fl in ci.fields:
-            if fl in ci.fdefault and c + "." + fl not in self.cvars:  # (a class variable is read from the class, see getfield)
-                h = self.default_home(ci, fl)
-                t = ci.ftypes[fl]
-                if not is_const(ci.fdefault[fl]):
-                    self.class_default(h, fl)
-                v = Val(self.ins(f"load {lt(t)}, ptr {h.fglob[fl]}"), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
-                self.setfield(o, self.field(o, fl), fl, v)
+        self.class_defaults(o)
         self.line = line
         if init is not None:
             self.call_fn(init, [o] + vals, kws)
         return o
+
+    def class_defaults(self, o: Val) -> None:
+        # new object o's class-body defaults: CPython's class attributes, which o reads until it
+        # assigns them, as it is made (exc_object, new_obj), so that a later call of its __init__
+        # sees what o holds then. A class variable is read from the class (see getfield)
+        ci = self.classes[o.t]
+        for fl in ci.fields:
+            if fl in ci.fdefault and o.t + "." + fl not in self.cvars:
+                h = self.default_home(ci, fl)
+                t = ci.ftypes[fl]
+                if not is_const(ci.fdefault[fl]):
+                    self.class_default(h, fl)  # (compiled before the class statement runs)
+                v = Val(self.ins(f"load {lt(t)}, ptr {h.fglob[fl]}"), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
+                self.setfield(o, self.field(o, fl), fl, v)
 
     def exc_keep(self, o: Val, vals: list[Val], coded: bool = True) -> None:
         # what exception object o keeps of its args vals (BaseException.__new__, and its __init__
@@ -18081,10 +18073,15 @@ class Gen:
         return Val(r, self.ctype("dict", ["str", vt]))
 
     def new_obj(self, c: str) -> Val:
-        # a new object of class c, not initialized
+        # a new object of class c, which its __init__ initializes: it holds its class-body defaults
+        # (but where @dataclass wrote __init__, which assigns every field itself)
         size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
         o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
         self.nn[o.v] = True
+        if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
+            line = self.line
+            self.class_defaults(o)
+            self.line = line
         return o
 
     def pcoerce(self, v: Val, t: str, f: FnInfo, j: int) -> Val:
