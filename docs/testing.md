@@ -11,7 +11,7 @@ honest.
 | `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
 | `make test-cache` | the cached runtime's rules, with both compilers (`tests/cache.sh`, [below](#make-verify)) |
-| `make test-ffi` | the FFI's tests, JIT and AOT: C calls and the FFI's errors ([ffi.md](ffi.md#tests)) |
+| `make test-ffi` | the FFI's tests, JIT and AOT: C calls and the FFI's errors, and with python3's libpython, extension modules against the twins ([ffi.md](ffi.md#tests)) |
 | `make bench-extended-check` | the [extended performance prototype](extended-performance.md)'s runner failure checks and small CPython/JIT/AOT checksum checks; no timing gates |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
 | `make irsame REF=<commit>` | a refactor changes no program's IR, message or exit status |
@@ -84,9 +84,11 @@ versions, platform, git commit and a timestamp:
   (the run after builds the new bytes), when a tool changes and when the compiler changes;
   `PYSTACHY_CFLAGS`, `PYSTACHY_OPT` (the same passes named otherwise share one) and tools found
   through `PATH` get entries of their own; a failed `llvm-link` and a build killed after `opt`
-  leave nothing a later run uses; and the compiler run by name is found through `PATH` as the
-  shell finds it (past a directory, a file that is not executable, through a symbolic link), a
-  script run by CPython in the current directory without a search;
+  leave nothing a later run uses; `pystachy ext` caches its glue (`pyembed.c`, `pyext.c`) beside
+  the runtime; with a tool whose times have not settled, `run` and `ext` build a runtime of their
+  own and publish nothing; and the compiler run by name is found through `PATH` as the shell
+  finds it (past a directory, a file that is not executable, through a symbolic link), a script
+  run by CPython in the current directory without a search;
 - **python-free** — `PATH` holds only the LLVM tools, the system linker and a few POSIX
   tools (`python3` is checked to be unreachable); the native compiler rebuilds its runtime
   and itself, reproduces the IR and passes the tests;
@@ -122,8 +124,8 @@ versions, platform, git commit and a timestamp:
   signature in `runtime.py`, in runtime.c and in every program of the corpus (`llvm-link`
   would accept a mismatch silently);
 - **ffi** — `tests/ffi/run.sh` (`make test-ffi`) with the native compiler: `@ffi.extern`'s C
-  calls and the FFI's compile-time errors, against what CPython printed with the twin in
-  `tools/rt_cpython` ([ffi.md](ffi.md));
+  calls and the FFI's compile-time errors, and, with python3's own libpython, `pystachy ext`'s
+  extension modules, against the twins in `tools/rt_cpython` ([ffi.md](ffi.md));
 - **dict-probes** — `tools/dictprobe.c` counts the table slots that dict insertions and
   lookups visit for twelve key patterns that defeat a weak hash or probe sequence (`i << 46`,
   spaced ints, str keys sharing a long prefix or suffix, ...) and every shift `i << s`, with

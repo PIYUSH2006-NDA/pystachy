@@ -13,6 +13,9 @@
 #   - PYSTACHY_CFLAGS and PYSTACHY_OPT get entries of their own (the same passes named otherwise, the
 #     same one); the tools found through PATH too.
 #   - A failed llvm-link and a build killed after opt leave nothing that a later run uses.
+#   - pystachy ext caches its glue (pyembed.c, pyext.c) beside the runtime and uses it again.
+#   - With a tool whose times have not settled, run and ext build a runtime (and glue) of their own,
+#     which they use, and publish nothing.
 #   - The compiler is found through PATH as the shell finds it, past a directory and a file that is
 #     not executable, and through a symbolic link; a script run by CPython is opened as named, in the
 #     current directory, not looked for in PATH.
@@ -31,7 +34,7 @@ mkdir -p "$T/home" "$T/bin" "$T/llvm" "$T/tmp" "$T/d1/pystachy" "$T/d1/clang" "$
 trap 'rm -rf "$T"' EXIT
 H=$T/home
 B=$H/build
-cp runtime.c runtime.py "$H/" && cp -R lib "$H/" && cp "$from" "$T/bin/$me" && cp "$from" "$T/base" || exit 1
+cp runtime.c runtime.py pyembed.c pyext.c "$H/" && cp -R lib "$H/" && cp "$from" "$T/bin/$me" && cp "$from" "$T/base" || exit 1
 # the edits: the same size, other messages
 sed 's/substring not found/substring NOT found/g' runtime.py > "$T/NOT.py"
 sed 's/invalid literal for int()/INVALID literal for int()/g' runtime.c > "$T/INVALID.c"
@@ -72,12 +75,17 @@ pass=0; fail=0
 ok() { pass=$((pass + 1)); echo "ok   $1"; }
 bad() { fail=$((fail + 1)); echo "FAIL $1"; }
 builds() { wc -l < "$T/built" | tr -d ' '; }
-# the cache's entries (inode and name), their number, and the other files but the hashes (partial ones)
+# the cache's runtimes (inode and name), their number, its ext glue, and the other files but the
+# hashes (partial ones)
 entries() { (cd "$B" && ls -i runtime-py-*-????????????????.bc runtime-py-*-????????????????.o 2> /dev/null); }
 pairs() { (cd "$B" && ls runtime-py-*-????????????????.bc 2> /dev/null) | wc -l | tr -d ' '; }
+glue() { (cd "$B" && ls -i runtime-py-*-????????????????.py*.bc 2> /dev/null); }
 others() {
   for f in "$B"/*; do
-    case ${f##*/} in runtime-py-*-????????????????.bc | runtime-py-*-????????????????.o | runtime-py.hashes) ;; *) printf '%s ' "${f##*/}" ;; esac
+    case ${f##*/} in
+      runtime-py-*-????????????????.bc | runtime-py-*-????????????????.o | runtime-py-*-????????????????.py*.bc | runtime-py.hashes) ;;
+      *) printf '%s ' "${f##*/}" ;;
+    esac
   done
 }
 # pys ARGS...: the compiler under test, run by its path from $T, PYSTACHY_LLVM the wrappers (or $LLVM)
@@ -178,12 +186,55 @@ check "and used then" "$out" 0 LLVM= PATH="$T/d1:$realdir:$PATH"
 same "$E" "the same entries"
 clean "no partial or temporary file is left"
 
+# pystachy ext: an extension module's glue (pyembed.c, pyext.c) is cached beside the runtime, by the
+# same rules; the module is loaded where $CPY is CPython 3.12 or later
+CPY=${PY:-python3}
+loads() { # loads NAME: the module of $T/so/NAME.abi3.so doubles 21
+  if "$CPY" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2> /dev/null; then
+    if [ "$(cd "$T/so" && "$CPY" -c "import $1; print($1.twice(21))" 2>&1)" = 42 ]; then ok "and $CPY loads the module"
+    else bad "$CPY cannot load $1.abi3.so"; fi
+  fi
+}
+mkdir -p "$T/so"
+printf 'from ffi import export\n\n\n@export\ndef twice(n: int) -> int:\n    return n * 2\n' > "$T/m.py"
+cp "$T/m.py" "$T/m2.py"
+b=$(builds)
+if pys ext m.py -o so/m.abi3.so && [ -f "$T/so/m.abi3.so" ] && [ $(($(builds) - b)) = 2 ] && [ "$(glue | wc -l | tr -d ' ')" = 2 ]; then
+  ok "pystachy ext builds pyembed.c and pyext.c once, beside the cached runtime"
+else bad "pystachy ext: $(($(builds) - b)) builds, glue: $(glue)"; fi
+loads m
+G=$(glue)
+b=$(builds)
+if pys ext m.py -o so/m.abi3.so && [ "$(builds)" = "$b" ] && [ "$(glue)" = "$G" ]; then ok "and uses them then"
+else bad "pystachy ext again: $(($(builds) - b)) builds, glue: $(glue)"; fi
+same "$E" "the runtime's entries are the same"
+clean "no partial or temporary file is left"
+# a tool whose times have not settled (opt's mtime in the future): each run builds a runtime (and
+# glue) of its own, which it uses, publishes nothing and leaves nothing
+touch -t 203001010000 "$T/llvm/opt"
+check "a tool not settled: a run builds a runtime of its own" "$out" 1
+same "$E" "and publishes nothing"
+clean "and leaves nothing"
+b=$(builds)
+if pys ext m2.py -o so/m2.abi3.so && [ -f "$T/so/m2.abi3.so" ] && [ $(($(builds) - b)) = 3 ]; then
+  ok "pystachy ext builds a runtime and glue of its own"
+else bad "pystachy ext with a tool not settled: $(($(builds) - b)) builds"; fi
+loads m2
+same "$E" "and publishes no runtime"
+if [ "$(glue)" = "$G" ]; then ok "nor glue"; else bad "glue published: $(glue)"; fi
+clean "and leaves nothing"
+touch "$T/llvm/opt"
+sleep 3
+E=$(entries)
+
+# last, as it leaves a partial file and a temporary directory behind (as a killed build does)
 cat "$T/orig.py" > "$H/runtime.py"
 got=$( (export CACHE_KILL=1; pys run prog.py) 2>&1)
 st=$?
 if [ $st != 0 ]; then ok "a build killed after opt ends the run"; else bad "a killed build: status 0, $got"; fi
 same "$E" "and writes no entry"
-check "the next run builds the runtime" "$(printf '%s\n%s' "$P0" "$C0")" 1
+out=$(printf '%s\n%s' "$P0" "$C0")
+check "the next run builds the runtime" "$out" 1
 npairs 4 "and its entry replaces the old"
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]

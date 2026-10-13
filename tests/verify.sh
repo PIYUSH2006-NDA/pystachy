@@ -10,7 +10,8 @@
 #   runtime-cache  tests/cache.sh with both compilers: the cached runtime is used while nothing it is
 #                  built from changes, built again when runtime.c, runtime.py, the compiler or a tool
 #                  changes (also by a same-size edit whose mtime is set back, or one made while it is
-#                  built), keyed by the flags too, never left by a failed build; PATH's rules
+#                  built), keyed by the flags too, never left by a failed build; ext's glue cached
+#                  beside it; a run's own runtime while a tool is not settled; PATH's rules
 #   python-free    PATH holds only symlinks to the LLVM tools, the linker and the POSIX tools that the
 #                  driver and tests/run.sh call (no python3): the native compiler rebuilds its runtime
 #                  and itself, reproduces the same IR and passes the tests
@@ -33,7 +34,8 @@
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
 #   ffi            tests/ffi/run.sh with the stage-2 compiler: @ffi.extern's C calls and the FFI's
-#                  compile-time errors, against what CPython printed with the twins (docs/ffi.md)
+#                  compile-time errors, then, with $PY's libpython, pystachy ext's extension modules,
+#                  against the twins in tools/rt_cpython (docs/ffi.md)
 #   list-storage   tools/listprobe.c: cleared reachable lists release backing capacity and live bytes;
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
 #   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
@@ -270,7 +272,7 @@ L=$V/inherited-ast.log; s=$(now); r=fail
 $PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
 
-# ---- ffi: C functions called through @ffi.extern (docs/ffi.md)
+# ---- ffi: C functions, extension modules (docs/ffi.md)
 L=$V/ffi.log; s=$(now); r=fail
 PY=$PY tests/ffi/run.sh "$V/pystachy2" > "$L" 2>&1 && r=pass
 step ffi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) passed, \([0-9]*\) failed.*$/, "passed": \1, "failed": \2/p' "$L")"
