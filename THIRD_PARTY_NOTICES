@@ -307,6 +307,8 @@ These differential tests and rejection fixtures adapt test methods of CPython 3.
 Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
 
 - tests/upstream_scope_*.py and tests/errors/upstream_scope_*.py: Lib/test/test_scope.py
+- tests/upstream_decorators_*.py and tests/errors/upstream_decorators_*.py:
+  Lib/test/test_decorators.py
 
 They are used under the Python Software Foundation License Version 2 reproduced above;
 tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
