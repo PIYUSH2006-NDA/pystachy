@@ -1,0 +1,100 @@
+True abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 0123456789abcdefABCDEF 01234567
+!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ 100 '}~ \t\n\r\x0b\x0c'
+['ascii_letters', 'ascii_lowercase', 'ascii_uppercase', 'capwords', 'digits', 'hexdigits', 'octdigits', 'printable', 'punctuation', 'whitespace', 'Formatter', 'Template']
+'Abc Def Ghi' 'Abc def ghi'
+'Abc Def Ghi' 'Abc\tDef\nghi'
+'Abc Def Ghi' 'Abc\t   def  \nghi'
+'Abc Def Ghi' 'Abc def ghi'
+'Abc-def-ghi' 'Abc-def-ghi'
+'Abc-def Def-ghi Ghi' 'Abc-def def-ghi ghi'
+'Abc Def' '   abc  def   '
+'Abc Def' '\tAbc\tDef\t'
+'' ''
+'' ' '
+'X' 'X'
+'Abc-Def def-Ghi ghi' 'A--B' 'Hello World'
+tim likes to eat a bag of ham worth $100
+tim likes to eat a bag of ham worth $100 | $who likes to eat a bag of $what worth $$100
+KeyError 'what'
+tim likes ham for dinner
+KeyError KeyError('meal')
+tim likes ham for dinner
+tim likes ham for dinner
+tim likes to eat a bag of $what worth $100
+tim likes $
+%(foo)s baz baz | %(foo)s baz baz
+tim has eaten 7 bags of ham today | tim has eaten 7 bags of ham today
+tim has eaten 7 bags of ham today
+('tim', 'fred') ate ('ham', 'kung pao') | ('tim', 'fred') ate ('ham', 'kung pao')
+1.5 and 2.25 TrueFalse
+[1, 2, 3] None
+tim likes ${what} for ${meal}
+$who likes ham for ${meal}
+$who likes ham for dinner
+tim likes ham for ${meal}
+tim likes ham for dinner
+tim likes ham | tim likes ham
+tim likes ham
+tim likes ham | tim likes ham
+tim likes ham | $who likes ham
+the mapping is bozo | the mapping is two
+the mapping is bozo | the mapping is two
+the self is bozo | the self is bozo
+ann likes tea | 1 likes 2
+KeyError 'what'
+KeyError 'who'
+100$ and no names | $a ${b} $
+KeyError 'gift'
+ABC and DE | ABC ${xyz} $x
+ABC and kw
+KeyError 'xyz'
+ValueError Invalid placeholder in string: line 1, col 12
+'tim likes $' False
+ValueError Invalid placeholder in string: line 1, col 12
+'tim likes ${what)' False
+ValueError Invalid placeholder in string: line 1, col 12
+'tim likes $100' False
+ValueError Invalid placeholder in string: line 1, col 12
+'tim likes $ı' False
+ValueError Invalid placeholder in string: line 1, col 1
+'$' False
+ValueError Invalid placeholder in string: line 1, col 1
+'${' False
+ValueError Invalid placeholder in string: line 1, col 1
+'${}' False
+ValueError Invalid placeholder in string: line 1, col 1
+'$ x' False
+ValueError Invalid placeholder in string: line 3, col 1
+'a\n$b\n$ c' False
+ValueError Invalid placeholder in string: line 4, col 3
+'line one\nline two\n\nx $1 y' False
+ValueError Invalid placeholder in string: line 3, col 1
+'1\r\n$b\r\n$' False
+ValueError Invalid placeholder in string: line 1, col 5
+'1${b c}' False
+True
+False
+['who', 'what']
+['who', 'what']
+['who', 'what'] []
+True [] ['a', 'b', 'c']
+$ (?a:[_a-z][_a-z0-9]*) None 2
+
+            \$(?:
+              (?P<escaped>\$)  |   # Escape sequence of two delimiters
+              (?P<named>(?a:[_a-z][_a-z0-9]*))       |   # delimiter and a Python identifier
+              {(?P<braced>(?a:[_a-z][_a-z0-9]*))} |   # delimiter and a braced identifier
+              (?P<invalid>)             # Other ill-formed delimiter exprs
+            )
+            
+98 4 {'escaped': 1, 'named': 2, 'braced': 3, 'invalid': 4}
+True a$b
+hello (4, 12) ['${hello}', '$$', '$x', '$']
+tÿm likes fþed
+café crème €5
+re.compile('\n            \\$(?:\n              (?P<escaped>\\$)  |   # Escape sequence of two delimiters\n              (?P<named>(?a:[_a-z][_a-z0-9]*))       |   # delimiter and a Python identifier\n          , re.IGNORECASE|re.VERBOSE)
+True
+now x and $ ['b'] True
+b 12
+[exit 0]
