@@ -81,5 +81,8 @@ maybe: AlwaysEq | None = None
 print(1 in (maybe, 2), 2 in (maybe, 2))
 maybe = AlwaysEq()
 print(1 in (maybe, 2))
-# a dataclass's and a NamedTuple's
+# a dataclass's and a NamedTuple's; a dataclass's __eq__ declines an object of another class,
+# whose own __eq__ then decides
 print(1 in (D(1), 2), D(1) in (1, D(1)), 1 in (N(1, 2), 3), 3 in (N(1, 2), 3))
+print(AlwaysEq() in (D(1),), NeverEq() in (D(1),), D(1) in (AlwaysEq(),), D(2) in (NeverEq(), D(2)))
+print(AlwaysEq() in (N(1, 2),), N(1, 2) in (AlwaysEq(),))
