@@ -1,0 +1,46 @@
+side: init
+good: init
+import good as g skipped
+NameError: name 'g' is not defined
+from good import A2, K as K2 skipped
+NameError: name 'A2' is not defined
+NameError: name 'K2' is not defined
+from good import * skipped
+NameError: name 'A' is not defined
+NameError: name 'K' is not defined
+import fpk.good as fg2 skipped
+NameError: name 'fg2' is not defined
+import side skipped
+NameError: name 'side' is not defined
+7
+fpk: init
+fpk.bad: init
+import fpk.bad failed: fpk.bad raises
+NameError: name 'fpk' is not defined
+ok
+AttributeError: module 'fpk' has no attribute 'bad'
+flaky: run 1
+import flaky as f1 failed: flaky raises on its first run
+flaky: run 2
+10
+NameError: name 'f1' is not defined
+10
+bad: init
+import good as g3, bad failed: bad raises
+1
+NameError: name 'bad' is not defined
+fpk.bad: init
+from fpk import good as fg, bad as fb failed: fpk.bad raises
+NameError: name 'fg' is not defined
+NameError: name 'g4' is not defined
+1
+boom went through the finally block
+1
+pass 0 skipped the import
+pass 0 NameError: name 's2' is not defined
+pass 1 7
+pass 2 7
+1 2 1 3 3
+user: from good import A2 as ua2 skipped
+NameError: name 'ua2' is not defined
+[exit 0]

@@ -39,7 +39,7 @@ flowchart TD
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
-| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter, the stdlib census, and the count of a port's edits by cause |
+| `tools/` | | the IR oracle, the IR check over the corpus, the check of the `RUNTIME` table against `runtime.c` and `runtime.py`, `runtime.py`'s fuzzer against CPython, `lib/re`'s fuzzer against CPython's `re`, ABI check and microbenchmarks, the syntax and import sweeps, the scaling check, the dict probe counter, the stdlib census, and the count of a port's edits by cause |
 | `ports/` | 15 packages | PyPI packages with the few edits each needs to compile, marked "Pystachy port:" and listed in its `PORT.md`: convertdate 2.5.1's calendar conversions and holidays ([`ports/convertdate/PORT.md`](../ports/convertdate/PORT.md)); iniconfig 2.3.1, pytest's INI parser ([`ports/iniconfig/PORT.md`](../ports/iniconfig/PORT.md)); jdcal 1.4.1, Julian date conversions ([`ports/jdcal/PORT.md`](../ports/jdcal/PORT.md)); ordered-set 4.1.0's OrderedSet, of str ([`ports/ordered_set/PORT.md`](../ports/ordered_set/PORT.md)); pyaes 1.6.1's AES block cipher ([`ports/pyaes/PORT.md`](../ports/pyaes/PORT.md)); pyfiglet 1.0.4, FIGlet's text banners in its standard, slant and small fonts ([`ports/pyfiglet/PORT.md`](../ports/pyfiglet/PORT.md)); pylev 1.4.0, Levenshtein distances ([`ports/pylev/PORT.md`](../ports/pylev/PORT.md)); qrcode 8.2's encoder and text output ([`ports/qrcode/PORT.md`](../ports/qrcode/PORT.md)); roman 5.2, the Roman numeral converter ([`ports/roman/PORT.md`](../ports/roman/PORT.md)); sgp4 2.27, the SGP4/SDP4 satellite propagator under Skyfield ([`ports/sgp4/PORT.md`](../ports/sgp4/PORT.md)); snowballstemmer 3.1.1's English (Porter2) and Porter stemmers, Sphinx's search-index stemmers ([`ports/snowballstemmer/PORT.md`](../ports/snowballstemmer/PORT.md)); sortedcontainers 2.4.0's SortedList, of ints ([`ports/sortedcontainers/PORT.md`](../ports/sortedcontainers/PORT.md)); sqids 0.5.2, short unique ids from numbers ([`ports/sqids/PORT.md`](../ports/sqids/PORT.md)); tomli-w 1.2.0's TOML writer, `dumps()` ([`ports/tomli_w/PORT.md`](../ports/tomli_w/PORT.md)); and wcwidth 0.9.2's `wcwidth()` and `wcswidth()`, the columns a terminal gives text ([`ports/wcwidth/PORT.md`](../ports/wcwidth/PORT.md)); `tests/port_*.py` run their test cases, and `tools/port_edits.py` sorts the markers by cause and, given the upstream package, lists the census blockers the edits removed |
 
 ## Environment variables
@@ -261,7 +261,12 @@ file whose close fails notes its `OSError`, which then takes the place of the ex
 propagated, including `SystemExit` (CPython's `__exit__` raises it inside the `try`, if any).
 
 A module's code runs in the region of a landing block that marks the module not run and throws
-again; a read through a name that an import in a `try` statement binds checks that mark.
+again. A name that an import in a `try` statement binds has a flag of its own, which every import
+that binds the name sets where it binds it (a plain import once its own modules' code has run, a
+from-import once all of them has), and which every read through the name checks: a global in
+module code, in a function a slot, or a cell that the lambdas in it that read the name share. A
+read through a package's attribute for a submodule that an import in a `try` statement runs checks
+the submodule's mark, as CPython sets that attribute once the submodule's code has run to its end.
 `runtime.c` is compiled with `-fexceptions` in both tiers.
 
 An object of an exception class begins with a pointer to its class's `ExcClass`, a constant the

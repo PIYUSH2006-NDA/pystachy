@@ -1,13 +1,18 @@
 #!/bin/sh
 # Differential tests. Every tests/*.py must print exactly what CPython printed
 # (stdout + exit code, recorded in tests/*.out) both JIT-run and AOT-compiled; where
-# CPython wrote to stderr, the last line (tests/*.err) must match too. Stdin comes from
-# tests/*.in; where tests/NAME.full exists, stdout is /dev/full (writing it fails); where
-# tests/NAME.path exists, it is PYSTACHY_PATH (as PYTHONPATH was for tests/record.sh).
+# CPython wrote to stderr, the last line (tests/*.err) must match too, and where it wrote
+# none (no tests/NAME.err), the program must write none either; an AOT build writes none.
+# Stdin comes from tests/*.in; where tests/NAME.full exists, stdout is /dev/full (writing it
+# fails); where tests/NAME.path exists, it is PYSTACHY_PATH (as PYTHONPATH was for tests/record.sh).
+# A test program dies by no signal but SIGTERM and SIGINT: bash as sh reports a death by another
+# one with the process ID (and "core dumped" or not, by ulimit -c: 0 here, so that no core file
+# lands in the tree).
 # PYSTACHY_GC_STRESS_PROGRAM=N makes the programs collect every N allocations (JIT and AOT), whatever
 # PYSTACHY_GC_STRESS gives the compiler that builds them.
 # Every tests/errors/*.py must be rejected with the message in its first line (rtmode_*.py as
-# "pystachy rt" compiles runtime.py), and every
+# "pystachy rt" compiles runtime.py): exit status 1, and one line on stderr, the diagnostic
+# FILE:LINE: error: MESSAGE, which holds the expected message; and every
 # tests/deviations/*.py must print its hand-written .out (documented deviations from CPython).
 # "pystachy check", which only parses, must accept tests/syntax_*.py and report the error of a
 # tests/errors/syntax_*.py whose error is in its own file.
@@ -20,6 +25,8 @@
 #        e.g. "python3 pystachy.py", or tests/run.sh ./pystachy jit tests/str_*.py tests/errors/x.py;
 #        FILEs are relative to the repository root)
 cd "$(dirname "$0")/.." || exit 1
+# shellcheck disable=SC3045 # (ulimit -c is not POSIX, but dash, bash, ksh and busybox have it)
+ulimit -c 0 2> /dev/null
 PYS=${1:-./pystachy}
 MODES=${2:-jit aot}
 if [ $# -gt 2 ]; then shift 2; else set --; fi
@@ -54,16 +61,24 @@ program() { # tests/NAME.py
   o=1; [ -f "tests/$n.full" ] && o=3
   mp=$PYSTACHY_PATH; [ -f "tests/$n.path" ] && mp=$(cat "tests/$n.path")
   for mode in $MODES; do
+    # the program's stderr goes to $n.err, an AOT build's to $n.build, which must stay empty (what
+    # pystachy run writes before it becomes the program goes to $n.err: it must be nothing too)
+    : > "$T/$n.build"; : > "$T/$n.err"
     if [ $mode = jit ]; then
       (PYSTACHY_PATH=$mp $PYS run "$1" a1 a2 < "$in" >&$o; echo "[exit $?]") > "$T/$n.$mode" 2> "$T/$n.err"
     else
-      PYSTACHY_PATH=$mp $PYS build "$1" -o "$T/$n.exe" 2> "$T/$n.err" &&
-        ($XENV "$T/$n.exe" a1 a2 < "$in" >&$o; echo "[exit $?]") > "$T/$n.$mode" 2>> "$T/$n.err"
+      PYSTACHY_PATH=$mp $PYS build "$1" -o "$T/$n.exe" 2> "$T/$n.build" &&
+        ($XENV "$T/$n.exe" a1 a2 < "$in" >&$o; echo "[exit $?]") > "$T/$n.$mode" 2> "$T/$n.err"
     fi
-    if cmp -s "$T/$n.$mode" "tests/$n.out" && { [ ! -f "tests/$n.err" ] || [ "$(tail -1 "$T/$n.err")" = "$(cat "tests/$n.err")" ]; }; then
+    if cmp -s "$T/$n.$mode" "tests/$n.out" && [ ! -s "$T/$n.build" ] &&
+      if [ -f "tests/$n.err" ]; then [ "$(tail -1 "$T/$n.err")" = "$(cat "tests/$n.err")" ]; else [ ! -s "$T/$n.err" ]; fi; then
       pass=$((pass + 1)); else
       fail=$((fail + 1)); echo "FAIL $n ($mode)"; diff "tests/$n.out" "$T/$n.$mode" | head -10
-      [ -f "tests/$n.err" ] && echo "  stderr: want '$(cat "tests/$n.err")', got '$(tail -1 "$T/$n.err")'"; head -5 "$T/$n.err"; fi
+      if [ -f "tests/$n.err" ]; then echo "  stderr: want '$(cat "tests/$n.err")', got '$(tail -1 "$T/$n.err")'"
+      elif [ -s "$T/$n.err" ]; then echo "  stderr: want none (CPython wrote none), got:"; fi
+      head -5 "$T/$n.err"
+      [ ! -s "$T/$n.build" ] || { echo "  build's stderr:"; head -5 "$T/$n.build"; }
+    fi
   done
   case $n in
     syntax_*)
@@ -85,19 +100,27 @@ deviation() { # tests/deviations/NAME.py
       fail=$((fail + 1)); echo "FAIL deviations/$n ($mode)"; diff "$exp" "$T/dev.$n.$mode" | head -10; fi
   done
 }
+# A rejection exits with status 1 and writes one line to stderr, the diagnostic FILE:LINE: error:
+# MESSAGE, which holds the expected message (diag ERRFILE: that is what ERRFILE holds, and nothing
+# after that line's newline: the second read finds no data, not even text without a newline)
+diag() {
+  { IFS= read -r line && ! IFS= read -r more && [ -z "$more" ]; } < "$1" || return 1
+  case $line in *.py:[0-9]*": error: "*) ;; *) return 1 ;; esac
+  case $line in *"$want"*) ;; *) return 1 ;; esac
+}
 rejection() { # tests/errors/NAME.py
   n=$(basename "$1" .py)
   want=$(head -1 "$1" | sed 's/^# error: //')
   how=ir
   case $n in rtmode_*) how=rt ;; esac  # compiled as runtime.py is
-  if $PYS $how "$1" > /dev/null 2> "$T/rej.$n" || ! grep -qF "$want" "$T/rej.$n"; then
-    fail=$((fail + 1)); echo "FAIL $1: expected error '$want', got: $(cat "$T/rej.$n")"
-  else pass=$((pass + 1)); fi
+  $PYS $how "$1" > /dev/null 2> "$T/rej.$n"; st=$?
+  if [ $st = 1 ] && diag "$T/rej.$n"; then pass=$((pass + 1)); else
+    fail=$((fail + 1)); echo "FAIL $1: expected error '$want', got (exit $st): $(cat "$T/rej.$n")"; fi
   case $n:$want in
     syntax_*:"$n.py:"*)
-      if $PYS check "$1" > /dev/null 2> "$T/chk.$n" || ! grep -qF "$want" "$T/chk.$n"; then
-        fail=$((fail + 1)); echo "FAIL $1 (check): expected error '$want', got: $(cat "$T/chk.$n")"
-      else pass=$((pass + 1)); fi ;;
+      $PYS check "$1" > /dev/null 2> "$T/chk.$n"; st=$?
+      if [ $st = 1 ] && diag "$T/chk.$n"; then pass=$((pass + 1)); else
+        fail=$((fail + 1)); echo "FAIL $1 (check): expected error '$want', got (exit $st): $(cat "$T/chk.$n")"; fi ;;
   esac
 }
 # worker K CASE...: each case no worker has claimed yet (claiming creates $T/c.I), the cases about

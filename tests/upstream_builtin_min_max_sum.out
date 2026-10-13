@@ -1,0 +1,37 @@
+max('123123') '3'
+max(1, 2, 3) 3
+max((1, 2, 3, 1, 2, 3)) 3
+max([1, 2, 3, 1, 2, 3]) 3
+ValueError: max() iterable argument is empty
+max((1,), key=neg) 1
+max((1,2), key=neg) 1
+max(1, 2, key=neg) 1
+max((1, 2), key=None) 2
+max(data, key=f) 28
+min('123123') '1'
+min(1, 2, 3) 1
+min((1, 2, 3, 1, 2, 3)) 1
+min([1, 2, 3, 1, 2, 3]) 1
+ValueError: min() iterable argument is empty
+min((1,), key=neg) 1
+min((1,2), key=neg) 2
+min(1, 2, key=neg) 2
+min((1, 2), key=None) 1
+min(data, key=f) 132
+sum([]) 0
+sum(list(range(2,8))) 27
+sum(range(10), 1000) 1045
+sum(range(10), 2**31-5) 2147483688
+sum(i % 2 != 0 for i in range(10)) 5
+sum((i % 2 != 0 for i in range(10)), 2**31-3) 2147483650
+sum(i / 2 for i in range(10)) 22.5
+sum((i / 2 for i in range(10)), 1000) 1022.5
+sum((i / 2 for i in range(10)), 1000.25) 1022.75
+repr(sum([-0.0])) '0.0'
+repr(sum([-0.0], -0.0)) '-0.0'
+repr(sum([], -0.0)) '-0.0'
+isinf(sum([inf, inf])) True
+isinf(sum([1e308, 1e308])) True
+sum([0.1] * 10) 1.0
+sum([1.0, 10E100, 1.0, -10E100]) 2.0
+[exit 0]

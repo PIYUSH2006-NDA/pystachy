@@ -1,0 +1,22 @@
+Grüße
+'Grüße\n' 'Gr\xfc\xdfe\n'
+True True True True True False
+[  Grüße] [**Grüße**] ['Grüße' ]
+['Gr', 'ße'] Grüsse 1 Grüße|Grüße |
+'Grüße\n' True
+'© café\n' True
+'naïve «»\n' True
+'ÿ end' True
+'Grüße\n© café\r\nnaïve «»\nÿ end'
+'Grü' 'ße' '\n' '© café\n' 'naïv'
+[101, 32, 171, 187] '\nÿ end' '' ''
+['Grüße\n', '© café\n', 'naïve «»\n', 'ÿ end']
+['Grüße\n© café\r\n', 'naïve «»\nÿ end']
+ÿ end True
+'Ã©â\x82¬\n' True False
+'' '' '' [] []
+70002
+True True
+True
+True 'é\nü'
+[exit 0]
