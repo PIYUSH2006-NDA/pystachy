@@ -17,6 +17,7 @@ honest.
 | `make check-ir` | every program in the corpus compiles, and the compiler's IR check and `llvm-as` accept its IR |
 | `make check-runtime` | the compiler's `RUNTIME` table agrees with `runtime.c` |
 | `make check-recordings` | `tests/record.sh --check`: CPython still prints every recorded expected output, every deviation still deviates, `lib/`'s copies are CPython's files, and no stray file lies in the tree ([below](#recording-expected-output)) |
+| `make re-fuzz` | `lib/re`, run by CPython, against CPython's `re` on random patterns (`RE_FUZZ="N SEED"` for others) and on `test_re`'s biggest cases |
 | `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
@@ -62,7 +63,8 @@ imports, modules and packages (`tests/mods/`, `tests/scope/`, `tests/infer/`; im
 statements that raise or are skipped, `tests/tryimp/`, `tests/upimport/`), what the
 loader decides at import time (`tests/loader/`), a program run through a symbolic link
 (`tests/linked/`), CPython's syntax errors and its compiler's block, parser-stack and marshal limits, templates, empty containers typed by their first
-use, loops with `else`, the `lib/` modules (`tests/lib_*.py`), definite assignment, sorting
+use, loops with `else`, the `lib/` modules (`tests/lib_*.py`, and for `re` CPython 3.13.16's
+`re_tests.py` and `test_re.py` cases, `tests/upstream_re_*.py`), definite assignment, sorting
 (timsort's exact comparisons), loops that change what they iterate, files and the standard
 streams, exceptions and exit statuses, runtime errors (also CPython's wording of the type and argument errors Pystachy reports
 when it compiles), garbage-collector churn, classic
@@ -150,6 +152,13 @@ versions, platform, git commit and a timestamp:
 - **rtcheck** — `tools/rtcheck.py` runs `runtime.py` on CPython and compares each of its
   functions with CPython's str methods, `math` functions and `format()` (and the dict hashes
   with their formulas) on random inputs, about 290,000 cases;
+- **re-fuzz** — `tools/re_fuzz.py` (`make re-fuzz`) runs `lib/re` on CPython and compares it
+  with CPython's own `re`: 2,000 random patterns of all of 3.13's syntax (seed 1), some invalid on
+  purpose, must compile to CPython's code or raise its error (message and position), and each
+  valid one must match, split and substitute 19 random strings as CPython's `re` does, every
+  other pattern on strs that hold UTF-8, as Pystachy's do; about 390,000 cases. The cases of
+  `test_re.py` that `tests/upstream_re_*.py` run smaller (too many allocations for gc-stress)
+  run there at upstream's size;
 - **rt-abi** — `tools/rtabi.py`: every function `runtime.py` defines or declares has one LLVM
   signature in `runtime.py`, in runtime.c and in every program of the corpus (`llvm-link`
   would accept a mismatch silently);
@@ -177,10 +186,11 @@ versions, platform, git commit and a timestamp:
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
 - **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
-  active signatures and branching template specializations fail with bounded source diagnostics
-  in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
-  seconds. Finite controls check active-budget release and reuse of completed instances at the
-  compilation-wide limit of 4,096 specializations;
+  active signatures, branching template specializations and the signature bytes they retain
+  (16 MiB per compilation) fail with bounded source diagnostics in hosted/native `ir`, JIT `run`
+  and AOT `build`, under 256 MiB address space and ten CPU seconds. Finite controls check
+  active-budget release and reuse of completed instances at the compilation-wide limit of 4,096
+  specializations;
 - **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
   35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
   function's default, import effects and the runtime's object comparison/representation callbacks

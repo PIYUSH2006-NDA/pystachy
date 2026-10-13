@@ -25,6 +25,9 @@
 #   benchmarks     bench/*.py print exactly what CPython prints, JIT and AOT; timings recorded
 #   rtcheck        tools/rtcheck.py: runtime.py, run by CPython, gives what CPython's str methods and
 #                  math functions give on random inputs
+#   re-fuzz        tools/re_fuzz.py: lib/re, run by CPython, compiles random patterns to the code and
+#                  errors CPython's re does and matches, splits and substitutes as it does, on CPython's
+#                  strs and on Pystachy's UTF-8 ones, and so do test_re's cases too big for gc-stress
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
@@ -37,8 +40,9 @@
 #                  including ordering and list searches, normally and with GC stress
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
-#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types and
-#                  specialization breadth under 256 MiB / ten CPU seconds, with short diagnostics;
+#   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types,
+#                  specialization breadth and the signature bytes specializations retain under
+#                  256 MiB / ten CPU seconds, with short diagnostics;
 #                  finite controls and reuse at the retained-instance boundary still compile
 #   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
 #                  still execute as in CPython, with both compilers
@@ -269,6 +273,11 @@ step benchmarks $r "$s" "$L" ", \"programs\": $n, \"identical\": $ok, \"timings\
 L=$V/rtcheck.log; s=$(now); r=fail
 $PY tools/rtcheck.py > "$L" 2>&1 && r=pass
 step rtcheck $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) cases, \([0-9]*\) failed$/, "cases": \1, "failed": \2/p' "$L")"
+
+# ---- re-fuzz: lib/re on CPython against CPython's own re, on random patterns and test_re's largest cases
+L=$V/re-fuzz.log; s=$(now); r=fail
+$PY tools/re_fuzz.py > "$L" 2>&1 && r=pass
+step re-fuzz $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) upstream cases and \([0-9]*\) patterns (\([0-9]*\) valid): \([0-9]*\) cases, \([0-9]*\) failed$/, "upstream_cases": \1, "patterns": \2, "valid": \3, "cases": \4, "failed": \5/p' "$L")"
 
 # ---- rt-abi: one signature per runtime function across runtime.py, runtime.c and the corpus
 L=$V/rt-abi.log; s=$(now); r=fail
