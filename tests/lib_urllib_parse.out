@@ -1,0 +1,452 @@
+-- quote
+True True
+%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-./0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~%7F
+%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~%7F
+%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F+%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~%7F
+%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F+%21%22%23%24%25%26%27%28%29%2A%2B%2C-./0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~%7F
+<> <>
+a%FCb a%FCb
+ab%5B%5Dcd ab%5B%5Dcd
+%20 + a%20b%20cd%20e%20f a+b+cd+e+f
+alpha%2Bbeta+gamma alpha+beta+gamma
+  ''
+%C2%A2%C3%98ab%C3%BF %C2%A2%C3%98ab%C3%BF
+%A2%D8ab%FF
+%E6%BC%A2%E5%AD%97 UnicodeError: 'latin-1' codec can't encode characters in position 0-1: ordinal not in range(256)
+%3F%3F
+%26%2328450%3B%26%2323383%3B
+%A2%D8+%FF
+ab%3F%3F+cd
+caf%C3%A9%20cr%C3%A8me/%E2%82%AC?%F0%9F%98%80
+caf%C3%A9 %41% a%2Fb:c@d
+~-._ %00%7F
+'utf-8' %C3%A9%E2%82%AC %C3%A9
+'UTF8' %C3%A9%E2%82%AC %C3%A9
+'u8' %C3%A9%E2%82%AC %C3%A9
+'utf_8' %C3%A9%E2%82%AC %C3%A9
+' utf-8 ' %C3%A9%E2%82%AC %C3%A9
+'cp65001' %C3%A9%E2%82%AC %C3%A9
+'latin-1' %E9%5Cu20ac %E9
+'Latin1' %E9%5Cu20ac %E9
+'ISO-8859-1' %E9%5Cu20ac %E9
+'iso8859_1' %E9%5Cu20ac %E9
+'L1' %E9%5Cu20ac %E9
+'8859' %E9%5Cu20ac %E9
+'cp819' %E9%5Cu20ac %E9
+'ascii' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+'US-ASCII' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+'646' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+'ANSI_X3.4-1968' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+'iso_646.irv:1991' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+'us' %5Cxe9%5Cu20ac UnicodeError: 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+strict UnicodeError: 'ascii' codec can't encode characters in position 1-3: ordinal not in range(128) UnicodeError: 'latin-1' codec can't encode characters in position 1-2: ordinal not in range(256)
+strict UnicodeError: 'utf-8' codec can't encode characters in position 1-2: surrogates not allowed
+strict UnicodeError: 'latin-1' codec can't encode characters in position 0-2: ordinal not in range(256) UnicodeError: 'ascii' codec can't encode character '\udce9' in position 0: ordinal not in range(128)
+strict ok %C3%A9
+ignore ab %E9
+ignore xy
+ignore  
+ignore ok %C3%A9
+replace a%3F%3F%3Fb %E9%3F%3F
+replace x%3F%3Fy%3F
+replace %3F%3F%3F %3F
+replace ok %C3%A9
+backslashreplace a%5Cxe9%5Cu20ac%5CU0001f600b %E9%5Cu20ac%5CU0001f600
+backslashreplace x%5Cud800%5Cudfffy%5Cudce9
+backslashreplace %5Cudc80%5Cudcff%5Cudc7f %5Cudce9
+backslashreplace ok %C3%A9
+xmlcharrefreplace a%26%23233%3B%26%238364%3B%26%23128512%3Bb %E9%26%238364%3B%26%23128512%3B
+xmlcharrefreplace x%26%2355296%3B%26%2357343%3By%26%2356553%3B
+xmlcharrefreplace %26%2356448%3B%26%2356575%3B%26%2356447%3B %26%2356553%3B
+xmlcharrefreplace ok %C3%A9
+surrogateescape UnicodeError: 'ascii' codec can't encode characters in position 1-3: ordinal not in range(128) UnicodeError: 'latin-1' codec can't encode characters in position 1-2: ordinal not in range(256)
+surrogateescape UnicodeError: 'utf-8' codec can't encode characters in position 1-2: surrogates not allowed
+surrogateescape UnicodeError: 'latin-1' codec can't encode character '\udc7f' in position 2: ordinal not in range(256) %E9
+surrogateescape ok %C3%A9
+surrogatepass UnicodeError: 'ascii' codec can't encode characters in position 1-3: ordinal not in range(128) UnicodeError: 'latin-1' codec can't encode characters in position 1-2: ordinal not in range(256)
+surrogatepass x%ED%A0%80%ED%BF%BFy%ED%B3%A9
+surrogatepass UnicodeError: 'latin-1' codec can't encode characters in position 0-2: ordinal not in range(256) UnicodeError: 'ascii' codec can't encode character '\udce9' in position 0: ordinal not in range(128)
+surrogatepass ok %C3%A9
+nosuch LookupError: unknown error handler name 'nosuch' LookupError: unknown error handler name 'nosuch'
+nosuch LookupError: unknown error handler name 'nosuch'
+nosuch LookupError: unknown error handler name 'nosuch' LookupError: unknown error handler name 'nosuch'
+nosuch ok %C3%A9
+Strict LookupError: unknown error handler name 'Strict' LookupError: unknown error handler name 'Strict'
+Strict LookupError: unknown error handler name 'Strict'
+Strict LookupError: unknown error handler name 'Strict' LookupError: unknown error handler name 'Strict'
+Strict ok %C3%A9
+a%20b%2B%2541 a+b%2B%2541 a b+A a b A a%20b%2B%2541
+TypeError: quote_from_bytes() expected bytes
+TypeError: quote_from_bytes() expected bytes
+TypeError: argument of type 'NoneType' is not iterable
+AttributeError: 'NoneType' object has no attribute 'replace'
+-- unquote
+1
+'%xab' '%xab' '%xab'
+'%x' '%x' '%x'
+'%' '%' '%'
+'%%' '%%' '%%'
+'%2' '%2' '%2'
+'%G0' '%G0' '%G0'
+'%%41' '%A' '%A'
+'%4%41' '%4A' '%4A'
+'abc' 'abc' 'abc'
+'' '' ''
+'%20%2' ' %2' ' %2'
+'a%2xb%41' 'a%2xbA' 'a%2xbA'
+abcd abcd
+are+there+spaces... are there spaces...
+'br\xfcckner_sapporo_20050930.doc' 'br\xfcckner'
+'br\xfcckner_sapporo_20050930.doc'
+'\u6f22\u5b57' '\ufffd' '\ufffd'
+'' '\u6f22\xfc' '\u6f22\xfc'
+'\xab\xea' 'caf\xe9 cr\xe8me' 'caf\xe9 cr\xe8me'
+'\xe9\xe9\u20ac\u20ac\U0001f600\U0001f600'
+'\ufffd\xe9\ufffd' '\ufffd\xe9\ufffd' 'x\ufffd' '\ufffdx'
+replace 'a\ufffdb\xe9\ufffd\ufffd\ufffd\ufffd\ufffdc\ufffd' '\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd'
+replace 'a\ufffdb\ufffd\ufffd' 'A' '\xe9'
+ignore 'ab\xe9c' ''
+ignore 'ab' 'A' '\xe9'
+backslashreplace 'a\\xe9b\xe9\\xed\\xa0\\x80\\xed\\xa0c\\xf0\\x9f\\x98' '\\xed\\xb3\\xa9\\xed\\xa0\\x80'
+backslashreplace 'a\\xe9b\\xc3\\xa9' 'A' '\xe9'
+surrogateescape 'a\udce9b\xe9\udced\udca0\udc80\udced\udca0c\udcf0\udc9f\udc98' '\udced\udcb3\udca9\udced\udca0\udc80'
+surrogateescape 'a\udce9b\udcc3\udca9' 'A' '\xe9'
+surrogatepass UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte '\udce9\ud800'
+surrogatepass UnicodeError: 'ascii' codec can't decode byte 0xe9 in position 1: ordinal not in range(128) 'A' '\xe9'
+strict UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte UnicodeError: 'utf-8' codec can't decode byte 0xed in position 0: invalid continuation byte
+strict UnicodeError: 'ascii' codec can't decode byte 0xe9 in position 1: ordinal not in range(128) 'A' '\xe9'
+xmlcharrefreplace TypeError: don't know how to handle UnicodeDecodeError in error callback TypeError: don't know how to handle UnicodeDecodeError in error callback
+xmlcharrefreplace TypeError: don't know how to handle UnicodeDecodeError in error callback 'A' '\xe9'
+namereplace TypeError: don't know how to handle UnicodeDecodeError in error callback TypeError: don't know how to handle UnicodeDecodeError in error callback
+namereplace TypeError: don't know how to handle UnicodeDecodeError in error callback 'A' '\xe9'
+nosuch LookupError: unknown error handler name 'nosuch' LookupError: unknown error handler name 'nosuch'
+nosuch LookupError: unknown error handler name 'nosuch' 'A' '\xe9'
+UTF-8 '\xe9\ufffd' UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 2: unexpected end of data
+utf8 '\xe9\ufffd' UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 2: unexpected end of data
+latin1 '\xc3\xa9\xe9' '\xc3\xa9\xe9'
+ISO8859-1 '\xc3\xa9\xe9' '\xc3\xa9\xe9'
+ASCII '\ufffd\ufffd\ufffd' UnicodeError: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+us_ascii '\ufffd\ufffd\ufffd' UnicodeError: 'ascii' codec can't decode byte 0xc3 in position 0: ordinal not in range(128)
+-- parse_qsl and parse_qs
+'' [] []
+  {} {}
+'&' [] []
+  {} {}
+'&&' [] []
+  {} {}
+'=' [('', '')] []
+  {'': ['']} {}
+'=a' [('', 'a')] [('', 'a')]
+  {'': ['a']} {'': ['a']}
+'a' [('a', '')] []
+  {'a': ['']} {}
+'a=' [('a', '')] []
+  {'a': ['']} {}
+'a=b=c' [('a', 'b=c')] [('a', 'b=c')]
+  {'a': ['b=c']} {'a': ['b=c']}
+'a%3Db=c' [('a=b', 'c')] [('a=b', 'c')]
+  {'a=b': ['c']} {'a=b': ['c']}
+'a=b&c=d' [('a', 'b'), ('c', 'd')] [('a', 'b'), ('c', 'd')]
+  {'a': ['b'], 'c': ['d']} {'a': ['b'], 'c': ['d']}
+'a=b%26c=d' [('a', 'b&c=d')] [('a', 'b&c=d')]
+  {'a': ['b&c=d']} {'a': ['b&c=d']}
+'&a=b' [('a', 'b')] [('a', 'b')]
+  {'a': ['b']} {'a': ['b']}
+'a=a+b&b=b+c' [('a', 'a b'), ('b', 'b c')] [('a', 'a b'), ('b', 'b c')]
+  {'a': ['a b'], 'b': ['b c']} {'a': ['a b'], 'b': ['b c']}
+'a=1&a=2' [('a', '1'), ('a', '2')] [('a', '1'), ('a', '2')]
+  {'a': ['1', '2']} {'a': ['1', '2']}
+';a=b' [(';a', 'b')] [(';a', 'b')]
+  {';a': ['b']} {';a': ['b']}
+'a=a+b;b=b+c' [('a', 'a b;b=b c')] [('a', 'a b;b=b c')]
+  {'a': ['a b;b=b c']} {'a': ['a b;b=b c']}
+'Ł=é' [('Ł', 'é')] [('Ł', 'é')]
+  {'Ł': ['é']} {'Ł': ['é']}
+'%C5%81=%C3%A9' [('Ł', 'é')] [('Ł', 'é')]
+  {'Ł': ['é']} {'Ł': ['é']}
+'%81=%A9' [('�', '�')] [('�', '�')]
+  {'�': ['�']} {'�': ['�']}
+'a=%ZZ' [('a', '%ZZ')] [('a', '%ZZ')]
+  {'a': ['%ZZ']} {'a': ['%ZZ']}
+'x=1&&y=%7E&z' [('x', '1'), ('y', '~'), ('z', '')] [('x', '1'), ('y', '~')]
+  {'x': ['1'], 'y': ['~'], 'z': ['']} {'x': ['1'], 'y': ['~']}
+'  a = b  ' [('  a ', ' b  ')] [('  a ', ' b  ')]
+  {'  a ': [' b  ']} {'  a ': [' b  ']}
+';' [] {}
+';;' [] {}
+';a=b' [('a', 'b')] {'a': ['b']}
+'a=a+b;b=b+c' [('a', 'a b'), ('b', 'b c')] {'a': ['a b'], 'b': ['b c']}
+'a=1;a=2' [('a', '1'), ('a', '2')] {'a': ['1', '2']}
+'a=1&b=2;c=3' [('a', '1&b=2'), ('c', '3')] {'a': ['1&b=2'], 'c': ['3']}
+[('a', '1'), ('b', '2'), ('c', '')] {'a': ['1'], 'b': ['2']}
+{'key': ['Łé']} {'key': ['Łé']}
+{'key': ['Ł��']} {'key': ['Ł�-']}
+{'key': ['Ł-']}
+[('key', 'Łé')] [('k', '\\xe9')]
+10
+[('a', 'a&a=a&a=a&a=a&a=a&a=a&a=a&a=a&a=a&a=a&a=a')]
+[('a', '1'), ('b', '2')]
+[('a', '1&b')]
+ValueError: bad query field: 'b'
+ValueError: bad query field: 'b'
+ValueError: bad query field: ''
+ValueError: bad query field: ''
+ValueError: bad query field: 'é'
+ValueError: bad query field: 'é'
+[('a', 'b')]
+{'': [''], 'a': ['b']}
+ValueError: bad query field: ''
+ValueError: bad query field: ''
+ValueError: Separator must be of type string or bytes.
+UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 0: unexpected end of data
+{'q': ['café crème', 'té'], 'page': ['2'], 'filter': ['color:red', 'size:M']} ['filter', 'page', 'q'] ['café crème', 'té'] ['2'] 2
+-- urlencode
+1st=1&2nd=2&3rd=3 1st=1&2nd=2&3rd=3
+%26=%3D key+name=A+bunch+of+pluses
+sequence=%5B%271%27%2C+%272%27%2C+%273%27%5D sequence=1&sequence=2&sequence=3
+'' '' a=1 a=1&a=2
+a=1&a=2&b=3&b=4&b=5 a=3&a=4&a=5 a=5
+a=1.5&b=2.0 a=True 1=x&22=y
+%3F=%3F %C2%A0=%C3%81
+%A0=%C1 %3F=%3F
+%3F=1&%3F=%3F
+%C2%A0=42&%C2%A0=%C3%81 %A0=42&%A0=%C1
+a=some+value a=some%20value%2Fanother
+a=some%20value/another a/b=c+d:e
+q=caf%C3%A9+cr%C3%A8me&n=%E2%82%AC%F0%9F%98%80 q=caf%E9
+a=%E9&a=b+c a=1&a=2&b=
+x=%26%2328450%3B
+a=x&b=None a=x&b=None
+UnicodeError: 'latin-1' codec can't encode character '\u6f22' in position 0: ordinal not in range(256)
+TypeError: not a valid non-string sequence or mapping object
+-- urlsplit, urlparse, urlunsplit, urlunparse
+'path/to/file' SplitResult(scheme='', netloc='', path='path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='path/to/file', params='', query='', fragment='') 'path/to/file' 'path/to/file' True True
+'/path/to/file' SplitResult(scheme='', netloc='', path='/path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='/path/to/file', params='', query='', fragment='') '/path/to/file' '/path/to/file' True True
+'//path/to/file' SplitResult(scheme='', netloc='path', path='/to/file', query='', fragment='') ParseResult(scheme='', netloc='path', path='/to/file', params='', query='', fragment='') '//path/to/file' '//path/to/file' True True
+'////path/to/file' SplitResult(scheme='', netloc='', path='//path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='//path/to/file', params='', query='', fragment='') '////path/to/file' '////path/to/file' True True
+'/////path/to/file' SplitResult(scheme='', netloc='', path='///path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='///path/to/file', params='', query='', fragment='') '/////path/to/file' '/////path/to/file' True True
+'scheme:path/to/file' SplitResult(scheme='scheme', netloc='', path='path/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='', path='path/to/file', params='', query='', fragment='') 'scheme:path/to/file' 'scheme:path/to/file' True True
+'scheme:/path/to/file' SplitResult(scheme='scheme', netloc='', path='/path/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='', path='/path/to/file', params='', query='', fragment='') 'scheme:/path/to/file' 'scheme:/path/to/file' True True
+'scheme://path/to/file' SplitResult(scheme='scheme', netloc='path', path='/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='path', path='/to/file', params='', query='', fragment='') 'scheme://path/to/file' 'scheme://path/to/file' True True
+'scheme:////path/to/file' SplitResult(scheme='scheme', netloc='', path='//path/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='', path='//path/to/file', params='', query='', fragment='') 'scheme:////path/to/file' 'scheme:////path/to/file' True True
+'scheme://///path/to/file' SplitResult(scheme='scheme', netloc='', path='///path/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='', path='///path/to/file', params='', query='', fragment='') 'scheme://///path/to/file' 'scheme://///path/to/file' True True
+'file:tmp/junk.txt' SplitResult(scheme='file', netloc='', path='tmp/junk.txt', query='', fragment='') ParseResult(scheme='file', netloc='', path='tmp/junk.txt', params='', query='', fragment='') 'file:tmp/junk.txt' 'file:tmp/junk.txt' True True
+'file:///tmp/junk.txt' SplitResult(scheme='file', netloc='', path='/tmp/junk.txt', query='', fragment='') ParseResult(scheme='file', netloc='', path='/tmp/junk.txt', params='', query='', fragment='') 'file:///tmp/junk.txt' 'file:///tmp/junk.txt' True True
+'file:////tmp/junk.txt' SplitResult(scheme='file', netloc='', path='//tmp/junk.txt', query='', fragment='') ParseResult(scheme='file', netloc='', path='//tmp/junk.txt', params='', query='', fragment='') 'file:////tmp/junk.txt' 'file:////tmp/junk.txt' True True
+'file://///tmp/junk.txt' SplitResult(scheme='file', netloc='', path='///tmp/junk.txt', query='', fragment='') ParseResult(scheme='file', netloc='', path='///tmp/junk.txt', params='', query='', fragment='') 'file://///tmp/junk.txt' 'file://///tmp/junk.txt' True True
+'http:tmp/junk.txt' SplitResult(scheme='http', netloc='', path='tmp/junk.txt', query='', fragment='') ParseResult(scheme='http', netloc='', path='tmp/junk.txt', params='', query='', fragment='') 'http:tmp/junk.txt' 'http:tmp/junk.txt' True True
+'http://example.com/tmp/junk.txt' SplitResult(scheme='http', netloc='example.com', path='/tmp/junk.txt', query='', fragment='') ParseResult(scheme='http', netloc='example.com', path='/tmp/junk.txt', params='', query='', fragment='') 'http://example.com/tmp/junk.txt' 'http://example.com/tmp/junk.txt' True True
+'http:///example.com/tmp/junk.txt' SplitResult(scheme='http', netloc='', path='/example.com/tmp/junk.txt', query='', fragment='') ParseResult(scheme='http', netloc='', path='/example.com/tmp/junk.txt', params='', query='', fragment='') 'http:///example.com/tmp/junk.txt' 'http:///example.com/tmp/junk.txt' True True
+'http:////example.com/tmp/junk.txt' SplitResult(scheme='http', netloc='', path='//example.com/tmp/junk.txt', query='', fragment='') ParseResult(scheme='http', netloc='', path='//example.com/tmp/junk.txt', params='', query='', fragment='') 'http:////example.com/tmp/junk.txt' 'http:////example.com/tmp/junk.txt' True True
+'imap://mail.python.org/mbox1' SplitResult(scheme='imap', netloc='mail.python.org', path='/mbox1', query='', fragment='') ParseResult(scheme='imap', netloc='mail.python.org', path='/mbox1', params='', query='', fragment='') 'imap://mail.python.org/mbox1' 'imap://mail.python.org/mbox1' True True
+'mms://wms.sys.hinet.net/cts/Drama/09006251100.asf' SplitResult(scheme='mms', netloc='wms.sys.hinet.net', path='/cts/Drama/09006251100.asf', query='', fragment='') ParseResult(scheme='mms', netloc='wms.sys.hinet.net', path='/cts/Drama/09006251100.asf', params='', query='', fragment='') 'mms://wms.sys.hinet.net/cts/Drama/09006251100.asf' 'mms://wms.sys.hinet.net/cts/Drama/09006251100.asf' True True
+'nfs://server/path/to/file.txt' SplitResult(scheme='nfs', netloc='server', path='/path/to/file.txt', query='', fragment='') ParseResult(scheme='nfs', netloc='server', path='/path/to/file.txt', params='', query='', fragment='') 'nfs://server/path/to/file.txt' 'nfs://server/path/to/file.txt' True True
+'svn+ssh://svn.zope.org/repos/main/ZConfig/trunk/' SplitResult(scheme='svn+ssh', netloc='svn.zope.org', path='/repos/main/ZConfig/trunk/', query='', fragment='') ParseResult(scheme='svn+ssh', netloc='svn.zope.org', path='/repos/main/ZConfig/trunk/', params='', query='', fragment='') 'svn+ssh://svn.zope.org/repos/main/ZConfig/trunk/' 'svn+ssh://svn.zope.org/repos/main/ZConfig/trunk/' True True
+'git+ssh://git@github.com/user/project.git' SplitResult(scheme='git+ssh', netloc='git@github.com', path='/user/project.git', query='', fragment='') ParseResult(scheme='git+ssh', netloc='git@github.com', path='/user/project.git', params='', query='', fragment='') 'git+ssh://git@github.com/user/project.git' 'git+ssh://git@github.com/user/project.git' True True
+'itms-services://?action=download-manifest&url=https://example.com/app' SplitResult(scheme='itms-services', netloc='', path='', query='action=download-manifest&url=https://example.com/app', fragment='') ParseResult(scheme='itms-services', netloc='', path='', params='', query='action=download-manifest&url=https://example.com/app', fragment='') 'itms-services://?action=download-manifest&url=https://example.com/app' 'itms-services://?action=download-manifest&url=https://example.com/app' True True
+'+scheme:path/to/file' SplitResult(scheme='', netloc='', path='+scheme:path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='+scheme:path/to/file', params='', query='', fragment='') '+scheme:path/to/file' '+scheme:path/to/file' True True
+'sch_me:path/to/file' SplitResult(scheme='', netloc='', path='sch_me:path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='sch_me:path/to/file', params='', query='', fragment='') 'sch_me:path/to/file' 'sch_me:path/to/file' True True
+'sch\xe8me:path/to/file' SplitResult(scheme='', netloc='', path='schème:path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='schème:path/to/file', params='', query='', fragment='') 'sch\xe8me:path/to/file' 'sch\xe8me:path/to/file' True True
+'///path/to/file' SplitResult(scheme='', netloc='', path='/path/to/file', query='', fragment='') ParseResult(scheme='', netloc='', path='/path/to/file', params='', query='', fragment='') '/path/to/file' '/path/to/file' True True
+'scheme:///path/to/file' SplitResult(scheme='scheme', netloc='', path='/path/to/file', query='', fragment='') ParseResult(scheme='scheme', netloc='', path='/path/to/file', params='', query='', fragment='') 'scheme:/path/to/file' 'scheme:/path/to/file' True True
+'file:/tmp/junk.txt' SplitResult(scheme='file', netloc='', path='/tmp/junk.txt', query='', fragment='') ParseResult(scheme='file', netloc='', path='/tmp/junk.txt', params='', query='', fragment='') 'file:///tmp/junk.txt' 'file:///tmp/junk.txt' True True
+'http:/tmp/junk.txt' SplitResult(scheme='http', netloc='', path='/tmp/junk.txt', query='', fragment='') ParseResult(scheme='http', netloc='', path='/tmp/junk.txt', params='', query='', fragment='') 'http:///tmp/junk.txt' 'http:///tmp/junk.txt' True True
+'https:/tmp/junk.txt' SplitResult(scheme='https', netloc='', path='/tmp/junk.txt', query='', fragment='') ParseResult(scheme='https', netloc='', path='/tmp/junk.txt', params='', query='', fragment='') 'https:///tmp/junk.txt' 'https:///tmp/junk.txt' True True
+'http://www.python.org' SplitResult(scheme='http', netloc='www.python.org', path='', query='', fragment='') ParseResult(scheme='http', netloc='www.python.org', path='', params='', query='', fragment='') 'http://www.python.org' 'http://www.python.org' True True
+'http://www.python.org#abc' SplitResult(scheme='http', netloc='www.python.org', path='', query='', fragment='abc') ParseResult(scheme='http', netloc='www.python.org', path='', params='', query='', fragment='abc') 'http://www.python.org#abc' 'http://www.python.org#abc' True True
+'https://www.python.org?q=abc' SplitResult(scheme='https', netloc='www.python.org', path='', query='q=abc', fragment='') ParseResult(scheme='https', netloc='www.python.org', path='', params='', query='q=abc', fragment='') 'https://www.python.org?q=abc' 'https://www.python.org?q=abc' True True
+'http://www.python.org/#abc' SplitResult(scheme='http', netloc='www.python.org', path='/', query='', fragment='abc') ParseResult(scheme='http', netloc='www.python.org', path='/', params='', query='', fragment='abc') 'http://www.python.org/#abc' 'http://www.python.org/#abc' True True
+'https://a/b/c/d;p?q#f' SplitResult(scheme='https', netloc='a', path='/b/c/d;p', query='q', fragment='f') ParseResult(scheme='https', netloc='a', path='/b/c/d', params='p', query='q', fragment='f') 'https://a/b/c/d;p?q#f' 'https://a/b/c/d;p?q#f' True True
+'Python' SplitResult(scheme='', netloc='', path='Python', query='', fragment='') ParseResult(scheme='', netloc='', path='Python', params='', query='', fragment='') 'Python' 'Python' True True
+'./Python' SplitResult(scheme='', netloc='', path='./Python', query='', fragment='') ParseResult(scheme='', netloc='', path='./Python', params='', query='', fragment='') './Python' './Python' True True
+'x-newscheme://foo.com/stuff' SplitResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', query='', fragment='') ParseResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', params='', query='', fragment='') 'x-newscheme://foo.com/stuff' 'x-newscheme://foo.com/stuff' True True
+'x://y' SplitResult(scheme='x', netloc='y', path='', query='', fragment='') ParseResult(scheme='x', netloc='y', path='', params='', query='', fragment='') 'x://y' 'x://y' True True
+'x:/y' SplitResult(scheme='x', netloc='', path='/y', query='', fragment='') ParseResult(scheme='x', netloc='', path='/y', params='', query='', fragment='') 'x:/y' 'x:/y' True True
+'x:/' SplitResult(scheme='x', netloc='', path='/', query='', fragment='') ParseResult(scheme='x', netloc='', path='/', params='', query='', fragment='') 'x:/' 'x:/' True True
+'/' SplitResult(scheme='', netloc='', path='/', query='', fragment='') ParseResult(scheme='', netloc='', path='/', params='', query='', fragment='') '/' '/' True True
+'mailto:1337@example.org' SplitResult(scheme='mailto', netloc='', path='1337@example.org', query='', fragment='') ParseResult(scheme='mailto', netloc='', path='1337@example.org', params='', query='', fragment='') 'mailto:1337@example.org' 'mailto:1337@example.org' True True
+'http://example.com?blahblah=/foo' SplitResult(scheme='http', netloc='example.com', path='', query='blahblah=/foo', fragment='') ParseResult(scheme='http', netloc='example.com', path='', params='', query='blahblah=/foo', fragment='') 'http://example.com?blahblah=/foo' 'http://example.com?blahblah=/foo' True True
+'path' SplitResult(scheme='', netloc='', path='path', query='', fragment='') ParseResult(scheme='', netloc='', path='path', params='', query='', fragment='') 'path' 'path' True True
+'//www.python.org:80' SplitResult(scheme='', netloc='www.python.org:80', path='', query='', fragment='') ParseResult(scheme='', netloc='www.python.org:80', path='', params='', query='', fragment='') '//www.python.org:80' '//www.python.org:80' True True
+'http://www.python.org:80' SplitResult(scheme='http', netloc='www.python.org:80', path='', query='', fragment='') ParseResult(scheme='http', netloc='www.python.org:80', path='', params='', query='', fragment='') 'http://www.python.org:80' 'http://www.python.org:80' True True
+'http:80' SplitResult(scheme='http', netloc='', path='80', query='', fragment='') ParseResult(scheme='http', netloc='', path='80', params='', query='', fragment='') 'http:80' 'http:80' True True
+'https:80' SplitResult(scheme='https', netloc='', path='80', query='', fragment='') ParseResult(scheme='https', netloc='', path='80', params='', query='', fragment='') 'https:80' 'https:80' True True
+'path:80' SplitResult(scheme='path', netloc='', path='80', query='', fragment='') ParseResult(scheme='path', netloc='', path='80', params='', query='', fragment='') 'path:80' 'path:80' True True
+'http:' SplitResult(scheme='http', netloc='', path='', query='', fragment='') ParseResult(scheme='http', netloc='', path='', params='', query='', fragment='') 'http://' 'http://' True True
+'https:' SplitResult(scheme='https', netloc='', path='', query='', fragment='') ParseResult(scheme='https', netloc='', path='', params='', query='', fragment='') 'https://' 'https://' True True
+'s3://foo.com/stuff' SplitResult(scheme='s3', netloc='foo.com', path='/stuff', query='', fragment='') ParseResult(scheme='s3', netloc='foo.com', path='/stuff', params='', query='', fragment='') 's3://foo.com/stuff' 's3://foo.com/stuff' True True
+'x-newscheme://foo.com/stuff?query#fragment' SplitResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', query='query', fragment='fragment') ParseResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', params='', query='query', fragment='fragment') 'x-newscheme://foo.com/stuff?query#fragment' 'x-newscheme://foo.com/stuff?query#fragment' True True
+'x-newscheme://foo.com/stuff?query' SplitResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', query='query', fragment='') ParseResult(scheme='x-newscheme', netloc='foo.com', path='/stuff', params='', query='query', fragment='') 'x-newscheme://foo.com/stuff?query' 'x-newscheme://foo.com/stuff?query' True True
+'tel:+31-641044153' SplitResult(scheme='tel', netloc='', path='+31-641044153', query='', fragment='') ParseResult(scheme='tel', netloc='', path='+31-641044153', params='', query='', fragment='') 'tel:+31-641044153' 'tel:+31-641044153' True True
+'tel:123-4;phone-context=+1-650-516' SplitResult(scheme='tel', netloc='', path='123-4;phone-context=+1-650-516', query='', fragment='') ParseResult(scheme='tel', netloc='', path='123-4', params='phone-context=+1-650-516', query='', fragment='') 'tel:123-4;phone-context=+1-650-516' 'tel:123-4;phone-context=+1-650-516' True True
+'tel:7042;phone-context=example.com' SplitResult(scheme='tel', netloc='', path='7042;phone-context=example.com', query='', fragment='') ParseResult(scheme='tel', netloc='', path='7042', params='phone-context=example.com', query='', fragment='') 'tel:7042;phone-context=example.com' 'tel:7042;phone-context=example.com' True True
+'sip:alice@atlanta.com;maddr=239.255.255.1;ttl=15' SplitResult(scheme='sip', netloc='', path='alice@atlanta.com;maddr=239.255.255.1;ttl=15', query='', fragment='') ParseResult(scheme='sip', netloc='', path='alice@atlanta.com', params='maddr=239.255.255.1;ttl=15', query='', fragment='') 'sip:alice@atlanta.com;maddr=239.255.255.1;ttl=15' 'sip:alice@atlanta.com;maddr=239.255.255.1;ttl=15' True True
+'http://User:Pass@www.python.org:080/doc/?query=yes#frag' SplitResult(scheme='http', netloc='User:Pass@www.python.org:080', path='/doc/', query='query=yes', fragment='frag') ParseResult(scheme='http', netloc='User:Pass@www.python.org:080', path='/doc/', params='', query='query=yes', fragment='frag') 'http://User:Pass@www.python.org:080/doc/?query=yes#frag' 'http://User:Pass@www.python.org:080/doc/?query=yes#frag' True True
+'\x00\x01 \x1f http://u@h/p?q#f' SplitResult(scheme='http', netloc='u@h', path='/p', query='q', fragment='f') ParseResult(scheme='http', netloc='u@h', path='/p', params='', query='q', fragment='f') 'http://u@h/p?q#f' 'http://u@h/p?q#f' True True
+'www.pypi.org ' SplitResult(scheme='', netloc='', path='www.pypi.org ', query='', fragment='') ParseResult(scheme='', netloc='', path='www.pypi.org ', params='', query='', fragment='') 'www.pypi.org ' 'www.pypi.org ' True True
+'https://www.python.org:88/doc/?query=    ' SplitResult(scheme='https', netloc='www.python.org:88', path='/doc/', query='query=    ', fragment='') ParseResult(scheme='https', netloc='www.python.org:88', path='/doc/', params='', query='query=    ', fragment='') 'https://www.python.org:88/doc/?query=    ' 'https://www.python.org:88/doc/?query=    ' True True
+"http\t://www.python\n.org\t/java\nscript:\talert('msg\r\n')/?query\n=\tsomething#frag\nment" SplitResult(scheme='http', netloc='www.python.org', path="/javascript:alert('msg')/", query='query=something', fragment='fragment') ParseResult(scheme='http', netloc='www.python.org', path="/javascript:alert('msg')/", params='', query='query=something', fragment='fragment') "http://www.python.org/javascript:alert('msg')/?query=something#fragment" "http://www.python.org/javascript:alert('msg')/?query=something#fragment" True True
+'.://www.example.net' SplitResult(scheme='', netloc='', path='.://www.example.net', query='', fragment='') ParseResult(scheme='', netloc='', path='.://www.example.net', params='', query='', fragment='') '.://www.example.net' '.://www.example.net' True True
+'+://x' SplitResult(scheme='', netloc='', path='+://x', query='', fragment='') ParseResult(scheme='', netloc='', path='+://x', params='', query='', fragment='') '+://x' '+://x' True True
+'-://x' SplitResult(scheme='', netloc='', path='-://x', query='', fragment='') ParseResult(scheme='', netloc='', path='-://x', params='', query='', fragment='') '-://x' '-://x' True True
+'0://x' SplitResult(scheme='', netloc='', path='0://x', query='', fragment='') ParseResult(scheme='', netloc='', path='0://x', params='', query='', fragment='') '0://x' '0://x' True True
+'http&://x' SplitResult(scheme='', netloc='', path='http&://x', query='', fragment='') ParseResult(scheme='', netloc='', path='http&://x', params='', query='', fragment='') 'http&://x' 'http&://x' True True
+'\u0966http://x' SplitResult(scheme='', netloc='', path='०http://x', query='', fragment='') ParseResult(scheme='', netloc='', path='०http://x', params='', query='', fragment='') '\u0966http://x' '\u0966http://x' True True
+'http://[::1]:5432/foo/' SplitResult(scheme='http', netloc='[::1]:5432', path='/foo/', query='', fragment='') ParseResult(scheme='http', netloc='[::1]:5432', path='/foo/', params='', query='', fragment='') 'http://[::1]:5432/foo/' 'http://[::1]:5432/foo/' True True
+'http://[dead:beef:cafe:5417:affe:8FA3:deaf:feed]/foo/' SplitResult(scheme='http', netloc='[dead:beef:cafe:5417:affe:8FA3:deaf:feed]', path='/foo/', query='', fragment='') ParseResult(scheme='http', netloc='[dead:beef:cafe:5417:affe:8FA3:deaf:feed]', path='/foo/', params='', query='', fragment='') 'http://[dead:beef:cafe:5417:affe:8FA3:deaf:feed]/foo/' 'http://[dead:beef:cafe:5417:affe:8FA3:deaf:feed]/foo/' True True
+'http://[::12.34.56.78]:/foo/' SplitResult(scheme='http', netloc='[::12.34.56.78]:', path='/foo/', query='', fragment='') ParseResult(scheme='http', netloc='[::12.34.56.78]:', path='/foo/', params='', query='', fragment='') 'http://[::12.34.56.78]:/foo/' 'http://[::12.34.56.78]:/foo/' True True
+'http://[::ffff:12.34.56.78]/foo/' SplitResult(scheme='http', netloc='[::ffff:12.34.56.78]', path='/foo/', query='', fragment='') ParseResult(scheme='http', netloc='[::ffff:12.34.56.78]', path='/foo/', params='', query='', fragment='') 'http://[::ffff:12.34.56.78]/foo/' 'http://[::ffff:12.34.56.78]/foo/' True True
+'scheme://user@[v6a.ip]:1234/path?query' SplitResult(scheme='scheme', netloc='user@[v6a.ip]:1234', path='/path', query='query', fragment='') ParseResult(scheme='scheme', netloc='user@[v6a.ip]:1234', path='/path', params='', query='query', fragment='') 'scheme://user@[v6a.ip]:1234/path?query' 'scheme://user@[v6a.ip]:1234/path?query' True True
+'scheme://user@[0439:23af:2309::fae7%test]/path?query' SplitResult(scheme='scheme', netloc='user@[0439:23af:2309::fae7%test]', path='/path', query='query', fragment='') ParseResult(scheme='scheme', netloc='user@[0439:23af:2309::fae7%test]', path='/path', params='', query='query', fragment='') 'scheme://user@[0439:23af:2309::fae7%test]/path?query' 'scheme://user@[0439:23af:2309::fae7%test]/path?query' True True
+'scheme://user@[0439:23af:2309::fae7:1234:192.0.2.146%test]/path?query' SplitResult(scheme='scheme', netloc='user@[0439:23af:2309::fae7:1234:192.0.2.146%test]', path='/path', query='query', fragment='') ParseResult(scheme='scheme', netloc='user@[0439:23af:2309::fae7:1234:192.0.2.146%test]', path='/path', params='', query='query', fragment='') 'scheme://user@[0439:23af:2309::fae7:1234:192.0.2.146%test]/path?query' 'scheme://user@[0439:23af:2309::fae7:1234:192.0.2.146%test]/path?query' True True
+'http://[FE80::822a:a8ff:fe49:470c%tESt]:1234' SplitResult(scheme='http', netloc='[FE80::822a:a8ff:fe49:470c%tESt]:1234', path='', query='', fragment='') ParseResult(scheme='http', netloc='[FE80::822a:a8ff:fe49:470c%tESt]:1234', path='', params='', query='', fragment='') 'http://[FE80::822a:a8ff:fe49:470c%tESt]:1234' 'http://[FE80::822a:a8ff:fe49:470c%tESt]:1234' True True
+'http://\u30d5\u309a:80' SplitResult(scheme='http', netloc='プ:80', path='', query='', fragment='') ParseResult(scheme='http', netloc='プ:80', path='', params='', query='', fragment='') 'http://\u30d5\u309a:80' 'http://\u30d5\u309a:80' True True
+'http://caf\xe9.example/x' SplitResult(scheme='http', netloc='café.example', path='/x', query='', fragment='') ParseResult(scheme='http', netloc='café.example', path='/x', params='', query='', fragment='') 'http://caf\xe9.example/x' 'http://caf\xe9.example/x' True True
+'HTTP://Example.COM/A' SplitResult(scheme='http', netloc='Example.COM', path='/A', query='', fragment='') ParseResult(scheme='http', netloc='Example.COM', path='/A', params='', query='', fragment='') 'http://Example.COM/A' 'http://Example.COM/A' True True
+'a:b:c' SplitResult(scheme='a', netloc='', path='b:c', query='', fragment='') ParseResult(scheme='a', netloc='', path='b:c', params='', query='', fragment='') 'a:b:c' 'a:b:c' True True
+'1a:b' SplitResult(scheme='', netloc='', path='1a:b', query='', fragment='') ParseResult(scheme='', netloc='', path='1a:b', params='', query='', fragment='') '1a:b' '1a:b' True True
+'http://a@b@c/d' SplitResult(scheme='http', netloc='a@b@c', path='/d', query='', fragment='') ParseResult(scheme='http', netloc='a@b@c', path='/d', params='', query='', fragment='') 'http://a@b@c/d' 'http://a@b@c/d' True True
+'http://h/p;a;b?q' SplitResult(scheme='http', netloc='h', path='/p;a;b', query='q', fragment='') ParseResult(scheme='http', netloc='h', path='/p', params='a;b', query='q', fragment='') 'http://h/p;a;b?q' 'http://h/p;a;b?q' True True
+'http://h/p/;a' SplitResult(scheme='http', netloc='h', path='/p/;a', query='', fragment='') ParseResult(scheme='http', netloc='h', path='/p/', params='a', query='', fragment='') 'http://h/p/;a' 'http://h/p/;a' True True
+'http://::12.34.56.78]/' ValueError: 'Invalid IPv6 URL'
+'http://[::1/foo/' ValueError: 'Invalid IPv6 URL'
+'ftp://[::1/foo/bad]/bad' ValueError: 'Invalid IPv6 URL'
+'http://[::1/foo/bad]/bad' ValueError: 'Invalid IPv6 URL'
+'http://[::ffff:12.34.56.78' ValueError: 'Invalid IPv6 URL'
+'Scheme://user@[192.0.2.146]/Path?Query' ValueError: 'An IPv4 address cannot be in brackets'
+'Scheme://user@[important.com:8000]/Path?Query' ValueError: "'important.com:8000' does not appear to be an IPv4 or IPv6 address"
+'Scheme://user@[v123r.IP]/Path?Query' ValueError: 'IPvFuture address is invalid'
+'Scheme://user@[v12ae]/Path?Query' ValueError: 'IPvFuture address is invalid'
+'Scheme://user@[v.IP]/Path?Query' ValueError: 'IPvFuture address is invalid'
+'Scheme://user@[v123.]/Path?Query' ValueError: 'IPvFuture address is invalid'
+'Scheme://user@[v]/Path?Query' ValueError: 'IPvFuture address is invalid'
+'Scheme://user@[0439:23af::2309::fae7:1234]/Path?Query' ValueError: "'0439:23af::2309::fae7:1234' does not appear to be an IPv4 or IPv6 address"
+'Scheme://user@[0439:23af:2309::fae7:1234:2342:438e:192.0.2.146]/Path?Query' ValueError: "'0439:23af:2309::fae7:1234:2342:438e:192.0.2.146' does not appear to be an IPv4 or IPv6 address"
+'Scheme://user@]v6a.ip[/Path' ValueError: 'Invalid IPv6 URL'
+'scheme://prefix.[v6a.ip]' ValueError: 'Invalid IPv6 URL'
+'scheme://[v6a.ip].suffix' ValueError: 'Invalid IPv6 URL'
+'scheme://prefix.[::1]:a' ValueError: 'Invalid IPv6 URL'
+'scheme://[::1].suffix:1a' ValueError: 'Invalid IPv6 URL'
+'scheme://[::1]x' ValueError: 'Invalid IPv6 URL'
+'scheme://[]' ValueError: "'' does not appear to be an IPv4 or IPv6 address"
+'scheme://[::1%]' ValueError: "'::1%' does not appear to be an IPv4 or IPv6 address"
+'scheme://[::1%a%b]' ValueError: "'::1%a%b' does not appear to be an IPv4 or IPv6 address"
+'scheme://[1.2.3.4.5]' ValueError: "'1.2.3.4.5' does not appear to be an IPv4 or IPv6 address"
+'scheme://[::01.2.3.4]' ValueError: "'::01.2.3.4' does not appear to be an IPv4 or IPv6 address"
+'scheme://[::256.2.3.4]' ValueError: "'::256.2.3.4' does not appear to be an IPv4 or IPv6 address"
+'scheme://[1:2:3:4:5:6:7:8:9]' ValueError: "'1:2:3:4:5:6:7:8:9' does not appear to be an IPv4 or IPv6 address"
+'scheme://[:1::]' ValueError: "':1::' does not appear to be an IPv4 or IPv6 address"
+'scheme://[1::2:]' ValueError: "'1::2:' does not appear to be an IPv4 or IPv6 address"
+'scheme://[12345::]' ValueError: "'12345::' does not appear to be an IPv4 or IPv6 address"
+'scheme://[\u0661::]' ValueError: "'\u0661::' does not appear to be an IPv4 or IPv6 address"
+'scheme://[1:2:3:4:5:6:7::]' SplitResult(scheme='scheme', netloc='[1:2:3:4:5:6:7::]', path='', query='', fragment='')
+'scheme://[1:2:3:4:5:6::7:8]' ValueError: "'1:2:3:4:5:6::7:8' does not appear to be an IPv4 or IPv6 address"
+'scheme://[::1:2:3:4:5:6:7]' SplitResult(scheme='scheme', netloc='[::1:2:3:4:5:6:7]', path='', query='', fragment='')
+'scheme://[1:2:3:4:5:6:1.2.3.4]' SplitResult(scheme='scheme', netloc='[1:2:3:4:5:6:1.2.3.4]', path='', query='', fragment='')
+'scheme://[1:2:3:4:5:6:7:1.2.3.4]' ValueError: "'1:2:3:4:5:6:7:1.2.3.4' does not appear to be an IPv4 or IPv6 address"
+'scheme://[0123:4567:89ab:cdef:0123:4567:89ab:cdef]' SplitResult(scheme='scheme', netloc='[0123:4567:89ab:cdef:0123:4567:89ab:cdef]', path='', query='', fragment='')
+'scheme://[1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1]' ValueError: "'1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1:1' does not appear to be an IPv4 or IPv6 address"
+'scheme://[v1.:]' SplitResult(scheme='scheme', netloc='[v1.:]', path='', query='', fragment='')
+'scheme://[V0.x\n]' SplitResult(scheme='scheme', netloc='[V0.x]', path='', query='', fragment='')
+'http://\u30d5\u309a\ufe1380' ValueError: "netloc '\u30d5\u309a\ufe1380' contains invalid characters under NFKC normalization"
+'http://netloc\u2100false.netloc/path' ValueError: "netloc 'netloc\u2100false.netloc' contains invalid characters under NFKC normalization"
+'http://n\uff03user@netloc/path' ValueError: "netloc 'n\uff03user@netloc' contains invalid characters under NFKC normalization"
+'http://a\u2a74b/' ValueError: "netloc 'a\u2a74b' contains invalid characters under NFKC normalization"
+'http://a\uff1fb/' ValueError: "netloc 'a\uff1fb' contains invalid characters under NFKC normalization"
+'http://u\ufe6bh/' ValueError: "netloc 'u\ufe6bh' contains invalid characters under NFKC normalization"
+'http://\u2047x/' ValueError: "netloc '\u2047x' contains invalid characters under NFKC normalization"
+'http://a\u2050b/' SplitResult(scheme='http', netloc='a⁐b', path='/', query='', fragment='')
+http:#frag SplitResult(scheme='http', netloc='', path='#frag', query='', fragment='') ParseResult(scheme='http', netloc='', path='#frag', params='', query='', fragment='') frag
+//example.net#frag SplitResult(scheme='', netloc='example.net', path='#frag', query='', fragment='') ParseResult(scheme='', netloc='example.net', path='#frag', params='', query='', fragment='') frag
+index.html#frag SplitResult(scheme='', netloc='', path='index.html#frag', query='', fragment='') ParseResult(scheme='', netloc='', path='index.html#frag', params='', query='', fragment='') frag
+;a=b#frag SplitResult(scheme='', netloc='', path=';a=b#frag', query='', fragment='') ParseResult(scheme='', netloc='', path='', params='a=b#frag', query='', fragment='') frag
+?a=b#frag SplitResult(scheme='', netloc='', path='', query='a=b#frag', fragment='') ParseResult(scheme='', netloc='', path='', params='', query='a=b#frag', fragment='') frag
+#frag SplitResult(scheme='', netloc='', path='#frag', query='', fragment='') ParseResult(scheme='', netloc='', path='#frag', params='', query='', fragment='') frag
+abc#@frag SplitResult(scheme='', netloc='', path='abc#@frag', query='', fragment='') ParseResult(scheme='', netloc='', path='abc#@frag', params='', query='', fragment='') @frag
+//abc#@frag SplitResult(scheme='', netloc='abc', path='#@frag', query='', fragment='') ParseResult(scheme='', netloc='abc', path='#@frag', params='', query='', fragment='') @frag
+//abc:80#@frag SplitResult(scheme='', netloc='abc:80', path='#@frag', query='', fragment='') ParseResult(scheme='', netloc='abc:80', path='#@frag', params='', query='', fragment='') @frag
+//abc#@frag:80 SplitResult(scheme='', netloc='abc', path='#@frag:80', query='', fragment='') ParseResult(scheme='', netloc='abc', path='#@frag:80', params='', query='', fragment='') @frag:80
+http ftp ftp
+SplitResult(scheme='http', netloc='www.python.org', path="/javascript:alert('msg')/", query='query=something', fragment='fragment')
+https://www.python.org/
+SplitResult(scheme='https', netloc='user@www.example.com:8080', path='/a/b/c', query='q=1&r=2', fragment='frag') user@www.example.com:8080 frag 5 user@www.example.com:8080 q=1&r=2 https user@www.example.com:8080 /a/b/c q=1&r=2 frag
+True SplitResult(scheme='https', netloc='user@www.example.com:8080', path='/a/b/c', query='q=1&r=2', fragment='') https://user@www.example.com:8080/x?q=1&r=2#frag
+ParseResult(scheme='http', netloc='h', path='/p', params='x', query='y', fragment='z') x http://h/p?y#z http://h/p;x?y#z
+http://h/p ////p file://
+urllib.parse ['', 'ftp', 'http', 'gopher'] 27 ['mms', 'sftp', 'tel']
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-. type://host/path x
+-- urljoin and urldefrag
+http://a/b/c/d;p?q#f
+  g:h http://a/b/c/g http://a/b/c/g http://a/b/c/g/ http://a/g http://g http://a/b/c/g?y http://a/b/c/g?y/./x http://a/b/c/d;p?q#s http://a/b/c/g#s http://a/b/c/g#s/./x http://a/b/c/g?y#s http://a/b/c/g;x http://a/b/c/g;x?y#s http://a/b/c/ http://a/b/c/ http://a/b/ http://a/b/ http://a/b/g http://a/ http://a/ http://a/g http://a/b/c/d;p?q#f http://a/b/c/g. http://a/b/c/.g http://a/b/c/g.. http://a/b/c/..g http://a/b/g http://a/b/c/g/ http://a/b/c/g/h http://a/b/c/h http://a/b/c/g;x=1/y http://a/b/c/y http://a/b/c/g?y/../x http://a/b/c/g#s/../x http://a/b/c/d;p?y http://a/b/c/;x http://a/g http://a/g http://a/g http://a/g http://a/b/c/g http://a/b/c/d;p?q http://a/b/c/d;p?y http://a/b/c/g?y http://a/b/c/g?y/./x http://a/h/i
+http://a/b/c/d;p?q
+  g:h http://a/b/c/g http://a/b/c/g http://a/b/c/g/ http://a/g http://g http://a/b/c/g?y http://a/b/c/g?y/./x http://a/b/c/d;p?q#s http://a/b/c/g#s http://a/b/c/g#s/./x http://a/b/c/g?y#s http://a/b/c/g;x http://a/b/c/g;x?y#s http://a/b/c/ http://a/b/c/ http://a/b/ http://a/b/ http://a/b/g http://a/ http://a/ http://a/g http://a/b/c/d;p?q http://a/b/c/g. http://a/b/c/.g http://a/b/c/g.. http://a/b/c/..g http://a/b/g http://a/b/c/g/ http://a/b/c/g/h http://a/b/c/h http://a/b/c/g;x=1/y http://a/b/c/y http://a/b/c/g?y/../x http://a/b/c/g#s/../x http://a/b/c/d;p?y http://a/b/c/;x http://a/g http://a/g http://a/g http://a/g http://a/b/c/g http://a/b/c/d;p?q http://a/b/c/d;p?y http://a/b/c/g?y http://a/b/c/g?y/./x http://a/h/i
+http://a/b/c/d
+  g:h http://a/b/c/g http://a/b/c/g http://a/b/c/g/ http://a/g http://g http://a/b/c/g?y http://a/b/c/g?y/./x http://a/b/c/d#s http://a/b/c/g#s http://a/b/c/g#s/./x http://a/b/c/g?y#s http://a/b/c/g;x http://a/b/c/g;x?y#s http://a/b/c/ http://a/b/c/ http://a/b/ http://a/b/ http://a/b/g http://a/ http://a/ http://a/g http://a/b/c/d http://a/b/c/g. http://a/b/c/.g http://a/b/c/g.. http://a/b/c/..g http://a/b/g http://a/b/c/g/ http://a/b/c/g/h http://a/b/c/h http://a/b/c/g;x=1/y http://a/b/c/y http://a/b/c/g?y/../x http://a/b/c/g#s/../x http://a/b/c/d?y http://a/b/c/;x http://a/g http://a/g http://a/g http://a/g http://a/b/c/g http://a/b/c/d http://a/b/c/d?y http://a/b/c/g?y http://a/b/c/g?y/./x http://a/h/i
+http://a/b/c/d/
+  g:h http://a/b/c/d/g http://a/b/c/d/g http://a/b/c/d/g/ http://a/g http://g http://a/b/c/d/g?y http://a/b/c/d/g?y/./x http://a/b/c/d/#s http://a/b/c/d/g#s http://a/b/c/d/g#s/./x http://a/b/c/d/g?y#s http://a/b/c/d/g;x http://a/b/c/d/g;x?y#s http://a/b/c/d/ http://a/b/c/d/ http://a/b/c/ http://a/b/c/ http://a/b/c/g http://a/b/ http://a/b/ http://a/b/g http://a/b/c/d/ http://a/b/c/d/g. http://a/b/c/d/.g http://a/b/c/d/g.. http://a/b/c/d/..g http://a/b/c/g http://a/b/c/d/g/ http://a/b/c/d/g/h http://a/b/c/d/h http://a/b/c/d/g;x=1/y http://a/b/c/d/y http://a/b/c/d/g?y/../x http://a/b/c/d/g#s/../x http://a/b/c/d/?y http://a/b/c/d/;x http://a/g http://a/g http://a/g http://a/g http://a/b/c/d/g http://a/b/c/d/ http://a/b/c/d/?y http://a/b/c/d/g?y http://a/b/c/d/g?y/./x http://a/b/h/i
+http://a/b/c/de
+  g:h http://a/b/c/g http://a/b/c/g http://a/b/c/g/ http://a/g http://g http://a/b/c/g?y http://a/b/c/g?y/./x http://a/b/c/de#s http://a/b/c/g#s http://a/b/c/g#s/./x http://a/b/c/g?y#s http://a/b/c/g;x http://a/b/c/g;x?y#s http://a/b/c/ http://a/b/c/ http://a/b/ http://a/b/ http://a/b/g http://a/ http://a/ http://a/g http://a/b/c/de http://a/b/c/g. http://a/b/c/.g http://a/b/c/g.. http://a/b/c/..g http://a/b/g http://a/b/c/g/ http://a/b/c/g/h http://a/b/c/h http://a/b/c/g;x=1/y http://a/b/c/y http://a/b/c/g?y/../x http://a/b/c/g#s/../x http://a/b/c/de?y http://a/b/c/;x http://a/g http://a/g http://a/g http://a/g http://a/b/c/g http://a/b/c/de http://a/b/c/de?y http://a/b/c/g?y http://a/b/c/g?y/./x http://a/h/i
+'http:///' '..' http:/// http:///
+'' 'http://a/b/c/g?y/./x' http://a/b/c/g?y/./x http://a/b/c/g?y/./x
+'' 'http://a/./g' http://a/./g http://a/./g
+'svn://pathtorepo/dir1' 'dir2' svn://pathtorepo/dir2 svn://pathtorepo/dir2
+'svn+ssh://pathtorepo/dir1' 'dir2' svn+ssh://pathtorepo/dir2 svn+ssh://pathtorepo/dir2
+'ws://a/b' 'g' ws://a/g ws://a/g
+'wss://a/b' 'g' wss://a/g wss://a/g
+'http://a/b/c/d/e/' '../../f/g/' http://a/b/c/f/g/ http://a/b/c/f/g/
+'http://a/b/c/d/e' '../../f/g/' http://a/b/f/g/ http://a/b/f/g/
+'http://a/b/c/d/e/' '/../../f/g/' http://a/f/g/ http://a/f/g/
+'http://a/b/c/d/e' '/../../f/g/' http://a/f/g/ http://a/f/g/
+'http://a/b/c/d/e/' '../../f/g' http://a/b/c/f/g http://a/b/c/f/g
+'http://a/b/' '../../f/g/' http://a/f/g/ http://a/f/g/
+'a' 'b' b b
+'http://a/b/c' '' http://a/b/c http://a/b/c
+'http://a/b' '//c/d' http://c/d http://c/d
+'mailto:x@y' 'z' z z
+'http://a//b//c' '../d' http://a/d http://a/d
+'http://a/b/c/d;p?q' 'g;x=1/./y' http://a/b/c/g;x=1/y http://a/b/c/g;x=1/y
+'https://a/b' 'http://c/d' http://c/d http://c/d
+'http://a/b' 'x/y/z/../../w' http://a/x/w http://a/x/w
+http://python.org#frag DefragResult(url='http://python.org', fragment='frag') http://python.org frag http://python.org#frag True
+http://python.org DefragResult(url='http://python.org', fragment='') http://python.org  http://python.org True
+http://python.org/#frag DefragResult(url='http://python.org/', fragment='frag') http://python.org/ frag http://python.org/#frag True
+http://python.org/ DefragResult(url='http://python.org/', fragment='') http://python.org/  http://python.org/ True
+http://python.org/?q#frag DefragResult(url='http://python.org/?q', fragment='frag') http://python.org/?q frag http://python.org/?q#frag True
+http://python.org/?q DefragResult(url='http://python.org/?q', fragment='') http://python.org/?q  http://python.org/?q True
+http://python.org/p#frag DefragResult(url='http://python.org/p', fragment='frag') http://python.org/p frag http://python.org/p#frag True
+http://python.org/p?q DefragResult(url='http://python.org/p?q', fragment='') http://python.org/p?q  http://python.org/p?q True
+http://a/b/c/d;p?q#f DefragResult(url='http://a/b/c/d;p?q', fragment='f') http://a/b/c/d;p?q f http://a/b/c/d;p?q#f True
+http://a/b/c/d;p?q DefragResult(url='http://a/b/c/d;p?q', fragment='') http://a/b/c/d;p?q  http://a/b/c/d;p?q True
+#x DefragResult(url='', fragment='x')  x #x True
+a#b#c DefragResult(url='a', fragment='b#c') a b#c a#b#c True
+http://h/p f
+-- every percent-escape of one byte, and of two to four from each class of bytes CPython's decoder tells apart
+replace 195706725 195706725
+surrogateescape 331499901 331499901
+strict 569988572 644922972
+497907932
+UnicodeError: 'utf-8' codec can't decode byte 0xe9 in position 0: unexpected end of data UnicodeError: 'ascii' codec can't decode byte 0xe9 in position 0: ordinal not in range(128) UnicodeError: 'utf-8' codec can't decode byte 0x80 in position 0: invalid start byte
+324 replace 937139858
+324 surrogateescape 360608489
+324 strict 962521205
+1134 surrogateescape 588099084
+1134 strict 687037012
+958344413
+486 surrogateescape 220009769
+486 strict 681114582
+'\U0001f600\U0010ffff\udcf4\udc90\udc80\udc80\ud7ff\ue000\uffff\u0800\u07ff\x80'
+'a\xe9\u9000\\xc3x\\xf0\\x9f\\x98\u20ac\\xed\\xa0\\x80\\xed\\xb0\\x80\\xf8'
+-- code points at the ends of each length of UTF-8, and surrogates, quoted and unquoted
+66 utf-8 strict 427087327 101386994
+66 utf-8 surrogatepass 517696527 274283254
+66 utf-8 surrogateescape 435932097 37105165
+66 utf-8 replace 600403025 994714281
+66 latin-1 strict 401791833 30725964
+66 latin-1 backslashreplace 884803340 107455496
+66 latin-1 xmlcharrefreplace 107289959 108487258
+66 ascii surrogateescape 847095125 707919737
+66 ascii ignore 918942900 985745508
+%7F%C2%80%C2%A0%C3%A9%C3%BF%DF%BF%E0%A0%80 %EF%BF%BF%F0%90%80%80%F4%8F%BF%BF
+661 True
+UnicodeError: 'utf-8' codec can't encode characters in position 13-23: surrogates not allowed UnicodeError: 'latin-1' codec can't encode characters in position 7-31: ordinal not in range(256)
+[exit 0]

@@ -590,7 +590,12 @@ reader parses all of its input when its iteration starts, into rows that are `li
 in 20 marked places: `fmean()` (its weights through a port of `math.sumprod()`'s C code), the
 medians, `quantiles()`, `geometric_mean()`, `mode()` and `multimode()`, with what needs `Fraction`,
 `Decimal` or `random` (`mean()`, the variances, `NormalDist`, ...) left uncompiled
-([`lib/README.md`](../lib/README.md#statistics-a-port-of-cpythons)).
+([`lib/README.md`](../lib/README.md#statistics-a-port-of-cpythons)). Its `urllib.parse` is CPython's
+with marked edits, whose `quote()`, `unquote()`, `parse_qs()`, `parse_qsl()`, `urlencode()`,
+`urlsplit()`, `urljoin()` and their siblings take strs, which hold UTF-8, as CPython's take the
+UTF-8 of strs, with CPython's codecs of UTF-8, Latin-1 and ASCII, but raise `UnicodeError` where
+those raise `UnicodeEncodeError` or `UnicodeDecodeError`, and have no other codecs, bytes or netloc
+properties ([`lib/README.md`](../lib/README.md#urllibparse-a-port-of-cpythons)).
 
 ## Expressions
 
