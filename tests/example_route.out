@@ -1,8 +1,79 @@
-21 ['auth.*.failed', 'auth.*.locked', 'payments.*.failed'] ['alerts', 'alerts', 'alerts']
-[338, 386, 284, 901, 1558, 1552, 2852, 195, 155, 548, 1229, 8, 26, 3, 1163, 87, 763, 50, 499, 37, 174, 7192]
+21 21 ['auth.*.failed', 'auth.*.locked', 'payments.*.failed'] ['alerts', 'alerts', 'alerts']
+[338, 386, 284, 901, 1558, 1552, 2852, 195, 155, 548, 1229, 8, 26, 3, 1163, 87, 763, 50, 499, 37, 174, 7192] True
 CacheInfo(hits=18242, misses=1758, maxsize=4096, currsize=1758)
-CacheInfo(hits=24052, misses=21, maxsize=32768, currsize=21)
+CacheInfo(hits=262656, misses=21, maxsize=32768, currsize=21)
 [446, 493, 378, 1151, 2035, 2041, 3738, 195, 155, 719, 1642, 8, 26, 3, 1515, 109, 978, 62, 631, 37, 227, 9411]
 CacheInfo(hits=18242, misses=7758, maxsize=4096, currsize=4096)
-0 20 -1
+0 20 -1 13
+[]
+3001 events, 21 rules
+     1107 unrouted
+      462 billing
+      362 errors
+      264 tools
+      233 retries
+      169 database
+      155 alerts
+      108 metrics
+       72 jobs
+       39 drop
+       16 search
+        8 cache-misses
+        3 access
+        2 http-errors
+        1 slow-queries
+route: CacheInfo(hits=1107, misses=1894, maxsize=4096, currsize=1894)
+['--names']
+3001 events, 1894 names, 21 rules
+     1107 unrouted
+      462 billing
+      362 errors
+      264 tools
+      233 retries
+      169 database
+      155 alerts
+      108 metrics
+       72 jobs
+       39 drop
+       16 search
+        8 cache-misses
+        3 access
+        2 http-errors
+        1 slow-queries
+route: CacheInfo(hits=1107, misses=1894, maxsize=4096, currsize=1894)
+['--no-cache']
+3001 events, 21 rules
+     1107 unrouted
+      462 billing
+      362 errors
+      264 tools
+      233 retries
+      169 database
+      155 alerts
+      108 metrics
+       72 jobs
+       39 drop
+       16 search
+        8 cache-misses
+        3 access
+        2 http-errors
+        1 slow-queries
+['--fnmatch', '--names']
+3001 events, 1894 names, 21 rules
+     1107 unrouted
+      462 billing
+      362 errors
+      264 tools
+      233 retries
+      169 database
+      155 alerts
+      108 metrics
+       72 jobs
+       39 drop
+       16 search
+        8 cache-misses
+        3 access
+        2 http-errors
+        1 slow-queries
+patterns: CacheInfo(hits=302268, misses=21, maxsize=32768, currsize=21)
 [exit 0]

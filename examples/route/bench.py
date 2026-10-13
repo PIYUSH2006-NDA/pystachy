@@ -1,6 +1,8 @@
 """bench: route.py under CPython and as a Pystachy AOT executable, in each mode, on a trace whose
-names repeat (1,000,000 events, about 2,300 names) and on one whose names are all new (100,000);
-the median wall time of N runs and the peak RSS of one.
+names repeat (1,000,000 events, about 2,500 names) and on one whose names are all new (100,000).
+For each, the median wall time of N runs of the whole program, the median time of the routing
+alone (--in-memory: the trace read first, and the routing timed in the program), and the peak RSS
+of one run.
 
 usage: python3 -I bench.py PYSTACHY [N]
 The traces and the executable go to build/route/ of the checkout.
@@ -39,24 +41,39 @@ def peak_rss(cmd: list[str]) -> int:
     return int(subprocess.run([sys.executable, "-I", "-c", probe] + cmd, capture_output=True, text=True, check=True).stdout)
 
 
-def measure(cmd: list[str]) -> tuple[float, int, str]:
-    # the median wall time of the runs, the peak RSS of one, and what a run prints
+def measure(cmd: list[str]) -> tuple[float, float, str]:
+    # the median wall time of the runs of cmd, the median routing time that cmd + --in-memory
+    # reports on stderr ("routing: SECONDS s, ..."), and what a run prints
     times = []
+    routing = []
     out = ""
     for _ in range(runs):
         t = time.perf_counter()
         p = subprocess.run(cmd, capture_output=True, text=True, check=True)
         times.append(time.perf_counter() - t)
         out = p.stdout
-    return statistics.median(times), peak_rss(cmd), out
+        p = subprocess.run(cmd + ["--in-memory"], capture_output=True, text=True, check=True)
+        routing.append(float(p.stderr.split()[1]))
+        if p.stdout != out:
+            out += "  (--in-memory prints otherwise)"
+    return statistics.median(times), statistics.median(routing), out
 
 
-print(f"{'trace':8} {'mode':14} {'CPython':>9} {'AOT':>9} {'speedup':>8} {'CPython RSS':>12} {'AOT RSS':>9}")
+print(f"{'trace':7} {'mode':11} {'CPython':>8} {'AOT':>8} {'speedup':>7} {'routing: CPython':>17} {'AOT':>9} {'speedup':>7} {'RSS: CPython':>13} {'AOT':>8}")
 for trace in traces:
-    for mode in ["", "--no-cache", "--precompiled"]:
+    events = 1000000 if "repeat" in trace else 100000
+    for mode in ["", "--no-cache", "--fnmatch"]:
         extra = [mode] if mode else []
         c = measure([sys.executable, "-I", route, rules, trace] + extra)
         a = measure([exe, rules, trace] + extra)
+        rc = peak_rss([sys.executable, "-I", route, rules, trace] + extra)
+        ra = peak_rss([exe, rules, trace] + extra)
         same = "" if c[2] == a[2] else "  OUTPUT DIFFERS"
         name = os.path.basename(trace)[3:-4]
-        print(f"{name:8} {mode or 'cached':14} {c[0]:8.3f}s {a[0]:8.3f}s {c[0] / a[0]:7.1f}x {c[1] / 1024:9.1f} MB {a[1] / 1024:6.1f} MB{same}")
+        print(f"{name:7} {mode or 'cached':11} {c[0]:7.3f}s {a[0]:7.3f}s {c[0] / a[0]:6.1f}x {c[1] * 1e9 / events:14.0f} ns {a[1] * 1e9 / events:6.0f} ns {c[1] / a[1]:6.1f}x {rc / 1024:10.1f} MB {ra / 1024:5.1f} MB{same}")
+# what --names costs: a dict of every distinct name, which the trace of new names makes grow
+for trace in traces:
+    name = os.path.basename(trace)[3:-4]
+    rc = peak_rss([sys.executable, "-I", route, rules, trace, "--names"])
+    ra = peak_rss([exe, rules, trace, "--names"])
+    print(f"{name:7} cached, --names: RSS CPython {rc / 1024:.1f} MB, AOT {ra / 1024:.1f} MB")

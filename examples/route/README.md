@@ -3,15 +3,16 @@
 `route.py` sends each event of a trace or log to the first destination whose rule matches the
 event's name, and counts the events per destination: the routing step of a log shipper or a
 tracing pipeline, where a few hundred span or event names come back millions of times. It is
-ordinary Python, which CPython runs as it is and Pystachy compiles as it is, and it shows the two
-caches of the standard library that a program like it leans on:
+ordinary Python, which CPython runs as it is and Pystachy compiles as it is.
 
-- `fnmatch` keeps each rule's compiled regular expression (`_compile_pattern()`, an
-  `lru_cache(maxsize=32768)`), so a pattern is compiled once however many events it is matched
-  against ([`lib/fnmatch`](../../lib/README.md#fnmatch-a-port-of-cpythons));
-- `route()` is an `lru_cache(maxsize=4096)` of its own: an event's destination depends only on
-  its name, so a name seen before skips the rules altogether
-  ([`lib/functools`](../../lib/README.md#functools-pystachys-own)).
+- The rules' patterns are fnmatch's, each compiled once as the rules load
+  (`re.compile(fnmatch.translate(pattern))`, [`lib/fnmatch`](../../lib/README.md#fnmatch-a-port-of-cpythons)).
+- `route()` is an `lru_cache(maxsize=4096)`: an event's destination depends only on its name,
+  so a name seen before skips the rules altogether
+  ([`lib/functools`](../../lib/README.md#functools-pystachys-own)). A name it has not seen goes
+  through the compiled patterns.
+- An event's name is its line up to the first tab, found with `line.find("\t")` and sliced off:
+  `line.split("\t", 1)[0]` would also make a list and a str of the rest of the line.
 
 ```
 $ cat rules.txt
@@ -23,59 +24,95 @@ http.request.[45]??     http-errors
 $ python3 genevents.py 1000000 > events.tsv     # db.search.locked<TAB>1760000000<TAB>4685 ...
 $ python3 route.py rules.txt events.tsv          # CPython
 $ pystachy build route.py -o route && ./route rules.txt events.tsv
-1000000 events, 2476 names, 21 rules
+1000000 events, 21 rules
    363895 unrouted
    156197 billing
    121460 errors
    ...
       173 slow-queries
 route: CacheInfo(hits=997524, misses=2476, maxsize=4096, currsize=2476)
-patterns: CacheInfo(hits=34746, misses=21, maxsize=32768, currsize=21)
 ```
 
-CPython and the executable print the same report, the caches' statistics included.
+CPython and the executable print the same report, the cache's statistics included. The other
+modes are the baselines:
+- `--no-cache` routes each event through the compiled patterns again (`route.__wrapped__`);
+- `--fnmatch` calls `fnmatchcase()` for each rule, as a program that matches with fnmatch does,
+  so each pattern is looked up in fnmatch's own cache of compiled patterns.
 
-`--no-cache` routes each event again (`route.__wrapped__`, so fnmatch's cache still compiles each
-pattern once), and `--precompiled` compiles each rule's pattern itself, once, and matches without
-fnmatch: the baseline of a program that knows its patterns are fixed.
+Two options change what is measured, not the routing:
+- `--names` also counts the distinct names (`1000000 events, 2476 names, 21 rules`). That takes
+  memory for each of them. Without it, what the router keeps is bounded by its cache.
+- `--in-memory` reads the whole trace first, then reports on stderr how long the routing alone
+  took, which separates the cache and the compiled code from reading the input.
 
-## What the caches buy
+## What the cache buys
 
-`bench.py`, on a 4-core x86-64 VM: median wall time of 5 runs with process start-up, peak RSS of
-one, a trace of 1,000,000 events over 2,476 names and one of 100,000 events whose names are all
-new. Pystachy as the caching PRs leave it (`lib/functools` and `lib/fnmatch`), and with the two
-runtime PRs that this router's profile led to, #267 (tuple keys hashed in place) and #270
-(readline):
+`bench.py` ran on a 4-core x86-64 VM, against CPython 3.13.16:
+- the whole program: the median wall time of 5 runs, with process start-up;
+- the routing alone: the median of 5 `--in-memory` runs, per event;
+- the peak RSS of one run.
 
-| trace | mode | CPython 3.13.16 | Pystachy AOT | with #267, #270 | CPython RSS | AOT RSS |
-|---|---|---:|---:|---:|---:|---:|
-| names repeat | cached | 0.282 s | 0.260 s | 0.180 s | 11.0 MB | 35.9 MB |
-| names repeat | `--no-cache` | 2.927 s | 2.177 s | 2.003 s | 11.0 MB | 36.0 MB |
-| names repeat | `--precompiled` | 1.603 s | 1.775 s | 1.699 s | 10.9 MB | 36.1 MB |
-| names all new | cached | 0.353 s | 0.281 s | 0.259 s | 22.4 MB | 50.0 MB |
-| names all new | `--no-cache` | 0.330 s | 0.270 s | 0.247 s | 21.8 MB | 48.8 MB |
-| names all new | `--precompiled` | 0.200 s | 0.226 s | 0.214 s | 21.8 MB | 48.8 MB |
+The traces are 1,000,000 events over 2,476 names, and 100,000 events whose names are all new.
 
-- **The cache is the speedup**, compiled or not: where names repeat, `route()`'s cache routes a
-  million events in a tenth of the time it takes to route each again (CPython 2.93 s to 0.28 s;
-  Pystachy 2.18 s to 0.26 s, or 0.18 s), and in a sixth of the time of precompiled patterns.
-  Where names are all new it cannot help, and costs little: a miss, an eviction past 4,096 names.
-- **Compiled, the router is 1.1 to 1.6 times as fast as CPython, not more.** What is left per
-  event once its name is cached is a line read, a split and two dict operations, which CPython
-  does in C too; #270 made Pystachy's line reading faster than CPython's. A miss matches regular
-  expressions, where CPython's C engine `_sre` is about 1.6 times faster than `lib/re`: so the
-  modes that match every event (`--precompiled`, and new names) run at CPython's speed or a
-  little slower, and `--no-cache` gains from fnmatch's cache lookups being cheaper compiled.
-- **Memory stays bounded**, but the executable's peak is about 3 times CPython's: Pystachy's
-  collector runs when its heap has grown, where CPython frees each line as its last reference
-  goes. The trace of new names peaks higher in both because `route.py` counts the distinct names
-  in a dict of its own; `route()`'s cache stays at its 4,096 names.
-- Building the executable takes 3 to 5 s, most of it `lib/re` (3,500 lines of the subset).
+| trace | mode | CPython | Pystachy AOT | | routing: CPython | Pystachy AOT | | RSS: CPython | Pystachy AOT |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| names repeat | cached | 0.238 s | 0.165 s | 1.4× | 99 ns | 60 ns | 1.6× | 11.3 MB | 35.6 MB |
+| names repeat | `--no-cache` | 1.632 s | 1.596 s | 1.0× | 1,430 ns | 1,976 ns | 0.7× | 10.9 MB | 35.8 MB |
+| names repeat | `--fnmatch` | 2.927 s | 1.866 s | 1.6× | 2,650 ns | 2,283 ns | 1.2× | 10.9 MB | 35.6 MB |
+| names all new | cached | 0.197 s | 0.207 s | 1.0× | 1,558 ns | 2,027 ns | 0.8× | 11.7 MB | 37.8 MB |
+| names all new | `--no-cache` | 0.185 s | 0.189 s | 1.0× | 1,456 ns | 1,873 ns | 0.8× | 10.9 MB | 35.7 MB |
+| names all new | `--fnmatch` | 0.318 s | 0.221 s | 1.4× | 2,653 ns | 2,200 ns | 1.2× | 10.9 MB | 35.8 MB |
+
+**The cache is the speedup, compiled or not.** Where names repeat, routing an event takes:
+- in CPython, 99 ns from the cache against 1,430 ns through the patterns, 14 times less;
+- compiled, 60 ns against 1,976 ns, 33 times less.
+
+Where every name is new, the cache cannot help, and it costs little: a miss, then an eviction
+once it holds 4,096 names.
+
+**Compiled, a cached event routes 1.6 times as fast as in CPython; the whole program is 1.4
+times as fast.**
+- The rest of each event's time is reading its line, about 100 ns compiled and 120 ns in
+  CPython, which reads lines in C.
+- A cached event takes about 500 instructions (callgrind):
+  - a third hashes its name, a new str each time, one multiply per byte (FNV-1a);
+  - a third is the dict probe, with its key comparison;
+  - most of the rest is the least-recently-used bookkeeping.
+- Where events miss, routing is regular-expression matching, where CPython's C engine `_sre`
+  beats `lib/re`. So the rows that match every event run at 0.7 to 0.8 times CPython's speed.
+
+**Compiling the patterns once is the other half.** `--fnmatch` pays fnmatch's cache lookup for
+each rule tried, in Python code under CPython:
+- in CPython, 2,650 ns per event against 1,430 ns for the compiled patterns;
+- compiled, 2,283 ns against 1,976 ns.
+
+Before these two changes (fnmatch on misses, `split()` for the name), the cached router took
+0.282 s in CPython and 0.180 s compiled.
+
+**Memory stays bounded without `--names`.** The trace of new names peaks where the trace of
+repeating names does, since `route()`'s cache stays at its 4,096 names. With `--names`, the dict
+of distinct names grows with the trace: the trace of new names then peaks at 23.0 MB in CPython
+and 48.8 MB compiled. The executable's peak is about 3 times CPython's, because Pystachy's
+collector runs once 32 MiB have been allocated, where CPython frees each line as its last
+reference goes.
+
+**Two designs this example does not take:**
+- A report of totals alone could count the names first and route each distinct name once,
+  without a least-recently-used cache at all. A router that delivers each event as it comes
+  needs a decision per event, which is what this example measures.
+- Most of these rules are `prefix.*` or `*.suffix`, which `startswith()` and `endswith()` could
+  test without a regular expression. That would help exactly the rows where events miss.
+
+Building the executable takes about 3 s, most of it `lib/re` (3,500 lines of the subset).
 
 ## Tests
 
-`tests/example_route.py` routes a generated trace in-process, then one whose names are all new,
-which pushes `route()`'s cache past its 4,096 names, and compares the counts and both caches'
-statistics with CPython's (`tests/example_route.path` puts this directory on the module path).
-`bench.py` runs the table above: `python3 -I bench.py ../../pystachy 5`, from anywhere; it
+`tests/example_route.py` (`tests/example_route.path` puts this directory on the module path):
+- routes a generated trace in-process with `route()` and with `route_fnmatch()`;
+- routes a trace whose names are all new, which pushes `route()`'s cache past its 4,096 names;
+- runs `run()` over a trace file in each mode, a last line without a tab included.
+
+It compares the counts and both caches' statistics with CPython's.
+
+`bench.py` runs the table above: `python3 -I bench.py ../../pystachy 5`, from anywhere. It
 writes its traces and executable to `build/route/`.
