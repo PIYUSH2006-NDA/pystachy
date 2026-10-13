@@ -53,8 +53,9 @@
 #                  specialization breadth and the signature bytes specializations retain under
 #                  256 MiB / ten CPU seconds, with short diagnostics;
 #                  finite controls and reuse at the retained-instance boundary still compile
-#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli; live code and runtime callbacks
-#                  still execute as in CPython, with both compilers
+#   jit-dead-code  tools/jitprobe.py: unused functions never reach lli, and a small helper reaches it
+#                  inlined (not with PYSTACHY_JIT_INLINE=0); live code and runtime callbacks still
+#                  execute as in CPython, with both compilers
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or

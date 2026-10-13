@@ -19,7 +19,7 @@ CPython's.
 | `fib.py`: fib(35), calls | 0.80 s | 0.08 s | 0.04 s | 23× |
 | `mandel.py`: mandelbrot, float loops | 1.26 s | 0.09 s | 0.04 s | 34× |
 | `nbody.py`: n-body, floats and objects | 1.82 s | 0.10 s | 0.03 s | 59× |
-| `spectral.py`: spectral norm, nested loops | 1.07 s | 0.14 s | 0.02 s | 67× |
+| `spectral.py`: spectral norm, nested loops | 1.07 s | 0.09 s | 0.02 s | 67× |
 | `sieve.py`: a 4M-element list | 0.76 s | 0.21 s | 0.15 s | 5× |
 | `words.py`: word count, strings and dicts | 0.17 s | 0.10 s | 0.05 s | 3× |
 | `dictlookup.py`: dict lookups, int and str keys | 0.90 s | 0.47 s | 0.39 s | 2× |
@@ -57,6 +57,25 @@ runs, with the dict lookup fusion turned off (`PYSTACHY_OPT=-dictfuse`) and on:
 
 The fused lookups make it 31% faster AOT and 28% faster under the JIT. `PYSTACHY_OPT=-all` turns
 every pass off, for comparisons like this one.
+
+## Inlining under the JIT
+
+`lli` compiles each function as it is, so a small helper called in a hot loop stays a call under
+the JIT, where the AOT tier's `-O2` inlines it. `pystachy run` therefore runs LLVM's inliner
+(`cgscc(inline, ...)`) on a program of up to 20,000 lines of IR (#211). Best of 5, `pystachy run`
+with its compilation:
+
+| | without | with the inliner |
+|---|---:|---:|
+| `dot3()` of six floats, 50M calls (#211) | 0.249 s | 0.095 s |
+| `bench/spectral.py` | 0.144 s | 0.085 s |
+| hello world | 0.044 s | 0.043 s |
+| the other `bench/*.py` | | within 2% |
+
+The inliner's own time grows with the IR: about 2 to 3 ms per 1,000 lines (+24 ms on 9,948 lines,
++28 ms on 16,860). Above 20,000 lines, which a program that imports `lib/re` passes (35,000), and
+the compiler's 277,000, where it would add 0.55 s to `opt`'s 0.7 s, the JIT keeps its start-up.
+`PYSTACHY_JIT_INLINE` sets the limit, and `0` turns the inliner off.
 
 ## The cost of exceptions
 

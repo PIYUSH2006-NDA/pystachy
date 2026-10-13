@@ -5778,6 +5778,11 @@ OPTS: list[str] = ["listget", "dictfuse", "tupleiter"]
 # self-compile's deepest is 18), the ops Gen.reaching walks back over (85) and the lookups that
 # hold at once (7)
 CANON_DEPTH = 1000
+# the JIT tier runs LLVM's inliner over a program of up to this many lines of IR (#211; the
+# environment's PYSTACHY_JIT_INLINE, 0 for none): lli never inlines, so each call of a small helper
+# in a hot loop stayed a call. A larger program keeps its start-up: the inliner adds about 90 ms to
+# opt's 0.1 s on 38,000 lines (a program that imports lib/re), 0.55 s to 0.7 s on the compiler
+JIT_INLINE = 20000
 REACH = 256
 LOOKUPS = 32
 # Types are serialized strings. Bound their size before joining children, and the active
@@ -21032,8 +21037,16 @@ def main() -> None:
     else:
         # JIT tier: discard unused internal functions before SSA cleanup and ORC's module-wide
         # code generation. The frontend still checks their bodies; external pys_obj_* dispatch
-        # callbacks stay visible to the precompiled runtime (which this tier never inlines).
-        fast = f"{llvm}opt -passes='globaldce,function(mem2reg,instcombine<no-verify-fixpoint>,simplifycfg)'"
+        # callbacks stay visible to the precompiled runtime (which this tier never inlines). A
+        # program of up to JIT_INLINE lines of IR has its own functions inlined into their callers
+        # first, bottom-up (cgscc), each then cleaned up as before
+        lim = os.getenv("PYSTACHY_JIT_INLINE", str(JIT_INLINE))
+        if not lim.isdigit():
+            fail(f"PYSTACHY_JIT_INLINE: {lim} is no number of lines (0 turns the JIT's inliner off)", 0)
+        clean = "function(mem2reg,instcombine<no-verify-fixpoint>,simplifycfg)"
+        if ir.count("\n") <= int(lim):
+            clean = f"cgscc(inline,{clean})"
+        fast = f"{llvm}opt -passes='globaldce,{clean}'"
         code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:
             # then this process becomes lli, through a shell that opens the bitcode and the runtime's
