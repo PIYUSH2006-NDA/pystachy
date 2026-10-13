@@ -9528,8 +9528,8 @@ class Gen:
         if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
             ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
             return "" if "__call__" not in ms else ms["__call__"].ret if ms["__call__"].bad == "" else "!" + ms["__call__"].bad
-        if k == "call" and len(e.kids) == 2 and self.imported_ref(e.kids[0]) == "os.fspath" and unopt(self.guess(e.kids[1], f)) == "str":
-            return "str"  # (a str path is its own file system path)
+        if k == "call" and len(e.kids) == 2 and (self.imported_ref(e.kids[0]) == "os.fspath" or self.imported_ref(e.kids[0]) == "os.path.normcase") and unopt(self.guess(e.kids[1], f)) == "str":
+            return "str"  # (a str path is its own file system path, and its own posixpath normcase())
         if k == "call" and e.kids[0].kind == "name":
             c = e.kids[0].s
             if c in self.tmpl:
