@@ -2520,12 +2520,18 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     if (!f->nl) b.n = j;
     return decode(f, &b);
   }
+  /* n characters: their bytes gather in t, and go to b only when t is full, as readline's do (a
+     put() per byte took most of the time); a read that fits in t becomes its str without b */
+  char t[4096]; I m = 0;
   for (I k = 0;;) {
     int c = get(f);
     if (c == EOF) break;
     if ((f->lat || (c & 0xC0) != 0x80) && k++ == n) { unget(f, c); break; }   /* the next character starts */
-    char ch = getnl(f, c); put(&b, &ch, 1);
+    t[m++] = (char)getnl(f, c);
+    if (m == (I)sizeof t) { put(&b, t, m); m = 0; }
   }
+  if (b.n) put(&b, t, m);
+  else b = (Buf){t, m, m};
   return decode(f, &b);
 }
 Str *pys_file_read(File *f, I n) {
