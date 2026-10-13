@@ -58,6 +58,29 @@ runs, with the dict lookup fusion turned off (`PYSTACHY_OPT=-dictfuse`) and on:
 The fused lookups make it 31% faster AOT and 28% faster under the JIT. `PYSTACHY_OPT=-all` turns
 every pass off, for comparisons like this one.
 
+## Tuples made in the frame
+
+A call of a function with `*args` makes the tuple of its extra arguments in the caller's frame,
+not on the heap, where the function keeps it nowhere a copy before each statement does not see
+(`Gen.stack_ok`): not in a closure, a generator, a global or a while loop's test. The function
+gives a local that holds the tuple (`args`, `key = args`) its heap copy, made once per call, before
+any statement that uses it other than to look it up (`x in d`, `d[x]`, `d.get(x)`, `x in xs`) or to
+read its items (`f(*x)`, `len(x)`, `x[i]`, `for`, `if x`) (`Gen.keep_stack`). A tuple display that a
+lookup takes as its key (`(i, j) in memo`, `memo[(i, j)]`, `memo.get((i, j), d)`) is made in the
+frame too. So a hit of `lib/functools`' caches, whose `__call__(self, *args)` only looks its key up,
+and of a memo dict allocates nothing; a miss allocates the key it stores, once, as before.
+
+`bench/memo.py`, a memoized dynamic program (the fewest scalar multiplications of a chain of 220
+matrices, `@cache` over two ints, 3.5 million hits), median of 5 runs:
+
+| `bench/memo.py` | CPython | Pystachy AOT |
+|---|---:|---:|
+| tuples on the heap | 0.355 s | 0.147 s (2 collections, 36.4 MiB peak) |
+| tuples in the frame | 0.355 s | 0.068 s (none, 6.1 MiB peak) |
+
+An `lru_cache` hit takes 17 ns instead of 22 (an `int` argument), 12 instead of 14 (unbounded),
+and 19 instead of 23 (`str` and `int`); CPython's C `lru_cache` takes 60 to 84 ns.
+
 ## Inlining under the JIT
 
 `lli` compiles each function as it is, so a small helper called in a hot loop stays a call under

@@ -1,0 +1,330 @@
+test 0, fsum() of 0 values: 0.0
+test 1, fsum() of 1 values: 0.0
+test 2, fsum() of 7 values: 1e-100
+test 3, fsum() of 3 values: 9007199254740991.0
+test 4, fsum() of 3 values: 9007199254740994.0
+test 5, fsum() of 3 values: 9007199254741004.0
+test 6, fsum() of 3 values: 9007199254740989.0
+test 7, fsum() of 1000 values: 7.485470860550345
+test 8, fsum() of 1000 values: -0.6926474305598203
+test 9, fsum() of 3 values: 1.0000000000000002e+16
+test 10, fsum() of 4 values: 0.0
+test 11, fsum() of 1024 values: 1.3305602063564798e+292
+test 12, fsum() of 1001 values: -1.0
+fsum((1e100, 1.0, -1e100, 1e-100, 1e50, -1, -1e50)) 1e-100
+fsum([1.0, math.inf]) inf
+isnan(fsum([math.nan, 1.0])) True
+fsum([1e+308, 1e+308]) OverflowError: intermediate overflow in fsum
+fsum([math.inf, -math.inf]) ValueError: -inf + inf in fsum
+prod([]) 1
+prod([], start=5) 5
+prod(list(range(2,8))) 5040
+prod(range(1, 10), start=10) 3628800
+prod([1, 2, 3, 4, 5]) 120
+prod([1.0, 2.0, 3.0, 4.0, 5.0]) 120.0
+prod([1, 1, 2**32, 1, 1]) 4294967296
+prod([0, 1, 2, 3]) 0
+prod([1, 0, 2, 3]) 0
+prod([1, 2, 3, 0]) 0
+prod(range(1, 21)) 2432902008176640000
+prod(range(-20, -1)) -2432902008176640000
+prod(range(-20, 20)) 0
+prod([float(x) for x in range(1, 1000)]) inf
+prod([float(x) for x in range(-1000, -1)]) -inf
+prod([float(x) for x in range(-1000, 1000)]) nan
+isinstance(prod([1, 2, 3, 4, 5, 6]), int) True
+isinstance(prod(range(1, 21)), int) True
+isinstance(prod(range(1, 10000), start=1.0), float) True
+hypot(*args[:2]) 4.154354402313313
+hypot(12.0, 5.0) 13.0
+hypot(12, 5) 13.0
+hypot(0.75, -1) 1.25
+hypot(-1, 0.75) 1.25
+hypot(0.0, 0.0) 0.0
+hypot(0, INF) inf
+hypot(10, INF) inf
+hypot(-10, INF) inf
+hypot(NAN, INF) inf
+hypot(INF, NAN) inf
+hypot(NINF, NAN) inf
+hypot(NAN, NINF) inf
+hypot(-INF, INF) inf
+hypot(-INF, -INF) inf
+hypot(10, -INF) inf
+isnan(hypot(0, NAN)) True
+isnan(hypot(NAN, 10)) True
+isnan(hypot(10, NAN)) True
+isnan(hypot(NAN, NAN)) True
+isclose(hypot(*([fourthmax]*2)), fourthmax * sqrt(2)) True
+hypot(4*scale, 3*scale), exp 0 1.1125369292536007e-307
+hypot(4*scale, 3*scale), exp 1 5.562684646268003e-308
+hypot(4*scale, 3*scale), exp 2 2.7813423231340017e-308
+hypot(4*scale, 3*scale), exp 3 1.390671161567001e-308
+hypot(4*scale, 3*scale), exp 4 6.953355807835004e-309
+hypot(4*scale, 3*scale), exp 5 3.4766779039175e-309
+hypot(4*scale, 3*scale), exp 6 1.73833895195875e-309
+hypot(4*scale, 3*scale), exp 7 8.69169475979376e-310
+hypot(4*scale, 3*scale), exp 8 4.3458473798969e-310
+hypot(4*scale, 3*scale), exp 9 2.17292368994844e-310
+hypot(4*scale, 3*scale), exp 10 1.0864618449742e-310
+hypot(4*scale, 3*scale), exp 11 5.432309224871e-311
+hypot(4*scale, 3*scale), exp 12 2.7161546124355e-311
+hypot(4*scale, 3*scale), exp 13 1.358077306218e-311
+hypot(4*scale, 3*scale), exp 14 6.79038653109e-312
+hypot(4*scale, 3*scale), exp 15 3.395193265544e-312
+hypot(4*scale, 3*scale), exp 16 1.69759663277e-312
+hypot(4*scale, 3*scale), exp 17 8.48798316386e-313
+hypot(4*scale, 3*scale), exp 18 4.24399158193e-313
+hypot(4*scale, 3*scale), exp 19 2.12199579097e-313
+hypot(4*scale, 3*scale), exp 20 1.0609978955e-313
+hypot(4*scale, 3*scale), exp 21 5.3049894774e-314
+hypot(4*scale, 3*scale), exp 22 2.6524947387e-314
+hypot(4*scale, 3*scale), exp 23 1.3262473694e-314
+hypot(4*scale, 3*scale), exp 24 6.631236847e-315
+hypot(4*scale, 3*scale), exp 25 3.315618423e-315
+hypot(4*scale, 3*scale), exp 26 1.65780921e-315
+hypot(4*scale, 3*scale), exp 27 8.28904606e-316
+hypot(4*scale, 3*scale), exp 28 4.14452303e-316
+hypot(4*scale, 3*scale), exp 29 2.0722615e-316
+hypot(4*scale, 3*scale), exp 30 1.03613076e-316
+hypot(4*scale, 3*scale), exp 31 5.180654e-317
+hypot(0x1.10e89518dca48p+29, 0x1.1970f7565b7efp+30).hex() '0x1.38c6b597220c2p+30'
+hypot(0x1.10106eb4b44a2p+29, 0x1.ef0596cdc97f8p+29).hex() '0x1.1a6def4b2d09fp+30'
+hypot(0x1.459c058e20bb7p+30, 0x1.993ca009b9178p+29).hex() '0x1.8090a1a3570bfp+30'
+hypot(0x1.378371ae67c0cp+30, 0x1.fbe6619854b4cp+29).hex() '0x1.91e8d27dde4ffp+30'
+hypot(0x1.f4cd0574fb97ap+29, 0x1.50fe31669340ep+30).hex() '0x1.a3d6bbac344c9p+30'
+hypot(0x1.494b2cdd3d446p+29, 0x1.212a5367b4c7cp+29).hex() '0x1.b63c72aea6e56p+29'
+hypot(0x1.f84e649f1e46dp+29, 0x1.1fa56bef8eec4p+30).hex() '0x1.7e851bb9d7fddp+30'
+hypot(0x1.2e817edd3d6fap+30, 0x1.eb0814f1e9602p+29).hex() '0x1.85997a108af72p+30'
+hypot(0x1.0d3a6e3d04245p+29, 0x1.32a62fea52352p+30).hex() '0x1.4ee5200af5bc7p+30'
+hypot(0x1.888e19611bfc5p+29, 0x1.52b8e70b24353p+29).hex() '0x1.033ec4887f851p+30'
+hypot(0x1.538816d48a13fp+29, 0x1.7967c5ca43e16p+29).hex() '0x1.fba86a32035f8p+29'
+hypot(0x1.57b47b7234530p+29, 0x1.74e2c7040e772p+29).hex() '0x1.fb204f152682ep+29'
+hypot(0x1.821b685e9b168p+30, 0x1.677dc1c1e3dc6p+29).hex() '0x1.a9e54cd3c0c5ep+30'
+hypot(0x1.9e8247f67097bp+29, 0x1.24bd2dc4f4baep+29).hex() '0x1.fb7547955f497p+29'
+hypot(0x1.b73b59e0cb5f9p+29, 0x1.da899ab784a97p+28).hex() '0x1.f338706dbb681p+29'
+hypot(0x1.94a8d2842a7cfp+30, 0x1.326a51d4d8d8ap+30).hex() '0x1.fb9506c46830fp+30'
+hypot(0x1.e930b9cd99035p+29, 0x1.5a1030e18dff9p+30).hex() '0x1.a7c6cc1ed3fcdp+30'
+hypot(0x1.1592bbb0e4690p+29, 0x1.a9c337b33fb9ap+29).hex() '0x1.fc40a5bc45ccbp+29'
+hypot(0x1.1243a50751fd4p+29, 0x1.a5a10175622d9p+29).hex() '0x1.f6fba11cd3ba4p+29'
+hypot(0x1.57a8596e74722p+30, 0x1.42d1af9d04da9p+30).hex() '0x1.d780208bb9317p+30'
+hypot(0x1.ee7dbd9565899p+29, 0x1.7ab4d6fc6e4b4p+29).hex() '0x1.376c969e411d2p+30'
+hypot(0x1.5c6bfbec5c4dcp+30, 0x1.02511184b4970p+30).hex() '0x1.b1bbed85946ccp+30'
+hypot(0x1.59dcebba995cap+30, 0x1.50ca7e7c38854p+29).hex() '0x1.80adecf719d91p+30'
+hypot(0x1.768cdd94cf5aap+29, 0x1.9cfdc5571d38ep+29).hex() '0x1.16c4fcef84d87p+30'
+hypot(0x1.dcf137d60262ep+29, 0x1.1101621990b3ep+30).hex() '0x1.6a7df1dbe28a3p+30'
+hypot(0x1.3a2d006e288b0p+30, 0x1.e9a240914326cp+29).hex() '0x1.8e4c6e2883aa4p+30'
+hypot(0x1.62a32f7f53c61p+29, 0x1.47eb6cd72684fp+29).hex() '0x1.e302a6672a046p+29'
+hypot(0x1.d3bcb60748ef2p+29, 0x1.3f13c4056312cp+30).hex() '0x1.8b9b5a4615c34p+30'
+hypot(0x1.282bdb82f17f3p+30, 0x1.640ba4c4eed3ap+30).hex() '0x1.cf204bb58312dp+30'
+hypot(0x1.89d8c423ea0c6p+29, 0x1.d35dcfe902bc3p+29).hex() '0x1.3197a22482281p+30'
+dist((1.0, 2.0, 3.0), (4.0, 2.0, -1.0)) 5.0
+dist((1, 2, 3), (4, 2, -1)) 5.0
+dist(p, q) of 0 dimensions 0.0
+dist(p, q) of 0 dimensions 0.0
+dist(p, q) of 0 dimensions 0.0
+dist(p, q) of 0 dimensions 0.0
+dist(p, q) of 0 dimensions 0.0
+dist(p, q) of 1 dimensions 3.1123707396909595
+dist(p, q) of 1 dimensions 6.488266107626259
+dist(p, q) of 1 dimensions 4.813180272467434
+dist(p, q) of 1 dimensions 1.6977413417771459
+dist(p, q) of 1 dimensions 3.971148352138698
+dist(p, q) of 2 dimensions 2.275385279830053
+dist(p, q) of 2 dimensions 7.236636170500873
+dist(p, q) of 2 dimensions 3.6616781747815237
+dist(p, q) of 2 dimensions 6.684154417451815
+dist(p, q) of 2 dimensions 7.45485474792885
+dist(p, q) of 3 dimensions 8.74457464632993
+dist(p, q) of 3 dimensions 3.7739845846290363
+dist(p, q) of 3 dimensions 9.75374178874608
+dist(p, q) of 3 dimensions 7.547625631923011
+dist(p, q) of 3 dimensions 5.18231970104334
+dist(p, q) of 4 dimensions 7.825210845399279
+dist(p, q) of 4 dimensions 8.932130966892752
+dist(p, q) of 4 dimensions 5.355495688462759
+dist(p, q) of 4 dimensions 10.517925689737522
+dist(p, q) of 4 dimensions 4.700334179280388
+dist(p, q) of 5 dimensions 8.118673945733963
+dist(p, q) of 5 dimensions 8.492085397444255
+dist(p, q) of 5 dimensions 6.456334683209014
+dist(p, q) of 5 dimensions 7.915848973454469
+dist(p, q) of 5 dimensions 11.194536662683808
+dist(p, q) of 6 dimensions 8.112713853777347
+dist(p, q) of 6 dimensions 11.256273186302518
+dist(p, q) of 6 dimensions 8.971044576337157
+dist(p, q) of 6 dimensions 13.472388789061888
+dist(p, q) of 6 dimensions 12.915315474199495
+dist(p, q) of 7 dimensions 7.843486021718347
+dist(p, q) of 7 dimensions 11.555161013703804
+dist(p, q) of 7 dimensions 12.235176416591809
+dist(p, q) of 7 dimensions 10.412341380163856
+dist(p, q) of 7 dimensions 14.107454799464346
+dist(p, q) of 8 dimensions 11.301805340244949
+dist(p, q) of 8 dimensions 12.302163024190042
+dist(p, q) of 8 dimensions 7.091571605213812
+dist(p, q) of 8 dimensions 8.955722170460438
+dist(p, q) of 8 dimensions 14.002875747498832
+dist([1.0, 2.0, 3.0], [4.0, 2.0, -1.0]) 5.0
+dist((14.0, 1.0), (2.0, -4.0)) 13.0
+dist((14, 1), (2, -4)) 13.0
+dist((14, -1), (2, -6)) 13.0
+dist((True, True, False, False, True, True), (True, False, True, False, False, False)) 2.0
+dist((13.25, 12.5, -3.25), (13.25, 12.5, -3.25)) 0.0
+dist((), ()) 0.0
+copysign(1.0, dist((-0.0,), (0.0,))) 1.0
+copysign(1.0, dist((0.0,), (-0.0,))) 1.0
+dist((1.5, 1.5, 0.5), (0, 0, 0)) 2.179449471770337
+dist((1, 2, 3, 4), (5, 6, 7)) ValueError: both points must have the same number of dimensions
+dist((1, 2, 3), (4, 5, 6, 7)) ValueError: both points must have the same number of dimensions
+dist((p,), (q,)) == abs(p - q), 0.3659517550840974 0.6698134704492986 0.30386171536520123
+dist((p,), (q,)) == abs(p - q), 0.94716377556324 0.8457996067591012 0.1013641688041389
+dist((p,), (q,)) == abs(p - q), 0.27367891278117895 0.48906207038089633 0.21538315759971738
+dist((p,), (q,)) == abs(p - q), 0.4165878053754568 0.11291528725996614 0.3036725181154907
+dist((p,), (q,)) == abs(p - q), 0.8849326567724347 0.5467399484477937 0.338192708324641
+dist((p,), (q,)) == abs(p - q), 0.16266020759940147 0.8408101280219853 0.6781499204225838
+dist((p,), (q,)) == abs(p - q), 0.422668213956058 0.677437539678067 0.25476932572200894
+dist((p,), (q,)) == abs(p - q), 0.5700450409203768 0.9922903538681567 0.4222453129477799
+dist((p,), (q,)) == abs(p - q), 0.959961355663836 0.585915872361511 0.374045483302325
+dist((p,), (q,)) == abs(p - q), 0.4384072795510292 0.5035432321019471 0.06513595255091786
+dist((p,), (q,)) == abs(p - q), 0.1410777335986495 0.7561641852371395 0.61508645163849
+dist((p,), (q,)) == abs(p - q), 0.132193086668849 0.42268687719479203 0.29049379052594304
+dist((p,), (q,)) == abs(p - q), 0.8459015907719731 0.1866294196806848 0.6592721710912883
+dist((p,), (q,)) == abs(p - q), 0.7831444628536701 0.7963669304735959 0.013222467619925737
+dist((p,), (q,)) == abs(p - q), 0.39147384744137526 0.6703675868920982 0.27889373945072293
+dist((p,), (q,)) == abs(p - q), 0.8892982695251703 0.7731501148082316 0.11614815471693873
+dist((p,), (q,)) == abs(p - q), 0.364389562048018 0.8388670100830495 0.47447744803503156
+dist((p,), (q,)) == abs(p - q), 0.1542196273803711 0.892464664299041 0.7382450369186699
+dist((p,), (q,)) == abs(p - q), 0.6778047671541572 0.6882934416644275 0.010488674510270357
+dist((p,), (q,)) == abs(p - q), 0.9102196898311377 0.027837628964334726 0.8823820608668029
+dist(p, q) of special values: 87858 infinite, 25695 NaN
+isclose(dist(p, q), fourthmax * sqrt(0)) True
+isclose(dist(q, p), fourthmax * sqrt(0)) True
+isclose(dist(p, q), fourthmax * sqrt(1)) True
+isclose(dist(q, p), fourthmax * sqrt(1)) True
+isclose(dist(p, q), fourthmax * sqrt(2)) True
+isclose(dist(q, p), fourthmax * sqrt(2)) True
+isclose(dist(p, q), fourthmax * sqrt(3)) True
+isclose(dist(q, p), fourthmax * sqrt(3)) True
+isclose(dist(p, q), fourthmax * sqrt(4)) True
+isclose(dist(q, p), fourthmax * sqrt(4)) True
+isclose(dist(p, q), fourthmax * sqrt(5)) True
+isclose(dist(q, p), fourthmax * sqrt(5)) True
+isclose(dist(p, q), fourthmax * sqrt(6)) True
+isclose(dist(q, p), fourthmax * sqrt(6)) True
+isclose(dist(p, q), fourthmax * sqrt(7)) True
+isclose(dist(q, p), fourthmax * sqrt(7)) True
+isclose(dist(p, q), fourthmax * sqrt(8)) True
+isclose(dist(q, p), fourthmax * sqrt(8)) True
+isclose(dist(p, q), fourthmax * sqrt(9)) True
+isclose(dist(q, p), fourthmax * sqrt(9)) True
+isclose(dist(p, q), fourthmax * sqrt(10)) True
+isclose(dist(q, p), fourthmax * sqrt(10)) True
+isclose(dist(p, q), fourthmax * sqrt(11)) True
+isclose(dist(q, p), fourthmax * sqrt(11)) True
+isclose(dist(p, q), fourthmax * sqrt(12)) True
+isclose(dist(q, p), fourthmax * sqrt(12)) True
+isclose(dist(p, q), fourthmax * sqrt(13)) True
+isclose(dist(q, p), fourthmax * sqrt(13)) True
+isclose(dist(p, q), fourthmax * sqrt(14)) True
+isclose(dist(q, p), fourthmax * sqrt(14)) True
+isclose(dist(p, q), fourthmax * sqrt(15)) True
+isclose(dist(q, p), fourthmax * sqrt(15)) True
+isclose(dist(p, q), fourthmax * sqrt(16)) True
+isclose(dist(q, p), fourthmax * sqrt(16)) True
+isclose(dist(p, q), fourthmax * sqrt(17)) True
+isclose(dist(q, p), fourthmax * sqrt(17)) True
+isclose(dist(p, q), fourthmax * sqrt(18)) True
+isclose(dist(q, p), fourthmax * sqrt(18)) True
+isclose(dist(p, q), fourthmax * sqrt(19)) True
+isclose(dist(q, p), fourthmax * sqrt(19)) True
+isclose(dist(p, q), fourthmax * sqrt(20)) True
+isclose(dist(q, p), fourthmax * sqrt(20)) True
+isclose(dist(p, q), fourthmax * sqrt(21)) True
+isclose(dist(q, p), fourthmax * sqrt(21)) True
+isclose(dist(p, q), fourthmax * sqrt(22)) True
+isclose(dist(q, p), fourthmax * sqrt(22)) True
+isclose(dist(p, q), fourthmax * sqrt(23)) True
+isclose(dist(q, p), fourthmax * sqrt(23)) True
+isclose(dist(p, q), fourthmax * sqrt(24)) True
+isclose(dist(q, p), fourthmax * sqrt(24)) True
+isclose(dist(p, q), fourthmax * sqrt(25)) True
+isclose(dist(q, p), fourthmax * sqrt(25)) True
+isclose(dist(p, q), fourthmax * sqrt(26)) True
+isclose(dist(q, p), fourthmax * sqrt(26)) True
+isclose(dist(p, q), fourthmax * sqrt(27)) True
+isclose(dist(q, p), fourthmax * sqrt(27)) True
+isclose(dist(p, q), fourthmax * sqrt(28)) True
+isclose(dist(q, p), fourthmax * sqrt(28)) True
+isclose(dist(p, q), fourthmax * sqrt(29)) True
+isclose(dist(q, p), fourthmax * sqrt(29)) True
+isclose(dist(p, q), fourthmax * sqrt(30)) True
+isclose(dist(q, p), fourthmax * sqrt(30)) True
+isclose(dist(p, q), fourthmax * sqrt(31)) True
+isclose(dist(q, p), fourthmax * sqrt(31)) True
+dist(p, q), exp 0 1.1125369292536007e-307
+dist(q, p), exp 0 1.1125369292536007e-307
+dist(p, q), exp 1 5.562684646268003e-308
+dist(q, p), exp 1 5.562684646268003e-308
+dist(p, q), exp 2 2.7813423231340017e-308
+dist(q, p), exp 2 2.7813423231340017e-308
+dist(p, q), exp 3 1.390671161567001e-308
+dist(q, p), exp 3 1.390671161567001e-308
+dist(p, q), exp 4 6.953355807835004e-309
+dist(q, p), exp 4 6.953355807835004e-309
+dist(p, q), exp 5 3.4766779039175e-309
+dist(q, p), exp 5 3.4766779039175e-309
+dist(p, q), exp 6 1.73833895195875e-309
+dist(q, p), exp 6 1.73833895195875e-309
+dist(p, q), exp 7 8.69169475979376e-310
+dist(q, p), exp 7 8.69169475979376e-310
+dist(p, q), exp 8 4.3458473798969e-310
+dist(q, p), exp 8 4.3458473798969e-310
+dist(p, q), exp 9 2.17292368994844e-310
+dist(q, p), exp 9 2.17292368994844e-310
+dist(p, q), exp 10 1.0864618449742e-310
+dist(q, p), exp 10 1.0864618449742e-310
+dist(p, q), exp 11 5.432309224871e-311
+dist(q, p), exp 11 5.432309224871e-311
+dist(p, q), exp 12 2.7161546124355e-311
+dist(q, p), exp 12 2.7161546124355e-311
+dist(p, q), exp 13 1.358077306218e-311
+dist(q, p), exp 13 1.358077306218e-311
+dist(p, q), exp 14 6.79038653109e-312
+dist(q, p), exp 14 6.79038653109e-312
+dist(p, q), exp 15 3.395193265544e-312
+dist(q, p), exp 15 3.395193265544e-312
+dist(p, q), exp 16 1.69759663277e-312
+dist(q, p), exp 16 1.69759663277e-312
+dist(p, q), exp 17 8.48798316386e-313
+dist(q, p), exp 17 8.48798316386e-313
+dist(p, q), exp 18 4.24399158193e-313
+dist(q, p), exp 18 4.24399158193e-313
+dist(p, q), exp 19 2.12199579097e-313
+dist(q, p), exp 19 2.12199579097e-313
+dist(p, q), exp 20 1.0609978955e-313
+dist(q, p), exp 20 1.0609978955e-313
+dist(p, q), exp 21 5.3049894774e-314
+dist(q, p), exp 21 5.3049894774e-314
+dist(p, q), exp 22 2.6524947387e-314
+dist(q, p), exp 22 2.6524947387e-314
+dist(p, q), exp 23 1.3262473694e-314
+dist(q, p), exp 23 1.3262473694e-314
+dist(p, q), exp 24 6.631236847e-315
+dist(q, p), exp 24 6.631236847e-315
+dist(p, q), exp 25 3.315618423e-315
+dist(q, p), exp 25 3.315618423e-315
+dist(p, q), exp 26 1.65780921e-315
+dist(q, p), exp 26 1.65780921e-315
+dist(p, q), exp 27 8.28904606e-316
+dist(q, p), exp 27 8.28904606e-316
+dist(p, q), exp 28 4.14452303e-316
+dist(q, p), exp 28 4.14452303e-316
+dist(p, q), exp 29 2.0722615e-316
+dist(q, p), exp 29 2.0722615e-316
+dist(p, q), exp 30 1.03613076e-316
+dist(q, p), exp 30 1.03613076e-316
+dist(p, q), exp 31 5.180654e-317
+dist(q, p), exp 31 5.180654e-317
+dist([1, 2], [3, 4, 5]) ValueError: both points must have the same number of dimensions
+[exit 0]

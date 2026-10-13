@@ -310,11 +310,13 @@ prints a list or dict that it meets again while printing it as `[...]` or `{...}
 that needs nothing beyond the C library. Small objects come from 64 KiB chunks in 40
 size classes, carved from 1 MiB arenas; larger objects get blocks of their own. A
 two-level page map finds the object behind any word, interior pointers included, in
-O(1). Strings, buffers and dict index arrays are allocated pointer-free and never
-scanned. The roots are the C stack and callee-saved registers, the runtime's statics,
-and the program's pointer-typed globals: the generated `@main` passes `pys_init` its
-frame address and a table of those globals, because under the JIT they live in memory
-no scanner would find. A collection runs once max(32 MiB, live bytes) have been
+O(1). Strings, buffers, the hash and index arrays of dicts and sets, the keys of dicts
+and sets of ints, and the merge buffers of sorts of ints and floats are allocated
+pointer-free and never scanned: none of them can hold a pointer (`tools/dictprobe.c`
+checks the tables' kinds). The roots are the C stack and callee-saved registers, the
+runtime's statics, and the program's pointer-typed globals: the generated `@main` passes
+`pys_init` its frame address and a table of those globals, because under the JIT they
+live in memory no scanner would find. A collection runs once max(32 MiB, live bytes) have been
 allocated since the last one, so the heap stays near twice the live set.
 Open files that become unreachable are closed after marking, before the sweep. A
 collection also runs when `open()` runs out of file descriptors. The buffers of a file open
