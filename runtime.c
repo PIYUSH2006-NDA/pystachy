@@ -307,15 +307,13 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
-/* The *args tuple that a call made in its own frame (Gen.stack_tuple), as the function called
-   keeps it (Gen.keep_stack): x itself where it is not in a frame between this one and @main's,
-   else its heap copy, which the first such request of the call makes into *heap. Not inlined:
-   the frames of its callers, where such a tuple lives, are then all above this one's. */
-__attribute__((noinline)) void *pys_keep(void *x, void **heap, I n) {
+/* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
+   own frame (Gen.stack_tuple), which the function called copies before it keeps it
+   (Gen.keep_stack). Not inlined: the frames of its callers, where such a tuple lives, are then all
+   above this one's. */
+__attribute__((noinline)) I pys_on_stack(void *x) {
   uintptr_t p = (uintptr_t)x;
-  if (p < (uintptr_t)__builtin_frame_address(0) || p >= (uintptr_t)gc_bottom) return x;
-  if (!*heap) { *heap = pys_alloc(n); memcpy(*heap, x, n); }
-  return *heap;
+  return p >= (uintptr_t)__builtin_frame_address(0) && p < (uintptr_t)gc_bottom;
 }
 static void gc_report(void) {
   fprintf(stderr, "gc: %lld collections, %.1f ms; heap peak %.1f MiB; live %.1f MiB at the last\n",

@@ -5905,7 +5905,7 @@ RUNTIME: dict[str, str] = {
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
-    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "keep": "%ptr:%ptr,%ptr,int|A|", "box": "%ptr:*T|A|", "unpack_check": "None:int,int|R|",
+    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "unpack_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
     "platform": "str:|A|", "errno": "int:str|R A|", "system": "int:str|R I|", "execv": "None:str,list[str]|R N A I rL|", "getpid": "int:|I|", "exists": "bool:str|I|",
@@ -17055,8 +17055,9 @@ class Gen:
     def keep_stack(self, n: Node) -> None:
         # before statement n of a function whose *args tuple may be in its caller's frame
         # (stack_ok): each local that may hold the tuple and that n uses other than to look it up
-        # or read its items (stack_uses) holds its heap copy from here on. runtime.c's pys_keep
-        # makes that copy once per call, and keeps a tuple that is not in a frame as it is
+        # or read its items (stack_uses) holds its heap copy from here on, which the first such
+        # statement of a call makes. A tuple that is not in a frame (runtime.c's pys_on_stack), as
+        # a call through a Callable passes it, is kept as it is
         ns = self.curfn.stknames
         k = n.kind
         if k == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and n.kids[1].s in ns:
@@ -17095,9 +17096,31 @@ class Gen:
                 continue  # (not assigned yet here: it holds nothing; or a comprehension's own)
             if ".stk" not in self.lreg:
                 self.alloca(t, ".stk")  # (the heap copy, once made)
+            hs = self.lreg[".stk"]
             v = self.ins(f"load ptr, ptr {self.lreg[nm]}")
-            r = self.rt("pys_keep", "ptr", [f"ptr {v}", f"ptr {self.lreg['.stk']}", f"i64 {8 * len(targs(t))}"])
-            self.emit(f"store ptr {r}, ptr {self.lreg[nm]}")
+            h = self.ins(f"load ptr, ptr {hs}")
+            lchk = self.label()
+            lcopy = self.label()
+            lnew = self.label()
+            lold = self.label()
+            ldone = self.label()
+            self.cbr(self.ins(f"icmp eq ptr {v}, {h}"), ldone, lchk)  # (it holds the copy: a statement before kept it)
+            self.place(lchk)
+            self.cbr(self.ins(f"icmp ne i64 {self.rt('pys_on_stack', 'i64', [f'ptr {v}'])}, 0"), lcopy, ldone)
+            self.place(lcopy)
+            self.cbr(self.ins(f"icmp eq ptr {h}, null"), lnew, lold)
+            self.place(lold)
+            self.emit(f"store ptr {h}, ptr {self.lreg[nm]}")  # (the copy another local's statement made)
+            self.br(ldone)
+            self.place(lnew)
+            cp = self.rt("pys_alloc", "ptr", [f"i64 {8 * len(targs(t))}"])
+            for j in range(len(targs(t))):
+                wd = self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {v}, i64 {j}')}")
+                self.emit(f"store i64 {wd}, ptr {self.ins(f'getelementptr i64, ptr {cp}, i64 {j}')}")
+            self.emit(f"store ptr {cp}, ptr {hs}")
+            self.emit(f"store ptr {cp}, ptr {self.lreg[nm]}")
+            self.br(ldone)
+            self.place(ldone)
 
     def stack_target(self, t: Node, out: dict[str, bool]) -> None:
         # stack_uses of an assignment's target: d[x] = v stores the key x
