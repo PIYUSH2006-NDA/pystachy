@@ -1,0 +1,23 @@
+2 X 2 Box(1) Box('x') [Box(1), Box(2)]
+True True
+3 ab 2.5
+Pair(1, 'one', p) Pair('one', 1, p) 2 ONE 2 2
+[Pair(1, 'a', p), Pair(2, 'b', p), Pair(3, 'c', p)] True False
+Pair(2.5, 2.5, p) Pair('t', ['t'], p) Pair(7, 7, p) Pair(1, 2, kw) True
+2 10 3
+['square(-3) = 9', 'twice(-3) = -6', 'abs(-3) = 3']
+Pair(1, 2, p)/n Pair('x', 'y', p)/3 Pair(4, 'abab', p) True
+5 Pair(10, 12, p) a Box a Pair something else
+6 2 10 leaf
+Pair(3, [3], p) 3 ['s'] 3
+(1, 2, 3) ('a', 'b') 1
+4 1 2 1.5
+made 1
+[1, 2, 3]
+1, b, 2.5 x
+3 3 True True
+1 x 2
+1 1 1 True s None
+1 2 3 1
+2 4 14 16 1
+[exit 0]

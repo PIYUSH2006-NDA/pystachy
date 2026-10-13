@@ -1,10 +1,8 @@
 # error: parameter 'x' of '__init__' needs a type annotation
-class A:
+# (an exception class is no class template: a handler cannot know which specialization it caught)
+class Oops(Exception):
     def __init__(self, x) -> None:
         self.x = x
 
-    def m(self, y):
-        return self.x + y
 
-
-print(A(1).m(2))
+raise Oops(1)

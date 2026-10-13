@@ -86,7 +86,8 @@ imports `annotations` from `__future__`.
 ## Typing rules
 
 - A function whose parameters are annotated has those types; a missing return annotation
-  means `-> None`. `__init__`'s parameters must be annotated: they type the fields it assigns.
+  means `-> None`. `__init__`'s annotated parameters type the fields it assigns (one without an
+  annotation makes its class a class template, below).
 - A module-level function with an unannotated parameter is a **template**: each call
   compiles it, once per list of argument types, for those types (an annotated parameter
   keeps its type), and its first `return` with a value decides what it returns. It is
@@ -135,8 +136,30 @@ imports `annotations` from `__future__`.
   it for their arguments' types, with `self` of its class. So are the operator methods
   (`__add__` & co, the comparisons, which `sorted()`, `in` and `==` of containers call with two
   objects of the class, and must return `bool`), `__call__`, `__getitem__` and `__contains__`;
-  not `__init__`, nor the other special methods. A field is typed by `__init__` as before, so a
-  template that assigns one must give it a value of its type.
+  not `__init__` (but a class template's, below), nor the other special methods. A field is typed
+  by `__init__` as before, so a template that assigns one must give it a value of its type.
+- A class whose `__init__` has a parameter without an annotation (also `*args` or `**kwargs`), or
+  one annotated with a class template, or that makes an object of a class template, is a **class
+  template**. Each call `C(args)` makes an object of a *specialization*, a class of its own whose
+  fields `__init__` types as if it annotated its parameters with the types of the call's
+  arguments; calls whose fields get the same types share one (`Box(1)` and `Box(2)`, not
+  `Box("s")`). A specialization's methods are compiled where they are called, as templates are
+  (its special methods that are no templates when it is made), with `self` of the
+  specialization. To CPython's eyes it is its class: `isinstance(o, Box)` holds for each,
+  `repr()` and CPython's messages name `Box`, the class attributes are the class's, and a class
+  method's `cls(...)` makes an object of the specialization its arguments pick. Each is a type of
+  its own, so a variable or a list holds objects of one; compile-time messages show it with its
+  fields' types (`expected Box[int], got Box[str]`). An annotation that names a class template
+  types nothing (`b: Box`, `-> Box`, `x: Box = Box(1)`: a function with such a parameter or
+  return is a template), but in the class's own methods and fields, where it names the
+  specialization, as `typing.Self` does (`self.next: "Node | None" = next`). A function passed for
+  an unannotated parameter gives a specialization per function, each having its own type: a
+  `Callable[[A], R]` annotation makes one for every function of that shape, also where `R` names a
+  class template (a parameter `fn: Callable[[str, int], Result]`): a function is then the
+  `Callable` of the specialization it returns, so parsers that hold different closures returning
+  one `Result` specialization share a layout. Specializations count
+  towards the 4,096 template specializations of a compilation (*Rejected rather than
+  miscompiled*).
 - Each variable has one type for its lifetime, fixed by its annotation or first assignment.
 - Empty `[]` and `{}` take their type from context: an annotation, a parameter, a field,
   or the variable being assigned. A variable without a type that is assigned `[]` or `{}`
@@ -461,7 +484,7 @@ submodule (`from .util import util`).
 
 A class or function of an
 imported module that Pystachy cannot compile (inheritance other than an exception class's,
-an unannotated `__init__`, an annotation it does not support such as `Iterable[int]` or
+`*args` with an annotation in `__init__`, an annotation it does not support such as `Iterable[int]` or
 `dict[float, X]`, a `bytes` parameter, a field whose type cannot be inferred, a special method that Pystachy
 never calls such as `__new__`, ...) is an error only where the
 program uses it, and the message names it (`m.total() is not supported: parameter 'xs':
@@ -586,7 +609,7 @@ rejected.
 Each of these would require a dynamic runtime or a large compiler
 feature: generator functions (`yield`), generator expressions other than the consumer
 arguments above, inheritance other than an exception class's,
-`*args` and `**kwargs` in `__init__` and the special methods that are no templates, `**`
+`*args` and `**kwargs` with annotations in `__init__` (without, they make a class template) and in the special methods that are no templates, `**`
 arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
@@ -867,6 +890,11 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   `TypeError`
 - a parameter whose argument is `None` given a value of another type in an if branch or loop, or
   bound as a `for` target
+- in a class template: a field given `None` (no specialization types it; another call's `T | None`
+  needs unions), an annotation naming one where it cannot stand for its specialization (a field
+  of another class, a dataclass's), an exception class with an unannotated `__init__` (a handler
+  cannot know which specialization it caught), and objects of two specializations in one
+  variable or container
 
 ### Objects and operators
 

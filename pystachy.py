@@ -29,8 +29,9 @@ MODDUNDERS = "__file__ __doc__ __spec__ __loader__ __package__ __builtins__"  # 
 def shown(s: str) -> str:
     # a name as Python spells it: the "$" of a qualified name (heapq$heappush) between two
     # identifier characters is the "." of a module attribute; the main program's names are
-    # its own (__main__$len, a def that shadows a builtin, is len)
-    s = s.replace("__main__$", "")
+    # its own (__main__$len, a def that shadows a builtin, is len), and a class template's
+    # specializations its class's (Box-2 is Box)
+    s = unspec(s.replace("__main__$", ""))
     out: list[str] = []
     for i in range(len(s)):
         c = s[i]
@@ -6041,8 +6042,40 @@ def owner(name: str) -> str:
 
 
 def short(name: str) -> str:
-    # a function's or class's own name, without its module (heapq$heappush: heappush)
-    return name[name.rfind("$") + 1 :]
+    # a function's or class's own name, without its module (heapq$heappush: heappush), a class
+    # template's specialization its class's (Box-2: Box)
+    return unspec(name[name.rfind("$") + 1 :])
+
+
+def retoken(t: str, name: str, to: str) -> str:
+    # type t with each occurrence of the name name (a whole name, between brackets and commas) as to
+    out: list[str] = []
+    w = ""
+    for c in t + ",":
+        if c == "[" or c == "]" or c == ",":
+            out.append(to if w == name else w)
+            out.append(c)
+            w = ""
+        else:
+            w += c
+    return "".join(out)[:-1]
+
+
+def unspec(name: str) -> str:
+    # the class that a specialization of a class template is (Box-2, re$Match-1: Box, re$Match):
+    # its name and a number, joined by "-", which no class name of Python's has
+    i = name.rfind("-")
+    if i <= 0 or i + 1 == len(name) or not name[i + 1 :].isdigit():
+        return name
+    for c in name[:i]:
+        if not (c.isalnum() or c == "_" or c == "$" or c == "."):
+            return name
+    return name[:i]
+
+
+# a specialization of a class template (Box-2) as compile-time messages show it: its class and
+# its fields' types (Box[int, str]), filled as the compiler makes them (Gen.specialize)
+SPECSHOW: dict[str, str] = {}
 
 
 def raising_op(op: str) -> bool:
@@ -6287,7 +6320,7 @@ def typestr(t: str) -> str:
     w = ""
     for c in t + ",":
         if c == "[" or c == "]" or c == ",":
-            out.append("BaseException" if w == "exc" else short(w))
+            out.append("BaseException" if w == "exc" else SPECSHOW[w] if w in SPECSHOW else short(w))
             out.append(c)
             w = ""
         else:
@@ -7178,6 +7211,9 @@ class FnInfo:
         # a template's function: the parameters whose arguments are objects known not to be None
         # (a new object, self), which its isinstance(), hasattr() and "is None" tests read as such
         self.nnp: dict[str, bool] = {}
+        # the parameters annotated Callable[[A, B], C] with C a class template: an argument that is
+        # a function is that Callable of the specialization it returns (see pat_arg)
+        self.pats: dict[int, Node] = {}
         self.clo = -1  # a closure's function (a def or lambda inside a function): its Gen.closures position
 
 
@@ -7447,6 +7483,11 @@ class ClassInfo:
         self.nflag = 0  # the "is assigned" flags at the end of its struct (its own fields')
         self.leak = False  # its __init__ lets self escape before it ends
         self.flowed = False  # fl_fields has decided its flags
+        # a class template (an __init__ parameter without an annotation): its specializations,
+        # named by the types its fields get (see specialize); a specialization: its template
+        self.specs: dict[str, str] = {}
+        self.nspec = 0  # (the names it has given: one each, also to those found to be one already made)
+        self.origin = ""
 
 
 class Flow:
@@ -7594,6 +7635,10 @@ class Flow:
 class Gen:
     def __init__(self):
         self.classes: dict[str, ClassInfo] = {}
+        self.tmpl: dict[str, bool] = {}  # the class templates (an __init__ parameter without an annotation)
+        self.compiling = False  # every declaration is made: code is being compiled (see guess)
+        self.specing: dict[str, str] = {}  # the specializations being made, by template and argument types
+        self.specdone: dict[str, str] = {}  # and those made, which the same call gets again
         self.selfcls = ""  # the class whose method or fields are being declared: what typing.Self is
         self.funcs: dict[str, FnInfo] = {}
         self.aliases: dict[str, str] = {}
@@ -7705,6 +7750,8 @@ class Gen:
         self.clokeys: dict[str, int] = {}
         self.cells: dict[str, str] = {}  # the function's variables that closures take: the cell of each (a pointer)
         self.adapters: dict[str, str] = {}  # "<function value type> <Callable type>" -> its adapter's symbol (Gen.adapter)
+        self.adrets: dict[str, str] = {}  # "<function value type> <parameter types>" -> what it returns (Gen.adapter_ret)
+        self.ncv = 0  # the adapters named (@cv.N), each before its body is compiled, which may name others
         self.decorated: dict[str, bool] = {}  # the defs of a module's top level that bind what their decorators give (decorate)
         self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
@@ -8402,6 +8449,10 @@ class Gen:
             return self.ann(self.parse_expr(n.s))
         s = n.s
         if k == "name":
+            if s in self.tmpl and self.selfcls in self.classes and self.classes[self.selfcls].origin == s:
+                return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)
+            if s in self.tmpl:
+                return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
             if s == "int" or s == "float" or s == "bool" or s == "str" or s in self.classes:
                 return s
             if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
@@ -8866,11 +8917,17 @@ class Gen:
         tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: {d.s}() is not a template (another method whose parameters mention a TypeVar is, compiled for each call's argument types)"
         if tv != "" and cls != "" and not template_ok(d.s) and not self.lib:
             self.err(tvbad)
+        init = d.s == "__init__" and self.tmpl_of(cls) != ""  # (a class template's: see specialize)
         for i in range(len(ps)):
-            # a method's are too, as M2 makes them (but its self or cls; see template_ok)
+            # a method's are too, as M2 makes them (but its self or cls; see template_ok), and a
+            # class template's __init__; an annotation that names a class template types nothing
             own = cls != "" and i == 0 and f.deco != "staticmethod"
-            if (cls == "" or (template_ok(d.s) and not own)) and ((ps[i].kind == "param" and ps[i].kids[0].kind == "noann") or ps[i].kind == "starparam" or ps[i].kind == "dstarparam"):
+            if (cls == "" or ((template_ok(d.s) or init) and not own)) and ((ps[i].kind == "param" and (ps[i].kids[0].kind == "noann" or self.tmpl_ann(ps[i].kids[0]))) or ps[i].kind == "starparam" or ps[i].kind == "dstarparam"):
                 f.generic = True
+        if (cls == "" or template_ok(d.s)) and d.kids[1].kind != "noann" and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != ""):
+            f.generic = True  # (-> Box: what it returns is one of the class's specializations)
+        if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
+            f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
         marks = d.kids[0].s.split(",")
         bad = ""
         f.npos = -1
@@ -8916,6 +8973,10 @@ class Gen:
                 if not f.generic:
                     self.err(f"parameter '{p.s}' of '{d.s}' needs a type annotation")
                 f.ptypes.append("")
+            elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):
+                f.ptypes.append("")  # (it names a class template: any of its specializations, see tmpl_ann)
+                if self.callable_pat(p.kids[0]) != "":
+                    f.pats[len(f.params) - 1] = p.kids[0]
             elif self.lib and self.ann_problem(p.kids[0], False) != "":
                 bad = f"{cls + '.' if cls != '' else ''}{d.s}() is not supported: parameter '{p.s}': {self.ann_problem(p.kids[0], False)}"
                 f.ptypes.append("")  # (any type: the def statement evaluates its default, see hoist)
@@ -8969,8 +9030,12 @@ class Gen:
         elif d.kids[1].kind != "noann" and cls != "" and d.s == "__iter__" and self.iter_ann(d.kids[1]) != "":
             f.ret = self.iter_ann(d.kids[1])
             f.iters = True
+        elif d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s)):
+            f.ret = ""  # (-> Box: decided by its first return, as an unannotated one is)
         elif d.kids[1].kind != "noann":
             f.ret = self.typeof(d.kids[1])
+        elif f.generic and init:
+            f.ret = "None"  # (a class template's __init__: what CPython lets it return)
         elif f.generic:
             f.ret = ""
         return f
@@ -9139,7 +9204,7 @@ class Gen:
             self.err(f"a base that defines __init_subclass__ is not supported (CPython calls {owner}.__init_subclass__() when it creates class {short(ci.name)})")
         if "__init__" in ci.methods or ci.exc != "":
             # (an exception class without __init__ of its own takes its base's, or none)
-            if "__init__" in ci.methods and ci.methods["__init__"].cls == ci.name:
+            if "__init__" in ci.methods and ci.methods["__init__"].cls == ci.name and ci.name not in self.tmpl:
                 f = ci.methods["__init__"]
                 self.scan_fields(ci, f, f.node.kids[2].kids)
             return
@@ -9277,6 +9342,28 @@ class Gen:
                 elif kid.kind == "except":
                     self.scan_fields(ci, f, kid.kids[1].kids)
 
+    def guess_args(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
+        # the types of the arguments (but self) that the call of class template __init__ init with
+        # args passes, as guess infers them ([] for none); ["!"] where it cannot (a keyword or
+        # star argument, *args, a type it cannot infer)
+        ts: list[str] = []
+        if init.vararg >= 0 or init.kwarg >= 0 or len(args) > len(init.params) - 1:
+            return ["!"]
+        for i in range(1, len(init.params)):
+            if i - 1 < len(args):
+                a = args[i - 1]
+                if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+                    return ["!"]
+                t = self.guess(a, f)
+            elif init.defaults[i].kind == "noann":
+                return ["!"]
+            else:
+                t = "None" if init.defaults[i].kind == "None" else self.guess(init.defaults[i], FnInfo("", "", init.node, ""))
+            if t == "" or t.startswith("!"):
+                return ["!"]
+            ts.append(t)
+        return ts
+
     def guess(self, e: Node, f: FnInfo) -> str:
         k = e.kind
         if k == "int" or k == "float" or k == "str":
@@ -9328,6 +9415,11 @@ class Gen:
             return "str"  # (a str path is its own file system path)
         if k == "call" and e.kids[0].kind == "name":
             c = e.kids[0].s
+            if c in self.tmpl:
+                # a class template's object: of the specialization its arguments' types pick, once
+                # code is being compiled (a specialization compiles its special methods)
+                ts = self.guess_args(self.classes[c].methods["__init__"], e.kids[1:], f) if self.compiling else ["!"]
+                return self.specialize(c, ts) if "!" not in ts else ""
             if c in self.classes or c in self.unsupported:
                 return c if c in self.classes else "!" + self.unsupported[c]
             if c in self.funcs:
@@ -10050,7 +10142,7 @@ class Gen:
         names = [name] + self.twins(name)
         fs: list[FnInfo] = [f for f in self.funcs.values()]
         for ci in self.classes.values():
-            if ci.bad == "":
+            if ci.bad == "" and ci.name not in self.tmpl:
                 fs.extend(ci.methods.values())
         for f in fs:
             if name in self.gtypes and "?" not in self.gtypes[name]:
@@ -11898,7 +11990,59 @@ class Gen:
             c = self.classes[c].base
         return c in EXCBASES and exc_derives(c, base)
 
-    def class_problem(self, m: Mod, st: Node) -> str:
+    def init_template(self, st: Node) -> bool:
+        # is class statement st a class template: no decorator (a dataclass's fields are annotated)
+        # and an __init__ of its own with a parameter but self that has no annotation, or one that
+        # names a class template; each object then belongs to a specialization, whose fields are
+        # typed by the arguments of the call that makes it (see specialize)
+        if len(st.kids) > 1 or st.s in self.nts:
+            return False
+        for d in st.kids[0].kids:
+            if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
+                ps = d.kids[0].kids
+                for i in range(1, len(ps)):
+                    if ps[i].kids[0].kind == "noann" or (ps[i].kind == "param" and self.tmpl_ann(ps[i].kids[0])):
+                        return True  # (also *args or **kwargs without an annotation)
+                if self.makes_tmpl(d.kids[2]):
+                    return True  # (a field may hold an object of a class template: typed where the object is made)
+        return False
+
+    def makes_tmpl(self, n: Node) -> bool:
+        # does n call a class template, making an object of one of its specializations?
+        if n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s in self.tmpl:
+            return True
+        for k in n.kids:
+            if self.makes_tmpl(k):
+                return True
+        return False
+
+    def tmpl_ann(self, a: Node) -> bool:
+        # does annotation a name a class template (Box, "Box", Box | None, list[Box])? Each of its
+        # specializations being a type of its own, the annotation then types nothing, as if left out
+        if a.kind == "name":
+            return a.s in self.tmpl
+        if a.kind == "str":
+            w = ""
+            for c in a.s + " ":
+                if c.isalnum() or c == "_":
+                    w += c
+                    continue
+                if w in self.tmpl or len([t for t in self.tmpl if t.endswith("$" + w)]) > 0:
+                    return True
+                w = ""
+            return False
+        for k in a.kids:
+            if self.tmpl_ann(k):
+                return True
+        return False
+
+    def tmpl_of(self, c: str) -> str:
+        # the class template that class c is or specializes, or ""
+        if c in self.tmpl:
+            return c
+        return self.classes[c].origin if c in self.classes else ""
+
+    def class_problem(self, m: Mod, st: Node, exc: bool) -> str:
         # why a class of an imported module cannot be declared, or "": its __init__ (and the special
         # methods template_ok leaves out) needs annotated parameters, where another method's
         # unannotated ones make it a template, and its body may hold only fields, methods and a
@@ -11914,7 +12058,7 @@ class Gen:
                     return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
                 if len(ps) == 0 and not static:
                     return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
-                for i in range(len(ps) if not template_ok(b.s) else 0):
+                for i in range(len(ps) if not template_ok(b.s) and not (b.s == "__init__" and not exc and self.init_template(st)) else 0):
                     if ps[i].kind != "param":
                         return f"method {b.s}() takes *args or **kwargs"
                     if (i > 0 or static) and ps[i].kids[0].kind == "noann":
@@ -12254,9 +12398,9 @@ class Gen:
                 if st.kind == "subclass":
                     why = self.subclass_problem(st)
                     if why == "" and m.name != "":
-                        why = self.class_problem(m, st.kids[0])
+                        why = self.class_problem(m, st.kids[0], True)
                 elif st.kind == "class" and m.name != "":
-                    why = self.class_problem(m, st)
+                    why = self.class_problem(m, st, False)
                 if why != "" and m.name == "":
                     self.err(why)
                 if why != "":
@@ -12284,6 +12428,15 @@ class Gen:
                         self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
                     if len(st.kids) > 2:
                         self.err(f"unsupported decorator @{st.kids[2].s}")
+        grow = True
+        while grow:
+            # the class templates: an __init__ parameter without an annotation, or with one that
+            # names a class template (Holder(b: Box)), which then types nothing either
+            grow = False
+            for ci in self.classes.values():
+                if ci.name not in self.tmpl and ci.exc == "" and self.init_template(ci.node):
+                    self.tmpl[ci.name] = True
+                    grow = True
         for m in mods:
             top: list[Node] = []
             for st in m.body.kids:
@@ -12397,6 +12550,7 @@ class Gen:
             self.inits[m.name] = FnInfo("<module>", "@init." + m.name if m.name != "" else "@main.init", m.body, "")
             self.inits[m.name].mod = m.name
             self.mfile[m.name] = m.path[2:] if m.path.startswith("./") else m.path
+        self.compiling = True
         self.modlevel = True
         for i in range(len(mods)):
             self.function(self.inits[mods[i].name], tops[i])
@@ -12429,10 +12583,10 @@ class Gen:
                     self.externs[f.ll] = f"declare {have[0]} {f.ll}({', '.join(have[1:])})"
             elif not f.generic and f.ll not in self.compiled:
                 self.function(f, f.node.kids[2].kids)
-        for ci in self.classes.values():
+        for ci in [x for x in self.classes.values()]:
             for f in ci.methods.values():
-                if f.cls != ci.name:
-                    continue  # (an exception class's base's)
+                if f.cls != ci.name or (ci.name in self.tmpl and f.deco == ""):
+                    continue  # (an exception class's base's; a class template's, but its static and class methods: its specializations')
                 if ci.mod != "" and f.ll not in self.lazy:
                     self.lazy[f.ll] = f
                 elif f.ll not in self.lazy and f.ll not in self.compiled and not f.generic:
@@ -12523,6 +12677,8 @@ class Gen:
             self.dispatch(op)  # (each program defines them: runtime.py calls them like runtime.c)
         hdr: list[str] = ["; generated by pystachy"]
         for ci in self.classes.values():
+            if ci.name in self.tmpl:
+                continue  # (a class template's objects are its specializations')
             ts = [lt(ci.ftypes[x]) for x in ci.fields]
             for _ in range(ci.nflag):
                 ts.append("i1")
@@ -12774,7 +12930,7 @@ class Gen:
         # included, since the base's methods work on its objects. Its constructor sets the hidden
         # fields; super().__init__() assigns what the base's __init__ surely does (and exposes self
         # if that lets it escape), as the constructor does when it calls the base's __init__
-        if ci.flowed:
+        if ci.flowed or ci.name in self.tmpl:
             return
         ci.flowed = True
         fl = Flow({}, {})
@@ -13308,6 +13464,15 @@ class Gen:
         self.global_var(name, lt(v.t))
         self.emit(f"store {lt(v.t)} {v.v}, ptr {name}")
         return name
+
+    def dflt_fn(self, f: FnInfo) -> FnInfo:
+        # the function whose def statement evaluates f's default values (hoist): f, but for a method
+        # of a class template's specialization, the template's method, as each specialization's is
+        # the same def, whose defaults CPython evaluates once, when the class statement runs
+        o = self.classes[f.cls].origin if f.cls in self.classes else ""
+        if o != "" and f.name in self.classes[o].methods and self.classes[o].methods[f.name].node is f.node:
+            return self.classes[o].methods[f.name]
+        return f
 
     def early_default(self, f: FnInfo, j: int) -> None:
         # a call that leaves out parameter j of f, compiled before f's def statement (in a
@@ -14529,6 +14694,10 @@ class Gen:
                 for i in range(len(n.kids) - 1):
                     self.assign(n.kids[i], v)
             self.copying = False
+        elif k == "annassign" and self.tmpl_ann(n.kids[1]):
+            # an annotation that names a class template types nothing: x: Box = v is x = v
+            if len(n.kids) == 3:
+                self.stmt(mk("assign", "", n.line, [n.kids[0], n.kids[2]]))
         elif k == "annassign":
             if n.s != "" and self.ann_problem(n.kids[1], False) != "":
                 self.err(n.s)  # (the declaration of a local that only dropped code binds: Loader.dropped_locals())
@@ -15612,7 +15781,7 @@ class Gen:
         if c.s in self.classes:
             # (an exception of class t, or of a builtin one, may be an object of a class deriving from t)
             xc = self.classes[c.s].exc != "" and (t == "exc" or (t in self.classes and (self.derives(t, c.s) or self.derives(c.s, t))))
-            return -2 if t == c.s else -1 if xc else 0
+            return -2 if t == c.s or (t in self.classes and self.classes[t].origin == c.s) else -1 if xc else 0
         if self.bound(c.s):
             return -1
         if c.s == "object":
@@ -17272,6 +17441,12 @@ class Gen:
                     return self.exc_object(f.s, args)
                 if self.classes[f.s].bad != "":
                     self.err(self.classes[f.s].bad)
+                if f.s in self.tmpl:
+                    # a class template: the types of the arguments pick the specialization, whose
+                    # object call_fn makes once it has them (in made[0])
+                    made = [Val("", f.s)]
+                    self.call_fn(self.classes[f.s].methods["__init__"], made, args)
+                    return made[0]
                 o = self.new_obj(f.s)
                 self.call_fn(self.classes[f.s].methods["__init__"], [o], args)
                 return o
@@ -17490,7 +17665,8 @@ class Gen:
         if key in self.adapters:
             return self.adapters[key]
         ts = targs(t)
-        ll = f"@cv.{len(self.adapters)}"
+        ll = f"@cv.{self.ncv}"
+        self.ncv += 1
         self.adapters[key] = ll
         line = self.line
         f = FnInfo("<callable>", ll, mk("def", "<callable>", line, []), "")
@@ -17513,6 +17689,80 @@ class Gen:
         self.restore(fr)
         self.making.pop()
         return ll
+
+    def callable_pat(self, a: Node) -> str:
+        # the class template C of annotation a when it is Callable[[A, B], C] (C named alone, A and B
+        # no class template's), else ""
+        if a.kind == "str":
+            return self.callable_pat(self.parse_expr(a.s))
+        if a.kind != "index" or (a.kids[0].kind != "name" and a.kids[0].kind != "attr"):
+            return ""
+        base = self.typing_attr(a.kids[0]) if a.kids[0].kind == "attr" else self.typing_name(a.kids[0].s)
+        if base != "Callable" or a.kids[1].kind != "tuple" or len(a.kids[1].kids) != 2 or a.kids[1].kids[0].kind != "list":
+            return ""
+        r = a.kids[1].kids[1]
+        for x in a.kids[1].kids[0].kids:
+            if self.tmpl_ann(x):
+                return ""
+        if r.kind == "str":
+            r = self.parse_expr(r.s)
+        return r.s if r.kind == "name" and r.s in self.tmpl else ""
+
+    def pat_arg(self, v: Val, a: Node) -> Val:
+        # an argument for a parameter annotated Callable[[A, B], C], C a class template: a function
+        # (or such a Callable) that returns an object of a specialization S of C, given A and B, as
+        # the Callable[[A, B], S], so that one type holds the functions that return S (a field of
+        # it, one specialization of the class that has the field); another is left as it is
+        c = self.callable_pat(a)
+        if a.kind == "str":
+            a = self.parse_expr(a.s)
+        ps = [self.vtype(x) for x in a.kids[1].kids[0].kids]
+        if is_callable(v.t):
+            r = targs(v.t)[0]
+            if targs(v.t)[1:] != ps:
+                return v
+        elif is_fn(v.t):
+            r = self.adapter_ret(v.t, ps)
+        else:
+            return v
+        if self.tmpl_of(unopt(r)) != c:
+            return v
+        return self.coerce(v, self.ctype("callable", [r] + ps))
+
+    def adapter_ret(self, ft: str, ps: list[str]) -> str:
+        # what function value type ft returns, called with arguments of types ps: the adapter of a
+        # Callable of those parameters (see adapter), compiled with its return type left to its
+        # return statement, and kept for the Callable that returns that
+        key = ft + " " + ",".join(ps)
+        if key in self.adrets:
+            return self.adrets[key]
+        line = self.line
+        ll = f"@cv.{self.ncv}"  # (its key needs what it returns: it is registered once compiled)
+        self.ncv += 1
+        f = FnInfo("<callable>", ll, mk("def", "<callable>", line, []), "")
+        f.params = ["_f"] + [f"_a{j}" for j in range(len(ps))]
+        f.ptypes = [ft] + ps
+        for _ in f.params:
+            f.defaults.append(mk("noann", "", line, []))
+            f.dglob.append("")
+            f.dtypes.append("")
+        f.ret = ""  # (decided by its return statement, as a template's)
+        f.infer = True
+        f.inst = True
+        f.mod = self.curfn.mod
+        call = mk("call", "", line, [mk("name", p, line, []) for p in f.params])
+        body = [mk("return", "", line, [call])]
+        f.node.kids = [mk("params", "-1,-1", line, []), mk("noann", "", line, []), mk("block", "", line, body)]
+        self.making.append(f"making a Callable of {typestr(ft)} at {where(line)}")
+        fr = self.save()
+        self.modlevel = False
+        self.lenient = False
+        self.function(f, body)
+        self.restore(fr)
+        self.making.pop()
+        self.adrets[key] = f.ret
+        self.adapters[ft + " " + self.ctype("callable", [f.ret] + ps)] = ll
+        return f.ret
 
     def call_callable(self, o: Val, args: list[Node]) -> Val:
         # o(args), o a Callable (callable[R,A,B]): its code, with its env and the arguments, which
@@ -17841,32 +18091,42 @@ class Gen:
             else:
                 pos += 1
             vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
+            if j in f.pats:
+                vals[j] = self.pat_arg(vals[j], f.pats[j])
         if f.vararg >= 0:
             vals[f.vararg] = self.tuple_(extra)
         if f.kwarg >= 0:
             vals[f.kwarg] = self.kw_record(kwn, kwv)
         if none != "":
             self.notnone(pre[0], none)  # (CPython calls o once it has evaluated the arguments)
+        df = self.dflt_fn(f)
         for j in range(np):
             if vals[j].t == "":
                 t = f.ptypes[j]
-                if f.dglob[j] == "" and not is_const(f.defaults[j]):
-                    self.early_default(f, j)
-                if f.dglob[j].startswith("!"):
-                    self.err(f.dglob[j][1:])
-                if f.dglob[j] == "=None":
+                if df.dglob[j] == "" and not is_const(f.defaults[j]):
+                    self.early_default(df, j)
+                if df.dglob[j].startswith("!"):
+                    self.err(df.dglob[j][1:])
+                if df.dglob[j] == "=None":
                     vals[j] = Val("null", "None")
-                elif f.dglob[j].startswith("&"):
+                elif df.dglob[j].startswith("&"):
                     # a closure's default: in its env (pre[0]), evaluated where it was defined
-                    t = t if t != "" else f.dtypes[j]
-                    da = self.ins(f"getelementptr inbounds i64, ptr {pre[0].v}, i64 {f.dglob[j][1:]}")
+                    t = t if t != "" else df.dtypes[j]
+                    da = self.ins(f"getelementptr inbounds i64, ptr {pre[0].v}, i64 {df.dglob[j][1:]}")
                     vals[j] = Val(self.ins(f"load {lt(t)}, ptr {da}"), t)
-                elif f.dglob[j] != "":
-                    t = t if t != "" else f.dtypes[j]
-                    vals[j] = Val(self.ins(f"load {lt(t)}, ptr {f.dglob[j]}"), t)
+                elif df.dglob[j] != "":
+                    t = t if t != "" else df.dtypes[j]
+                    vals[j] = Val(self.ins(f"load {lt(t)}, ptr {df.dglob[j]}"), t)
                 else:
                     vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
         self.line = line
+        if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tmpl:
+            # C(args) of a class template C: its arguments' types decide the specialization the
+            # object belongs to (see specialize), whose __init__ initializes it
+            sc = self.specialize(f.cls, [v.t for v in vals[1:]])
+            vals[0] = self.new_obj(sc)
+            pre[0] = vals[0]
+            f = self.classes[sc].methods["__init__"]
         if f.generic:
             nnp: list[str] = []
             for j in range(np):
@@ -17971,6 +18231,94 @@ class Gen:
             if self.tests(n.kids, p):
                 return True
         return False
+
+    def specialize(self, c: str, ts: list[str]) -> str:
+        # the specialization of class template c that c(args) makes an object of, for arguments
+        # of types ts (its __init__'s, after self, as call_fn has them): the fields its __init__
+        # assigns are typed as for a class whose __init__ annotates its parameters with ts, and the
+        # calls whose fields get the same types share one. A specialization is a class of its
+        # own (c-1, c-2, ...): CPython's names for it are c's, messages about types show its
+        # fields' (Box[int]). It counts as a template specialization
+        t = self.classes[c]
+        init = t.methods["__init__"]
+        # (an annotated parameter's argument has its type, as call_fn coerces it)
+        ts = [init.ptypes[i + 1] if i + 1 < len(init.ptypes) and init.ptypes[i + 1] != "" else ts[i] for i in range(len(ts))]
+        doing = c + "(" + ",".join(ts) + ")"
+        if doing in self.specdone:
+            # (the same argument types make the same fields: also where templates make objects of
+            # each other, A's __init__ making a B whose __init__ makes an A, which gets the A made)
+            return self.specdone[doing]
+        if doing in self.specing:
+            # (its __init__ makes another object of these types, self.next = Node(n - 1): the one
+            # being made, as a recursive call of a template is)
+            return self.specing[doing]
+        if len(self.making) >= 100:
+            self.err(f"{short(c)}() needs more than 100 nested template functions; annotate its parameters")
+        t.nspec += 1
+        name = f"{c}-{t.nspec}"
+        self.specing[doing] = name
+        s = ClassInfo(name, t.node)
+        s.mod = t.mod
+        s.origin = c
+        s.fields = [x for x in t.fields]  # (its class attributes, which its specializations share)
+        for x in t.fields:
+            s.fpos[x] = t.fpos[x]
+            s.ftypes[x] = t.ftypes[x]
+        s.fdefault = t.fdefault
+        s.fglob = t.fglob
+        self.classes[name] = s
+        fi = FnInfo("__init__", init.ll, init.node, name)
+        fi.params = init.params
+        fi.ptypes = [name] + ts
+        fi.mod = init.mod
+        args = ", ".join([typestr(x) for x in ts])
+        self.making.append(f"specializing {shown(c)}({args}) for the call at {where(self.line)}")
+        sel = self.selfcls
+        self.selfcls = name  # (c names its specialization in its annotations, see ann)
+        line = self.line
+        self.scan_fields(s, fi, init.node.kids[2].kids)
+        self.line = line
+        # (a field that holds the specialization itself, self.next: Node | None, is the same in each)
+        key = ",".join([x + ":" + retoken(s.ftypes[x], name, "@") for x in s.fields])
+        del self.specing[doing]
+        if key in t.specs:
+            del self.classes[name]
+            self.selfcls = sel
+            self.making.pop()
+            self.specdone[doing] = t.specs[key]
+            return t.specs[key]
+        if s.bad != "":
+            self.err(s.bad)  # (an imported module's class: where the program makes an object of it)
+        if self.template_instances >= TEMPLATE_INSTANCES:
+            self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
+        self.template_instances += 1
+        t.specs[key] = name
+        self.specdone[doing] = name
+        SPECSHOW[name] = f"{short(c)}[{', '.join([typestr(s.ftypes[x]) for x in s.fields if x not in t.ftypes])}]"
+        for d in t.node.kids[0].kids:
+            if d.kind == "def":
+                self.line = d.line
+                self.lib = s.mod != ""
+                s.methods[d.s] = self.declare_fn(d, name)
+                self.lib = False
+                s.methods[d.s].mod = s.mod
+        s.hook = t.hook
+        for f in s.methods.values():
+            self.check_special(f)
+        self.fl_fields(s)
+        for f in s.methods.values():
+            # the special methods that are no templates, which Pystachy calls implicitly (its
+            # others are compiled where they are called, as templates are)
+            if not f.generic and f.bad == "" and f.ll not in self.compiled:
+                fr = self.save()
+                self.modlevel = False
+                self.lenient = False
+                self.function(f, f.node.kids[2].kids)
+                self.restore(fr)
+        self.line = line
+        self.selfcls = sel
+        self.making.pop()
+        return name
 
     def instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
         # the function template f compiles to for arguments of types ts, compiled when first
