@@ -146,8 +146,9 @@ imports `annotations` from `__future__`.
   it for their arguments' types, with `self` of its class. So are the operator methods
   (`__add__` & co for `+ - * / // % @ & | ^ << >>` and their in-place forms, as parsy's parsers
   define `|`, `>>` and `<<`; the comparisons, which `sorted()`, `in` and `==` of containers call
-  with two objects of the class, and must return `bool`), `__call__`, `__getitem__` and
-  `__contains__`; not `__init__` (but a class template's, below), nor the other special methods.
+  with two objects of the class, `in` of a tuple also with an item or value of another type, and
+  must return `bool`), `__call__`, `__getitem__` and `__contains__`; not `__init__` (but a class
+  template's, below), nor the other special methods.
   A field is typed by `__init__` as before, so a template that assigns one must give it a value
   of its type.
 - A class whose `__init__` has a parameter without an annotation (also `*args` or `**kwargs`), or
