@@ -24,7 +24,7 @@ work may have moved the numbers; [issue #5](https://github.com/den-run-ai/pystac
   methods library code uses most (`partition`, `splitlines`, `zfill`, `rsplit`, ...).
 - **With them, these CPython 3.13 modules compile unmodified and print what CPython prints**
   (vendored byte for byte in `lib/`, each with a differential test): `bisect`, `colorsys`,
-  `heapq` (its core), `operator` (its functions), `stat`, `posixpath` and `genericpath` (the path
+  `heapq` (its core; `lib/heapq.py` edits `nlargest()` and `nsmallest()`), `operator` (its functions), `stat`, `posixpath` and `genericpath` (the path
   string functions), `this` and `curses.ascii`. On a harness of 189 small programs over 25
   candidate modules (written by an independent research pass), 65 compile from the unmodified
   sources and all 65 print what CPython prints; none prints something different.
@@ -120,7 +120,7 @@ methods.
 |---|---|---|
 | `bisect` | `bisect_left`, `bisect_right`, `insort_left`, `insort_right`, `bisect`, `insort`, with `lo`/`hi`, on ints, floats, strings, tuples, objects, and `key=` with a function of the program or a builtin | `key=` with a lambda (not supported) |
 | `colorsys` | all six conversions, with float or int arguments | — |
-| `heapq` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` forms, on any ordered type | `merge` (a generator, `*iterables`), `nlargest`/`nsmallest` (`iter`, `key=`, `try`) |
+| `heapq` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` forms, on any ordered type | `merge` (a generator, `*iterables`); `nlargest`/`nsmallest` as CPython wrote them (`iter`, `object()`, `min(default=)`), which `lib/heapq.py` edits in marked places so that they compile ([lib/README.md](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)) |
 | `operator` | 49 of its functions: arithmetic, bitwise, comparisons, `not_`/`truth`, `concat`, `contains`/`countOf`/`indexOf`, item access, the in-place forms, the dunder aliases | `attrgetter`, `itemgetter`, `methodcaller` (classes with `*args`), `call`, `length_hint`, `index` (`int.__index__`); in-place forms that change the type (`itruediv(1, 2)`) |
 | `stat` | every constant, `S_IS*`, `S_IMODE`, `S_IFMT` | `filemode` (iterates a tuple of tuples of different lengths) |
 | `posixpath` | `normcase`, `isabs`, `split`, `splitext`, `splitdrive`, `splitroot`, `basename`, `dirname`, `normpath`, the constants | `join`, `relpath`, `commonpath`, `commonprefix` (`try`, `*args`, `map`), `abspath`, `expanduser`, `expandvars` (`os.environ`, `re`), the file tests (`try`) |
