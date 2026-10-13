@@ -62,7 +62,13 @@ a display of constants is the frozenset constant CPython's compiler makes, ...),
 set that changes size raises CPython's `RuntimeError`, and `set()` without a type takes the type
 its first use shows, as `[]` does (`s.add(x)`, `s.update(xs)`, `s |= t`, also
 `d.setdefault(k, set()).add(x)`). A frozenset has the methods that change nothing, and
-`f |= t` rebinds `f` to a new one, as CPython's does.
+`f |= t` rebinds `f` to a new one, as CPython's does. A method that takes iterables
+(`s.update(xs, ys)`, `s.union(...)`, ...) evaluates all its arguments first, then takes the items
+of each in turn, as CPython's does: a generator expression (or `map()`, `filter()`, `zip()`,
+...) makes its iterator among the arguments, where its outermost iterable is evaluated, and runs
+at its turn; another iterable's `__iter__` runs at its turn, and so does the `TypeError` of a
+`None`. `update()` and `difference_update()` add or discard each item of a generator as it is
+made, and `issuperset()` and `isdisjoint()` stop at the item that decides.
 
 ### When annotations are evaluated
 
@@ -698,11 +704,10 @@ In these cases the program compiles but can behave differently from CPython:
   reuses the earlier one's frozenset constant, whose table can differ where elements collide,
   and a module CPython loads from its `.pyc` rebuilds such constants once more. `min()` and
   `max()` of a set take its elements before they call a `key=` function, which so does not see
-  the set change (CPython's raises `RuntimeError` where it changes the set's size), and the set
-  methods but `update()` take all the items of a generator expression before they run.
-  `update()` adds a generator's elements as it makes them, after those of the arguments before
-  it, and evaluates the generator's first iterable then too, where CPython evaluates that with
-  the call's arguments.
+  the set change (CPython's raises `RuntimeError` where it changes the set's size), and
+  `intersection()` and `intersection_update()` take all the items of a generator expression
+  before they test them against the set, where CPython tests each as it is made, which differs
+  only where the generator's expressions change the set.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without

@@ -1,0 +1,116 @@
+ValueError: range() arg 3 must not be zero
+after failed update [1, 2]
+ValueError: range() arg 3 must not be zero
+after failed update 2 [1, 2]
+ValueError: range() arg 3 must not be zero
+arg a
+arg b
+make c
+arg d
+item gen 3 [1, 2]
+item gen 4 [1, 2, 3]
+iter c [1, 2, 3, 4]
+update [1, 2, 3, 4, 5, 6]
+item gen 3 [1, 2]
+TypeError: 'NoneType' object is not iterable
+after None [1, 2, 3]
+RuntimeError: Set changed size during iteration
+own items [1, 2]
+own items, none added [1, 2, 3]
+RuntimeError: dictionary changed size during iteration
+dict grew [0]
+list cleared [9]
+list cleared 2 [0, 1, 9]
+zip of a cleared list [(0, 0), (5, 5)]
+ValueError: bad item
+partial update [1, 2, 10]
+arg a
+arg b
+make c
+item u 6 [1, 2, 3, 4]
+iter c [1, 2, 3, 4]
+union [1, 2, 3, 4, 5, 6, 7]
+arg a
+make b
+arg c
+item i 1 [1, 2, 3, 4]
+item i 2 [1, 2, 3, 4]
+item i 3 [1, 2, 3, 4]
+iter b [1, 2, 3, 4]
+intersection [2, 3]
+make a
+arg b
+arg c
+iter a [1, 2, 3, 4]
+item d 2 [1, 2, 3, 4]
+difference [4]
+arg a
+arg b
+make c
+item iu 2 [1, 2, 3, 4]
+item iu 3 [1, 2, 3, 4]
+iter c [1, 2, 3, 4]
+intersection_update [3]
+arg a
+arg b
+make c
+item du 2 [2, 3, 4, 5]
+item du 3 [3, 4, 5]
+iter c [4, 5]
+difference_update [5]
+make f
+iter f [1, 2, 3]
+frozenset union [1, 2, 3, 4, 5]
+frozenset difference [3]
+discarding as yielded [3]
+ValueError: bad item
+partial difference_update [2, 3]
+difference_update gen [1, 3]
+item sup 1 [1, 2, 3]
+item sup 4 [1, 2, 3]
+issuperset False
+item sup 1 [1, 2, 3]
+item sup 2 [1, 2, 3]
+issuperset all True
+item dis 7 [1, 2, 3]
+item dis 2 [1, 2, 3]
+isdisjoint False
+item dis 7 [1, 2, 3]
+item dis 8 [1, 2, 3]
+isdisjoint all True
+frozenset issuperset True
+make first
+arg second
+iter first [0]
+item w 3 [0]
+typed by first [1, 2, 3]
+make third
+iter third [0]
+typed by generator [4, 5, 6]
+make one
+iter one [1, 2, 4]
+one argument [1, 2, 4, 7, 8, 9]
+union first iterable [1, 2, 5, 100] [1, 2, 100]
+union body [1, 2, 5] [1, 2, 200]
+union __iter__ [1, 2] [1, 2, 300]
+difference first iterable [2, 100] [1, 2, 100]
+difference body [2] [1, 2, 200]
+difference __iter__ [2] [1, 2, 300]
+difference of two [] [1, 2, 200, 300]
+function sd
+symmetric_difference map [1, 2, 4]
+function sub
+issubset map True
+map item 1
+map item 9
+issuperset map False
+isdisjoint filter False
+function u
+union map [1, 2, 3, 7]
+ValueError: boom
+ValueError: boom
+ValueError: range() arg 3 must not be zero
+ValueError: boom
+ranges [0, 1, 2, 3, 4, 5, 9]
+ranges discarded [2, 3, 9]
+[exit 0]

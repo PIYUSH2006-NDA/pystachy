@@ -7184,9 +7184,24 @@ class Val:
 
 class IterArg:
     # A consumer's next argument: evaluate it after its iterator is constructed, before traversal.
+    # With split, a label, there is none: the code after the iterator is constructed goes on at
+    # split, and the traversal waits at trav for a branch to it (the consumer's turn to iterate).
     def __init__(self, node: Node):
         self.node = node
         self.value = Val("", "")
+        self.split = ""
+        self.trav = ""
+
+
+class SetArg:
+    # An argument of a set method that takes several iterables, evaluated with the others before
+    # the method iterates any: v, the value of an iterable, or gen, a generator expression whose
+    # iterator was made then (arg split), whose traversal starts at arg.trav and comes back to back.
+    def __init__(self, v: Val, gen: Node):
+        self.v = v
+        self.gen = gen
+        self.arg = IterArg(gen)
+        self.back = ""
 
 
 class FnInfo:
@@ -10660,18 +10675,18 @@ class Gen:
             return Val("null", "None")
         if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
             # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
-            # for a set of that type (each argument evaluated before any is added, as CPython does)
+            # for a set of that type (each argument evaluated before any is added, as CPython does:
+            # the first one's value is taken now, and its items at its turn)
             a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
-            if a.kind == "listcomp" and a.s == "gen":
-                et = elem(self.dry(mk("listcomp", "", a.line, a.kids)))  # (the type of a list of what it yields)
-                et = self.none_items(et) if is_tuple(et) else et
-                if elem_problem(et) != "":
-                    self.err(elem_problem(et))
-                self.refine(name, self.ctype("set", [et]))
-            else:
-                v = self.siter(a, "", "set.update()")
-                self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
-                a = self.vnode(v)
+            if (a.kind != "listcomp" or a.s != "gen") and not self.iterator_call(a):
+                a = self.vnode(self.consume(a, ""))
+            item = mk("name", "__item", a.line, [])
+            g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
+            et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
+            et = self.none_items(et) if is_tuple(et) else et
+            if elem_problem(et) != "":
+                self.err(elem_problem(et))
+            self.refine(name, self.ctype("set", [et]))
             return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
         if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
             if self.empty_of(args[1]) != "" and (want == "" or "?" in want):
@@ -15049,6 +15064,8 @@ class Gen:
                     self.err(elem_problem(et))
             if n.s == "set":
                 self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))])
+            elif n.s == "discard":
+                self.sdiscard(f"ptr {self.lcs[-1]}", v, et)
             else:
                 self.rt("pys_list_append", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.coerce(v, et))])
         elif k == "defaults" or k == "cdefaults":
@@ -15344,7 +15361,13 @@ class Gen:
             self.compvars[nm] = self.compvars.get(nm, 0) + 1
 
     def iterarg(self, arg: IterArg | None) -> None:
-        if arg is not None:
+        if arg is not None and arg.split != "":
+            # the iterator is made: what follows goes on at split, and the traversal compiled next
+            # runs once a branch to trav starts it, after the consumer's other arguments
+            arg.trav = self.label()
+            self.br(arg.split)
+            self.place(arg.trav)
+        elif arg is not None:
             arg.value = self.expr(arg.node, "")
 
     def for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None:
@@ -16770,7 +16793,8 @@ class Gen:
         # [e for t in it if c] runs as a loop appending to a fresh list (or to list into, of type
         # want, as xs.extend(e for ...) does item by item); t is scoped to it. mode any/all:
         # any(e for ...) / all(...) instead, stopping at the deciding element. kind "set": {e for
-        # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does)
+        # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does); kind
+        # "discard": discarding each from set into, as s.difference_update(e for ...) does
         h = Ins("", "", "")
         if mode != "":
             res = self.alloca("bool", "")
@@ -16785,12 +16809,12 @@ class Gen:
         saved: list[str] = []
         for nm in names:
             saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
-        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else "set", n.line, [n.kids[0]])
+        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
         body = [app]
         if len(n.kids) == 4:
             body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
         self.lcs.append(res)
-        self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind == "set" and "?" not in want else "")
+        self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
         pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
         self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
         self.narrowed = pre
@@ -16816,7 +16840,7 @@ class Gen:
             self.holes[h.k] = self.ctype(kind, [et])
             if kind == "set":
                 self.key_kind(et)  # (a tuple element's descriptor, a string constant, which lowering prints)
-        return Val(res, self.ctype(kind, [et]))
+        return Val(res, self.ctype("list" if kind == "list" else "set", [et]))
 
     def ifexp(self, n: Node, want: str) -> Val:
         st = self.static(n.kids[0])
@@ -19575,9 +19599,16 @@ class Gen:
         # for elements of type et ("": any): a set or frozenset, a dict (CPython takes its keys
         # with their hashes), or else the list of its items, in the order CPython's iterator
         # gives them (a list's, a tuple's, a str's characters, what a generator yields, ...)
-        v = self.unwrap(self.consume(n, self.ctype("list", [et]) if et != "" else ""), "TypeError: 'NoneType' object is not iterable")
+        return self.sitems(self.consume(n, self.ctype("list", [et]) if et != "" else ""), et, what)
+
+    def sitems(self, v: Val, et: str, what: str) -> Val:
+        # siter's iterable, from its value v: where the set method takes its items (the iterator
+        # CPython makes then runs __iter__, and None raises)
+        v = self.unwrap(v, "TypeError: 'NoneType' object is not iterable")
         if v.t == "str":
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        elif v.t == "tuple[]" and et != "":
+            v = Val(self.as_list(v, "set").v, self.ctype("list", [et]))  # (() has no item to type: the elements wanted)
         elif not is_set(v.t) and not is_dict(v.t):
             v = self.as_list(v, "set")
         if not is_set(v.t) and not is_dict(v.t) and not is_list(v.t):
@@ -19599,6 +19630,73 @@ class Gen:
             self.rt("pys_set_update_dict", "void", [f"ptr {s}", f"ptr {v.v}"])
         else:
             self.rt("pys_set_update_list", "void", [f"ptr {s}", f"ptr {v.v}"])
+
+    def sdiscard(self, ov: str, v: Val, et: str) -> None:
+        # set ov (of elements of type et) discards v, which it holds or not; None is no element
+        if v.t == "None":
+            return
+        if is_opt(v.t) and unopt(v.t) == et:
+            l1 = self.label()
+            l2 = self.label()
+            self.cbr(self.isnull(v), l2, l1)
+            self.place(l1)
+            self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
+            self.br(l2)
+            self.place(l2)
+            return
+        self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(v, et))])
+
+    def sargs(self, o: Val, m: str, args: list[Node]) -> list[SetArg]:
+        # the arguments of set o's method m (update(), union(), ...), evaluated in order before it
+        # takes the items of any (stake). With several (or for union() and difference(), which copy
+        # o first), a generator expression (or map(), filter(), range(), zip(), enumerate(),
+        # reversed()) makes its iterator now, where its outermost iterable is evaluated (and range()
+        # checks its step, and __iter__ runs), and runs at its turn (a range's items are never all
+        # made at once); any other iterable is evaluated now, and its __iter__ runs at its turn
+        et = selem(o.t)
+        split = len(args) > 1 or m == "union" or m == "difference"
+        out: list[SetArg] = []
+        for a in args:
+            g = self.mapgen(a) if self.is_mapcall(a) else a
+            if len(args) > 1 and self.iterator_call(g):
+                item = mk("name", "__item", g.line, [])
+                g = mk("listcomp", "gen", g.line, [item, item, g])
+            if g.kind != "listcomp" or g.s != "gen":
+                out.append(SetArg(self.consume(g, self.ctype("list", [et]) if et != "" else ""), g))
+                continue
+            x = SetArg(Val("", ""), g)
+            if split:
+                x.arg.split = self.label()
+                x.v = self.sgen(o, m, g, x.arg)
+                x.back = self.label()
+                self.br(x.back)
+                self.place(x.arg.split)
+            out.append(x)
+        return out
+
+    def stake(self, o: Val, m: str, x: SetArg) -> Val:
+        # the items of argument x of set o's method m (sargs), at its turn: a set, a dict or a list,
+        # or none (type "") where a generator added (or discarded) each item as it came
+        what = f"{'frozenset' if is_fset(o.t) else 'set'}.{m}()"
+        if x.gen.kind != "listcomp" or x.gen.s != "gen":
+            return self.sitems(x.v, selem(o.t), what)
+        if x.arg.split == "":
+            v = self.sgen(o, m, x.gen, None)
+        else:
+            self.br(x.arg.trav)
+            self.place(x.back)
+            v = x.v
+        return v if v.t == "" else self.sitems(v, selem(o.t), what)
+
+    def sgen(self, o: Val, m: str, g: Node, arg: IterArg | None) -> Val:
+        # generator expression g, an argument of set o's method m: update() adds each item to o as
+        # it is yielded, and difference_update() discards it (none: a Val of type ""), as CPython's
+        # set_update_internal and set_difference_update_internal do; the others take a list of them
+        if m == "update" or m == "difference_update":
+            self.listcomp(g, o.t, "", o.v, arg, "set" if m == "update" else "discard")
+            return Val("", "")
+        et = selem(o.t)
+        return self.listcomp(g, self.ctype("list", [et]) if et != "" else "", "", "", arg)
 
     def keys_list(self, v: Val) -> Val:
         # a dict's keys (or v as it is), where CPython iterates over a dict as over any iterable
@@ -19671,15 +19769,7 @@ class Gen:
                         return none
                     v = self.deref(v)
                 else:
-                    if v.t == "None":
-                        return none
-                    l1 = self.label()
-                    l2 = self.label()
-                    self.cbr(self.isnull(v), l2, l1)
-                    self.place(l1)
-                    self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
-                    self.br(l2)
-                    self.place(l2)
+                    self.sdiscard(ov, v, et)
                     return none
             k = self.dkey(v, et)
             if m == "remove" and bool_for_int(v.t, et):
@@ -19702,50 +19792,61 @@ class Gen:
             return none
         if m == "copy":
             return o if fz else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)  # (frozenset.copy() is the frozenset)
-        if m == "update":
-            # CPython evaluates the arguments, then adds the elements of each in turn: a generator's
-            # (or map()'s, filter()'s) as it yields them, which may see the set change
-            gens: list[Node] = []
-            vs = []
-            for a in args:
-                g = self.mapgen(a) if self.is_mapcall(a) else a
-                gens.append(g)
-                vs.append(Val("", "") if g.kind == "listcomp" and g.s == "gen" else self.siter(g, et, f"{tn}.{m}()"))
-            for i in range(n):
-                if vs[i].t == "":
-                    self.listcomp(gens[i], o.t, "", o.v, None, "set")
-                else:
-                    self.supdate(o.v, vs[i])
-            return none
-        vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
-        if m == "difference_update":
-            for v in vs:
-                self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
-            return none
-        if m == "union":
-            r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            for v in vs:
-                if is_set(v.t):
-                    self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
-                else:
-                    self.supdate(r.v, v)
-            return r
-        if m == "intersection" or m == "intersection_update":
-            r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            for v in vs:
-                r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
-            if m == "intersection":
+        if m == "update" or m == "union" or m == "intersection" or m == "intersection_update" or m == "difference" or m == "difference_update":
+            # CPython evaluates every argument first, in order, then the method takes the items of
+            # each in turn (sargs, stake): update() adds a generator's (or map()'s, filter()'s) as
+            # it yields them, which may see the set change, and difference_update() discards them so
+            sa = self.sargs(o, m, args)
+            if m == "update" or m == "difference_update":
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    if v.t == "":
+                        pass  # (a generator: each item went as it came)
+                    elif m == "update":
+                        self.supdate(o.v, v)
+                    else:
+                        self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
+                return none
+            if m == "union":
+                r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    if is_set(v.t):
+                        self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
+                    else:
+                        self.supdate(r.v, v)
                 return r
-            self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
-            return none
-        if m == "difference":
+            if m == "intersection" or m == "intersection_update":
+                r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                for x in sa:
+                    v = self.stake(o, m, x)
+                    r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
+                if m == "intersection":
+                    return r
+                self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
+                return none
             if n == 0:
                 return Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            v = vs[0]
-            r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
-            for v in vs[1:]:
+            x = sa[0]
+            if (x.gen.kind == "listcomp" and x.gen.s == "gen") or unopt(x.v.t) in self.classes:
+                # code runs as its items are taken (a generator's, __iter__): CPython's
+                # set_copy_and_difference has copied o before
+                r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+                self.rt("pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.stake(o, m, x).v}"])
+            else:
+                v = self.stake(o, m, x)
+                r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+            for x in sa[1:]:
+                v = self.stake(o, m, x)
                 self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"])
             return r
+        if (m == "issuperset" or m == "isdisjoint") and ((args[0].kind == "listcomp" and args[0].s == "gen") or self.is_mapcall(args[0])):
+            # CPython takes a generator's items until one decides: one o lacks (issuperset), or one
+            # it holds (isdisjoint), and the generator runs no further
+            g = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
+            e = mk("cmp", "in" if m == "issuperset" else "not in", g.line, [g.kids[0], self.vnode(o)])
+            return self.listcomp(mk("listcomp", "gen", g.line, [e] + g.kids[1:]), "", "all")
+        vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
         v = vs[0]
         if m == "symmetric_difference":
             return Val(self.rt("pys_set_xor" if is_set(v.t) else "pys_set_xor_dict" if is_dict(v.t) else "pys_set_xor_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
