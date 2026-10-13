@@ -31,13 +31,20 @@ it either due to existing user code API behavior expectations (Hyrum's Law).
 It serves as a useful guide when making changes.
 """
 
-from collections import namedtuple
+# Pystachy port: the result classes are typing.NamedTuple classes (below), as Pystachy has no
+# collections.namedtuple; and types, warnings and ipaddress, which Pystachy has not either, are
+# optional imports: the code that uses them runs in CPython only, in blocks that import types
+# (which Pystachy drops), or is not compiled
+from typing import NamedTuple
 import functools
 import math
 import re
-import types
-import warnings
-import ipaddress
+try:
+    import types
+    import warnings
+    import ipaddress
+except ImportError:
+    pass
 
 __all__ = ["urlparse", "urlunparse", "urljoin", "urldefrag",
            "urlsplit", "urlunsplit", "urlencode", "parse_qs",
@@ -122,15 +129,20 @@ def _coerce_args(*args):
     # an appropriate result coercion function
     #   - noop for str inputs
     #   - encoding function otherwise
-    str_input = isinstance(args[0], str)
-    for arg in args[1:]:
+    # Pystachy port: the first argument is named, as Pystachy decides isinstance() of a name as it
+    # compiles, and leaves out the return of bytes, in an else block, for strs; and the loop takes
+    # all of args, as Pystachy slices no tuple (the first one is no mix)
+    first = args[0]
+    str_input = isinstance(first, str)
+    for arg in args:
         # We special-case the empty string to support the
         # "scheme=''" default argument to some functions
         if arg and isinstance(arg, str) != str_input:
             raise TypeError("Cannot mix str and non-str arguments")
-    if str_input:
+    if isinstance(first, str):
         return args + (_noop,)
-    return _decode_args(args) + (_encode_result,)
+    else:
+        return _decode_args(args) + (_encode_result,)
 
 # Result objects are more helpful than simple tuples
 class _ResultMixinStr(object):
@@ -184,7 +196,8 @@ class _NetlocResultMixinBase(object):
                 raise ValueError("Port out of range 0-65535")
         return port
 
-    __class_getitem__ = classmethod(types.GenericAlias)
+    # Pystachy port: __class_getitem__ = classmethod(types.GenericAlias) is set in CPython only
+    # (below): Pystachy has no types module, which this class body would read as it runs
 
 
 class _NetlocResultMixinStr(_NetlocResultMixinBase, _ResultMixinStr):
@@ -247,71 +260,107 @@ class _NetlocResultMixinBytes(_NetlocResultMixinBase, _ResultMixinBytes):
         return hostname, port
 
 
-_DefragResultBase = namedtuple('DefragResult', 'url fragment')
-_SplitResultBase = namedtuple(
-    'SplitResult', 'scheme netloc path query fragment')
-_ParseResultBase = namedtuple(
-    'ParseResult', 'scheme netloc path params query fragment')
-
-_DefragResultBase.__doc__ = """
+# Pystachy port: DefragResult, SplitResult and ParseResult are typing.NamedTuple classes, the bases
+# namedtuple() made, with the docstrings they were given and geturl(): in Pystachy, a class has no
+# base (but an exception class), and so no mixin. In CPython, the blocks below give their fields
+# docstrings, and make each again as a class deriving from it and from its mixin, as CPython's
+# code does
+class DefragResult(NamedTuple):
+    """
 DefragResult(url, fragment)
 
 A 2-tuple that contains the url without fragment identifier and the fragment
 identifier as a separate argument.
 """
+    url: str
+    fragment: str
 
-_DefragResultBase.url.__doc__ = """The URL with no fragment identifier."""
+    def geturl(self) -> str:
+        if self.fragment:
+            return self.url + '#' + self.fragment
+        else:
+            return self.url
 
-_DefragResultBase.fragment.__doc__ = """
-Fragment identifier separated from URL, that allows indirect identification of a
-secondary resource by reference to a primary resource and additional identifying
-information.
-"""
-
-_SplitResultBase.__doc__ = """
+class SplitResult(NamedTuple):
+    """
 SplitResult(scheme, netloc, path, query, fragment)
 
 A 5-tuple that contains the different components of a URL. Similar to
 ParseResult, but does not split params.
 """
+    scheme: str
+    netloc: str
+    path: str
+    query: str
+    fragment: str
 
-_SplitResultBase.scheme.__doc__ = """Specifies URL scheme for the request."""
+    def geturl(self) -> str:
+        return urlunsplit(self)
 
-_SplitResultBase.netloc.__doc__ = """
+class ParseResult(NamedTuple):
+    """
+ParseResult(scheme, netloc, path, params, query, fragment)
+
+A 6-tuple that contains components of a parsed URL.
+"""
+    scheme: str
+    netloc: str
+    path: str
+    params: str
+    query: str
+    fragment: str
+
+    def geturl(self) -> str:
+        return urlunparse(self)
+
+_DefragResultBase = DefragResult
+_SplitResultBase = SplitResult
+_ParseResultBase = ParseResult
+
+# Pystachy port: in CPython only (Pystachy has no types module, and drops this block)
+try:
+    import types
+    _DefragResultBase.url.__doc__ = """The URL with no fragment identifier."""
+
+    _DefragResultBase.fragment.__doc__ = """
+Fragment identifier separated from URL, that allows indirect identification of a
+secondary resource by reference to a primary resource and additional identifying
+information.
+"""
+
+    _SplitResultBase.scheme.__doc__ = """Specifies URL scheme for the request."""
+
+    _SplitResultBase.netloc.__doc__ = """
 Network location where the request is made to.
 """
 
-_SplitResultBase.path.__doc__ = """
+    _SplitResultBase.path.__doc__ = """
 The hierarchical path, such as the path to a file to download.
 """
 
-_SplitResultBase.query.__doc__ = """
+    _SplitResultBase.query.__doc__ = """
 The query component, that contains non-hierarchical data, that along with data
 in path component, identifies a resource in the scope of URI's scheme and
 network location.
 """
 
-_SplitResultBase.fragment.__doc__ = """
+    _SplitResultBase.fragment.__doc__ = """
 Fragment identifier, that allows indirect identification of a secondary resource
 by reference to a primary resource and additional identifying information.
 """
 
-_ParseResultBase.__doc__ = """
-ParseResult(scheme, netloc, path, params, query, fragment)
-
-A 6-tuple that contains components of a parsed URL.
-"""
-
-_ParseResultBase.scheme.__doc__ = _SplitResultBase.scheme.__doc__
-_ParseResultBase.netloc.__doc__ = _SplitResultBase.netloc.__doc__
-_ParseResultBase.path.__doc__ = _SplitResultBase.path.__doc__
-_ParseResultBase.params.__doc__ = """
+    _ParseResultBase.scheme.__doc__ = _SplitResultBase.scheme.__doc__
+    _ParseResultBase.netloc.__doc__ = _SplitResultBase.netloc.__doc__
+    _ParseResultBase.path.__doc__ = _SplitResultBase.path.__doc__
+    _ParseResultBase.params.__doc__ = """
 Parameters for last path element used to dereference the URI in order to provide
 access to perform some operation on the resource.
 """
 
-_ParseResultBase.query.__doc__ = _SplitResultBase.query.__doc__
-_ParseResultBase.fragment.__doc__ = _SplitResultBase.fragment.__doc__
+    _ParseResultBase.query.__doc__ = _SplitResultBase.query.__doc__
+    _ParseResultBase.fragment.__doc__ = _SplitResultBase.fragment.__doc__
+except ImportError:
+    pass
 
 
 # For backwards compatibility, alias _NetlocResultMixinStr
@@ -320,24 +369,7 @@ _ParseResultBase.fragment.__doc__ = _SplitResultBase.fragment.__doc__
 ResultBase = _NetlocResultMixinStr
 
 # Structured result objects for string data
-class DefragResult(_DefragResultBase, _ResultMixinStr):
-    __slots__ = ()
-    def geturl(self):
-        if self.fragment:
-            return self.url + '#' + self.fragment
-        else:
-            return self.url
-
-class SplitResult(_SplitResultBase, _NetlocResultMixinStr):
-    __slots__ = ()
-    def geturl(self):
-        return urlunsplit(self)
-
-class ParseResult(_ParseResultBase, _NetlocResultMixinStr):
-    __slots__ = ()
-    def geturl(self):
-        return urlunparse(self)
-
+# Pystachy port: DefragResult, SplitResult and ParseResult, as above
 # Structured result objects for bytes data
 class DefragResultBytes(_DefragResultBase, _ResultMixinBytes):
     __slots__ = ()
@@ -368,8 +400,18 @@ def _fix_result_transcoding():
         _decoded._encoded_counterpart = _encoded
         _encoded._decoded_counterpart = _decoded
 
-_fix_result_transcoding()
-del _fix_result_transcoding
+# Pystachy port: in CPython only (Pystachy has no types module, and drops this block): the
+# structured result objects for string data derive from their mixins too, as CPython's do
+try:
+    import types
+    DefragResult = type('DefragResult', (DefragResult, _ResultMixinStr), {'__slots__': ()})
+    SplitResult = type('SplitResult', (SplitResult, _NetlocResultMixinStr), {'__slots__': ()})
+    ParseResult = type('ParseResult', (ParseResult, _NetlocResultMixinStr), {'__slots__': ()})
+    _NetlocResultMixinBase.__class_getitem__ = classmethod(types.GenericAlias)
+    _fix_result_transcoding()
+    del _fix_result_transcoding
+except ImportError:
+    pass
 
 def urlparse(url, scheme='', allow_fragments=True):
     """Parse a URL into 6 components:
@@ -425,18 +467,30 @@ def _checknetloc(netloc):
         return
     # looking for characters like \u2100 that expand to 'a/c'
     # IDNA uses NFKC equivalence, so normalize for this check
-    import unicodedata
+    # Pystachy port: no unicodedata (Pystachy has none): netloc2 is n with each character whose NFKC
+    # form holds one of '/?#@:' replaced by that form, which is all the test below reads of NFKC
     n = netloc.replace('@', '')   # ignore characters already included
     n = n.replace(':', '')        # but not the surrounding text
     n = n.replace('#', '')
     n = n.replace('?', '')
-    netloc2 = unicodedata.normalize('NFKC', n)
+    netloc2 = n
+    for c in _NFKC_DELIMITERS:
+        netloc2 = netloc2.replace(c, _NFKC_DELIMITERS[c])
     if n == netloc2:
         return
     for c in '/?#@:':
         if c in netloc2:
             raise ValueError("netloc '" + netloc + "' contains invalid " +
                              "characters under NFKC normalization")
+
+# Pystachy port: the characters whose NFKC form holds one of '/?#@:', with that form (Unicode 15.1, as
+# CPython 3.13's unicodedata: no composition takes one of these five characters in, so these are
+# all the characters that put one in the NFKC form of a str)
+_NFKC_DELIMITERS = {
+    '\u2047': '??', '\u2048': '?!', '\u2049': '!?', '\u2100': 'a/c', '\u2101': 'a/s',
+    '\u2105': 'c/o', '\u2106': 'c/u', '\u2a74': '::=', '\ufe13': ':', '\ufe16': '?',
+    '\ufe55': ':', '\ufe56': '?', '\ufe5f': '#', '\ufe6b': '@', '\uff03': '#',
+    '\uff0f': '/', '\uff1a': ':', '\uff1f': '?', '\uff20': '@'}
 
 def _check_bracketed_netloc(netloc):
     # Note that this function must mirror the splitting
@@ -462,13 +516,93 @@ def _check_bracketed_host(hostname):
         if not re.match(r"\A[vV][a-fA-F0-9]+\..+\Z", hostname):
             raise ValueError(f"IPvFuture address is invalid")
     else:
-        ip = ipaddress.ip_address(hostname) # Throws Value Error if not IPv6 or IPv4
-        if isinstance(ip, ipaddress.IPv4Address):
+        # Pystachy port: _ip_version() for ipaddress, which Pystachy has not
+        ip = _ip_version(hostname) # Throws Value Error if not IPv6 or IPv4
+        if ip == 4:
             raise ValueError(f"An IPv4 address cannot be in brackets")
+
+# Pystachy port: 4 or 6, as ipaddress.ip_address(address) makes an IPv4Address or an IPv6Address of
+# a str, or its ValueError: _is_ipv4() and _is_ipv6() test the str as the constructors parse it
+def _ip_version(address):
+    if _is_ipv4(address):
+        return 4
+    if _is_ipv6(address):
+        return 6
+    raise ValueError(f'{address!r} does not appear to be an IPv4 or IPv6 address')
+
+def _is_ipv4(ip_str):
+    # IPv4Address(ip_str): _BaseV4._ip_int_from_string() and _parse_octet()
+    if '/' in ip_str or not ip_str:
+        return False
+    octets = ip_str.split('.')
+    if len(octets) != 4:
+        return False
+    for octet_str in octets:
+        if not octet_str or not (octet_str.isascii() and octet_str.isdigit()):
+            return False
+        if len(octet_str) > 3 or (octet_str != '0' and octet_str[0] == '0'):
+            return False
+        if int(octet_str, 10) > 255:
+            return False
+    return True
+
+def _is_ipv6(ip_str):
+    # IPv6Address(ip_str): _split_scope_id(), _BaseV6._ip_int_from_string() and _parse_hextet()
+    if '/' in ip_str:
+        return False
+    ip_str, sep, scope_id = ip_str.partition('%')
+    if sep and (not scope_id or '%' in scope_id):
+        return False
+    if not ip_str or len(ip_str) > 45:
+        return False
+    parts = ip_str.split(':', 9)
+    if len(parts) < 3:
+        return False
+    if '.' in parts[-1]:
+        if not _is_ipv4(parts.pop()):
+            return False
+        parts.append('0')
+        parts.append('0')
+    if len(parts) > 9:
+        return False
+    skip_index = 0
+    for i in range(1, len(parts) - 1):
+        if not parts[i]:
+            if skip_index:
+                return False
+            skip_index = i
+    if skip_index:
+        parts_hi = skip_index
+        parts_lo = len(parts) - skip_index - 1
+        if not parts[0]:
+            parts_hi -= 1
+            if parts_hi:
+                return False
+        if not parts[-1]:
+            parts_lo -= 1
+            if parts_lo:
+                return False
+        if 8 - (parts_hi + parts_lo) < 1:
+            return False
+    else:
+        if len(parts) != 8 or not parts[0] or not parts[-1]:
+            return False
+        parts_hi = len(parts)
+        parts_lo = 0
+    for i in range(len(parts)):
+        if i < parts_hi or i >= len(parts) - parts_lo:
+            hextet_str = parts[i]
+            if not hextet_str or len(hextet_str) > 4:
+                return False
+            for c in hextet_str:
+                if c not in '0123456789abcdefABCDEF':
+                    return False
+    return True
 
 # typed=True avoids BytesWarnings being emitted during cache key
 # comparison since this API supports both bytes and str input.
-@functools.lru_cache(typed=True)
+# Pystachy port: cached in CPython only (below): lib/functools caches a function whose parameters
+# are annotated, called with each of them by position
 def urlsplit(url, scheme='', allow_fragments=True):
     """Parse a URL into 5 components:
     <scheme>://<netloc>/<path>?<query>#<fragment>
@@ -524,13 +658,22 @@ def urlsplit(url, scheme='', allow_fragments=True):
     v = SplitResult(scheme, netloc, url, query, fragment)
     return _coerce_result(v)
 
+try:
+    import types  # Pystachy port: (above; Pystachy has no types module, and drops this block)
+    urlsplit = functools.lru_cache(typed=True)(urlsplit)
+except ImportError:
+    pass
+
 def urlunparse(components):
     """Put a parsed URL back together again.  This may result in a
     slightly different, but equivalent URL, if the URL that was parsed
     originally had redundant delimiters, e.g. a ? with an empty query
     (the draft states that these are equivalent)."""
+    # Pystachy port: the components unpacked first, as Pystachy unpacks only a tuple's items into
+    # arguments, not a NamedTuple's (in CPython, a wrong number of components is a ValueError too)
+    scheme, netloc, url, params, query, fragment = components
     scheme, netloc, url, params, query, fragment, _coerce_result = (
-                                                  _coerce_args(*components))
+                                    _coerce_args(scheme, netloc, url, params, query, fragment))
     if params:
         url = "%s;%s" % (url, params)
     return _coerce_result(urlunsplit((scheme, netloc, url, query, fragment)))
@@ -541,8 +684,10 @@ def urlunsplit(components):
     This may result in a slightly different, but equivalent URL, if the URL that
     was parsed originally had unnecessary delimiters (for example, a ? with an
     empty query; the RFC states that these are equivalent)."""
+    # Pystachy port: (as in urlunparse())
+    scheme, netloc, url, query, fragment = components
     scheme, netloc, url, query, fragment, _coerce_result = (
-                                          _coerce_args(*components))
+                                          _coerce_args(scheme, netloc, url, query, fragment))
     if netloc:
         if url and url[:1] != '/': url = '/' + url
         url = '//' + netloc + url
@@ -601,7 +746,9 @@ def urljoin(base, url, allow_fragments=True):
         segments = base_parts + path.split('/')
         # filter out elements that would cause redundant slashes on re-joining
         # the resolved_path
-        segments[1:-1] = filter(None, segments[1:-1])
+        # Pystachy port: a new list, as Pystachy assigns to no slice and has filter() only as the
+        # argument of a function that consumes it
+        segments = [s for i, s in enumerate(segments) if s or i == 0 or i == len(segments) - 1]
 
     resolved_path = []
 
@@ -679,17 +826,284 @@ def _unquote_impl(string: bytes | bytearray | str) -> bytes | bytearray:
             append(item)
     return res
 
+# Pystachy port: Pystachy has no bytes. Where CPython makes bytes, of a str (str.encode()) or of
+# percent-escapes (_unquote_impl()), and decodes them, the str paths of quote() and unquote() make a
+# str of the bytes, which holds byte b as chr(b) (in Pystachy, a str's byte; in CPython, a code
+# point below 256), and _encode() and _decode() do what CPython's codecs of UTF-8, Latin-1 and ASCII
+# do. A str holds UTF-8 in Pystachy: a str's bytes are its UTF-8, a surrogate's three included
+_UTF8 = len('\xe9') == 2  # (a str holds UTF-8, as in Pystachy; else code points, as in CPython)
+_UTF_8_NAMES = {'utf_8', 'cp65001', 'u8', 'utf', 'utf8', 'utf8_ucs2', 'utf8_ucs4'}
+_LATIN_1_NAMES = {'latin_1', '8859', 'cp819', 'csisolatin1', 'ibm819', 'iso8859', 'iso8859_1',
+                  'iso_8859_1', 'iso_8859_1_1987', 'iso_ir_100', 'l1', 'latin', 'latin1'}
+_ASCII_NAMES = {'ascii', '646', 'ansi_x3.4_1968', 'ansi_x3.4_1986', 'ansi_x3_4_1968', 'cp367',
+                'csascii', 'ibm367', 'iso646_us', 'iso_646.irv_1991', 'iso_ir_6', 'us', 'us_ascii'}
+_codec_names: dict[str, str] = {}
+_hextochr: dict[str, str] = {}
+
+def _codec(encoding):
+    # the codec encoding names: 'utf-8', 'latin-1' or 'ascii', its name normalized and looked up
+    # among encodings.aliases as codecs.lookup() does
+    codec = _codec_names.get(encoding)
+    if codec is not None:
+        return codec
+    norm = ''
+    punct = False
+    for c in encoding:
+        if (c.isascii() and c.isalnum()) or c == '.':
+            if punct and norm:
+                norm += '_'
+            norm += c.lower()
+            punct = False
+        else:
+            punct = True
+    alias = norm.replace('.', '_')
+    if norm in _UTF_8_NAMES or alias in _UTF_8_NAMES:
+        codec = 'utf-8'
+    elif norm in _LATIN_1_NAMES or alias in _LATIN_1_NAMES:
+        codec = 'latin-1'
+    elif norm in _ASCII_NAMES or alias in _ASCII_NAMES:
+        codec = 'ascii'
+    else:
+        raise NotImplementedError(f"encoding {encoding!r}: this urllib.parse has the codecs "
+                                  "utf-8, latin-1 and ascii")
+    _codec_names[encoding] = codec
+    return codec
+
+def _char_at(s, i, n):
+    # the code point of the character at index i of s, and its length: in Pystachy, its UTF-8
+    # bytes, read as lib/re reads them (a byte that begins no character is one, its value its
+    # code point); in CPython, 1
+    b = ord(s[i])
+    if not _UTF8 or b < 0xC2 or b > 0xF4:
+        return b, 1
+    k = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
+    if i + k > n:
+        return b, 1
+    cp = b & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
+    for j in range(i + 1, i + k):
+        c = ord(s[j])
+        if c & 0xC0 != 0x80:
+            return b, 1
+        cp = cp << 6 | c & 0x3F
+    return cp, k
+
+def _utf8_bytes(cp):
+    # the bytes of the UTF-8 of code point cp (of a surrogate's too)
+    if cp < 0x80:
+        return chr(cp)
+    if cp < 0x800:
+        return chr(0xC0 | cp >> 6) + chr(0x80 | cp & 0x3F)
+    if cp < 0x10000:
+        return chr(0xE0 | cp >> 12) + chr(0x80 | cp >> 6 & 0x3F) + chr(0x80 | cp & 0x3F)
+    return (chr(0xF0 | cp >> 18) + chr(0x80 | cp >> 12 & 0x3F) + chr(0x80 | cp >> 6 & 0x3F)
+            + chr(0x80 | cp & 0x3F))
+
+def _encode(s, encoding, errors):
+    # s.encode(encoding, errors), as the str of its bytes: the characters of s that the codec
+    # cannot encode (a surrogate, in UTF-8; above U+00FF or U+007F) go to _encode_error() in runs
+    if encoding is None:
+        encoding = 'utf-8'
+    if errors is None:
+        errors = 'strict'
+    codec = _codec(encoding)
+    if s.isascii() or (_UTF8 and codec == 'utf-8' and chr(0xED) not in s):
+        return s  # (only ED begins a surrogate's bytes)
+    limit = 0x80 if codec == 'ascii' else 0x100 if codec == 'latin-1' else 0x110000
+    out = []
+    n = len(s)
+    i = start = pos = 0  # out holds the bytes of s[:start]; s[:i] holds pos characters
+    while i < n:
+        cp, k = _char_at(s, i, n)
+        if cp < 0x80 or (_UTF8 and codec == 'utf-8' and not 0xD800 <= cp <= 0xDFFF) or (
+                not _UTF8 and codec != 'utf-8' and cp < limit):
+            i += k  # (its bytes are its own: in Pystachy, its UTF-8; in CPython, a code point below 256)
+            pos += 1
+            continue
+        out.append(s[start:i])
+        if cp < limit and not 0xD800 <= cp <= 0xDFFF:
+            out.append(chr(cp) if codec == 'latin-1' else _utf8_bytes(cp))
+            i += k
+            pos += 1
+            start = i
+            continue
+        cps = []
+        first = pos
+        while i < n:
+            cp, k = _char_at(s, i, n)
+            if cp < limit and not 0xD800 <= cp <= 0xDFFF:
+                break
+            cps.append(cp)
+            i += k
+            pos += 1
+        out.append(_encode_error(cps, first, codec, errors))
+        start = i
+    out.append(s[start:])
+    return ''.join(out)
+
+def _encode_error(cps, pos, codec, errors):
+    # the bytes that error handler errors makes of the characters of code points cps, from
+    # character pos of the str on, which codec cannot encode, as CPython's handlers make them;
+    # 'strict' raises UnicodeError with UnicodeEncodeError's message (Pystachy raises no
+    # UnicodeEncodeError)
+    if errors == 'replace':
+        return '?' * len(cps)
+    if errors == 'ignore':
+        return ''
+    if errors == 'backslashreplace':
+        return ''.join(['\\x%02x' % c if c < 0x100 else '\\u%04x' % c if c < 0x10000 else '\\U%08x' % c
+                        for c in cps])
+    if errors == 'xmlcharrefreplace':
+        return ''.join(['&#%d;' % c for c in cps])
+    k = 0
+    if errors == 'surrogateescape':
+        while k < len(cps) and 0xDC80 <= cps[k] <= 0xDCFF:
+            k += 1
+        if k == len(cps):
+            return ''.join([chr(c - 0xDC00) for c in cps])
+    elif errors == 'surrogatepass' and codec == 'utf-8':
+        return ''.join([_utf8_bytes(c) for c in cps])
+    elif errors == 'namereplace':
+        raise NotImplementedError("the error handler 'namereplace' needs the names of the "
+                                  "characters, which this urllib.parse has not")
+    elif errors != 'strict' and errors != 'surrogatepass':
+        raise LookupError(f"unknown error handler name {errors!r}")
+    start = pos + k
+    end = pos + len(cps)
+    reason = ('surrogates not allowed' if codec == 'utf-8' else
+              'ordinal not in range(256)' if codec == 'latin-1' else 'ordinal not in range(128)')
+    if end - start == 1:
+        c = cps[k]
+        char = '\\x%02x' % c if c <= 0xff else '\\u%04x' % c if c <= 0xffff else '\\U%08x' % c
+        raise UnicodeError(f"'{codec}' codec can't encode character '{char}' in position {start}: {reason}")
+    raise UnicodeError(f"'{codec}' codec can't encode characters in position {start}-{end - 1}: {reason}")
+
+def _utf8_char(bs, i, n):
+    # the character of UTF-8 that begins at index i of bs, a str of bytes, as CPython's decoder
+    # reads it (stringlib's utf8_decode()): (its length, its code point, ''), or, where bytes from
+    # i on are no character, (0, the end of those bytes, why)
+    b = ord(bs[i])
+    if b < 0xC2 or b > 0xF4:
+        return 0, i + 1, 'invalid start byte'
+    k = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
+    if n - i >= 2:
+        b2 = ord(bs[i + 1])
+        if (b2 & 0xC0 != 0x80 or (b == 0xE0 and b2 < 0xA0) or (b == 0xED and b2 >= 0xA0)
+                or (b == 0xF0 and b2 < 0x90) or (b == 0xF4 and b2 >= 0x90)):
+            return 0, i + 1, 'invalid continuation byte'
+        if k > 2 and n - i >= 3:
+            if ord(bs[i + 2]) & 0xC0 != 0x80:
+                return 0, i + 2, 'invalid continuation byte'
+            if k > 3 and n - i >= 4 and ord(bs[i + 3]) & 0xC0 != 0x80:
+                return 0, i + 3, 'invalid continuation byte'
+    if n - i < k:
+        return 0, n, 'unexpected end of data'
+    cp = b & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
+    for j in range(i + 1, i + k):
+        cp = cp << 6 | ord(bs[j]) & 0x3F
+    return k, cp, ''
+
+def _decode(bs, encoding, errors):
+    # bs.decode(encoding, errors) of bs, a str of bytes: the bytes the codec cannot decode go to
+    # _decode_error() as CPython's decoder gives them to its handler
+    codec = _codec(encoding)
+    if bs.isascii():
+        return bs
+    if codec == 'latin-1':
+        return ''.join(['%c' % ord(c) for c in bs]) if _UTF8 else bs
+    out = []
+    n = len(bs)
+    i = start = 0  # out holds the characters of bs[:start]
+    while i < n:
+        if ord(bs[i]) < 0x80:
+            i += 1
+            continue
+        if codec == 'utf-8':
+            k, x, reason = _utf8_char(bs, i, n)
+        else:
+            k, x, reason = 0, i + 1, 'ordinal not in range(128)'
+        if k:
+            if not _UTF8:
+                out.append(bs[start:i])
+                out.append('%c' % x)  # (in Pystachy, bs holds its UTF-8)
+                start = i + k
+            i += k
+            continue
+        rep, resume = _decode_error(bs, i, x, codec, errors, reason)
+        out.append(bs[start:i])
+        out.append(rep)
+        i = start = resume
+    out.append(bs[start:])
+    return ''.join(out)
+
+def _decode_error(bs, start, end, codec, errors, reason):
+    # what error handler errors makes of the bytes bs[start:end], which codec cannot decode (for
+    # reason), and where decoding goes on, as CPython's handlers do; 'strict' raises UnicodeError
+    # with UnicodeDecodeError's message (Pystachy raises no UnicodeDecodeError)
+    if errors == 'replace':
+        return '\ufffd', end
+    if errors == 'ignore':
+        return '', end
+    if errors == 'backslashreplace':
+        return ''.join(['\\x%02x' % ord(c) for c in bs[start:end]]), end
+    if errors == 'surrogateescape':
+        return ''.join(['%c' % (0xDC00 + ord(c)) for c in bs[start:end]]), end
+    if errors == 'surrogatepass' and codec == 'utf-8' and len(bs) - start >= 3:
+        b1 = ord(bs[start])
+        b2 = ord(bs[start + 1])
+        b3 = ord(bs[start + 2])
+        cp = (b1 & 0x0F) << 12 | (b2 & 0x3F) << 6 | b3 & 0x3F
+        if b1 & 0xF0 == 0xE0 and b2 & 0xC0 == 0x80 and b3 & 0xC0 == 0x80 and 0xD800 <= cp <= 0xDFFF:
+            return '%c' % cp, start + 3
+    if errors == 'xmlcharrefreplace' or errors == 'namereplace':
+        raise TypeError("don't know how to handle UnicodeDecodeError in error callback")
+    if errors != 'strict' and errors != 'surrogatepass':
+        raise LookupError(f"unknown error handler name {errors!r}")
+    if end - start == 1:
+        raise UnicodeError(f"'{codec}' codec can't decode byte 0x{ord(bs[start]):02x} in position "
+                           f"{start}: {reason}")
+    raise UnicodeError(f"'{codec}' codec can't decode bytes in position {start}-{end - 1}: {reason}")
+
+def _unquote_str(string):
+    # _unquote_impl() of a str (ASCII, as _generate_unquoted_parts() gives it), as a str of its bytes
+    bits = string.split('%')
+    if len(bits) == 1:
+        return string
+    res = [bits[0]]
+    append = res.append
+    if not _hextochr:
+        for a in _hexdig:
+            for b in _hexdig:
+                _hextochr[a + b] = chr(int(a + b, 16))
+    for item in bits[1:]:
+        try:
+            append(_hextochr[item[:2]])
+            append(item[2:])
+        except KeyError:
+            append('%')
+            append(item)
+    return ''.join(res)
+
 _asciire = re.compile('([\x00-\x7f]+)')
 
-def _generate_unquoted_parts(string, encoding, errors):
+def _generate_unquoted_parts(string, encoding, errors) -> list[str]:
+    # Pystachy port: the parts in a list (annotated), as Pystachy has no generators; _unquote_str()
+    # and _decode() for _unquote_impl() and bytes.decode() (above); an ASCII string unquoted at once,
+    # as lib/re finds the ASCII runs more slowly than CPython's _sre; and a string of a str | None
+    # narrowed to a str (unquote() has raised TypeError for None)
+    if string is None:
+        return []
+    if string.isascii():
+        return [_decode(_unquote_str(string), encoding, errors)]
+    parts = []
     previous_match_end = 0
     for ascii_match in _asciire.finditer(string):
         start, end = ascii_match.span()
-        yield string[previous_match_end:start]  # Non-ASCII
+        parts.append(string[previous_match_end:start])  # Non-ASCII
         # The ascii_match[1] group == string[start:end].
-        yield _unquote_impl(ascii_match[1]).decode(encoding, errors)
+        parts.append(_decode(_unquote_str(string[start:end]), encoding, errors))
         previous_match_end = end
-    yield string[previous_match_end:]  # Non-ASCII tail
+    parts.append(string[previous_match_end:])  # Non-ASCII tail
+    return parts
 
 def unquote(string, encoding='utf-8', errors='replace'):
     """Replace %xx escapes by their single-character equivalent. The optional
@@ -756,8 +1170,11 @@ def parse_qs(qs, keep_blank_values=False, strict_parsing=False,
     return parsed_result
 
 
+# Pystachy port: annotated, as the first return, of [], would give the template's function its type
+# (in CPython, of a bytes qs, it is a list of bytes pairs)
 def parse_qsl(qs, keep_blank_values=False, strict_parsing=False,
-              encoding='utf-8', errors='replace', max_num_fields=None, separator='&'):
+              encoding='utf-8', errors='replace', max_num_fields=None,
+              separator='&') -> list[tuple[str, str]]:
     """Parse a query given as a string argument.
 
         Arguments:
@@ -838,11 +1255,21 @@ def unquote_plus(string, encoding='utf-8', errors='replace'):
     string = string.replace('+', ' ')
     return unquote(string, encoding, errors)
 
-_ALWAYS_SAFE = frozenset(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-                         b'abcdefghijklmnopqrstuvwxyz'
-                         b'0123456789'
-                         b'_.-~')
-_ALWAYS_SAFE_BYTES = bytes(_ALWAYS_SAFE)
+# Pystachy port: the bytes, for bytes, in CPython only (Pystachy has no types module, and drops
+# this block), and _ALWAYS_SAFE_STR for strs
+try:
+    import types
+    _ALWAYS_SAFE = frozenset(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                             b'abcdefghijklmnopqrstuvwxyz'
+                             b'0123456789'
+                             b'_.-~')
+    _ALWAYS_SAFE_BYTES = bytes(_ALWAYS_SAFE)
+except ImportError:
+    pass
+_ALWAYS_SAFE_STR = ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                    'abcdefghijklmnopqrstuvwxyz'
+                    '0123456789'
+                    '_.-~')
 
 def __getattr__(name):
     if name == 'Quoter':
@@ -916,11 +1343,11 @@ def quote(string, safe='/', encoding=None, errors=None):
     if isinstance(string, str):
         if not string:
             return string
-        if encoding is None:
-            encoding = 'utf-8'
-        if errors is None:
-            errors = 'strict'
-        string = string.encode(encoding, errors)
+        # Pystachy port: _encode() makes the str of the bytes of the str, which _quote_str() quotes as
+        # quote_from_bytes() quotes bytes (Pystachy has no bytes), and takes an encoding and errors
+        # of None as 'utf-8' and 'strict': a parameter whose argument is None takes no str in a
+        # branch, which this one is where the string may be None
+        return _quote_str(_encode(string, encoding, errors), safe)
     else:
         if encoding is not None:
             raise TypeError("quote() doesn't support 'encoding' for bytes")
@@ -946,9 +1373,16 @@ def quote_plus(string, safe='', encoding=None, errors=None):
     return string.replace(' ', '+')
 
 # Expectation: A typical program is unlikely to create more than 5 of these.
-@functools.lru_cache
+# Pystachy port: cached in CPython only (Pystachy has no types module, and drops the block below):
+# lib/functools caches a function whose parameters are annotated
 def _byte_quoter_factory(safe):
     return _Quoter(safe).__getitem__
+
+try:
+    import types
+    _byte_quoter_factory = functools.lru_cache(_byte_quoter_factory)
+except ImportError:
+    pass
 
 def quote_from_bytes(bs, safe='/'):
     """Like quote(), but accepts a bytes object rather than a str, and does
@@ -977,6 +1411,29 @@ def quote_from_bytes(bs, safe='/'):
                   for i in range(0, bs_len, chunk_size)]
         return ''.join(chunks)
 
+# Pystachy port: quote_from_bytes() of bs, a str of bytes, which _encode() makes for quote(); by
+# safe (ASCII), _quoters holds the characters that are not quoted and the quoted forms of the bytes 0
+# to 255, made once, as _byte_quoter_factory()'s _Quoter makes them (a byte past ASCII is never safe)
+_quoters: dict[str, tuple[str, list[str]]] = {}
+
+def _quote_str(bs, safe):
+    if not bs:
+        return ''
+    if isinstance(safe, str):
+        # Normalize 'safe' by removing non-ASCII chars
+        if not safe.isascii():
+            safe = ''.join([c for c in safe if ord(c) < 128])
+    else:
+        safe = ''.join([chr(c) for c in safe if c < 128])
+    if safe not in _quoters:
+        chars = _ALWAYS_SAFE_STR + safe
+        _quoters[safe] = (chars, [chr(b) if b < 128 and chr(b) in chars else '%%%02X' % b
+                                  for b in range(256)])
+    chars, quoter = _quoters[safe]
+    if bs.isascii() and not bs.rstrip(chars):
+        return bs
+    return ''.join([quoter[ord(c)] for c in bs])
+
 def urlencode(query, doseq=False, safe='', encoding=None, errors=None,
               quote_via=quote_plus):
     """Encode a dict or sequence of two-element tuples into a URL query string.
@@ -994,9 +1451,14 @@ def urlencode(query, doseq=False, safe='', encoding=None, errors=None,
     specified by quote_via (encoding and errors only if a component is a str).
     """
 
+    # Pystachy port: pairs for the query's pairs, as a variable has one type (a dict's stays a
+    # dict); and below, qk, qv and qelt for the quoted key, value and element, as a key or value
+    # that is no str keeps its type, and an elif for a value without __len__, as len() of it would
+    # be a compile-time error (as would looping over it), where CPython's raises TypeError
     if hasattr(query, "items"):
-        query = query.items()
+        pairs = query.items()
     else:
+        pairs = query
         # It's a bother at times that strings and string-like objects are
         # sequences.
         try:
@@ -1014,46 +1476,50 @@ def urlencode(query, doseq=False, safe='', encoding=None, errors=None,
 
     l = []
     if not doseq:
-        for k, v in query:
+        for k, v in pairs:
             if isinstance(k, bytes):
-                k = quote_via(k, safe)
+                qk = quote_via(k, safe)
             else:
-                k = quote_via(str(k), safe, encoding, errors)
+                qk = quote_via(str(k), safe, encoding, errors)
 
             if isinstance(v, bytes):
-                v = quote_via(v, safe)
+                qv = quote_via(v, safe)
             else:
-                v = quote_via(str(v), safe, encoding, errors)
-            l.append(k + '=' + v)
+                qv = quote_via(str(v), safe, encoding, errors)
+            l.append(qk + '=' + qv)
     else:
-        for k, v in query:
+        for k, v in pairs:
             if isinstance(k, bytes):
-                k = quote_via(k, safe)
+                qk = quote_via(k, safe)
             else:
-                k = quote_via(str(k), safe, encoding, errors)
+                qk = quote_via(str(k), safe, encoding, errors)
 
             if isinstance(v, bytes):
-                v = quote_via(v, safe)
-                l.append(k + '=' + v)
+                qv = quote_via(v, safe)
+                l.append(qk + '=' + qv)
             elif isinstance(v, str):
-                v = quote_via(v, safe, encoding, errors)
-                l.append(k + '=' + v)
+                qv = quote_via(v, safe, encoding, errors)
+                l.append(qk + '=' + qv)
+            elif not hasattr(v, '__len__'):
+                # not a sequence
+                qv = quote_via(str(v), safe, encoding, errors)
+                l.append(qk + '=' + qv)
             else:
                 try:
                     # Is this a sufficient test for sequence-ness?
                     x = len(v)
                 except TypeError:
                     # not a sequence
-                    v = quote_via(str(v), safe, encoding, errors)
-                    l.append(k + '=' + v)
+                    qv = quote_via(str(v), safe, encoding, errors)
+                    l.append(qk + '=' + qv)
                 else:
                     # loop over the sequence
                     for elt in v:
                         if isinstance(elt, bytes):
-                            elt = quote_via(elt, safe)
+                            qelt = quote_via(elt, safe)
                         else:
-                            elt = quote_via(str(elt), safe, encoding, errors)
-                        l.append(k + '=' + elt)
+                            qelt = quote_via(str(elt), safe, encoding, errors)
+                        l.append(qk + '=' + qelt)
     return '&'.join(l)
 
 
@@ -1097,7 +1563,9 @@ def splittype(url):
     return _splittype(url)
 
 
-_typeprog = None
+# Pystachy port: _typeprog, _hostprog and _portprog annotated, as only a function gives them a value
+# other than None
+_typeprog: re.Pattern | None = None
 def _splittype(url):
     """splittype('type:opaquestring') --> 'type', 'opaquestring'."""
     global _typeprog
@@ -1118,7 +1586,7 @@ def splithost(url):
     return _splithost(url)
 
 
-_hostprog = None
+_hostprog: re.Pattern | None = None  # Pystachy port: (above)
 def _splithost(url):
     """splithost('//host[:port]/path') --> 'host[:port]', '/path'."""
     global _hostprog
@@ -1168,7 +1636,7 @@ def splitport(host):
 
 
 # splittag('/path#tag') --> '/path', 'tag'
-_portprog = None
+_portprog: re.Pattern | None = None  # Pystachy port: (above)
 def _splitport(host):
     """splitport('host:port') --> 'host', 'port'."""
     global _portprog

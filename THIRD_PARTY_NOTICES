@@ -43,6 +43,10 @@ lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.m
 marked in the source; it is derived from Python and is used under the same license and
 copyright notice.
 
+lib/urllib/parse.py is CPython 3.13.16's Lib/urllib/parse.py with the edits lib/README.md lists,
+each marked in the source; it is derived from Python and is used under the same license and
+copyright notice. lib/urllib/__init__.py is CPython's, which is empty.
+
 CPython's math tests (tests/)
 ----------------------------
 

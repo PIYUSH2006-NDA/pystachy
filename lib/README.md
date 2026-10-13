@@ -19,6 +19,7 @@ checks each against CPython.
 | `posixpath` | `Lib/posixpath.py` | `69acb9e294987cd6056a2237048373cf8d6201faf1e43a49c38889b47d2fb28e` | the constants and `normcase`, `isabs`, `split`, `splitext`, `splitdrive`, `splitroot`, `basename`, `dirname`, `normpath` on `str` paths; not `join`, `relpath`, `commonpath`, `abspath`, `expanduser`, `expandvars`, `realpath`, `exists` and the other file tests (`try`, `*args`, `map`, `os.environ`, `re`) |
 | `genericpath` | `Lib/genericpath.py` | `cdac5a68dd738051e0d66fc81d5947d6a1776248fc6fe862253477608d870ec4` | what `posixpath` uses of it; not `commonprefix` (`map`) or the file tests (`try`) |
 | `curses.ascii` | `Lib/curses/ascii.py` | `780dd8bbaf0ee7e832f164c1772953e694a9cd1031d1ab1471af65344d3645e6` | everything, for ASCII characters (strings are byte strings) |
+| `urllib` | `Lib/urllib/__init__.py` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | the package, which is empty; its `parse` is a port (below) |
 
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
 so is `functools.py` (below).
@@ -219,6 +220,153 @@ and the lookups that stand in for `str.translate()` 10 µs (CPython: 2.7 µs), w
 `wrap()`, the wrapping itself, takes 6 µs, against CPython's 17 µs. `dedent()`'s three regular
 expressions take 20, 14 and 13 µs (CPython: 3 µs each). (Medians of 3 runs, each the median of
 5 rounds over 200 generated ASCII paragraphs or blocks.)
+
+## `urllib.parse`, a port of CPython's
+
+`urllib/parse.py` is CPython 3.13.16's `Lib/urllib/parse.py` (SHA-256
+`491b233e8d87a2ab73964afff029717177d53ad8def328ed9b00575db983da27`) with 27 edits, each marked
+`# Pystachy port:`, and `urllib/__init__.py` is CPython's, which is empty. Of CPython's 1,264 lines,
+1,156 are as they are; the edits change or remove 108 and add 576. The budget: 257 of the lines
+added are the codecs that stand in for `str.encode()` and `bytes.decode()` (Pystachy has no bytes),
+87 test bracketed hosts and NFKC forms where CPython calls `ipaddress` and `unicodedata`, 23 quote a
+str of bytes, and the other 209 are the result classes, the blocks that only CPython runs, and the
+lines and comments of the smaller edits.
+
+What works, on strs, as CPython's code does it:
+
+- `quote()`, `quote_plus()`, `unquote()` and `unquote_plus()`, with `safe`, `encoding` and `errors`.
+  A str holds UTF-8 in Pystachy, so `quote()` quotes its bytes as CPython quotes the bytes of
+  `str.encode()`, and `unquote()` decodes the bytes of the percent-escapes of each ASCII run as UTF-8
+  (with `errors='replace'` by default), each sequence that is no UTF-8 replaced as CPython's decoder
+  replaces it (`unquote('%F0%9F%98')` is one U+FFFD, `unquote('%ED%A0%80')` three). The codecs are
+  UTF-8, Latin-1 and ASCII, under any of the names `codecs.lookup()` finds them by (`'utf8'`,
+  `'ISO-8859-1'`, `'us-ascii'`, `'l1'`, ...), with the error handlers `strict`, `ignore`, `replace`,
+  `backslashreplace`, `xmlcharrefreplace`, `surrogateescape` and `surrogatepass` (a surrogate is held
+  as Pystachy holds one, its three bytes), CPython's `LookupError` for a handler it does not know and
+  `TypeError` for `xmlcharrefreplace` and `namereplace` in `unquote()`, and its messages.
+- `parse_qs()` and `parse_qsl()`, with `keep_blank_values`, `strict_parsing`, `encoding`, `errors`,
+  `max_num_fields` and `separator` (also of several characters), and their `ValueError`s.
+- `urlencode()` of a dict, or of a list or tuple of pairs, with `doseq` (a value that is a list,
+  tuple or set is a sequence, an int or `None` is not), `safe`, `encoding`, `errors` and `quote_via`
+  (`quote`, `quote_plus` or a function of the program); keys and values that are no strs are
+  `str()`-ed, as in CPython.
+- `urlsplit()`, `urlparse()`, `urlunsplit()`, `urlunparse()`, `urljoin()`, `urldefrag()` and
+  `unwrap()`, with the `ValueError`s of an invalid IPv6 URL or bracketed host and of a netloc whose
+  NFKC form holds `/?#@:`, and `uses_relative` and the other lists. `SplitResult`, `ParseResult` and
+  `DefragResult` are NamedTuples: their fields, indexing, unpacking, `==` with tuples, `repr()`,
+  `_replace()` and `geturl()`.
+- A `str | None` for the string of `quote()`, `quote_plus()`, `unquote()` and `unquote_plus()`,
+  which raise CPython's `TypeError` or `AttributeError` for `None`.
+
+The edits:
+
+- The imports: `typing.NamedTuple` for `collections.namedtuple`, and `types`, `warnings` and
+  `ipaddress` optional (`try:` ... `except ImportError: pass`), as Pystachy has none of them.
+- What only CPython runs is in blocks that begin `try: import types`: Pystachy decides an optional
+  import as it compiles, and where an import fails it drops the rest of the `try` block
+  ([`docs/language.md`](../docs/language.md#optional-imports)). They make the result classes for strs
+  again as classes that derive from their NamedTuples and their mixins
+  (`type('SplitResult', (SplitResult, _NetlocResultMixinStr), {'__slots__': ()})`), set
+  `__class_getitem__`, the fields' docstrings and the result pairs (`_fix_result_transcoding()`),
+  make `_ALWAYS_SAFE` and `_ALWAYS_SAFE_BYTES`, which are bytes, and wrap `urlsplit()` and
+  `_byte_quoter_factory()` in `functools.lru_cache`, which CPython's decorators did. So CPython,
+  running the edited module, has CPython's result classes, bytes paths and caches.
+- `DefragResult`, `SplitResult` and `ParseResult` are `typing.NamedTuple` classes, the bases that
+  `namedtuple()` made, with the docstrings they were given and `geturl() -> str`: only an exception
+  class has a base in Pystachy, so a class has no mixin, and the mixins' properties (`username`,
+  `password`, `hostname`, `port`) and `encode()` are CPython's only; `_DefragResultBase` and the
+  others name them, for the bytes classes, which stay CPython's.
+- `_coerce_args()` names its first argument, as Pystachy decides `isinstance()` of a name as it
+  compiles, and puts the return of bytes in an `else` block, which it then leaves out for strs; its
+  loop takes all the arguments, as Pystachy slices no tuple. `urlunsplit()` and `urlunparse()`
+  unpack their components before they pass them, as Pystachy unpacks only a tuple's items into
+  arguments, not a NamedTuple's.
+- `urljoin()` makes a new list of the segments, as Pystachy assigns to no slice and has `filter()`
+  only as the argument of a consumer.
+- `_checknetloc()` replaces each of the 19 characters whose NFKC form holds one of `/?#@:` with that
+  form (`_NFKC_DELIMITERS`, from CPython 3.13's Unicode 15.1), for `unicodedata.normalize()`: no
+  composition takes one of these five characters in, so that is all NFKC changes of what the test
+  reads. `_check_bracketed_host()` calls `_ip_version()`, whose `_is_ipv4()` and `_is_ipv6()` test a
+  str as `ipaddress.ip_address()`'s constructors parse it, scope IDs and IPv4 suffixes included, and
+  raise its `ValueError`.
+- `quote()` returns `_quote_str(_encode(string, encoding, errors), safe)` for `string.encode()` and
+  `quote_from_bytes()`; `_encode()` makes the str of the bytes, which holds byte b as `chr(b)` (a
+  str's byte in Pystachy, a code point below 256 in CPython), and takes an `encoding` and `errors`
+  of `None` as `'utf-8'` and `'strict'`; `_quote_str()` quotes it as `quote_from_bytes()` quotes
+  bytes, with the quoted forms of the 256 bytes made once for each `safe`.
+- `unquote()`'s `_generate_unquoted_parts()` returns a list of the parts (Pystachy has no
+  generators), unquotes an ASCII string at once (`lib/re`'s `finditer()` is slower than `_sre`'s), and
+  calls `_unquote_str()` and `_decode()` for `_unquote_impl()` and `bytes.decode()`.
+- The codecs (`_codec()`, `_encode()`, `_encode_error()`, `_decode()`, `_utf8_char()`,
+  `_decode_error()`) are those of CPython's `unicodeobject.c` and `stringlib/codecs.h` and the
+  handlers of `codecs.c`: the same runs of characters an encoder cannot encode, the same ranges of
+  bytes the UTF-8 decoder gives its handler (an invalid start byte, an invalid continuation byte,
+  the unexpected end of the data), the same replacements and positions. `_UTF8` (a str's length of
+  `'\xe9'`) tells Pystachy's strs from CPython's code points, so the module runs under CPython too.
+- `urlencode()` names the pairs `pairs` (a dict stays a dict) and the quoted key, value and element
+  `qk`, `qv` and `qelt` (a key or value that is no str keeps its type), and an `elif` takes a value
+  without `__len__` as no sequence, as `len()` of it, and looping over it, would be compile-time
+  errors where CPython's `len()` raises `TypeError`.
+- `parse_qsl()` and `_generate_unquoted_parts()` annotate their returns, which their first return,
+  of `[]`, would type, and `_typeprog`, `_hostprog` and `_portprog` are annotated, as only a
+  function gives them a value other than `None`.
+
+Where it differs from CPython (`tests/deviations/lib_urllib_parse.py`):
+
+- Where CPython's codecs raise `UnicodeEncodeError` or `UnicodeDecodeError` (`errors='strict'`, the
+  default of `quote()`), the port raises `UnicodeError` with their message, as Pystachy raises
+  neither: an `except` clause that names them does not catch it.
+- An encoding other than UTF-8, Latin-1 and ASCII raises `NotImplementedError`, where CPython
+  encodes and decodes (or raises `LookupError` for a name it has no codec for), and so does the
+  error handler `namereplace` in `quote()`, which needs the names of the characters.
+- A str that holds bytes that are no UTF-8, which no CPython str is (`chr(233)` is the byte 0xE9 in
+  Pystachy, docs/language.md), is quoted byte for byte; for Latin-1 and ASCII, a byte that begins no
+  character is the character of its value, as `lib/re` reads it.
+- `urlsplit()` caches nothing, which only its speed shows (and `cache_info()`, an error below); a
+  `doseq` value that is a set of strs gives its items in the order of a Pystachy set, which differs
+  from CPython's ([`docs/language.md`](../docs/language.md#deviations-from-cpython)).
+
+Each of these is a compile-time error (`tests/errors/lib_urllib_parse_*.py`):
+
+- `username`, `password`, `hostname` and `port` of a `SplitResult` or `ParseResult`, which are
+  properties of CPython's mixins (`@property` is not supported; `_hostname.py`), and `encode()` of a
+  result (`_encode.py`).
+- Bytes: `quote_from_bytes()`, `unquote_to_bytes()` (`_unquote_to_bytes.py`), a bytes argument and
+  the bytes result classes.
+- `urlsplit.cache_info()`, `cache_clear()` and `clear_cache()` (`_cache.py`).
+- `urlencode()` of something other than a mapping or a sequence (`_not_sequence.py`; CPython raises
+  `TypeError`), and with `doseq`, a value that is a sequence of items of different types
+  (`_doseq_mixed.py`).
+- An `allow_fragments` that is an int, not a bool (`_allow_fragments_int.py`): `urlsplit()` rebinds
+  it to `bool(allow_fragments)`, and a variable has one type.
+- The deprecated `splittype()` and the other split functions, `to_bytes()` and `Quoter`, which warn
+  with `warnings` (`_deprecated.py`).
+
+`tests/lib_urllib_parse.py` compares it with CPython's `urllib.parse`: the str cases of CPython's
+`Lib/test/test_urlparse.py` and of `test_urllib.py`'s `QuotingTests`, `UnquotingTests` and
+`urlencode_Tests`, every codec name and error handler on characters past U+00FF and on surrogates,
+then `unquote()` of every one-byte escape and of two to four bytes drawn from each class of bytes
+CPython's UTF-8 decoder tells apart, and `quote()` of code points at the ends of each length of
+UTF-8, summed up by a digest of their `ascii()`. Run by CPython in place of its own, the edited
+module passes all 77 tests of CPython 3.13.16's `test_urlparse.py` (5 subtests skip, as with
+CPython's own: they are about non-ASCII bytes) and 28 of the 29 tests of `test_urllib.py`'s
+`QuotingTests`, `UnquotingTests` and `urlencode_Tests`: `test_quote_with_unicode` stops at its
+`assertRaises(UnicodeEncodeError, ...)`, the deviation above, and passes with `UnicodeError` in its
+place; the whole of `test_urllib.py`, 109 tests, gives what it gives with CPython's own module but
+for that one. Beyond the
+tests, compiled, it gave what CPython gives for `unquote()` of all 65,536 two-byte escapes in 7
+codec and handler combinations, of three bytes from 25 values and four from 13, for `quote()` of
+all 1,114,112 code points in 4 combinations and back, and for 200,000 random strings of URL
+pieces through each function, about 30 calls each.
+
+In an AOT executable (medians of 3 runs, each the median of 5 rounds of 20,000 calls after one that
+warms up), `quote()` of `'café crème/menu'` takes 252 ns (CPython 3.13.16: 865 ns), `quote_plus()`
+of four ASCII words 134 ns (488), `unquote()` of `'caf%C3%A9%20cr%C3%A8me%2Fmenu'` 418 ns (2,209),
+`parse_qsl()` of a query of 7 fields 1.04 µs (8.99) and `parse_qs()` 1.16 µs (9.68), `urlencode()`
+of 4 pairs 652 ns (4,583), `urlsplit()` of 1,000 URLs in turn 338 ns (2,061) and `urljoin()` 812 ns
+(3,743); `urlsplit()` of one URL again and again takes 338 ns, where CPython's cache gives its result
+in 91 ns. [`examples/urlstats`](../examples/urlstats/README.md) reads an access log with it, 5.4 to
+5.9 times as fast as CPython.
 
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop

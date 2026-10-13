@@ -568,7 +568,13 @@ a function they decorate keeps its results in a cache of its own types, which it
 parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
 counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `textwrap` is all of
 CPython's, edited in 7 marked places for what Pystachy does not support, with a width that counts a
-str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cpythons)).
+str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cpythons)). Its
+`urllib.parse` is CPython's with marked edits, whose `quote()`, `unquote()`, `parse_qs()`,
+`parse_qsl()`, `urlencode()`, `urlsplit()`, `urljoin()` and their siblings take strs, which hold
+UTF-8, as CPython's take the UTF-8 of strs, with CPython's codecs of UTF-8, Latin-1 and ASCII, but
+raise `UnicodeError` where those raise `UnicodeEncodeError` or `UnicodeDecodeError`, and have no
+other codecs, bytes or netloc properties
+([`lib/README.md`](../lib/README.md#urllibparse-a-port-of-cpythons)).
 
 ## Expressions
 

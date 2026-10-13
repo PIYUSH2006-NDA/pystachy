@@ -1,0 +1,39 @@
+207.93.69.226 - - [13/Oct/2026:00:00:00 +0000] "GET /api/v1/items?ids=838&fields=name%2Cprice&token= HTTP/1.1" 200 13473 "-" "Mozilla/5.0 (X11; Linux x86_64)"
+401 requests (2 lines without one); 104 distinct paths, 278 distinct canonical URLs
+most requested paths:
+       137 /search
+        33 /api/v1/items
+        23 /
+        20 /login
+        17 /category/café-bar
+query parameters: requests that give them, distinct values, the most common values:
+  q               137     27  'jeans' (9), 'a+b' (8), 'café' (8)
+  filter           75      9  'color:black' (19), 'color:green' (19), 'color:red' (18)
+  ref              64      3  'home' (32), 'search' (27), '%zz' (5)
+  page             60      9  '6' (12), '2' (10), '3' (10)
+  sort             35      4  'price_asc' (10), 'newest' (9), 'price_desc' (9)
+  fields           33      1  'name,price' (33)
+  ids              33     33  '1117,361,521' (1), '1245,589' (1), '1282,346' (1)
+  token            33      1  '' (33)
+  utm_medium       30      1  'email' (30)
+  utm_source       30      4  'partner' (9), 'facebook' (8), 'newsletter' (8)
+  next             20      2  '/account/orders?tab=open' (12), '/account/orders?tab=all' (8)
+values whose escapes are no UTF-8 (decoded with U+FFFD): 1
+most requested canonical URLs:
+        23 /
+        12 /login?next=%2Faccount%2Forders%3Ftab%3Dopen
+         8 /login?next=%2Faccount%2Forders%3Ftab%3Dall
+         5 /search?q=caf%C3%A9
+         5 /search?q=desk
+401 ['/api/v1/items?fields=name%2Cprice&ids=838&token=', '/static/app.d5f3a1.js', '/api/v1/items?fields=name%2Cprice&ids=198&token=', '/api/v1/items?fields=name%2Cprice&ids=465%2C1120&token=']
+'/search?b=2&a=caf%c3%a9' '/search?a=caf%C3%A9&b=2'
+'/search?a=caf%C3%A9&b=2' '/search?a=caf%C3%A9&b=2'
+'/search?a=caf%E9&b=2' '/search?a=caf%EF%BF%BD&b=2'
+'/x%20y/?q=a+b&q=%2B' '/x%20y/?q=%2B&q=a%20b'
+'/?' '/'
+'/p?a&b=&c=1' '/p?a=&b=&c=1'
+'http://example.com/p%2Fq?z=1&a=%zz' '/p%2Fq?a=%25zz&z=1'
+'/%E6%9D%B1?k=%F0%9F%8E%81' '/%E6%9D%B1?k=%F0%9F%8E%81'
+409 2 2 ['a', 'b', 'c', 'fields', 'filter', 'ids', 'k', 'next', 'page', 'q', 'ref', 'sort', 'token', 'utm_medium', 'utm_source', 'z'] {'café': 2, 'caf�': 1, '': 1, '%zz': 1}
+caf%C3%A9+cr%C3%A8me %c3%a9x%2f /search?page=2&q=cr%C3%A8me+br%C3%BBl%C3%A9e 939
+[exit 0]
