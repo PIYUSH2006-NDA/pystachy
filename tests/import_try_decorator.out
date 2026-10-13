@@ -1,0 +1,28 @@
+from decos import deco, fac skipped
+import decos as dm skipped
+NameError: name 'deco' is not defined
+NameError: name 'fac' is not defined
+NameError: name 'dm' is not defined
+NameError: name 'dm' is not defined
+NameError: name 'deco' is not defined
+default evaluated
+deco runs
+0
+fac runs 1
+default evaluated
+deco runs
+0
+default evaluated
+deco runs
+0
+fac runs 2
+default evaluated
+deco runs
+0
+fac runs 3
+deco runs
+deco runs
+4
+deco runs
+5
+[exit 0]

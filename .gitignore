@@ -4,3 +4,4 @@ __pycache__/
 *.ll
 *.bc
 .claude/
+/core

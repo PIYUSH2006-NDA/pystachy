@@ -1,0 +1,19 @@
+try 1 raised ZeroDivisionError
+UnboundLocalError: cannot access local variable 'sticks' where it is not associated with a value
+try 2 raised ZeroDivisionError
+UnboundLocalError: cannot access local variable 'sticks' where it is not associated with a value
+try 3 raised ZeroDivisionError
+UnboundLocalError: cannot access local variable 'sticks' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'exec_foo' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'nested_foo' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'broken_child' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'bar' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'broken_parent' where it is not associated with a value
+ZeroDivisionError: division by zero
+UnboundLocalError: cannot access local variable 'bar' where it is not associated with a value
+[exit 0]

@@ -1,0 +1,9 @@
+EnumerateTestCase: list(enumerate(seq)) [(0, 'a'), (1, 'b'), (2, 'c')]
+TestEmpty: list(enumerate(seq)) []
+TestBig: list(enumerate(seq)) [(0, 10), (1, 12), (2, 14), (3, 16), (4, 18), (5, 20), (6, 2...
+TestStart: list(enumerate(seq, start=11)) [(11, 'a'), (12, 'b'), (13, 'c')]
+'abc' ['c', 'b', 'a']
+range(5) [4, 3, 2, 1, 0]
+range(1,17,5) [16, 11, 6, 1]
+dict.fromkeys('abcde') ['e', 'd', 'c', 'b', 'a']
+[exit 0]

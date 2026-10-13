@@ -305,6 +305,54 @@ replace the dynamic bool result expectation with an explicit compiler rejection,
 and add Pystachy regressions for iterator construction, argument evaluation and
 traversal order. Differential output is recorded with CPython 3.13.16.
 
+CPython's language and builtin regression tests (tests/upstream_*.py)
+---------------------------------------------------------------------
+
+These differential tests and rejection fixtures adapt test methods of CPython 3.13.16's
+Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
+
+- tests/upstream_scope_*.py and tests/errors/upstream_scope_*.py: Lib/test/test_scope.py
+- tests/upstream_decorators_*.py and tests/errors/upstream_decorators_*.py:
+  Lib/test/test_decorators.py
+- tests/upstream_extcall_*.py and tests/errors/upstream_extcall_*.py: Lib/test/test_extcall.py
+  (with test.support.sortdict() of Lib/test/support/__init__.py)
+- tests/upstream_call_*.py and tests/errors/upstream_call_*.py: Lib/test/test_call.py
+- tests/upstream_iter_*.py: Lib/test/test_iter.py
+- tests/upstream_builtin_*.py and tests/errors/upstream_builtin_*.py: Lib/test/test_builtin.py
+- tests/upstream_enumerate_*.py: Lib/test/test_enumerate.py
+- tests/upstream_dict_*.py: Lib/test/test_dict.py
+
+They are used under the Python Software Foundation License Version 2 reproduced above;
+tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
+upstream test methods it adapts and lists, with the reason, those it leaves out.
+
+Summary of changes: remove unittest, doctest and test.support scaffolding (each test method
+becomes a function, assertEqual a printed value and an assert, assertRaises a try statement,
+and each doctest example a statement commented with its expected output), add type annotations
+where Pystachy's subset needs them, rename names that a module would bind twice, run as module
+code what upstream runs with exec(), turn the syntax errors that upstream checks with compile()
+and the TypeErrors of calls whose arguments do not fit into expected compile-time rejections,
+draw random data from a fixed linear congruential sequence, reopen a file where upstream seeks
+back, and leave out the cases that use what the subset does not support; where an adaptation
+changes more (an attribute set on a function becomes a field of an object that holds it), the
+file's header says so. Differential output is recorded with CPython 3.13.16.
+
+CPython's import tests (tests/upstream_import_failing.py)
+---------------------------------------------------------
+
+tests/upstream_import_failing.py adapts ImportTests.test_failing_import_sticks and
+ImportTracebackTests.test_exec_failure, test_exec_failure_nested, test_broken_submodule,
+test_broken_from, test_broken_parent and test_broken_parent_from from CPython 3.13.16's
+Lib/test/test_import/__init__.py, at commit cbc944f4bc59639a444dd971c737788ba2283a91;
+the modules in tests/upimport/ hold the source those tests write. They are used under the
+Python Software Foundation License Version 2; the complete CPython license and copyright
+notices are retained in tests/upstream/CPYTHON-LICENSE.txt.
+
+Summary of changes: each test becomes a function, and the modules it writes are files under
+names of their own; the sys.modules and traceback assertions are left out, as Pystachy has
+neither; each test also checks that the name its failed import would bind stays unbound.
+Differential output is recorded with CPython 3.13.16.
+
 APACHE LICENSE VERSION 2.0
 --------------------------
 
