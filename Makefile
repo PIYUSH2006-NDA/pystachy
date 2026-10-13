@@ -28,6 +28,12 @@ test-py:
 	$(PY) -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)'
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
+# the cached runtime's rules (tests/cache.sh: when it is used, built again, and what it is keyed by),
+# with the native compiler, then the CPython-hosted one ($(PY) loads the extension modules)
+test-cache: pystachy
+	PY="$(PY)" tests/cache.sh ./pystachy
+	tests/cache.sh "$(PY) -m pystachy"
+
 # the FFI's tests (docs/ffi.md): C calls, and with $(PY)'s libpython, extension modules
 test-ffi: pystachy
 	PY="$(PY)" tests/ffi/run.sh ./pystachy "jit aot"
@@ -93,8 +99,8 @@ fileprobe: tools/fileprobe.c runtime.c runtime.py pystachy
 jitprobe: pystachy
 	$(PY) tools/jitprobe.py
 
-# Full verification (bootstrap, both compilers, Python-free stage, UBSan, GC stress, IR check, benchmarks, dict probes,
-# scaling) -> build/verification.json
+# Full verification (bootstrap, both compilers, the runtime cache, Python-free stage, UBSan, GC stress, IR check,
+# benchmarks, dict probes, scaling) -> build/verification.json
 verify:
 	PY="$(PY)" tests/verify.sh
 
@@ -158,4 +164,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean

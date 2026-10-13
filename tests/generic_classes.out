@@ -1,0 +1,14 @@
+Box(4, 2) 5 ['3', '4'] [1.5, 2.0]
+Box('yz', 2) YZ [1, 2] True True
+[Box(1, 1), Box(2, 1), Box(4, 2)] 7
+0 7 0 ['a', 'b', 'c']
+- -
+10 5 None 5
+12 12 10 2 area [(2, 5), (3, 4)]
+2 kg 2 kg 3 m 2 label
+23416728348467685 81 23416728348467685 81
+made once made once 1 {(): 'made once'}
+FOUR! four
+(1, 'a', True) (1, 'a', True) (2, 'b', False) ('k', (2, 'b', False))
+() (0, ())
+[exit 0]

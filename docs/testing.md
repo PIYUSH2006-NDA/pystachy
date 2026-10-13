@@ -10,6 +10,7 @@ honest.
 | `make` | the bootstrap: the compiler built by itself reproduces its own LLVM IR byte for byte |
 | `make test` | the differential tests with the native compiler, JIT and AOT (`FILES="tests/a.py tests/errors/b.py"` runs only those) |
 | `make test-py` | the same tests with the compiler running on CPython |
+| `make test-cache` | the cached runtime's rules, with both compilers (`tests/cache.sh`, [below](#make-verify)) |
 | `make test-ffi` | the FFI's tests, JIT and AOT: C calls and the FFI's errors, and with python3's libpython, extension modules against the twins ([ffi.md](ffi.md#tests)) |
 | `make bench-extended-check` | the [extended performance prototype](extended-performance.md)'s runner failure checks and small CPython/JIT/AOT checksum checks; no timing gates |
 | `make verify` | the bootstrap, both test runs and the other steps under [make verify](#make-verify), with a JSON report in `build/verification.json` |
@@ -122,6 +123,20 @@ versions, platform, git commit and a timestamp:
   against `pystachy.py`'s hash: run as a script, it would compile its 16k lines at every start);
 - **tests-opt-off** — the differential tests with the native compiler and every optimization
   on the IR turned off (`PYSTACHY_OPT=-all`): the passes change no output;
+- **runtime-cache** — `tests/cache.sh` (`make test-cache`) with each compiler, a private
+  `PYSTACHY_HOME` and LLVM tools behind wrappers that count the runtime's builds: the cached
+  runtime ([runtime-in-subset.md](runtime-in-subset.md) §1.4) is used while nothing it is built
+  from changes (also by the AOT tier, and through another path to the same tools), and built
+  again, its new entry replacing the old, when `runtime.py` changes by an edit of the same size
+  whose mtime is set back, when `runtime.c` changes, when both change while the runtime is built
+  (the run after builds the new bytes), when a tool changes and when the compiler changes;
+  `PYSTACHY_CFLAGS`, `PYSTACHY_OPT` (the same passes named otherwise share one) and tools found
+  through `PATH` get entries of their own; a failed `llvm-link` and a build killed after `opt`
+  leave nothing a later run uses; `pystachy ext` caches its glue (`pyembed.c`, `pyext.c`) beside
+  the runtime; with a tool whose times have not settled, `run` and `ext` build a runtime of their
+  own and publish nothing; and the compiler run by name is found through `PATH` as the shell
+  finds it (past a directory, a file that is not executable, through a symbolic link), a script
+  run by CPython in the current directory without a search;
 - **python-free** — `PATH` holds only the LLVM tools, the system linker and a few POSIX
   tools (`python3` is checked to be unreachable); the native compiler rebuilds its runtime
   and itself, reproduces the IR and passes the tests;
@@ -196,10 +211,11 @@ versions, platform, git commit and a timestamp:
   started as an extension module is, and with collection at every allocation; a wrapper of
   `malloc` and `free` counts the buffers themselves, without RSS or timing thresholds;
 - **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
-  active signatures and branching template specializations fail with bounded source diagnostics
-  in hosted/native `ir`, JIT `run` and AOT `build`, under 256 MiB address space and ten CPU
-  seconds. Finite controls check active-budget release and reuse of completed instances at the
-  compilation-wide limit of 4,096 specializations;
+  active signatures, branching template specializations and the signature bytes they retain
+  (16 MiB per compilation) fail with bounded source diagnostics in hosted/native `ir`, JIT `run`
+  and AOT `build`, under 256 MiB address space and ten CPU seconds. Finite controls check
+  active-budget release and reuse of completed instances at the compilation-wide limit of 4,096
+  specializations;
 - **jit-dead-code** — `tools/jitprobe.py` inspects the bitcode handed to `lli` by both compilers:
   35 unused functions, including a mutually recursive pair, must be absent. Live calls, an unused
   function's default, import effects and the runtime's object comparison/representation callbacks
@@ -214,7 +230,8 @@ A step that runs the differential tests passes only with as many passes as the c
 holds, which `tests/verify.sh` counts from its files as `tests/run.sh` makes them (each program and
 deviation once per mode, each rejection once, and `pystachy check` of the syntax tests): a run
 that covered fewer cases fails, as one with a failure does. The report gives each of these steps'
-`passed`, `failed` and `expected` counts.
+`passed`, `failed` and `expected` counts. The **runtime-cache** step expects `tests/cache.sh`'s
+checks the same way: 56 with the native compiler, 55 with CPython's (one `PATH` case fewer).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
 others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,

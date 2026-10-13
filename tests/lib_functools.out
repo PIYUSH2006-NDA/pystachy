@@ -1,0 +1,101 @@
+bounded, maxsize=3
+  square 1
+1 1 CacheInfo(hits=0, misses=1, maxsize=3, currsize=1)
+  square 2
+2 4 CacheInfo(hits=0, misses=2, maxsize=3, currsize=2)
+1 1 CacheInfo(hits=1, misses=2, maxsize=3, currsize=2)
+  square 3
+3 9 CacheInfo(hits=1, misses=3, maxsize=3, currsize=3)
+  square 4
+4 16 CacheInfo(hits=1, misses=4, maxsize=3, currsize=3)
+1 1 CacheInfo(hits=2, misses=4, maxsize=3, currsize=3)
+  square 2
+2 4 CacheInfo(hits=2, misses=5, maxsize=3, currsize=3)
+  square 5
+5 25 CacheInfo(hits=2, misses=6, maxsize=3, currsize=3)
+  square 3
+3 9 CacheInfo(hits=2, misses=7, maxsize=3, currsize=3)
+  square 4
+16 CacheInfo(hits=2, misses=8, maxsize=3, currsize=3)
+cleared CacheInfo(hits=0, misses=0, maxsize=3, currsize=0)
+  square 1
+1 CacheInfo(hits=0, misses=1, maxsize=3, currsize=1)
+  one a
+  one b
+  one a
+maxsize=1: aa aa bb aa CacheInfo(hits=1, misses=3, maxsize=1, currsize=1)
+cache: 2880067194370816120 CacheInfo(hits=88, misses=91, maxsize=None, currsize=91)
+55 CacheInfo(hits=8, misses=11, maxsize=None, currsize=11)
+  unbounded 1
+  unbounded 2
+maxsize=None: -1 -2 -1 CacheInfo(hits=1, misses=2, maxsize=None, currsize=2)
+  nocache 1
+  nocache 1
+maxsize=0: 2 2 CacheInfo(hits=0, misses=2, maxsize=0, currsize=0)
+  negative 1
+  negative 1
+maxsize=-5: 3 3 CacheInfo(hits=0, misses=2, maxsize=0, currsize=0)
+  bare 1
+@lru_cache: 10 10 CacheInfo(hits=1, misses=1, maxsize=128, currsize=1)
+  triple 1
+  triple 2
+  triple 3
+  triple 2
+lru_cache(2)(f): 3 6 3 9 6 CacheInfo(hits=1, misses=4, maxsize=2, currsize=2)
+  triple 1
+__wrapped__: 3 CacheInfo(hits=1, misses=4, maxsize=2, currsize=2)
+names: triple triple square fib
+  triple 4
+cache(f): 12 12 CacheInfo(hits=1, misses=1, maxsize=None, currsize=1)
+  falsy 1
+  zero x
+falsy: '' '' 0 0 CacheInfo(hits=1, misses=1, maxsize=8, currsize=1) CacheInfo(hits=1, misses=1, maxsize=8, currsize=1)
+  items 3
+same object: True [0, 1, 2, 99] CacheInfo(hits=1, misses=1, maxsize=8, currsize=1)
+  checked 1
+1
+  checked -1
+ValueError negative: -1
+  checked -1
+ValueError negative: -1
+1
+CacheInfo(hits=1, misses=3, maxsize=4, currsize=1)
+  join ab 2 True
+  join ab 2 False
+  join ab 3 True
+tuple keys: abab abab ab ababab
+CacheInfo(hits=1, misses=3, maxsize=4, currsize=3)
+  pair (2, 'x') None
+  pair (2, 'x') y
+tuple and str | None: xx- xx- xxy CacheInfo(hits=1, misses=2, maxsize=4, currsize=2)
+  flag True
+  flag False
+bool: yes no yes CacheInfo(hits=1, misses=2, maxsize=2, currsize=2)
+  config
+no parameters: {'retries': 4} CacheInfo(hits=1, misses=1, maxsize=None, currsize=1)
+  point 1
+  point 2
+  point 3
+  point 1
+objects: 1 True -2 -3 False CacheInfo(hits=1, misses=4, maxsize=2, currsize=2)
+  maybe 1
+  maybe 0
+int | None: 1 None None 1 CacheInfo(hits=2, misses=2, maxsize=2, currsize=2)
+closures:
+  times 10 2
+  times 10 3
+20 20 30 CacheInfo(hits=1, misses=2, maxsize=2, currsize=2)
+  times 20 2
+  times 20 3
+40 40 60 CacheInfo(hits=1, misses=2, maxsize=2, currsize=2)
+  inner [7, 2]
+reentrant: [7, 2] [7, 2] False CacheInfo(hits=1, misses=2, maxsize=4, currsize=1)
+  clearing 1
+  clearing 2
+  clearing 3
+  clearing 1
+clear inside: 1 2 3 CacheInfo(hits=0, misses=0, maxsize=2, currsize=1) 1 CacheInfo(hits=0, misses=1, maxsize=2, currsize=2)
+churn: 11310000 CacheInfo(hits=0, misses=5000, maxsize=100, currsize=100)
+CacheInfo(hits=2, misses=5001, maxsize=100, currsize=100)
+mutual: True True CacheInfo(hits=1, misses=26, maxsize=None, currsize=26) CacheInfo(hits=0, misses=26, maxsize=None, currsize=26)
+[exit 0]
