@@ -169,9 +169,11 @@ Where it differs from CPython (`tests/deviations/lib_textwrap.py`):
 - A width counts a str's bytes, as `len()` does in Pystachy: past ASCII, fewer characters fit
   on a line, and a word longer than the width (`break_long_words`) is broken after that many
   bytes, which can fall inside a character, whose bytes two lines then hold apart.
-- `unicode_whitespace_trans` is looked up byte by byte: a table that a wrapper is given maps the
-  bytes of a character past ASCII, not the character (CPython's table maps only ASCII
-  whitespace).
+- `unicode_whitespace_trans` maps code points to code points, an int each, the type of its default:
+  a table with a str or `None` value, which `str.translate()` takes to replace a character with
+  several or to delete it, is a compile-time type error (`tests/errors/lib_textwrap_trans_str.py`).
+  It is looked up byte by byte: a table that a wrapper is given maps the bytes of a character past
+  ASCII, not the character (CPython's table maps only ASCII whitespace).
 - A subclass of `TextWrapper` is an error: only an exception class may have a base (#7).
 
 `tests/lib_textwrap.py` compares it with CPython's on the cases of CPython's
