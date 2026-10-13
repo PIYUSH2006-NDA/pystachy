@@ -55,6 +55,9 @@ lib/heapq.py is CPython 3.13.16's Lib/heapq.py with its functions nsmallest() an
 edited as lib/README.md lists, each edit marked in the source; it is derived from Python and is
 used under the same license and copyright notice.
 
+lib/string.py is CPython 3.13.16's Lib/string.py with the edits lib/README.md lists, each marked
+in the source; it is derived from Python and is used under the same license and copyright notice.
+
 CPython's math tests (tests/)
 ----------------------------
 

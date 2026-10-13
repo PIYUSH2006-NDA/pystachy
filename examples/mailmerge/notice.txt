@@ -1,0 +1,14 @@
+From: Billing <billing@example.com>
+To: $name <$email>
+Subject: Your $plan plan renews on $due
+
+Dear $name,
+
+your $plan plan (account $account) renews on ${due}. We will charge $$$amount
+to the card ending in $card. To change the plan or cancel it, reply to this
+message before ${due}; there is nothing else to do.
+
+This is message $seq of $count.
+
+--
+Billing, Example Inc.

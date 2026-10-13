@@ -577,7 +577,10 @@ edited where Pystachy has no `gettext` and no `os.environ` and where empty lists
 `longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)). Its `heapq` is
 CPython's with `nlargest()` and `nsmallest()` edited in marked places, which read a list in place
 and another iterable (but a file) through a list of its items, with CPython's comparisons in its
-order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)).
+order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)). Its `string`
+is CPython's, edited in 16 marked places: the constants, `capwords()` and `Template` (not a subclass
+of it, which needs inheritance), with `Formatter` left uncompiled
+([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)).
 
 ## Expressions
 

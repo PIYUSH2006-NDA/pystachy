@@ -356,6 +356,76 @@ and the lookups that stand in for `str.translate()` 10 µs (CPython: 2.7 µs), w
 expressions take 20, 14 and 13 µs (CPython: 3 µs each). (Medians of 3 runs, each the median of
 5 rounds over 200 generated ASCII paragraphs or blocks.)
 
+## `string`, a port of CPython's
+
+`string.py` is CPython 3.13.16's `Lib/string.py` (SHA-256
+`c000d9c4340c910b869399f0f0acc1b70e39391ad9344c4e08d8d0f80210a916`) edited in 16 places, each
+marked `# Pystachy port:`. It has the constants, `capwords()` and `Template`, as CPython's code:
+`substitute()` and `safe_substitute()` with a mapping (a dict, or an object with `__getitem__`),
+keyword arguments or both, `is_valid()`, `get_identifiers()`, the `template` attribute, the class
+attributes `delimiter`, `idpattern`, `braceidpattern`, `flags` and `pattern`, and the `ValueError`
+of an invalid placeholder, with its line and column. Its regular expression is `lib/re`'s.
+`Formatter` stays in the file, uncompiled: a program that uses it is an error where it does (it
+needs CPython's C module `_string`, whose import is optional here, and sets of mixed items;
+`tests/errors/lib_string_formatter.py`).
+
+- `import _string` is an optional import (`try:` ... `except ImportError: pass`): Pystachy has no
+  `_string`, which only `Formatter` uses, and runs the handler; CPython imports it, and its
+  `Formatter` works.
+- `from collections import ChainMap` is gone (no `collections` here), and so is its one use: where
+  `substitute()` and `safe_substitute()` are given no mapping, CPython binds `mapping` to `kws`,
+  and where they are given both, to `ChainMap(kws, mapping)`, which a variable of one type cannot
+  hold. Their `convert()` looks a name up in `kws` first, then in `mapping`,
+  `str(kws[named]) if kws and named in kws else str(mapping[named])`, where an empty `kws` (a
+  `**kwargs` record, which the call decides) is not looked in; with no mapping, `mapping` is the
+  empty `_sentinel_dict`, whose `KeyError` names the key as CPython's does.
+- `_sentinel_dict = {}`, `mapping`'s default, is annotated `dict[str, str]`, as nothing fills it.
+- In `Template`'s class body, `braceidpattern` and `flags` are annotated (`str | None`, `int`):
+  `None` and another module's variable (`re.IGNORECASE`) give a class attribute no type. `pattern`
+  is bound, to `None`, so that the module's code may assign it.
+- The module's `Template.__init_subclass__()`, which computes `pattern`, is
+  `Template.pattern = _template_pattern()`, a function of `__init_subclass__()`'s lines with
+  `Template` for `cls`: Pystachy compiles no `__init_subclass__()`, which calls `super()` and reads
+  `cls.__dict__`. CPython still calls it for a subclass.
+- `__init__` annotates its parameter (`template: str`), and so `is_valid()` and
+  `get_identifiers()` annotate their returns (`-> bool`, `-> list[str]`): with an unannotated
+  `__init__`, `Template` is a class template, whose objects compile its special methods,
+  `__init_subclass__()` too; with an annotated one, a method without unannotated parameters
+  returns `None` unless it says otherwise.
+- `capwords()` annotates `sep` as `str | None`: `s.split(sep)` of a template's parameter whose
+  argument is `None` is an error, and of an optional `str` it is CPython's default.
+- `safe_substitute()`'s `convert()` returns `mo.group() or ''`, a `str` (group 0 is never `None`),
+  where `lib/re`'s `group()` is a `str | None`, and `_invalid()` passes `splitlines()` its
+  `keepends` by position, as Pystachy takes it.
+
+Where it differs from CPython (`tests/deviations/lib_string.py`):
+
+- `Template.flags` is an int, `2`, where CPython's is `re.IGNORECASE` (`lib/re`'s flags are ints).
+- The column of an invalid placeholder counts the str's bytes past ASCII, as `lib/re`'s positions
+  do, and `capwords()` capitalizes ASCII letters alone, as `str.capitalize()` does.
+
+A subclass of `Template` (another `delimiter`, `idpattern`, `braceidpattern`, `flags` or
+`pattern`) is an error: only an exception class may have a base (#7;
+`tests/errors/lib_string_subclass.py`). So are keyword arguments whose values have different types
+(`substitute(name="Ann", count=3)`), as a dict of them would be: Pystachy reads a `**kwargs` record
+by a name computed as the code runs only where its values share a type
+(`tests/errors/lib_string_kwargs_types.py`).
+
+`tests/lib_string.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_string.py` that need no subclass of `Template`, and on the class attributes, the
+pattern and keyword arguments with a mapping. Run by CPython, the edited module passes that file's
+39 tests, also the 25 of `Template`, those that subclass it among them, as `__init_subclass__()`
+is CPython's, and those of `Formatter`, as CPython imports `_string`.
+
+In an AOT executable, `substitute()` of a 430-character template with 14 placeholders takes 5.8 µs
+with a dict (CPython: 4.6 µs) and 6.1 µs with a dict and two keyword arguments (CPython: 7.3 µs,
+which makes a `ChainMap` at each call); `safe_substitute()` 5.7 µs (4.8), `get_identifiers()`
+5.3 µs (4.2) and `is_valid()` 5.2 µs (3.8): most of each is `lib/re`'s scan of the template, which
+CPython's `_sre` does faster. `substitute()` of `"$who likes $what"` takes 0.78 µs (0.81), and
+`capwords()` of 18 words 0.48 µs (1.35). (Medians of 3 runs, each the median of 5 rounds of 2,000
+calls, 20,000 for the short ones.) [`examples/mailmerge`](../examples/mailmerge/README.md)
+renders a message for each record of a data file with it.
+
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop
 from empty list` here, `index out of range` from CPython's `_heapq`), keyword arguments the C
