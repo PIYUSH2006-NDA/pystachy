@@ -533,7 +533,10 @@ CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md))
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
-deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists.
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `difflib` is
+CPython's, edited where Pystachy needs types and has no `namedtuple()`, for `SequenceMatcher` over
+strs and lists of strs and `get_close_matches()`; its generators (`unified_diff()`, `ndiff()`)
+are not compiled yet ([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)).
 
 ## Expressions
 

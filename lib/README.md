@@ -22,6 +22,47 @@ checks each against CPython.
 
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`.
 
+## `difflib`, a port of CPython's
+
+`difflib.py` is CPython 3.13.16's `Lib/difflib.py` (SHA-256
+`1593ae08143632f4f81fea3beeeb279d803f8a9be922b12fe79664d78bba879d`) edited in 12 places, each
+marked `# Pystachy port:`. It has `SequenceMatcher` (`set_seqs()`, `set_seq1()`, `set_seq2()`,
+`find_longest_match()`, `get_matching_blocks()`, `get_opcodes()`, `ratio()`, `quick_ratio()`,
+`real_quick_ratio()`, with `isjunk` and `autojunk`), `get_close_matches()`, `Match`,
+`IS_CHARACTER_JUNK()` and `IS_LINE_JUNK()`, as CPython's code. A sequence is a str or a list of
+strs (lines, words): the matcher's tables are typed for str items.
+
+- `Match` is a `typing.NamedTuple` class, where CPython makes it with `collections.namedtuple()`;
+  `SequenceMatcher` has no `__class_getitem__` (`types.GenericAlias`).
+- `SequenceMatcher.__init__` types the fields, sets `a` and `b`, and builds `b`'s tables, as
+  `set_seqs(a, b)` does, where CPython sets `a` and `b` to `None` first and then calls it: a class
+  template's field takes the type of its first value. `isjunk` is a `Callable[[str], bool] | None`
+  (a def, a lambda or one of the module's junk functions), the caches are `... | None`, and the
+  tables are `dict[str, ...]` and `set[str]`.
+- `find_longest_match()` and `quick_ratio()` test `x in set` and call `dict.get()` where CPython
+  binds `set.__contains__` and `dict.get` to locals first: a builtin's method is no value in
+  Pystachy. Their empty dicts and list are annotated.
+- `get_matching_blocks()`, `get_opcodes()` and `quick_ratio()` read their cache field into a local
+  and test that (a test narrows no field), so they return lists, never `None`;
+  `get_matching_blocks()` makes each `Match` with `Match(*t)` where CPython maps `Match._make`.
+- `get_close_matches()` keeps its best `n` with `sorted(result, reverse=True)[:n]`, the documented
+  equivalent of the `heapq.nlargest()` CPython calls (which needs iterators); the module's final
+  `del re` is gone (a module-level `del` is not supported).
+
+Not compiled, because they are generators: `get_grouped_opcodes()`, `unified_diff()`,
+`context_diff()`, `ndiff()`, `restore()`, `Differ.compare()` and `HtmlDiff`'s tables
+(`examples/linediff` groups opcodes into a unified diff itself). A sequence of items other than
+strs is a compile-time error (`tests/errors/lib_difflib_int_items.py`).
+
+`tests/lib_difflib.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_difflib.py` and the module's doctests that use these. Run by CPython, the edited
+module passes that file's 57 tests. Two applications use it:
+[`examples/linediff`](../examples/linediff/README.md), unified and word diffs of two files, at 1.3
+to 1.9 times CPython's speed (a diff of 50,000 lines runs at CPython's speed: its dict operations
+are C in CPython too), and [`examples/suggest`](../examples/suggest/README.md), spelling
+suggestions from a vocabulary, where each `get_close_matches()` of 20,000 words takes 3.9 ms, against
+CPython's 23 ms.
+
 ## `re`, a port of CPython's
 
 `re/` is no copy: CPython's `re` is a pure-Python parser and compiler (`Lib/re/_parser.py` and

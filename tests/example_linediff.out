@@ -1,0 +1,705 @@
+0,0 4 4,6 5,0
+[[('equal', 7, 10, 7, 10), ('replace', 10, 11, 10, 12), ('equal', 11, 14, 12, 15)], [('equal', 27, 30, 28, 31), ('delete', 30, 31, 31, 31)]]
+[] []
+('the [-quick-] {+slow+} brown [-fox-] {+dog jumps+}', 2, 3)
+['--- old', '+++ new', '@@ -1,3 +1,3 @@', ' a', '-b', ' c', '+d']
+--- old.txt
++++ new.txt
+@@ -96,6 +96,7 @@
+ 96. at number in this the output which was
+ 97. order to in as his it be
+ 98. was time be value for as the be or input set are
++for on test it table it are data and the rule his
+ 99. as point file system order to second on order
+ 100. time time change his is file
+ 101. time that rule error for are
+@@ -121,6 +122,7 @@
+ 121. state order the order
+ 122. and it table file model rule order set
+ 123. first input state test line file order second output order this are
++value first set which which are it rule set
+ 124. order test test of this
+ 125. value which was test was table number order which of an
+ 126. test not rule input an to
+@@ -129,31 +131,11 @@
+ 129. the point this from and
+ 130. this cache first time second system the change result rule
+ 131. set on table line and change and
+-132. is test by time was
+-133. data change not or are in system line at
+-134. his at point cache output be
+-135. this change error are not set are input
+-136. first that on or with that the it an on system
+-137. state was an system that
+-138. time table is output input table and with case model value system
+-139. this order of this error result first
+-140. output with is result
+-141. or first point system as it value was error input input
+-142. of was output from
+-143. test his data in be of
+-144. test point first second and table as value file change
+-145. cache result with change point that cache output
+-146. first as time by file it the the system which at as
+-147. are that from data from that table
+-148. it first cache input system by set
+-149. first output rule error data for
+-150. point line with point data time his not output state
+-151. case rule state his cache output by
+ 152. cache this time which his set
+ 153. with result table case
+ 154. time output and set second to be line an
+ 155. at is test is the of the data at
+-156. cache number his second and not time state case was
++156. cache number his second and not time CHANGED case was
+ 157. at was second not and point by for that was error result
+ 158. not with for cache of change
+ 159. order cache his case
+@@ -174,13 +156,14 @@
+ 174. second table table which not result first
+ 175. by input data rule it of and result state are
+ 176. number not was error this an
+-177. is time set or on this not number set with table that
++177. is time set or on this not number
++set with table that
+ 178. with data rule on rule are it set at are first
+ 179. not change cache input file point
+ 180. from model or set state first on
+ 181. second first model are first set file second his the as the
+ 182. data or output not result model of
+-183. is result with are
++183. is result with CHANGED
+ 184. data an which input input by as to which error
+ 185. second cache are model
+ 186. and case cache cache cache as second or
+@@ -193,7 +176,8 @@
+ 193. in his the data result table table file case
+ 194. with state from was point as
+ 195. for second output rule system not rule
+-196. with are error error
++196. with
++are error error
+ 197. time file time set input
+ 198. cache table first which second data to with from set or point
+ 199. of line model was which state state for of of
+@@ -208,7 +192,6 @@
+ 208. as number line and not and second table
+ 209. as state with from to the test
+ 210. result on for cache cache
+-211. output table point and set the line not this an
+ 212. change it it set by data which to is be data to
+ 213. number input of line in rule state line rule table was an
+ 214. error error second second
+@@ -229,7 +212,6 @@
+ 229. in second line an first from by time
+ 230. system and state output error
+ 231. error case test to set line which case
+-232. are point or model
+ 233. by second with that to cache from case
+ 234. error table that by data in time state output is
+ 235. that an output an first system change it
+@@ -301,6 +283,26 @@
+ 301. model line rule and order from be state error an
+ 302. cache to value state
+ 303. an output to state this order to was
++132. is test by time was
++133. data change not or are in system line at
++134. his at point cache output be
++135. this change error are not set are input
++136. first that on or with that the it an on system
++137. state was an system that
++138. time table is output input table and with case model value system
++140. output with is result
++141. or first point system as it value was error input input
++142. of was output from
++143. test his data in be of
++case it file set value input input rule was be
++144. test point first second and table as value file change
++145. cache result with change point that cache output
++146. first as time by file it the the system which at as
++147. are that from data from that table
++148. it first cache input system by set
++149. first output rule error data for
++150. point line with point data time his not output state
++151. case rule state his cache output by
+ 304. value that is of on it point cache not in cache in
+ 305. case is not with table for state on are
+ 306. from on second rule in it that output value data
+@@ -361,7 +363,7 @@
+ 361. as data that for as it that it output to
+ 362. output on that in error state table was
+ 363. input to an order number an second output
+-364. first model table that by was that output was this set in
++364. first model table that by was that output was CHANGED set in
+ 365. that data be is model case cache
+ 366. is this for on that
+ 367. file system data the
+@@ -388,7 +390,6 @@
+ 388. it case was second line rule system number
+ 389. from his for to not that order table rule of that
+ 390. first time for rule state and with
+-391. input first table error file an case the was second point an
+ 392. with result state set his test model
+ 393. line is first time result an case
+ 394. are or first table his that of second the rule was
+--- old.txt
++++ new.txt
+@@ -98,2 +98,3 @@
+ 98. was time be value for as the be or input set are
++for on test it table it are data and the rule his
+ 99. as point file system order to second on order
+@@ -123,2 +124,3 @@
+ 123. first input state test line file order second output order this are
++value first set which which are it rule set
+ 124. order test test of this
+@@ -131,22 +133,2 @@
+ 131. set on table line and change and
+-132. is test by time was
+-133. data change not or are in system line at
+-134. his at point cache output be
+-135. this change error are not set are input
+-136. first that on or with that the it an on system
+-137. state was an system that
+-138. time table is output input table and with case model value system
+-139. this order of this error result first
+-140. output with is result
+-141. or first point system as it value was error input input
+-142. of was output from
+-143. test his data in be of
+-144. test point first second and table as value file change
+-145. cache result with change point that cache output
+-146. first as time by file it the the system which at as
+-147. are that from data from that table
+-148. it first cache input system by set
+-149. first output rule error data for
+-150. point line with point data time his not output state
+-151. case rule state his cache output by
+ 152. cache this time which his set
+@@ -155,3 +137,3 @@
+ 155. at is test is the of the data at
+-156. cache number his second and not time state case was
++156. cache number his second and not time CHANGED case was
+ 157. at was second not and point by for that was error result
+@@ -176,3 +158,4 @@
+ 176. number not was error this an
+-177. is time set or on this not number set with table that
++177. is time set or on this not number
++set with table that
+ 178. with data rule on rule are it set at are first
+@@ -182,3 +165,3 @@
+ 182. data or output not result model of
+-183. is result with are
++183. is result with CHANGED
+ 184. data an which input input by as to which error
+@@ -195,3 +178,4 @@
+ 195. for second output rule system not rule
+-196. with are error error
++196. with
++are error error
+ 197. time file time set input
+@@ -210,3 +194,2 @@
+ 210. result on for cache cache
+-211. output table point and set the line not this an
+ 212. change it it set by data which to is be data to
+@@ -231,3 +214,2 @@
+ 231. error case test to set line which case
+-232. are point or model
+ 233. by second with that to cache from case
+@@ -303,2 +285,22 @@
+ 303. an output to state this order to was
++132. is test by time was
++133. data change not or are in system line at
++134. his at point cache output be
++135. this change error are not set are input
++136. first that on or with that the it an on system
++137. state was an system that
++138. time table is output input table and with case model value system
++140. output with is result
++141. or first point system as it value was error input input
++142. of was output from
++143. test his data in be of
++case it file set value input input rule was be
++144. test point first second and table as value file change
++145. cache result with change point that cache output
++146. first as time by file it the the system which at as
++147. are that from data from that table
++148. it first cache input system by set
++149. first output rule error data for
++150. point line with point data time his not output state
++151. case rule state his cache output by
+ 304. value that is of on it point cache not in cache in
+@@ -363,3 +365,3 @@
+ 363. input to an order number an second output
+-364. first model table that by was that output was this set in
++364. first model table that by was that output was CHANGED set in
+ 365. that data be is model case cache
+@@ -390,3 +392,2 @@
+ 390. first time for rule state and with
+-391. input first table error file an case the was second point an
+ 392. with result state set his test model
+--- old.txt
++++ new.txt
+@@ -98,0 +99 @@
++for on test it table it are data and the rule his
+@@ -123,0 +125 @@
++value first set which which are it rule set
+@@ -132,20 +133,0 @@
+-132. is test by time was
+-133. data change not or are in system line at
+-134. his at point cache output be
+-135. this change error are not set are input
+-136. first that on or with that the it an on system
+-137. state was an system that
+-138. time table is output input table and with case model value system
+-139. this order of this error result first
+-140. output with is result
+-141. or first point system as it value was error input input
+-142. of was output from
+-143. test his data in be of
+-144. test point first second and table as value file change
+-145. cache result with change point that cache output
+-146. first as time by file it the the system which at as
+-147. are that from data from that table
+-148. it first cache input system by set
+-149. first output rule error data for
+-150. point line with point data time his not output state
+-151. case rule state his cache output by
+@@ -156 +138 @@
+-156. cache number his second and not time state case was
++156. cache number his second and not time CHANGED case was
+@@ -177 +159,2 @@
+-177. is time set or on this not number set with table that
++177. is time set or on this not number
++set with table that
+@@ -183 +166 @@
+-183. is result with are
++183. is result with CHANGED
+@@ -196 +179,2 @@
+-196. with are error error
++196. with
++are error error
+@@ -211 +194,0 @@
+-211. output table point and set the line not this an
+@@ -232 +214,0 @@
+-232. are point or model
+@@ -303,0 +286,20 @@
++132. is test by time was
++133. data change not or are in system line at
++134. his at point cache output be
++135. this change error are not set are input
++136. first that on or with that the it an on system
++137. state was an system that
++138. time table is output input table and with case model value system
++140. output with is result
++141. or first point system as it value was error input input
++142. of was output from
++143. test his data in be of
++case it file set value input input rule was be
++144. test point first second and table as value file change
++145. cache result with change point that cache output
++146. first as time by file it the the system which at as
++147. are that from data from that table
++148. it first cache input system by set
++149. first output rule error data for
++150. point line with point data time his not output state
++151. case rule state his cache output by
+@@ -364 +366 @@
+-364. first model table that by was that output was this set in
++364. first model table that by was that output was CHANGED set in
+@@ -391 +392,0 @@
+-391. input first table error file an case the was second point an
+400 and 401 lines, ratio 0.9288: 28 removed, 29 added
+1. error an order was it output
+2. it line from as and rule change are an to
+3. data by by case result is model the which state number
+4. is as is not file with system
+5. on rule it as the rule time second
+6. data to on result
+7. result not output an in cache line this be as at
+8. by model cache by change error for that
+9. second for by file by state be
+10. are on first order or error change second
+11. his an set input first
+12. an in model on was on
+13. on the that error was
+14. order rule first from to time
+15. or this on to output test file result
+16. time table with input
+17. his not not cache point an in
+18. in for which is change
+19. from is change at his data rule file it was
+20. second order set it that in model first time
+21. on are be point to with is data at
+22. that number point which be number this second number his
+23. time is to state an are be file value and test
+24. state in output as and at state cache cache order and
+25. model an second model this time this that
+26. test error cache number error in error is in of
+27. from with second rule model
+28. be test to table and error output system cache time are time
+29. line cache this or from
+30. it output point this
+31. or rule table file in that
+32. by system case point second number not first it output
+33. at second point from input an
+34. for be in in number was which
+35. the is was case table for was this to table
+36. and of number are state at to the
+37. time output with result table order
+38. output table line data from second cache are result file on point
+39. second are or and in
+40. was point state his first first the result this is
+41. set state change case this as order are set
+42. not as change is in be set value
+43. which it his set from is system test system
+44. set cache in file that
+45. of test value on of rule second from first result at
+46. data result error and data test input from with
+47. cache case input model
+48. data model rule are from output that be
+49. of data for or that and second case is this time time
+50. input for are file or input
+51. result it the and input table table with that
+52. by value at are first result
+53. as input model of is in time error this
+54. rule table or output first as which which
+55. time as data from second table rule this number value that not
+56. second was with on was for of second from as
+57. his point output result it
+58. test that set set from with
+59. or this which at from cache
+60. order for point input value first with time
+61. that file with error order with case which change
+62. this value file first to an are are
+63. from table an set rule cache is rule set file on
+64. change order table model an
+65. test and change file
+66. state first the was with rule output
+67. and to is output value which an to of
+68. data at time or be is for error result state system to
+69. result his to input is from state
+70. his data his by his on
+71. test this file rule by is are as not
+72. line that output as was are are time error case value of
+73. change at line error in which test at number and error
+74. with and it of with at point at cache input
+75. set this the set or output set output and rule
+76. for file in rule and set as as
+77. which it case table this system his and second which system it
+78. system not result time second file for state model data data
+79. line it was state first second
+80. it in output rule this second for test cache first cache
+81. system be by of with change this to at file
+82. value first is are of system is or an state
+83. time at the to value change be case rule
+84. state result output which an as error cache value
+85. on test is line value as number output on
+86. be input which which second line
+87. cache value second second set set as
+88. result rule by state
+89. at data data be test that to this an
+90. is second on order was as second case
+91. for it point are which are case was
+92. model number or is value and to cache
+93. that table for model as output cache this that not error the
+94. to the which second at an error set as which file that
+95. second number by cache rule or for change rule input not number
+96. at number in this the output which was
+97. order to in as his it be
+98. was time be value for as the be or input set are
+{+for on test it table it are data and the rule his+}
+99. as point file system order to second on order
+100. time time change his is file
+101. time that rule error for are
+102. his at at case which error is
+103. second that is result cache
+104. not are test error not as line from time of that
+105. second to state and order output rule file
+106. it rule line model and or to or for from was
+107. file cache which input
+108. an number error not change table
+109. case or system of which
+110. is cache it data output by point system the as his
+111. input not which are
+112. test was that at order system
+113. are change be change as as time
+114. set his data are
+115. time rule is system result the by are not
+116. his as model file or
+117. is output and which system this of an time with rule for
+118. as value with change line output
+119. error be of in rule was case at
+120. test data are this value time output data an on the model
+121. state order the order
+122. and it table file model rule order set
+123. first input state test line file order second output order this are
+{+value first set which which are it rule set+}
+124. order test test of this
+125. value which was test was table number order which of an
+126. test not rule input an to
+127. was not point for rule case result input
+128. or order state the test test was in
+129. the point this from and
+130. this cache first time second system the change result rule
+131. set on table line and change and
+[-132. is test by time was 133. data change not or are in system line at 134. his at point cache output be 135. this change error are not set are input 136. first that on or with that the it an on system 137. state was an system that 138. time table is output input table and with case model value system 139. this order of this error result first 140. output with is result 141. or first point system as it value was error input input 142. of was output from 143. test his data in be of 144. test point first second and table as value file change 145. cache result with change point that cache output 146. first as time by file it the the system which at as 147. are that from data from that table 148. it first cache input system by set 149. first output rule error data for 150. point line with point data time his not output state 151. case rule state his cache output by-]
+152. cache this time which his set
+153. with result table case
+154. time output and set second to be line an
+155. at is test is the of the data at
+156. cache number his second and not time [-state-] {+CHANGED+} case was
+157. at was second not and point by for that was error result
+158. not with for cache of change
+159. order cache his case
+160. rule for and state from order line or in line
+161. by rule point and point second error in
+162. file number cache output to of be
+163. input case order to input rule file model not for in table
+164. model point data or and by model
+165. on error result or point an as line error time
+166. by order output table result it to it test line at and
+167. error is in rule
+168. point test output on set at with cache be set
+169. value that from input table not line model the in data
+170. change of case at number and first for case from
+171. at system not was
+172. is from his model
+173. test or error system at not for as is for to
+174. second table table which not result first
+175. by input data rule it of and result state are
+176. number not was error this an
+177. is time set or on this not number set with table that
+178. with data rule on rule are it set at are first
+179. not change cache input file point
+180. from model or set state first on
+181. second first model are first set file second his the as the
+182. data or output not result model of
+183. is result with [-are-] {+CHANGED+}
+184. data an which input input by as to which error
+185. second cache are model
+186. and case cache cache cache as second or
+187. in error case cache his on was model an
+188. be output number file point number it system result as
+189. not this with on number line is for and his file
+190. output state the system output number value change on was result
+191. by output first to which an in change
+192. time in set set result
+193. in his the data result table table file case
+194. with state from was point as
+195. for second output rule system not rule
+196. with are error error
+197. time file time set input
+198. cache table first which second data to with from set or point
+199. of line model was which state state for of of
+200. is system data was rule it as number number table are
+201. value that table output number and an for or test model set
+202. on change in point
+203. number first be of system are output was an set line
+204. to be to change change input and input
+205. set error an system from are set on first
+206. by and data from is is point state table and with as
+207. set rule be and table cache
+208. as number line and not and second table
+209. as state with from to the test
+210. result on for cache cache
+[-211. output table point and set the line not this an-]
+212. change it it set by data which to is be data to
+213. number input of line in rule state line rule table was an
+214. error error second second
+215. rule from by number with as
+216. error cache second system system from and model
+217. point output and of or was from
+218. input for as test
+219. of not error by
+220. at table first that system an point
+221. rule change his result time an system to rule from to first
+222. result rule value at as system are on as with
+223. point set to to value error
+224. that of state change change it order in state table
+225. the change as with number input with for which and
+226. line state not input this data second is line
+227. time and the his input second
+228. with of was for be model by
+229. in second line an first from by time
+230. system and state output error
+231. error case test to set line which case
+[-232. are point or model-]
+233. by second with that to cache from case
+234. error table that by data in time state output is
+235. that an output an first system change it
+236. line result line at his test
+237. set case are first line
+238. point an table input system an case for error output
+239. which and set or that data system line and
+240. time or or result result as of not
+241. that with his to result from for
+242. his from an which be for case which the error be his
+243. first on input be value result input be value table the for
+244. the and value data
+245. cache this system table time or model input which order
+246. the result file error this state time cache state second cache in
+247. it point value be the as input with
+248. by model change with and state
+249. for at be in of value state
+250. that which of value and time input it of
+251. order data on for to is set state line table
+252. input be as for
+253. from it case of case
+254. from result change value an change that set as as
+255. in by which it not test for
+256. change second it input first or
+257. result table on data is that
+258. this it value or or the change number state it
+259. result is input model not in table
+260. state and on is data input and first his first
+261. it with change result was order value as
+262. state result data result model change
+263. file his are or change in input second test data set
+264. to test which the was data model rule state be input
+265. this and table case for data
+266. data input data on and
+267. first point time time as system are for are
+268. input be his on at was on the table cache test
+269. which to which at cache which output test
+270. change as from and which order
+271. point result for from state error second
+272. an was the file line
+273. to cache which rule line are from this of case
+274. test change cache in be order
+275. first not on value data
+276. by point order as from an first model with
+277. line test to second data
+278. is in change from cache model an number
+279. order for to change
+280. line are order by output as an it it or in
+281. in or time system system in as
+282. second result point change case point
+283. and system or was it
+284. from which number rule as it result
+285. is table this in from the error file
+286. on on with from to not point system value result which result
+287. first this an and for from as state
+288. test from an are file rule on table
+289. it number test for test error model as in
+290. his input cache for set
+291. case cache with which order table are in
+292. input and file value
+293. result cache at for data and
+294. case his with was with
+295. in number on error test as test second state
+296. rule change by not is to at
+297. with was to output test
+298. input result and not be this be
+299. be which his file it with or line by
+300. are case case error cache in are and as
+301. model line rule and order from be state error an
+302. cache to value state
+303. an output to state this order to was
+{+132. is test by time was 133. data change not or are in system line at 134. his at point cache output be 135. this change error are not set are input 136. first that on or with that the it an on system 137. state was an system that 138. time table is output input table and with case model value system 140. output with is result 141. or first point system as it value was error input input 142. of was output from 143. test his data in be of case it file set value input input rule was be 144. test point first second and table as value file change 145. cache result with change point that cache output 146. first as time by file it the the system which at as 147. are that from data from that table 148. it first cache input system by set 149. first output rule error data for 150. point line with point data time his not output state 151. case rule state his cache output by+}
+304. value that is of on it point cache not in cache in
+305. case is not with table for state on are
+306. from on second rule in it that output value data
+307. set second state that or to model data test not number of
+308. this time input second and
+309. or it the this table his or point point not to
+310. or which rule that change line as file output point result value
+311. result at case input as order set input not input number
+312. order state data test
+313. output change rule or rule at file his on error
+314. is that at set that to
+315. input and are value his set
+316. his is on system it
+317. an which and data data system cache are file from for line
+318. number state second this change
+319. system result data input value
+320. data set of and are
+321. not point rule this second as on model first number
+322. of value not error number value result which order on his rule
+323. are in which point on for is it and result point cache
+324. was by an system of system test system be it
+325. an set case not first output case line case
+326. file was value output point
+327. in system number output of test output of output this
+328. his and model in
+329. rule are point change
+330. is cache order by of second test set time
+331. it which of result order model table
+332. input with not model on or
+333. first order value be was was rule
+334. an error change point on input file set not case as
+335. an or of error
+336. order model cache system it with number value
+337. change or with second
+338. or by time was first result
+339. not with and case result set system is value input state
+340. case output change and rule rule
+341. order on number by set the this his an the
+342. it of be the is or
+343. model for from at on value
+344. set result model output his be
+345. are as input cache output second as output as case by which
+346. it line model for
+347. table are time result not as by his state on which data
+348. input order to for
+349. number of and to table input change file
+350. his as be case number rule state first file the model point
+351. model in this error that it of input
+352. are point are test
+353. the his test are for are system
+354. for an at file by test of point in of
+355. model was are file to
+356. point by number system number to
+357. in state of cache order error file from case or an
+358. with in and or second not case
+359. file line the rule are and data from
+360. at be model point second it with
+361. as data that for as it that it output to
+362. output on that in error state table was
+363. input to an order number an second output
+364. first model table that by was that output was [-this-] {+CHANGED+} set in
+365. that data be is model case cache
+366. is this for on that
+367. file system data the
+368. set set system number number input
+369. system error order change
+370. his line change value file first time at set of data are
+371. data line to case rule his from
+372. to the rule for the
+373. time second and at an an an this as number change result
+374. to be this be change as test file second case
+375. was his are at test
+376. his set to from be this cache that change
+377. or time model line
+378. the point point which on state are in model
+379. result the result system
+380. or second case which an that an on that case his for
+381. this not rule the
+382. to this the model output or his number line first for and
+383. which his is result that it order system table cache data to
+384. change rule change order change was on it result
+385. by by an state
+386. from input point model it second value cache set value table point
+387. for model number not and cache state
+388. it case was second line rule system number
+389. from his for to not that order table rule of that
+390. first time for rule state and with
+[-391. input first table error file an case the was second point an-]
+392. with result state set his test model
+393. line is first time result an case
+394. are or first table his that of second the rule was
+395. time cache which is from first
+396. error are by is model point line of change in
+397. this test second file error state state the is by
+398. or in this from in which
+399. state file set his system rule and system with line
+400. case error time it be the rule table as first
+['--words'] -> 1
+400 and 401 lines, ratio 0.9288: 28 removed, 29 added
+['-q'] -> 1
+400 and 401 lines, ratio 0.9288: 28 removed, 29 added; words: 207 removed, 201 added
+['--words', '-q'] -> 1
+400 and 401 lines, ratio 0.9288: 28 removed, 29 added
+['-U', '2', '-q'] -> 1
+400 and 400 lines, ratio 1.0000: 0 removed, 0 added
+0
+2 2
+[exit 0]
