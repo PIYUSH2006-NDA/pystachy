@@ -343,8 +343,9 @@ inside a function: a closure, see *Typing rules*), decorators of a def (see *Typ
 `UnboundLocalError`; not of a global in a function), `import`/`from` of the builtin modules
 `sys`, `os`, `os.path`, `math`, `time`, `errno`, `tempfile`, `typing`, `collections.abc`,
 `dataclasses`, `builtins` and `__future__`, and of Python modules (below), with keyword-only (`*`) and positional-only
-(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`): see
-[ffi.md](ffi.md) (a program's own `ffi.py` comes first, as under CPython).
+(`/`) parameters. The builtin module `ffi` declares C functions (`@ffi.extern`) and the functions
+an extension module gives CPython (`@ffi.export`): see [ffi.md](ffi.md) (a program's own
+`ffi.py` comes first, as under CPython).
 
 ## Exceptions
 
