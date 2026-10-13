@@ -58,6 +58,9 @@ character by character (code point by code point). Where it differs from CPython
   choice: a `list[str | None]` would hold it.
 - `finditer()` returns a list of the matches, found before it returns.
 - `\N{...}` is a pattern error: Pystachy has no table of the characters' names.
+- An inline flag that is no flag, `(?iⅠ)` or `(?-Ⅰ:x)`, is an "unknown flag" where the character
+  may begin an identifier, else "missing -, : or )" or "missing flag": CPython asks
+  `str.isalpha()`, which differs for 262 characters such as U+2160 ROMAN NUMERAL ONE (`Ⅰ`).
 - The flags are ints, not `RegexFlag` members; `groupindex` is a dict; `re.error` is the base class
   of the `PatternError` the module raises (CPython 3.13 has one class); a replacement function
   must return a str (CPython's may return `None`); and there is no `DEBUG` output, `Scanner`,
