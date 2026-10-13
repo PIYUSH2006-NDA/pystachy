@@ -55,9 +55,9 @@ sre.Ctx = _CountedCtx
 OPERATIONS = [
     ("wordsep_re.split", re_bench.WORDSEP, re.VERBOSE, "split", 3414, 62198),
     ("wordsep_simple_re.split", re_bench.WORDSEP_SIMPLE, 0, "split", 9355, 10935),
-    ("whitespace_only_re.sub", re_bench.WHITESPACE_ONLY, re.MULTILINE, "sub", 6265, 7272),
-    ("leading_whitespace_re.findall", re_bench.LEADING_WHITESPACE, re.MULTILINE, "findall", 5351, 5764),
-    ("margin.sub", r"(?m)^    ", 0, "sub", 5616, 5616),
+    ("whitespace_only_re.sub", re_bench.WHITESPACE_ONLY, re.MULTILINE, "sub", 320, 1327),
+    ("leading_whitespace_re.findall", re_bench.LEADING_WHITESPACE, re.MULTILINE, "findall", 320, 733),
+    ("margin.sub", r"(?m)^    ", 0, "sub", 298, 298),
 ]
 
 

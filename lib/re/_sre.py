@@ -1169,6 +1169,30 @@ def sre_search(state: State, code: list[int]) -> int:
             ptr += 1
             state.lastmark = -1
             state.lastindex = -1
+    elif _at_line_start(code, pattern):
+        # (not in _sre: a pattern that begins with ^ of MULTILINE, after marks, which match
+        # anywhere, can match only where a line begins, as sre_at() says: at the string's start or
+        # after a \n, not at pos; the matcher is entered there alone, which the general case below
+        # does at every position, each match failing at once elsewhere)
+        if ptr == 0 or s[ptr - 1] == 10:
+            state.start = ptr
+            state.ptr = ptr
+            status = sre_match(state, code, pattern, True)
+        state.must_advance = False
+        while status == 0:
+            while ptr < end and s[ptr] != 10:
+                ptr += 1
+            if ptr >= end:
+                # (where the general case's last position leaves them)
+                state.start = end
+                state.ptr = end
+                return 0
+            ptr += 1
+            state.lastmark = -1
+            state.lastindex = -1
+            state.start = ptr
+            state.ptr = ptr
+            status = sre_match(state, code, pattern, False)
     else:
         # the general case
         state.start = ptr
@@ -1187,3 +1211,10 @@ def sre_search(state: State, code: list[int]) -> int:
             state.ptr = ptr
             status = sre_match(state, code, pattern, False)
     return status
+
+
+def _at_line_start(code: list[int], p: int) -> bool:
+    # whether the code at p begins with AT_BEGINNING_LINE, after MARKs
+    while code[p] == MARK:
+        p += 2
+    return code[p] == AT and code[p + 1] == AT_BEGINNING_LINE
