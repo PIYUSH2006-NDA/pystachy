@@ -273,6 +273,10 @@ class State:
         self.must_advance = False
         self.data: list[int] = []  # the data stack: saved marks and last_ptr values
         self.offs: list[int] = []  # (re's: the index in the str of each of s's code points, [] if they are theirs)
+        # (not _sre's: the contexts of the matches of this state, kept for reuse: those below top are
+        # in use, by sre_match() and the calls nested in it through sre_count(), the others free)
+        self.ctxs: list[Ctx] = []
+        self.top = 0
 
     def reset(self) -> None:
         # state_reset
@@ -288,6 +292,18 @@ class Ctx:
         self.count = 0
         self.chr = 0
         self.rep: Repeat | None = None
+        self.lastmark = -1
+        self.lastindex = -1
+        self.pattern = pattern
+        self.ptr = 0
+        self.toplevel = toplevel
+        self.jump = jump
+
+    def reuse(self, pattern: int, toplevel: bool, jump: int) -> None:
+        # a free context, set as a new one is
+        self.count = 0
+        self.chr = 0
+        self.rep = None
         self.lastmark = -1
         self.lastindex = -1
         self.pattern = pattern
@@ -443,8 +459,20 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
     # match ends, and state.mark its groups), else 0
     s = state.s
     end = state.end
-    ctxs = [Ctx(start, toplevel, JUMP_NONE)]
-    ctx = ctxs[0]
+    # (not _sre's: the contexts are the state's, kept for reuse: this call's are ctxs[base], its
+    # first, to ctxs[base + depth], the current one, and a nested match takes the next one, so that
+    # contexts are made as deep as the matcher goes, not one for each match and nested match; a call
+    # nested in sre_count() takes those above, from state.top, and gives them back when it returns)
+    ctxs = state.ctxs
+    base = state.top
+    depth = 0
+    if base < len(ctxs):
+        ctx = ctxs[base]
+        ctx.reuse(start, toplevel, JUMP_NONE)
+    else:
+        ctx = Ctx(start, toplevel, JUMP_NONE)
+        ctxs.append(ctx)
+    state.top = base + 1
     pattern = start
     ptr = 0
     ret = 0
@@ -787,11 +815,14 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
                 # (the LOCALE opcodes, of bytes patterns, and the set members)
                 raise RuntimeError("internal error in regular expression engine")
         elif k == K_EXIT:
-            done = ctxs.pop()
-            if len(ctxs) == 0:
+            ctx.rep = None  # (a free context refers to no repeat)
+            if depth == 0:
+                state.top = base
                 return ret
-            ctx = ctxs[-1]
-            jump = done.jump
+            jump = ctx.jump
+            depth -= 1
+            state.top = base + depth + 1
+            ctx = ctxs[base + depth]
             pattern = ctx.pattern
             ptr = ctx.ptr
             k = K_RESUME
@@ -1046,8 +1077,14 @@ def sre_match(state: State, code: list[int], start: int, toplevel: bool) -> int:
             # DO_JUMP: this context waits for a nested one, which begins at nextp
             ctx.pattern = pattern
             ctx.ptr = ptr
-            ctx = Ctx(nextp, nextt, nextj)
-            ctxs.append(ctx)
+            depth += 1
+            if base + depth < len(ctxs):
+                ctx = ctxs[base + depth]
+                ctx.reuse(nextp, nextt, nextj)
+            else:
+                ctx = Ctx(nextp, nextt, nextj)
+                ctxs.append(ctx)
+            state.top = base + depth + 1
             pattern = nextp
             nextj = 0
             k = K_ENTRANCE

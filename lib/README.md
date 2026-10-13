@@ -365,7 +365,11 @@ One search is not `_sre`'s: a pattern that begins with `^` of `MULTILINE` (after
 enters the matcher only where a line begins, at the string's start or after a `\n`, where `_sre`
 enters it at every position and fails at once at all the others (`tests/lib_re_lines.py`). For a
 block of 15 lines, `dedent()`'s `^[ \t]+$` substitution enters the matcher 16 times instead of 313,
-and takes 4.2 µs compiled, against 10.9 µs before and CPython's 2.1 µs.
+and takes 4.2 µs compiled, against 10.9 µs before and CPython's 2.1 µs. And the matcher keeps its
+contexts for reuse, the state's for all its matches (`tests/lib_re_reuse.py`), where `_sre` pushes a
+new one for each nested match: they are made as deep as it goes, 7 for `wordsep_re`'s split of a
+paragraph instead of 3,110, which takes about 6% less time compiled, and `wordsep_simple_re`'s 15%
+less.
 
 ## `fnmatch`, a port of CPython's
 
