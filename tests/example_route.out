@@ -1,0 +1,79 @@
+21 21 ['auth.*.failed', 'auth.*.locked', 'payments.*.failed'] ['alerts', 'alerts', 'alerts']
+[48, 53, 35, 141, 233, 221, 416, 32, 28, 81, 202, 1, 9, 0, 181, 13, 132, 7, 76, 4, 25, 1062] True
+CacheInfo(hits=1950, misses=1050, maxsize=4096, currsize=1050)
+CacheInfo(hits=39518, misses=21, maxsize=32768, currsize=21)
+[58, 59, 39, 157, 268, 262, 497, 32, 28, 93, 240, 1, 9, 0, 208, 14, 154, 9, 90, 4, 28, 1250]
+CacheInfo(hits=1950, misses=1550, maxsize=4096, currsize=1550)
+0 20 -1 13
+[]
+601 events, 21 rules
+      218 unrouted
+       78 billing
+       72 errors
+       61 tools
+       42 database
+       39 retries
+       37 alerts
+       22 metrics
+       15 jobs
+        6 search
+        5 drop
+        4 cache-misses
+        2 http-errors
+        0 access
+        0 slow-queries
+route: CacheInfo(hits=85, misses=516, maxsize=4096, currsize=516)
+['--names']
+601 events, 516 names, 21 rules
+      218 unrouted
+       78 billing
+       72 errors
+       61 tools
+       42 database
+       39 retries
+       37 alerts
+       22 metrics
+       15 jobs
+        6 search
+        5 drop
+        4 cache-misses
+        2 http-errors
+        0 access
+        0 slow-queries
+route: CacheInfo(hits=85, misses=516, maxsize=4096, currsize=516)
+['--no-cache']
+601 events, 21 rules
+      218 unrouted
+       78 billing
+       72 errors
+       61 tools
+       42 database
+       39 retries
+       37 alerts
+       22 metrics
+       15 jobs
+        6 search
+        5 drop
+        4 cache-misses
+        2 http-errors
+        0 access
+        0 slow-queries
+['--fnmatch', '--names']
+601 events, 516 names, 21 rules
+      218 unrouted
+       78 billing
+       72 errors
+       61 tools
+       42 database
+       39 retries
+       37 alerts
+       22 metrics
+       15 jobs
+        6 search
+        5 drop
+        4 cache-misses
+        2 http-errors
+        0 access
+        0 slow-queries
+patterns: CacheInfo(hits=47494, misses=21, maxsize=32768, currsize=21)
+[exit 0]
