@@ -5547,6 +5547,12 @@ HASATTR: dict[str, str] = {
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
+    "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
+           "__rsub__ __rxor__ __sub__ __xor__ add clear copy difference difference_update discard intersection "
+           "intersection_update isdisjoint issubset issuperset pop remove symmetric_difference symmetric_difference_update "
+           "union update",
+    "frozenset": "__and__ __class_getitem__ __contains__ __iter__ __len__ __or__ __rand__ __ror__ __rsub__ __rxor__ __sub__ "
+                 "__xor__ copy difference intersection isdisjoint issubset issuperset symmetric_difference union",
 }
 # what builtins raise for a None argument (an optional value that is None); OPTARG: builtins that
 # take None (or an optional value) themselves
@@ -5573,8 +5579,7 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
     "subclass": "class inheritance is not supported",
-    "yield": "'yield' is not supported (there are no generator functions)", "set": "set literals are not supported",
-    "setcomp": "set literals are not supported", "dictcomp": "dict comprehensions are not supported",
+    "yield": "'yield' is not supported (there are no generator functions)", "dictcomp": "dict comprehensions are not supported",
     "nestedcomp": "nested comprehensions are not supported", "starred": "starred expressions (*x) are not supported",
     "dstar": "star arguments are not supported", "bytes": "bytes literals are not supported (there is no bytes type)",
     "ellipsis": "Ellipsis (...) is not supported", "complex": "complex numbers are not supported",
@@ -5668,6 +5673,9 @@ METHODS: dict[str, str] = {
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
+# the methods of frozenset (those that change nothing) and of set, which Gen.smethod compiles
+FSETMETHODS: list[str] = "copy difference intersection isdisjoint issubset issuperset symmetric_difference union".split()
+SETMETHODS: list[str] = FSETMETHODS + "add clear difference_update discard intersection_update pop remove symmetric_difference_update update".split()
 # the IR's ops (Ins.op) and their effects (docs/typed-ir.md 3.4 and 3.7, and FX below): T ends
 # a block; an rt op has its runtime function's effects (RUNTIME), a call or an init its callee's
 # summary (IFn.fx); a raw op is LLVM text that loads, stores or computes (never a call), whose
@@ -5756,6 +5764,20 @@ RUNTIME: dict[str, str] = {
     "dict.find": "int:S,*K|rD|", "dict.entry": "int:S,*K|R A I rD|", "dict.entry_set": "None:S,int,*V|rD wD|",
     "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
     "dict.fromkeys": "dict[K,V]:int,list[T],*V|A rL|", "dict.fromkeys_dict": "dict[K,V]:S,*V|A rD|",
+    # sets and frozensets (CPython's tables; Set.kind as Dict.kind): their elements are a dict's
+    # keys, which hash, compare and print without user code. A set's memory counts as a dict's (rD
+    # wD: what changes a set may change a dict); what an operation makes, it alone has seen
+    "set.new": "set[T]:int|A|", "set.add": "None:S,*T|A rD wD|", "set.has": "bool:S,*T|rD|", "set.discard": "None:S,*T|rD wD|",
+    "set.remove": "None:S,*T|R A I rD wD|", "set.pop": "*T:S|R rD wD|", "set.clear": "None:S|A wD|", "set.copy": "S:S|A rD|",
+    "set.update": "None:S,S|A rD wD|", "set.update_list": "None:S,list[T]|A rL rD wD|", "set.update_dict": "None:S,dict[T,V]|A rD wD|",
+    "set.union_more": "None:S,S,S|A rD wD|", "set.or": "S:S,S|A rD|", "set.and": "S:S,S|A rD|", "set.and_list": "S:S,list[T]|A rL rD|",
+    "set.assign": "None:S,S|rD wD|", "set.isub": "None:S,S|A rD wD|", "set.isub_list": "None:S,list[T]|A rL rD wD|",
+    "set.sub": "S:S,S|A rD|", "set.sub_list": "S:S,list[T]|A rL rD|", "set.sub_dict": "S:S,dict[T,V]|A rD|",
+    "set.xor": "S:S,S|A rD|", "set.xor_list": "S:S,list[T]|A rL rD|", "set.xor_dict": "S:S,dict[T,V]|A rD|",
+    "set.ixor": "None:S,S|A rD wD|", "set.ixor_list": "None:S,list[T]|A rL rD wD|", "set.ixor_dict": "None:S,dict[T,V]|A rD wD|",
+    "set.cmp": "int:S,S,int|rD|", "set.le_list": "bool:S,list[T]|A rL rD|", "set.ge_list": "bool:S,list[T]|rL rD|",
+    "set.isdisjoint": "bool:S,S|rD|", "set.isdisjoint_list": "bool:S,list[T]|rL rD|", "set.next": "int:S,int,int|R rD|",
+    "set.key": "*T:S,int|rD|", "set.list": "list[T]:S|A rD|",
     # strings
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
@@ -5875,11 +5897,7 @@ def rtsig(k: str) -> list[str]:
     # the result and parameter types of runtime function k, as RUNTIME spells them
     e = RUNTIME[k]
     c = e.find(":")
-    ps = [e[:c]]
-    for p in e[c + 1 : e.find("|")].split(","):
-        if p != "":
-            ps.append(p)
-    return ps
+    return [e[:c]] + targs("f[" + e[c + 1 : e.find("|")] + "]")  # (a parameter's type may hold commas: dict[T,V])
 
 
 def rtsym(k: str) -> str:
@@ -6083,6 +6101,25 @@ def is_dict(t: str) -> bool:
     return t.startswith("dict[")
 
 
+def is_set(t: str) -> bool:
+    # set[T] or frozenset[T] (runtime.c's sets): a frozenset is a set that no method changes
+    return t.startswith("set[") or t.startswith("frozenset[")
+
+
+def empty_ann(t: str) -> str:
+    # the annotation that types an empty list, set or dict t, as the error suggesting it shows it
+    return "list[T] = []" if is_list(t) else "set[T] = set()" if is_set(t) else "dict[K, V] = {}"
+
+
+def is_fset(t: str) -> bool:
+    return t.startswith("frozenset[")
+
+
+def selem(t: str) -> str:
+    # the element type of a set or frozenset
+    return t[t.find("[") + 1 : -1]
+
+
 def is_tuple(t: str) -> bool:
     return t.startswith("tuple[")
 
@@ -6110,8 +6147,10 @@ def pure_arg(e: Node) -> bool:
 
 
 def has_method(base: str, m: str) -> bool:
-    # does builtin type base ("str", "list", "dict", "file", ...) have method m that Pystachy
-    # compiles (METHODS, and those Gen.bmethod dispatches itself)
+    # does builtin type base ("str", "list", "dict", "set", "file", ...) have method m that
+    # Pystachy compiles (METHODS, and those Gen.bmethod and Gen.smethod dispatch themselves)
+    if base == "set" or base == "frozenset":
+        return m in (SETMETHODS if base == "set" else FSETMETHODS)
     return base + "." + m in METHODS or (base == "list" and m == "sort") or (base == "dict" and m == "update")
 
 
@@ -6202,8 +6241,8 @@ def nonetest(n: Node) -> int:
 
 
 def same_kind(a: str, b: str) -> bool:
-    # are types a and b both lists or both dicts (a class may be named listing)
-    return (is_list(a) and is_list(b)) or (is_dict(a) and is_dict(b))
+    # are types a and b both lists, both dicts or both sets (a class may be named listing)
+    return (is_list(a) and is_list(b)) or (is_dict(a) and is_dict(b)) or (is_set(a) and is_set(b) and is_fset(a) == is_fset(b))
 
 
 def typestr(t: str) -> str:
@@ -6263,14 +6302,33 @@ def optnames(t: str) -> str:
     return t
 
 
+def folds(e: Node) -> bool:
+    # is e a constant once CPython's AST optimizer has run (ast_opt.c): a literal, a tuple of
+    # constants, or an operator applied to constants (a set display of constants is then a
+    # frozenset constant, whose table decides the order of its elements)
+    k = e.kind
+    if k == "int" or k == "float" or k == "str" or k == "True" or k == "False" or k == "None" or k == "ellipsis":
+        return True
+    if k == "tuple" or k == "unary" or (k == "binop" and e.s != "%"):
+        for x in e.kids:
+            if not folds(x):
+                return False
+        return True
+    return False
+
+
 def empty_display(e: Node) -> bool:
     return (e.kind == "list" or e.kind == "dict") and len(e.kids) == 0
 
 
 def empty_default(n: Node, name: str, kind: str) -> bool:
-    # is n name.setdefault(k, []) (kind "list") or name.setdefault(k, {}) (kind "dict")
+    # is n name.setdefault(k, []) (kind "list"), name.setdefault(k, {}) (kind "dict") or
+    # name.setdefault(k, set()) (kind "set")
     if n.kind != "call" or len(n.kids) != 3 or n.kids[0].kind != "attr" or n.kids[0].s != "setdefault":
         return False
+    if kind == "set":
+        d = n.kids[2]
+        return n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name and d.kind == "call" and len(d.kids) == 1 and d.kids[0].kind == "name" and d.kids[0].s == "set"
     return n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name and n.kids[2].kind == kind and len(n.kids[2].kids) == 0
 
 
@@ -6282,6 +6340,13 @@ def key_problem(t: str) -> str:
     if is_opt(t):
         return f"dict keys must be int or str, not {typestr(t)} (a key cannot be None)"
     return f"dict keys must be int or str, or tuples of int, bool, str and str | None items, not {typestr(t)}"
+
+
+def elem_problem(t: str) -> str:
+    # why t cannot be the element type of a set, or "": the types of dict keys (key_problem)
+    if is_opt(t):
+        return f"set elements must be int or str, not {typestr(t)} (an element cannot be None)"
+    return key_problem(t).replace("dict keys", "set elements")
 
 
 def lookable(a: str, b: str) -> bool:
@@ -7034,7 +7099,8 @@ def aliases(n: Node, name: str) -> bool:
 
 def shows_items(n: Node, name: str) -> bool:
     # does n (outside the functions and classes it defines) assign variable name, or fill the
-    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get
+    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get,
+    # and a set's add and update
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "lambda":
         return False
     if stmt_binds(n, name):
@@ -7044,7 +7110,7 @@ def shows_items(n: Node, name: str) -> bool:
             if t.kind == "index" and t.kids[0].kind == "name" and t.kids[0].s == name:
                 return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name:
-        if n.kids[0].s in "append insert extend setdefault get".split():
+        if n.kids[0].s in "append insert extend setdefault get add update".split():
             return True
     for k in n.kids:
         if shows_items(k, name):
@@ -7890,9 +7956,9 @@ class Gen:
         return k
 
     def hole(self, kind: str) -> Ins:
-        # a new list or dict (kind) whose type a later use decides: the op holds a new hole
-        i = Ins("rt", f"{kind}[?]" if kind == "list" else "dict[?,?]", f"{kind}.new")
-        i.a = [Val("0", "int")]  # (a dict's key kind: the hole's, when it is lowered)
+        # a new list, dict or set (kind) whose type a later use decides: the op holds a new hole
+        i = Ins("rt", "dict[?,?]" if kind == "dict" else f"{kind}[?]", f"{kind}.new")
+        i.a = [Val("0", "int")]  # (a dict's key kind, a set's element kind: the hole's, when it is lowered)
         if kind == "dict":
             i.a.append(Val("0", "int"))
         i.k = len(self.holes)
@@ -8241,6 +8307,9 @@ class Gen:
         if is_dict(t):
             a = targs(t)
             return "D" + self.desc(a[0], use) + self.desc(a[1], use if use == "repr" else "==")
+        if is_set(t):
+            # (S<e> a set, F<e> a frozenset: equal, or ordered as subsets, by their elements)
+            return ("F" if is_fset(t) else "S") + self.desc(selem(t), "repr" if use == "repr" else "==")
         if is_tuple(t):
             a = targs(t)
             if len(a) > 9:
@@ -8345,7 +8414,7 @@ class Gen:
             base = n.kids[0].s
             if n.kids[0].kind == "attr":
                 base = self.typing_attr(n.kids[0]).lower()  # typing.List[int]
-            elif base != "list" and base != "dict" and base != "tuple":
+            elif base != "list" and base != "dict" and base != "tuple" and base != "set" and base != "frozenset":
                 base = self.typing_name(base)
                 if base.startswith("!"):
                     return base
@@ -8354,6 +8423,8 @@ class Gen:
                 base = "dict"  # (collections.abc's and typing's: what a dict is)
             elif base == "sequence" or base == "mutablesequence":
                 base = "list"
+            elif base == "mutableset":
+                base = "set"
             elif base == "classvar":
                 return "!" + CLASSVAR
             a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
@@ -8381,6 +8452,8 @@ class Gen:
                 return self.ctype("list", [ts[0]])
             if base == "dict" and len(ts) == 2:
                 return self.ctype("dict", ts) if key_problem(ts[0]) == "" else "!" + key_problem(ts[0])
+            if (base == "set" or base == "frozenset") and len(ts) == 1:
+                return self.ctype(base, ts) if elem_problem(ts[0]) == "" else "!" + elem_problem(ts[0])
             if base == "tuple" and (len(ts) > 0 or n.kids[1].kind == "tuple"):
                 return self.ctype("tuple", ts)  # (tuple[()] is the empty tuple's)
             if base == "optional" and len(ts) == 1:
@@ -8610,7 +8683,7 @@ class Gen:
         # the type of a value that is a t or None, "" if there is none
         if t in self.classes or is_opt(t):
             return t
-        if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_tuple(t) or is_callable(t)) and "?" not in t:
+        if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_callable(t)) and "?" not in t:
             return self.ctype("opt", [t])
         return ""
 
@@ -8653,6 +8726,9 @@ class Gen:
             k = self.wider(targs(a)[0], targs(b)[0])  # (tuple keys whose items may be None)
             w = self.wider(targs(a)[1], targs(b)[1])
             return self.ctype("dict", [k, w]) if k != "" and w != "" else ""
+        if is_set(a) and is_set(b) and is_fset(a) == is_fset(b):
+            w = self.wider(selem(a), selem(b))  # (tuple elements whose items may be None)
+            return self.ctype("frozenset" if is_fset(a) else "set", [w]) if w != "" else ""
         if not is_tuple(a) or not is_tuple(b) or len(targs(a)) != len(targs(b)):
             return ""
         bs = targs(b)
@@ -9410,7 +9486,7 @@ class Gen:
         src = name
         while src in self.origin and name not in self.ltype:
             src = self.origin[src]
-        self.err(f"cannot infer the type of '{short(name)}', an empty {'list' if is_list(t) else 'dict'} so far: annotate it{self.where_def(src)} ({short(src)}: {'list[T] = []' if is_list(t) else 'dict[K, V] = {}'})")
+        self.err(f"cannot infer the type of '{short(name)}', an empty {tname(t)} so far: annotate it{self.where_def(src)} ({short(src)}: {empty_ann(t)})")
 
     def load_name(self, name: str) -> Val:
         if (name in self.nonevars or name in self.noneglobals) and name not in self.ltype:
@@ -9420,8 +9496,8 @@ class Gen:
             if self.unfilled(name) and self.dead and not aliases(self.curfn.node.kids[2], name):
                 # only code these argument types leave out fills it, and nothing else gets it to
                 # fill: it is always empty here
-                self.refine(name, "list[int]" if is_list(t) else "dict[int,int]")
-                self.guessed[self.curfn.ll] = f"'{name}' of {short(self.curfn.name)}() is always empty for these arguments, and taken as {typestr(self.ltype[name])}: annotate it ({name}: {'list[T] = []' if is_list(t) else 'dict[K, V] = {}'})"
+                self.refine(name, "list[int]" if is_list(t) else "set[int]" if is_set(t) else "dict[int,int]")
+                self.guessed[self.curfn.ll] = f"'{name}' of {short(self.curfn.name)}() is always empty for these arguments, and taken as {typestr(self.ltype[name])}: annotate it ({name}: {empty_ann(t)})"
             elif not self.globread(name) or self.copying or "?" in self.early(name):
                 self.no_type(name)
         if name in self.ltype:
@@ -9845,8 +9921,8 @@ class Gen:
         self.copying = st.s == "from" and self.foreign(e.s)  # (see copying)
         if st.kind == "annassign" and st.kids[0].kind == "name":
             self.new_global(name, self.vtype(st.kids[1]))
-        elif st.kind == "assign" and assigns(st, name) and (e.kind == "list" or e.kind == "dict") and len(e.kids) == 0:
-            self.new_global(name, "list[?]" if e.kind == "list" else "dict[?,?]")
+        elif st.kind == "assign" and assigns(st, name) and self.empty_of(e) != "":
+            self.new_global(name, "dict[?,?]" if e.kind == "dict" else f"{self.empty_of(e)}[?]")
             self.lookahead(name, True)
         elif st.kind == "assign" and len(st.kids) == 2 and assigns(st, name) and e.kind == "name" and not self.copying and self.globread(e.s) and "?" in self.gtype(e.s):
             # X = Y of such a container (from m import Y): twins (see stmt), typed as above
@@ -10033,12 +10109,13 @@ class Gen:
         return None
 
     def only_empties(self, body: list[Node], name: str) -> bool:
-        # is every binding of name in body (into the blocks that run) an assignment of an empty [] or {}
+        # is every binding of name in body (into the blocks that run) an assignment of an empty [],
+        # {} or set()
         for st in body:
             if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
                 continue
             v = st.kids[-1] if st.kind == "assign" else st
-            empty = len(st.kids) == 2 and st.kids[0].kind == "name" and (v.kind == "list" or v.kind == "dict") and len(v.kids) == 0
+            empty = len(st.kids) == 2 and st.kids[0].kind == "name" and self.empty_of(v) != ""
             if stmt_binds(st, name) and not empty:
                 return False
             for kid in self.live_blocks(st):
@@ -10103,6 +10180,15 @@ class Gen:
         for k in n.kids:
             self.type_reads(k)
 
+    def empty_of(self, e: Node) -> str:
+        # the kind of empty container e makes without a type, "list", "dict" or "set" ([], {},
+        # set() of the builtin set), or ""
+        if (e.kind == "list" or e.kind == "dict") and len(e.kids) == 0:
+            return e.kind
+        if e.kind == "call" and len(e.kids) == 1 and e.kids[0].kind == "name" and e.kids[0].s == "set" and not self.bound("set"):
+            return "set"
+        return ""
+
     def empty(self, kind: str, name: str) -> Val:
         # [] or {} assigned to a variable without a type: the first use that shows what it holds
         # gives the variable its type (fill, refine); until then only len() and truth tests read it
@@ -10120,6 +10206,8 @@ class Gen:
             self.err(f"cannot infer the type of '{name}' from this use; annotate it")
         if is_dict(t):
             t = self.ctype("dict", [self.none_items(targs(t)[0]), targs(t)[1]])  # (d[k, None] = v)
+        if is_set(t):
+            t = self.ctype("frozenset" if is_fset(t) else "set", [self.none_items(selem(t))])  # (s.add((k, None)))
         toks = ""
         if name in self.ltype and not glob:
             self.ltype[name] = t
@@ -10133,10 +10221,12 @@ class Gen:
                     toks += " " + self.gkk.pop(nm, "")
         if is_dict(t) and key_problem(targs(t)[0]) != "":
             self.err(key_problem(targs(t)[0]))
+        if is_set(t) and elem_problem(selem(t)) != "":
+            self.err(elem_problem(selem(t)))
         for h in toks.split():
             self.holes[int(h)] = t
-            if is_dict(t):
-                self.key_kind(targs(t)[0])  # (a tuple key's descriptor, a string constant from here on, which lowering prints)
+            if is_dict(t) or is_set(t):
+                self.key_kind(targs(t)[0] if is_dict(t) else selem(t))  # (a tuple key's descriptor, a string constant from here on, which lowering prints)
 
     def lookahead(self, name: str, ahead: bool = False) -> str:
         # an empty list or dict read before the code that fills it: the first use in this
@@ -10165,18 +10255,24 @@ class Gen:
             return ""
         t = self.qtype(name)
         e = found[-1]
-        if empty_display(e):
+        if self.empty_of(e) != "":
             return ""  # (d[k] = [] shows nothing of what d holds)
         for x in found:
             if not self.typed_now(x) or (ahead and self.calls_open(x, {})):
                 return ""
-        if found[0].kind == "omit" and not is_list(t):
+        if found[0].kind == "omit" and not is_list(t) and not is_set(t):
             return ""  # (d += ... or d.extend(...) on a dict: an error where it is compiled)
         it = self.dry(e)
         if found[0].kind == "omit" and is_list(t):
             if not is_list(it):
                 return ""
             r = it
+        elif found[0].kind == "omit" and is_set(t):
+            r = self.ctype("set", [self.iter_elem(it)]) if self.iter_elem(it) != "" else ""  # (s.update(xs), s |= t)
+            if r == "":
+                return ""
+        elif is_set(t):
+            r = self.ctype("set", [it])
         elif is_list(t):
             r = self.ctype("list", [it])
         else:
@@ -10234,11 +10330,11 @@ class Gen:
         # context expects, else list[int] or dict[int, int] (as sum() of an empty list is the int 0),
         # which a type error further on in this function then explains (guessed). A new dict is made
         # by each call, so it gets the key kind of its type here (a dict's second word)
-        t = want if same_kind(want, v.t) and "?" not in want else "list[int]" if is_list(v.t) else "dict[int,int]"
+        t = want if same_kind(want, v.t) and "?" not in want else "list[int]" if is_list(v.t) else "set[int]" if is_set(v.t) else "dict[int,int]"
         if t != want:
-            self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'dict[K, V]'} = {short(f.name)}()"
-        if is_dict(t):
-            self.emit(f"store i64 {self.key_kind(targs(t)[0])}, ptr {self.ins(f'getelementptr i64, ptr {v.v}, i64 1')}")
+            self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'set[T]' if is_set(t) else 'dict[K, V]'} = {short(f.name)}()"
+        if is_dict(t) or is_set(t):
+            self.emit(f"store i64 {self.key_kind(targs(t)[0] if is_dict(t) else selem(t))}, ptr {self.ins(f'getelementptr i64, ptr {v.v}, i64 1')}")
         return Val(v.v, t)
 
     def fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
@@ -10262,8 +10358,8 @@ class Gen:
                 # name.setdefault(k, {})[k2] = v: the item is {k2: v} (see default_want)
                 found.append(st.kids[0].kids[0].kids[1])
                 found.append(mk("dict", "", st.line, [st.kids[0].kids[1], st.kids[1]]))
-            elif k == "augassign" and st.kids[0].kind == "name" and st.kids[0].s == name and st.s == "+":
-                found.append(mk("omit", "", st.line, []))
+            elif k == "augassign" and st.kids[0].kind == "name" and st.kids[0].s == name and (st.s == "+" or (st.s == "|" and is_set(self.qtype(name)))):
+                found.append(mk("omit", "", st.line, []))  # (xs += ys, s |= t)
                 found.append(st.kids[1])
             elif k == "if" and s >= 0:
                 # a test that the types decide there: only the branch that runs
@@ -10297,15 +10393,20 @@ class Gen:
             found.append(n.kids[0].kids[0].kids[1])
             found.append(mk("list", "", n.line, [n.kids[-1]]))
             return
+        if n.kind == "call" and n.kids[0].kind == "attr" and len(n.kids) == 2 and n.kids[0].s == "add" and n.kids[-1].kind != "kw" and empty_default(n.kids[0].kids[0], name, "set"):
+            # name.setdefault(k, set()).add(v): the item is {v}
+            found.append(n.kids[0].kids[0].kids[1])
+            found.append(mk("set", "", n.line, [n.kids[-1]]))
+            return
         if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name:
             m = n.kids[0].s
             a = n.kids[1:]
-            if (m == "append" and len(a) == 1) or (m == "insert" and len(a) == 2):
+            if (m == "append" and len(a) == 1) or (m == "insert" and len(a) == 2) or (m == "add" and len(a) == 1):
                 found.append(mk("int", "0", n.line, []))
                 found.append(a[-1])
-            elif m == "extend" and len(a) == 1:
+            elif (m == "extend" and len(a) == 1) or (m == "update" and is_set(self.qtype(name)) and len(a) > 0):
                 found.append(mk("omit", "", n.line, []))
-                found.append(a[0])
+                found.append(a[0])  # (s.update(xs, ys): the first one's elements)
             elif (m == "setdefault" or m == "get") and len(a) == 2:
                 found.append(a[0])
                 found.append(a[1])
@@ -10401,8 +10502,40 @@ class Gen:
             else:
                 self.rt("pys_list_extend", "void", [f"ptr {o.v}", f"ptr {v.v}"])
             return Val("null", "None")
+        if is_set(o.t) and m == "add" and len(args) == 1 and args[0].kind != "kw":
+            if self.empty_of(args[0]) != "":
+                self.no_type(name)  # (s.add(()) is an error where it is compiled; this one shows nothing)
+            v = self.expr(args[0], "")
+            self.refine(name, self.ctype("set", [v.t]))
+            t = self.qtype(name)
+            self.rt("pys_set_add", "void", [f"ptr {o.v}", "i64 " + self.to_slot(self.store_elem(v, selem(t)))])
+            return Val("null", "None")
+        if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind == "listcomp" and args[0].s == "gen":
+            # (item by item, as smethod's)
+            self.refine(name, self.listcomp(args[0], "", "", o.v, None, "set").t)
+            return Val("null", "None")
+        if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind != "kw":
+            v = self.siter(args[0], "", "set.update()")
+            self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
+            self.supdate(o.v, v)
+            return Val("null", "None")
+        if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
+            # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
+            # for a set of that type (each argument evaluated before any is added, as CPython does)
+            a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
+            if a.kind == "listcomp" and a.s == "gen":
+                et = elem(self.dry(mk("listcomp", "", a.line, a.kids)))  # (the type of a list of what it yields)
+                et = self.none_items(et) if is_tuple(et) else et
+                if elem_problem(et) != "":
+                    self.err(elem_problem(et))
+                self.refine(name, self.ctype("set", [et]))
+            else:
+                v = self.siter(a, "", "set.update()")
+                self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
+                a = self.vnode(v)
+            return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
         if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
-            if empty_display(args[1]) and (want == "" or "?" in want):
+            if self.empty_of(args[1]) != "" and (want == "" or "?" in want):
                 self.no_type(name)
             k = self.expr(args[0], "")
             v = self.expr(args[1], want if "?" not in want else "")
@@ -10418,8 +10551,10 @@ class Gen:
         if r.kind != "call" or len(r.kids) != 3 or r.kids[0].kind != "attr" or r.kids[0].s != "setdefault" or r.kids[0].kids[0].kind != "name":
             return ""
         d = r.kids[2]
-        if "?" not in self.rtype(r.kids[0].kids[0].s) or (d.kind != "list" and d.kind != "dict") or len(d.kids) > 0:
+        if "?" not in self.rtype(r.kids[0].kids[0].s) or self.empty_of(d) == "":
             return ""
+        if self.empty_of(d) == "set":
+            return self.ctype("set", [self.dry(args[0])]) if m == "add" and len(args) == 1 and args[0].kind != "kw" else ""
         if m == "[]" and d.kind == "dict":
             return self.ctype("dict", [self.dry(args[0]), vt])
         if d.kind == "list" and ((m == "append" and len(args) == 1) or (m == "insert" and len(args) == 2)) and args[-1].kind != "kw":
@@ -11027,11 +11162,11 @@ class Gen:
             f = self.rtfns[i.s]
             ll = f.ll
             vs = [ll[j + 1] + " " + i.a[j].v for j in range(len(i.a))]
-            if i.k > 0 and i.s == "dict.new":
-                # the key kind of a dict created empty: what its first use showed (0 if nothing
-                # did; refine made a tuple key's descriptor a string constant)
+            if i.k > 0 and (i.s == "dict.new" or i.s == "set.new"):
+                # the key kind of a dict (the element kind of a set) created empty: what its first
+                # use showed (0 if nothing did; refine made a tuple key's descriptor a string constant)
                 h = self.holes[i.k]
-                vs[0] = f"i64 {self.key_kind(targs(h)[0]) if h != '' else '0'}"
+                vs[0] = f"i64 {self.key_kind(targs(h)[0] if is_dict(h) else selem(h)) if h != '' else '0'}"
             c = self.invoke(f"call {ll[0]} @{f.sym}({', '.join(vs)})", i)
             o.append("  " + c if ll[0] == "void" else f"  %t{i.r[0]} = {c}")
         elif op == "call":
@@ -14342,10 +14477,11 @@ class Gen:
             val = n.kids[-1]
             t0 = n.kids[0]
             self.copying = n.s == "from" and self.foreign(val.s)
-            if len(n.kids) == 2 and t0.kind == "name" and empty_display(val) and self.ltype.get(t0.s, "") == NONEVAR and not self.is_global(t0.s):
-                self.err(f"cannot infer the type of '{t0.s}' from None and an empty {val.kind}; annotate it ({t0.s}: {val.kind}[{'T' if val.kind == 'list' else 'K, V'}] | None = None)")
-            if len(n.kids) == 2 and t0.kind == "name" and (val.kind == "list" or val.kind == "dict") and len(val.kids) == 0 and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
-                self.assign(t0, self.empty(val.kind, t0.s))
+            ekind = self.empty_of(val)
+            if len(n.kids) == 2 and t0.kind == "name" and ekind != "" and self.ltype.get(t0.s, "") == NONEVAR and not self.is_global(t0.s):
+                self.err(f"cannot infer the type of '{t0.s}' from None and an empty {ekind}; annotate it ({t0.s}: {ekind}[{'K, V' if ekind == 'dict' else 'T'}] | None = None)")
+            if len(n.kids) == 2 and t0.kind == "name" and ekind != "" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
+                self.assign(t0, self.empty(ekind, t0.s))
             elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "call" and len(val.kids) == 2 and val.kids[0].kind == "name" and val.kids[0].s == "dict" and not self.bound("dict") and val.kids[1].kind == "name" and self.static_type(val.kids[1]) == "kw[]" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
                 self.assign(t0, self.empty("dict", t0.s))  # (d = dict(kwargs) of a call without extra keywords: d = {})
             elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "name" and self.is_global(t0.s) and (t0.s not in self.gtypes or self.twin_of.get(t0.s, "-") == self.twin_of.get(val.s, "")) and t0.s not in self.noneglobals and not self.copying and self.globread(val.s) and "?" in self.gtypes.get(val.s, ""):
@@ -14363,7 +14499,7 @@ class Gen:
                 for i in range(len(vs)):
                     self.assign(t0.kids[i], vs[i])
             else:
-                if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and empty_display(val):
+                if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                     self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
                 v = self.expr(val, self.target_type(t0))
                 for i in range(len(n.kids) - 1):
@@ -14611,9 +14747,14 @@ class Gen:
             et = self.lct[-1]
             v = self.expr(n.kids[0], et)
             if et == "":
-                self.lct[-1] = v.t
-                et = v.t
-            self.rt("pys_list_append", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.coerce(v, et))])
+                self.lct[-1] = self.none_items(v.t) if n.s == "set" and is_tuple(v.t) else v.t
+                et = self.lct[-1]
+                if n.s == "set" and elem_problem(et) != "":
+                    self.err(elem_problem(et))
+            if n.s == "set":
+                self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))])
+            else:
+                self.rt("pys_list_append", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.coerce(v, et))])
         elif k == "defaults" or k == "cdefaults":
             if k == "defaults":
                 self.decorators(self.funcs[n.s].node, self.funcs[n.s].node.kids[3:] if self.curfn.mod != "" else [], {})
@@ -14719,6 +14860,17 @@ class Gen:
             self.refine(t.s, v.t)
             self.rt("pys_list_extend", "void", [f"ptr {cur.v}", f"ptr {v.v}"])
             self.store_name(t.s, Val(cur.v, v.t))  # (the right operand may have rebound the name)
+        elif t.kind == "name" and op == "|" and is_set(self.rtype(t.s)) and "?" in self.qtype(t.s):
+            # s |= t on an empty set without a type
+            self.allowq = True
+            cur = self.read(t)
+            self.allowq = False
+            v = self.expr(n.kids[1], "")
+            if not is_set(v.t):
+                self.err(f"unsupported operand type(s) for |=: 'set' and '{tname(v.t)}'")
+            self.refine(t.s, self.ctype("set", [selem(v.t)]))
+            self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"])
+            self.store_name(t.s, Val(cur.v, self.qtype(t.s)))
         elif t.kind == "name":
             cur = self.read(t)
             self.store_name(t.s, self.inplace(op, cur, n.kids[1]))
@@ -14820,6 +14972,23 @@ class Gen:
                 self.none_operands(op, cur, b, "*=")
                 cur = Val(cur.v, unopt(cur.t))
             self.rt("pys_list_imul", "void", [f"ptr {cur.v}", f"i64 {self.coerce(b, 'int').v}"])
+            return cur
+        if is_set(unopt(cur.t)) and not is_fset(unopt(cur.t)) and (op == "|" or op == "&" or op == "-" or op == "^"):
+            # s |= t, s &= t, s -= t, s ^= t of a set t: s changes in place (a frozenset s is
+            # rebound to s op t, as CPython's has no in-place operators)
+            b = self.expr(rhs, unopt(cur.t))
+            if is_opt(cur.t) or is_opt(b.t):
+                self.none_operands(op, cur, b, op + "=")
+                cur = Val(cur.v, unopt(cur.t))
+                b = Val(b.v, unopt(b.t))
+            if not is_set(b.t):
+                self.err(f"unsupported operand type(s) for {op}=: '{tname(cur.t)}' and '{tname(b.t)}'")
+            if self.wider(selem(b.t), selem(cur.t)) != selem(cur.t):
+                self.err(f"unsupported operand types for {op}=: {typestr(cur.t)} and {typestr(b.t)} (a set holds elements of one type)")
+            if op == "&":
+                self.rt("pys_set_assign", "void", [f"ptr {cur.v}", f"ptr {self.rt('pys_set_and', 'ptr', [f'ptr {cur.v}', f'ptr {b.v}'])}"])
+            else:
+                self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"])
             return cur
         im = "__i" + DUNDER.get(op, "__?")[2:]
         if cur.t in self.classes and im in self.classes[cur.t].methods:
@@ -14938,7 +15107,11 @@ class Gen:
                 else:
                     self.for_seq(tgt, [self.method(o, m, [])], "", body, "0", hide, arg)
                 return
-        seq = self.iterable(self.expr(it, ""))
+        if it.kind == "set" and folds(mk("tuple", "", it.line, it.kids)):
+            # (CPython iterates the frozenset constant it makes of a display of constants)
+            seq = self.set_display(it, "", True)
+        else:
+            seq = self.iterable(self.expr(it, ""))
         if seq.t == "tuple[]":
             self.iterarg(arg)
             self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
@@ -15067,18 +15240,21 @@ class Gen:
         self.narrowed = after
 
     def for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None) -> None:
-        # One loop serves lists, strings, tuples, dicts, enumerate, zip and reversed. Each round
-        # takes the next item of every sequence, in order, the way its CPython iterator would:
-        # lists and strings by index, checked against their current length (reversed: counting
-        # down from the length at the start), tuples by index below the length their type gives;
-        # dicts by entry position, skipping deleted entries and failing if the dict changed size.
-        # The loop ends at the first exhausted sequence.
+        # One loop serves lists, strings, tuples, dicts, sets, enumerate, zip and reversed. Each
+        # round takes the next item of every sequence, in order, the way its CPython iterator
+        # would: lists and strings by index, checked against their current length (reversed:
+        # counting down from the length at the start), tuples by index below the length their type
+        # gives; dicts by entry position, skipping deleted entries and failing if the dict changed
+        # size; sets by slot, failing if the set changed size. The loop ends at the first
+        # exhausted sequence.
         ctr = self.alloca("int", "")
         self.emit(f"store i64 0, ptr {ctr}")
         st: list[str] = []
         used: list[str] = []
         for s in seqs:
-            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+            if is_set(s.t) and mode == "reversed":
+                self.err(f"'{tname(s.t)}' object is not reversible")
+            if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
                 self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
             if s.t == "file":
                 st.append("")
@@ -15086,7 +15262,7 @@ class Gen:
                 continue
             n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
             used.append(n0)
-            if is_dict(s.t):
+            if is_dict(s.t) or is_set(s.t):
                 pos = self.alloca("int", "")
                 p0 = "0"
                 if mode == "reversed":
@@ -15115,6 +15291,11 @@ class Gen:
                 j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
                 ok = self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {j}')}, 0")
                 nx = ""
+            elif is_set(s.t):
+                # the slot of the next element, as CPython's set iterator finds it
+                j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.ins(f'load i64, ptr {st[k]}')}", f"i64 {used[k]}"])
+                nx = self.ins(f"add i64 {j}, 1")
+                ok = self.ins(f"icmp sge i64 {j}, 0")
             elif is_dict(s.t):
                 p = self.ins(f"load i64, ptr {st[k]}")
                 if mode == "reversed":
@@ -15137,7 +15318,7 @@ class Gen:
             lp.body = go
             lp.tests.append(go)
             lp.idx.append(j)
-            if is_dict(s.t):
+            if is_dict(s.t) or is_set(s.t):
                 self.emit(f"store i64 {nx}, ptr {st[k]}")
             at.append(j)
         vals: list[Val] = []
@@ -15154,6 +15335,8 @@ class Gen:
                 vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
             elif s.t == "file":
                 vals.append(Val(j, "str"))
+            elif is_set(s.t):
+                vals.append(self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t)))
             else:
                 kv = targs(s.t)
                 if mode != "values":
@@ -15314,6 +15497,7 @@ class Gen:
                 return -1
             return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() else 0
         b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) else "int" if t == "bool" else t
+        b = t[: t.find("[")] if is_set(t) else b
         if b in HASATTR:
             return 1 if a in HASATTR[b].split() else 0
         self.err(f"hasattr() of '{a}' on a {tname(t)} is not supported")
@@ -15399,9 +15583,9 @@ class Gen:
             return 1 if t == c.s else 0
         if c.s == "tuple" and t in self.nts:
             return -2  # (a tuple, unless it is None)
-        if c.s == "list" or c.s == "dict" or c.s == "tuple":
+        if c.s == "list" or c.s == "dict" or c.s == "tuple" or c.s == "set" or c.s == "frozenset":
             return 1 if t.startswith(c.s + "[") else 0
-        if c.s in "bytes bytearray memoryview set frozenset complex range slice type".split():
+        if c.s in "bytes bytearray memoryview complex range slice type".split():
             return 0
         return -1
 
@@ -15464,7 +15648,7 @@ class Gen:
             return self.ins(f"icmp ne i64 {v.v}, 0")
         if t == "float":
             return self.ins(f"fcmp une double {v.v}, 0.0")
-        if t == "str" or is_list(t) or is_dict(t):
+        if t == "str" or is_list(t) or is_dict(t) or is_set(t):
             return self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {v.v}')}, 0")
         if t == "None":
             return "false"
@@ -15543,6 +15727,12 @@ class Gen:
             self.err(n.s)  # a module attribute that does not exist, or a module used as a value
         if k == "lambda":
             return self.closure(n)
+        if k == "set":
+            return self.set_display(n, want, False)
+        if k == "setcomp":
+            if n.kids[0].kind != "listcomp":
+                self.err(UNSUPPORTED[n.kids[0].kind])
+            return self.listcomp(n.kids[0], want, "", "", None, "set")
         if k in UNSUPPORTED:
             self.err(UNSUPPORTED[k])
         if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
@@ -16266,10 +16456,11 @@ class Gen:
             self.err(f"iter() of {typestr(v.t)} in __iter__ is not supported: return iter(xs) of a list xs of the items")
         return v
 
-    def listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: IterArg | None = None) -> Val:
+    def listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: IterArg | None = None, kind: str = "list") -> Val:
         # [e for t in it if c] runs as a loop appending to a fresh list (or to list into, of type
         # want, as xs.extend(e for ...) does item by item); t is scoped to it. mode any/all:
-        # any(e for ...) / all(...) instead, stopping at the deciding element.
+        # any(e for ...) / all(...) instead, stopping at the deciding element. kind "set": {e for
+        # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does)
         h = Ins("", "", "")
         if mode != "":
             res = self.alloca("bool", "")
@@ -16277,19 +16468,19 @@ class Gen:
         elif into != "":
             res = into
         else:
-            h = self.hole("list")
+            h = self.hole(kind)
             res = f"%t{h.r[0]}"
         names: list[str] = []
         names_in(n.kids[1], names)
         saved: list[str] = []
         for nm in names:
             saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
-        app = mk("lcappend" if mode == "" else "anyall", mode, n.line, [n.kids[0]])
+        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else "set", n.line, [n.kids[0]])
         body = [app]
         if len(n.kids) == 4:
             body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
         self.lcs.append(res)
-        self.lct.append(elem(want) if is_list(want) else "")
+        self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind == "set" and "?" not in want else "")
         pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
         self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
         self.narrowed = pre
@@ -16312,8 +16503,10 @@ class Gen:
         if et == "":
             self.err("cannot infer the element type of this comprehension")
         if into == "":
-            self.holes[h.k] = self.ctype("list", [et])
-        return Val(res, self.ctype("list", [et]))
+            self.holes[h.k] = self.ctype(kind, [et])
+            if kind == "set":
+                self.key_kind(et)  # (a tuple element's descriptor, a string constant, which lowering prints)
+        return Val(res, self.ctype(kind, [et]))
 
     def ifexp(self, n: Node, want: str) -> Val:
         st = self.static(n.kids[0])
@@ -16636,6 +16829,8 @@ class Gen:
             return self.arith(op, self.deref(a) if is_opt(a.t) else a, self.deref(b) if is_opt(b.t) else b, shown)
         if a.t == "bool" and b.t == "bool" and (op == "&" or op == "|" or op == "^"):
             return Val(self.ins(f"{IOPS[op]} i1 {a.v}, {b.v}"), "bool")
+        if is_set(a.t) and is_set(b.t) and (op == "|" or op == "&" or op == "-" or op == "^"):
+            return self.setop(op, a, b)
         a = self.as_int(a)
         b = self.as_int(b)
         if a.t == "int" and b.t == "int" and op == "/":
@@ -16854,9 +17049,10 @@ class Gen:
                 return Val(r if op == "in" else self.ins(f"xor i1 {r}, true"), "bool")
         if (op == "in" or op == "not in") and b.t == "str":
             a = self.unwrap(a, "TypeError: 'in <string>' requires string as left operand, not NoneType")
-        if (op == "in" or op == "not in") and a.t == "None" and (is_dict(b.t) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
-            return Val("false" if op == "in" else "true", "bool")  # None is no key of a dict, and no number
-        if (op == "in" or op == "not in") and is_opt(a.t) and ((is_dict(b.t) and (unopt(a.t) == targs(b.t)[0] or (is_sopt(a.t) and bool_for_int(unopt(a.t), targs(b.t)[0])))) or (is_sopt(a.t) and is_list(b.t) and (unopt(a.t) == elem(b.t) or self.isnum(elem(b.t))))):
+        if (op == "in" or op == "not in") and a.t == "None" and (is_dict(b.t) or is_set(b.t) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
+            return Val("false" if op == "in" else "true", "bool")  # None is no key of a dict (no element of a set), and no number
+        kt = targs(b.t)[0] if is_dict(b.t) else selem(b.t) if is_set(b.t) else ""
+        if (op == "in" or op == "not in") and is_opt(a.t) and ((kt != "" and (unopt(a.t) == kt or (is_sopt(a.t) and bool_for_int(unopt(a.t), kt)))) or (is_sopt(a.t) and is_list(b.t) and (unopt(a.t) == elem(b.t) or self.isnum(elem(b.t))))):
             # None is no key of the dict (and no int of a list[int])
             nn = self.ins(f"icmp ne ptr {a.v}, null")
             e0 = self.cur
@@ -16918,6 +17114,9 @@ class Gen:
             elif is_dict(b.t):
                 s = self.to_slot(self.dkey(a, targs(b.t)[0]))
                 r = self.rt("pys_dict_has", "i64", [f"ptr {b.v}", f"i64 {s}"])
+            elif is_set(b.t):
+                s = self.to_slot(self.dkey(a, selem(b.t)))
+                r = self.rt("pys_set_has", "i64", [f"ptr {b.v}", f"i64 {s}"])
             else:
                 self.err(f"'in' is not supported for {b.t}")
             return Val(self.ins(f"icmp {'ne' if op == 'in' else 'eq'} i64 {r}, 0"), "bool")
@@ -16937,6 +17136,12 @@ class Gen:
             if a.t == "float":
                 r = self.select(self.ins(f"icmp eq i64 {r}, 2"), Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
             return Val(self.ins(MIXCMP[op].replace("R", r)), "bool")
+        if is_set(a.t) and is_set(b.t) and op in ICMP:
+            # subsets and equality (a set equals a frozenset of its elements)
+            if self.wider(selem(a.t), selem(b.t)) == "":
+                self.err(f"cannot compare {typestr(a.t)} {op} {typestr(b.t)}")
+            r = self.rt("pys_set_cmp", "i64", [f"ptr {a.v}", f"ptr {b.v}", f"i64 {ORDOP[op] if op in ORDOP else 4 if op == '==' else 5}"])
+            return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool")
         eq = op == "==" or op == "!="
         if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):
             return Val("false" if op == "==" else "true", "bool")  # a number or bool never equals None
@@ -16952,7 +17157,7 @@ class Gen:
             a = self.boxto(a, ct)
             b = self.boxto(b, ct)
         u = unopt(ct)
-        if ct != "" and (u == "str" or is_list(u) or is_tuple(u) or (eq and is_dict(u)) or u == "exc"):
+        if ct != "" and (u == "str" or is_list(u) or is_tuple(u) or (eq and is_dict(u)) or is_set(u) or u == "exc"):
             self.exc_eq(ct)
             d = f"ptr {self.sconst(self.desc(ct, '==' if eq else op))}"
             sa = self.to_slot(a)
@@ -17504,8 +17709,8 @@ class Gen:
                 self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[m:{t}.{name}]")
-        base = "list" if is_list(t) else "dict" if is_dict(t) else t
-        if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t)):
+        base = "list" if is_list(t) else "dict" if is_dict(t) else "frozenset" if is_fset(t) else "set" if is_set(t) else t
+        if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t) or is_set(t)):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[d:{name}:{t}]")
         return Val("", "")
@@ -17861,6 +18066,8 @@ class Gen:
             return self.print_(args)
         if name == "open":
             return self.open_(args)
+        if name == "set" or name == "frozenset":
+            return self.set_new(name, args, want)
         if name == "map" or name == "filter":
             self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
         if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
@@ -17966,6 +18173,7 @@ class Gen:
                 first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
                 return Val(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {first}')}, 0"), "bool")
             vals = [self.as_list(v0, name)]
+            fresh = fresh or is_set(v0.t)  # (the list of a set's elements is a new one)
             if v0.t == "tuple[]" and is_list(w):
                 vals[0] = Val(vals[0].v, w)  # (list(()) has no item to type: it is the list wanted)
             self.close_temp(args[0], v0)
@@ -18113,7 +18321,7 @@ class Gen:
                 # (tagged as the primitives' loads are, and bounded: LLVM then sees that index
                 # arithmetic on lengths cannot overflow)
                 return Val(self.ins(f"load i64, ptr {v.v}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}"), "int")
-            if t == "str" or is_list(t) or is_dict(t):
+            if t == "str" or is_list(t) or is_dict(t) or is_set(t):
                 return Val(self.ins(f"load i64, ptr {v.v}"), "int")
             if is_tuple(t):
                 return Val(str(len(targs(t))), "int")
@@ -18428,6 +18636,8 @@ class Gen:
             return items
         if is_dict(v.t):
             return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]]))
+        if is_set(v.t):
+            return Val(self.rt("pys_set_list", "ptr", [f"ptr {v.v}"]), self.ctype("list", [selem(v.t)]))
         if is_tuple(v.t):
             ts = targs(v.t)
             et = ts[0] if len(ts) > 0 else "str" if name == "join" else "int"  # (the empty tuple: no item to type)
@@ -18523,6 +18733,8 @@ class Gen:
             self.rt("pys_write", "void", [f"ptr {s}", f"i64 {fd}"])
 
     def bmethod(self, o: Val, m: str, args: list[Node]) -> Val:
+        if is_set(o.t):
+            return self.smethod(o, m, args)
         if is_list(o.t) and m == "sort":
             rev = "0"
             keyv = Val("", "")
@@ -18746,6 +18958,250 @@ class Gen:
             self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
         return Val("null", "None")
 
+    # ---- sets: runtime.c's, which make them as CPython's setobject.c does
+    def set_display(self, n: Node, want: str, folded: bool) -> Val:
+        # {a, b, ...}: the items, evaluated in order, inserted into a new set (BUILD_SET). One of
+        # more than two constants is CPython's frozenset constant of them merged into a new set
+        # (SET_UPDATE), which can leave it a smaller table; folded: the iterable of a for loop or
+        # a comprehension, of constants, which CPython's AST optimizer makes that frozenset. The
+        # constant is the frozenset of the items inserted in order, made again of its elements
+        # in the order it has them (the compiler's merge_consts_recursive does that)
+        et = selem(want) if is_set(want) and "?" not in want else ""
+        given = et != ""
+        items: list[Val] = []
+        jt = ""
+        for e in n.kids:
+            if e.kind == "starred":
+                self.err("unpacking in a set display ({*xs}) is not supported: use set(xs) or s.update(xs)")
+            v = self.expr(e, et)
+            if et == "" and v.t != "None":
+                et = v.t
+            jt = v.t if jt == "" else self.join(jt, v.t) or "-"  # (the items' types together)
+            items.append(v)
+        if not given and is_tuple(jt):
+            et = self.none_items(jt)  # (None among the strs of a tuple's item: str | None)
+        if et == "":
+            self.err("cannot infer the type of a set of None")
+        if elem_problem(et) != "":
+            self.err(elem_problem(et))
+        items = [self.store_elem(v, et) for v in items]
+        r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
+        for v in items:
+            self.rt("pys_set_add", "void", [f"ptr {r}", "i64 " + self.to_slot(v)])
+        if folded or (len(items) > 2 and folds(mk("tuple", "", n.line, n.kids))):
+            c = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
+            self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"])
+            r = c
+            if not folded:
+                m = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
+                self.rt("pys_set_update", "void", [f"ptr {m}", f"ptr {r}"])
+                r = m
+        return Val(r, self.ctype("frozenset" if folded else "set", [et]))
+
+    def iter_elem(self, t: str) -> str:
+        # the type of the items a loop over a value of type t gets, or ""
+        if is_list(t):
+            return elem(t)
+        if is_set(t):
+            return selem(t)
+        if is_dict(t):
+            return targs(t)[0]
+        if t == "str" or is_kw(t):
+            return "str"
+        if is_tuple(t) and len(targs(t)) > 0 and all(x == targs(t)[0] for x in targs(t)):
+            return targs(t)[0]
+        return ""
+
+    def siter(self, n: Node, et: str, what: str) -> Val:
+        # an iterable that a set takes the elements of (set(it), s.update(it), s.union(it), ...),
+        # for elements of type et ("": any): a set or frozenset, a dict (CPython takes its keys
+        # with their hashes), or else the list of its items, in the order CPython's iterator
+        # gives them (a list's, a tuple's, a str's characters, what a generator yields, ...)
+        v = self.unwrap(self.consume(n, self.ctype("list", [et]) if et != "" else ""), "TypeError: 'NoneType' object is not iterable")
+        if v.t == "str":
+            v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        elif not is_set(v.t) and not is_dict(v.t):
+            v = self.as_list(v, "set")
+        if not is_set(v.t) and not is_dict(v.t) and not is_list(v.t):
+            self.err(f"'{tname(v.t)}' object is not iterable")
+        it = self.iter_elem(v.t)
+        if "?" in v.t:
+            self.err(f"cannot infer the type of an empty {tname(v.t)}; add a type annotation")
+        if et != "" and it != et and self.wider(it, et) != et:
+            self.err(f"{what} of {typestr(v.t)} for a set of {typestr(et)} is not supported: a set holds elements of one type")
+        if et == "" and elem_problem(it) != "":
+            self.err(elem_problem(it))
+        return v
+
+    def supdate(self, s: str, v: Val) -> None:
+        # set s takes the elements of v, a set, a dict or a list (siter), as CPython's update does
+        if is_set(v.t):
+            self.rt("pys_set_update", "void", [f"ptr {s}", f"ptr {v.v}"])
+        elif is_dict(v.t):
+            self.rt("pys_set_update_dict", "void", [f"ptr {s}", f"ptr {v.v}"])
+        else:
+            self.rt("pys_set_update_list", "void", [f"ptr {s}", f"ptr {v.v}"])
+
+    def keys_list(self, v: Val) -> Val:
+        # a dict's keys (or v as it is), where CPython iterates over a dict as over any iterable
+        return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]])) if is_dict(v.t) else v
+
+    def set_new(self, name: str, args: list[Node], want: str) -> Val:
+        # set(), set(it), frozenset(), frozenset(it): a new set (frozenset) of the elements of it,
+        # made as CPython's make_new_set makes it (set_update_internal: a set's table is merged, a
+        # dict's keys are added after one resize for them all, any other iterable's items are added
+        # in order); frozenset(f) of a frozenset is f itself
+        fz = name == "frozenset"
+        for a in args:
+            if a.kind == "kw":
+                self.err(f"{name}() takes no keyword arguments")
+        if len(args) > 1:
+            self.err(f"{name} expected at most 1 argument, got {len(args)}")
+        w = want if is_set(want) and is_fset(want) == fz and "?" not in want else ""
+        if len(args) == 0:
+            if w == "":
+                self.err(f"cannot infer the type of an empty {name}; add a type annotation ({'s: set[T] = set()' if not fz else 'f: frozenset[T] = frozenset()'})")
+            return Val(self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(selem(w))}"]), w)
+        v = self.siter(args[0], selem(w) if w != "" else "", f"{name}()")
+        t = self.ctype(name, [selem(w) if w != "" else self.none_items(self.iter_elem(v.t))])
+        if fz and is_fset(v.t):
+            return Val(v.v, t)
+        if is_set(v.t):
+            return Val(self.rt("pys_set_copy", "ptr", [f"ptr {v.v}"]), t)
+        r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(selem(t))}"])
+        self.supdate(r, v)
+        return Val(r, t)
+
+    def setop(self, op: str, a: Val, b: Val) -> Val:
+        # a | b, a & b, a - b and a ^ b of sets or frozensets: a new one of a's kind, made as
+        # CPython's set_or, set_intersection, set_difference and set_symmetric_difference make it
+        w = self.wider(selem(a.t), selem(b.t))
+        if w == "":
+            self.err(f"unsupported operand types for {op}: {typestr(a.t)} and {typestr(b.t)} (a set holds elements of one type)")
+        fn = "pys_set_or" if op == "|" else "pys_set_and" if op == "&" else "pys_set_sub" if op == "-" else "pys_set_xor"
+        return Val(self.rt(fn, "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), self.ctype("frozenset" if is_fset(a.t) else "set", [w]))
+
+    def smethod(self, o: Val, m: str, args: list[Node]) -> Val:
+        # a method of a set or frozenset o, run as CPython's setobject.c runs it; the iterables the
+        # methods take are those siter takes, each evaluated before the method runs (its *args)
+        fz = is_fset(o.t)
+        tn = "frozenset" if fz else "set"
+        et = selem(o.t)
+        if not has_method(tn, m):
+            self.err(f"'{tn}' object has no attribute '{m}'")
+        for a in args:
+            if a.kind == "kw":
+                self.err(f"{tn}.{m}() takes no keyword arguments")
+        n = len(args)
+        if (m == "pop" or m == "clear" or m == "copy") and n > 0:
+            self.err(f"{tn}.{m}() takes no arguments ({n} given)")
+        if m in "add discard remove symmetric_difference symmetric_difference_update isdisjoint issubset issuperset".split() and n != 1:
+            self.err(f"{tn}.{m}() takes exactly one argument ({n} given)")
+        ov = f"ptr {o.v}"
+        none = Val("null", "None")
+        if m == "add":
+            v = self.store_elem(self.expr(args[0], et), et)
+            self.rt("pys_set_add", "void", [ov, "i64 " + self.to_slot(v)])
+            return none
+        if m == "discard" or m == "remove":
+            v = self.expr(args[0], et)
+            if v.t == "None" or (is_opt(v.t) and unopt(v.t) == et):
+                # None is no element: discard() does nothing, remove() raises KeyError: None
+                if m == "remove":
+                    self.guard(self.isnull(v) if v.t != "None" else "true", "KeyError: None")
+                    if v.t == "None":
+                        return none
+                    v = self.deref(v)
+                else:
+                    if v.t == "None":
+                        return none
+                    l1 = self.label()
+                    l2 = self.label()
+                    self.cbr(self.isnull(v), l2, l1)
+                    self.place(l1)
+                    self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
+                    self.br(l2)
+                    self.place(l2)
+                    return none
+            k = self.dkey(v, et)
+            if m == "remove" and bool_for_int(v.t, et):
+                # a bool where the elements are ints removes the int it equals, and CPython's
+                # KeyError names it as the bool it is (KeyError: True), where the runtime's would
+                # name the int
+                l1 = self.label()
+                l2 = self.label()
+                self.cbr(self.ins(f"icmp eq i64 {self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)])}, 0"), l1, l2)
+                self.place(l1)
+                self.raise_("KeyError", self.repr(v).v)
+                self.place(l2)
+                m = "discard"
+            self.rt("pys_set_discard" if m == "discard" else "pys_set_remove", "void", [ov, "i64 " + self.to_slot(k)])
+            return none
+        if m == "pop":
+            return self.from_slot(self.rt("pys_set_pop", "i64", [ov]), et)
+        if m == "clear":
+            self.rt("pys_set_clear", "void", [ov])
+            return none
+        if m == "copy":
+            return o if fz else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)  # (frozenset.copy() is the frozenset)
+        if m == "update":
+            # CPython evaluates the arguments, then adds the elements of each in turn: a generator's
+            # (or map()'s, filter()'s) as it yields them, which may see the set change
+            gens: list[Node] = []
+            vs = []
+            for a in args:
+                g = self.mapgen(a) if self.is_mapcall(a) else a
+                gens.append(g)
+                vs.append(Val("", "") if g.kind == "listcomp" and g.s == "gen" else self.siter(g, et, f"{tn}.{m}()"))
+            for i in range(n):
+                if vs[i].t == "":
+                    self.listcomp(gens[i], o.t, "", o.v, None, "set")
+                else:
+                    self.supdate(o.v, vs[i])
+            return none
+        vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
+        if m == "difference_update":
+            for v in vs:
+                self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
+            return none
+        if m == "union":
+            r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+            for v in vs:
+                if is_set(v.t):
+                    self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
+                else:
+                    self.supdate(r.v, v)
+            return r
+        if m == "intersection" or m == "intersection_update":
+            r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+            for v in vs:
+                r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
+            if m == "intersection":
+                return r
+            self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
+            return none
+        if m == "difference":
+            if n == 0:
+                return Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
+            v = vs[0]
+            r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+            for v in vs[1:]:
+                self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"])
+            return r
+        v = vs[0]
+        if m == "symmetric_difference":
+            return Val(self.rt("pys_set_xor" if is_set(v.t) else "pys_set_xor_dict" if is_dict(v.t) else "pys_set_xor_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+        if m == "symmetric_difference_update":
+            self.rt("pys_set_ixor" if is_set(v.t) else "pys_set_ixor_dict" if is_dict(v.t) else "pys_set_ixor_list", "void", [ov, f"ptr {v.v}"])
+            return none
+        if m == "isdisjoint":
+            hit = self.rt("pys_set_isdisjoint" if is_set(v.t) else "pys_set_isdisjoint_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
+        elif is_set(v.t):
+            hit = self.rt("pys_set_cmp", "i64", [ov, f"ptr {v.v}", "i64 1" if m == "issubset" else "i64 3"])
+        else:
+            hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
+        return Val(self.ins(f"icmp ne i64 {hit}, 0"), "bool")
+
     def fromkeys(self, args: list[Node], want: str) -> Val:
         # dict.fromkeys(xs, v=None): a dict of xs's items, each mapped to v. Both are evaluated
         # first; a dict's keys go into a table sized for them, any other iterable's one by one
@@ -18854,6 +19310,13 @@ class Gen:
         if bool_for_int(k.t, kt):
             self.err(f"a {typestr(k.t)} key is stored into a dict with {typestr(kt)} keys, where CPython keeps a key it adds as the bool it is (True, not 1): convert the bool with int()")
         return self.coerce(k, kt)
+
+    def store_elem(self, k: Val, et: str) -> Val:
+        # k as an element added to a set whose elements have type et (s.add(k), a display, a
+        # comprehension): as store_key, a bool is rejected where the elements are ints
+        if bool_for_int(k.t, et):
+            self.err(f"a {typestr(k.t)} element is added to a set of {typestr(et)} elements, where CPython keeps an element it adds as the bool it is (True, not 1): convert the bool with int()")
+        return self.coerce(k, et)
 
     def nonekey(self, k: Val, none: str, fn: str, av: list[str]) -> str:
         # the slot fn(av) returns, a dict lookup of key k; a key that is None is in no dict: the

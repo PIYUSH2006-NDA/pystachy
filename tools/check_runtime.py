@@ -21,7 +21,8 @@ disagrees with its entry is an internal error. This tool checks the table itself
     has a # parameter and reaches eqv, opv or repr (which walk a value of any type by its
     descriptor: the lists and dicts in it), and N if the C function is noreturn;
   - it has rL or wL if it reads or writes the memory of a list parameter (S of a list.* entry,
-    or list[...]), rD or wD a dict's (S of dict.*, dict[...]) and rF or wF a file's (S of
+    or list[...]), rD or wD a dict's (S of dict.*, dict[...]) or a set's (S of set.*, set[...]:
+    its memory counts as a dict's) and rF or wF a file's (S of
     file.*, file), which loads and stores through addresses derived from the parameter show:
     through getelementptr, load (the list's items array, an item), phi, select and casts,
     the locals they are stored in, and the parameters of the runtime functions they are passed
@@ -76,7 +77,11 @@ TOOL = (LLVM.rstrip("/") + "/") if LLVM else ""
 # which compare and print without user code
 NO_USER = {"dict.has", "dict.find", "dict.getitem", "dict.entry", "dict.get", "dict.set", "dict.pop", "dict.pop_default",
            "dict.setdefault", "dict.getbox", "dict.popbox", "dict.update", "dict.update_pairs", "dict.fromkeys",
-           "dict.fromkeys_dict"}
+           "dict.fromkeys_dict"} | {
+           k for k in ("set.add set.has set.discard set.remove set.update set.update_list set.update_dict set.union_more set.or "
+                       "set.and set.and_list set.isub set.isub_list set.sub set.sub_list set.sub_dict set.xor set.xor_list "
+                       "set.xor_dict set.ixor set.ixor_list set.ixor_dict set.cmp set.le_list set.ge_list set.isdisjoint "
+                       "set.isdisjoint_list set.copy").split()}
 RAISES = {"pys_fail", "pys_raise", "oserr", "kbint_exit", "throw_", "pys_reraise"}
 # what the raise funnels build their exception with: in a program that has a try, a raise allocates
 # its Exc on the way out, which R stands for (a collection may then run before a handler takes it),
@@ -114,7 +119,7 @@ READS_ONLY = set("""memcmp bcmp memchr memmem strlen strchr strstr strcmp strnca
 NO_STATE = {"ch1", "pys_round_n.b", "pys_round_n.o", "c_num"}
 # the parameter types whose memory the letters rL wL, rD wD and rF wF are about, by entry prefix
 # for S (the receiver)
-OWNER = {"list.": "L", "dict.": "D", "file.": "F"}
+OWNER = {"list.": "L", "dict.": "D", "set.": "D", "file.": "F"}  # (a set's memory counts as a dict's)
 
 
 def load_compiler():
@@ -743,7 +748,7 @@ def main():
         if uses_state(fns, used, sym):
             derived.append("I")
         for i, p in enumerate(pys.rtsig(k)[1:]):
-            o = OWNER.get(k[: k.find(".") + 1], "") if p == "S" else "L" if p.startswith("list[") else "D" if p.startswith("dict[") else "F" if p == "file" else ""
+            o = OWNER.get(k[: k.find(".") + 1], "") if p == "S" else "L" if p.startswith("list[") else "D" if p.startswith("dict[") or p.startswith("set[") else "F" if p == "file" else ""
             if o and sym in eff and i < len(eff[sym]) and eff[sym][i] is not None:
                 derived.extend((["r" + o] if eff[sym][i][0] else []) + (["w" + o] if eff[sym][i][1] else []))
         for x in derived:

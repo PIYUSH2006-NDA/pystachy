@@ -12,11 +12,11 @@ with a `file:line: error:`, never miscompiled.
 
 | | in short |
 |---|---|
-| [Types](#types) | `int` (64-bit, overflow-checked), `float`, `bool`, `str`, `list[T]`, `dict[K, V]`, `tuple[...]`, classes, dataclasses and `NamedTuple`s, `Optional` of any of these |
+| [Types](#types) | `int` (64-bit, overflow-checked), `float`, `bool`, `str`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, `tuple[...]`, classes, dataclasses and `NamedTuple`s, `Optional` of any of these |
 | [Typing rules](#typing-rules) | annotated functions have their declared types; an unannotated module-level function is a *template*, compiled once per list of argument types |
 | [Exceptions](#exceptions) | `try`/`except`/`else`/`finally` and `raise` with CPython 3.13's exception hierarchy, and exception classes of the program |
 | [Modules](#modules) | your own modules and packages, the builtin modules `sys`, `os`, `math`, `time`, ..., and unmodified standard library modules from `lib/` |
-| [Removed on purpose](#removed-on-purpose) | generators, inheritance (but an exception class's), sets, `bytes`, big integers, `async`, ... |
+| [Removed on purpose](#removed-on-purpose) | generators, inheritance (but an exception class's), `bytes`, big integers, `async`, ... |
 | [Syntax errors](#syntax-errors) | every `SyntaxError` CPython reports before running a file, at CPython's line and almost always with its message |
 
 Contents: [Types](#types) · [Typing rules](#typing-rules) · [Statements](#statements) ·
@@ -29,20 +29,21 @@ Contents: [Types](#types) · [Typing rules](#typing-rules) · [Statements](#stat
 ## Types
 
 `int` (64-bit), `float` (IEEE double), `bool`, `str`, `list[T]`, `dict[K, V]` (keys `int`,
-`str`, or tuples of `int`, `bool`, `str`, `str | None` and such tuples), `tuple[A, B, ...]` (up
+`str`, or tuples of `int`, `bool`, `str`, `str | None` and such tuples), `set[T]` and
+`frozenset[T]` (elements of the types a dict's keys may have), `tuple[A, B, ...]` (up
 to 9 elements, indexed by integer constants), user classes, `T | None` (also `None | T`,
 `Optional[T]` and `Union[T, None]`, whose repeated members collapse as `typing`'s do:
 `Union[T, T, None]`, and `Union[T]` is `T`) for a class type or for `str`, `int`, `float`,
-`bool`, `list`, `dict` and `tuple` (wherever a type goes, inside containers too), and `None` as
-a return type.
+`bool`, `list`, `dict`, `set`, `frozenset` and `tuple` (wherever a type goes, inside containers
+too), and `None` as a return type.
 
-The `typing` spellings (`List`, `Dict`, `Tuple`, `Optional`, `Union`, `TextIO`, and `Self` in a
+The `typing` spellings (`List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `TextIO`, and `Self` in a
 class's methods and fields, which is that class) work when imported from `typing`, and string
 forward references work (also inside `list["Node"]`), as does `typing_extensions` in place of
 `typing`. `collections.abc` imports as `typing` does (also `from collections import abc`), and
 `Mapping[K, V]` and `MutableMapping[K, V]` (from either) are `dict[K, V]`, `Sequence[T]` and
 `MutableSequence[T]` are `list[T]` (so they are invariant, and a tuple or `str` is no
-`Sequence`); `isinstance(x, Sequence)` and its siblings are decided by `x`'s type. `os.PathLike`
+`Sequence`), `MutableSet[T]` is `set[T]`; `isinstance(x, Sequence)` and its siblings are decided by `x`'s type. `os.PathLike`
 (also `os.PathLike[str]`) in a union with `str` is dropped, as a path of another type cannot
 exist in Pystachy: `str | os.PathLike[str]` is `str` (with `None`, `str | None`), and
 `os.fspath()` returns the `str` it is given.
@@ -50,6 +51,18 @@ exist in Pystachy: `str | os.PathLike[str]` is `str` (with `None`, `str | None`)
 `x: Final = v` is `x = v` outside class bodies (in one, a field typed by its constant),
 `x: Final[T]` is `x: T`, `x: Final` alone does nothing, and a `def` decorated with `@overload`
 (also a method) is the stub CPython replaces with the `def` after it: it is dropped.
+
+A set or frozenset is CPython 3.13's hash table (`setobject.c`), whose slots decide the order in
+which a loop, `print()` or `list()` sees the elements: Pystachy's has the same slots, with
+CPython's hashes for ints, bools, `None` and tuples of them, so such a set iterates and prints
+as it does in CPython (a set of strs, whose hashes CPython varies from run to run, see
+[deviations](#deviations-from-cpython)). Each operation makes its result as CPython's does (a
+copy merges the table, `s & t` walks the smaller set, `s - t` copies `s` where it is much larger,
+a display of constants is the frozenset constant CPython's compiler makes, ...), a loop over a
+set that changes size raises CPython's `RuntimeError`, and `set()` without a type takes the type
+its first use shows, as `[]` does (`s.add(x)`, `s.update(xs)`, `s |= t`, also
+`d.setdefault(k, set()).add(x)`). A frozenset has the methods that change nothing, and
+`f |= t` rebinds `f` to a new one, as CPython's does.
 
 ### When annotations are evaluated
 
@@ -489,8 +502,9 @@ that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python sem
 chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
 `None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
-indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/tuple
-displays, list comprehensions, generator expressions and
+indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/set/tuple
+displays, list and set comprehensions, set operators (`|`, `&`, `-` and `^` of sets and
+frozensets, their in-place forms, and `<`, `<=`, `>`, `>=` as subsets), generator expressions and
 `range()`/`reversed()`/`enumerate()`/`zip()`, and `map()`/`filter()` (the generator expressions
 they are, their function evaluated first), as the argument of `list()`, `sorted()`,
 `sum()`, `min()`, `max()`, `any()`, `all()`, `math.fsum()`, `math.prod()`, `str.join()` or
@@ -527,8 +541,11 @@ CPython's error when it runs.
 `print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
 `int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
 or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
-`list.sort`, with `key=` and `reverse=`), `list`, `dict`, `round`, `divmod`, `pow` (also modular,
-with inverses), `any`, `all`, `input`, `format`; the common `str`, `list` and `dict` methods
+`list.sort`, with `key=` and `reverse=`), `list`, `dict`, `set` and `frozenset` (of any iterable of
+their element type), `round`, `divmod`, `pow` (also modular,
+with inverses), `any`, `all`, `input`, `format`; every method of `set` and `frozenset` (those that
+take iterables take sets, dicts, lists and other iterables, several where CPython's take
+several); the common `str`, `list` and `dict` methods
 (`find`/`index`/`count` with start and end, also `None`, `startswith`/`endswith` also with a tuple of
 `str`, `split`/`rsplit`, `partition`/`rpartition`,
 `splitlines`, `removeprefix`/`removesuffix`, `center`/`ljust`/`rjust` with a fill character,
@@ -562,7 +579,7 @@ arguments above, inheritance other than an exception class's,
 `*args` and `**kwargs` in methods, `**` arguments other than a function's `**kwargs` (or a dict
 display's), star arguments other than a tuple's items (or a display's, and a list's in `print()`: see
 *Typing rules*), starred targets (`a, *rest = xs`),
-sets, dict and multi-clause comprehensions, slice steps, `map()` and `filter()` other than as a
+dict and multi-clause comprehensions, slice steps, `map()` and `filter()` other than as a
 consumer's argument (above), `isinstance`/`hasattr` other than the static cases above, `getattr`/`eval`, `bytes` (literals
 are rejected; a binary mode computed at run time raises `NotImplementedError`) and binary
 files, complex numbers, arbitrary-precision integers, `async`, `match` and `:=`. The parser
@@ -634,6 +651,18 @@ In these cases the program compiles but can behave differently from CPython:
   where the call is evaluated, so a later argument that changes the dict does not change it
   (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
   `dict.fromkeys(d.keys(), d.pop(k))`), where CPython's view shows the change.
+- A set of strs (or of tuples with str items) iterates and prints in an order of its own: a
+  str's hash is the dict's, where CPython's changes from run to run (`PYTHONHASHSEED`), so no
+  order of such a set is CPython's on every run (`sorted()` gives one). A display of constants
+  equal to an earlier one of its module is made of its own items, where CPython's compiler
+  reuses the earlier one's frozenset constant, whose table can differ where elements collide,
+  and a module CPython loads from its `.pyc` rebuilds such constants once more. `min()` and
+  `max()` of a set take its elements before they call a `key=` function, which so does not see
+  the set change (CPython's raises `RuntimeError` where it changes the set's size), and the set
+  methods but `update()` take all the items of a generator expression before they run.
+  `update()` adds a generator's elements as it makes them, after those of the arguments before
+  it, and evaluates the generator's first iterable then too, where CPython evaluates that with
+  the call's arguments.
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
   index outside a tuple) is a compile-time error, so the output before it is not printed.
 - An exception that nothing catches prints only the last line of CPython's traceback (without
@@ -917,10 +946,14 @@ CPython would run these programs, but Pystachy rejects them at compile time, wit
   is first assigned (`for w in ws: last = w`), or that only functions or other modules give another
   value (annotate it at module level: `last: str | None = None`)
 
-### Dict keys and `bool` values
+### Dict keys, set elements and `bool` values
 
 - dict key types that may be `None`, and tuple keys holding other items (a `float`, a `list`, an
-  object, a NamedTuple)
+  object, a NamedTuple); set elements of these types too, and frozensets as set elements or keys
+- a `bool` added to a set of ints (CPython keeps it as the `bool` it is, which prints as `True`)
+- unpacking in a set display (`{*xs}`), a set operator with an operand that is not a set or
+  frozenset (`s | [1]`: CPython's `TypeError`), or with sets of different element types
+  (`{1} | {"a"}`), and an empty `set()` or `frozenset()` that nothing gives a type
 - a `bool` where an `int` is stored (`x: int = True`: CPython keeps the `bool`, which prints as
   `True`), also as a dict key or a tuple key's item where the keys hold an `int` (`d[True] = v`,
   `setdefault()`, a display: CPython keeps a key it adds as the `bool`; a lookup, `pop()`, `del`

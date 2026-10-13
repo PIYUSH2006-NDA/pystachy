@@ -264,7 +264,7 @@ as RPython does). Further, in measured order of weight: `with` on objects (`__en
 statically), first-class functions passed as arguments (`key=`, `map`, specialised as
 compile-time constants of a template's instance), `Optional[int]`/`Optional[str]` (a null
 pointer for `str` and containers, a flag and a value for scalars), generators (a heap frame
-and a resume switch), sets on the dict table, and the missing `str`, `os` and `sys` API.
+and a resume switch), sets (now implemented as CPython's own tables), and the missing `str`, `os` and `sys` API.
 
 For importability, independently of the order above, the measured blockers are a handful of
 C modules and dynamic hubs. Native shims for `_weakref` (strong references), `_thread` (one

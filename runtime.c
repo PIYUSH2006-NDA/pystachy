@@ -28,6 +28,7 @@ typedef int64_t I;
 typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
+typedef struct { I len, kind, fill, mask, finger; I *keys, *hs; } Set; /* a set or frozenset, kind as Dict's; see sets */
 typedef struct { char *p; I n, cap; } Buf;
 typedef struct Exc Exc;                                /* a raised exception (see exceptions) */
 #define NONE INT64_MIN                                 /* omitted slice bound */
@@ -896,8 +897,8 @@ I pys_floor(double d) { return pys_f2i(floor(d)); }
 I pys_ceil(double d) { return pys_f2i(ceil(d)); }
 
 /* ---------- generic repr / equality / ordering driven by a type descriptor ----------
-   i int, f float, b bool, s str, L<e> list, D<k><v> dict, T<n><e...> tuple, O<id> object
-   of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
+   i int, f float, b bool, s str, L<e> list, D<k><v> dict, T<n><e...> tuple, S<e> set, F<e>
+   frozenset, O<id> object of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
    has three digits or more (O007, O1234): a letter or the end of the descriptor follows it;
    ?<e> None (null) or a value of <e>; E an exception (an Exc) */
 I pys_obj_eq(I c, I a, I b);
@@ -929,7 +930,7 @@ static I unbox(I v, const char *d) { return *d == 'i' || *d == 'f' || *d == 'b' 
 static const char *skip(const char *d) {
   char c = *d++;
   if (c == 'O') { d += 3; while (*d >= '0' && *d <= '9') d++; return d; }
-  if (c == 'L' || c == '?') return skip(d);
+  if (c == 'L' || c == '?' || c == 'S' || c == 'F') return skip(d);
   if (c == 'D') return skip(skip(d));
   if (c == 'T') for (int n = *d++ - '0'; n > 0; n--) d = skip(d);
   return d;
@@ -985,6 +986,13 @@ static const char *repr(Buf *b, I v, const char *d) {
     }
     put(b, "}", 1); pys_repr_leave(m); return skip(dv);
   }
+  case 'S': case 'F': {                             /* set() or {1, 2}; frozenset() or frozenset({1, 2}) */
+    Set *s = (Set *)v; int f = d[-1] == 'F';
+    if (!s->len) { put(b, f ? "frozenset()" : "set()", f ? 11 : 5); return skip(d); }
+    put(b, f ? "frozenset({" : "{", f ? 11 : 1);
+    for (I i = 0, n = 0; i <= s->mask; i++) if (s->hs[i] != -1) { if (n++) put(b, ", ", 2); repr(b, s->keys[i], d); }
+    put(b, f ? "})" : "}", f ? 2 : 1); return skip(d);
+  }
   case 'T': {
     if (!v) { put(b, "None", 4); return skip(d - 1); }
     int n = *d++ - '0'; I *t = (I *)v; put(b, "(", 1);
@@ -999,13 +1007,14 @@ static const char *repr(Buf *b, I v, const char *d) {
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
 static I entry(Dict *d, I k);
+I pys_set_cmp(Set *a, Set *b, I op);
 static int eqv(I a, I b, const char *d);
 /* Container items use identity before equality (PyObject_RichCompareBool). Keep this
    separate from direct comparison: equal unboxed float bits need not compare equal,
    and an optional scalar's box does not give that scalar Python object identity. */
 static int eqitem(I a, I b, const char *d) {
   char c = d[*d == '?'];
-  return (a == b && (c == 'L' || c == 'D' || c == 'T')) || eqv(a, b, d);
+  return (a == b && (c == 'L' || c == 'D' || c == 'T' || c == 'S' || c == 'F')) || eqv(a, b, d);
 }
 #ifndef EQ_PROBE
 #define EQ_PROBE()
@@ -1038,6 +1047,7 @@ static int eqv(I a, I b, const char *d) {
     for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return 0;
     return 1;
   }
+  case 'S': case 'F': return pys_set_cmp((Set *)a, (Set *)b, 4);   /* (a set equals a frozenset of its elements) */
   case 'O': return a == b || pys_obj_eq(ocls(d + 1), a, b);   /* identity first, like CPython */
   case '?': return a && b ? eqv(unbox(a, d + 1), unbox(b, d + 1), d + 1) : a == b;   /* None equals only None */
   case 'E': return pys_exc_id((Exc *)a) == pys_exc_id((Exc *)b);
@@ -1065,6 +1075,7 @@ static int opv(I a, I b, const char *d, I op) {
     for (int i = 0; i < d[1] - '0'; i++, e = skip(e)) if (!eqitem(x[i], y[i], e)) return opv(x[i], y[i], e, op);
     return cmpop(0, op);
   }
+  case 'S': case 'F': return pys_set_cmp((Set *)a, (Set *)b, op) != 0;   /* subsets */
   case 'O': return pys_obj_cmp(ocls(d + 1), op, a, b) != 0;
   case 'K': return opv(((I *)a)[0], ((I *)b)[0], d + 1, op);   /* key='s records {key, value}: their keys */
   case 'D': failf("TypeError: '%s' not supported between instances of 'dict' and 'dict'", op == 0 ? "<" : op == 1 ? "<=" : op == 2 ? ">" : ">=");
@@ -1709,6 +1720,269 @@ Dict *pys_dict_fromkeys_dict(Dict *o, I v) {
   return d;
 }
 
+/* ---------- sets: CPython's setobject.c ----------
+   A set or frozenset is CPython 3.13's table, since its slots decide the order in which a loop,
+   print() or list() sees the elements: there is no entry array in insertion order, as a dict
+   has, but mask + 1 slots (a power of two, 8 at first and after clear()) with each element
+   where its probes first found room. A probe looks at up to ten adjacent slots (one at the end
+   of the table), then moves on by CPython's perturbed step. hs[i] is the hash of keys[i], or -1
+   in a slot that holds no element: keys[i] is then 0 if none ever was there (which ends a
+   lookup), 1 if one was removed (CPython's dummy, which an insertion reuses: the last one its
+   probes passed). fill counts the slots that are not empty, dummies too, and len the elements.
+   An insertion that brings fill to 3/5 of the slots rebuilds the table, without dummies, for 4
+   times the elements (2 times above 50000); merges and differences resize as CPython's do, and
+   set(s), s | t, s & t, ... are made as CPython makes them, since that decides their tables
+   too. The hashes are CPython's where its own do not change from run to run, so that a set of
+   them iterates in CPython's order: an int's is the int modulo 2**61 - 1 with its sign (-1 is
+   -2), a bool's 0 or 1, None's 0xFCA86420, a tuple's xxHash's rounds over its items'; a str's
+   is the dict's hash of it (CPython's depends on PYTHONHASHSEED, so no order is CPython's for
+   strs). kind is Dict.kind: 0 int elements, 1 str, else a Str *, the descriptor of tuple
+   elements; equality is a dict key's. A frozenset is a set that the compiler gives no method
+   that changes it. */
+#define LINEAR_PROBES 9
+#define NONE_HASH 0xFCA86420                         /* hash(None) since CPython 3.12 */
+static I hint(I v) {                                 /* long_hash */
+  uint64_t u = v < 0 ? 0 - (uint64_t)v : (uint64_t)v;
+  I h = (I)(u % ((1ULL << 61) - 1));
+  h = v < 0 ? -h : h;
+  return h == -1 ? -2 : h;
+}
+static I hstr(Str *s) { Dict t = {.kind = 1}; I h = (I)hsh(&t, (I)s); return h == -1 ? -2 : h; }
+static I hitem(I k, const char *d);
+static I htuple(I *t, const char *d) {               /* tuplehash */
+  uint64_t acc = 2870177450012600261ULL; const char *e = d + 2; int n = d[1] - '0';
+  for (int i = 0; i < n; i++, e = skip(e)) {
+    acc += (uint64_t)hitem(t[i], e) * 14029467366897019727ULL;
+    acc = acc << 31 | acc >> 33;
+    acc *= 11400714785074694791ULL;
+  }
+  acc += (uint64_t)n ^ (2870177450012600261ULL ^ 3527539ULL);
+  return acc == (uint64_t)-1 ? 1546275796 : (I)acc;
+}
+static I hitem(I k, const char *d) {                 /* the hash of a tuple element's item k, by its descriptor */
+  if (*d == '?' || *d == 's') {
+    if (!k) return NONE_HASH;                        /* (None: also a looked-up key's, see hval) */
+    k = unbox(k, d + (*d == '?'));
+    d += *d == '?';
+  }
+  return *d == 'b' ? k : *d == 's' ? hstr((Str *)k) : *d == 'T' ? htuple((I *)k, d) : hint(k);
+}
+static I shash(Set *s, I k) { return s->kind == 0 ? hint(k) : s->kind == 1 ? hstr((Str *)k) : htuple((I *)k, ((Str *)s->kind)->s); }
+static int skeq(Set *s, I a, I b) {
+  return a == b || (s->kind == 1 ? pys_str_eq((Str *)a, (Str *)b) : s->kind > 1 && eqv(a, b, ((Str *)s->kind)->s));
+}
+static void stable(Set *s, I size) {                 /* an empty table of size slots */
+  s->keys = pys_alloc(size * 8); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
+  s->mask = size - 1; s->fill = 0;
+}
+Set *pys_set_new(I kind) { Set *s = pys_alloc(sizeof(Set)); s->kind = kind; stable(s, 8); return s; }
+static I slook(Set *s, I k, I h) {                   /* set_lookkey: k's slot, else the empty one that ends its probes */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    I probes = i + LINEAR_PROBES <= mask ? LINEAR_PROBES : 0;
+    for (uint64_t j = i;; j++) {
+      DICT_PROBE();
+      if (s->hs[j] == h ? skeq(s, s->keys[j], k) : s->hs[j] == -1 && !s->keys[j]) return (I)j;
+      if (!probes--) break;
+    }
+  }
+}
+static void sclean(Set *s, I k, I h) {               /* set_insert_clean: k into a table that has no dummy, nor k */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h, e;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    if (s->hs[e = i] == -1) break;
+    if (i + LINEAR_PROBES <= mask) {
+      int j = 0;
+      while (j < LINEAR_PROBES && s->hs[++e] != -1) j++;
+      if (j < LINEAR_PROBES) break;
+    }
+  }
+  s->keys[e] = k; s->hs[e] = h;
+}
+static void sresize(Set *s, I minused) {             /* set_table_resize: the first size > minused, without dummies */
+  I size = 8, m = s->mask, *keys = s->keys, *hs = s->hs;
+  while (size <= minused) size <<= 1;
+  if (size == 8 && m == 7 && s->fill == s->len) return;   /* (the small table without dummies stays as it is) */
+  stable(s, size); s->fill = s->len;
+  for (I i = 0; i <= m; i++) if (hs[i] != -1) sclean(s, keys[i], hs[i]);
+}
+static void sadd(Set *s, I k, I h) {                 /* set_add_entry: k, whose hash is h, unless an equal element is there */
+  uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h;
+  I free = -1;
+  for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
+    I probes = i + LINEAR_PROBES <= mask ? LINEAR_PROBES : 0;
+    for (uint64_t j = i;; j++) {
+      DICT_PROBE();
+      if (s->hs[j] == h) { if (skeq(s, s->keys[j], k)) return; }
+      else if (s->hs[j] == -1 && s->keys[j]) free = (I)j;
+      else if (s->hs[j] == -1) {
+        if (free >= 0) { s->keys[free] = k; s->hs[free] = h; s->len++; return; }
+        s->keys[j] = k; s->hs[j] = h; s->len++;
+        if ((uint64_t)++s->fill * 5 >= mask * 3) sresize(s, s->len > 50000 ? s->len * 2 : s->len * 4);
+        return;
+      }
+      if (!probes--) break;
+    }
+  }
+}
+static int sdiscard(Set *s, I k, I h) {              /* set_discard_entry: was k there */
+  I j = slook(s, k, h);
+  if (s->hs[j] == -1) return 0;
+  s->keys[j] = 1; s->hs[j] = -1; s->len--;
+  return 1;
+}
+static int shas(Set *s, I k, I h) { return s->hs[slook(s, k, h)] != -1; }
+static void smerge(Set *s, Set *o) {                 /* set_merge: o's elements into s */
+  if (o == s || !o->len) return;
+  if ((s->fill + o->len) * 5 >= s->mask * 3) sresize(s, (s->len + o->len) * 2);
+  if (!s->fill && s->mask == o->mask && o->fill == o->len) {   /* tables of one size, o's without dummies: a copy */
+    memcpy(s->keys, o->keys, (o->mask + 1) * 8); memcpy(s->hs, o->hs, (o->mask + 1) * 8);
+    s->fill = o->fill; s->len = o->len; return;
+  }
+  if (!s->fill) {
+    s->fill = s->len = o->len;
+    for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sclean(s, o->keys[i], o->hs[i]);
+    return;
+  }
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sadd(s, o->keys[i], o->hs[i]);
+}
+static void sshrink(Set *s) {                        /* after a difference: a rebuild once a quarter of the slots are dummies */
+  if ((uint64_t)(s->fill - s->len) > (uint64_t)s->mask / 4) sresize(s, s->len > 50000 ? s->len * 2 : s->len * 4);
+}
+static void ssymupd(Set *s, Set *o) {                /* set_symmetric_difference_update_set */
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1 && !sdiscard(s, o->keys[i], o->hs[i])) sadd(s, o->keys[i], o->hs[i]);
+}
+static int ssubset(Set *a, Set *b) {                 /* set_issubset of a set */
+  if (a->len > b->len) return 0;
+  for (I i = 0; i <= a->mask; i++) if (a->hs[i] != -1 && !shas(b, a->keys[i], a->hs[i])) return 0;
+  return 1;
+}
+LOOKUP void pys_set_add(Set *s, I k) { sadd(s, k, shash(s, k)); }
+LOOKUP I pys_set_has(Set *s, I k) { return shas(s, k, shash(s, k)); }
+LOOKUP void pys_set_discard(Set *s, I k) { sdiscard(s, k, shash(s, k)); }
+LOOKUP void pys_set_remove(Set *s, I k) {
+  if (sdiscard(s, k, shash(s, k))) return;
+  Buf b = {0}; put(&b, "KeyError: ", 10); repr(&b, k, s->kind > 1 ? ((Str *)s->kind)->s : s->kind ? "s" : "i"); put(&b, "", 1); pys_fail(b.p);
+}
+I pys_set_pop(Set *s) {                              /* set_pop: the first element from the finger on */
+  if (!s->len) pys_fail("KeyError: 'pop from an empty set'");
+  I i = s->finger & s->mask;
+  while (s->hs[i] == -1) if (++i > s->mask) i = 0;
+  I k = s->keys[i];
+  s->keys[i] = 1; s->hs[i] = -1; s->len--; s->finger = i + 1;
+  return k;
+}
+void pys_set_clear(Set *s) { stable(s, 8); s->len = 0; }
+/* set(o), s.copy() and frozenset(o) of a set o: o merged into a new set */
+Set *pys_set_copy(Set *s) { Set *r = pys_set_new(s->kind); smerge(r, s); return r; }
+/* s.update(o) (s |= o) of a set o; of a list (any other iterable's items), one insertion per item;
+   of a dict, one resize for all its keys, then theirs in order */
+void pys_set_update(Set *s, Set *o) { smerge(s, o); }
+void pys_set_update_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) pys_set_add(s, l->a[i]); }
+void pys_set_update_dict(Set *s, Dict *d) {
+  if ((s->fill + d->len) * 5 >= s->mask * 3) sresize(s, (s->len + d->len) * 2);
+  for (I e = 0; e < d->n; e++) if (d->hs[e]) pys_set_add(s, d->keys[e]);
+}
+/* s.union(..., o, ...) after the first: o, unless it is s itself (r: the union so far) */
+void pys_set_union_more(Set *r, Set *s, Set *o) { if (o != s) smerge(r, o); }
+Set *pys_set_or(Set *a, Set *b) { Set *r = pys_set_copy(a); if (b != a) smerge(r, b); return r; }
+/* s & o (set_intersection): the elements of the smaller set (o if both have as many), in its order,
+   that the other has; of a list, its items in order that s has, until there are as many as s has */
+Set *pys_set_and(Set *a, Set *b) {
+  if (a == b) return pys_set_copy(a);
+  Set *r = pys_set_new(a->kind);
+  if (b->len > a->len) { Set *t = a; a = b; b = t; }
+  for (I i = 0; i <= b->mask; i++) if (b->hs[i] != -1 && shas(a, b->keys[i], b->hs[i])) sadd(r, b->keys[i], b->hs[i]);
+  return r;
+}
+Set *pys_set_and_list(Set *s, List *l) {
+  Set *r = pys_set_new(s->kind);
+  for (I i = 0; i < l->len; i++) {
+    I k = l->a[i], h = shash(s, k);
+    if (shas(s, k, h)) { sadd(r, k, h); if (r->len >= s->len) break; }
+  }
+  return r;
+}
+/* s &= o and s.intersection_update(...): s takes the table of the intersection (set_swap_bodies) */
+void pys_set_assign(Set *s, Set *t) { s->len = t->len; s->fill = t->fill; s->mask = t->mask; s->keys = t->keys; s->hs = t->hs; }
+/* s -= o and s.difference_update(o) (set_difference_update_internal): o's elements discarded (those
+   of s & o, if o is more than 8 times larger); a list's items in order */
+void pys_set_isub(Set *s, Set *o) {
+  if (s == o) { pys_set_clear(s); return; }
+  if ((o->len >> 3) > s->len) o = pys_set_and(s, o);
+  for (I i = 0; i <= o->mask; i++) if (o->hs[i] != -1) sdiscard(s, o->keys[i], o->hs[i]);
+  sshrink(s);
+}
+void pys_set_isub_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) pys_set_discard(s, l->a[i]); sshrink(s); }
+/* s - o (set_difference): a copy of s less o's elements if s has more than 4 times as many, else
+   the elements of s that o has not, inserted into a new set; of a list, the copy less its items;
+   of a dict, as of a set, with its keys */
+Set *pys_set_sub(Set *a, Set *b) {
+  if ((a->len >> 2) > b->len) { Set *r = pys_set_copy(a); pys_set_isub(r, b); return r; }
+  Set *r = pys_set_new(a->kind);
+  for (I i = 0; i <= a->mask; i++) if (a->hs[i] != -1 && !shas(b, a->keys[i], a->hs[i])) sadd(r, a->keys[i], a->hs[i]);
+  return r;
+}
+Set *pys_set_sub_list(Set *s, List *l) { Set *r = pys_set_copy(s); pys_set_isub_list(r, l); return r; }
+Set *pys_set_sub_dict(Set *s, Dict *d) {
+  if ((s->len >> 2) > d->len) {
+    Set *r = pys_set_copy(s);
+    for (I e = 0; e < d->n; e++) if (d->hs[e]) pys_set_discard(r, d->keys[e]);
+    sshrink(r);
+    return r;
+  }
+  Set *r = pys_set_new(s->kind);
+  for (I i = 0; i <= s->mask; i++) if (s->hs[i] != -1 && !pys_dict_has(d, s->keys[i])) sadd(r, s->keys[i], s->hs[i]);
+  return r;
+}
+/* s ^ o (set_symmetric_difference): a new set of o's elements (a list's items, a dict's keys), with
+   each element of s then removed if it is there, else added */
+Set *pys_set_xor(Set *a, Set *b) { Set *r = pys_set_new(a->kind); smerge(r, b); ssymupd(r, a); return r; }
+Set *pys_set_xor_list(Set *s, List *l) { Set *r = pys_set_new(s->kind); pys_set_update_list(r, l); ssymupd(r, s); return r; }
+Set *pys_set_xor_dict(Set *s, Dict *d) { Set *r = pys_set_new(s->kind); pys_set_update_dict(r, d); ssymupd(r, s); return r; }
+/* s ^= o and s.symmetric_difference_update(o): each element of o removed from s if it is there, else
+   added (s ^= s empties s); a list's items go through a set of them first, a dict's keys do not */
+void pys_set_ixor(Set *s, Set *o) { if (s == o) pys_set_clear(s); else ssymupd(s, o); }
+void pys_set_ixor_list(Set *s, List *l) { Set *o = pys_set_new(s->kind); pys_set_update_list(o, l); ssymupd(s, o); }
+void pys_set_ixor_dict(Set *s, Dict *d) {
+  for (I e = 0; e < d->n; e++) if (d->hs[e]) { I k = d->keys[e], h = shash(s, k); if (!sdiscard(s, k, h)) sadd(s, k, h); }
+}
+/* a op b for op 0..5 = < <= > >= == != (set_richcompare): subsets and equality */
+I pys_set_cmp(Set *a, Set *b, I op) {
+  switch (op) {
+  case 0: return a->len < b->len && ssubset(a, b);
+  case 1: return ssubset(a, b);
+  case 2: return a->len > b->len && ssubset(b, a);
+  case 3: return ssubset(b, a);
+  case 4: return a->len == b->len && ssubset(a, b);
+  }
+  return a->len != b->len || !ssubset(a, b);
+}
+/* s.issubset(l), s.issuperset(l) and s.isdisjoint(...) */
+I pys_set_le_list(Set *s, List *l) { return pys_set_and_list(s, l)->len == s->len; }
+I pys_set_ge_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) if (!pys_set_has(s, l->a[i])) return 0; return 1; }
+I pys_set_isdisjoint(Set *a, Set *b) {
+  if (a == b) return !a->len;
+  if (b->len > a->len) { Set *t = a; a = b; b = t; }
+  for (I i = 0; i <= b->mask; i++) if (b->hs[i] != -1 && shas(a, b->keys[i], b->hs[i])) return 0;
+  return 1;
+}
+I pys_set_isdisjoint_list(Set *s, List *l) { for (I i = 0; i < l->len; i++) if (pys_set_has(s, l->a[i])) return 0; return 1; }
+/* for loops: the slot of the next element from slot i, or -1 at the end, failing like CPython's set
+   iterator when the set changed size meanwhile (used: its len when the loop started) */
+I pys_set_next(Set *s, I i, I used) {
+  if (s->len != used) pys_fail("RuntimeError: Set changed size during iteration");
+  while (i <= s->mask && s->hs[i] == -1) i++;
+  return i > s->mask ? -1 : i;
+}
+I pys_set_key(Set *s, I i) { return s->keys[i]; }
+/* list(s), sorted(s), ...: the elements in the order a loop sees them */
+List *pys_set_list(Set *s) {
+  List *l = pys_list_new(s->len);
+  for (I i = 0; i <= s->mask; i++) if (s->hs[i] != -1) l->a[l->len++] = s->keys[i];
+  return l;
+}
+
 /* ---------- formatting: f"{x:spec}" ---------- */
 /* CPython's format-spec mini-language for int (and bool), float and str:
    [[fill]align][sign][z][#][0][width][grouping][.precision][type]. Widths count code points;
@@ -1723,7 +1997,7 @@ static I u8enc(char *o, I c) {
   o[0] = 0xF0 | c >> 18; o[1] = 0x80 | (c >> 12 & 63); o[2] = 0x80 | (c >> 6 & 63); o[3] = 0x80 | (c & 63); return 4;
 }
 static const char *tyname(char d) {
-  return d == 'i' ? "int" : d == 'b' ? "bool" : d == 'f' ? "float" : d == 's' ? "str" : d == 'L' ? "list" : d == 'D' ? "dict" : d == 'T' ? "tuple" : "object";
+  return d == 'i' ? "int" : d == 'b' ? "bool" : d == 'f' ? "float" : d == 's' ? "str" : d == 'L' ? "list" : d == 'D' ? "dict" : d == 'T' ? "tuple" : d == 'S' ? "set" : d == 'F' ? "frozenset" : "object";
 }
 /* The mini-language itself is in runtime.py (pys_format_str, _int, _float); pys_format picks one
    by the descriptor, and pys_fmt_float writes the digits of a float for a presentation type with

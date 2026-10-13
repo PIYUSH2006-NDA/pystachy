@@ -24,7 +24,7 @@ def frozen(a, *args, **kwargs):
 
 
 @staticmethod
-def loose(a, key=len, empty={1, 2}, raw=b"x", rest=..., big=(sys.maxsize, LIMIT)):
+def loose(a, key=len, empty=(1, b"y"), raw=b"x", rest=..., big=(sys.maxsize, LIMIT)):
     return a
 
 
