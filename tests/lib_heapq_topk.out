@@ -1,0 +1,89 @@
+-1 [] []
+-1 [] []
+0 [] []
+0 [] []
+1 [1] [9]
+1 [9] [3]
+2 [1, 2] [9, 8]
+2 [9, 8] [3, 7]
+3 [1, 2, 3] [9, 8, 8]
+3 [9, 8, 8] [3, 7, 3]
+8 [1, 2, 3, 3, 5, 7, 8, 8] [9, 8, 8, 7, 5, 3, 3, 2]
+8 [9, 8, 8, 7, 5, 3, 3, 2] [3, 7, 3, 2, 5, 1, 9, 8]
+9 [1, 2, 3, 3, 5, 7, 8, 8, 9] [9, 8, 8, 7, 5, 3, 3, 2, 1]
+9 [9, 8, 8, 7, 5, 3, 3, 2, 1] [3, 7, 3, 2, 5, 1, 9, 8, 8]
+10 [1, 2, 3, 3, 5, 7, 8, 8, 9] [9, 8, 8, 7, 5, 3, 3, 2, 1]
+10 [9, 8, 8, 7, 5, 3, 3, 2, 1] [3, 7, 3, 2, 5, 1, 9, 8, 8]
+100 [1, 2, 3, 3, 5, 7, 8, 8, 9] [9, 8, 8, 7, 5, 3, 3, 2, 1]
+100 [9, 8, 8, 7, 5, 3, 3, 2, 1] [3, 7, 3, 2, 5, 1, 9, 8, 8]
+-1 [] [] [] []
+0 [] [] [] []
+1 [] [] [] []
+2 [] [] [] []
+[-7.5, -1.0, 0.0] [-7.5, 3.25]
+['Banana', 'Fig', 'apple'] ['pear', 'kiwi', 'date'] ['apple', 'Banana', 'cherry'] ['Banana', 'cherry']
+2 [('bob', 5), ('dee', 5)] [('eve', 1), ('ann', 3)]
+3 [('bob', 5), ('dee', 5), ('fay', 5)] [('eve', 1), ('ann', 3), ('cy', 3)]
+4 [('bob', 5), ('dee', 5), ('fay', 5), ('ann', 3)] [('eve', 1), ('ann', 3), ('cy', 3), ('gus', 3)]
+6 [('bob', 5), ('dee', 5), ('fay', 5), ('ann', 3), ('cy', 3), ('gus', 3)] [('eve', 1), ('ann', 3), ('cy', 3), ('gus', 3), ('bob', 5), ('dee', 5)]
+7 [('bob', 5), ('dee', 5), ('fay', 5), ('ann', 3), ('cy', 3), ('gus', 3), ('eve', 1)] [('eve', 1), ('ann', 3), ('cy', 3), ('gus', 3), ('bob', 5), ('dee', 5), ('fay', 5)]
+[(0, 'a'), (0, 'b'), (1, 'a')] [(2, 'c'), (1, 'z'), (1, 'a')] [(1, 'a')]
+nsmallest 1 [h0] 9 b1<a4 c4<b1 d7<b1 e1<b1 f9<b1 g4<b1 h0<b1 i7<h0 j2<h0
+nlargest 1 [f9] 9 a4<b1 a4<c4 a4<d7 d7<e1 d7<f9 f9<g4 f9<h0 f9<i7 f9<j2
+nsmallest 2 [h0, e1] 12 b1<a4 c4<a4 d7<a4 e1<a4 b1<e1 f9<b1 g4<b1 h0<b1 e1<h0 i7<e1 j2<e1 h0<e1
+nlargest 2 [f9, d7] 13 a4<b1 b1<c4 c4<a4 a4<d7 d7<c4 c4<e1 c4<f9 f9<d7 d7<g4 d7<h0 d7<i7 d7<j2 d7<f9
+nsmallest 3 [h0, e1, b1] 16 c4<b1 c4<a4 d7<c4 e1<c4 a4<b1 a4<e1 f9<a4 g4<a4 h0<a4 e1<b1 e1<h0 i7<e1 j2<e1 b1<e1 h0<b1 e1<b1
+nlargest 3 [f9, d7, i7] 20 b1<c4 a4<b1 b1<d7 a4<c4 d7<c4 c4<e1 c4<f9 a4<d7 f9<a4 a4<g4 a4<h0 a4<i7 f9<d7 i7<d7 d7<j2 f9<i7 d7<f9 i7<f9 d7<f9 d7<i7
+nsmallest 5 [h0, b1, e1, j2, a4] 28 e1<d7 d7<b1 c4<d7 e1<b1 e1<a4 d7<a4 f9<d7 g4<d7 c4<a4 c4<g4 h0<c4 g4<a4 g4<h0 i7<g4 j2<g4 h0<a4 e1<b1 e1<j2 a4<j2 j2<a4 h0<j2 b1<h0 h0<b1 b1<a4 b1<j2 b1<h0 e1<j2 e1<b1
+nlargest 5 [f9, i7, d7, g4, a4] 23 d7<e1 b1<e1 e1<c4 d7<b1 a4<b1 e1<f9 b1<c4 d7<a4 f9<a4 b1<g4 a4<c4 g4<c4 c4<h0 c4<i7 a4<g4 i7<g4 g4<j2 d7<f9 i7<d7 d7<i7 a4<i7 g4<a4 a4<g4
+nsmallest 10 [h0, b1, e1, j2, a4, c4, g4, d7, i7, f9] 23 b1<a4 c4<b1 b1<c4 c4<a4 d7<c4 e1<d7 e1<c4 e1<a4 e1<b1 f9<a4 f9<d7 g4<c4 g4<f9 g4<d7 h0<c4 h0<e1 h0<b1 i7<c4 i7<d7 i7<f9 j2<c4 j2<e1 j2<a4
+nlargest 10 [f9, d7, i7, a4, c4, g4, j2, b1, e1, h0] 25 i7<j2 h0<i7 j2<i7 h0<i7 h0<j2 g4<j2 g4<i7 f9<g4 f9<i7 e1<g4 e1<j2 e1<h0 d7<g4 d7<f9 d7<i7 c4<g4 c4<d7 c4<i7 b1<c4 b1<j2 b1<e1 a4<g4 a4<d7 a4<i7 a4<c4
+nsmallest 11 [h0, b1, e1, j2, a4, c4, g4, d7, i7, f9] 23 b1<a4 c4<b1 b1<c4 c4<a4 d7<c4 e1<d7 e1<c4 e1<a4 e1<b1 f9<a4 f9<d7 g4<c4 g4<f9 g4<d7 h0<c4 h0<e1 h0<b1 i7<c4 i7<d7 i7<f9 j2<c4 j2<e1 j2<a4
+nlargest 11 [f9, d7, i7, a4, c4, g4, j2, b1, e1, h0] 25 i7<j2 h0<i7 j2<i7 h0<i7 h0<j2 g4<j2 g4<i7 f9<g4 f9<i7 e1<g4 e1<j2 e1<h0 d7<g4 d7<f9 d7<i7 c4<g4 c4<d7 c4<i7 b1<c4 b1<j2 b1<e1 a4<g4 a4<d7 a4<i7 a4<c4
+nsmallest 2 [h0, b1] 16 b1=a4 b1<a4 c4<a4 d7<a4 e1<a4 b1=e1 f9<e1 g4<e1 h0<e1 b1=h0 b1<h0 i7<b1 j2<b1 d7<b1 h0=b1 h0<b1
+nlargest 2 [f9, d7] 18 a4=b1 a4<b1 b1<c4 c4=a4 c4<d7 d7=a4 d7<a4 a4<e1 a4<f9 f9=d7 f9<d7 d7<g4 d7<h0 d7<i7 d7<j2 d7<d7 d7=f9 d7<f9
+nsmallest 4 [h0, b1, e1, j2] 38 d7=b1 d7<b1 c4=d7 c4<d7 b1=a4 b1<a4 d7=a4 d7<a4 e1<d7 c4=a4 c4=e1 c4<e1 f9<c4 g4<c4 h0<c4 e1=a4 e1<a4 b1=h0 b1<h0 i7<a4 j2<a4 e1=b1 e1=j2 e1<j2 d7<j2 b1=j2 b1<j2 e1=b1 b1=e1 e1=j2 e1<j2 e1=j2 e1<j2 e1=b1 h0=e1 h0<e1 h0=b1 h0<b1
+nlargest 4 [f9, d7, i7, d7] 36 b1=d7 b1<d7 b1=c4 b1<c4 a4=d7 a4<d7 a4=b1 a4<b1 b1<e1 b1<f9 a4=c4 f9=c4 f9<c4 c4<g4 c4<h0 c4<i7 a4=f9 a4<f9 i7=d7 i7=a4 i7<a4 a4<j2 a4<d7 i7=f9 i7<f9 d7=i7 f9=d7 f9<d7 i7=f9 i7<f9 d7=f9 d7<f9 i7=f9 i7<f9 i7=d7 d7=i7
+nsmallest key 1 [('eve', 1)] key(ann) key(bob) bob<ann key(cy) cy<ann key(dee) dee<ann key(eve) eve<ann key(fay) fay<eve key(gus) gus<eve
+nlargest key 1 [('bob', 5)] key(ann) key(bob) ann<bob key(cy) bob<cy key(dee) bob<dee key(eve) bob<eve key(fay) bob<fay key(gus) bob<gus
+nsmallest key 3 [('eve', 1), ('cy', 3), ('ann', 3)] key(ann) key(bob) key(cy) cy<bob bob<ann key(dee) dee<bob key(eve) eve<bob cy<ann cy<eve key(fay) fay<cy key(gus) gus<cy ann<cy eve<ann cy<ann
+nlargest key 3 [('dee', 5), ('bob', 5), ('fay', 5)] key(ann) key(bob) key(cy) bob<cy ann<cy key(dee) cy<dee bob<ann dee<ann key(eve) ann<eve key(fay) ann<fay bob<dee fay<dee key(gus) dee<gus bob<fay dee<bob
+nsmallest key 7 [('eve', 1), ('ann', 3), ('cy', 3), ('gus', 3), ('bob', 5), ('dee', 5), ('fay', 5)] key(ann) key(bob) key(cy) key(dee) key(eve) key(fay) key(gus) bob<ann cy<bob ann<bob cy<bob cy<ann dee<cy dee<bob eve<bob eve<cy eve<ann fay<cy fay<dee gus<bob gus<ann gus<cy
+nlargest key 7 [('bob', 5), ('dee', 5), ('fay', 5), ('ann', 3), ('cy', 3), ('gus', 3), ('eve', 1)] key(ann) key(bob) key(cy) key(dee) key(eve) key(fay) key(gus) fay<gus eve<fay gus<fay eve<fay eve<gus dee<gus dee<fay cy<fay cy<gus bob<cy bob<dee ann<fay ann<gus ann<cy
+nsmallest key 8 [('eve', 1), ('ann', 3), ('cy', 3), ('gus', 3), ('bob', 5), ('dee', 5), ('fay', 5)] key(ann) key(bob) key(cy) key(dee) key(eve) key(fay) key(gus) bob<ann cy<bob ann<bob cy<bob cy<ann dee<cy dee<bob eve<bob eve<cy eve<ann fay<cy fay<dee gus<bob gus<ann gus<cy
+nlargest key 8 [('bob', 5), ('dee', 5), ('fay', 5), ('ann', 3), ('cy', 3), ('gus', 3), ('eve', 1)] key(ann) key(bob) key(cy) key(dee) key(eve) key(fay) key(gus) fay<gus eve<fay gus<fay eve<fay eve<gus dee<gus dee<fay cy<fay cy<gus bob<cy bob<dee ann<fay ann<gus ann<cy
+1 [1] [1] ['iter', 'iter']
+1 [1] [8] ['iter', 'iter']
+1 [1] [5]
+2 [1, 3] [1, 3] ['len', 'iter', 'len', 'iter']
+2 [1, 3] [8, 5] ['iter', 'iter']
+2 [1, 3] [5, 8]
+4 [1, 3, 5, 8] [1, 3, 5, 8] ['len', 'iter', 'len', 'len', 'iter', 'len']
+4 [1, 3, 5, 8] [8, 5, 3, 1] ['iter', 'iter']
+4 [1, 3, 5, 8] [5, 8, 1, 3]
+6 [1, 3, 5, 8] [1, 3, 5, 8] ['len', 'iter', 'len', 'len', 'iter', 'len']
+6 [1, 3, 5, 8] [8, 5, 3, 1] ['iter', 'iter']
+6 [1, 3, 5, 8] [5, 8, 1, 3]
+[] [] ['iter', 'len', 'iter', 'len']
+[b1, a4, c4, d7] d7<b1 c4<d7 b1<a4 d7<a4 a4<d7 c4<a4 a4<c4 b1<c4
+[b1, a4, c4, d7] b1<a4 c4<b1 b1<c4 c4<a4 d7<c4
+[1, 1] [9, 7] [1] [1, 1, 4]
+['a', 'e'] ['q', 'p', 'h'] ['q']
+['be', 'is'] ['to', 'be', 'that'] ['to', 'be', 'that']
+[('to', 4), ('be', 4), ('that', 3), ('or', 2)] [1, 2]
+[1, 3, 8] [8, 3]
+2 ['248', '313'] 612 ['598<313', '599<313', '248<313']
+2 ['3', '83'] 603 ['3<598', '3<599', '3<83']
+10 ['248', '313', '562', '196', '50'] 786 ['50<273', '50<562', '50<196']
+10 ['83', '87', '414', '517', '3'] 732 ['155<3', '155<202', '155<19']
+50 ['248', '313', '196', '50', '562'] 1684 ['175<465', '175<325', '175<284']
+50 ['414', '83', '202', '3', '87'] 1530 ['327<416', '327<356', '327<62']
+599 ['248', '313', '196', '50', '562'] 5441 ['465<75', '173<75', '339<75']
+599 ['83', '87', '202', '414', '517'] 5431 ['280<592', '32<592', '280<541']
+True True
+[19999, 8999, 28999, 7998, 26998] [32500, 32340, 32190, 31920, 31750]
+True True
+[5, 4] [0, 4, 3, 2, 1, 0]
+[0, 1] [0, 4, 3, 2, 1, 0]
+[0, 1, 2] [0, 1, 2] [0, 4, 3, 2, 1, 0]
+[exit 0]

@@ -17,11 +17,23 @@ evaluation order, optional bounds, bool bounds, and the signed-64-bit minimum.
 CPython's standard library modules (lib/)
 -----------------------------------------
 
-lib/bisect.py, lib/colorsys.py, lib/genericpath.py, lib/heapq.py, lib/operator.py,
+lib/bisect.py, lib/colorsys.py, lib/genericpath.py, lib/operator.py,
 lib/posixpath.py, lib/stat.py, lib/this.py and lib/curses/ascii.py are unmodified copies of the files of the same names in CPython 3.13.16's
 Lib/ directory (lib/README.md lists their SHA-256 sums). They are part of Python and are used
 under the Python Software Foundation License Version 2, reproduced below, with the copyright
 notice below. lib/curses/__init__.py is Pystachy's own.
+
+lib/difflib.py is CPython 3.13.16's Lib/difflib.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
+
+lib/getopt.py is CPython 3.13.16's Lib/getopt.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
+
+lib/io.py is Pystachy's own StringIO, written after CPython 3.13.16's Modules/_io/stringio.c,
+whose behaviour and messages it follows and whose docstrings it keeps; it is derived from Python
+and is used under the same license and copyright notice.
 
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
@@ -42,6 +54,23 @@ same license and copyright notice.
 lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and
 copyright notice.
+
+lib/heapq.py is CPython 3.13.16's Lib/heapq.py with its functions nsmallest() and nlargest()
+edited as lib/README.md lists, each edit marked in the source; it is derived from Python and is
+used under the same license and copyright notice.
+
+lib/string.py is CPython 3.13.16's Lib/string.py with the edits lib/README.md lists, each marked
+in the source; it is derived from Python and is used under the same license and copyright notice.
+
+lib/csv.py is Pystachy's own code, written after CPython 3.13.16's Modules/_csv.c and Lib/csv.py
+(lib/README.md); it keeps the docstrings and comments it copies from them (the module's docstring,
+those of reader(), writer(), the registry functions and field_size_limit(), and the comments of the
+reader's states). It is derived from Python and is used under the same license and copyright
+notice.
+
+lib/statistics.py is CPython 3.13.16's Lib/statistics.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
 
 lib/urllib/parse.py is CPython 3.13.16's Lib/urllib/parse.py with the edits lib/README.md lists,
 each marked in the source; it is derived from Python and is used under the same license and

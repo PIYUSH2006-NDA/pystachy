@@ -12,7 +12,6 @@ checks each against CPython.
 |---|---|---|---|
 | `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | everything, `key=` too (a function of the program or a builtin, compiled into each call) |
 | `colorsys` | `Lib/colorsys.py` | `65e3dfbf7bad61d4d7d7731a69dd7e75a347fd350d91327a51010a94e6fd2f1d` | everything |
-| `heapq` | `Lib/heapq.py` | `6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` variants; not `merge` (a generator), `nlargest`, `nsmallest` (`iter`, `key=`) |
 | `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` | the operator functions; not `attrgetter`, `itemgetter`, `methodcaller` (class templates whose `_call` field holds a closure of `__init__`, which a field's type cannot be inferred from), `call`, `length_hint`, `index`; the in-place functions only where the result keeps its type (`itruediv(1, 2)` would rebind an int to a float) |
 | `stat` | `Lib/stat.py` | `07217986d9b2172b509dab3578d18ac05ba768b418e1f1e8c90e38a8f7c2b3c6` | the constants and `S_IS*()`, `S_IMODE`, `S_IFMT`; not `filemode` (it iterates a tuple of tuples of different lengths) |
 | `this` | `Lib/this.py` | `481d0cb3de511eae0b5713dad18542b07eafd9c013bb7690f7497bad49923a71` | everything (it prints the Zen of Python) |
@@ -23,6 +22,274 @@ checks each against CPython.
 
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
 so is `functools.py` (below).
+
+## `difflib`, a port of CPython's
+
+`difflib.py` is CPython 3.13.16's `Lib/difflib.py` (SHA-256
+`1593ae08143632f4f81fea3beeeb279d803f8a9be922b12fe79664d78bba879d`) edited in 12 places, each
+marked `# Pystachy port:`. It has `SequenceMatcher` (`set_seqs()`, `set_seq1()`, `set_seq2()`,
+`find_longest_match()`, `get_matching_blocks()`, `get_opcodes()`, `ratio()`, `quick_ratio()`,
+`real_quick_ratio()`, with `isjunk` and `autojunk`), `get_close_matches()`, `Match`,
+`IS_CHARACTER_JUNK()` and `IS_LINE_JUNK()`, as CPython's code. A sequence is a str or a list of
+strs (lines, words): the matcher's tables are typed for str items.
+
+- `Match` is a `typing.NamedTuple` class, where CPython makes it with `collections.namedtuple()`;
+  `SequenceMatcher` has no `__class_getitem__` (`types.GenericAlias`).
+- `SequenceMatcher.__init__` types the fields, sets `a` and `b`, and builds `b`'s tables, as
+  `set_seqs(a, b)` does, where CPython sets `a` and `b` to `None` first and then calls it: a class
+  template's field takes the type of its first value. `isjunk` is a `Callable[[str], bool] | None`
+  (a def, a lambda or one of the module's junk functions), the caches are `... | None`, and the
+  tables are `dict[str, ...]` and `set[str]`.
+- `find_longest_match()` and `quick_ratio()` test `x in set` and call `dict.get()` where CPython
+  binds `set.__contains__` and `dict.get` to locals first: a builtin's method is no value in
+  Pystachy. Their empty dicts and list are annotated.
+- `get_matching_blocks()`, `get_opcodes()` and `quick_ratio()` read their cache field into a local
+  and test that (a test narrows no field), so they return lists, never `None`;
+  `get_matching_blocks()` makes each `Match` with `Match(*t)` where CPython maps `Match._make`.
+- `get_close_matches()` keeps its best `n` with `sorted(result, reverse=True)[:n]`, the documented
+  equivalent of the `heapq.nlargest()` CPython calls (which needs iterators); the module's final
+  `del re` is gone (a module-level `del` is not supported).
+
+Not compiled, because they are generators: `get_grouped_opcodes()`, `unified_diff()`,
+`context_diff()`, `ndiff()`, `restore()`, `Differ.compare()` and `HtmlDiff`'s tables
+(`examples/linediff` groups opcodes into a unified diff itself). A sequence of items other than
+strs is a compile-time error (`tests/errors/lib_difflib_int_items.py`).
+
+`tests/lib_difflib.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_difflib.py` and the module's doctests that use these. Run by CPython, the edited
+module passes that file's 57 tests. Two applications use it:
+[`examples/linediff`](../examples/linediff/README.md), unified and word diffs of two files, at
+about twice CPython's speed (the `SequenceMatcher` of two texts of 50,000 lines takes 39 ms,
+against CPython's 124 ms), and [`examples/suggest`](../examples/suggest/README.md), spelling
+suggestions from a vocabulary, where each `get_close_matches()` of 20,000 words takes 3.9 ms, against
+CPython's 23 ms.
+
+## `getopt`, a port of CPython's
+
+`getopt.py` is CPython 3.13.16's `Lib/getopt.py` (SHA-256
+`0ce875700c8798193b8e2748f7a27fc542cc4d525a1e6fc403767450ec92be99`) edited in 15 places, each
+marked `# Pystachy port:` but for the six messages, which the comment that replaces the `gettext`
+import describes. It has the whole module, as CPython's code: `getopt()` and `gnu_getopt()` (also
+with a leading `+` in the short options, or `POSIXLY_CORRECT` set), with unique prefixes of long
+options, `GetoptError` (with `msg`, `opt` and the old name `error`) and its messages.
+
+- CPython's messages go through `gettext`'s `_()`, but `gettext` reads `sys.base_prefix`, which
+  Pystachy does not have, and `%` formatting takes only a literal format string. So each message
+  is `%` formatted as it is, untranslated (CPython ships no translation of them either).
+- `GetoptError.__init__`'s parameters and `__str__`'s return are annotated `str`: an exception
+  class is no class template, and a method without a return annotation returns `None`.
+- `longopts` is annotated `list[str]` in `getopt()` and `gnu_getopt()`, since its default `[]`
+  has no type otherwise. CPython also takes one str (`'alpha='`); here that is a compile-time
+  error (`tests/errors/lib_getopt_longopts_str.py`).
+- `opts` is annotated `list[tuple[str, str]]`: `do_longs()` and `do_shorts()`, which fill it, are
+  templates, and an empty list is not typed through them.
+- `do_longs()` declares `optarg: str | None` first: it is `None` or a str, set in the two arms of
+  a `try`.
+- `gnu_getopt()` reads `POSIXLY_CORRECT` with `os.getenv()` where CPython calls
+  `os.environ.get()`: Pystachy has no `os.environ`.
+
+`tests/lib_getopt.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_getopt.py`. Run by CPython, the edited module passes that file's 8 tests and its
+doctest (not the test of the translation catalogs, which needs CPython's `Tools/`).
+[`examples/cut`](../examples/cut/README.md), a `cut` with GNU's options, is an application of it.
+
+## `heapq`, with `nlargest()` and `nsmallest()` ported
+
+`heapq.py` is CPython 3.13.16's `Lib/heapq.py` (SHA-256
+`6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9`) with `nsmallest()` and
+`nlargest()` edited, each edit marked `# Pystachy port:`; the rest of the file is CPython's byte for
+byte. It has `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max`
+variants, as CPython's code, and `nlargest()` and `nsmallest()`, with and without `key=`, of a list
+or of another iterable the subset passes (a tuple, a str, a dict, a set, `d.items()`, an object
+with `__iter__`, with or without `__len__`), as CPython's algorithm: the same heap operations, so
+the same comparisons and calls of `key` in the same order, and the same ties, as the
+`(elem, order)` and `(key, order, elem)` tuples keep the input's order among equal items.
+
+The edits, the same in both functions:
+
+- `it = iter(iterable)` is `iterable` itself for a list, else a list of its items: the subset has
+  no iterators. The list is a comprehension, `[elem for elem in iterable]`: `list(iterable)` would
+  call an object's `__len__` (its length hint), which `iter()` does not.
+- For n of 1, `min(it, default=sentinel, key=key)` with an `object()` sentinel is
+  `[min(it, key=key)] if it else []`: the subset has neither `object()` nor `default=`.
+- In `try: size = len(iterable)`, the `TypeError` of an iterable without `__len__` is raised before
+  `len()`, under `if not hasattr(iterable, '__len__')`, which the argument's type decides: `len()`
+  of an object without `__len__` is a compile-time error. A `__len__` that raises `TypeError` is
+  caught, as in CPython.
+- `zip(range(n), it)` (`range(0, -n, -1)` in `nlargest()`), which takes the first n items, is a
+  comprehension over `range(min(n, len(it)))` that indexes `it`, and with a `key` a loop that reads
+  each item once, before its key is called, as `zip()`'s iterator reads it (a key may change the
+  list): `range()` cannot be nested in `zip()`. The loop over the other items, which goes on with `zip()`'s iterator in CPython, is
+  `for i, elem in enumerate(it)`, which skips the first n: a list is read in place, as CPython's
+  iterator reads it, with no copy.
+- An empty `result` returns `[]`, not `result`: its tuples are not of the items' type, which the
+  function returns elsewhere.
+
+Where it differs from CPython:
+
+- The items of an iterable other than a list are taken into a list first, so a `key` or a
+  comparison that changes the dict or set being read does not raise CPython's `RuntimeError`.
+- For an n above 2,500 that is less than the length, `heapify()` of the decorated items compares
+  in another order than CPython's `_heapq` does (see the end of this page), with the same result.
+
+`merge()` is an error where a program calls it: it is a generator. So is an open file as the
+iterable of `nlargest()` or `nsmallest()`, as `hasattr()` of a file is not supported (its
+`readlines()` is an argument), and a generator expression, which the subset has only as the
+argument of `list()`, `sorted()`, `sum()` and the like (`list()` of it is an argument).
+
+`tests/lib_heapq_topk.py` compares them with CPython's on ints, floats, strs and tuples, n of -1,
+0, 1, 2, the length and around it, empty input, `key=` (a lambda, a function, a builtin,
+`str.lower`, a bound method), ties, the iterables above, and objects whose `__lt__`, `__eq__`,
+`__iter__` and `__len__` log their calls, so that the comparisons are CPython's, in its order. Run
+by CPython, the edited module passes CPython's `Lib/test/test_heapq.py` (51 tests), and its
+`nlargest()` and `nsmallest()` make the same comparisons and calls of `key`, with the same results,
+as CPython's own in 36,000 calls on random inputs with many ties (lists, tuples and an object
+without `__len__`, n from -2 to past the length, with and without `key`).
+
+In an AOT executable, `nlargest(10, xs)` and `nsmallest(10, xs)` of 100,000 ints take 45 and
+47 µs, against CPython's 1,970 and 1,936 µs: most items are only compared with the heap's top, an
+int comparison in the compiled loop, where CPython steps an iterator and calls a rich comparison
+for each; `nlargest(10, pairs, key=second)` of 100,000 `(str, int)` tuples takes 108 µs (CPython:
+4,263 µs). Where the heap does more of the work the gain is smaller: `nsmallest(1000, xs)` takes
+867 µs (CPython: 3,363 µs), most of it replacing and sifting `(elem, order)` tuples, and
+`nlargest(1, xs)`, `max()` of the list, 234 µs (CPython: 590 µs). The `sorted()` that an n at or
+past the length takes is slower than CPython's: 38 µs for 1,000 ints (CPython: 27 µs), whose sort
+compares ints with a function of their own, where Pystachy's compares through a descriptor of the
+items' type. (Medians of 3
+runs, each the median of 5 rounds of 20 calls, 2,000 for 1,000 ints, on items from a linear
+congruential generator.) [`examples/topk`](../examples/topk/README.md) picks the most frequent
+words of a text with them.
+
+## `io`, Pystachy's own
+
+CPython's `io` is the C module `_io` (`Modules/_io/`); its pure-Python twin `Lib/_pyio.py` makes
+`StringIO` a `TextIOWrapper` over a `BytesIO`, and neither compiles. `io.py` here has `StringIO`,
+written after CPython 3.13.16's `Modules/_io/stringio.c` and keeping its docstrings, and
+`SEEK_SET`, `SEEK_CUR` and `SEEK_END`:
+
+- `StringIO(initial_value='', newline='\n')`, `read(size)`, `readline(size)`,
+  `readlines(hint)`, iteration, `write(s)` (which returns `len(s)`), `writelines()`,
+  `getvalue()`, `seek(pos, whence)`, `tell()`, `truncate(pos)`, `close()` and `closed`, `flush()`,
+  `readable()`, `writable()`, `seekable()`, `isatty()`, `encoding`, `errors` and
+  `line_buffering`.
+- It does what `stringio.c` does. The newline modes translate what is written (`None`: `\r\n` and
+  `\r` become `\n`; `"\r"` and `"\r\n"`: `\n` becomes them) and end the lines that are read (`""`:
+  at `\n`, `\r` and `\r\n`). A write past the end pads the gap with NULs. `seek()` takes a nonzero
+  offset only from the start. Its errors, `truncate()`'s and those of a closed stream are
+  CPython's, word for word, with or without the full stop as each method has it.
+- Writes at the end gather in a list that is joined when the text is read, so a text built from
+  many writes takes linear time.
+- `print(..., file=buf)` writes into it: the compiler passes each piece of a `print()` to the
+  `write()` method of an object of the program's classes, a call each, as CPython does
+  (`tests/print_file_object.py`).
+
+Where it differs from CPython (`tests/deviations/lib_io.py`):
+
+- Sizes and positions (`read(n)`, `readline(n)`, `tell()`, `seek()`, `truncate()`, what `write()`
+  returns) count a str's bytes past ASCII, as `len()` and slicing do; CPython's count characters.
+- A `for` loop over it reads the lines left when it starts: an iterator class, which would read
+  each line as the loop asks for it, is not supported.
+- `with io.StringIO() as f:` is a compile-time error: Pystachy's `with` takes files only
+  (`tests/errors/lib_io_with.py`).
+- There is no `newlines` (a str, a tuple or `None`), `detach()`, `fileno()` (CPython raises
+  `UnsupportedOperation`) or pickling, and `StringIO(5)` is a compile-time type error where CPython
+  raises `TypeError`.
+
+`tests/lib_io.py` compares it with CPython's `StringIO`. Run by CPython in place of its own, it
+passes 29 of the 39 `StringIO` tests of CPython's `Lib/test/test_memoryio.py` (with its `IntLike`
+an int: Pystachy has no `__index__`); the others test pickling, `detach()`, `newlines`, an
+iterator that is the stream itself, and the `TypeError` of an argument of another type, which
+Pystachy reports at compile time. In an AOT executable, a `write()` at the end
+costs 37 ns and a `readline()` 22 ns, the loop included, against 42 and 142 ns with CPython's C
+`StringIO` (best of 5 runs over a million lines). [`examples/column`](../examples/column/README.md),
+a `column -t` that builds its table in a `StringIO`, is an application of it.
+
+## `csv`, Pystachy's own
+
+`csv.py` is no copy: CPython's `csv` is `Lib/csv.py` over the C module `_csv` (`Modules/_csv.c`),
+and Pystachy has no C modules. It is Pystachy's own module, written after CPython 3.13.16's
+`_csv.c` and `Lib/csv.py`: a reader runs `_csv.c`'s state machine (`parse_process_char`, from
+`START_RECORD` to `AFTER_ESCAPED_CRNL`) over the characters of each line, a writer escapes, doubles
+and quotes as `join_append_data` does, and a dialect is checked as `dialect_new` checks it, in its
+order, so that what `csv` reads, writes and rejects is CPython's, with CPython's `csv.Error`
+messages, and its `TypeError` and `ValueError` messages for a bad setting. The characters the state
+machine adds to a field one by one are taken as slices of the line, each run of them found with
+`str.find()`.
+
+It has `reader()` and `writer()`, with a dialect and the format parameters `delimiter`,
+`quotechar`, `escapechar`, `doublequote`, `skipinitialspace`, `lineterminator`, `quoting` and
+`strict`; a reader's `line_num` and `dialect`, and a writer's `writerow()`, `writerows()` and
+`dialect`; the six `QUOTE_*` constants, `Error`, `Dialect`, the dialects `excel`, `excel_tab` and
+`unix_dialect` (registered as `"excel"`, `"excel-tab"` and `"unix"`), `register_dialect()`,
+`get_dialect()`, `unregister_dialect()`, `list_dialects()` and `field_size_limit()`; and
+`DictReader` and `DictWriter`. It has no `Sniffer`. A reader reads any iterable of strs (a file,
+`sys.stdin`, a list of lines, an object whose `__iter__` steps through a list), and a writer writes
+to any object with a `write()` method (a file, `sys.stdout`, an object of the program's class), and
+returns what `write()` returns. `writerow()` is a template: a row is a list or a tuple (or a str or
+a dict, as in CPython) of strs, ints, floats, bools, `None`s or objects of the program's classes,
+each field `str()`-ed as CPython does; a tuple's items may have different types
+(`writerow((name, 3, 1.5))`), a list's cannot. Where it differs from CPython
+(`tests/deviations/lib_csv.py`):
+
+- A reader parses all of its input when its iteration starts, where CPython's reader is an iterator
+  that parses a row at each step: an error in the data is raised before the loop sees a row,
+  `line_num` is the last line's throughout the loop, the rows are all held in a list (the memory a
+  file takes grows with it), and the reader has no rows left for a second iteration, also where the
+  first one stopped early. `next(reader)` does not compile, as the subset has no `next()`: take the
+  rows with `list()`, or the header with a `DictReader`.
+- A row is a `list[str]`: a reader whose quoting is `QUOTE_NONNUMERIC` or `QUOTE_STRINGS`, which
+  make floats of the unquoted fields, raises `NotImplementedError` when it is made, and one of
+  `QUOTE_NOTNULL`, which makes `None` of an empty unquoted field, raises it where the row holding
+  one ends. A writer quotes with each of the six quoting styles as CPython's does.
+- A `DictReader`'s row is a `dict[str, str]`: a row longer than `fieldnames` (whose other fields
+  CPython puts in a list under `restkey`), and a shorter one where `restval` is `None`, raise
+  `NotImplementedError`; `fieldnames` is a `list[str]` or `None`, `restkey` and `restval` a str or
+  `None`. A `DictReader` reads its rows, and the header, when it is made, where CPython's reads the
+  header when its `fieldnames` property is first read: `line_num` is then the header's, `fieldnames`
+  assigned afterwards names the fields of the rows after the header, and an error in the data is
+  raised by the constructor. A `DictWriter`'s `restval` is a str or `None`, and its `ValueError` for
+  the keys of a row that are not in `fieldnames` lists them in the dict's order (CPython's, in a
+  set's, which varies from run to run for strs).
+- `excel`, `excel_tab` and `unix_dialect` are `Dialect` objects, where CPython's are classes: a
+  class is no value in the subset, and there is no inheritance to derive a dialect from
+  `csv.Dialect` with, so a dialect of the program's is a registered name
+  (`register_dialect("pipes", delimiter="|")`) or keyword arguments. `Dialect` is the type CPython
+  calls `_csv.Dialect` (what `get_dialect()` returns, and a reader's or writer's `dialect`), whose
+  fields can be assigned (CPython's are read-only): a writer writes with the settings its dialect
+  had when it was made, and a reader reads with those it has when its iteration starts.
+  `dialect=` is a registered name, a `Dialect` or `None`.
+- An uncaught error is reported as `csv.Error` (CPython's class is `_csv.Error`). A writer of an
+  object without `write()` (`tests/errors/lib_csv_no_write.py`), a format parameter that is an object
+  of the program's class, a row that cannot be iterated (but an int, float, bool or `None`, which
+  raise CPython's `csv.Error`; `tests/errors/lib_csv_row_not_iterable.py`) and a NamedTuple row
+  (`tests/errors/lib_csv_namedtuple_row.py`) are compile-time errors, where CPython raises `TypeError` or writes the
+  NamedTuple's fields; for `QUOTE_NONNUMERIC`, an object of the program's class is no number, also
+  where its class defines `__float__`, `__int__` or `__index__`.
+
+A str holds UTF-8 in Pystachy: where the dialect's characters are ASCII, the state machine reads a
+line byte by byte, which reads it character by character, as no byte of a character past ASCII is a
+delimiter, quote, escape, space or line break; where one of them is past ASCII, it reads the line
+character by character. A field's length, which `field_size_limit()` bounds, counts characters, as
+CPython's does.
+
+`tests/lib_csv.py` compares it with CPython's `csv`: the cases of CPython 3.13's
+`Lib/test/test_csv.py` that do not use `next()` or classes as dialects (line ends, NUL, escapes,
+quoting, `skipinitialspace`, quoted line breaks, the end of the data, `strict`, each error with its
+message, the writer's quoting, escaping and empty fields, line terminators, dialects and the
+registry, `field_size_limit()`, `DictReader` and `DictWriter`), round trips through files,
+characters past ASCII in fields and as the dialect's characters, and 300 random rows written and
+read back and 300 random sets of lines read, with random dialects. Beyond the tests, run by
+CPython in place of its own `csv`, it read 200,000 random sets of lines and wrote 200,000 random
+rows as CPython's does, with random dialects (raising `NotImplementedError` only where a row would
+hold a float or `None`), and its `DictReader` made CPython's dicts, `fieldnames` and `line_num` for
+50,000 random files (raising `NotImplementedError` exactly where a dict would hold a `None` or a
+list); compiled, it printed what it prints under CPython for 120,000 random reads and writes.
+`examples/csvstat` is an application of it.
+
+For a file of 200,000 generated orders (16.1 MB, 10 fields a row; `examples/csvstat/rwbench.py`
+on a 4-core x86-64 VM, the medians of 11 runs, CPython's and the executable's in turn), compiled AOT
+it reads the file in 0.850 µs a row (CPython 3.13.16: 1.333 µs), parses the file's lines already in
+memory in 0.713 µs (1.221 µs), and writes the rows to a file in 0.755 µs (1.207 µs).
 
 ## `re`, a port of CPython's
 
@@ -220,6 +487,184 @@ and the lookups that stand in for `str.translate()` 10 µs (CPython: 2.7 µs), w
 `wrap()`, the wrapping itself, takes 6 µs, against CPython's 17 µs. `dedent()`'s three regular
 expressions take 20, 14 and 13 µs (CPython: 3 µs each). (Medians of 3 runs, each the median of
 5 rounds over 200 generated ASCII paragraphs or blocks.)
+
+## `string`, a port of CPython's
+
+`string.py` is CPython 3.13.16's `Lib/string.py` (SHA-256
+`c000d9c4340c910b869399f0f0acc1b70e39391ad9344c4e08d8d0f80210a916`) edited in 16 places, each
+marked `# Pystachy port:`. It has the constants, `capwords()` and `Template`, as CPython's code:
+`substitute()` and `safe_substitute()` with a mapping (a dict, or an object with `__getitem__`),
+keyword arguments or both, `is_valid()`, `get_identifiers()`, the `template` attribute, the class
+attributes `delimiter`, `idpattern`, `braceidpattern`, `flags` and `pattern`, and the `ValueError`
+of an invalid placeholder, with its line and column. Its regular expression is `lib/re`'s.
+`Formatter` stays in the file, uncompiled: a program that uses it is an error where it does (it
+needs CPython's C module `_string`, whose import is optional here, and sets of mixed items;
+`tests/errors/lib_string_formatter.py`).
+
+- `import _string` is an optional import (`try:` ... `except ImportError: pass`): Pystachy has no
+  `_string`, which only `Formatter` uses, and runs the handler; CPython imports it, and its
+  `Formatter` works.
+- `from collections import ChainMap` is gone (no `collections` here), and so is its one use: where
+  `substitute()` and `safe_substitute()` are given no mapping, CPython binds `mapping` to `kws`,
+  and where they are given both, to `ChainMap(kws, mapping)`, which a variable of one type cannot
+  hold. Their `convert()` looks a name up in `kws` first, then in `mapping`,
+  `str(kws[named]) if kws and named in kws else str(mapping[named])`, where an empty `kws` (a
+  `**kwargs` record, which the call decides) is not looked in; with no mapping, `mapping` is the
+  empty `_sentinel_dict`, whose `KeyError` names the key as CPython's does.
+- `_sentinel_dict = {}`, `mapping`'s default, is annotated `dict[str, str]`, as nothing fills it.
+- In `Template`'s class body, `braceidpattern` and `flags` are annotated (`str | None`, `int`):
+  `None` and another module's variable (`re.IGNORECASE`) give a class attribute no type. `pattern`
+  is bound, to `None`, so that the module's code may assign it.
+- The module's `Template.__init_subclass__()`, which computes `pattern`, is
+  `Template.pattern = _template_pattern()`, a function of `__init_subclass__()`'s lines with
+  `Template` for `cls`: Pystachy compiles no `__init_subclass__()`, which calls `super()` and reads
+  `cls.__dict__`. CPython still calls it for a subclass.
+- `__init__` annotates its parameter (`template: str`), and so `is_valid()` and
+  `get_identifiers()` annotate their returns (`-> bool`, `-> list[str]`): with an unannotated
+  `__init__`, `Template` is a class template, whose objects compile its special methods,
+  `__init_subclass__()` too; with an annotated one, a method without unannotated parameters
+  returns `None` unless it says otherwise.
+- `capwords()` annotates `sep` as `str | None`: `s.split(sep)` of a template's parameter whose
+  argument is `None` is an error, and of an optional `str` it is CPython's default.
+- `safe_substitute()`'s `convert()` returns `mo.group() or ''`, a `str` (group 0 is never `None`),
+  where `lib/re`'s `group()` is a `str | None`, and `_invalid()` passes `splitlines()` its
+  `keepends` by position, as Pystachy takes it.
+
+Where it differs from CPython (`tests/deviations/lib_string.py`):
+
+- `Template.flags` is an int, `2`, where CPython's is `re.IGNORECASE` (`lib/re`'s flags are ints).
+- The column of an invalid placeholder counts the str's bytes past ASCII, as `lib/re`'s positions
+  do, and `capwords()` capitalizes ASCII letters alone, as `str.capitalize()` does.
+
+A subclass of `Template` (another `delimiter`, `idpattern`, `braceidpattern`, `flags` or
+`pattern`) is an error: only an exception class may have a base (#7;
+`tests/errors/lib_string_subclass.py`). So are keyword arguments whose values have different types
+(`substitute(name="Ann", count=3)`), as a dict of them would be: Pystachy reads a `**kwargs` record
+by a name computed as the code runs only where its values share a type
+(`tests/errors/lib_string_kwargs_types.py`).
+
+`tests/lib_string.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_string.py` that need no subclass of `Template`, and on the class attributes, the
+pattern and keyword arguments with a mapping. Run by CPython, the edited module passes that file's
+39 tests, also the 25 of `Template`, those that subclass it among them, as `__init_subclass__()`
+is CPython's, and those of `Formatter`, as CPython imports `_string`.
+
+In an AOT executable, `substitute()` of a 430-character template with 14 placeholders takes 5.8 µs
+with a dict (CPython: 4.6 µs) and 6.1 µs with a dict and two keyword arguments (CPython: 7.3 µs,
+which makes a `ChainMap` at each call); `safe_substitute()` 5.7 µs (4.8), `get_identifiers()`
+5.3 µs (4.2) and `is_valid()` 5.2 µs (3.8): most of each is `lib/re`'s scan of the template, which
+CPython's `_sre` does faster. `substitute()` of `"$who likes $what"` takes 0.78 µs (0.81), and
+`capwords()` of 18 words 0.48 µs (1.35). (Medians of 3 runs, each the median of 5 rounds of 2,000
+calls, 20,000 for the short ones.) [`examples/mailmerge`](../examples/mailmerge/README.md)
+renders a message for each record of a data file with it.
+
+## `statistics`, a port of CPython's
+
+`statistics.py` is CPython 3.13.16's `Lib/statistics.py` (SHA-256
+`80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18`) edited in 20 places, each
+marked `# Pystachy port:`. It has `fmean()`, with and without `weights`, `median()`,
+`median_low()`, `median_high()`, `median_grouped()`, `quantiles()`, `geometric_mean()`, `mode()`,
+`multimode()` and `StatisticsError` (a `ValueError`), as CPython's code computes them, with its
+results bit for bit and its exceptions and their messages: of lists, tuples, sets, dicts, strs and
+objects with `__iter__` (with `__len__` or not), of floats, and of ints and bools where the result
+has one type (below); of strs and tuples too for `median_low()` and `median_high()`, and of ints,
+strs and tuples of them for `mode()` and `multimode()`. The weights of `fmean()` go through
+`math.sumprod()`, which Pystachy's `math` does not have: `_sumprod()` ports its C code. The other
+functions stay in the file, uncompiled, as CPython wrote them: a program that uses one is an error
+where it does (below).
+
+The edits, which replace 52 of the file's 1,817 lines with 195 (88 of them `_sumprod()`, 62 of
+those code), and need no change to the compiler or the runtime:
+
+- The imports of `numbers`, `random`, `fractions`, `decimal`, `itertools`, `functools.reduce` and
+  `collections` are optional (`try:` ... `except ImportError: pass`), as Pystachy has none of them
+  (its `functools` has no `reduce`) and only functions that it leaves uncompiled use them;
+  `_random = random` moves into the `try` of `random`. `_decimal_sqrt_of_frac()`'s return
+  annotation is quoted, `'Decimal'`: CPython 3.13 evaluates it where the `def` runs.
+- `sumprod` is imported from `math` where `math` has it (CPython), in an optional import after
+  `_sumprod()`, which is the module's `sumprod` where it does not. `_sumprod()` is
+  `math_sumprod_impl()` of CPython 3.13.16's `Modules/mathmodule.c` for the subset's sequences of
+  ints, bools and floats, the C code's operations in its order: the products of ints and bools are
+  added as ints, and those of floats, or of floats and ints or bools, in triple length with
+  `math.fma()` (`tl_fma()`, `dl_mul()` and `dl_sum()`, written out in its loop: as functions that
+  return tuples, they made a weighted `fmean()` three times as slow), until a product or a sum is
+  not finite, then as floats. It returns `float(math.sumprod(p, q))`, the float that `fmean()`
+  divides. An input without `__len__`, or whose `len()` raises `TypeError`, is read into a list
+  first, as C iterates it.
+- `fmean()` counts the items of an iterable without `__len__` (an object with `__iter__` alone, as
+  `hasattr()` tells), or whose `len()` raises `TypeError`, in a list of them, where CPython counts
+  them with a generator, `count()`, that it gives `fsum()`: the subset has no generators. Its return
+  is annotated `float`, as it may call itself before it returns. It passes weights that are no list
+  or tuple to a call of itself as a list of them, where CPython makes `weights` that list: a
+  variable has one type.
+- `geometric_mean()`'s generator `count_positive()` is a loop that keeps what it would give in a
+  list, which `fsum(map(log, ...))` takes.
+- `median()`, `median_low()`, `median_high()`, `median_grouped()` and `quantiles()` call
+  themselves with `list(data)` where `data` is no list, as `data = sorted(data)` makes it a list.
+  `median_grouped()` converts `interval` and the middle value to floats in variables of their own,
+  `interval_f` and `x_f`, as they may be ints.
+- `mode()` and `multimode()` count the items in a dict, as `Counter(iter(data))` does
+  (`_count_elements()`): `mode()` takes the pair of `most_common(1)` with `max()` of the dict's
+  items by count, as `heapq.nlargest(1, ...)` does, the first of the highest count, and
+  `multimode()` returns `list(counts)` for no data, the `[]` of the dict's keys' type.
+- `LinearRegression` (a `collections.namedtuple`) and `kde_random()`'s table of kernels are made in
+  the `try` of an optional import of `collections` and of `random`, which Pystachy does not have:
+  the table, a dict of different functions, the first of them a method of a `NormalDist`, would not
+  compile.
+
+Where it differs from CPython (`tests/deviations/lib_statistics.py`):
+
+- Pystachy's ints are 64-bit: `fmean()` with weights adds the products of ints as ints, as
+  `math.sumprod()` does, and raises `OverflowError` where their sum leaves 64 bits (CPython goes on
+  with longer ints). Without weights, `fsum()` adds them as floats, as in CPython.
+- The module's `sumprod`, `math.sumprod` in CPython, is `_sumprod()`, which returns a float:
+  `sumprod([1, 2], [3, 4])` is `11.0`, and of no items `0.0`, where CPython's are ints.
+- The items of a str (for `mode()`, `multimode()`, `median_low()` and `median_high()`) are its
+  bytes past ASCII, as iterating it gives them.
+
+What it does not have, each a compile-time error (`tests/errors/lib_statistics_*.py`):
+
+- `median()` and `quantiles()` of ints or bools: CPython's `median()` of an odd number of ints is
+  the middle int, of an even number a float, and its `quantiles()` of one data point are ints, of
+  more floats, where a function has one return type (`median_low()` and `median_high()` return an
+  item, and `median([float(x) for x in xs])` a float). So is `median()` of strs: CPython returns
+  the middle one of an odd number of them, and raises `TypeError` for an even number, whose two
+  middle ones it divides.
+- `mode()` and `multimode()` of floats: a dict of Pystachy has no float keys.
+- `mean()`, `harmonic_mean()`, `variance()`, `pvariance()`, `stdev()` and `pstdev()`: they add
+  exactly, as `fractions.Fraction`s keyed by denominator, keep the data's classes in a set, convert
+  to `Decimal` and take square roots of fractions of long ints; Pystachy has no `Fraction`,
+  `Decimal` or long int, and `fsum()` and a division round twice where they round once.
+  `harmonic_mean()` also asks whether `iter(data) is data`.
+- `covariance()` and `linear_regression()` (generator expressions given to `sumprod()`, and a
+  `collections.namedtuple`), and `correlation()` (`itertools`' `count()` and `groupby()`).
+- `kde()` (a `match` statement), `kde_random()` (`random.Random`) and `NormalDist` (properties,
+  reflected operators, a `__slots__` dict; `random` for `samples()`).
+
+`tests/lib_statistics.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_statistics.py` and of the docstrings for these functions that the subset types
+(floats in place of the ints they give `median()` and `quantiles()`, no `Fraction`, `Decimal` or
+iterator), on lists, tuples, sets, dicts, strs and objects with `__iter__` (and `__len__`, whose
+calls it prints), empty data, NaNs, infinities and signed zeros, the errors and their messages, 240
+weighted means of generated data with infinities, NaNs, overflows and cancellations, and the
+medians and quantiles of generated data of every length from 1 to 40. Run by CPython, the edited
+module passes CPython 3.13.16's `Lib/test/test_statistics.py`: all its 401 tests (372 test
+methods of 43 classes, the 24 doctests of the module's docstrings and 5 of the test's helpers), as
+the unmodified module does, also with its `sumprod` replaced by `_sumprod()`, which `fmean()`,
+`covariance()`, `correlation()` and `linear_regression()` then use. Compiled, `_sumprod()` gives
+what CPython's C `math.sumprod()` gives, repr for repr, for 1,464,607 generated pairs of sequences
+of floats, and of floats and ints or bools, with infinities, NaNs, subnormals, overflows and
+cancellations (and `0.0` for 36,016 empty ones, where C gives `0`).
+
+In an AOT executable, on 100,000 items from a linear congruential generator, `fmean()` takes
+297 µs (CPython: 352 µs), and with weights 717 µs for floats (896), 952 µs for int weights (1,308)
+and 570 µs for ints (1,374): `_sumprod()`'s loop reads unboxed items, where C's `math.sumprod()`
+reads each item's object. `median()`, `median_low()` and `quantiles(n=100)` of floats take 8.3 to
+8.9 ms (12.9 to 13.1 ms), most of it the sort, `median_high()` and `median_grouped()` of ints 6.3
+and 6.5 ms (10.6), `geometric_mean()` 2.4 ms (6.4: a `log()` per item, which CPython calls through
+`map()`), and `mode()` and `multimode()` of ints 1.0 ms (3.1). (Medians of 3 runs, each the median
+of 5 rounds of 10 to 50 calls.) [`examples/latency`](../examples/latency/README.md) reports the
+latencies of each endpoint of an access log with it.
 
 ## `urllib.parse`, a port of CPython's
 

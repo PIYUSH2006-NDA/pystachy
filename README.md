@@ -52,7 +52,7 @@ flowchart LR
 | **runtime** | `runtime.c`, about 3,300 lines, with its own garbage collector, and `runtime.py`, its str methods, formatting and hashing written in the subset; needs only the C library |
 | **bootstrap** | the compiler running on CPython, the native compiler it builds, and the one that builds itself all emit byte-identical LLVM IR |
 | **tests** | about 700 programs that must print what CPython printed for them, JIT and AOT, and over 850 that must be rejected, with the compiler running on CPython and with the native one ([docs/testing.md](docs/testing.md)) |
-| **standard library** | 9 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
+| **standard library** | 8 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
 
 ### Speed
 
@@ -181,7 +181,7 @@ compiler on CPython. Other settings are listed in
 - **Unmodified library code compiles.** An unannotated module-level function or method is a template,
   compiled for the argument types of each call, and what CPython decides at import time (`__main__` guards,
   platform tests, optional C accelerators) is decided at compile time. That is how `bisect`,
-  `heapq`, `posixpath` and six more CPython modules compile as they are.
+  `colorsys`, `posixpath` and five more CPython modules compile as they are.
 - **A small runtime that copies CPython where it shows.** `runtime.c` has its own garbage
   collector and needs only the C library. Lists sort with a port of CPython's timsort, and dicts
   use CPython 3.13's layout, so ordering and iteration match.

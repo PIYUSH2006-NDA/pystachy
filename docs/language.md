@@ -556,7 +556,7 @@ objects inside containers).
 ### The vendored standard library
 
 `lib/` holds unmodified
-CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`, `heapq`,
+CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`,
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
@@ -569,12 +569,33 @@ parameters and return give (the wrapper is a generic class, *Typing rules*), and
 counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `textwrap` is all of
 CPython's, edited in 7 marked places for what Pystachy does not support, with a width that counts a
 str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cpythons)). Its
-`urllib.parse` is CPython's with marked edits, whose `quote()`, `unquote()`, `parse_qs()`,
-`parse_qsl()`, `urlencode()`, `urlsplit()`, `urljoin()` and their siblings take strs, which hold
-UTF-8, as CPython's take the UTF-8 of strs, with CPython's codecs of UTF-8, Latin-1 and ASCII, but
-raise `UnicodeError` where those raise `UnicodeEncodeError` or `UnicodeDecodeError`, and have no
-other codecs, bytes or netloc properties
-([`lib/README.md`](../lib/README.md#urllibparse-a-port-of-cpythons)).
+`difflib` is CPython's, edited where Pystachy needs types and has no `namedtuple()`, for
+`SequenceMatcher` over strs and lists of strs and `get_close_matches()`; its generators
+(`unified_diff()`, `ndiff()`) are not compiled yet
+([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)). Its `getopt` is all of CPython's,
+edited where Pystachy has no `gettext` and no `os.environ` and where empty lists need a type, with
+`longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)). Its `heapq` is
+CPython's with `nlargest()` and `nsmallest()` edited in marked places, which read a list in place
+and another iterable (but a file) through a list of its items, with CPython's comparisons in its
+order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)). Its `string`
+is CPython's, edited in 16 marked places: the constants, `capwords()` and `Template` (not a subclass
+of it, which needs inheritance), with `Formatter` left uncompiled
+([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)). Its `io` is Pystachy's own
+`StringIO`, CPython's in-memory text stream, whose positions count a str's bytes past ASCII
+([`lib/README.md`](../lib/README.md#io-pystachys-own)). Its `csv` is Pystachy's own, written after
+CPython's `Modules/_csv.c` and `Lib/csv.py`, which reads and writes as CPython's does, but that a
+reader parses all of its input when its iteration starts, into rows that are `list[str]` (a
+`DictReader`'s `dict[str, str]`), and the other deviations
+[`lib/README.md`](../lib/README.md#csv-pystachys-own) lists. Its `statistics` is CPython's, edited
+in 20 marked places: `fmean()` (its weights through a port of `math.sumprod()`'s C code), the
+medians, `quantiles()`, `geometric_mean()`, `mode()` and `multimode()`, with what needs `Fraction`,
+`Decimal` or `random` (`mean()`, the variances, `NormalDist`, ...) left uncompiled
+([`lib/README.md`](../lib/README.md#statistics-a-port-of-cpythons)). Its `urllib.parse` is CPython's
+with marked edits, whose `quote()`, `unquote()`, `parse_qs()`, `parse_qsl()`, `urlencode()`,
+`urlsplit()`, `urljoin()` and their siblings take strs, which hold UTF-8, as CPython's take the
+UTF-8 of strs, with CPython's codecs of UTF-8, Latin-1 and ASCII, but raise `UnicodeError` where
+those raise `UnicodeEncodeError` or `UnicodeDecodeError`, and have no other codecs, bytes or netloc
+properties ([`lib/README.md`](../lib/README.md#urllibparse-a-port-of-cpythons)).
 
 ## Expressions
 
@@ -627,7 +648,9 @@ CPython's error when it runs.
 
 ## Builtins and library modules
 
-`print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
+`print` (with `sep`, `end`, `file`, `flush`; `file` a file or an object with a `write()` method,
+such as `io.StringIO`, which gets each piece in a call of its own, as CPython makes them), `len`,
+`str`, `repr`, `ascii`,
 `int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
 or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
 `list.sort`, with `key=` and `reverse=`), `list`, `dict`, `set` and `frozenset` (of any iterable of
