@@ -15758,6 +15758,20 @@ class Gen:
                 o = self.unwrap(self.expr(it.kids[0].kids[0], ""), f"AttributeError: 'NoneType' object has no attribute '{m}'")
                 if is_dict(o.t):
                     self.for_seq(tgt, [o], m, body, "0", hide, arg)
+                elif o.t == "kw[]" and m != "keys":
+                    # **kwargs of a call that passes no extra keyword arguments: no values, of the
+                    # type its annotation gives them (**kwargs: T), else of none. Only the parameter
+                    # itself is known to be this function's record: another name may hold one that
+                    # a call returned or passed in, from a function annotated otherwise
+                    f = self.curfn
+                    x = it.kids[0].kids[0]
+                    if f.kwarg >= 0 and f.kwelem != "" and x.kind == "name" and x.s == f.params[f.kwarg]:
+                        et = f.kwelem if m == "values" else "tuple[str," + f.kwelem + "]"
+                        self.for_seq(tgt, [self.expr(mk("list", "", it.line, []), "list[" + et + "]")], "", body, "0", hide, arg)
+                        return
+                    self.iterarg(arg)
+                    self.hide(hide)
+                    return  # nothing to iterate: the body never runs (and its types are unknown), as for ()
                 else:
                     self.for_seq(tgt, [self.method(o, m, [])], "", body, "0", hide, arg)
                 return
