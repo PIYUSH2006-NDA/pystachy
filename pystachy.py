@@ -5784,6 +5784,11 @@ TEMPLATE_BYTES = 1048576
 # Completed instances retain their FnInfo and IR too: branching on short types can
 # grow exponentially without reaching either active limit. Count across all templates.
 TEMPLATE_INSTANCES = 4096
+# They keep their signatures too (key and parameter types, up to TYPE_SIZE per parameter),
+# which long types make hundreds of MiB under that count: bound their total, low enough that
+# a rejection fits tools/compilelimits.py's 256 MiB, hosted too (the corpus's largest total is
+# 4,736 bytes, tests/port_tomli_w_tables.py's 92 instances).
+TEMPLATE_RETAINED = 16777216
 # Effect letters: R may raise (in a program that has try or with, a raise allocates its exception, so a
 # collection may run before a handler takes it; if none does, the raise prints its message, flushes
 # stdout and exits); N never returns; A allocates on the way to returning (a collection may run, and
@@ -7860,6 +7865,8 @@ class Gen:
         self.making: list[str] = []  # the template functions being compiled, each with its call site
         self.template_bytes = 0  # bytes in the signatures of the active instance() calls
         self.template_instances = 0  # retained instances in this compilation, including completed ones
+        self.template_retained = 0  # and the bytes of their signatures
+        self.retainers: dict[str, int] = {}  # and those of each template, by the name messages give it
         self.unsupported: dict[str, str] = {}  # classes of imported modules that cannot be compiled: why
         self.cnodes: dict[int, Node] = {}  # every module-level class or subclass statement, by line
         self.hooks: dict[str, str] = {}  # see hook()
@@ -18716,6 +18723,13 @@ class Gen:
             self.err(f"active template signatures exceed {TEMPLATE_BYTES} bytes; annotate template parameters")
         if self.template_instances >= TEMPLATE_INSTANCES:
             self.err(f"compilation needs more than {TEMPLATE_INSTANCES} template specializations; annotate template parameters or reduce type combinations")
+        who = f"{shown(f.cls) + '.' if f.cls != '' else ''}{shown(f.name)}"
+        if self.template_retained + size > TEMPLATE_RETAINED:
+            top = ""  # (the template whose instances keep the most)
+            for w in self.retainers:
+                if top == "" or self.retainers[w] > self.retainers[top]:
+                    top = w
+            self.err(f"retained template signatures exceed {TEMPLATE_RETAINED} bytes, {top}() keeping the most ({self.retainers[top]}); annotate template parameters or reduce type combinations")
         self.materialize(f)  # (an inherited class method's own body)
         g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, f.cls)
         g.deco = f.deco
@@ -18742,10 +18756,12 @@ class Gen:
             g.nnp[x] = True
         f.insts[key] = g
         self.template_instances += 1
+        self.template_retained += size
+        self.retainers[who] = self.retainers.get(who, 0) + size
         maybe = [f.params[j] for j in range(len(ts)) if ts[j] in self.classes and f.params[j] not in g.nnp and self.dispatches(f, f.params[j])]
         why = f", where {' and '.join(maybe)} may be None: only a new object or self is known not to be None, which decides isinstance(), hasattr() and 'is None' at compile time" if len(maybe) > 0 else ""
         args = ", ".join(ts[1:] if f.clo >= 0 or takes_self(f) else ts) if size <= 256 else f"<{len(ts)} arguments, {size} type bytes>"  # (a closure's env, a method's self aside)
-        self.making.append(f"compiling {shown(f.cls) + '.' if f.cls != '' else ''}{shown(f.name)}({args}) for the call at {where(self.line)}{why}")
+        self.making.append(f"compiling {who}({args}) for the call at {where(self.line)}{why}")
         self.template_bytes += size
         fr = self.save()
         self.modlevel = False
