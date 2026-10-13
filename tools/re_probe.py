@@ -53,11 +53,11 @@ sre.Ctx = _CountedCtx
 # name, pattern, flags, what it does to what, and the limits of its matcher entries and contexts
 # over the 20 inputs
 OPERATIONS = [
-    ("wordsep_re.split", re_bench.WORDSEP, re.VERBOSE, "split", 3414, 62198),
-    ("wordsep_simple_re.split", re_bench.WORDSEP_SIMPLE, 0, "split", 9355, 10935),
-    ("whitespace_only_re.sub", re_bench.WHITESPACE_ONLY, re.MULTILINE, "sub", 320, 1327),
-    ("leading_whitespace_re.findall", re_bench.LEADING_WHITESPACE, re.MULTILINE, "findall", 320, 733),
-    ("margin.sub", r"(?m)^    ", 0, "sub", 298, 298),
+    ("wordsep_re.split", re_bench.WORDSEP, re.VERBOSE, "split", 3414, 140),
+    ("wordsep_simple_re.split", re_bench.WORDSEP_SIMPLE, 0, "split", 9355, 40),
+    ("whitespace_only_re.sub", re_bench.WHITESPACE_ONLY, re.MULTILINE, "sub", 320, 40),
+    ("leading_whitespace_re.findall", re_bench.LEADING_WHITESPACE, re.MULTILINE, "findall", 320, 40),
+    ("margin.sub", r"(?m)^    ", 0, "sub", 298, 20),
 ]
 
 
