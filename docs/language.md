@@ -537,7 +537,9 @@ CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md))
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
-deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists.
+deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its `io` is
+Pystachy's own `StringIO`, CPython's in-memory text stream, whose positions count a str's bytes
+past ASCII ([`lib/README.md`](../lib/README.md#io-pystachys-own)).
 
 ## Expressions
 
@@ -589,7 +591,9 @@ CPython's error when it runs.
 
 ## Builtins and library modules
 
-`print` (with `sep`, `end`, `file`, `flush`), `len`, `str`, `repr`, `ascii`,
+`print` (with `sep`, `end`, `file`, `flush`; `file` a file or an object with a `write()` method,
+such as `io.StringIO`, which gets each piece in a call of its own, as CPython makes them), `len`,
+`str`, `repr`, `ascii`,
 `int` (also with `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct` and `bin` (of an int
 or a bool), `abs`, `min` and `max` (with `key=`), `sum`, `sorted` (and
 `list.sort`, with `key=` and `reverse=`), `list`, `dict`, `set` and `frozenset` (of any iterable of
