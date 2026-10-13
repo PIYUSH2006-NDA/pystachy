@@ -1,0 +1,314 @@
+format(0.0, 'f') '0.000000'
+format(0.0, '') '0.0'
+format(0.01, '') '0.01'
+format(0.01, 'g') '0.01'
+format(x, '') '14.285714285714286'
+format(x, '-') '14.285714285714286'
+format(x, '>') '14.285714285714286'
+format(x, '2') '14.285714285714286'
+format(1.0, 'f') '1.000000'
+format(-1.0, 'f') '-1.000000'
+format( 1.0, ' f') ' 1.000000'
+format(-1.0, ' f') '-1.000000'
+format( 1.0, '+f') '+1.000000'
+format(-1.0, '+f') '-1.000000'
+format(-1.0, '%') '-100.000000%'
+format(3.0, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(0.0, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(1.0, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(-1.0, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(1e+100, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(-1e+100, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(1e-100, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(-1e-100, 's') ValueError: Unknown format code 's' for object of type 'float'
+format(0.0, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(1.0, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(-1.0, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(1e+100, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(-1e+100, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(1e-100, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(-1e-100, 'b') ValueError: Unknown format code 'b' for object of type 'float'
+format(0.0, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(1.0, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(-1.0, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(1e+100, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(-1e+100, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(1e-100, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(-1e-100, 'c') ValueError: Unknown format code 'c' for object of type 'float'
+format(0.0, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(1.0, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(-1.0, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(1e+100, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(-1e+100, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(1e-100, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(-1e-100, 'd') ValueError: Unknown format code 'd' for object of type 'float'
+format(0.0, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(1.0, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(-1.0, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(1e+100, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(-1e+100, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(1e-100, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(-1e-100, 'o') ValueError: Unknown format code 'o' for object of type 'float'
+format(0.0, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(1.0, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(-1.0, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(1e+100, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(-1e+100, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(1e-100, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(-1e-100, 'x') ValueError: Unknown format code 'x' for object of type 'float'
+format(0.0, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(1.0, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(-1.0, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(1e+100, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(-1e+100, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(1e-100, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(-1e-100, 'X') ValueError: Unknown format code 'X' for object of type 'float'
+format(NAN, 'f') 'nan'
+format(NAN, 'F') 'NAN'
+format(INF, 'f') 'inf'
+format(INF, 'F') 'INF'
+test_format_testfile: 1114 formats; %.50e of 1e-5: 1.00000000000000008180305391403130954586231382563710e-05, %#.6g of 234.56: 234.560
+format(123.456, '.4') '123.5'
+format(1234.56, '.4') '1.235e+03'
+format(12345.6, '.4') '1.235e+04'
+format(123.0, '00') '123.0'
+format(123.34, '00f') '123.340000'
+format(123.34, '00e') '1.233400e+02'
+format(123.34, '00g') '123.34'
+format(123.34, '00.10f') '123.3400000000'
+format(123.34, '00.10e') '1.2334000000e+02'
+format(123.34, '00.10g') '123.34'
+format(123.34, '01f') '123.340000'
+format(-123.0, '00') '-123.0'
+format(-123.34, '00f') '-123.340000'
+format(-123.34, '00e') '-1.233400e+02'
+format(-123.34, '00g') '-123.34'
+format(-123.34, '00.10f') '-123.3400000000'
+format(-123.34, '00.10f') '-123.3400000000'
+format(-123.34, '00.10e') '-1.2334000000e+02'
+format(-123.34, '00.10g') '-123.34'
+round(INF) OverflowError: cannot convert float infinity to integer
+round(-INF) OverflowError: cannot convert float infinity to integer
+round(NAN) ValueError: cannot convert float NaN to integer
+round(INF, 0) inf
+round(-INF, 0) -inf
+math.isnan(round(NAN, 0)) True
+round(123.456, 324) 123.456
+round(-123.456, 324) -123.456
+round(1e300, 324) 1e+300
+round(1e-320, 324) 1e-320
+round(123.456, 325) 123.456
+round(-123.456, 325) -123.456
+round(1e300, 325) 1e+300
+round(1e-320, 325) 1e-320
+round(123.456, 400) 123.456
+round(-123.456, 400) -123.456
+round(1e300, 400) 1e+300
+round(1e-320, 400) 1e-320
+round(123.456, 2147483647) 123.456
+round(-123.456, 2147483647) -123.456
+round(1e300, 2147483647) 1e+300
+round(1e-320, 2147483647) 1e-320
+round(123.456, 2147483648) 123.456
+round(-123.456, 2147483648) -123.456
+round(1e300, 2147483648) 1e+300
+round(1e-320, 2147483648) 1e-320
+round(123.456, 4294967296) 123.456
+round(-123.456, 4294967296) -123.456
+round(1e300, 4294967296) 1e+300
+round(1e-320, 4294967296) 1e-320
+round(1e150, 300) 1e+150
+round(1e300, 307) 1e+300
+round(-3.1415, 308) -3.1415
+round(1e150, 309) 1e+150
+round(1.4e-315, 315) 1e-315
+round(123.456, -308) 0.0
+round(-123.456, -308) -0.0
+round(1e300, -308) 0.0
+round(1e-320, -308) 0.0
+round(123.456, -309) 0.0
+round(-123.456, -309) -0.0
+round(1e300, -309) 0.0
+round(1e-320, -309) 0.0
+round(123.456, -400) 0.0
+round(-123.456, -400) -0.0
+round(1e300, -400) 0.0
+round(1e-320, -400) 0.0
+round(123.456, -2147483647) 0.0
+round(-123.456, -2147483647) -0.0
+round(1e300, -2147483647) 0.0
+round(1e-320, -2147483647) 0.0
+round(123.456, -2147483648) 0.0
+round(-123.456, -2147483648) -0.0
+round(1e300, -2147483648) 0.0
+round(1e-320, -2147483648) 0.0
+round(123.456, -2147483649) 0.0
+round(-123.456, -2147483649) -0.0
+round(1e300, -2147483649) 0.0
+round(1e-320, -2147483649) 0.0
+round(1.6e308, -308) OverflowError: rounded value too large to represent
+round(-1.7e308, -308) OverflowError: rounded value too large to represent
+round(562949953421312.5, 1) 562949953421312.5
+round(56294995342131.5, 3) 56294995342131.5
+round(25.0, -1) 20.0
+round(35.0, -1) 40.0
+round(45.0, -1) 40.0
+round(55.0, -1) 60.0
+round(65.0, -1) 60.0
+round(75.0, -1) 80.0
+round(85.0, -1) 80.0
+round(95.0, -1) 100.0
+test_matches_float_format: 6000 roundings; round(0.125, 2) = 0.12, round(4.995, 2) = 5.0
+%e inf 'inf'
+%e -inf '-inf'
+%e nan 'nan'
+%e nan 'nan'
+%+e inf '+inf'
+%+e -inf '-inf'
+%+e nan '+nan'
+%+e nan '+nan'
+% e inf ' inf'
+% e -inf '-inf'
+% e nan ' nan'
+% e nan ' nan'
+%f inf 'inf'
+%f -inf '-inf'
+%f nan 'nan'
+%f nan 'nan'
+%+f inf '+inf'
+%+f -inf '-inf'
+%+f nan '+nan'
+%+f nan '+nan'
+% f inf ' inf'
+% f -inf '-inf'
+% f nan ' nan'
+% f nan ' nan'
+%g inf 'inf'
+%g -inf '-inf'
+%g nan 'nan'
+%g nan 'nan'
+%+g inf '+inf'
+%+g -inf '-inf'
+%+g nan '+nan'
+%+g nan '+nan'
+% g inf ' inf'
+% g -inf '-inf'
+% g nan ' nan'
+% g nan ' nan'
+%.0e inf 'inf'
+%.0e -inf '-inf'
+%.0e nan 'nan'
+%.0e nan 'nan'
+%+.0e inf '+inf'
+%+.0e -inf '-inf'
+%+.0e nan '+nan'
+%+.0e nan '+nan'
+% .0e inf ' inf'
+% .0e -inf '-inf'
+% .0e nan ' nan'
+% .0e nan ' nan'
+%.6f inf 'inf'
+%.6f -inf '-inf'
+%.6f nan 'nan'
+%.6f nan 'nan'
+%+.6f inf '+inf'
+%+.6f -inf '-inf'
+%+.6f nan '+nan'
+%+.6f nan '+nan'
+% .6f inf ' inf'
+% .6f -inf '-inf'
+% .6f nan ' nan'
+% .6f nan ' nan'
+%.20g inf 'inf'
+%.20g -inf '-inf'
+%.20g nan 'nan'
+%.20g nan 'nan'
+%+.20g inf '+inf'
+%+.20g -inf '-inf'
+%+.20g nan '+nan'
+%+.20g nan '+nan'
+% .20g inf ' inf'
+% .20g -inf '-inf'
+% .20g nan ' nan'
+% .20g nan ' nan'
+%#e inf 'inf'
+%#e -inf '-inf'
+%#e nan 'nan'
+%#e nan 'nan'
+%+#e inf '+inf'
+%+#e -inf '-inf'
+%+#e nan '+nan'
+%+#e nan '+nan'
+% #e inf ' inf'
+% #e -inf '-inf'
+% #e nan ' nan'
+% #e nan ' nan'
+%#f inf 'inf'
+%#f -inf '-inf'
+%#f nan 'nan'
+%#f nan 'nan'
+%+#f inf '+inf'
+%+#f -inf '-inf'
+%+#f nan '+nan'
+%+#f nan '+nan'
+% #f inf ' inf'
+% #f -inf '-inf'
+% #f nan ' nan'
+% #f nan ' nan'
+%#g inf 'inf'
+%#g -inf '-inf'
+%#g nan 'nan'
+%#g nan 'nan'
+%+#g inf '+inf'
+%+#g -inf '-inf'
+%+#g nan '+nan'
+%+#g nan '+nan'
+% #g inf ' inf'
+% #g -inf '-inf'
+% #g nan ' nan'
+% #g nan ' nan'
+%#.20e inf 'inf'
+%#.20e -inf '-inf'
+%#.20e nan 'nan'
+%#.20e nan 'nan'
+%+#.20e inf '+inf'
+%+#.20e -inf '-inf'
+%+#.20e nan '+nan'
+%+#.20e nan '+nan'
+% #.20e inf ' inf'
+% #.20e -inf '-inf'
+% #.20e nan ' nan'
+% #.20e nan ' nan'
+%#.15f inf 'inf'
+%#.15f -inf '-inf'
+%#.15f nan 'nan'
+%#.15f nan 'nan'
+%+#.15f inf '+inf'
+%+#.15f -inf '-inf'
+%+#.15f nan '+nan'
+%+#.15f nan '+nan'
+% #.15f inf ' inf'
+% #.15f -inf '-inf'
+% #.15f nan ' nan'
+% #.15f nan ' nan'
+%#.3g inf 'inf'
+%#.3g -inf '-inf'
+%#.3g nan 'nan'
+%#.3g nan 'nan'
+%+#.3g inf '+inf'
+%+#.3g -inf '-inf'
+%+#.3g nan '+nan'
+%+#.3g nan '+nan'
+% #.3g inf ' inf'
+% #.3g -inf '-inf'
+% #.3g nan ' nan'
+% #.3g nan ' nan'
+round(1.23[, None]) 1
+isinstance(x, int) True
+round(1.23[, None]) 1
+isinstance(x, int) True
+round(1.78[, None]) 2
+isinstance(x, int) True
+round(1.78[, None]) 2
+isinstance(x, int) True
+[exit 0]

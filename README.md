@@ -52,7 +52,7 @@ flowchart LR
 | **runtime** | `runtime.c`, about 3,300 lines, with its own garbage collector, and `runtime.py`, its str methods, formatting and hashing written in the subset; needs only the C library |
 | **bootstrap** | the compiler running on CPython, the native compiler it builds, and the one that builds itself all emit byte-identical LLVM IR |
 | **tests** | about 700 programs that must print what CPython printed for them, JIT and AOT, and over 850 that must be rejected, with the compiler running on CPython and with the native one ([docs/testing.md](docs/testing.md)) |
-| **standard library** | 9 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
+| **standard library** | 8 unmodified CPython 3.13 modules compile as they are, for the functions the subset supports ([`lib/`](lib/README.md)) |
 
 ### Speed
 
@@ -181,7 +181,7 @@ compiler on CPython. Other settings are listed in
 - **Unmodified library code compiles.** An unannotated module-level function or method is a template,
   compiled for the argument types of each call, and what CPython decides at import time (`__main__` guards,
   platform tests, optional C accelerators) is decided at compile time. That is how `bisect`,
-  `heapq`, `posixpath` and six more CPython modules compile as they are.
+  `colorsys`, `posixpath` and five more CPython modules compile as they are.
 - **A small runtime that copies CPython where it shows.** `runtime.c` has its own garbage
   collector and needs only the C library. Lists sort with a port of CPython's timsort, and dicts
   use CPython 3.13's layout, so ordering and iteration match.
@@ -257,10 +257,10 @@ instead of raising `RecursionError`; and `__del__` never runs. The complete list
 [deviations](docs/language.md#deviations-from-cpython) and
 [rejected programs](docs/language.md#rejected-rather-than-miscompiled).
 
-The published import survey found that 38 of 519 standard-library modules imported, and no
-popular PyPI package imported as a whole. Algorithmic code copied out of packages often runs
-unmodified or after a few edits; see [docs/stdlib.md](docs/stdlib.md) for the survey and its
-scope.
+The published import survey found that 38 of 519 standard-library modules imported (now,
+beside the 19 that `lib/` replaces, 37 of the other 500 do), and no popular PyPI package
+imported as a whole. Algorithmic code copied out of packages often runs unmodified or after a
+few edits; see [docs/stdlib.md](docs/stdlib.md) for the survey and its scope.
 
 ## Design decisions
 
@@ -317,4 +317,5 @@ something large there.
 
 MIT ([LICENSE](LICENSE)). The list sort in `runtime.c` is a port of CPython's, and the vendored
 CPython modules in `lib/` are CPython's own; both are used under the PSF License Version 2
-([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).
+([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)). `ryu/`, the float repr's digits, is Ryu's, used
+under the Boost Software License 1.0 ([ryu/README.md](ryu/README.md)).

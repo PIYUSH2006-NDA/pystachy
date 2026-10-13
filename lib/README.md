@@ -12,7 +12,6 @@ checks each against CPython.
 |---|---|---|---|
 | `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | everything, `key=` too (a function of the program or a builtin, compiled into each call) |
 | `colorsys` | `Lib/colorsys.py` | `65e3dfbf7bad61d4d7d7731a69dd7e75a347fd350d91327a51010a94e6fd2f1d` | everything |
-| `heapq` | `Lib/heapq.py` | `6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9` | `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max` variants; not `merge` (a generator), `nlargest`, `nsmallest` (`iter`, `key=`) |
 | `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` | the operator functions; not `attrgetter`, `itemgetter`, `methodcaller` (class templates whose `_call` field holds a closure of `__init__`, which a field's type cannot be inferred from), `call`, `length_hint`, `index`; the in-place functions only where the result keeps its type (`itruediv(1, 2)` would rebind an int to a float) |
 | `stat` | `Lib/stat.py` | `07217986d9b2172b509dab3578d18ac05ba768b418e1f1e8c90e38a8f7c2b3c6` | the constants and `S_IS*()`, `S_IMODE`, `S_IFMT`; not `filemode` (it iterates a tuple of tuples of different lengths) |
 | `this` | `Lib/this.py` | `481d0cb3de511eae0b5713dad18542b07eafd9c013bb7690f7497bad49923a71` | everything (it prints the Zen of Python) |
@@ -22,6 +21,143 @@ checks each against CPython.
 
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
 so is `functools.py` (below).
+
+## `difflib`, a port of CPython's
+
+`difflib.py` is CPython 3.13.16's `Lib/difflib.py` (SHA-256
+`1593ae08143632f4f81fea3beeeb279d803f8a9be922b12fe79664d78bba879d`) edited in 12 places, each
+marked `# Pystachy port:`. It has `SequenceMatcher` (`set_seqs()`, `set_seq1()`, `set_seq2()`,
+`find_longest_match()`, `get_matching_blocks()`, `get_opcodes()`, `ratio()`, `quick_ratio()`,
+`real_quick_ratio()`, with `isjunk` and `autojunk`), `get_close_matches()`, `Match`,
+`IS_CHARACTER_JUNK()` and `IS_LINE_JUNK()`, as CPython's code. A sequence is a str or a list of
+strs (lines, words): the matcher's tables are typed for str items.
+
+- `Match` is a `typing.NamedTuple` class, where CPython makes it with `collections.namedtuple()`;
+  `SequenceMatcher` has no `__class_getitem__` (`types.GenericAlias`).
+- `SequenceMatcher.__init__` types the fields, sets `a` and `b`, and builds `b`'s tables, as
+  `set_seqs(a, b)` does, where CPython sets `a` and `b` to `None` first and then calls it: a class
+  template's field takes the type of its first value. `isjunk` is a `Callable[[str], bool] | None`
+  (a def, a lambda or one of the module's junk functions), the caches are `... | None`, and the
+  tables are `dict[str, ...]` and `set[str]`.
+- `find_longest_match()` and `quick_ratio()` test `x in set` and call `dict.get()` where CPython
+  binds `set.__contains__` and `dict.get` to locals first: a builtin's method is no value in
+  Pystachy. Their empty dicts and list are annotated.
+- `get_matching_blocks()`, `get_opcodes()` and `quick_ratio()` read their cache field into a local
+  and test that (a test narrows no field), so they return lists, never `None`;
+  `get_matching_blocks()` makes each `Match` with `Match(*t)` where CPython maps `Match._make`.
+- `get_close_matches()` keeps its best `n` with `sorted(result, reverse=True)[:n]`, the documented
+  equivalent of the `heapq.nlargest()` CPython calls (which needs iterators); the module's final
+  `del re` is gone (a module-level `del` is not supported).
+
+Not compiled, because they are generators: `get_grouped_opcodes()`, `unified_diff()`,
+`context_diff()`, `ndiff()`, `restore()`, `Differ.compare()` and `HtmlDiff`'s tables
+(`examples/linediff` groups opcodes into a unified diff itself). A sequence of items other than
+strs is a compile-time error (`tests/errors/lib_difflib_int_items.py`).
+
+`tests/lib_difflib.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_difflib.py` and the module's doctests that use these. Run by CPython, the edited
+module passes that file's 57 tests. Two applications use it:
+[`examples/linediff`](../examples/linediff/README.md), unified and word diffs of two files, at
+about twice CPython's speed (the `SequenceMatcher` of two texts of 50,000 lines takes 39 ms,
+against CPython's 124 ms), and [`examples/suggest`](../examples/suggest/README.md), spelling
+suggestions from a vocabulary, where each `get_close_matches()` of 20,000 words takes 3.9 ms, against
+CPython's 23 ms.
+
+## `getopt`, a port of CPython's
+
+`getopt.py` is CPython 3.13.16's `Lib/getopt.py` (SHA-256
+`0ce875700c8798193b8e2748f7a27fc542cc4d525a1e6fc403767450ec92be99`) edited in 15 places, each
+marked `# Pystachy port:` but for the six messages, which the comment that replaces the `gettext`
+import describes. It has the whole module, as CPython's code: `getopt()` and `gnu_getopt()` (also
+with a leading `+` in the short options, or `POSIXLY_CORRECT` set), with unique prefixes of long
+options, `GetoptError` (with `msg`, `opt` and the old name `error`) and its messages.
+
+- CPython's messages go through `gettext`'s `_()`, but `gettext` reads `sys.base_prefix`, which
+  Pystachy does not have, and `%` formatting takes only a literal format string. So each message
+  is `%` formatted as it is, untranslated (CPython ships no translation of them either).
+- `GetoptError.__init__`'s parameters and `__str__`'s return are annotated `str`: an exception
+  class is no class template, and a method without a return annotation returns `None`.
+- `longopts` is annotated `list[str]` in `getopt()` and `gnu_getopt()`, since its default `[]`
+  has no type otherwise. CPython also takes one str (`'alpha='`); here that is a compile-time
+  error (`tests/errors/lib_getopt_longopts_str.py`).
+- `opts` is annotated `list[tuple[str, str]]`: `do_longs()` and `do_shorts()`, which fill it, are
+  templates, and an empty list is not typed through them.
+- `do_longs()` declares `optarg: str | None` first: it is `None` or a str, set in the two arms of
+  a `try`.
+- `gnu_getopt()` reads `POSIXLY_CORRECT` with `os.getenv()` where CPython calls
+  `os.environ.get()`: Pystachy has no `os.environ`.
+
+`tests/lib_getopt.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_getopt.py`. Run by CPython, the edited module passes that file's 8 tests and its
+doctest (not the test of the translation catalogs, which needs CPython's `Tools/`).
+[`examples/cut`](../examples/cut/README.md), a `cut` with GNU's options, is an application of it.
+
+## `heapq`, with `nlargest()` and `nsmallest()` ported
+
+`heapq.py` is CPython 3.13.16's `Lib/heapq.py` (SHA-256
+`6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9`) with `nsmallest()` and
+`nlargest()` edited, each edit marked `# Pystachy port:`; the rest of the file is CPython's byte for
+byte. It has `heappush`, `heappop`, `heapify`, `heapreplace`, `heappushpop` and the `_max`
+variants, as CPython's code, and `nlargest()` and `nsmallest()`, with and without `key=`, of a list
+or of another iterable the subset passes (a tuple, a str, a dict, a set, `d.items()`, an object
+with `__iter__`, with or without `__len__`), as CPython's algorithm: the same heap operations, so
+the same comparisons and calls of `key` in the same order, and the same ties, as the
+`(elem, order)` and `(key, order, elem)` tuples keep the input's order among equal items.
+
+The edits, the same in both functions:
+
+- `it = iter(iterable)` is `iterable` itself for a list, else a list of its items: the subset has
+  no iterators. The list is a comprehension, `[elem for elem in iterable]`: `list(iterable)` would
+  call an object's `__len__` (its length hint), which `iter()` does not.
+- For n of 1, `min(it, default=sentinel, key=key)` with an `object()` sentinel is
+  `[min(it, key=key)] if it else []`: the subset has neither `object()` nor `default=`.
+- In `try: size = len(iterable)`, the `TypeError` of an iterable without `__len__` is raised before
+  `len()`, under `if not hasattr(iterable, '__len__')`, which the argument's type decides: `len()`
+  of an object without `__len__` is a compile-time error. A `__len__` that raises `TypeError` is
+  caught, as in CPython.
+- `zip(range(n), it)` (`range(0, -n, -1)` in `nlargest()`), which takes the first n items, is a
+  comprehension over `range(min(n, len(it)))` that indexes `it`, and with a `key` a loop that reads
+  each item once, before its key is called, as `zip()`'s iterator reads it (a key may change the
+  list): `range()` cannot be nested in `zip()`. The loop over the other items, which goes on with `zip()`'s iterator in CPython, is
+  `for i, elem in enumerate(it)`, which skips the first n: a list is read in place, as CPython's
+  iterator reads it, with no copy.
+- An empty `result` returns `[]`, not `result`: its tuples are not of the items' type, which the
+  function returns elsewhere.
+
+Where it differs from CPython:
+
+- The items of an iterable other than a list are taken into a list first, so a `key` or a
+  comparison that changes the dict or set being read does not raise CPython's `RuntimeError`.
+- For an n above 2,500 that is less than the length, `heapify()` of the decorated items compares
+  in another order than CPython's `_heapq` does (see the end of this page), with the same result.
+
+`merge()` is an error where a program calls it: it is a generator. So is an open file as the
+iterable of `nlargest()` or `nsmallest()`, as `hasattr()` of a file is not supported (its
+`readlines()` is an argument), and a generator expression, which the subset has only as the
+argument of `list()`, `sorted()`, `sum()` and the like (`list()` of it is an argument).
+
+`tests/lib_heapq_topk.py` compares them with CPython's on ints, floats, strs and tuples, n of -1,
+0, 1, 2, the length and around it, empty input, `key=` (a lambda, a function, a builtin,
+`str.lower`, a bound method), ties, the iterables above, and objects whose `__lt__`, `__eq__`,
+`__iter__` and `__len__` log their calls, so that the comparisons are CPython's, in its order. Run
+by CPython, the edited module passes CPython's `Lib/test/test_heapq.py` (51 tests), and its
+`nlargest()` and `nsmallest()` make the same comparisons and calls of `key`, with the same results,
+as CPython's own in 36,000 calls on random inputs with many ties (lists, tuples and an object
+without `__len__`, n from -2 to past the length, with and without `key`).
+
+In an AOT executable, `nlargest(10, xs)` and `nsmallest(10, xs)` of 100,000 ints take 45 and
+47 µs, against CPython's 1,970 and 1,936 µs: most items are only compared with the heap's top, an
+int comparison in the compiled loop, where CPython steps an iterator and calls a rich comparison
+for each; `nlargest(10, pairs, key=second)` of 100,000 `(str, int)` tuples takes 108 µs (CPython:
+4,263 µs). Where the heap does more of the work the gain is smaller: `nsmallest(1000, xs)` takes
+867 µs (CPython: 3,363 µs), most of it replacing and sifting `(elem, order)` tuples, and
+`nlargest(1, xs)`, `max()` of the list, 234 µs (CPython: 590 µs). The `sorted()` that an n at or
+past the length takes is slower than CPython's: 38 µs for 1,000 ints (CPython: 27 µs), whose sort
+compares ints with a function of their own, where Pystachy's compares through a descriptor of the
+items' type. (Medians of 3
+runs, each the median of 5 rounds of 20 calls, 2,000 for 1,000 ints, on items from a linear
+congruential generator.) [`examples/topk`](../examples/topk/README.md) picks the most frequent
+words of a text with them.
 
 ## `re`, a port of CPython's
 
@@ -169,6 +305,57 @@ argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tup
 hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
 (medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
 
+## `textwrap`, a port of CPython's
+
+`textwrap.py` is CPython 3.13.16's `Lib/textwrap.py` (SHA-256
+`30f3d833950d53e168cc021961574b553f56aed84458712b2eb29c6495843d46`) edited in 7 places, each
+marked `# Pystachy port:`. It has the whole module, as CPython's code: `wrap()`, `fill()`,
+`shorten()`, `dedent()`, `indent()` and `TextWrapper`, with each of its options (also changed on
+a wrapper after it is made) and its class attributes (which a wrapper can override with its own).
+Its regular expressions are `lib/re`'s.
+
+- `TextWrapper`'s class body makes the patterns `word_punct`, `letter`, `whitespace` and
+  `nowhitespace`, builds `wordsep_re` and `wordsep_simple_re` of them, and then `del`s them: a
+  class body can neither read its own attributes (#126) nor `del`. They are the module's
+  `_word_punct`, `_letter`, `_whitespace_class` and `_nowhitespace`, which the class body reads.
+- The four class attributes, each a call's result, are annotated (`dict[int, int]`,
+  `re.Pattern`), and `unicode_whitespace_trans` is `dict.fromkeys()` of a list comprehension
+  where CPython's is of `map(ord, ...)`, which Pystachy takes only where its items are taken at
+  once.
+- `wordsep_re`'s pattern is `%` of a mapping (`%(wp)s`), which Pystachy does not support:
+  `str.replace()` of each name makes the same pattern.
+- `max_lines=None` is annotated `int | None`: a field that a class template gives `None` needs
+  its type.
+- `_munge_whitespace()` replaces each character through `unicode_whitespace_trans` with
+  `''.join([chr(trans.get(ord(c), ord(c))) for c in text])`: Pystachy has no `str.translate()`.
+- `dedent()` enumerates `list(zip(margin, indent))`: `zip()` nested in `enumerate()` is not
+  supported.
+
+Where it differs from CPython (`tests/deviations/lib_textwrap.py`):
+
+- A width counts a str's bytes, as `len()` does in Pystachy: past ASCII, fewer characters fit
+  on a line, and a word longer than the width (`break_long_words`) is broken after that many
+  bytes, which can fall inside a character, whose bytes two lines then hold apart.
+- `unicode_whitespace_trans` maps code points to code points, an int each, the type of its default:
+  a table with a str or `None` value, which `str.translate()` takes to replace a character with
+  several or to delete it, is a compile-time type error (`tests/errors/lib_textwrap_trans_str.py`).
+  It is looked up byte by byte: a table that a wrapper is given maps the bytes of a character past
+  ASCII, not the character (CPython's table maps only ASCII whitespace).
+- A subclass of `TextWrapper` is an error: only an exception class may have a base (#7).
+
+`tests/lib_textwrap.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_textwrap.py`, and on a wrapper's own options and class attributes. Run by
+CPython, the edited module passes that file's 66 tests.
+
+In an AOT executable, `wrap()` of a 500-character paragraph of 79 words takes 137 µs, `fill()`
+136 µs and `shorten()` 134 µs, against CPython's 64, 66 and 54 µs; `dedent()` of a 15-line
+block takes 45 µs (CPython: 11 µs) and `indent()` 1.2 µs (CPython: 2.3 µs). Most of the time
+is `lib/re`'s: `wordsep_re.split()` takes 122 µs of `wrap()`'s 137 (CPython's `_sre`: 38 of 64),
+and the lookups that stand in for `str.translate()` 10 µs (CPython: 2.7 µs), while the rest of
+`wrap()`, the wrapping itself, takes 6 µs, against CPython's 17 µs. `dedent()`'s three regular
+expressions take 20, 14 and 13 µs (CPython: 3 µs each). (Medians of 3 runs, each the median of
+5 rounds over 200 generated ASCII paragraphs or blocks.)
+
 ## `string`, a port of CPython's
 
 `string.py` is CPython 3.13.16's `Lib/string.py` (SHA-256
@@ -248,4 +435,5 @@ functions reject are accepted, `bisect`'s `hi=-1` is a plain bound (`len(a)` for
 
 These files are part of Python and are used under the PSF License Version 2; see
 `THIRD_PARTY_NOTICES`. `tools/import_sweep.py` tries every module of a CPython standard library
-this way; [`docs/stdlib.md`](../docs/stdlib.md) reports which import and why the others do not.
+this way, with the modules here in place of the library's own; [`docs/stdlib.md`](../docs/stdlib.md)
+reports which import and why the others do not.

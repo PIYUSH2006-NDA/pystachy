@@ -1,0 +1,78 @@
+factorial(0) 1
+factorial(1) 1
+py_factorial(1) 1
+factorial(2) 2
+py_factorial(2) 2
+factorial(3) 6
+py_factorial(3) 6
+factorial(4) 24
+py_factorial(4) 24
+factorial(5) 120
+py_factorial(5) 120
+factorial(6) 720
+py_factorial(6) 720
+factorial(7) 5040
+py_factorial(7) 5040
+factorial(8) 40320
+py_factorial(8) 40320
+factorial(9) 362880
+py_factorial(9) 362880
+factorial(10) 3628800
+py_factorial(10) 3628800
+factorial(11) 39916800
+py_factorial(11) 39916800
+factorial(12) 479001600
+py_factorial(12) 479001600
+factorial(13) 6227020800
+py_factorial(13) 6227020800
+factorial(14) 87178291200
+py_factorial(14) 87178291200
+factorial(15) 1307674368000
+py_factorial(15) 1307674368000
+factorial(16) 20922789888000
+py_factorial(16) 20922789888000
+factorial(17) 355687428096000
+py_factorial(17) 355687428096000
+factorial(18) 6402373705728000
+py_factorial(18) 6402373705728000
+factorial(19) 121645100408832000
+py_factorial(19) 121645100408832000
+factorial(20) 2432902008176640000
+py_factorial(20) 2432902008176640000
+factorial(-1) ValueError: factorial() not defined for negative values
+gcd(0, 0) 0
+gcd(1, 0) 1
+gcd(-1, 0) 1
+gcd(0, 1) 1
+gcd(0, -1) 1
+gcd(7, 1) 1
+gcd(7, -1) 1
+gcd(-23, 15) 1
+gcd(120, 84) 12
+gcd(84, -120) 12
+lcm(0, 0) 0
+lcm(1, 0) 0
+lcm(-1, 0) 0
+lcm(0, 1) 0
+lcm(0, -1) 0
+lcm(7, 1) 7
+lcm(7, -1) 7
+lcm(-23, 15) 345
+lcm(120, 84) 840
+lcm(84, -120) 840
+testIsqrt: 3240 values, isqrt(2**62 + 39) = 2147483648
+isqrt(-1) ValueError: isqrt() argument must be nonnegative
+testPerm: perm(n, k) == factorial(n) // factorial(n - k) for 231 (n, k)
+testPerm: Pascal's identity for 1059 (n, k)
+testPerm: perm(n, 0), perm(n, 1) for n in range(1, 100); perm(20, 20) = 2432902008176640000
+perm(-1, 1) ValueError: n must be a non-negative integer
+perm(1, -1) ValueError: k must be a non-negative integer
+perm(1, 2) 0
+testComb: comb(n, k) == factorial(n) // (factorial(k) * factorial(n - k)) for 231 (n, k)
+testComb: Pascal's identity for 3497 (n, k)
+testComb: comb(n, 0), comb(n, n), comb(n, 1), comb(n, n - 1) for n < 100
+testComb: symmetry for 1798 (n, k), comb(66, 33) = 7219428434016265740
+comb(-1, 1) ValueError: n must be a non-negative integer
+comb(1, -1) ValueError: k must be a non-negative integer
+comb(1, 2) 0
+[exit 0]

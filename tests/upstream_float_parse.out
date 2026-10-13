@@ -1,0 +1,142 @@
+float(3.14) 3.14
+float(314) 314.0
+float("  3.14  ") 3.14
+float('  0x3.1  ') ValueError: could not convert string to float: '  0x3.1  '
+float('  -0x3.p-1  ') ValueError: could not convert string to float: '  -0x3.p-1  '
+float('  +0x3.p-1  ') ValueError: could not convert string to float: '  +0x3.p-1  '
+float('++3.14') ValueError: could not convert string to float: '++3.14'
+float('+-3.14') ValueError: could not convert string to float: '+-3.14'
+float('-+3.14') ValueError: could not convert string to float: '-+3.14'
+float('--3.14') ValueError: could not convert string to float: '--3.14'
+float('.nan') ValueError: could not convert string to float: '.nan'
+float('+.inf') ValueError: could not convert string to float: '+.inf'
+float('.') ValueError: could not convert string to float: '.'
+float('-.') ValueError: could not convert string to float: '-.'
+float('\ud8f0') ValueError: could not convert string to float: '\ud8f0'
+float('-1.7d29') ValueError: could not convert string to float: '-1.7d29'
+float('3D-14') ValueError: could not convert string to float: '3D-14'
+float("  \u0663.\u0661\u0664  ") 3.14
+float("\N{EM SPACE}3.14\N{EN SPACE}") 3.14
+float('.' + '1'*1000) 0.1111111111111111
+float('こんにちは') ValueError: could not convert string to float: 'こんにちは'
+float() 0.0
+float('0_0_0') 0.0
+float('000') 0.0
+float('4_2') 42.0
+float('42') 42.0
+float('1_0000_0000') 100000000.0
+float('100000000') 100000000.0
+float('1_00_00.5') 10000.5
+float('10000.5') 10000.5
+float('1_00_00.5e5') 1000050000.0
+float('10000.5e5') 1000050000.0
+float('1_00_00e5_1') 1e+55
+float('10000e51') 1e+55
+float('1e1_0') 10000000000.0
+float('1e10') 10000000000.0
+float('.1_4') 0.14
+float('.14') 0.14
+float('.1_4e1') 1.4
+float('.14e1') 1.4
+float('0_') ValueError: could not convert string to float: '0_'
+float('42_') ValueError: could not convert string to float: '42_'
+float('0 if 1_Else 1') ValueError: could not convert string to float: '0 if 1_Else 1'
+float('4_______2') ValueError: could not convert string to float: '4_______2'
+float('0.1__4') ValueError: could not convert string to float: '0.1__4'
+float('1e1__0') ValueError: could not convert string to float: '1e1__0'
+float('1_.4') ValueError: could not convert string to float: '1_.4'
+float('1._4') ValueError: could not convert string to float: '1._4'
+float('._5') ValueError: could not convert string to float: '._5'
+float('1.0e+_1') ValueError: could not convert string to float: '1.0e+_1'
+float('1_e1') ValueError: could not convert string to float: '1_e1'
+float('1.4_e1') ValueError: could not convert string to float: '1.4_e1'
+float('1e_1') ValueError: could not convert string to float: '1e_1'
+float('1.4e_1') ValueError: could not convert string to float: '1.4e_1'
+float('_NaN') ValueError: could not convert string to float: '_NaN'
+float('Na_N') ValueError: could not convert string to float: 'Na_N'
+float('IN_F') ValueError: could not convert string to float: 'IN_F'
+float('-_INF') ValueError: could not convert string to float: '-_INF'
+float('-INF_') ValueError: could not convert string to float: '-INF_'
+float('½'): "could not convert string to float: '½'"
+float('123½'): "could not convert string to float: '123½'"
+float('  123 456  '): "could not convert string to float: '  123 456  '"
+float(''): "could not convert string to float: ''"
+float(' '): "could not convert string to float: ' '"
+float('\t \n'): "could not convert string to float: '\\t \\n'"
+float('٣١٤!'): "could not convert string to float: '٣١٤!'"
+float('123\x00'): "could not convert string to float: '123\\x00'"
+float('123\x00 245'): "could not convert string to float: '123\\x00 245'"
+float('123\x00245'): "could not convert string to float: '123\\x00245'"
+isinf(float("inf")) True
+isinf(float("+inf")) True
+isinf(float("-inf")) True
+isinf(float("infinity")) True
+isinf(float("+infinity")) True
+isinf(float("-infinity")) True
+repr(float("inf")) 'inf'
+repr(float("+inf")) 'inf'
+repr(float("-inf")) '-inf'
+repr(float("infinity")) 'inf'
+repr(float("+infinity")) 'inf'
+repr(float("-infinity")) '-inf'
+repr(float("INF")) 'inf'
+repr(float("+Inf")) 'inf'
+repr(float("-iNF")) '-inf'
+repr(float("Infinity")) 'inf'
+repr(float("+iNfInItY")) 'inf'
+repr(float("-INFINITY")) '-inf'
+str(float("inf")) 'inf'
+str(float("+inf")) 'inf'
+str(float("-inf")) '-inf'
+str(float("infinity")) 'inf'
+str(float("+infinity")) 'inf'
+str(float("-infinity")) '-inf'
+float('info') ValueError: could not convert string to float: 'info'
+float('+info') ValueError: could not convert string to float: '+info'
+float('-info') ValueError: could not convert string to float: '-info'
+float('in') ValueError: could not convert string to float: 'in'
+float('+in') ValueError: could not convert string to float: '+in'
+float('-in') ValueError: could not convert string to float: '-in'
+float('infinit') ValueError: could not convert string to float: 'infinit'
+float('+Infin') ValueError: could not convert string to float: '+Infin'
+float('-INFI') ValueError: could not convert string to float: '-INFI'
+float('infinitys') ValueError: could not convert string to float: 'infinitys'
+float('++Inf') ValueError: could not convert string to float: '++Inf'
+float('-+inf') ValueError: could not convert string to float: '-+inf'
+float('+-infinity') ValueError: could not convert string to float: '+-infinity'
+float('--Infinity') ValueError: could not convert string to float: '--Infinity'
+repr(1e300 * 1e300) 'inf'
+repr(-1e300 * 1e300) '-inf'
+str(1e300 * 1e300) 'inf'
+str(-1e300 * 1e300) '-inf'
+isnan(float("nan")) True
+isnan(float("+nan")) True
+isnan(float("-nan")) True
+repr(float("nan")) 'nan'
+repr(float("+nan")) 'nan'
+repr(float("-nan")) 'nan'
+repr(float("NAN")) 'nan'
+repr(float("+NAn")) 'nan'
+repr(float("-NaN")) 'nan'
+str(float("nan")) 'nan'
+str(float("+nan")) 'nan'
+str(float("-nan")) 'nan'
+float('nana') ValueError: could not convert string to float: 'nana'
+float('+nana') ValueError: could not convert string to float: '+nana'
+float('-nana') ValueError: could not convert string to float: '-nana'
+float('na') ValueError: could not convert string to float: 'na'
+float('+na') ValueError: could not convert string to float: '+na'
+float('-na') ValueError: could not convert string to float: '-na'
+float('++nan') ValueError: could not convert string to float: '++nan'
+float('-+NAN') ValueError: could not convert string to float: '-+NAN'
+float('+-NaN') ValueError: could not convert string to float: '+-NaN'
+float('--nAn') ValueError: could not convert string to float: '--nAn'
+repr(1e300 * 1e300 * 0) 'nan'
+repr(-1e300 * 1e300 * 0) 'nan'
+str(1e300 * 1e300 * 0) 'nan'
+str(-1e300 * 1e300 * 0) 'nan'
+copysign(1.0, float('inf')) 1.0
+copysign(1.0, float('-inf')) -1.0
+copysign(1.0, float('nan')) 1.0
+copysign(1.0, float('-nan')) -1.0
+[exit 0]

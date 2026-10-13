@@ -282,10 +282,10 @@ imports `annotations` from `__future__`.
   static or class method, and a method of an `int`, `float` or `bool`, as a value are rejected.
 - `Callable[[A, B], R]` (typing's or `collections.abc`'s, also `Callable[[], R]` and with `| None`)
   is the type of any function that takes an `A` and a `B` and returns an `R`: a function value
-  becomes one where it is expected (an annotated variable, parameter, field, return, or a list or
-  dict item, also as an arm of a conditional expression there), compiled for those parameter
-  types, so one variable, field or list holds different functions (defs, builtins, lambdas,
-  closures, bound methods). A call of a Callable passes its arguments by
+  becomes one where it is expected (an annotated variable, parameter, field, return, or a list,
+  tuple or dict item, also as an arm of a conditional expression there), compiled for those
+  parameter types, so one variable, field or list holds different functions (defs, builtins,
+  lambdas, closures, bound methods). A call of a Callable passes its arguments by
   position, as its parameter types type them (one that is `None` raises `TypeError` once they are
   evaluated); two Callables are the same function where they hold one function (a closure from
   one run of its def or lambda), also compared with that function, and where they may be `None`,
@@ -552,7 +552,7 @@ objects inside containers).
 ### The vendored standard library
 
 `lib/` holds unmodified
-CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`, `heapq`,
+CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`,
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
@@ -562,9 +562,20 @@ CPython's over that `re`, with its compiled patterns in an `lru_cache`, for `str
 Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
 a function they decorate keeps its results in a cache of its own types, which its annotated
 parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
-counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `string` is CPython's,
-edited in 16 marked places: the constants, `capwords()` and `Template` (not a subclass of it, which
-needs inheritance), with `Formatter` left uncompiled
+counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `textwrap` is all of
+CPython's, edited in 7 marked places for what Pystachy does not support, with a width that counts a
+str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cpythons)). Its
+`difflib` is CPython's, edited where Pystachy needs types and has no `namedtuple()`, for
+`SequenceMatcher` over strs and lists of strs and `get_close_matches()`; its generators
+(`unified_diff()`, `ndiff()`) are not compiled yet
+([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)). Its `getopt` is all of CPython's,
+edited where Pystachy has no `gettext` and no `os.environ` and where empty lists need a type, with
+`longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)). Its `heapq` is
+CPython's with `nlargest()` and `nsmallest()` edited in marked places, which read a list in place
+and another iterable (but a file) through a list of its items, with CPython's comparisons in its
+order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)). Its `string`
+is CPython's, edited in 16 marked places: the constants, `capwords()` and `Template` (not a subclass
+of it, which needs inheritance), with `Formatter` left uncompiled
 ([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)).
 
 ## Expressions
@@ -577,7 +588,8 @@ complete format-spec mini-language, `%` formatting with a constant format string
 widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
 that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers; between two bools, `flag is True`, as
+`==`, since a bool is one of CPython's two objects `True` and `False`), `==`/`!=` with
 `None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/set/tuple
