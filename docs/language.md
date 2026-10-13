@@ -556,7 +556,7 @@ objects inside containers).
 ### The vendored standard library
 
 `lib/` holds unmodified
-CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`, `heapq`,
+CPython 3.13 modules that compile this way ([`lib/README.md`](../lib/README.md)): `bisect`, `colorsys`,
 `operator`, `stat`, `posixpath` and `genericpath` (the path string functions), `this` and
 `curses.ascii`. Its `re` is Pystachy's port of CPython's `re` and of its C engine `_sre`, which
 matches as CPython's does, with a position in a str counting its bytes past ASCII and the other
@@ -574,7 +574,10 @@ str's bytes past ASCII ([`lib/README.md`](../lib/README.md#textwrap-a-port-of-cp
 (`unified_diff()`, `ndiff()`) are not compiled yet
 ([`lib/README.md`](../lib/README.md#difflib-a-port-of-cpythons)). Its `getopt` is all of CPython's,
 edited where Pystachy has no `gettext` and no `os.environ` and where empty lists need a type, with
-`longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)).
+`longopts` a list ([`lib/README.md`](../lib/README.md#getopt-a-port-of-cpythons)). Its `heapq` is
+CPython's with `nlargest()` and `nsmallest()` edited in marked places, which read a list in place
+and another iterable (but a file) through a list of its items, with CPython's comparisons in its
+order ([`lib/README.md`](../lib/README.md#heapq-with-nlargest-and-nsmallest-ported)).
 
 ## Expressions
 
