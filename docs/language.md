@@ -582,7 +582,11 @@ is CPython's, edited in 16 marked places: the constants, `capwords()` and `Templ
 of it, which needs inheritance), with `Formatter` left uncompiled
 ([`lib/README.md`](../lib/README.md#string-a-port-of-cpythons)). Its `io` is Pystachy's own
 `StringIO`, CPython's in-memory text stream, whose positions count a str's bytes past ASCII
-([`lib/README.md`](../lib/README.md#io-pystachys-own)).
+([`lib/README.md`](../lib/README.md#io-pystachys-own)). Its `csv` is Pystachy's own, written after
+CPython's `Modules/_csv.c` and `Lib/csv.py`, which reads and writes as CPython's does, but that a
+reader parses all of its input when its iteration starts, into rows that are `list[str]` (a
+`DictReader`'s `dict[str, str]`), and the other deviations
+[`lib/README.md`](../lib/README.md#csv-pystachys-own) lists.
 
 ## Expressions
 
