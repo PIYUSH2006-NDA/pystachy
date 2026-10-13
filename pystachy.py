@@ -519,8 +519,10 @@ class Lexer:
                 self.bad(f"invalid non-printable character U+{cp:04X}", self.line)
                 return
             if among(cp, NOTID):
-                # (chr() is the same bytes natively, and the character where CPython runs this)
-                self.bad(f"invalid character '{chr(cp) if cp >= 256 else w[k : k + n]}' (U+{cp:04X})", self.line)
+                # ("%c" is the character's UTF-8 natively, where chr() below 256 is one byte, and
+                # the character where CPython runs this, where the source's own bytes are Latin-1)
+                ch = "%c" % cp
+                self.bad(f"invalid character '{ch}' (U+{cp:04X})", self.line)
                 return
             if n <= 0:
                 self.bad("(unicode error) " + utf8_error(w), self.line)  # (in a file declared UTF-8)
