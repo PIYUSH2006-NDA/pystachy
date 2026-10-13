@@ -87,6 +87,7 @@ def main():
         wrapper.write_text(f"#!/bin/sh\n{shlex.quote(real['opt'])} -S -passes=verify /dev/fd/9 -o {shlex.quote(str(capture))} || exit $?\nexec {shlex.quote(real['lli'])} \"$@\"\n")
         wrapper.chmod(0o755)
         env = os.environ | {"PYSTACHY_LLVM": str(bindir), "PYSTACHY_PATH": str(temp)}
+        env.pop("PYSTACHY_JIT_INLINE", None)  # (the default's inliner is what is checked first)
         expected = run([sys.executable, str(source)], env)
         for spec in commands:
             label, command = spec.split("=", 1)

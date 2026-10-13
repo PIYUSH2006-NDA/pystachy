@@ -239,7 +239,7 @@ that covered fewer cases fails, as one with a failure does. The report gives eac
 checks the same way: 58 with the native compiler, 57 with CPython's (one `PATH` case fewer).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
-others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
+others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_JIT_INLINE`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,
 `PYSTACHY_CFLAGS`, `PYSTACHY_PATH` and the like) from its environment, and lists the ones it
 found in the report's `ignored_env`; it keeps `PYSTACHY_LLVM` and `PYSTACHY_JOBS`.
 
