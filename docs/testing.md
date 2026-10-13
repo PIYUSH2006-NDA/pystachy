@@ -82,7 +82,9 @@ program shares with the commands it runs. Without `LANG` and `LC_*` the locale i
 CPython runs in UTF-8 mode (PEP 540), so `PYTHONUTF8=1` would change nothing: that environment
 reproduces every recording. The CPython must be the one of `.python-version`, which CI uses:
 another minor version is refused (3.12 prints otherwise for 28 tests), another patch version is
-warned about.
+warned about. The one package from outside the standard library that the tests import is
+`typing_extensions` (`tests/typevar_templates.py`, which Pystachy reads as `typing`), which
+`pip install -r tools/requirements-dev.txt` installs.
 
 `tests/record.sh --check` (`make check-recordings`) records every test into a temporary directory
 instead of `tests/`, and fails, naming the file:

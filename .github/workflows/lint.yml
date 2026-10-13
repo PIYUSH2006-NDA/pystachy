@@ -1,9 +1,10 @@
 # make lint: ruff (findings only), shellcheck of the scripts as POSIX sh, and clang's warnings on
 # runtime.c and tools/dictprobe.c, with the versions of tools/requirements-dev.txt; then make
 # check-recordings (tests/record.sh --check): the CPython of .python-version, which recorded the
-# tests' expected output, still prints every recording, every deviation still deviates from it,
-# lib/'s copies are its files, and no *.rej, *.orig or core file lies in the tree. A minute or two,
-# beside CI's make verify, on the same events: pull requests (forks too), pushes to main, and on demand.
+# tests' expected output (with the typing_extensions of tools/requirements-dev.txt), still prints
+# every recording, every deviation still deviates from it, lib/'s copies are its files, and no
+# *.rej, *.orig or core file lies in the tree. A minute or two, beside CI's make verify, on the same
+# events: pull requests (forks too), pushes to main, and on demand.
 name: Lint
 
 on:
