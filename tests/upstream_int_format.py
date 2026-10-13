@@ -9,8 +9,8 @@
 # each assertion is an assert and the loop prints how many it checked. getran() and
 # random.randrange() draw from a fixed linear congruential sequence (no random module), and
 # getran(n) is called for n of 1 and 2 digits only (MAXDIGITS is 2: 60 bits), as ints are 64-bit
-# here. check_format_1's (base, mapper) pairs are two lists, one of them of
-# Callable[[int], str] (a tuple of a function is not converted to a Callable: #245).
+# here. check_format_1's (base, mapper) pairs are a list of tuple[int, Callable[[int], str]]:
+# the tuple of pairs upstream iterates holds a different function type in each pair.
 # assertIs(type(got), int) is isinstance(got, int) (type() is not supported).
 # check_float_conversion compares reprs, as one variable holds the float or 'overflow' upstream
 # (a variable has one type here), and formats its message with % (str.format() is not
@@ -171,12 +171,11 @@ def slow_format(x: int, base: int) -> str:
 
 
 FORMATS = [0]
-BASES = [2, 8, 10, 10, 16]
-MAPPERS: list[Callable[[int], str]] = [bin, oct, str, repr, hex]
+PAIRS: list[tuple[int, Callable[[int], str]]] = [(2, bin), (8, oct), (10, str), (10, repr), (16, hex)]
 
 
 def check_format_1(x: int) -> None:
-    for base, mapper in zip(BASES, MAPPERS):  # (2, bin), (8, oct), (10, str), (10, repr), (16, hex)
+    for base, mapper in PAIRS:
         got = mapper(x)
         # with self.subTest(x=x, mapper=mapper.__name__):
         expected = slow_format(x, base)

@@ -1,0 +1,78 @@
+tab, 1 'http.request'
+tab 'http.request'
+tab, -1 'http.request'
+tab, 5 'http.request'
+tab, 0 'http.request\t200\tGET /'
+tab, True 'http.request'
+no tab 'http.request'
+at start ''
+at end 'x'
+empty ''
+long sep 'a'
+sep longer than s 'ab'
+sep is s ''
+non-ASCII 'é'
+non-ASCII sep 'a'
+words '  first second  ' 'first'
+None '  first second  ' 'first'
+None, 0 '  first second  ' 'first second  '
+None, 1 '  first second  ' 'first'
+words 'one' 'one'
+None 'one' 'one'
+None, 0 'one' 'one'
+None, 1 'one' 'one'
+words '\t\n x y' 'x'
+None '\t\n x y' 'x'
+None, 0 '\t\n x y' 'x y'
+None, 1 '\t\n x y' 'x'
+words 'a  b' 'a'
+None 'a  b' 'a'
+None, 0 'a  b' 'a  b'
+None, 1 'a  b' 'a'
+words '  a b ' 'a'
+None '  a b ' 'a'
+None, 0 '  a b ' 'a b '
+None, 1 '  a b ' 'a'
+words 'é ü' 'é'
+None 'é ü' 'é'
+None, 0 'é ü' 'é ü'
+None, 1 'é ü' 'é'
+IndexError: list index out of range ''
+IndexError: list index out of range ''
+IndexError: list index out of range '   '
+IndexError: list index out of range '   '
+IndexError: list index out of range '\t\n'
+IndexError: list index out of range '\t\n'
+ValueError: empty separator
+ValueError: empty separator
+sep 'x' 'a'
+sep 'x', 0 'axb'
+sep None 'a,b-c'
+sep None, 1 'a,b-c'
+sep ',' 'a'
+sep ',', 1 'a'
+sep '-' 'a,b'
+sep '-', 1 'a,b'
+evaluated receiver
+evaluated sep
+evaluated maxsplit
+order 'k'
+evaluated receiver
+evaluated sep
+evaluated maxsplit
+ValueError: empty separator
+attr 'name'
+method 'name'
+call 'key '
+index 'c'
+dict 'x'
+literal 'left'
+nested 'a'
+chained ''
+['a', 'c'] ['b', 'd']
+{'a': 'b', 'c': 'd'}
+fields fields =
+rsplit a,b b c
+optional 'p'
+AttributeError: 'NoneType' object has no attribute 'split'
+[exit 0]

@@ -1,0 +1,74 @@
+0.75 0.75 1.0
+[Match(a=1, b=0, size=3), Match(a=4, b=4, size=0)]
+[('delete', 0, 1, 0, 0), ('equal', 1, 4, 0, 3), ('insert', 4, 4, 3, 4)]
+0.995025 0.995025 0.995025
+[Match(a=0, b=1, size=100), Match(a=100, b=101, size=0)]
+[('insert', 0, 0, 0, 1), ('equal', 0, 100, 1, 101)]
+0.995025 0.995025 0.995025
+[Match(a=0, b=0, size=50), Match(a=50, b=51, size=50), Match(a=100, b=101, size=0)]
+[('equal', 0, 50, 0, 50), ('insert', 50, 50, 50, 51), ('equal', 50, 100, 51, 101)]
+0.993789 0.993789 0.993789
+[Match(a=0, b=0, size=40), Match(a=41, b=40, size=40), Match(a=81, b=80, size=0)]
+[('equal', 0, 40, 0, 40), ('delete', 40, 41, 40, 40), ('equal', 41, 81, 40, 80)]
+0.666667 0.666667 1.0
+[Match(a=1, b=0, size=2), Match(a=4, b=3, size=2), Match(a=6, b=6, size=0)]
+[('delete', 0, 1, 0, 0), ('equal', 1, 3, 0, 2), ('replace', 3, 4, 2, 3), ('equal', 4, 6, 3, 5), ('insert', 6, 6, 5, 6)]
+1.0 1.0 1.0
+[Match(a=0, b=0, size=0)]
+[]
+0.0 0.0 0.0
+[Match(a=3, b=0, size=0)]
+[('delete', 0, 3, 0, 0)]
+0.0 0.0 0.0
+[Match(a=0, b=3, size=0)]
+[('insert', 0, 0, 0, 3)]
+1.0 1.0 1.0
+[Match(a=0, b=0, size=9), Match(a=9, b=9, size=0)]
+[('equal', 0, 9, 0, 9)]
+0.866 [Match(a=0, b=0, size=8), Match(a=8, b=17, size=21), Match(a=29, b=38, size=0)] [' ']
+Match(a=0, b=4, size=5) Match(a=0, b=4, size=5)
+Match(a=1, b=0, size=4) Match(a=1, b=0, size=4) Match(a=0, b=4, size=3)
+[' ', 'b'] 0.434783 [('equal', 0, 40, 0, 40), ('replace', 40, 80, 40, 104)]
+0.0 ['b'] [('replace', 0, 200, 0, 201)]
+0.997506 [] [('insert', 0, 0, 0, 1), ('equal', 0, 200, 1, 201)]
+0.533333 0.666667 0.933333
+[Match(a=0, b=1, size=1), Match(a=3, b=4, size=1), Match(a=5, b=5, size=2), Match(a=7, b=8, size=0)]
+[('insert', 0, 0, 0, 1), ('equal', 0, 1, 1, 2), ('replace', 1, 3, 2, 4), ('equal', 3, 4, 4, 5), ('delete', 4, 5, 5, 5), ('equal', 5, 7, 5, 7), ('insert', 7, 7, 7, 8)]
+[('insert', 0, 0, 0, 1), ('equal', 0, 1, 1, 2), ('replace', 1, 4, 2, 3), ('equal', 4, 5, 3, 4), ('insert', 5, 5, 4, 5), ('equal', 5, 7, 5, 7), ('insert', 7, 7, 7, 8)] ['\n']
+insert  a[0:0] [] b[0:1] ['zero\n']
+equal   a[0:1] ['one\n'] b[1:2] ['one\n']
+replace a[1:4] ['two\n', 'three\n', '\n'] b[2:3] ['tree\n']
+equal   a[4:5] ['four\n'] b[3:4] ['four\n']
+insert  a[5:5] [] b[4:5] ['\n']
+equal   a[5:7] ['five\n', 'six\n'] b[5:7] ['five\n', 'six\n']
+insert  a[7:7] [] b[7:8] ['seven\n']
+1.0 1.0 1.0
+[Match(a=0, b=0, size=0)]
+[]
+0.0 0.0 0.0
+[Match(a=7, b=0, size=0)]
+[('delete', 0, 7, 0, 0)]
+True True [2, 2, 0]
+0.75 [('insert', 0, 0, 0, 1), ('equal', 0, 3, 1, 4), ('delete', 3, 4, 4, 4)]
+0.75 [('insert', 0, 0, 0, 1), ('equal', 0, 3, 1, 4), ('delete', 3, 4, 4, 4)]
+0.615385 0.615385 0.923077
+[Match(a=1, b=1, size=3), Match(a=5, b=5, size=1), Match(a=6, b=7, size=0)]
+[('replace', 0, 1, 0, 1), ('equal', 1, 4, 1, 4), ('replace', 4, 5, 4, 5), ('equal', 5, 6, 5, 6), ('insert', 6, 6, 6, 7)]
+1 1 3 3 True 3
+1 1 3
+['apple', 'ape']
+['appeal', 'apply', 'apple'] ['appeal', 'apply', 'apple', 'ape', 'apples']
+['appeal', 'apply'] [] ['peach']
+['wheel', 'where', 'while'] []
+ValueError: n must be > 0: 0
+ValueError: n must be > 0: -1
+ValueError: cutoff must be in [0.0, 1.0]: 1.5
+ValueError: cutoff must be in [0.0, 1.0]: -0.1
+True True False False
+True True False True
+[('equal', 0, 2, 0, 2), ('insert', 2, 2, 2, 3), ('equal', 2, 3, 3, 4), ('replace', 3, 4, 4, 5), ('equal', 4, 5, 5, 6)] [' ']
+[('equal', 0, 1, 0, 1), ('delete', 1, 2, 1, 1), ('equal', 2, 3, 1, 2), ('insert', 3, 3, 2, 3)]
+[('equal', 0, 1, 0, 1), ('delete', 1, 2, 1, 1), ('equal', 2, 3, 1, 2), ('insert', 3, 3, 2, 4)] ['  \n', '#\n']
+equal replace equal insert equal equal replace equal insert equal
+True 5
+[exit 0]

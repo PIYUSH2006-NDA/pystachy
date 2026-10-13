@@ -23,6 +23,14 @@ Lib/ directory (lib/README.md lists their SHA-256 sums). They are part of Python
 under the Python Software Foundation License Version 2, reproduced below, with the copyright
 notice below. lib/curses/__init__.py is Pystachy's own.
 
+lib/difflib.py is CPython 3.13.16's Lib/difflib.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
+
+lib/getopt.py is CPython 3.13.16's Lib/getopt.py with the edits lib/README.md lists, each
+marked in the source; it is derived from Python and is used under the same license and copyright
+notice.
+
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
 Modules/_sre/sre.c and sre_lib.h, to Pystachy's subset (lib/README.md). lib/re/_unicode.py is
