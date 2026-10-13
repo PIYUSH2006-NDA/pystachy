@@ -1,0 +1,14 @@
+caught dictionary changed size during iteration
+117
+[(1, 7)]
+caught Set changed size during iteration
+8
+[(1, 5), (2, 6), (3, 7)]
+[(1, 5), (9, 6)]
+caught dictionary changed size during iteration
+[(5, 0, 1)]
+caught dictionary changed size during iteration
+[((1, 10), 0), ((2, 20), 1)] [(1, 10), (2, 20)]
+[1, 2] [(5, 0)]
+caught dictionary changed size during iteration
+[exit 0]

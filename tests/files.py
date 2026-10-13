@@ -83,7 +83,7 @@ print(repr(open(d + "/pf.txt").read()))
 lat = open(d + "/lat.txt", "w")
 lat.write("\xe9")
 lat.close()
-print(len(open(d + "/lat.txt", encoding="latin-1").read()))
+print(repr(open(d + "/lat.txt", encoding="latin-1").read()))
 
 
 class Log:
