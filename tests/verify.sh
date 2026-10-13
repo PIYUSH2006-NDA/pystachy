@@ -178,7 +178,7 @@ step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"]
 # ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
 # whose checks are 56 with the native compiler and 55 with CPython's, which runs no PATH search)
 L=$V/runtime-cache.log; s=$(now)
-tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
+PY=$PY tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
 tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
 for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
 x=$(tests $((56 + 55)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail

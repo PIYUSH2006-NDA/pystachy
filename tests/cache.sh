@@ -20,11 +20,13 @@
 #     not executable, and through a symbolic link; a script run by CPython is opened as named, in the
 #     current directory, not looked for in PATH.
 # usage: tests/cache.sh [COMPILER]   (default ./pystachy; "python3 -m pystachy" tests the CPython-hosted
-#        compiler, from a copy of pystachy.py)
+#        compiler, from a copy of pystachy.py). $PY (default python3) loads the extension modules,
+#        or the CPython that runs the hosted compiler does
 cd "$(dirname "$0")/.." || exit 1
 PYS=${1:-./pystachy}
+CPY=${PY:-python3}
 case $PYS in
-  *" -m pystachy") PY=${PYS% -m pystachy}; me=pystachy.py; from=pystachy.py ;;
+  *" -m pystachy") PY=${PYS% -m pystachy}; CPY=$PY; me=pystachy.py; from=pystachy.py ;;
   *) PY=; me=pystachy; from=$PYS ;;
 esac
 unset PYSTACHY_CFLAGS PYSTACHY_OPT PYSTACHY_PATH PYSTACHY_GC PYSTACHY_GC_STRESS PYSTACHY_IRFX
@@ -188,7 +190,6 @@ clean "no partial or temporary file is left"
 
 # pystachy ext: an extension module's glue (pyembed.c, pyext.c) is cached beside the runtime, by the
 # same rules; the module is loaded where $CPY is CPython 3.12 or later
-CPY=${PY:-python3}
 loads() { # loads NAME: the module of $T/so/NAME.abi3.so doubles 21
   if "$CPY" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2> /dev/null; then
     if [ "$(cd "$T/so" && "$CPY" -c "import $1; print($1.twice(21))" 2>&1)" = 42 ]; then ok "and $CPY loads the module"

@@ -29,9 +29,9 @@ test-py:
 	tests/run.sh "$(PY) -m pystachy" "jit aot" $(FILES)
 
 # the cached runtime's rules (tests/cache.sh: when it is used, built again, and what it is keyed by),
-# with the native compiler, then the CPython-hosted one
+# with the native compiler, then the CPython-hosted one ($(PY) loads the extension modules)
 test-cache: pystachy
-	tests/cache.sh ./pystachy
+	PY="$(PY)" tests/cache.sh ./pystachy
 	tests/cache.sh "$(PY) -m pystachy"
 
 # the FFI's tests (docs/ffi.md): C calls, and with $(PY)'s libpython, extension modules
