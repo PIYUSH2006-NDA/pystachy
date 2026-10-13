@@ -5,8 +5,8 @@ usage: python3 cut.py -f LIST [-d DELIM] [-s] [--complement] [--output-delimiter
        pystachy build cut.py -o cut && ./cut -f 2,5- table.tsv
 
 LIST is one or more ranges separated by commas: N, N-M, N- (to the end) or -M (from the first);
-fields and characters are numbered from 1, and a field or character is printed once, in input
-order, however many ranges select it. Fields are separated by DELIM (a tab by default), and a
+fields and characters are numbered from 1 (a number has at most 18 digits), and a field or
+character is printed once, in input order, however many ranges select it. One list is given, once. Fields are separated by DELIM (a tab by default), and a
 line without DELIM is printed as it is, unless -s. With no FILE, or for a FILE that is -, it reads
 standard input. Options may follow the files, as GNU's do: getopt.gnu_getopt() parses them.
 """
@@ -16,7 +16,7 @@ import sys
 USAGE = """usage: cut.py -f LIST [-d DELIM] [-s] [--complement] [--output-delimiter STR] [FILE...]
        cut.py -c LIST [--complement] [FILE...]"""
 
-END = 1 << 40  # the end of an open range (N-)
+END = 1 << 62  # the end of an open range (N-), past any number of 18 digits
 
 
 def parse_list(text: str) -> list[tuple[int, int]]:
@@ -26,6 +26,8 @@ def parse_list(text: str) -> list[tuple[int, int]]:
         lo_text, dash, hi_text = part.partition("-")
         if part == "" or part == "-" or not (lo_text.isdigit() or lo_text == "") or not (hi_text.isdigit() or hi_text == ""):
             raise ValueError(f"invalid field or character list: {text!r}")
+        if len(lo_text) > 18 or len(hi_text) > 18:
+            raise ValueError(f"field or character number too large: {part}")
         lo = int(lo_text) if lo_text else 1
         hi = (int(hi_text) if hi_text else END) if dash else lo
         if lo == 0 or hi == 0:
@@ -87,17 +89,16 @@ def main(argv: list[str]) -> int:
                                                           "complement", "output-delimiter=", "help"])
     except getopt.GetoptError as e:
         return fail(str(e))
-    field_list = ""
-    char_list = ""
+    lists: list[str] = []  # the -f and -c options given, of which one is
+    list_text = ""
     delim = "\t"
     outdelim: str | None = None
     only_delimited = False
     complement = False
     for opt, value in opts:
-        if opt in ("-f", "--fields"):
-            field_list = value
-        elif opt in ("-c", "--characters"):
-            char_list = value
+        if opt in ("-f", "--fields", "-c", "--characters"):
+            lists.append(opt)
+            list_text = value
         elif opt in ("-d", "--delimiter"):
             if len(value) != 1:
                 return fail("the delimiter must be a single character")
@@ -111,13 +112,13 @@ def main(argv: list[str]) -> int:
         elif opt == "--help":
             print(USAGE)
             return 0
-    if (field_list == "") == (char_list == ""):
+    if len(lists) != 1:
         return fail("give one list, of fields (-f) or of characters (-c)")
-    fields = field_list != ""
+    fields = lists[0] in ("-f", "--fields")
     if not fields and (only_delimited or outdelim is not None or delim != "\t"):
         return fail("-d, -s and --output-delimiter only make sense with fields (-f)")
     try:
-        ranges = parse_list(field_list if fields else char_list)
+        ranges = parse_list(list_text)
     except ValueError as e:
         return fail(str(e))
     sep = delim if outdelim is None else outdelim

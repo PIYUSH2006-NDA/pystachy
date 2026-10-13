@@ -23,7 +23,8 @@ usage: cut.py -f LIST [-d DELIM] [-s] [--complement] [--output-delimiter STR] [F
 
 - `-f LIST` (`--fields`) selects fields, separated by `-d DELIM` (`--delimiter`, a tab by default),
   and `-c LIST` (`--characters`) characters. LIST is ranges separated by commas: `N`, `N-M`, `N-`
-  or `-M`, numbered from 1; each field or character is printed once, in input order.
+  or `-M`, numbered from 1, of up to 18 digits; each field or character is printed once, in input
+  order. One list is given, once: a second `-f` or `-c` is an error, as in GNU's cut.
 - `-s` (`--only-delimited`) drops the lines without a delimiter, which are otherwise printed as they
   are; `--complement` prints what the list does not select; `--output-delimiter STR` joins the
   fields it prints.
