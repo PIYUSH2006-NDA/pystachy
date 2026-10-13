@@ -14539,15 +14539,6 @@ class Gen:
             self.call_fn(init, [o] + vals, kws)
         return o
 
-    def kw_type(self, f: FnInfo, name: str) -> str:
-        # the type call_fn evaluates keyword argument name of a call of f with: its parameter's, or
-        # that of the values f's **kwargs takes where the name goes there ("" where it fits no
-        # parameter, which arity reports)
-        j = f.params.index(name) if name in f.params else -1
-        if f.kwarg >= 0 and (j < 0 or j < f.posonly or j == f.kwarg or j == f.vararg):
-            return f.kwelem
-        return f.ptypes[j] if j >= 0 else ""
-
     def exc_keep(self, o: Val, vals: list[Val], coded: bool = True) -> None:
         # what exception object o keeps of its args vals (BaseException.__new__, and its __init__
         # through super().__init__): str(e) (a KeyError's: the repr of its one argument) and the
@@ -18267,6 +18258,15 @@ class Gen:
                 elif len(miss) > 2:
                     names = "'" + "', '".join(miss[:-1]) + f"', and '{miss[-1]}'"
                 self.err(f"{self.fname(f)}() missing {len(miss)} required {kind} argument{'s' if len(miss) != 1 else ''}: {names}")
+
+    def kw_type(self, f: FnInfo, name: str) -> str:
+        # the type call_fn evaluates keyword argument name of a call of f with: its parameter's, or
+        # that of the values f's **kwargs takes where the name goes there ("" where it fits no
+        # parameter, which arity reports)
+        j = f.params.index(name) if name in f.params else -1
+        if f.kwarg >= 0 and (j < 0 or j < f.posonly or j == f.kwarg or j == f.vararg):
+            return f.kwelem
+        return f.ptypes[j] if j >= 0 else ""
 
     def dispatches(self, f: FnInfo, p: str) -> bool:
         # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
