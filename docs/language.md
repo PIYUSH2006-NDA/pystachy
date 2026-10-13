@@ -673,18 +673,23 @@ In these cases the program compiles but can behave differently from CPython:
   `0 ** -1` raises CPython's `ZeroDivisionError`), and so is a negative float to a
   fractional power (CPython returns a complex).
 - `str` is a byte string holding UTF-8: `len`, indexing, slicing, iteration, `find`/`index`
-  and `write()`'s result count bytes, case mapping and the `is*()` tests but `isspace()`
-  know only ASCII, `replace("", s)`'s gaps are bytes, and `chr(i)` for `i < 256` is that byte
-  (above, its UTF-8; `"%c" % i` is the character's UTF-8 for every `i`).
+  and `write()`'s result (but a Latin-1 file's) count bytes, case mapping and the `is*()`
+  tests but `isspace()` know only ASCII, `replace("", s)`'s gaps are bytes, and `chr(i)` for
+  `i < 256` is that byte (above, its UTF-8; `"%c" % i` is the character's UTF-8 for every `i`).
   ASCII behaves exactly like CPython; escapes such as `\xe9` and `€` produce UTF-8, and
   format widths, `center`/`ljust`/`rjust`/`zfill`, `repr()`'s escapes, `read(n)` and
   `ord()` count characters, as `strip()` (also of given characters), `split()`,
   `rsplit()`, `splitlines()` and `isspace()` read them (CPython's Unicode whitespace and
-  line breaks). Files hold the
-  same bytes, read as UTF-8 or Latin-1, without checking them (invalid UTF-8 is read as it
-  is, where CPython raises `UnicodeDecodeError`); any other `encoding=` computed at run time
-  raises `NotImplementedError` when the file opens. A surrogate (`chr(0xD800)` to
-  `chr(0xDFFF)`) is held in its three-byte form and printed or written as it is, where
+  line breaks). A UTF-8 file holds a str's bytes, read and written without checking them
+  (invalid UTF-8 is read as it is, where CPython raises `UnicodeDecodeError`). A Latin-1
+  file's bytes are its characters, as in CPython: the str read holds each as UTF-8, as a
+  literal does (from U+0080 on, two bytes, which `len()` and indexing count), and a write
+  gives each character as its byte (a byte `chr()` makes is one, but `chr()` bytes that
+  together are UTF-8, `chr(195) + chr(169)`, are the one character they encode) and returns
+  the number of characters, or raises CPython's `UnicodeEncodeError` for one above U+00FF
+  before any of the text reaches the file. Any other `encoding=` computed at run time raises
+  `NotImplementedError` when the file opens. A surrogate (`chr(0xD800)` to `chr(0xDFFF)`) is
+  held in its three-byte form and printed or written to a UTF-8 file as it is, where
   CPython raises `UnicodeEncodeError` (`sys.stderr`, which an uncaught exception's line and
   `sys.exit()`'s message go to, writes it as `\udcff`, as CPython's does); its `repr()`,
   `ascii()` and `ord()` match CPython's. A format width or precision above 10**8, in a format
