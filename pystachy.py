@@ -14504,6 +14504,10 @@ class Gen:
         init = ci.methods["__init__"] if "__init__" in ci.methods else None
         vals: list[Val] = []
         kws: list[Node] = []
+        if init is not None and len([a for a in args if a.kind == "kw" and not pure_arg(a.kids[0])]) > 0:
+            # (a keyword argument that fits no parameter of __init__ is reported as call_fn reports
+            # it, before the loop evaluates one with the type of its parameter)
+            self.arity(init, 1, args)
         for a in args:
             if a.kind == "kw" and init is None:
                 # (the keywords its builtin base's __init__ takes, ImportError's name and path, ...)
