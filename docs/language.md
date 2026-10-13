@@ -560,7 +560,11 @@ deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its 
 Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
 a function they decorate keeps its results in a cache of its own types, which its annotated
 parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
-counts, evicts and reports `cache_info()` as CPython's C wrapper does.
+counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `csv` is Pystachy's
+own, written after CPython's `Modules/_csv.c` and `Lib/csv.py`, which reads and writes as CPython's
+does, but that a reader parses all of its input when its iteration starts, into rows that are
+`list[str]` (a `DictReader`'s `dict[str, str]`), and the other deviations
+[`lib/README.md`](../lib/README.md#csv-pystachys-own) lists.
 
 ## Expressions
 

@@ -23,6 +23,91 @@ checks each against CPython.
 `curses/__init__.py` is Pystachy's own stand-in: CPython's wraps the C extension `_curses`, and
 so is `functools.py` (below).
 
+## `csv`, Pystachy's own
+
+`csv.py` is no copy: CPython's `csv` is `Lib/csv.py` over the C module `_csv` (`Modules/_csv.c`),
+and Pystachy has no C modules. It is Pystachy's own module, written after CPython 3.13.16's
+`_csv.c` and `Lib/csv.py`: a reader runs `_csv.c`'s state machine (`parse_process_char`, from
+`START_RECORD` to `AFTER_ESCAPED_CRNL`) over the characters of each line, a writer escapes, doubles
+and quotes as `join_append_data` does, and a dialect is checked as `dialect_new` checks it, in its
+order, so that what `csv` reads, writes and rejects is CPython's, with CPython's `csv.Error`
+messages, and its `TypeError` and `ValueError` messages for a bad setting. The characters the state
+machine adds to a field one by one are taken as slices of the line, each run of them found with
+`str.find()`.
+
+It has `reader()` and `writer()`, with a dialect and the format parameters `delimiter`,
+`quotechar`, `escapechar`, `doublequote`, `skipinitialspace`, `lineterminator`, `quoting` and
+`strict`; a reader's `line_num` and `dialect`, and a writer's `writerow()`, `writerows()` and
+`dialect`; the six `QUOTE_*` constants, `Error`, `Dialect`, the dialects `excel`, `excel_tab` and
+`unix_dialect` (registered as `"excel"`, `"excel-tab"` and `"unix"`), `register_dialect()`,
+`get_dialect()`, `unregister_dialect()`, `list_dialects()` and `field_size_limit()`; and
+`DictReader` and `DictWriter`. It has no `Sniffer`. A reader reads any iterable of strs (a file,
+`sys.stdin`, a list of lines, an object whose `__iter__` steps through a list), and a writer writes
+to any object with a `write()` method (a file, `sys.stdout`, an object of the program's class), and
+returns what `write()` returns. `writerow()` is a template: a row is a list or a tuple (or a str or
+a dict, as in CPython) of strs, ints, floats, bools, `None`s or objects of the program's classes,
+each field `str()`-ed as CPython does; a tuple's items may have different types
+(`writerow((name, 3, 1.5))`), a list's cannot. Where it differs from CPython
+(`tests/deviations/lib_csv.py`):
+
+- A reader parses all of its input when its iteration starts, where CPython's reader is an iterator
+  that parses a row at each step: an error in the data is raised before the loop sees a row,
+  `line_num` is the last line's throughout the loop, the rows are all held in a list (the memory a
+  file takes grows with it), and the reader has no rows left for a second iteration, also where the
+  first one stopped early. `next(reader)` does not compile, as the subset has no `next()`: take the
+  rows with `list()`, or the header with a `DictReader`.
+- A row is a `list[str]`: a reader whose quoting is `QUOTE_NONNUMERIC` or `QUOTE_STRINGS`, which
+  make floats of the unquoted fields, raises `NotImplementedError` when it is made, and one of
+  `QUOTE_NOTNULL`, which makes `None` of an empty unquoted field, raises it where the row holding
+  one ends. A writer quotes with each of the six quoting styles as CPython's does.
+- A `DictReader`'s row is a `dict[str, str]`: a row longer than `fieldnames` (whose other fields
+  CPython puts in a list under `restkey`), and a shorter one where `restval` is `None`, raise
+  `NotImplementedError`; `fieldnames` is a `list[str]` or `None`, `restkey` and `restval` a str or
+  `None`. A `DictReader` reads its rows, and the header, when it is made, where CPython's reads the
+  header when its `fieldnames` property is first read: `line_num` is then the header's, `fieldnames`
+  assigned afterwards names the fields of the rows after the header, and an error in the data is
+  raised by the constructor. A `DictWriter`'s `restval` is a str or `None`, and its `ValueError` for
+  the keys of a row that are not in `fieldnames` lists them in the dict's order (CPython's, in a
+  set's, which varies from run to run for strs).
+- `excel`, `excel_tab` and `unix_dialect` are `Dialect` objects, where CPython's are classes: a
+  class is no value in the subset, and there is no inheritance to derive a dialect from
+  `csv.Dialect` with, so a dialect of the program's is a registered name
+  (`register_dialect("pipes", delimiter="|")`) or keyword arguments. `Dialect` is the type CPython
+  calls `_csv.Dialect` (what `get_dialect()` returns, and a reader's or writer's `dialect`), whose
+  fields can be assigned (CPython's are read-only), and `dialect=` is a registered name, a
+  `Dialect` or `None`.
+- An uncaught error is reported as `csv.Error` (CPython's class is `_csv.Error`). A writer of an
+  object without `write()`, a format parameter that is an object of the program's class, a row that
+  cannot be iterated (but an int, float, bool or `None`, which raise CPython's `csv.Error`) and a
+  NamedTuple row are compile-time errors, where CPython raises `TypeError` or writes the
+  NamedTuple's fields; for `QUOTE_NONNUMERIC`, an object of the program's class is no number, also
+  where its class defines `__float__`, `__int__` or `__index__`.
+
+A str holds UTF-8 in Pystachy: where the dialect's characters are ASCII, the state machine reads a
+line byte by byte, which reads it character by character, as no byte of a character past ASCII is a
+delimiter, quote, escape, space or line break; where one of them is past ASCII, it reads the line
+character by character. A field's length, which `field_size_limit()` bounds, counts characters, as
+CPython's does.
+
+`tests/lib_csv.py` compares it with CPython's `csv`: the cases of CPython 3.13's
+`Lib/test/test_csv.py` that do not use `next()` or classes as dialects (line ends, NUL, escapes,
+quoting, `skipinitialspace`, quoted line breaks, the end of the data, `strict`, each error with its
+message, the writer's quoting, escaping and empty fields, line terminators, dialects and the
+registry, `field_size_limit()`, `DictReader` and `DictWriter`), round trips through files,
+characters past ASCII in fields and as the dialect's characters, and 300 random rows written and
+read back and 300 random sets of lines read, with random dialects. Beyond the tests, run by
+CPython in place of its own `csv`, it read 200,000 random sets of lines and wrote 200,000 random
+rows as CPython's does, with random dialects (raising `NotImplementedError` only where a row would
+hold a float or `None`), and its `DictReader` made CPython's dicts, `fieldnames` and `line_num` for
+50,000 random files (raising `NotImplementedError` exactly where a dict would hold a `None` or a
+list); compiled, it printed what it prints under CPython for 120,000 random reads and writes.
+`examples/csvstat` is an application of it.
+
+For a file of 200,000 generated orders (16.1 MB, 10 fields a row; `examples/csvstat/rwbench.py`
+on a 4-core x86-64 VM, the medians of 11 runs, CPython's and the executable's in turn), compiled AOT
+it reads the file in 0.850 µs a row (CPython 3.13.16: 1.333 µs), parses the file's lines already in
+memory in 0.713 µs (1.221 µs), and writes the rows to a file in 0.755 µs (1.207 µs).
+
 ## `re`, a port of CPython's
 
 `re/` is no copy: CPython's `re` is a pure-Python parser and compiler (`Lib/re/_parser.py` and

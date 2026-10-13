@@ -1,0 +1,18 @@
+0
+Error: unexpected end of data 3
+['x'] 3
+['y'] 3
+['z'] 3
+['h1', 'h2'] []
+NotImplementedError: csv.reader with QUOTE_NONNUMERIC gives floats for the unquoted fields, which the list[str] Pystachy returns cannot hold
+NotImplementedError: csv.reader with QUOTE_STRINGS gives floats for the unquoted fields (None for an empty one), which the list[str] Pystachy returns cannot hold
+NotImplementedError: csv.reader with QUOTE_NOTNULL gives None for an empty unquoted field, which the list[str] Pystachy returns cannot hold
+NotImplementedError: csv.DictReader puts the fields past fieldnames in a list under restkey, which the dict[str, str] Pystachy returns cannot hold
+NotImplementedError: csv.DictReader gives restval None for the fields a short row lacks, which the dict[str, str] Pystachy returns cannot hold: pass a str restval
+1
+[{'H1': '1', 'H2': '2'}]
+Error: unexpected end of data
+True
+assigned ;
+csv.Error: unexpected end of data
+[exit 1]
