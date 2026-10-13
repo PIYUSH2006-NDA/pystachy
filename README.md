@@ -317,4 +317,5 @@ something large there.
 
 MIT ([LICENSE](LICENSE)). The list sort in `runtime.c` is a port of CPython's, and the vendored
 CPython modules in `lib/` are CPython's own; both are used under the PSF License Version 2
-([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).
+([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)). `ryu/`, the float repr's digits, is Ryu's, used
+under the Boost Software License 1.0 ([ryu/README.md](ryu/README.md)).
