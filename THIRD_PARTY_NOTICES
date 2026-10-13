@@ -300,6 +300,27 @@ replace the dynamic bool result expectation with an explicit compiler rejection,
 and add Pystachy regressions for iterator construction, argument evaluation and
 traversal order. Differential output is recorded with CPython 3.13.16.
 
+CPython's language and builtin regression tests (tests/upstream_*.py)
+---------------------------------------------------------------------
+
+These differential tests and rejection fixtures adapt test methods of CPython 3.13.16's
+Lib/test/ at commit cbc944f4bc59639a444dd971c737788ba2283a91:
+
+- tests/upstream_scope_*.py and tests/errors/upstream_scope_*.py: Lib/test/test_scope.py
+
+They are used under the Python Software Foundation License Version 2 reproduced above;
+tests/upstream/CPYTHON-LICENSE.txt retains CPython's full license. Each file's header names the
+upstream test methods it adapts and lists, with the reason, those it leaves out.
+
+Summary of changes: remove unittest and test.support scaffolding (each test method becomes a
+function, assertEqual a printed value and an assert, assertRaises a try statement), add type
+annotations where Pystachy's subset needs them, rename names that a module would bind twice,
+run as module code what upstream runs with exec(), turn compile()-checked syntax errors into
+expected compile-time rejections, and leave out the cases that use what the subset does not
+support; where an adaptation changes more (an attribute set on a function becomes a field of an
+object that holds it), the file's header says so. Differential output is recorded with
+CPython 3.13.16.
+
 APACHE LICENSE VERSION 2.0
 --------------------------
 
