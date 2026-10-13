@@ -361,6 +361,12 @@ limits, deterministic counts that a change making the matcher do more exceeds. `
 times the same operations, compiled and under CPython (`make re-probe RE_PROBE="--time
 ./pystachy"`).
 
+One search is not `_sre`'s: a pattern that begins with `^` of `MULTILINE` (after groups' marks)
+enters the matcher only where a line begins, at the string's start or after a `\n`, where `_sre`
+enters it at every position and fails at once at all the others (`tests/lib_re_lines.py`). For a
+block of 15 lines, `dedent()`'s `^[ \t]+$` substitution enters the matcher 16 times instead of 313,
+and takes 4.2 µs compiled, against 10.9 µs before and CPython's 2.1 µs.
+
 ## `fnmatch`, a port of CPython's
 
 `fnmatch.py` is CPython 3.13.16's `Lib/fnmatch.py` (SHA-256
