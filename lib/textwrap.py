@@ -150,12 +150,29 @@ class TextWrapper:
         whitespace characters to spaces.  Eg. " foo\\tbar\\n\\nbaz"
         becomes " foo    bar  baz".
         """
-        if self.expand_tabs:
+        # Pystachy port: without a tab, skip the copy but retain expandtabs' C-int range check.
+        if self.expand_tabs and ('\t' in text or self.tabsize > 2147483647
+                                 or self.tabsize < -2147483648):
             text = text.expandtabs(self.tabsize)
         if self.replace_whitespace:
-            # Pystachy port: no str.translate(); each character is looked up in the table
+            # Pystachy port: no str.translate(); recognize the default mapping by contents,
+            # so overridden tables and mutations through an alias still use their own entries.
             trans = self.unicode_whitespace_trans
-            text = ''.join([chr(trans.get(ord(c), ord(c))) for c in text])
+            if (len(trans) == 6 and trans.get(9, -1) == 32 and trans.get(10, -1) == 32
+                    and trans.get(11, -1) == 32 and trans.get(12, -1) == 32
+                    and trans.get(13, -1) == 32 and trans.get(32, -1) == 32):
+                if '\t' in text:
+                    text = text.replace('\t', ' ')
+                if '\n' in text:
+                    text = text.replace('\n', ' ')
+                if '\x0b' in text:
+                    text = text.replace('\x0b', ' ')
+                if '\x0c' in text:
+                    text = text.replace('\x0c', ' ')
+                if '\r' in text:
+                    text = text.replace('\r', ' ')
+            else:
+                text = ''.join([chr(trans.get(ord(c), ord(c))) for c in text])
         return text
 
 
