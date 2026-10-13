@@ -47,7 +47,7 @@ flowchart TD
 
 | variable | effect |
 |---|---|
-| `PYSTACHY_LLVM` | directory of the LLVM 18 tools (`clang`, `llvm-link`, `opt`, `lli`, `llvm-as`) when they are not on `PATH` under those names, e.g. `/usr/lib/llvm-18/bin` |
+| `PYSTACHY_LLVM` | directory of the LLVM 18 tools (`clang`, `llvm-link`, `opt`, `lli`, `llvm-as`) when they are not on `PATH` under those names, e.g. `/usr/lib/llvm-18/bin`; the cached runtime is keyed by the tools' files, wherever they are found |
 | `PYSTACHY_HOME` | the checkout that holds `runtime.c`, `lib/` and the `build/` cache, for a compiler installed elsewhere (by default the compiler looks next to itself, or in its parent directory) |
 | `PYSTACHY_PATH` | extra directories, separated by `:`, to search for imported modules |
 | `PYSTACHY_CFLAGS` | extra clang flags (such as sanitizers) for the runtime and the AOT build, with a runtime cache per flag set |
@@ -390,10 +390,13 @@ compiles it in a runtime mode: its `pys_*` functions keep runtime.c's C names an
 `def f(...) -> T: ...` declares a C function, and `import _rt` gives a few primitives (byte
 reads, an in-place string builder, `memchr`, `memcmp` and `memmem`, wrapping and unsigned
 arithmetic), each a few checked LLVM instructions. The driver links it to runtime.c's bitcode
-and optimizes the two as one module (`build/runtime-py-<hash>.bc` and its `.o`) when it
-rebuilds the cached runtime, which it does when `runtime.c`, `runtime.py` or the running
-compiler is newer; programs' IR does not change (but for an `invoke` inside a `try` where a
-moved function can raise). A raise in a `runtime.py` function unwinds to
+and optimizes the two as one module (`build/runtime-py-<L>-<K>.bc` and its `.o`) when it
+builds the cached runtime. The name is a hash of all the runtime is built from: the bytes of
+`runtime.c`, `runtime.py` and the running compiler, the flags and the LLVM tools' files, so an
+edit of any of them, also one made while the runtime is built, makes a run build it again
+([runtime-in-subset.md](runtime-in-subset.md) §1.4; `tests/cache.sh` tests the rules).
+Programs' IR does not change (but for an `invoke` inside a `try` where a moved function can
+raise). A raise in a `runtime.py` function unwinds to
 a program's handler like one in runtime.c. `tools/rtcheck.py` runs `runtime.py` on CPython
 against CPython's own str methods, `math` and `format()`.
 [runtime-in-subset.md](runtime-in-subset.md) evaluates the approach.
