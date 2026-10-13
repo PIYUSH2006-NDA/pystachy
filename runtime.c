@@ -46,8 +46,10 @@ typedef struct Exc Exc;                                /* a raised exception (se
    this word a pointer into the heap, and into which object" is a range check, two loads and
    a multiply by the reciprocal of the slot size: O(1), interior pointers included.
    Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and arrays, dict
-   key and value arrays); pys_alloc_atomic returns memory that is never scanned (strings, Buf
-   data, dict index arrays, sort buffers). Each (class, kind) has a free list. Memory is
+   value arrays, the key arrays of dicts and sets of strs and tuples); pys_alloc_atomic returns
+   memory that is never scanned (strings, Buf data, dict hash and index arrays, set hash arrays,
+   the key arrays of dicts and sets of ints, the merge buffers of sorts of ints and floats),
+   since none of it can hold a pointer. Each (class, kind) has a free list. Memory is
    handed out zeroed: the sweep zeroes dead slots, so allocation pops a slot and clears its
    link word (inlined into callers for the classes up to 136 bytes). A chunk's never-used
    slots are linked about a page at a time, so memory the program has not needed stays
@@ -1291,7 +1293,10 @@ static I gallop(MS *ms, I key, I *a, I n, I hint, int right) {
 #undef PRE
 }
 static I *getmem(MS *ms, I need) {                  /* merge_getmem, growing geometrically */
-  if (need > ms->nt) { ms->nt = need > 2 * ms->nt ? need : 2 * ms->nt; ms->t = pys_alloc(ms->nt * 8); }
+  if (need > ms->nt) {                               /* (ints and floats: nothing in it to scan) */
+    ms->nt = need > 2 * ms->nt ? need : 2 * ms->nt;
+    ms->t = ms->kind == INT || ms->kind == FLOAT ? pys_alloc_atomic(ms->nt * 8) : pys_alloc(ms->nt * 8);
+  }
   return ms->t;
 }
 /* The merges, written once (MERGES) and compiled twice: merge_lo and merge_hi, where NOTE notes
@@ -1613,6 +1618,9 @@ static int keq(I a, I b, const char *d) {            /* tuple keys of descriptor
   return 1;
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */
+static I *keymem(I kind, I n) {      /* the key array of a dict or set of this kind: an int key holds no pointer */
+  return kind ? pys_alloc(n * 8) : pys_alloc_atomic(n * 8);
+}
 static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *free: where to insert k */
   I f = -1;
   if (!d->size) return -1;
@@ -1626,7 +1634,7 @@ static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *f
   }
 }
 static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a table of this size, holes dropped */
-  I u = size * 2 / 3, *k = pys_alloc(u * 8), *v = pys_alloc(u * 8), n = 0, m = size * 2 - 1;
+  I u = size * 2 / 3, *k = keymem(d->kind, u), *v = pys_alloc(u * 8), n = 0, m = size * 2 - 1;
   uint64_t *hs = pys_alloc_atomic(u * 8); int32_t *ix = pys_alloc_atomic(size * 8);
   for (I e = 0; e < src->n; e++) {
     uint64_t h = src->hs[e], i = h & m, p = h;
@@ -1719,7 +1727,7 @@ List *pys_dict_items(Dict *d) {
    third of holes, and otherwise merges the same way */
 static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
   I u = d->size * 2 / 3;
-  r->keys = pys_alloc(u * 8); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
+  r->keys = keymem(r->kind, u); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
 }
@@ -1805,7 +1813,7 @@ static int skeq(Set *s, I a, I b) {
   return a == b || (s->kind == 1 ? pys_str_eq((Str *)a, (Str *)b) : s->kind > 1 && eqv(a, b, ((Str *)s->kind)->s));
 }
 static void stable(Set *s, I size) {                 /* an empty table of size slots */
-  s->keys = pys_alloc(size * 8); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
+  s->keys = keymem(s->kind, size); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
   s->mask = size - 1; s->fill = 0;
 }
 Set *pys_set_new(I kind) { Set *s = pys_alloc(sizeof(Set)); s->kind = kind; stable(s, 8); return s; }

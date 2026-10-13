@@ -53,7 +53,8 @@ bench-extended-check: pystachy
 
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
-# (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those)
+# (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those). It also
+# checks that the collector scans no key table of ints, and those of strs and tuples
 LLVMBIN = $(if $(PYSTACHY_LLVM),$(PYSTACHY_LLVM)/)
 dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	mkdir -p build

@@ -47,7 +47,8 @@
 #                  dropped without close() run collections; every close takes back exactly what was
 #                  counted, a standard stream's are never counted (deterministic counts, no RSS)
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
-#                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
+#                  hash or probe sequence (deterministic counts against a fixed limit, no timings);
+#                  the collector scans the key tables of strs and tuples, and none of ints
 #   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types,
 #                  specialization breadth and the signature bytes specializations retain under
 #                  256 MiB / ten CPU seconds, with short diagnostics;
