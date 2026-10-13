@@ -1,0 +1,251 @@
+pi 3.141592653589793
+e 2.718281828459045
+math.tau 6.283185307179586
+acos(-1) 3.141592653589793
+acos(0) 1.5707963267948966
+acos(1) 0.0
+acos(INF) ValueError: math domain error
+acos(NINF) ValueError: math domain error
+acos(1 + eps) ValueError: math domain error
+acos(-1 - eps) ValueError: math domain error
+isnan(acos(NAN)) True
+acosh(1) 0.0
+acosh(2) 1.3169578969248166
+acosh(0) ValueError: math domain error
+acosh(-1) ValueError: math domain error
+acosh(INF) inf
+acosh(NINF) ValueError: math domain error
+isnan(acosh(NAN)) True
+asin(-1) -1.5707963267948966
+asin(0) 0.0
+asin(1) 1.5707963267948966
+asin(INF) ValueError: math domain error
+asin(NINF) ValueError: math domain error
+asin(1 + eps) ValueError: math domain error
+asin(-1 - eps) ValueError: math domain error
+isnan(asin(NAN)) True
+asinh(0) 0.0
+asinh(1) 0.881373587019543
+asinh(-1) -0.881373587019543
+asinh(INF) inf
+asinh(NINF) -inf
+isnan(asinh(NAN)) True
+atan(-1) -0.7853981633974483
+atan(0) 0.0
+atan(1) 0.7853981633974483
+atan(inf) 1.5707963267948966
+atan(-inf) -1.5707963267948966
+isnan(atan(NAN)) True
+atanh(0) 0.0
+atanh(0.5) 0.5493061443340548
+atanh(-0.5) -0.5493061443340548
+atanh(1) ValueError: math domain error
+atanh(-1) ValueError: math domain error
+atanh(INF) ValueError: math domain error
+atanh(NINF) ValueError: math domain error
+isnan(atanh(NAN)) True
+atan2(-1, 0) -1.5707963267948966
+atan2(-1, 1) -0.7853981633974483
+atan2(0, 1) 0.0
+atan2(1, 1) 0.7853981633974483
+atan2(1, 0) 1.5707963267948966
+atan2(1, -1) 2.356194490192345
+atan2(0., -inf) 3.141592653589793
+atan2(0., -2.3) 3.141592653589793
+atan2(0., -0.) 3.141592653589793
+atan2(0., 0.) 0.0
+atan2(0., 2.3) 0.0
+atan2(0., INF) 0.0
+isnan(atan2(0., NAN)) True
+atan2(-0., -inf) -3.141592653589793
+atan2(-0., -2.3) -3.141592653589793
+atan2(-0., -0.) -3.141592653589793
+atan2(-0., 0.) -0.0
+atan2(-0., 2.3) -0.0
+atan2(-0., INF) -0.0
+isnan(atan2(-0., NAN)) True
+atan2(inf, -inf) 2.356194490192345
+atan2(inf, -2.3) 1.5707963267948966
+atan2(inf, -0.) 1.5707963267948966
+atan2(inf, 0.) 1.5707963267948966
+atan2(inf, 2.3) 1.5707963267948966
+atan2(inf, inf) 0.7853981633974483
+isnan(atan2(INF, NAN)) True
+atan2(-inf, -inf) -2.356194490192345
+atan2(-inf, -2.3) -1.5707963267948966
+atan2(-inf, -0.) -1.5707963267948966
+atan2(-inf, 0.) -1.5707963267948966
+atan2(-inf, 2.3) -1.5707963267948966
+atan2(-inf, inf) -0.7853981633974483
+isnan(atan2(NINF, NAN)) True
+atan2(2.3, -inf) 3.141592653589793
+atan2(2.3, -0.) 1.5707963267948966
+atan2(2.3, 0.) 1.5707963267948966
+atan2(2.3, INF) 0.0
+isnan(atan2(2.3, NAN)) True
+atan2(-2.3, -inf) -3.141592653589793
+atan2(-2.3, -0.) -1.5707963267948966
+atan2(-2.3, 0.) -1.5707963267948966
+atan2(-2.3, INF) -0.0
+isnan(atan2(-2.3, NAN)) True
+isnan(atan2(NAN, NINF)) True
+isnan(atan2(NAN, -2.3)) True
+isnan(atan2(NAN, -0.)) True
+isnan(atan2(NAN, 0.)) True
+isnan(atan2(NAN, 2.3)) True
+isnan(atan2(NAN, INF)) True
+isnan(atan2(NAN, NAN)) True
+cbrt(0) 0.0
+cbrt(1) 1.0
+cbrt(8) 2.0
+cbrt(0.0) 0.0
+cbrt(-0.0) -0.0
+cbrt(1.2) 1.0626585691826111
+cbrt(-2.6) -1.375068867074141
+cbrt(27) 3.0000000000000004
+cbrt(-1) -1.0
+cbrt(-27) -3.0000000000000004
+cbrt(INF) inf
+cbrt(NINF) -inf
+isnan(cbrt(NAN)) True
+cos(-pi/2) 6.123233995736766e-17
+cos(0) 1.0
+cos(pi/2) 6.123233995736766e-17
+cos(pi) -1.0
+cos(INF) ValueError: math domain error
+cos(NINF) ValueError: math domain error
+isnan(cos(NAN)) True
+cosh(0) 1.0
+cosh(2)-2*cosh(1)**2 -1.0
+cosh(INF) inf
+cosh(NINF) inf
+isnan(cosh(NAN)) True
+degrees(pi) 180.0
+degrees(pi/2) 90.0
+degrees(-pi/4) -45.0
+degrees(0) 0.0
+exp(-1) 0.36787944117144233
+exp(0) 1.0
+exp(1) 2.718281828459045
+exp(INF) inf
+exp(NINF) 0.0
+isnan(exp(NAN)) True
+exp(1000000) OverflowError: math range error
+exp2(-1) 0.5
+exp2(0) 1.0
+exp2(1) 2.0
+exp2(2.3) 4.924577653379664
+exp2(INF) inf
+exp2(NINF) 0.0
+isnan(exp2(NAN)) True
+exp2(1000000) OverflowError: math range error
+fabs(-1) 1.0
+fabs(0) 0.0
+fabs(1) 1.0
+log(1/e) -1.0
+log(1) 0.0
+log(e) 1.0
+log(32,2) 5.0
+log(-1.5) ValueError: math domain error
+log(10, -10) ValueError: math domain error
+log(NINF) ValueError: math domain error
+log(INF) inf
+isnan(log(NAN)) True
+log1p(2) 1.0986122886681096
+log1p(-1) ValueError: math domain error
+log1p(INF) inf
+log2(1) 0.0
+log2(2) 1.0
+log2(4) 2.0
+log2(-1.5) ValueError: math domain error
+log2(NINF) ValueError: math domain error
+isnan(log2(NAN)) True
+log2 of 2098 powers of 2: -1074.0 0.0 1023.0
+log10(0.1) -1.0
+log10(1) 0.0
+log10(10) 1.0
+log10(-1.5) ValueError: math domain error
+log10(NINF) ValueError: math domain error
+log(INF) inf
+isnan(log10(NAN)) True
+pow(0,1) 0.0
+pow(1,0) 1.0
+pow(2,1) 2.0
+pow(2,-1) 0.5
+pow(INF, 1) inf
+pow(NINF, 1) -inf
+pow(1, INF) 1.0
+pow(1, NINF) 1.0
+isnan(pow(NAN, 1)) True
+isnan(pow(2, NAN)) True
+isnan(pow(0, NAN)) True
+radians(180) 3.141592653589793
+radians(90) 1.5707963267948966
+radians(-45) -0.7853981633974483
+radians(0) 0.0
+sin(0) 0.0
+sin(pi/2) 1.0
+sin(-pi/2) -1.0
+sin(INF) ValueError: math domain error
+sin(NINF) ValueError: math domain error
+isnan(sin(NAN)) True
+sinh(0) 0.0
+sinh(1)**2-cosh(1)**2 -1.0000000000000002
+sinh(1)+sinh(-1) 0.0
+sinh(INF) inf
+sinh(NINF) -inf
+isnan(sinh(NAN)) True
+sqrt(0) 0.0
+sqrt(0) 0.0
+sqrt(2.5) 1.5811388300841898
+sqrt(0.25) 0.5
+sqrt(25.25) 5.024937810560445
+sqrt(1) 1.0
+sqrt(4) 2.0
+sqrt(INF) inf
+sqrt(-1) ValueError: math domain error
+sqrt(NINF) ValueError: math domain error
+isnan(sqrt(NAN)) True
+tan(0) 0.0
+tan(pi/4) 0.9999999999999999
+tan(-pi/4) -0.9999999999999999
+tan(INF) ValueError: math domain error
+tan(NINF) ValueError: math domain error
+isnan(tan(NAN)) True
+tanh(0) 0.0
+tanh(1)+tanh(-1) 0.0
+tanh(inf) 1.0
+tanh(-inf) -1.0
+isnan(tanh(NAN)) True
+tanh(-0.) -0.0
+copysign(1., tanh(-0.)) -1.0
+isfinite(0.0) True
+isfinite(-0.0) True
+isfinite(1.0) True
+isfinite(-1.0) True
+isfinite(float("nan")) False
+isfinite(float("inf")) False
+isfinite(float("-inf")) False
+isnan(float("nan")) True
+isnan(float("-nan")) True
+isnan(float("inf") * 0.) True
+isnan(float("inf")) False
+isnan(0.) False
+isnan(1.) False
+isinf(float("inf")) True
+isinf(float("-inf")) True
+isinf(1E400) True
+isinf(-1E400) True
+isinf(float("nan")) False
+isinf(0.) False
+isinf(1.) False
+isnan(math.nan) True
+copysign(1., math.nan) 1.0
+isinf(math.inf) True
+math.inf > 0.0 True
+math.inf inf
+-math.inf -inf
+exp(-1000000000) 0.0
+exp(1000000000) OverflowError
+sqrt(-1.0) ValueError
+[exit 0]
