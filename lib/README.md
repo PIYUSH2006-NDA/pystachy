@@ -335,6 +335,11 @@ character by character (code point by code point). Where it differs from CPython
   must return a str (CPython's may return `None`); and there is no `DEBUG` output, `Scanner`,
   `__index__` group number, warning or `bytes` pattern.
 
+The port also caches the last input string's decoded code points for repeated matches.
+`purge()` drops this input cache as well as the compiled-pattern and replacement-template
+caches. Active operations keep their own decoded input, so a substitution callback may call
+`purge()` safely; existing `Pattern` and `Match` objects remain usable.
+
 `tests/lib_re.py` compares it with CPython's `re`, and `tests/upstream_re_*.py` with CPython
 3.13.16's own tests of it, JIT and AOT, against what CPython's `re` printed: the 403 cases of
 `Lib/test/re_tests.py` (each also searched with IGNORECASE, with UNICODE and within its match,

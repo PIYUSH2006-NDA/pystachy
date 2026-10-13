@@ -1,0 +1,13 @@
+released True 0 0
+owned True True True True
+replaced True True True
+decoded again True True
+reused True
+idempotent True 0 0 True
+released True 0 0
+owned True True True True
+replaced True True True
+decoded again True True
+reused True
+idempotent True 0 0 True
+[exit 0]
