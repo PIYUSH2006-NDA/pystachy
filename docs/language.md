@@ -126,7 +126,8 @@ imports `annotations` from `__future__`.
   `len()`, iteration and `keys()`, and, where its values share a type, `values()`, `items()` and
   `dict(kwargs)`; it prints as that dict. Where a call passes no extra keyword arguments, a loop or
   comprehension over `kwargs.values()` or `kwargs.items()` never runs, and, as a loop over `()`,
-  is compiled for that call only where `**kwargs: T` gives its values a type. Changing it
+  is compiled for that call only where it names the parameter of a `**kwargs: T`, whose values
+  then have that type (not another name for it, `d = kwargs`). Changing it
   (`kwargs["k"] = v`, `pop()`) is rejected: copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a function's parameters and return that mention a module-level
   `T = TypeVar("T")` or `Ts = TypeVarTuple("Ts")` (`*args: *Ts`; from `typing` or
