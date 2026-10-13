@@ -535,7 +535,8 @@ complete format-spec mini-language, `%` formatting with a constant format string
 widths and precisions, but not `%(name)s`, `*` or a precision on integers; a format string
 that is not a literal, as in `fmt % x`, is rejected), arithmetic with Python semantics (`//` and `%` floor,
 `/` is correctly rounded true division, exact int/float comparison), bitwise ops,
-chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers and bools), `==`/`!=` with
+chained comparisons, `in`/`not in`, `is`/`is not` (not on numbers; between two bools, `flag is True`, as
+`==`, since a bool is one of CPython's two objects `True` and `False`), `==`/`!=` with
 `None` (also of a number or bool, which never equals it), `and`/`or`
 returning operands, `not`, conditional expressions, keyword and default arguments, negative
 indices, slicing of strings and lists, tuple `+` and `*` by a constant, list/dict/set/tuple
