@@ -2196,8 +2196,14 @@ def compile(pattern, flags: int = 0) -> Pattern:
 
 def purge() -> None:
     "Clear the regular expression caches"
+    global _last, _last_codes, _last_offs
     _cache.clear()
     _tcache.clear()
+    # Active operations own these lists too (a sub() callback can call purge()). Drop the
+    # cache's references without changing their state or resetting the lifetime work counter.
+    _last = ""
+    _last_codes = []
+    _last_offs = []
 
 
 def escape(pattern: str) -> str:
