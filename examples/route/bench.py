@@ -6,6 +6,7 @@ usage: python3 -I bench.py PYSTACHY [N]
 The traces and the executable go to build/route/ of the checkout.
 """
 import os
+import statistics
 import subprocess
 import sys
 import time
@@ -47,8 +48,7 @@ def measure(cmd: list[str]) -> tuple[float, int, str]:
         p = subprocess.run(cmd, capture_output=True, text=True, check=True)
         times.append(time.perf_counter() - t)
         out = p.stdout
-    times.sort()
-    return times[len(times) // 2], peak_rss(cmd), out
+    return statistics.median(times), peak_rss(cmd), out
 
 
 print(f"{'trace':8} {'mode':14} {'CPython':>9} {'AOT':>9} {'speedup':>8} {'CPython RSS':>12} {'AOT RSS':>9}")
