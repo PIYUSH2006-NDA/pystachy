@@ -148,7 +148,8 @@ keyword arguments or both, `is_valid()`, `get_identifiers()`, the `template` att
 attributes `delimiter`, `idpattern`, `braceidpattern`, `flags` and `pattern`, and the `ValueError`
 of an invalid placeholder, with its line and column. Its regular expression is `lib/re`'s.
 `Formatter` stays in the file, uncompiled: a program that uses it is an error where it does (it
-needs CPython's C module `_string`, whose import is optional here, and sets of mixed items).
+needs CPython's C module `_string`, whose import is optional here, and sets of mixed items;
+`tests/errors/lib_string_formatter.py`).
 
 - `import _string` is an optional import (`try:` ... `except ImportError: pass`): Pystachy has no
   `_string`, which only `Formatter` uses, and runs the handler; CPython imports it, and its
@@ -186,10 +187,11 @@ Where it differs from CPython (`tests/deviations/lib_string.py`):
   do, and `capwords()` capitalizes ASCII letters alone, as `str.capitalize()` does.
 
 A subclass of `Template` (another `delimiter`, `idpattern`, `braceidpattern`, `flags` or
-`pattern`) is an error: only an exception class may have a base (#7). So are keyword arguments
-whose values have different types (`substitute(name="Ann", count=3)`), as a dict of them would be:
-Pystachy reads a `**kwargs` record by a name computed as the code runs only where its values share a
-type.
+`pattern`) is an error: only an exception class may have a base (#7;
+`tests/errors/lib_string_subclass.py`). So are keyword arguments whose values have different types
+(`substitute(name="Ann", count=3)`), as a dict of them would be: Pystachy reads a `**kwargs` record
+by a name computed as the code runs only where its values share a type
+(`tests/errors/lib_string_kwargs_types.py`).
 
 `tests/lib_string.py` compares it with CPython's on the cases of CPython's
 `Lib/test/test_string.py` that need no subclass of `Template`, and on the class attributes, the
