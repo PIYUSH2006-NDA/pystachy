@@ -34,6 +34,9 @@
 #   re-fuzz        tools/re_fuzz.py: lib/re, run by CPython, compiles random patterns to the code and
 #                  errors CPython's re does and matches, splits and substitutes as it does, on CPython's
 #                  strs and on Pystachy's UTF-8 ones, and so do test_re's cases too big for gc-stress
+#   re-probe       tools/re_probe.py: lib/re, run by CPython, enters its matcher and makes contexts no
+#                  more often than fixed limits allow for textwrap's patterns (deterministic counts),
+#                  with the results of CPython's re
 #   rt-abi         tools/rtabi.py: each function runtime.py defines or declares has the same LLVM
 #                  signature in runtime.py, runtime.c and every program of the corpus
 #   inherited-ast tools/inheritprobe.py: unused inherited methods retain linear AST storage
@@ -296,6 +299,11 @@ step rtcheck $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) cases, \([0-9]*\) failed$/, "
 L=$V/re-fuzz.log; s=$(now); r=fail
 $PY tools/re_fuzz.py > "$L" 2>&1 && r=pass
 step re-fuzz $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) upstream cases and \([0-9]*\) patterns (\([0-9]*\) valid): \([0-9]*\) cases, \([0-9]*\) failed$/, "upstream_cases": \1, "patterns": \2, "valid": \3, "cases": \4, "failed": \5/p' "$L")"
+
+# ---- re-probe: lib/re's matcher entries and contexts for textwrap's patterns, against fixed limits
+L=$V/re-probe.log; s=$(now); r=fail
+$PY tools/re_probe.py > "$L" 2>&1 && r=pass
+step re-probe $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) operations, \([0-9]*\) failed$/, "operations": \1, "failed": \2/p' "$L")"
 
 # ---- rt-abi: one signature per runtime function across runtime.py, runtime.c and the corpus
 L=$V/rt-abi.log; s=$(now); r=fail
