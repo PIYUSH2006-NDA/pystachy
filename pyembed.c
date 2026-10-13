@@ -6,16 +6,17 @@
    - Pystachy's sys.stdin is Python's (in_hook): input() is Python's input(), readline() and read()
      are sys.stdin's, so the two never read ahead of each other.
    - A Python exception becomes a Pystachy one (pye_fail): the first class in its __mro__ that
-     Pystachy has, with str(e) (if str(e) raises, what it raised instead).
+     Pystachy has, with str(e) (if str(e) raises, what it raised instead); a SystemExit keeps the
+     status its code ends the program with, and its args.
    No Python.h: what it uses is CPython's stable ABI, declared below as the ABI fixes it. */
 #include <stdint.h>
 #include <string.h>
 typedef int64_t I;
 typedef intptr_t Py_ssize_t;
 typedef struct _object PyObject;
-typedef struct { I len; char s[]; } Str;
+typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* runtime.c's */
 /* CPython's stable ABI */
-extern PyObject PyUnicode_Type;
+extern PyObject PyUnicode_Type, PyLong_Type;
 extern PyObject *PyExc_RuntimeError, *PyExc_TypeError;
 int PyGILState_Ensure(void);
 void PyGILState_Release(int);
@@ -38,12 +39,18 @@ void PyErr_SetString(PyObject *, const char *);
 PyObject *PyErr_GetRaisedException(void);
 PyObject *PyObject_Type(PyObject *);
 PyObject *PyObject_Str(PyObject *);
+PyObject *PyObject_Repr(PyObject *);
+long long PyLong_AsLongLong(PyObject *);
 Py_ssize_t PyTuple_Size(PyObject *);
 PyObject *PyTuple_GetItem(PyObject *, Py_ssize_t);
 #define VC_OFFSET ((size_t)1 << (8 * sizeof(size_t) - 1))   /* PY_VECTORCALL_ARGUMENTS_OFFSET */
 /* the runtime (runtime.c) */
+typedef struct Exc Exc;
 Str *pys_str(const char *p, I n);
 _Noreturn void pys_raise(Str *kind, Str *msg);
+Exc *pys_exc_new(Str *kind, Str *msg, Str *args);
+Exc *pys_exc_exit(I code, Str *str, Str *args);
+_Noreturn void pys_throw(Exc *e);
 void pys_set_hooks(int (*s)(const char *, I, I), Str *(*i)(I, Str *, I));
 
 static int busy;                       /* in a hook's Python call: an extension module refuses calls then (pye_busy) */
@@ -71,7 +78,7 @@ PyObject *pye_text(Str *s) { return PyUnicode_DecodeUTF8(s->s, s->len, "surrogat
 static const char *const known[] = {"KeyError", "IndexError", "ZeroDivisionError", "OverflowError", "ValueError",
   "TypeError", "AttributeError", "ModuleNotFoundError", "ImportError", "NotImplementedError", "RecursionError",
   "RuntimeError", "FileNotFoundError", "OSError", "StopIteration", "AssertionError", "LookupError",
-  "ArithmeticError", "EOFError", "KeyboardInterrupt", "Exception", 0};
+  "ArithmeticError", "EOFError", "KeyboardInterrupt", "SystemExit", "GeneratorExit", "Exception", "BaseException", 0};
 static const char *kind_of(PyObject *e) {   /* the first class in type(e).__mro__ that Pystachy has */
   PyObject *t = PyObject_Type(e), *mro = t ? PyObject_GetAttrString(t, "__mro__") : 0;
   const char *k = 0;
@@ -83,6 +90,23 @@ static const char *kind_of(PyObject *e) {   /* the first class in type(e).__mro_
   }
   PyErr_Clear(); Py_DecRef(mro); Py_DecRef(t);
   return !k ? "Exception" : !strcmp(k, "RecursionError") ? "RuntimeError" : k;
+}
+static Exc *exit_of(PyObject *e, Str *ms) {   /* SystemExit e, str(e) ms, as the runtime's: the status its code ends
+                                                 the program with (None 0, an int itself, else 1), the args repr(e)
+                                                 shows, so that the host gets the same SystemExit back; 0 if repr fails */
+  PyObject *c = PyObject_GetAttrString(e, "code"), *r = PyObject_Repr(e);
+  Py_ssize_t n = 0;
+  const char *p = r ? PyUnicode_AsUTF8AndSize(r, &n) : 0, *a = p ? memchr(p, '(', (size_t)n) : 0;
+  Exc *x = 0;
+  if (a && p[n - 1] == ')') {
+    Str *args = pys_str(a + 1, (I)(p + n - 1 - (a + 1)));
+    int isint = c && c != none && PyObject_IsInstance(c, &PyLong_Type) == 1;   /* (a bool too) */
+    long long v = isint ? PyLong_AsLongLong(c) : 0;
+    if (isint && v == -1 && PyErr_Occurred()) isint = 0;   /* (beyond 64 bits: as a code of another type) */
+    x = c == none || isint ? pys_exc_exit(v, ms, args) : pys_exc_new(cstr("SystemExit"), ms, args);
+  }
+  PyErr_Clear(); Py_DecRef(c); Py_DecRef(r);
+  return x;
 }
 _Noreturn void pye_fail(int g) {       /* the Python exception just raised, raised in Pystachy's code; g: the GIL
                                           state to release first (-1: none) */
@@ -96,9 +120,11 @@ _Noreturn void pye_fail(int g) {       /* the Python exception just raised, rais
     PyObject *e2 = PyErr_GetRaisedException();   /* str(e) raised: that is raised instead (as the twin's str(e) does) */
     Py_DecRef(e); e = e2;
   }
+  Exc *x = e && ms && !strcmp(k, "SystemExit") ? exit_of(e, ms) : 0;
   PyErr_Clear(); Py_DecRef(e);
   Str *kind = cstr(k), *msg = ms ? ms : cstr(e ? "<exception str() failed>" : "error return without exception set");
   if (g >= 0) PyGILState_Release(g);
+  if (x) pys_throw(x);
   pys_raise(kind, msg);
 }
 int pye_busy(void) { return busy; }

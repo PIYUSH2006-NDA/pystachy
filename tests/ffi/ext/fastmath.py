@@ -85,6 +85,11 @@ def quit_msg(s: str) -> None:
 
 
 @export
+def empty() -> None:
+    raise ValueError()
+
+
+@export
 def quit_none(n: int) -> None:
     sys.exit()
 

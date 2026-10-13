@@ -17,7 +17,7 @@
 typedef int64_t I;
 typedef intptr_t Py_ssize_t;
 typedef struct _object PyObject;
-typedef struct { I len; char s[]; } Str;
+typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* runtime.c's */
 typedef struct Exc Exc;
 typedef struct { const char *name; void *meth; int flags; const char *doc; } PyMethodDef;
 /* CPython's stable ABI */
@@ -98,7 +98,7 @@ static PyObject *args_of(Exc *e) {     /* e.args, rebuilt from repr(e) "Kind(a, 
     I n = r->len - k->len - 2;
     char *b = malloc(n + 4);
     if (!b) return 0;
-    b[0] = '('; memcpy(b + 1, r->s + k->len + 1, n); memcpy(b + 1 + n, n ? ",)" : ")", 3);
+    b[0] = '('; memcpy(b + 1, r->s + k->len + 1, n); memcpy(b + 1 + n, n ? ",)" : ")", n ? 3 : 2);   /* (with the NUL) */
     PyObject *ast = PyImport_ImportModule("ast"), *f = ast ? PyObject_GetAttrString(ast, "literal_eval") : 0;
     PyObject *t = f ? PyUnicode_DecodeUTF8(b, (Py_ssize_t)strlen(b), "surrogatepass") : 0;
     a = t ? PyObject_Vectorcall(f, &t, 1, 0) : 0;

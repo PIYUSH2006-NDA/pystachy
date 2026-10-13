@@ -17,3 +17,7 @@ for label, f in cases:
         print(label, "->", type(r).__name__, r)
     except BaseException as e:
         print(label, "raises", type(e).__name__, e)
+try:
+    m.empty()
+except ValueError as e:
+    print("empty()", repr(e), e.args)
