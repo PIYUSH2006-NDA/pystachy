@@ -5908,7 +5908,7 @@ RUNTIME: dict[str, str] = {
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
-    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "box": "%ptr:*T|A|", "unpack_check": "None:int,int|R|",
+    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "unpack_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
     "platform": "str:|A|", "errno": "int:str|R A|", "system": "int:str|R I|", "execv": "None:str,list[str]|R N A I rL|", "getpid": "int:|I|", "exists": "bool:str|I|",
@@ -7007,6 +7007,39 @@ def nonlocal_decls(n: Node, out: dict[str, bool]) -> None:
         nonlocal_decls(k, out)
 
 
+def stack_aliases(n: Node, names: dict[str, bool]) -> bool:
+    # adds to names each local that an assignment in code n (not in its defs and lambdas) gives a
+    # name of names (y = args), and says whether it added one
+    added = False
+    if n.kind == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and n.kids[1].s in names and n.kids[0].s not in names:
+        names[n.kids[0].s] = True
+        added = True
+    if n.kind == "def" or n.kind == "lambda" or n.kind == "class":
+        return added
+    for k in n.kids:
+        if stack_aliases(k, names):
+            added = True
+    return added
+
+
+def stack_kept(n: Node, names: list[str]) -> bool:
+    # whether code n could keep what a name of names holds where the copy before each statement
+    # (Gen.keep_stack) does not look: in a generator (yield, await), a closure (a def, lambda or
+    # class that names one), a global or nonlocal, or a while loop's test, which runs again after
+    # the statements of its body
+    k = n.kind
+    if k == "yield" or k == "await" or k == "async":
+        return True
+    if k == "def" or k == "lambda" or k == "class" or k == "subclass" or k == "lclass" or k == "global" or k == "nonlocal":
+        return mentions(n, names)
+    if k == "while" and mentions(n.kids[0], names):
+        return True
+    for c in n.kids:
+        if stack_kept(c, names):
+            return True
+    return False
+
+
 def chk_names(n: Node, out: dict[str, bool]) -> None:
     # the names of the reads in code n (not in the defs and lambdas in it) that Flow marked
     # (Node.chk): they may find their variable unassigned
@@ -7293,6 +7326,20 @@ class IterArg:
         self.trav = ""
 
 
+class Reduce:
+    # sum(), min() or max() of a generator, whose items are added or compared as they come
+    # (Gen.reduce): its accumulators are made as the item is compiled, once its type is known, and
+    # set at the IterArg's split, which runs after the iterator is made and before the traversal
+    def __init__(self, name: str, stt: str):
+        self.name = name
+        self.stt = stt  # sum's start: its type, or "" where none is given
+        self.t = ""  # the items' type
+        self.acc = ""  # the sum so far, or the item kept (or the list of the items, collect)
+        self.comp = ""  # a float sum's compensation, as runtime.c's fsum keeps it (Neumaier's)
+        self.first = ""  # no item yet: min and max, and a float sum from an int start
+        self.collect = False  # min() or max() of items runtime.c compares (pys_list_minmax)
+
+
 class SetArg:
     # An argument of a set method that takes several iterables, evaluated with the others before
     # the method iterates any: v, the value of an iterable, or gen, a generator expression whose
@@ -7342,12 +7389,15 @@ class FnInfo:
         self.kwarg = -1  # the position of its **kwargs parameter, which a template's call gives a record of the extra keyword arguments (kw[...])
         self.kwelem = ""  # its annotation (the type of each extra keyword argument), or ""
         self.vartup = ""  # *args: *Ts, of a specialization of a generic class: the tuple type args is (each call passes its items)
+        self.stk = -1  # 1: a call may make its *args tuple in the caller's frame (Gen.stack_ok); -1 not yet known
+        self.stknames: dict[str, bool] = {}  # then *args and the locals assigned it, which may hold that tuple
         self.export = False  # runtime mode: a pys_* function defined under its C name, for runtime.c and programs
         self.extern = False  # runtime mode: a function whose body is `...`, declared under its C name and defined in C
         self.lib = ""  # @ffi.extern's library ("" the process's own)
         self.csym = ""  # and its C symbol
         self.pyexport = False  # @ffi.export: a function an extension module (pystachy ext) gives CPython
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
+        self.synthetic = False  # a dataclass's method that the compiler writes (Gen.synth), not the program
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
         self.orig = node  # and then its immutable def before cls was renamed (shared by inherited methods)
@@ -7832,6 +7882,7 @@ class Gen:
         self.opts: dict[str, bool] = {}  # the optimizations on (optimizations()), once program() starts
         self.lcs: list[str] = []
         self.lct: list[str] = []
+        self.reds: dict[str, Reduce] = {}  # the reductions (reduce), by the key their items' node holds
         self.ret = "None"
         self.retann = False
         self.nn: dict[str, bool] = {}
@@ -7869,6 +7920,8 @@ class Gen:
         self.building: dict[str, bool] = {}  # the functions being compiled
         self.wide: dict[str, bool] = {}  # optional values read from a global or a field (function + register), which no test narrows
         self.soft = Node("", "", 0)  # a display compared with a value: what it holds widens the type expected of it (see wider)
+        self.nokey = Node("", "", 0)
+        self.stkkey = self.nokey  # a tuple display that a lookup takes as its key (lookup_key): made in the frame
         self.retseen: dict[str, bool] = {}  # templates' functions a call used the return type of while they were compiled
         self.branch = 0  # how many if branches and loop bodies enclose the code being compiled
         self.making: list[str] = []  # the template functions being compiled, each with its call site
@@ -9532,6 +9585,7 @@ class Gen:
             f.defaults.append(noann)
             f.dglob.append("")
         f.ret = ret
+        f.synthetic = True
         ci.methods[name] = f
         self.lazy[f.ll] = f
 
@@ -11596,6 +11650,8 @@ class Gen:
             if i.k == 1:
                 o.append(f"  %{i.s}.def.{i.r[0]} = alloca i1")
                 o.append(f"  store i1 false, ptr %{i.s}.def.{i.r[0]}")
+            elif i.k == 2:
+                o.append(f"  %stk.{i.r[0]} = alloca [{len(targs(i.t))} x i64], align 8")  # (a tuple: stack_tuple)
             else:
                 r = f"%{i.s or 'h'}.{i.r[0]}"
                 o.append(f"  {r} = alloca {lt(i.t)}")
@@ -15057,6 +15113,8 @@ class Gen:
     def stmt(self, n: Node) -> None:
         self.line = n.line
         k = n.kind
+        if self.curfn.vararg >= 0 and self.stack_ok(self.curfn):
+            self.keep_stack(n)
         if k == "expr":
             if n.kids[0].kind != "str" and n.kids[0].kind != "ellipsis":
                 self.expr(n.kids[0], "")  # (a string or ... alone does nothing)
@@ -15322,6 +15380,8 @@ class Gen:
             if not self.term:
                 self.leave(n0)
             self.exits = self.exits[:n0]
+        elif k == "reduce":
+            self.reduce_item(self.reds[n.s], n.kids[0])
         elif k == "anyall":
             hit = self.label()
             go = self.label()
@@ -15717,6 +15777,20 @@ class Gen:
                 o = self.unwrap(self.expr(it.kids[0].kids[0], ""), f"AttributeError: 'NoneType' object has no attribute '{m}'")
                 if is_dict(o.t):
                     self.for_seq(tgt, [o], m, body, "0", hide, arg)
+                elif o.t == "kw[]" and m != "keys":
+                    # **kwargs of a call that passes no extra keyword arguments: no values, of the
+                    # type its annotation gives them (**kwargs: T), else of none. Only the parameter
+                    # itself is known to be this function's record: another name may hold one that
+                    # a call returned or passed in, from a function annotated otherwise
+                    f = self.curfn
+                    x = it.kids[0].kids[0]
+                    if f.kwarg >= 0 and f.kwelem != "" and x.kind == "name" and x.s == f.params[f.kwarg]:
+                        et = f.kwelem if m == "values" else "tuple[str," + f.kwelem + "]"
+                        self.for_seq(tgt, [self.expr(mk("list", "", it.line, []), "list[" + et + "]")], "", body, "0", hide, arg)
+                        return
+                    self.iterarg(arg)
+                    self.hide(hide)
+                    return  # nothing to iterate: the body never runs (and its types are unknown), as for ()
                 else:
                     self.for_seq(tgt, [self.method(o, m, [])], "", body, "0", hide, arg)
                 return
@@ -16547,7 +16621,7 @@ class Gen:
                 elif i < len(ws) and is_fn(v.t) and is_callable(unopt(ws[i])):
                     v = self.coerce(v, ws[i])  # (a function where a Callable is expected: made one)
                 vals.append(v)
-            return self.tuple_(vals)
+            return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
         if k == "listcomp":
             if n.s == "gen":
                 self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
@@ -16978,6 +17052,184 @@ class Gen:
             self.emit(f"store i64 {s}, ptr {q}")
         return Val(p, t)
 
+    def stack_tuple(self, vals: list[Val]) -> Val:
+        # tuple_, in this function's frame (a slot of its items, lowered to an array): the *args of
+        # a call of a function that copies them to the heap before it could keep them (stack_ok)
+        t = self.ctype("tuple", [v.t for v in vals])
+        self.n += 1
+        i = Ins("slot", t, "")
+        i.k = 2
+        i.r = [self.n]
+        self.fn.slots.append(i)
+        p = f"%stk.{self.n}"
+        for j in range(len(vals)):
+            s = self.to_slot(vals[j])
+            q = self.ins(f"getelementptr i64, ptr {p}, i64 {j}")
+            self.emit(f"store i64 {s}, ptr {q}")
+        return Val(p, t)
+
+    def stack_ok(self, f: FnInfo) -> bool:
+        # whether a call of f may make f's *args tuple in its own frame (stack_tuple), where it is
+        # gone once f returns: f copies the tuple to the heap before any statement that could
+        # keep it (keep_stack), and it keeps it nowhere else (stack_kept). A dict probe with the
+        # key, the most a cache's hit does with its arguments (lib/functools), then allocates
+        # nothing
+        if f.stk < 0:
+            f.stk = 0
+            if f.vararg >= 0 and f.node.kind == "def" and not f.export and not f.pyexport:
+                names: dict[str, bool] = {f.params[f.vararg]: True}
+                body = f.node.kids[2].kids
+                added = True
+                while added:
+                    added = False
+                    for st in body:
+                        if stack_aliases(st, names):
+                            added = True
+                ns = list(names)
+                if len([st for st in body if stack_kept(st, ns)]) == 0:
+                    f.stk = 1
+                    f.stknames = names
+        return f.stk == 1
+
+    def keep_stack(self, n: Node) -> None:
+        # before statement n of a function whose *args tuple may be in its caller's frame
+        # (stack_ok): each local that may hold the tuple and that n uses other than to look it up
+        # or read its items (stack_uses) holds its heap copy from here on, which the first such
+        # statement of a call makes. A tuple that is not in a frame (runtime.c's pys_on_stack), as
+        # a call through a Callable passes it, is kept as it is
+        ns = self.curfn.stknames
+        k = n.kind
+        if k == "assign" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[1].kind == "name" and n.kids[1].s in ns:
+            return  # (y = args: y may hold the tuple too, see stack_aliases)
+        out: dict[str, bool] = {}
+        if (k == "if" or k == "assert") and n.kids[0].kind == "name" and n.kids[0].s in ns:
+            for c in n.kids[1:] if k == "assert" else []:
+                self.stack_uses(c, out)  # (if args: whether it has items)
+        elif k == "if":
+            self.stack_uses(n.kids[0], out)
+        elif k == "match":
+            for c in n.kids:
+                if c.kind != "block":
+                    self.stack_uses(c, out)  # (its subject, and its cases' guards)
+        elif k == "for":
+            self.stack_target(n.kids[0], out)
+            if n.kids[1].kind != "name" or n.kids[1].s not in ns:
+                self.stack_uses(n.kids[1], out)  # (for x in args reads its items)
+        elif k == "with":
+            for w in n.kids[:-1]:
+                self.stack_uses(w.kids[0], out)
+                if len(w.kids) > 1:
+                    self.stack_target(w.kids[1], out)
+        elif k == "assign" or k == "annassign" or k == "augassign":
+            ts = n.kids[:-1] if k == "assign" else [n.kids[0]]
+            for x in ts:
+                self.stack_target(x, out)
+            if k != "annassign" or len(n.kids) == 3:
+                self.stack_uses(n.kids[-1], out)
+        elif k == "expr" or k == "return" or k == "raise" or k == "assert" or k == "del":
+            for c in n.kids:
+                self.stack_uses(c, out)
+        for nm in out:
+            t = unopt(self.ltype.get(nm, ""))
+            if nm not in self.lreg or nm in self.compvars or not is_tuple(t):
+                continue  # (not assigned yet here: it holds nothing; or a comprehension's own)
+            if ".stk" not in self.lreg:
+                self.alloca(t, ".stk")  # (the heap copy, once made)
+            hs = self.lreg[".stk"]
+            v = self.ins(f"load ptr, ptr {self.lreg[nm]}")
+            h = self.ins(f"load ptr, ptr {hs}")
+            lchk = self.label()
+            lcopy = self.label()
+            lnew = self.label()
+            lold = self.label()
+            ldone = self.label()
+            self.cbr(self.ins(f"icmp eq ptr {v}, {h}"), ldone, lchk)  # (it holds the copy: a statement before kept it)
+            self.place(lchk)
+            self.cbr(self.ins(f"icmp ne i64 {self.rt('pys_on_stack', 'i64', [f'ptr {v}'])}, 0"), lcopy, ldone)
+            self.place(lcopy)
+            self.cbr(self.ins(f"icmp eq ptr {h}, null"), lnew, lold)
+            self.place(lold)
+            self.emit(f"store ptr {h}, ptr {self.lreg[nm]}")  # (the copy another local's statement made)
+            self.br(ldone)
+            self.place(lnew)
+            cp = self.rt("pys_alloc", "ptr", [f"i64 {8 * len(targs(t))}"])
+            for j in range(len(targs(t))):
+                wd = self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {v}, i64 {j}')}")
+                self.emit(f"store i64 {wd}, ptr {self.ins(f'getelementptr i64, ptr {cp}, i64 {j}')}")
+            self.emit(f"store ptr {cp}, ptr {hs}")
+            self.emit(f"store ptr {cp}, ptr {self.lreg[nm]}")
+            self.br(ldone)
+            self.place(ldone)
+
+    def stack_target(self, t: Node, out: dict[str, bool]) -> None:
+        # stack_uses of an assignment's target: d[x] = v stores the key x
+        if t.kind == "index" and len(t.kids) == 2 and t.kids[1].kind == "name" and t.kids[1].s in self.curfn.stknames:
+            out[t.kids[1].s] = True
+            self.stack_uses(t.kids[0], out)
+        elif t.kind == "tuple" or t.kind == "list" or t.kind == "starred":
+            for c in t.kids:
+                self.stack_target(c, out)
+        elif t.kind == "attr":
+            self.stack_uses(t.kids[0], out)
+        elif t.kind != "name":
+            self.stack_uses(t, out)
+
+    def stack_uses(self, n: Node, out: dict[str, bool]) -> None:
+        # the names of curfn.stknames that expression n uses other than as a key it looks up (x in
+        # d, x in xs, d[x], d.get(x)) or as a tuple whose items it reads (f(*x), len(x), x[i]): the
+        # uses that could keep what the name holds
+        ns = self.curfn.stknames
+        k = n.kind
+        if k == "name":
+            if n.s in ns:
+                out[n.s] = True
+            return
+        if len(n.kids) > 0:
+            a = n.kids[0]
+            if k == "cmp" and len(n.kids) == 2 and (n.s == "in" or n.s == "not in") and a.kind == "name" and a.s in ns:
+                t = unopt(self.probe_type(n.kids[1]))
+                if is_dict(t) or is_set(t) or is_list(t) or is_tuple(t):
+                    self.stack_uses(n.kids[1], out)
+                    return
+            if k == "cmp" and len(n.kids) == 2 and (n.s == "in" or n.s == "not in") and n.kids[1].kind == "name" and n.kids[1].s in ns:
+                self.stack_uses(a, out)  # (x in args: its items)
+                return
+            if k == "unary" and n.s == "not" and a.kind == "name" and a.s in ns:
+                return
+            if k == "index" and len(n.kids) == 2 and n.kids[1].kind == "name" and n.kids[1].s in ns and is_dict(unopt(self.probe_type(a))):
+                self.stack_uses(a, out)
+                return
+            if k == "index" and len(n.kids) == 2 and a.kind == "name" and a.s in ns:
+                self.stack_uses(n.kids[1], out)
+                return
+            if k == "call" and len(n.kids) >= 2 and a.kind == "attr" and a.s == "get" and n.kids[1].kind == "name" and n.kids[1].s in ns and is_dict(unopt(self.probe_type(a.kids[0]))):
+                self.stack_uses(a.kids[0], out)
+                for c in n.kids[2:]:
+                    self.stack_uses(c, out)
+                return
+            if k == "call" and len(n.kids) == 2 and a.kind == "name" and a.s == "len" and not self.bound("len") and n.kids[1].kind == "name" and n.kids[1].s in ns:
+                return
+            if k == "starred" and a.kind == "name" and a.s in ns:
+                return
+        for c in n.kids:
+            self.stack_uses(c, out)
+
+    def lookup_key(self, n: Node) -> bool:
+        # whether n is a tuple display that a lookup takes as its key, which it keeps nowhere: it
+        # can be made in the frame (stack_tuple) instead of on the heap
+        return n.kind == "tuple" and len(n.kids) > 0 and len([x for x in n.kids if x.kind == "starred"]) == 0
+
+    def probe_type(self, n: Node) -> str:
+        # the static type of n where it is a variable (static_type, or a global that may not be
+        # assigned yet, whose read then raises first) or a field of one (self.d), or ""
+        if n.kind == "attr" and len(n.kids) == 1:
+            o = unopt(self.probe_type(n.kids[0]))
+            return self.classes[o].ftypes.get(n.s, "") if o in self.classes else ""
+        t = self.static_type(n)
+        if t == "" and n.kind == "name" and n.s not in self.ltype and n.s not in self.compvars and not self.unbound_local(n.s):
+            return self.gtypes.get(n.s, "")
+        return t
+
     def tget(self, v: Val, i: int) -> Val:
         p = self.ins(f"getelementptr i64, ptr {v.v}, i64 {i}")
         return self.from_slot(self.ins(f"load i64, ptr {p}"), targs(v.t)[i])
@@ -17005,7 +17257,10 @@ class Gen:
             return self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), elem(t))
         if is_dict(t):
             kv = targs(t)
+            if self.lookup_key(n.kids[1]):
+                self.stkkey = n.kids[1]  # (memo[(i, j)])
             kval = self.expr(n.kids[1], kv[0])
+            self.stkkey = self.nokey
             kx = self.dkey(kval, kv[0])
             o = self.unwrap(o, sub)
             if bool_for_int(kval.t, kv[0]):
@@ -17101,9 +17356,11 @@ class Gen:
         # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does); kind
         # "discard": discarding each from set into, as s.difference_update(e for ...) does
         h = Ins("", "", "")
-        if mode != "":
+        if mode == "any" or mode == "all":
             res = self.alloca("bool", "")
             self.emit(f"store i1 {'false' if mode == 'any' else 'true'}, ptr {res}")
+        elif mode != "":
+            res = ""  # (a reduction: mode is # and the key of its Reduce, which holds what it keeps)
         elif into != "":
             res = into
         else:
@@ -17114,7 +17371,7 @@ class Gen:
         saved: list[str] = []
         for nm in names:
             saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
-        app = mk("lcappend" if mode == "" else "anyall", mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
+        app = mk("lcappend" if mode == "" else "reduce" if mode.startswith("#") else "anyall", mode[1:] if mode.startswith("#") else mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
         body = [app]
         if len(n.kids) == 4:
             body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
@@ -17137,8 +17394,10 @@ class Gen:
             self.compvars[nm] -= 1
             if self.compvars[nm] == 0:
                 del self.compvars[nm]
-        if mode != "":
+        if mode == "any" or mode == "all":
             return Val(self.ins(f"load i1, ptr {res}"), "bool")
+        if mode != "":
+            return Val("", "")
         if et == "":
             self.err("cannot infer the element type of this comprehension")
         if into == "":
@@ -17565,7 +17824,12 @@ class Gen:
             return self.cmp2(ops[0], self.expr(n.kids[0], w), b)
         # (x is None reads a local that only None was assigned to so far, see none_type)
         self.nonecmp = len(ops) == 1 and n.kids[1].kind == "None" and n.kids[0].kind == "name" and (ops[0] == "is" or ops[0] == "is not" or ops[0] == "==" or ops[0] == "!=")
+        if len(ops) == 1 and (ops[0] == "in" or ops[0] == "not in") and self.lookup_key(n.kids[0]):
+            t = unopt(self.probe_type(n.kids[1]))
+            if is_dict(t) or is_set(t):
+                self.stkkey = n.kids[0]  # ((i, j) in memo)
         a = self.expr(n.kids[0], "")
+        self.stkkey = self.nokey
         self.nonecmp = False
         if len(ops) == 1 and (ops[0] == "in" or ops[0] == "not in") and self.iterator_call(n.kids[1]) and n.kids[1].kids[0].s == "range":
             # x in range(...): arithmetic, as CPython's range.__contains__ does for ints; an int |
@@ -17742,6 +18006,15 @@ class Gen:
             for i in range(len(targs(b.t))):
                 item = self.tget(b, i)
                 if not self.comparable(item.t, a.t):
+                    # item == x of types whose values are never equal: CPython still calls the
+                    # item's __eq__(x), or where the item's class has none (a builtin type's
+                    # declines) x's __eq__(item); with neither, they are not equal
+                    c = self.foreign_eq(item, a)
+                    if c.t != "":
+                        nx = self.label()
+                        self.incoming(ph, "true", self.cur)
+                        self.cbr(c.v, lend, nx)
+                        self.place(nx)
                     continue
                 u = unopt(item.t)
                 if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
@@ -17879,6 +18152,21 @@ class Gen:
         if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
             return True
         return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))
+
+    def foreign_eq(self, a: Val, b: Val) -> Val:
+        # a == b of types whose values comparable() finds never equal: the __eq__ of a's class
+        # where it takes a b, else, where a's class has none or a dataclass's (a builtin type's
+        # declines, as object's and a dataclass's do for an object of another class), the __eq__
+        # of b's class where it takes an a (CPython's reflected call); Val("", "") where neither
+        # applies, and CPython finds them not equal
+        if a.t in self.classes and "__eq__" in self.classes[a.t].methods:
+            if self.cmp_method(a.t, "__eq__", b.t) != "":
+                return self.eqcall(self.classes[a.t].methods["__eq__"], True, a, b)
+            if not self.classes[a.t].methods["__eq__"].synthetic:
+                return Val("", "")
+        if self.cmp_method(b.t, "__eq__", a.t) != "":
+            return self.eqcall(self.classes[b.t].methods["__eq__"], True, b, a)
+        return Val("", "")
 
     # ---- calls
     def call(self, n: Node, want: str) -> Val:
@@ -18577,7 +18865,7 @@ class Gen:
             if j in f.pats:
                 vals[j] = self.pat_arg(vals[j], f.pats[j])
         if f.vararg >= 0:
-            vals[f.vararg] = self.tuple_(extra)
+            vals[f.vararg] = self.stack_tuple(extra) if len(extra) > 0 and self.stack_ok(f) else self.tuple_(extra)
         if f.kwarg >= 0:
             vals[f.kwarg] = self.kw_record(kwn, kwv)
         if none != "":
@@ -19164,6 +19452,10 @@ class Gen:
             if g.kind != "listcomp":
                 g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
             return self.listcomp(g, "", name)
+        if name == "sum" or name == "min" or name == "max":
+            stt = self.stream_start(name, args)
+            if stt != "-":
+                return self.reduce(name, args, stt)
         base = [a.kids[0] for a in args if a.kind == "kw" and a.s == "base"] if name == "int" else []
         if len(base) > 0:
             # int(x, base=b) is int(x, b) (x is positional only: int(x=s) is an unknown keyword)
@@ -19605,6 +19897,155 @@ class Gen:
         self.place(le)
         return Val(self.ins(f"load i1, ptr {res}"), "bool")
 
+    def stream_start(self, name: str, args: list[Node]) -> str:
+        # whether sum(), min() or max() takes its items as they come (reduce), "-" if not: of a
+        # generator expression or an iterator call (range(), zip(), ...), with no keyword (key=
+        # keeps its list). Then sum's start type ("" where none is given), which must be an int or
+        # a float (dry: the value is evaluated where the iterator is made, after the traversal is
+        # compiled)
+        if len(args) == 0 or len(args) > (2 if name == "sum" else 1):
+            return "-"
+        for a in args:
+            if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar":
+                return "-"
+        g = args[0]
+        if not self.iterator_call(g) and not (g.kind == "listcomp" and g.s == "gen"):
+            return "-"
+        if len(args) == 1:
+            return ""
+        t = self.dry(args[1])
+        return t if t == "int" or t == "float" else "-"
+
+    def reduce(self, name: str, args: list[Node], stt: str) -> Val:
+        # sum(), min() or max() of a generator expression or an iterator call: each item is added
+        # or compared as it comes, as CPython takes them, and no list of them is made (#88). The
+        # iterator is made first, then sum's start is evaluated and the accumulators set (at the
+        # IterArg's split, once the traversal, compiled first, gave the items' type), then the
+        # items are traversed. A sum is runtime.c's (pys_sum_int, pys_sum_float, ...), item by
+        # item; min() and max() compare as max(a, b) does, but those of items other than numbers
+        # and strs collect them for pys_list_minmax, as before
+        g = args[0]
+        if g.kind != "listcomp":
+            item = mk("name", "__item", g.line, [])
+            g = mk("listcomp", "gen", g.line, [item, item, g])
+        key = str(len(self.reds))
+        r = Reduce(name, stt)
+        self.reds[key] = r
+        arg = IterArg(g)
+        arg.split = self.label()
+        self.listcomp(g, "", "#" + key, "", arg)
+        back = self.label()
+        self.br(back)
+        self.place(arg.split)
+        if r.t == "":
+            self.err("cannot infer the element type of this comprehension")
+        if name == "sum":
+            sv = self.expr(args[1], "") if len(args) == 2 else Val("0" if r.t != "float" else fbits("0.0"), "int" if r.t != "float" else "float")
+            if r.t == "float":
+                self.emit(f"store double {self.as_float(sv).v}, ptr {r.acc}")
+                self.emit(f"store double {fbits('0.0')}, ptr {r.comp}")
+                if r.first != "":
+                    self.emit(f"store i1 true, ptr {r.first}")
+            elif sv.t == "float":
+                self.emit(f"store double {sv.v}, ptr {r.acc}")
+            else:
+                self.emit(f"store i64 {self.as_int(sv).v}, ptr {r.acc}")
+        elif r.collect:
+            self.emit(f"store ptr {self.rt('pys_list_new', 'ptr', ['i64 0'])}, ptr {r.acc}")
+        else:
+            self.emit(f"store i1 true, ptr {r.first}")
+        self.br(arg.trav)
+        self.place(back)
+        if name != "sum" and r.collect:
+            d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
+            lv = self.ins(f"load ptr, ptr {r.acc}")
+            return self.from_slot(self.rt("pys_list_minmax", "i64", [f"ptr {lv}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"]), r.t)
+        if name != "sum":
+            self.guard(self.ins(f"load i1, ptr {r.first}"), f"ValueError: {name}() iterable argument is empty")
+            return Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+        if r.comp == "":
+            ft = "float" if r.stt == "float" else "int"
+            return Val(self.ins(f"load {lt(ft)}, ptr {r.acc}"), ft)
+        # fsum's end: the compensation is added where it is a finite number other than 0
+        s = self.ins(f"load double, ptr {r.acc}")
+        c = self.ins(f"load double, ptr {r.comp}")
+        fin = self.ins(f"fcmp olt double {self.rt('fabs', 'double', [f'double {c}'])}, 0x7FF0000000000000")
+        nz = self.ins(f"fcmp une double {c}, {fbits('0.0')}")
+        use = self.ins(f"and i1 {nz}, {fin}")
+        return Val(self.select(use, Val(self.ins(f"fadd double {s}, {c}"), "float"), Val(s, "float")), "float")
+
+    def reduce_item(self, r: Reduce, e: Node) -> None:
+        # an item of reduce()'s generator: added to the sum, or compared with the item kept. Its
+        # accumulators are made at its first compilation, which gives the items' type
+        v = self.expr(e, "")
+        if r.t == "":
+            r.t = v.t
+            if r.name == "sum" and v.t != "int" and v.t != "bool" and v.t != "float":
+                self.err(f"unsupported call sum(list[{v.t}]{',' + r.stt if r.stt != '' else ''})")
+            if r.name == "sum":
+                r.acc = self.alloca("float" if v.t == "float" or r.stt == "float" else "int", "")
+                if v.t == "float":
+                    r.comp = self.alloca("float", "")
+                    if r.stt == "int":
+                        r.first = self.alloca("bool", "")
+            elif v.t == "int" or v.t == "float" or v.t == "bool" or v.t == "str":
+                r.acc = self.alloca(v.t, "")
+                r.first = self.alloca("bool", "")
+            else:
+                r.collect = True
+                r.acc = self.alloca(self.ctype("list", [v.t]), "")
+        if r.collect:
+            self.rt("pys_list_append", "void", [f"ptr {self.ins(f'load ptr, ptr {r.acc}')}", "i64 " + self.to_slot(self.coerce(v, r.t))])
+            return
+        if r.name != "sum":
+            # the first item is kept; another where it is greater (max) or less (min) than the kept one
+            take = self.label()
+            test = self.label()
+            skip = self.label()
+            self.cbr(self.ins(f"load i1, ptr {r.first}"), take, test)
+            self.place(test)
+            kept = Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+            self.cbr(self.truth(self.cmp2(">" if r.name == "max" else "<", v, kept)), take, skip)
+            self.place(take)
+            self.emit(f"store {lt(r.t)} {v.v}, ptr {r.acc}")
+            self.emit(f"store i1 false, ptr {r.first}")
+            self.br(skip)
+            self.place(skip)
+            return
+        if r.t != "float" and r.stt != "float":
+            si = self.ins(f"load i64, ptr {r.acc}")
+            self.emit(f"store i64 {self.iop('+', si, self.as_int(v).v)}, ptr {r.acc}")
+            return
+        if r.t != "float":
+            # ints from a float start: added as floats, not compensated (pys_sum_int_float)
+            sf = self.ins(f"load double, ptr {r.acc}")
+            self.emit(f"store double {self.ins(f'fadd double {sf}, {self.as_float(self.as_int(v)).v}')}, ptr {r.acc}")
+            return
+        nm = self.label()
+        if r.first != "":
+            # floats from an int start: the first is added as it is (pys_sum_float_int)
+            plain = self.label()
+            comp = self.label()
+            self.cbr(self.ins(f"load i1, ptr {r.first}"), plain, comp)
+            self.place(plain)
+            s0 = self.ins(f"load double, ptr {r.acc}")
+            self.emit(f"store double {self.ins(f'fadd double {s0}, {v.v}')}, ptr {r.acc}")
+            self.emit(f"store i1 false, ptr {r.first}")
+            self.br(nm)
+            self.place(comp)
+        # Neumaier's step, as runtime.c's fsum takes it
+        s = self.ins(f"load double, ptr {r.acc}")
+        t = self.ins(f"fadd double {s}, {v.v}")
+        ge = self.ins(f"fcmp oge double {self.rt('fabs', 'double', [f'double {s}'])}, {self.rt('fabs', 'double', [f'double {v.v}'])}")
+        d1 = self.ins(f"fadd double {self.ins(f'fsub double {s}, {t}')}, {v.v}")
+        d2 = self.ins(f"fadd double {self.ins(f'fsub double {v.v}, {t}')}, {s}")
+        d = self.select(ge, Val(d1, "float"), Val(d2, "float"))
+        c = self.ins(f"load double, ptr {r.comp}")
+        self.emit(f"store double {self.ins(f'fadd double {c}, {d}')}, ptr {r.comp}")
+        self.emit(f"store double {t}, ptr {r.acc}")
+        self.br(nm)
+        self.place(nm)
+
     def iterator_call(self, n: Node) -> bool:
         if n.kind != "call" or n.kids[0].kind != "name" or self.bound(n.kids[0].s):
             return False
@@ -19882,7 +20323,10 @@ class Gen:
             elif i < len(args) and span and args[i].kind == "None":
                 av.append("i64 " + dflt)
             elif i < len(args):
+                if key == "dict.get" and i == 0 and self.lookup_key(args[0]):
+                    self.stkkey = args[0]  # (memo.get((i, j), -1))
                 v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], pt)
+                self.stkkey = self.nokey
                 if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                     v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
                     for x in targs(unopt(v.t)):
