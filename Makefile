@@ -42,14 +42,17 @@ bench: pystachy
 	PY="$(PY)" bench/run.sh
 
 # Advisory diagnostics with separate compilation and in-process execution timings.
+# Reuse a verified compiler, e.g. BENCH_COMPILER=build/verify/pystachy2, without
+# bootstrapping ./pystachy again. The default still builds the normal compiler.
+BENCH_COMPILER ?= ./pystachy
 BENCH_ARGS ?=
-bench-extended: pystachy
-	$(PY) tools/bench_extended.py $(BENCH_ARGS)
+bench-extended: $(BENCH_COMPILER)
+	$(PY) tools/bench_extended.py --compiler "$(BENCH_COMPILER)" $(BENCH_ARGS)
 
 # Correctness only: no wall-clock performance thresholds on shared CI runners.
-bench-extended-check: pystachy
+bench-extended-check: $(BENCH_COMPILER)
 	$(PY) -m unittest discover -s tools -p test_bench_extended.py
-	$(PY) tools/bench_extended.py --smoke --json build/extended-smoke.json
+	$(PY) tools/bench_extended.py --compiler "$(BENCH_COMPILER)" --smoke --json build/extended-smoke.json
 
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only

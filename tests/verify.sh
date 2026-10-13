@@ -68,11 +68,38 @@
 #                  scan, grow no faster than the programs
 # A step that runs tests/run.sh over the suite passes only with as many passes as the checks the suite
 # holds, counted from its files (checks): a run that covered fewer cases fails.
-# usage: tests/verify.sh   (make verify)   env: PY (default python3), PYSTACHY_LLVM (LLVM 18 bin dir)
+# usage: tests/verify.sh [GROUP]   (make verify runs all)   env: PY (default python3), PYSTACHY_LLVM (LLVM 18 bin dir)
 cd "$(dirname "$0")/.." || exit 1
 # shellcheck disable=SC3045 # (ulimit -c is not POSIX, but dash, bash, ksh and busybox have it)
 ulimit -c 0 2> /dev/null  # (no core file of a crashing compiler or test program in the tree)
 ROOT=$(pwd)
+# CI selects independent groups; a local run without arguments still runs every check.
+# --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
+plan() {
+  case $1 in
+    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-stress benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
+    hosted) echo 'bootstrap tests-cpython' ;;
+    native) echo 'bootstrap tests-native tests-opt-off' ;;
+    python-free) echo 'bootstrap python-free' ;;
+    ubsan) echo 'bootstrap ubsan' ;;
+    gc-stress) echo 'bootstrap gc-stress' ;;
+    contracts) echo 'bootstrap runtime-cache check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code' ;;
+    benchmarks) echo 'bootstrap benchmarks scaling' ;;
+    *) echo "verify: unknown group: $1" >&2; return 2 ;;
+  esac
+}
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|python-free|ubsan|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
+GROUP=${1:-all}
+if [ "$GROUP" = --list ]; then
+  for g in all hosted native python-free ubsan gc-stress contracts benchmarks; do
+    printf '%s %s\n' "$g" "$(plan "$g")"
+  done
+  exit 0
+fi
+SELECTED=$(plan "$GROUP") || exit 2
+want() { case " $SELECTED " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+expected=0
+for x in $SELECTED; do expected=$((expected + 1)); done
 PY=${PY:-python3}
 UBSAN="-fsanitize=undefined -fno-sanitize-recover=all"
 V=$ROOT/build/verify
@@ -162,7 +189,7 @@ step bootstrap $r "$s" "$L" "$x"
 # simple command run in the background is exec'd, with no shell around it to kill instead)
 gcpid=
 trap '[ -z "$gcpid" ] || kill $gcpid 2> /dev/null; exit 130' INT TERM
-if [ -x "$V/pystachy2" ]; then
+if want gc-stress && [ -x "$V/pystachy2" ]; then
   PYSTACHY_GC_STRESS=1000 "$V/pystachy2" ir pystachy.py -o "$V/stage-gc.ll" > "$V/gc-self.log" 2>&1 &
   gcpid=$!
 fi
@@ -171,15 +198,20 @@ fi
 # (the CPython-hosted compiler runs as a module, whose bytecode CPython caches, where it compiles a
 # script's 16k lines again at every start; the cache is checked against pystachy.py's hash, as an
 # edit within the same second may keep its mtime and size)
+if want tests-cpython; then
 L=$V/tests-cpython.log; s=$(now)
 { $PY -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)' &&
   tests/run.sh "$PY -m pystachy"; } > "$L" 2>&1
 x=$(tests $ALL "$L" 2>> "$L") && r=pass || r=fail
 step tests-cpython $r "$s" "$L" ', "compiler": "CPython-hosted", "modes": ["jit", "aot"]'"$x"
+fi
+if want tests-native; then
 L=$V/tests-native.log; s=$(now)
 tests/run.sh "$V/pystachy2" > "$L" 2>&1
 x=$(tests $ALL "$L" 2>> "$L") && r=pass || r=fail
 step tests-native $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"]'"$x"
+fi
+if want tests-opt-off; then
 L=$V/tests-opt-off.log; s=$(now); logs=""; offs=""; nl=0
 # shellcheck disable=SC2043 # (a list of one, for now)
 for o in all; do
@@ -189,17 +221,21 @@ done
 for l in $logs; do echo "== $(basename "$l")"; cat "$l"; done > "$L"
 x=$(tests $((nl * ALL)) $logs 2>> "$L") && r=pass || r=fail
 step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
+fi
 
 # ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
 # whose checks are 58 with the native compiler and 57 with CPython's, which runs no PATH search)
+if want runtime-cache; then
 L=$V/runtime-cache.log; s=$(now)
 PY=$PY tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
 tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
 for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
 x=$(tests $((58 + 57)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
 step runtime-cache $r "$s" "$L" ', "compilers": ["stage2", "CPython-hosted"]'"$x"
+fi
 
 # ---- python-free: the native compiler and the tests with only LLVM + POSIX tools on PATH
+if want python-free; then
 L=$V/python-free.log; s=$(now); r=fail; py=true
 NP=$(mktemp -d "${TMPDIR:-/tmp}/pystachy-path.XXXXXX")
 tool() { # tool NAME [DIR]: symlink NAME into $NP, from DIR if given, else from $PATH
@@ -230,8 +266,10 @@ x=$(tests $ALL "$L" 2>> "$L") || r=fail
 step python-free $r "$s" "$L" "$(printf ', "python_on_path": %s, "path_tools": [%s], "ir_identical": %s' "$py" \
   "$(ls "$NP" | while read -r t; do printf '"%s", ' "$t"; done | sed 's/, $//')" "$(same "$V/stage1.ll" "$V/stage-nopy.ll")")$x"
 rm -rf "$NP"
+fi
 
 # ---- ubsan: sanitized runtime in every program, the compiler included
+if want ubsan; then
 L=$V/ubsan.log; s=$(now); r=fail; built=0
 UBSO=$("${LLVM}clang" -print-file-name="libclang_rt.ubsan_standalone-$(uname -m).so")
 {
@@ -253,18 +291,24 @@ UBSO=$("${LLVM}clang" -print-file-name="libclang_rt.ubsan_standalone-$(uname -m)
 } > "$L" 2>&1
 x=$(tests $(($(checks aot) + $(checks jit))) "$V/ubsan-aot.log" "$V/ubsan-jit.log" 2>> "$L") && [ $built = 1 ] && r=pass
 step ubsan $r "$s" "$L" ", \"cflags\": $(js "$UBSAN"), \"modes\": [\"aot\", \"jit\"], \"jit_preload\": $(js "$UBSO"), \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-ubsan.ll")$x"
+fi
 
 # ---- check-ir: the IR of every program of the corpus passes the IR check and is valid LLVM
+if want check-ir; then
 L=$V/check-ir.log; s=$(now); r=fail
 tools/check_ir.sh "$V/pystachy2" > "$L" 2>&1 && r=pass
 step check-ir $r "$s" "$L" "$(sed -n 's/^the IR check and llvm-as accept the IR of \([0-9]*\) programs.*$/, "programs": \1/p' "$L")"
+fi
 
 # ---- runtime-table: the runtime functions the compiler declares, as runtime.c and runtime.py define them
+if want runtime-table; then
 L=$V/runtime-table.log; s=$(now); r=fail
 $PY tools/check_runtime.py > "$L" 2>&1 && r=pass
 step runtime-table $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) RUNTIME entries, \([0-9]*\) exception classes: .*$/, "entries": \1, "exception_classes": \2/p' "$L")"
+fi
 
 # ---- gc-stress: collections far more often than the collector would run them
+if want gc-stress; then
 L=$V/gc-stress.log; s=$(now); r=fail
 {
   # (every 1000, not 100: the compiler keeps each function's IR until the program is built, and at
@@ -276,8 +320,10 @@ L=$V/gc-stress.log; s=$(now); r=fail
 } > "$L" 2>&1
 x=$(tests $ALL "$V/gc-stress-tests.log" 2>> "$L") || r=fail
 step gc-stress $r "$s" "$L" ", \"compiler_interval\": 1000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
+fi
 
 # ---- benchmarks: same output as CPython, JIT and AOT
+if want benchmarks; then
 L=$V/benchmarks.log; s=$(now); r=pass; x=""; n=0; ok=0
 : > "$L"
 for b in bench/*.py; do
@@ -293,92 +339,124 @@ for b in bench/*.py; do
     "${x:+,}" "$k" $i "$(secs "$t0" "$t1")" "$(secs "$t1" "$t2")" "$(secs "$t2" "$t3")" "$(secs "$t3" "$t4")")"
 done
 step benchmarks $r "$s" "$L" ", \"programs\": $n, \"identical\": $ok, \"timings\": [$x]"
+fi
 
 # ---- rtcheck: runtime.py on CPython against CPython's own str methods and math functions
+if want rtcheck; then
 L=$V/rtcheck.log; s=$(now); r=fail
 $PY tools/rtcheck.py > "$L" 2>&1 && r=pass
 step rtcheck $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) cases, \([0-9]*\) failed$/, "cases": \1, "failed": \2/p' "$L")"
+fi
 
 # ---- re-fuzz: lib/re on CPython against CPython's own re, on random patterns and test_re's largest cases
+if want re-fuzz; then
 L=$V/re-fuzz.log; s=$(now); r=fail
 $PY tools/re_fuzz.py > "$L" 2>&1 && r=pass
 step re-fuzz $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) upstream cases and \([0-9]*\) patterns (\([0-9]*\) valid): \([0-9]*\) cases, \([0-9]*\) failed$/, "upstream_cases": \1, "patterns": \2, "valid": \3, "cases": \4, "failed": \5/p' "$L")"
+fi
 
 # ---- re-probe: lib/re's matcher entries and contexts for textwrap's patterns, against fixed limits
+if want re-probe; then
 L=$V/re-probe.log; s=$(now); r=fail
 $PY tools/re_probe.py > "$L" 2>&1 && r=pass
 step re-probe $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) operations, \([0-9]*\) failed$/, "operations": \1, "failed": \2/p' "$L")"
+fi
 
 # ---- rt-abi: one signature per runtime function across runtime.py, runtime.c and the corpus
+if want rt-abi; then
 L=$V/rt-abi.log; s=$(now); r=fail
 $PY tools/rtabi.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step rt-abi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) functions of runtime.py, \([0-9]*\) uses in runtime.c and \([0-9]*\) programs, \([0-9]*\) mismatches$/, "functions": \1, "uses": \2, "programs": \3, "mismatches": \4/p' "$L")"
+fi
 
 # ---- inherited ASTs: declaration headers grow linearly; unused method bodies are shared
+if want inherited-ast; then
 L=$V/inherited-ast.log; s=$(now); r=fail
 $PY tools/inheritprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step inherited-ast $r "$s" "$L" ', "sizes": [80, 160, 320], "native_size": 800, "address_space_mib": 256'
+fi
 
 # ---- streaming: sum(), min() and max() of 10^8 items in 64 MiB, which their list would exceed
+if want streaming; then
 L=$V/streaming.log; s=$(now); r=fail
 $PY tools/streamprobe.py "$V/pystachy2" > "$L" 2>&1 && r=pass
 step streaming $r "$s" "$L" ', "items": 100000000, "address_space_mib": 64'
+fi
 
 # ---- ffi: C functions, extension modules (docs/ffi.md)
+if want ffi; then
 L=$V/ffi.log; s=$(now); r=fail
 PY=$PY tests/ffi/run.sh "$V/pystachy2" > "$L" 2>&1 && r=pass
 step ffi $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) passed, \([0-9]*\) failed.*$/, "passed": \1, "failed": \2/p' "$L")"
+fi
 
 # ---- list-storage: deterministic capacity and live-byte checks for reachable empty lists
+if want list-storage; then
 L=$V/list-storage.log; s=$(now); r=fail
 { "${LLVM}clang" -O2 -S -emit-llvm tools/listprobe.c -o "$V/listprobe.ll" &&
   "${LLVM}llvm-link" "$V/rt1.ll" "$V/listprobe.ll" -o "$V/listprobe.bc" &&
   "${LLVM}clang" -O2 "$V/listprobe.bc" -o "$V/listprobe" -lm &&
   "$V/listprobe" && PYSTACHY_GC_STRESS=1 "$V/listprobe" && r=pass; } > "$L" 2>&1
 step list-storage $r "$s" "$L" ', "lists": 64, "historical_slots_per_list": 65536, "live_byte_limit": 1048576'
+fi
 
 # ---- container-eq: bounded comparisons for small DAGs with exponentially many logical leaves
+if want container-eq; then
 L=$V/container-eq.log; s=$(now); r=fail
 { "${LLVM}clang" -O2 -S -emit-llvm tools/eqprobe.c -o "$V/eqprobe.ll" &&
   "${LLVM}llvm-link" "$V/rt1.ll" "$V/eqprobe.ll" -o "$V/eqprobe.bc" &&
   "${LLVM}clang" -O2 "$V/eqprobe.bc" -o "$V/eqprobe" -lm &&
   "$V/eqprobe" && PYSTACHY_GC_STRESS=1 "$V/eqprobe" && r=pass; } > "$L" 2>&1
 step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
+fi
 
 # ---- file-buffers: dropped files' buffers run collections; opens, closes and the exit balance the counts
+if want file-buffers; then
 L=$V/file-buffers.log; s=$(now); r=fail
 { "${LLVM}clang" -O2 -S -emit-llvm tools/fileprobe.c -o "$V/fileprobe.ll" &&
   "${LLVM}llvm-link" "$V/rt1.ll" "$V/fileprobe.ll" -o "$V/fileprobe.bc" &&
   "${LLVM}clang" -O2 "$V/fileprobe.bc" -o "$V/fileprobe" -lm &&
   "$V/fileprobe" && "$V/fileprobe" --lib && PYSTACHY_GC_STRESS=1 "$V/fileprobe" && r=pass; } > "$L" 2>&1
 step file-buffers $r "$s" "$L" ', "dropped_files": 128, "buffer_bytes": 136314880, "outstanding_limit": 41975808'
+fi
 
 # ---- dict-probes: table slots per dict lookup for colliding keys, sequential keys the control
+if want dict-probes; then
 L=$V/dict-probes.log; s=$(now); r=fail
 { "$V/pystachy2" rt runtime.py -o "$V/dictprobe-rt.ll" && "${LLVM}clang" -O2 -S -emit-llvm tools/dictprobe.c -o "$V/dictprobe.ll" &&
   "${LLVM}llvm-link" "$V/dictprobe-rt.ll" "$V/dictprobe.ll" -o "$V/dictprobe.bc" && "${LLVM}clang" -O2 "$V/dictprobe.bc" -o "$V/dictprobe" -lm &&
   "$V/dictprobe" && PYSTACHY_GC_STRESS=1 "$V/dictprobe" --hash-cache && r=pass; } > "$L" 2>&1
 step dict-probes $r "$s" "$L" "$(sed -n 's/^worst average: \([0-9.]*\) slots per lookup (limit \([0-9.]*\))$/, "worst_average_slots": \1, "limit": \2/p' "$L")"
+fi
 
 # ---- compile limits: small sources must receive bounded source diagnostics, not exhaust memory
+if want compile-limits; then
 L=$V/compile-limits.log; s=$(now); r=fail
 $PY tools/compilelimits.py -c "hosted=$PY pystachy.py" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step compile-limits $r "$s" "$L" ', "address_space_mib": 256, "cpu_seconds": 10, "modes": ["ir", "run", "build"]'
+fi
 
 # ---- JIT dead code: inspect the actual execution module, without a timing threshold
+if want jit-dead-code; then
 L=$V/jit-dead-code.log; s=$(now); r=fail
 $PY tools/jitprobe.py -c "hosted=$PY -m pystachy" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step jit-dead-code $r "$s" "$L" ', "unused_functions": 35, "compilers": ["CPython-hosted", "stage2"]'
+fi
 
 # ---- scaling: compile time grows linearly with generated programs (counts need Python 3.12+)
+if want scaling; then
 L=$V/scaling.log; s=$(now); r=fail
 $PY tools/scaling.py --check --ops -n 500,1000 -r 1 -c "hosted=$PY pystachy.py" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step scaling $r "$s" "$L" ', "sizes": [500, 1000]'
+fi
 
 # ---- report
+complete=true
+[ "$nsteps" = "$expected" ] || { complete=false; echo "verify: $nsteps steps ran, expected $expected for $GROUP" >&2; }
 ver() { "$@" 2>&1 | head -1; }
 {
-  printf '{\n  "project": "Pystachy",\n  "result": "%s",\n' "$([ $nfail = 0 ] && echo pass || echo fail)"
+  printf '{\n  "project": "Pystachy",\n  "result": "%s",\n' "$([ $nfail = 0 ] && [ "$complete" = true ] && echo pass || echo fail)"
+  printf '  "group": %s,\n' "$(js "$GROUP")"
   printf '  "summary": {"steps": %s, "passed": %s, "failed": %s, "seconds": %s},\n' $nsteps $((nsteps - nfail)) $nfail "$(secs "$start" "$(now)")"
   printf '  "timestamp_utc": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if c=$(git rev-parse HEAD 2>/dev/null); then d=$([ -z "$(git status --porcelain)" ] && echo false || echo true); else c=unknown; d=null; fi
@@ -395,4 +473,4 @@ ver() { "$@" 2>&1 | head -1; }
   printf '  "steps": [\n'; cat "$V/steps.json"; printf '\n  ]\n}\n'
 } > "$OUT"
 echo "verification: $((nsteps - nfail))/$nsteps steps passed -> ${OUT#"$ROOT"/}"
-[ $nfail = 0 ]
+[ $nfail = 0 ] && [ "$complete" = true ]
