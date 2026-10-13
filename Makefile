@@ -123,6 +123,13 @@ check-ir: pystachy
 check-runtime:
 	$(PY) tools/check_runtime.py
 
+# lib/re, run by CPython, must compile random patterns to CPython's code and errors and match, split
+# and substitute as CPython's re, also on Pystachy's UTF-8 strs, and so must test_re's largest cases
+# (tools/re_fuzz.py; deterministic: N=2000 patterns, SEED=1, e.g. make re-fuzz RE_FUZZ="20000 7")
+RE_FUZZ ?=
+re-fuzz:
+	$(PY) tools/re_fuzz.py $(RE_FUZZ)
+
 # ruff (findings only, ruff.toml), shellcheck of the scripts as POSIX sh, and clang's warnings on the C
 # sources; pip install -r tools/requirements-dev.txt gives the versions CI uses
 lint:
@@ -133,4 +140,4 @@ lint:
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime lint clean
+.PHONY: test test-py test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime re-fuzz lint clean
