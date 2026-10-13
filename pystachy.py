@@ -5107,11 +5107,8 @@ class Loader:
             while root.kind == "attr":
                 root = root.kids[0]
             chks: list[str] = []
-            if root.kind == "name" and root.s not in loc:
-                inf = root.s in self.fk
-                key = f"{m.name} {self.fkey if inf else ''} {root.s}"
-                if key in self.fragile:
-                    chks.append(f"{self.fragile[key]} {root.s} {'L' if inf else 'G'}")
+            if root.kind == "name" and self.fragile_chk(m, root.s, loc) != "":
+                chks.append(self.fragile_chk(m, root.s, loc))
             self.subchk = []
             mod = self.qmod(m, n, loc)
             chks.extend(self.subchk)
@@ -5207,11 +5204,22 @@ class Loader:
             if n.chk and n.kind == "badattr" and " has no attribute " in n.s:
                 fail(n.s, n.line)  # (an evaluated annotation: see Loader.reads)
 
+    def fragile_chk(self, m: Mod, x: str, loc: dict[str, bool]) -> str:
+        # the check (Node.mchk) of a read of name x in m, where an import in a try statement binds
+        # it: its flag, x and whether it is a function's (L) or module code's (G); "" elsewhere
+        if x in loc:
+            return ""
+        inf = x in self.fk
+        key = f"{m.name} {self.fkey if inf else ''} {x}"
+        return f"{self.fragile[key]} {x} {'L' if inf else 'G'}" if key in self.fragile else ""
+
     def qdeco(self, m: Mod, d: Node, loc: dict[str, bool], fn: bool = False) -> None:
         # a decorator: the first name of its dotted name (unless it surely names a builtin
         # there: deftime), and the arguments of a call. A def's (fn), which CPython calls on the
         # function (Gen.decorate), names what it is: an imported function or class (not as written),
-        # and an attribute of a module as its qualified name; a call's function is qualified too
+        # and an attribute of a module as its qualified name; a call's function is qualified too.
+        # A dotted name's first name that an import in a try statement binds is checked as a read
+        # of it is (Node.mchk, which Gen.decorate tests where CPython evaluates the decorator)
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
         alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
         if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
@@ -5220,7 +5228,13 @@ class Loader:
                 e = mk("attr", part, d.line, [e])
             self.qexpr(m, e, loc)
             d.s = e.s if e.kind == "name" else d.s
+            r = e
+            while r.kind == "attr":
+                r = r.kids[0]
+            d.mchk = r.mchk if len(d.kids) == 0 else ""
         else:
+            if fn and len(d.kids) == 0 and d.line not in self.bdecos:
+                d.mchk = self.fragile_chk(m, root, loc)
             d.s = (root if d.line in self.bdecos else m.q + root if alias else self.qname(m, root, loc)) + d.s[len(root) :]
         for c in d.kids:
             if fn:
@@ -9801,6 +9815,7 @@ class Gen:
         decos = [x for x in n.kids[3:] if x.s != "async"]  # (from the bottom up, as the parser adds them)
         for i in range(len(decos) - 1, -1, -1):
             self.line = decos[i].line
+            self.modchk(decos[i])  # (a name that an import in a try statement binds: Loader.qdeco)
             e = self.deco_callee(decos[i], self.curfn.mod)
             callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
         v = self.closure(n)
