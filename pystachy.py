@@ -14495,7 +14495,8 @@ class Gen:
         # c(args), c an exception class: an object made as BaseException.__new__ makes it (its
         # ExcClass, and the args kept as str(e) and repr(e) show them, see exc_keep), with the
         # class-body defaults, then given to the __init__ of c or of the nearest base that has
-        # one; without one, the class takes any positional arguments
+        # one; without one, the class takes any positional arguments. All the arguments are
+        # evaluated first, in order, as CPython evaluates them before it makes the object
         ci = self.classes[c]
         if ci.bad != "":
             self.err(ci.bad)
@@ -14509,7 +14510,9 @@ class Gen:
                 self.exc_kw(ci.exc, [a], f"{short(c)}()")
                 self.expr(a.kids[0], "")
             elif a.kind == "kw":
-                kws.append(a)
+                # (its value is __init__'s, see vnode: E(xs, k=f(xs)) keeps xs as f left it, and a
+                # k=f() that raises leaves no object made; a constant is evaluated where it goes)
+                kws.append(a if pure_arg(a.kids[0]) else mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], self.kw_type(init, a.s)))]))
             else:
                 j = len(vals) + 1
                 vals.append(self.expr(a, init.ptypes[j] if init is not None and j < init.npos else ""))
@@ -14535,6 +14538,15 @@ class Gen:
         if init is not None:
             self.call_fn(init, [o] + vals, kws)
         return o
+
+    def kw_type(self, f: FnInfo, name: str) -> str:
+        # the type call_fn evaluates keyword argument name of a call of f with: its parameter's, or
+        # that of the values f's **kwargs takes where the name goes there ("" where it fits no
+        # parameter, which arity reports)
+        j = f.params.index(name) if name in f.params else -1
+        if f.kwarg >= 0 and (j < 0 or j < f.posonly or j == f.kwarg or j == f.vararg):
+            return f.kwelem
+        return f.ptypes[j] if j >= 0 else ""
 
     def exc_keep(self, o: Val, vals: list[Val], coded: bool = True) -> None:
         # what exception object o keeps of its args vals (BaseException.__new__, and its __init__
