@@ -1,0 +1,38 @@
+19 147 45 22
+1.0 4.5 2.0
+119 19.5 6.0 1.25
+3 4.5 31 19
+0 2.0 7
+inf nan nan
+9007199254740994.0 1.0
+9 -5 4 1 6
+2.5 0.2 pear APPLE
+True False 5 1
+nan 2.0 1.0
+(3, 'kiwi') (-1, 'fig') (9, -9)
+9 fig
+apple -1
+10 ['a', 'f', 'a', 'i']
+ValueError: max() iterable argument is empty
+ValueError: min() iterable argument is empty
+iterable made
+start evaluated
+item 1
+item 2
+item 3
+16
+iterable made
+item 2
+item 7
+item 1
+iterable made
+item 5
+item 4
+7 4
+item 6
+item 12
+ZeroDivisionError: integer division or modulo by zero
+item 6
+item 12
+ZeroDivisionError: integer division or modulo by zero
+[exit 0]

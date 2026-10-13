@@ -72,8 +72,8 @@ use, loops with `else`, the `lib/` modules (`tests/lib_*.py`, and for `re` CPyth
 streams, exceptions and exit statuses, runtime errors (also CPython's wording of the type and argument errors Pystachy reports
 when it compiles), garbage-collector churn, classic
 algorithms, a small interpreter, and 16 programs from Ouro v2. Where `tests/NAME.full`
-exists, the program's stdout is `/dev/full`. Current result: **2,454 passed, 0 failed** (at
-1eb23de: 698 programs and 23 deviations in each mode, 870 rejections and the `pystachy check`
+exists, the program's stdout is `/dev/full`. Current result: **2,635 passed, 0 failed** (at
+b55d4c9: 733 programs and 24 deviations in each mode, 979 rejections and the `pystachy check`
 cases), with both the CPython-hosted and the self-compiled compiler; `make verify` counts them
 from the files and reports them in `build/verification.json`.
 
@@ -198,6 +198,10 @@ versions, platform, git commit and a timestamp:
   Both counts must stay linear; native ir/run/build also succeed at N = 800 under 256 MiB.
   Each inherited method keeps its declaration metadata but shares an immutable body until
   it is needed, when its own class binding and definite-assignment checks are applied;
+- **streaming** — `tools/streamprobe.py` builds a program that takes `sum()` (of ints, of floats,
+  with a start), `max()` and `min()` of 100,000,000 items of `range()` and generator expressions,
+  and runs it under 64 MiB, where a list of the items alone would take 800 MB: these take the
+  items as they come (#88). Its output is checked against closed forms, without RSS or timing thresholds;
 - **list-storage** — `tools/listprobe.c` retains 64 cleared lists that each held 65,536 slots,
   checks that their backing capacity is released and collected live bytes stay below 1 MiB,
   and checks empty copying, reuse and sort mutation markers, normally and with collection

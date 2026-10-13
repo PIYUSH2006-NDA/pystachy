@@ -64,8 +64,10 @@ typedef struct Exc Exc;                                /* a raised exception (se
    this word a pointer into the heap, and into which object" is a range check, two loads and
    a multiply by the reciprocal of the slot size: O(1), interior pointers included.
    Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and arrays, dict
-   key and value arrays); pys_alloc_atomic returns memory that is never scanned (strings, Buf
-   data, dict index arrays, sort buffers). Each (class, kind) has a free list. Memory is
+   value arrays, the key arrays of dicts and sets of strs and tuples); pys_alloc_atomic returns
+   memory that is never scanned (strings, Buf data, dict hash and index arrays, set hash arrays,
+   the key arrays of dicts and sets of ints, the merge buffers of sorts of ints and floats),
+   since none of it can hold a pointer. Each (class, kind) has a free list. Memory is
    handed out zeroed: the sweep zeroes dead slots, so allocation pops a slot and clears its
    link word (inlined into callers for the classes up to 136 bytes). A chunk's never-used
    slots are linked about a page at a time, so memory the program has not needed stays
@@ -330,6 +332,14 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
+/* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
+   own frame (Gen.stack_tuple), which the function called copies before it keeps it
+   (Gen.keep_stack). Not inlined: the frames of its callers, where such a tuple lives, are then all
+   above this one's. */
+__attribute__((noinline)) I pys_on_stack(void *x) {
+  uintptr_t p = (uintptr_t)x;
+  return p >= (uintptr_t)__builtin_frame_address(0) && p < (uintptr_t)gc_bottom;
+}
 static void gc_extern(I n) {           /* n malloc'd bytes more that heap objects hold (fewer: n < 0), counted as the
                                           heap's own; whoever allocates them collects first, as gc_slow would */
   if (n > 0) gc_allocd += n;
@@ -1314,7 +1324,10 @@ static I gallop(MS *ms, I key, I *a, I n, I hint, int right) {
 #undef PRE
 }
 static I *getmem(MS *ms, I need) {                  /* merge_getmem, growing geometrically */
-  if (need > ms->nt) { ms->nt = need > 2 * ms->nt ? need : 2 * ms->nt; ms->t = pys_alloc(ms->nt * 8); }
+  if (need > ms->nt) {                               /* (ints and floats: nothing in it to scan) */
+    ms->nt = need > 2 * ms->nt ? need : 2 * ms->nt;
+    ms->t = ms->kind == INT || ms->kind == FLOAT ? pys_alloc_atomic(ms->nt * 8) : pys_alloc(ms->nt * 8);
+  }
   return ms->t;
 }
 /* The merges, written once (MERGES) and compiled twice: merge_lo and merge_hi, where NOTE notes
@@ -1636,6 +1649,9 @@ static int keq(I a, I b, const char *d) {            /* tuple keys of descriptor
   return 1;
 }
 static I keysize(I n) { I s = 8; while (s < n) s *= 2; return s; }   /* calculate_log2_keysize */
+static I *keymem(I kind, I n) {      /* the key array of a dict or set of this kind: an int key holds no pointer */
+  return kind ? pys_alloc(n * 8) : pys_alloc_atomic(n * 8);
+}
 static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *free: where to insert k */
   I f = -1;
   if (!d->size) return -1;
@@ -1649,7 +1665,7 @@ static I dfind(Dict *d, I k, uint64_t h, I *free) {    /* k's idx slot or -1; *f
   }
 }
 static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a table of this size, holes dropped */
-  I u = size * 2 / 3, *k = pys_alloc(u * 8), *v = pys_alloc(u * 8), n = 0, m = size * 2 - 1;
+  I u = size * 2 / 3, *k = keymem(d->kind, u), *v = pys_alloc(u * 8), n = 0, m = size * 2 - 1;
   uint64_t *hs = pys_alloc_atomic(u * 8); int32_t *ix = pys_alloc_atomic(size * 8);
   for (I e = 0; e < src->n; e++) {
     uint64_t h = src->hs[e], i = h & m, p = h;
@@ -1742,7 +1758,7 @@ List *pys_dict_items(Dict *d) {
    third of holes, and otherwise merges the same way */
 static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
   I u = d->size * 2 / 3;
-  r->keys = pys_alloc(u * 8); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
+  r->keys = keymem(r->kind, u); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
 }
@@ -1828,7 +1844,12 @@ static int skeq(Set *s, I a, I b) {
   return a == b || (s->kind == 1 ? pys_str_eq((Str *)a, (Str *)b) : s->kind > 1 && eqv(a, b, ((Str *)s->kind)->s));
 }
 static void stable(Set *s, I size) {                 /* an empty table of size slots */
-  s->keys = pys_alloc(size * 8); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
+  /* the 8 slots of a new or cleared set are scanned whatever its kind: the compiler gives an empty
+     set from a template the kind of the type its caller expects (typed_empty) only after it is
+     made. A larger table comes from insertions, of the set's own kind by then (a dict's tables
+     come at its first insertion, so a dict needs no such care) */
+  s->keys = size > 8 ? keymem(s->kind, size) : pys_alloc(size * 8);
+  s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
   s->mask = size - 1; s->fill = 0;
 }
 Set *pys_set_new(I kind) { Set *s = pys_alloc(sizeof(Set)); s->kind = kind; stable(s, 8); return s; }
@@ -2520,12 +2541,18 @@ static Str *read1(File *f, I n) {      /* n < 0: to the end; else n characters (
     if (!f->nl) b.n = j;
     return decode(f, &b);
   }
+  /* n characters: their bytes gather in t, and go to b only when t is full, as readline's do (a
+     put() per byte took most of the time); a read that fits in t becomes its str without b */
+  char t[4096]; I m = 0;
   for (I k = 0;;) {
     int c = get(f);
     if (c == EOF) break;
     if ((f->lat || (c & 0xC0) != 0x80) && k++ == n) { unget(f, c); break; }   /* the next character starts */
-    char ch = getnl(f, c); put(&b, &ch, 1);
+    t[m++] = (char)getnl(f, c);
+    if (m == (I)sizeof t) { put(&b, t, m); m = 0; }
   }
+  if (b.n) put(&b, t, m);
+  else b = (Buf){t, m, m};
   return decode(f, &b);
 }
 Str *pys_file_read(File *f, I n) {
