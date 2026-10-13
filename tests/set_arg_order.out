@@ -107,4 +107,10 @@ issuperset map False
 isdisjoint filter False
 function u
 union map [1, 2, 3, 7]
+ValueError: boom
+ValueError: boom
+ValueError: range() arg 3 must not be zero
+ValueError: boom
+ranges [0, 1, 2, 3, 4, 5, 9]
+ranges discarded [2, 3, 9]
 [exit 0]

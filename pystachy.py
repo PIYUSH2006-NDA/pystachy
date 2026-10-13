@@ -19554,16 +19554,16 @@ class Gen:
     def sargs(self, o: Val, m: str, args: list[Node]) -> list[SetArg]:
         # the arguments of set o's method m (update(), union(), ...), evaluated in order before it
         # takes the items of any (stake). With several (or for union() and difference(), which copy
-        # o first), a generator expression (or map(), filter(), zip(), enumerate(), reversed())
-        # makes its iterator now, where its outermost iterable is evaluated (and range() checks its
-        # step, and __iter__ runs), and runs at its turn; any other iterable is evaluated now, and
-        # its __iter__ runs at its turn
+        # o first), a generator expression (or map(), filter(), range(), zip(), enumerate(),
+        # reversed()) makes its iterator now, where its outermost iterable is evaluated (and range()
+        # checks its step, and __iter__ runs), and runs at its turn (a range's items are never all
+        # made at once); any other iterable is evaluated now, and its __iter__ runs at its turn
         et = selem(o.t)
         split = len(args) > 1 or m == "union" or m == "difference"
         out: list[SetArg] = []
         for a in args:
             g = self.mapgen(a) if self.is_mapcall(a) else a
-            if len(args) > 1 and self.iterator_call(g) and g.kids[0].s != "range":
+            if len(args) > 1 and self.iterator_call(g):
                 item = mk("name", "__item", g.line, [])
                 g = mk("listcomp", "gen", g.line, [item, item, g])
             if g.kind != "listcomp" or g.s != "gen":

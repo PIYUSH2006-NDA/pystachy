@@ -238,3 +238,32 @@ print("issubset map", s.issubset(map(make_fn("sub"), [-1, -2, -3])))
 print("issuperset map", s.issuperset(map(loud, [1, 9, 2])))
 print("isdisjoint filter", s.isdisjoint(filter(None, [0, 7, 3, 8])))
 print("union map", sorted(s.union(map(make_fn("u"), [-7]))))
+
+# a range among several arguments is made with them, not iterated: the argument after a huge one
+# raises before any of its items is made
+def boom() -> list[int]:
+    raise ValueError("boom")
+
+
+s = {1}
+try:
+    s.update(range(10**15), boom())
+except ValueError as e:
+    print("ValueError:", e)
+try:
+    print(sorted(s.union(range(10**15), boom())))
+except ValueError as e:
+    print("ValueError:", e)
+try:
+    s.update(range(1, 2, 0), boom())
+except ValueError as e:
+    print("ValueError:", e)
+w = set()
+try:
+    w.update(range(10**15), boom())
+except ValueError as e:
+    print("ValueError:", e)
+s.update(range(3), [9], range(5, 2, -1))
+print("ranges", sorted(s))
+s.difference_update(range(2), range(4, 6))
+print("ranges discarded", sorted(s))
