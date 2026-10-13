@@ -25,10 +25,10 @@
 #include <unwind.h>
 
 /* A float's shortest round-trip digits: Ryu's d2s (ryu/, upstream commit 4c0618b; ryu/README.md),
-   with its small tables. An update of ryu/ names its commit here too, as the driver rebuilds its
-   cached runtime when runtime.c changes. Its functions are made static, so that no symbol of it
-   leaves the runtime (d2s and d2s_buffered, unused, are dropped), and its asserts are off, as in a
-   release build (assert() is then as it was, for the code that follows) */
+   with its small tables. The driver's cached runtime is built from its files too, which RTPARTS
+   (pystachy.py) lists. Its functions are made static, so that no symbol of it leaves the runtime
+   (d2s and d2s_buffered, unused, are dropped), and its asserts are off, as in a release build
+   (assert() is then as it was, for the code that follows) */
 #define RYU_OPTIMIZE_SIZE
 static int d2s_buffered_n(double f, char *result);
 __attribute__((unused)) static void d2s_buffered(double f, char *result);

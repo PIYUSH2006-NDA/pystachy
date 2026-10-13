@@ -6,7 +6,10 @@ it, as CPython's `dtoa` (mode 0) gives them. runtime.c's `pys_str_float` gets th
 [Ryu](https://github.com/ulfjack/ryu)'s `d2s_buffered_n()`, which this directory holds, and lays
 them out as CPython does (where the point goes, when an exponent is written). runtime.c includes
 `d2s.c`, so it is compiled wherever runtime.c is: the runtime of `pystachy run` and
-`pystachy build`, the extension modules of `pystachy ext`, and the probes in `tools/`.
+`pystachy build`, the extension modules of `pystachy ext`, and the probes in `tools/`. The
+driver's cached runtime is built from these files' bytes as from runtime.c's, and keyed by them
+(`RTPARTS` in pystachy.py lists them; [docs/runtime-in-subset.md](../docs/runtime-in-subset.md)
+§1.4).
 
 | file | lines | from upstream |
 |---|---:|---|
@@ -47,6 +50,7 @@ lists them too.
 
 Copy the six files from upstream's `ryu/` directory at the new commit, make their includes relative
 (`sed -i 's|^#include "ryu/\([a-z0-9_]*\.h\)"|#include "\1"|' ryu/*.c ryu/*.h`), and name the
-commit here, in THIRD_PARTY_NOTICES and in the comment above runtime.c's `#include "ryu/d2s.c"`:
-the driver rebuilds its cached runtime when runtime.c is newer than the cache, and does not look
-at the files here. `tests/float_repr.py` checks the digits against CPython's.
+commit here, in THIRD_PARTY_NOTICES and in the comment above runtime.c's `#include "ryu/d2s.c"`.
+A file that the new `d2s.c` includes and these do not has to join them in `RTPARTS`, or the
+driver's build of the runtime will not find it. `tests/float_repr.py` checks the digits against
+CPython's.

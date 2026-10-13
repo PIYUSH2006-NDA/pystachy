@@ -392,8 +392,9 @@ reads, an in-place string builder, `memchr`, `memcmp` and `memmem`, wrapping and
 arithmetic), each a few checked LLVM instructions. The driver links it to runtime.c's bitcode
 and optimizes the two as one module (`build/runtime-py-<L>-<K>.bc` and its `.o`) when it
 builds the cached runtime. The name is a hash of all the runtime is built from: the bytes of
-`runtime.c`, `runtime.py` and the running compiler, the flags and the LLVM tools' files, so an
-edit of any of them, also one made while the runtime is built, makes a run build it again
+`runtime.c`, of the files it includes from `ryu/`, of `runtime.py` and of the running compiler,
+the flags and the LLVM tools' files, so an edit of any of them, also one made while the runtime
+is built, makes a run build it again
 ([runtime-in-subset.md](runtime-in-subset.md) §1.4; `tests/cache.sh` tests the rules).
 Programs' IR does not change (but for an `invoke` inside a `try` where a moved function can
 raise). A raise in a `runtime.py` function unwinds to
