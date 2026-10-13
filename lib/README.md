@@ -138,6 +138,112 @@ argument, 26 ns for a `str` one and 36 ns for a `(str, int)` pair, whose key tup
 hashed for each call; CPython's C wrapper takes 60 to 61, 61 and 84 ns, a loop's step included
 (medians of 3 runs over 1,000 warm keys). A miss that evicts takes 68 ns, against 104 ns.
 
+## `statistics`, a port of CPython's
+
+`statistics.py` is CPython 3.13.16's `Lib/statistics.py` (SHA-256
+`80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18`) edited in 19 places, each
+marked `# Pystachy port:`. It has `fmean()`, with and without `weights`, `median()`,
+`median_low()`, `median_high()`, `median_grouped()`, `quantiles()`, `geometric_mean()`, `mode()`,
+`multimode()` and `StatisticsError` (a `ValueError`), as CPython's code computes them, with its
+results bit for bit and its exceptions and their messages: of lists, tuples, sets, dicts, strs and
+objects with `__iter__` (with `__len__` or not), of floats, and of ints and bools where the result
+has one type (below); of strs and tuples too for `median_low()` and `median_high()`, and of ints,
+strs and tuples of them for `mode()` and `multimode()`. The weights of `fmean()` go through
+`math.sumprod()`, which Pystachy's `math` does not have: `_sumprod()` ports its C code. The other
+functions stay in the file, uncompiled, as CPython wrote them: a program that uses one is an error
+where it does (below).
+
+The edits, which replace 54 of the file's 1,817 lines with 185 (79 of them `_sumprod()`, 54 of
+those code), and need no change to the compiler or the runtime:
+
+- The imports of `numbers`, `random`, `fractions`, `decimal`, `itertools`, `functools.reduce` and
+  `collections` are optional (`try:` ... `except ImportError: pass`), as Pystachy has none of them
+  (its `functools` has no `reduce`) and only functions that it leaves uncompiled use them;
+  `_random = random` moves into the `try` of `random`. `_decimal_sqrt_of_frac()`'s return
+  annotation is quoted, `'Decimal'`: CPython 3.13 evaluates it where the `def` runs.
+- `sumprod` is imported from `math` where `math` has it (CPython), in an optional import after
+  `_sumprod()`, which is the module's `sumprod` where it does not. `_sumprod()` is
+  `math_sumprod_impl()` of CPython 3.13.16's `Modules/mathmodule.c` for the subset's sequences of
+  ints, bools and floats, the C code's operations in its order: the products of ints and bools are
+  added as ints, and those of floats, or of floats and ints or bools, in triple length with
+  `math.fma()` (`tl_fma()`, `dl_mul()` and `dl_sum()`, written out in its loop: as functions that
+  return tuples, they made a weighted `fmean()` three times as slow), until a product or a sum is
+  not finite, then as floats. It returns `float(math.sumprod(p, q))`, the float that `fmean()`
+  divides.
+- `fmean()` counts the items of an iterable without `__len__` (an object with `__iter__` alone,
+  whose `len()` raises `TypeError`, as `hasattr()` tells) in a list of them, where CPython counts
+  them with a generator, `count()`, that it gives `fsum()`: the subset has no generators. It passes
+  weights that are no list or tuple to a call of itself as a list of them, where CPython makes
+  `weights` that list: a variable has one type.
+- `geometric_mean()`'s generator `count_positive()` is a loop that keeps what it would give in a
+  list, which `fsum(map(log, ...))` takes.
+- `median()`, `median_low()`, `median_high()`, `median_grouped()` and `quantiles()` call
+  themselves with `list(data)` where `data` is no list, as `data = sorted(data)` makes it a list.
+  `median_grouped()` converts `interval` and the middle value to floats in variables of their own,
+  `interval_f` and `x_f`, as they may be ints.
+- `mode()` and `multimode()` count the items in a dict, as `Counter(iter(data))` does
+  (`_count_elements()`): `mode()` takes the pair of `most_common(1)` with `max()` of the dict's
+  items by count, as `heapq.nlargest(1, ...)` does, the first of the highest count, and
+  `multimode()` returns `list(counts)` for no data, the `[]` of the dict's keys' type.
+- `LinearRegression` (a `collections.namedtuple`) and `kde_random()`'s table of kernels are made in
+  the `try` of an optional import of `collections` and of `random`, which Pystachy does not have:
+  the table, a dict of different functions, the first of them a method of a `NormalDist`, would not
+  compile.
+
+Where it differs from CPython (`tests/deviations/lib_statistics.py`):
+
+- Pystachy's ints are 64-bit: `fmean()` with weights adds the products of ints as ints, as
+  `math.sumprod()` does, and raises `OverflowError` where their sum leaves 64 bits (CPython goes on
+  with longer ints). Without weights, `fsum()` adds them as floats, as in CPython.
+- The module's `sumprod`, `math.sumprod` in CPython, is `_sumprod()`, which returns a float:
+  `sumprod([1, 2], [3, 4])` is `11.0`, and of no items `0.0`, where CPython's are ints.
+- The items of a str (for `mode()`, `multimode()`, `median_low()` and `median_high()`) are its
+  bytes past ASCII, as iterating it gives them.
+
+What it does not have, each a compile-time error (`tests/errors/lib_statistics_*.py`):
+
+- `median()` and `quantiles()` of ints or bools: CPython's `median()` of an odd number of ints is
+  the middle int, of an even number a float, and its `quantiles()` of one data point are ints, of
+  more floats, where a function has one return type (`median_low()` and `median_high()` return an
+  item, and `median([float(x) for x in xs])` a float). So is `median()` of strs: CPython returns
+  the middle one of an odd number of them, and raises `TypeError` for an even number, whose two
+  middle ones it divides.
+- `mode()` and `multimode()` of floats: a dict of Pystachy has no float keys.
+- `mean()`, `harmonic_mean()`, `variance()`, `pvariance()`, `stdev()` and `pstdev()`: they add
+  exactly, as `fractions.Fraction`s keyed by denominator, keep the data's classes in a set, convert
+  to `Decimal` and take square roots of fractions of long ints; Pystachy has no `Fraction`,
+  `Decimal` or long int, and `fsum()` and a division round twice where they round once.
+  `harmonic_mean()` also asks whether `iter(data) is data`.
+- `covariance()` and `linear_regression()` (generator expressions given to `sumprod()`, and a
+  `collections.namedtuple`), and `correlation()` (`itertools`' `count()` and `groupby()`).
+- `kde()` (a `match` statement), `kde_random()` (`random.Random`) and `NormalDist` (properties,
+  reflected operators, a `__slots__` dict; `random` for `samples()`).
+
+`tests/lib_statistics.py` compares it with CPython's on the cases of CPython's
+`Lib/test/test_statistics.py` and of the docstrings for these functions that the subset types
+(floats in place of the ints they give `median()` and `quantiles()`, no `Fraction`, `Decimal` or
+iterator), on lists, tuples, sets, dicts, strs and objects with `__iter__` (and `__len__`, whose
+calls it prints), empty data, NaNs, infinities and signed zeros, the errors and their messages, 240
+weighted means of generated data with infinities, NaNs, overflows and cancellations, and the
+medians and quantiles of generated data of every length from 1 to 40. Run by CPython, the edited
+module passes CPython 3.13.16's `Lib/test/test_statistics.py`: all its 401 tests (372 test
+methods of 43 classes, the 24 doctests of the module's docstrings and 5 of the test's helpers), as
+the unmodified module does, also with its `sumprod` replaced by `_sumprod()`, which `fmean()`,
+`covariance()`, `correlation()` and `linear_regression()` then use. Compiled, `_sumprod()` gives
+what CPython's C `math.sumprod()` gives, repr for repr, for 1,464,607 generated pairs of sequences
+of floats, and of floats and ints or bools, with infinities, NaNs, subnormals, overflows and
+cancellations (and `0.0` for 36,016 empty ones, where C gives `0`).
+
+In an AOT executable, on 100,000 items from a linear congruential generator, `fmean()` takes
+297 µs (CPython: 352 µs), and with weights 717 µs for floats (896), 952 µs for int weights (1,308)
+and 570 µs for ints (1,374): `_sumprod()`'s loop reads unboxed items, where C's `math.sumprod()`
+reads each item's object. `median()`, `median_low()` and `quantiles(n=100)` of floats take 8.3 to
+8.9 ms (12.9 to 13.1 ms), most of it the sort, `median_high()` and `median_grouped()` of ints 6.3
+and 6.5 ms (10.6), `geometric_mean()` 2.4 ms (6.4: a `log()` per item, which CPython calls through
+`map()`), and `mode()` and `multimode()` of ints 1.0 ms (3.1). (Medians of 3 runs, each the median
+of 5 rounds of 10 to 50 calls.) [`examples/latency`](../examples/latency/README.md) reports the
+latencies of each endpoint of an access log with it.
+
 These modules behave as their pure-Python code, which CPython replaces with C accelerators that
 differ at the edges: errors can be worded differently (`heappop([])` raises `IndexError: pop
 from empty list` here, `index out of range` from CPython's `_heapq`), keyword arguments the C

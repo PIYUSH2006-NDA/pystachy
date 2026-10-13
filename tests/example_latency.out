@@ -1,0 +1,24 @@
+2026-10-13T08:00:00.010 GET /static/app.js 200 1.3 228490
+2026-10-13T08:00:16.314 GET /api/orders 200 18.2 8392
+3000 requests to 7 endpoints (0 lines skipped); latencies in ms
+endpoint               requests     mean by bytes   median      low     high  grouped      p90      p99    gmean  status    5xx
+GET /api/search             368   111.81   111.73    81.85     81.8     81.9    82.00    220.1    571.1    83.19     200   0.0%
+POST /api/login             163   165.49   162.70   144.80    144.8    144.8   145.00    214.2   1378.8   145.99     200   0.0%
+GET /api/orders             585    34.16    34.14    28.50     28.5     28.5    28.44     52.0    125.3    28.88     200   0.2%
+POST /api/orders            173    81.21    82.98    66.20     66.2     66.2    66.38    115.6    630.0    68.96     200   0.0%
+GET /api/users              895    13.65    13.54    12.00     12.0     12.0    12.08     18.5     36.3    12.09     200   0.1%
+GET /static/app.js          710     2.01     2.01     1.80      1.8      1.8     1.94      2.5      3.6     1.85     200   0.0%
+GET /healthz                106     0.67     0.69     0.60      0.6      0.6     0.78      0.8      5.6     0.62     200   0.0%
+all                        3000    38.63     7.94    14.40     14.4     14.4    14.39    102.3    296.9    13.27     200   0.1%
+2026-10-13T08:00:00.000 2026-10-13T08:59:59.999 2026-10-13T23:59:59.999
+8 requests to 4 endpoints (4 lines skipped); latencies in ms
+endpoint               requests     mean by bytes   median      low     high  grouped      p90      p99    gmean  status    5xx
+GET /a                        3     6.75     6.70     7.25      7.2      7.2     7.00     15.7     17.5     3.57     200  33.3%
+GET /empty                    2     3.00     3.00     3.00      2.5      3.5     3.50      4.2      4.5     2.96     204   0.0%
+GET /one                      1     3.00     3.00     3.00      3.0      3.0     3.00      3.0      3.0     3.00     201   0.0%
+POST /slow                    2                                                                                     504 100.0%
+all                           8     4.88     6.70     3.25      3.0      3.5     3.50     14.1     17.4     3.26     200  37.5%
+1 requests to 1 endpoints (0 lines skipped); latencies in ms
+endpoint               requests     mean by bytes   median      low     high  grouped      p90      p99    gmean  status    5xx
+GET /a                        1    12.50    12.50    12.50     12.5     12.5    12.00     12.5     12.5    12.50     200   0.0%
+[exit 0]

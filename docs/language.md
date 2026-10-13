@@ -560,7 +560,11 @@ deviations [`lib/README.md`](../lib/README.md#re-a-port-of-cpythons) lists. Its 
 Pystachy's own, with `cache()` and `lru_cache()` ([`lib/README.md`](../lib/README.md#functools-pystachys-own)):
 a function they decorate keeps its results in a cache of its own types, which its annotated
 parameters and return give (the wrapper is a generic class, *Typing rules*), and the cache
-counts, evicts and reports `cache_info()` as CPython's C wrapper does.
+counts, evicts and reports `cache_info()` as CPython's C wrapper does. Its `statistics` is CPython's,
+edited in 19 marked places: `fmean()` (its weights through a port of `math.sumprod()`'s C code), the
+medians, `quantiles()`, `geometric_mean()`, `mode()` and `multimode()`, with what needs `Fraction`,
+`Decimal` or `random` (`mean()`, the variances, `NormalDist`, ...) left uncompiled
+([`lib/README.md`](../lib/README.md#statistics-a-port-of-cpythons)).
 
 ## Expressions
 

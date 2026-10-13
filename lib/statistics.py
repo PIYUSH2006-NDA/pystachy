@@ -130,22 +130,46 @@ __all__ = [
 ]
 
 import math
-import numbers
-import random
+# Pystachy port: the imports of what Pystachy does not have are optional (numbers, random,
+# fractions, decimal, itertools, functools' reduce, collections), as only functions that it leaves
+# uncompiled use them; _random = random is in the try of random, and sumprod is imported below
+try:
+    import numbers
+except ImportError:
+    pass
+try:
+    import random
+    _random = random
+except ImportError:
+    pass
 import sys
 
-from fractions import Fraction
-from decimal import Decimal
-from itertools import count, groupby, repeat
+try:
+    from fractions import Fraction
+except ImportError:
+    pass
+try:
+    from decimal import Decimal
+except ImportError:
+    pass
+try:
+    from itertools import count, groupby, repeat
+except ImportError:
+    pass
 from bisect import bisect_left, bisect_right
-from math import hypot, sqrt, fabs, exp, erf, tau, log, fsum, sumprod
+from math import hypot, sqrt, fabs, exp, erf, tau, log, fsum  # Pystachy port: sumprod below
 from math import isfinite, isinf, pi, cos, sin, tan, cosh, asin, atan, acos
-from functools import reduce
+try:
+    from functools import reduce
+except ImportError:
+    pass
 from operator import itemgetter
-from collections import Counter, namedtuple, defaultdict
+try:
+    from collections import Counter, namedtuple, defaultdict
+except ImportError:
+    pass
 
 _SQRT2 = sqrt(2.0)
-_random = random
 
 # === Exceptions ===
 
@@ -439,7 +463,7 @@ def _float_sqrt_of_frac(n: int, m: int) -> float:
     return numerator / denominator   # Convert to float
 
 
-def _decimal_sqrt_of_frac(n: int, m: int) -> Decimal:
+def _decimal_sqrt_of_frac(n: int, m: int) -> 'Decimal':  # Pystachy port: quoted (optional import)
     """Square root of n/m as a Decimal, correctly rounded."""
     # Premise:  For decimal, computing (n/m).sqrt() can be off
     #           by 1 ulp from the correctly rounded result.
@@ -465,6 +489,85 @@ def _decimal_sqrt_of_frac(n: int, m: int) -> Decimal:
         return minus
 
     return root
+
+
+# Pystachy port: math.sumprod(), which Pystachy's math does not have: math_sumprod_impl() of CPython
+# 3.13.16's Modules/mathmodule.c for the subset's sequences of ints, bools and floats, the C code's
+# operations in its order. The products of ints and bools are added as ints (on the int path, and by
+# PyNumber_Add()), and a product or sum that leaves 64 bits raises OverflowError, where C goes on
+# with longer ints; those of floats, or of floats and ints or bools, in triple length (tl_fma(),
+# with its dl_mul() and dl_sum(), written out in the loop: their tuples would take longer than the
+# arithmetic), until a product or sum is not finite, then as floats, which C adds to its int 0. It
+# returns float(math.sumprod(p, q)), the float that fmean() divides.
+
+def _tl_to_d(hi: float, lo: float, tiny: float) -> float:
+    # tl_to_d() of the TripleLength (hi, lo, tiny): dl_sum(lo, hi), then tiny + last.lo + last.hi
+    x = lo + hi
+    z = x - lo
+    y = (lo - (x - z)) + (hi - z)
+    return tiny + y + x
+
+
+def _sumprod(p, q):
+    """Return the sum of products of values from two iterables p and q."""
+    # An iterable without __len__ (an object with __iter__ alone) is read into a list first, and
+    # the lengths are compared first: C raises the ValueError where the shorter input ends.
+    if not hasattr(p, '__len__'):
+        return _sumprod([x for x in p], q)
+    if not hasattr(q, '__len__'):
+        return _sumprod(p, [x for x in q])
+    if len(p) != len(q):
+        raise ValueError("Inputs are not the same length")
+    int_total = 0
+    flt_path_enabled = True
+    flt_total_in_use = False
+    hi = lo = tiny = 0.0  # flt_total
+    total = 0.0
+    for p_i, q_i in zip(p, q):
+        if not isinstance(p_i, float) and not isinstance(q_i, float):
+            # ints, on the int path, and bools, which PyNumber_Add() adds: an int
+            int_total += p_i * q_i
+            continue
+        if flt_path_enabled:
+            flt_p = float(p_i)
+            flt_q = float(q_i)
+            # new_flt_total = tl_fma(flt_p, flt_q, flt_total): pr = dl_mul(flt_p, flt_q), which
+            # is (z, zz), sm = dl_sum(hi, z), r1 = dl_sum(lo, zz) and r2 = dl_sum(r1.hi, sm.lo).
+            # Where z is not finite, neither is sm.hi, and fma() is left out: of an infinite flt_p
+            # or flt_q, C's is a NaN, for which math.fma() raises ValueError.
+            z = flt_p * flt_q
+            if isfinite(z):
+                zz = math.fma(flt_p, flt_q, -z)
+                sm_hi = hi + z
+                t = sm_hi - hi
+                sm_lo = (hi - (sm_hi - t)) + (z - t)
+                r1_hi = lo + zz
+                t = r1_hi - lo
+                r1_lo = (lo - (r1_hi - t)) + (zz - t)
+                r2_hi = r1_hi + sm_lo
+                t = r2_hi - r1_hi
+                r2_lo = (r1_hi - (r2_hi - t)) + (sm_lo - t)
+                if isfinite(sm_hi):
+                    hi, lo, tiny = sm_hi, r2_hi, tiny + r1_lo + r2_lo
+                    flt_total_in_use = True
+                    continue
+            # We're finished, overflowed, have a non-float, or got a non-finite value
+            flt_path_enabled = False
+            if flt_total_in_use:
+                total = total + _tl_to_d(hi, lo, tiny)
+                hi = lo = tiny = 0.0
+                flt_total_in_use = False
+        total = total + p_i * q_i
+    if flt_total_in_use:
+        total = total + _tl_to_d(hi, lo, tiny)
+    return total + int_total
+
+
+# Pystachy port: math.sumprod() where math has it (CPython), else _sumprod() (above)
+try:
+    from math import sumprod
+except ImportError:
+    sumprod = _sumprod
 
 
 # === Measures of central tendency (averages) ===
@@ -501,22 +604,18 @@ def fmean(data, weights=None):
     4.25
     """
     if weights is None:
-        try:
-            n = len(data)
-        except TypeError:
-            # Handle iterators that do not define __len__().
-            n = 0
-            def count(iterable):
-                nonlocal n
-                for n, x in enumerate(iterable, start=1):
-                    yield x
-            data = count(data)
+        # Pystachy port: an iterable without __len__ (an object with __iter__ alone), whose len()
+        # raises TypeError, as hasattr() tells, is read into a list, which counts its items, in
+        # place of the generator count(): the subset has no generators
+        if not hasattr(data, '__len__'):
+            return fmean([x for x in data])
+        n = len(data)
         total = fsum(data)
         if not n:
             raise StatisticsError('fmean requires at least one data point')
         return total / n
     if not isinstance(weights, (list, tuple)):
-        weights = list(weights)
+        return fmean(data, list(weights))  # Pystachy port: a call, as a variable has one type
     try:
         num = sumprod(data, weights)
     except ValueError:
@@ -543,16 +642,17 @@ def geometric_mean(data):
     """
     n = 0
     found_zero = False
-    def count_positive(iterable):
-        nonlocal n, found_zero
-        for n, x in enumerate(iterable, start=1):
-            if x > 0.0 or math.isnan(x):
-                yield x
-            elif x == 0.0:
-                found_zero = True
-            else:
-                raise StatisticsError('No negative inputs allowed', x)
-    total = fsum(map(log, count_positive(data)))
+    # Pystachy port: count_positive() is a loop that keeps what it would give in a list, which
+    # fsum() takes through map() as CPython's takes it from the generator: the subset has none
+    positive = []
+    for n, x in enumerate(data, start=1):
+        if x > 0.0 or math.isnan(x):
+            positive.append(x)
+        elif x == 0.0:
+            found_zero = True
+        else:
+            raise StatisticsError('No negative inputs allowed', x)
+    total = fsum(map(log, positive))
     if not n:
         raise StatisticsError('Must have a non-empty dataset')
     if math.isnan(total):
@@ -631,6 +731,8 @@ def median(data):
     4.0
 
     """
+    if not isinstance(data, list):  # Pystachy port: sorted() makes a list, and data has one type
+        return median(list(data))
     data = sorted(data)
     n = len(data)
     if n == 0:
@@ -654,6 +756,8 @@ def median_low(data):
     3
 
     """
+    if not isinstance(data, list):  # Pystachy port: sorted() makes a list, and data has one type
+        return median_low(list(data))
     data = sorted(data)
     n = len(data)
     if n == 0:
@@ -676,6 +780,8 @@ def median_high(data):
     5
 
     """
+    if not isinstance(data, list):  # Pystachy port: sorted() makes a list, and data has one type
+        return median_high(list(data))
     data = sorted(data)
     n = len(data)
     if n == 0:
@@ -726,6 +832,8 @@ def median_grouped(data, interval=1.0):
     the interpolation step.
 
     """
+    if not isinstance(data, list):  # Pystachy port: sorted() makes a list, and data has one type
+        return median_grouped(list(data), interval)
     data = sorted(data)
     n = len(data)
     if not n:
@@ -741,18 +849,19 @@ def median_grouped(data, interval=1.0):
     j = bisect_right(data, x, lo=i)
 
     # Coerce to floats, raising a TypeError if not possible
+    # Pystachy port: into new variables, interval_f and x_f, as a variable has one type
     try:
-        interval = float(interval)
-        x = float(x)
+        interval_f = float(interval)
+        x_f = float(x)
     except ValueError:
         raise TypeError(f'Value cannot be converted to a float')
 
     # Interpolate the median using the formula found at:
     # https://www.cuemath.com/data/median-of-grouped-data/
-    L = x - interval / 2.0    # Lower limit of the median interval
+    L = x_f - interval_f / 2.0    # Lower limit of the median interval
     cf = i                    # Cumulative frequency of the preceding interval
     f = j - i                 # Number of elements in the median internal
-    return L + interval * (n / 2 - cf) / f
+    return L + interval_f * (n / 2 - cf) / f
 
 
 def mode(data):
@@ -778,7 +887,13 @@ def mode(data):
     If *data* is empty, ``mode``, raises StatisticsError.
 
     """
-    pairs = Counter(iter(data)).most_common(1)
+    # Pystachy port: a dict counts the items, as Counter(iter(data)) does (Pystachy has no
+    # collections), and most_common(1)'s pair is max()'s of its items by count, the first of the
+    # highest count, as heapq.nlargest(1, ...) picks it
+    counts = {}
+    for elem in data:
+        counts[elem] = counts.get(elem, 0) + 1
+    pairs = [max(counts.items(), key=lambda pair: pair[1])] if counts else []
     try:
         return pairs[0][0]
     except IndexError:
@@ -798,9 +913,12 @@ def multimode(data):
     >>> multimode('')
     []
     """
-    counts = Counter(iter(data))
+    # Pystachy port: a dict counts the items, as Counter(iter(data)) does (see mode())
+    counts = {}
+    for elem in data:
+        counts[elem] = counts.get(elem, 0) + 1
     if not counts:
-        return []
+        return list(counts)  # Pystachy port: [], typed by counts' keys
     maxcount = max(counts.values())
     return [value for value, count in counts.items() if count == maxcount]
 
@@ -1072,6 +1190,8 @@ def quantiles(data, *, n=4, method='exclusive'):
     """
     if n < 1:
         raise StatisticsError('n must be at least 1')
+    if not isinstance(data, list):  # Pystachy port: sorted() makes a list, and data has one type
+        return quantiles(list(data), n=n, method=method)
     data = sorted(data)
     ld = len(data)
     if ld < 2:
@@ -1356,7 +1476,12 @@ def correlation(x, y, /, *, method='linear'):
         raise StatisticsError('at least one of the inputs is constant')
 
 
-LinearRegression = namedtuple('LinearRegression', ('slope', 'intercept'))
+# Pystachy port: made where collections imports (Pystachy has none)
+try:
+    from collections import namedtuple
+    LinearRegression = namedtuple('LinearRegression', ('slope', 'intercept'))
+except ImportError:
+    pass
 
 
 def linear_regression(x, y, /, *, proportional=False):
@@ -1757,21 +1882,27 @@ _triweight_invcdf = _newton_raphson(
     f = lambda t: 35/32 * (-1/7*t**7 + 3/5*t**5 - t**3 + t) + 1/2,
     f_prime = lambda t: 35/32 * (1.0 - t * t) ** 3)
 
-_kernel_invcdfs = {
-    'normal': NormalDist().inv_cdf,
-    'logistic': lambda p: log(p / (1 - p)),
-    'sigmoid': lambda p: log(tan(p * pi/2)),
-    'rectangular': lambda p: 2*p - 1,
-    'parabolic': lambda p: 2 * cos((acos(2*p-1) + pi) / 3),
-    'quartic': _quartic_invcdf,
-    'triweight': _triweight_invcdf,
-    'triangular': lambda p: sqrt(2*p) - 1 if p < 1/2 else 1 - sqrt(2 - 2*p),
-    'cosine': lambda p: 2 * asin(2*p - 1) / pi,
-}
-_kernel_invcdfs['gauss'] = _kernel_invcdfs['normal']
-_kernel_invcdfs['uniform'] = _kernel_invcdfs['rectangular']
-_kernel_invcdfs['epanechnikov'] = _kernel_invcdfs['parabolic']
-_kernel_invcdfs['biweight'] = _kernel_invcdfs['quartic']
+# Pystachy port: made where random imports, which kde_random() needs (Pystachy has none): a dict
+# of Pystachy holds functions of one type, and it does not compile NormalDist (its properties)
+try:
+    import random
+    _kernel_invcdfs = {
+        'normal': NormalDist().inv_cdf,
+        'logistic': lambda p: log(p / (1 - p)),
+        'sigmoid': lambda p: log(tan(p * pi/2)),
+        'rectangular': lambda p: 2*p - 1,
+        'parabolic': lambda p: 2 * cos((acos(2*p-1) + pi) / 3),
+        'quartic': _quartic_invcdf,
+        'triweight': _triweight_invcdf,
+        'triangular': lambda p: sqrt(2*p) - 1 if p < 1/2 else 1 - sqrt(2 - 2*p),
+        'cosine': lambda p: 2 * asin(2*p - 1) / pi,
+    }
+    _kernel_invcdfs['gauss'] = _kernel_invcdfs['normal']
+    _kernel_invcdfs['uniform'] = _kernel_invcdfs['rectangular']
+    _kernel_invcdfs['epanechnikov'] = _kernel_invcdfs['parabolic']
+    _kernel_invcdfs['biweight'] = _kernel_invcdfs['quartic']
+except ImportError:
+    pass
 
 def kde_random(data, h, kernel='normal', *, seed=None):
     """Return a function that makes a random selection from the estimated
