@@ -163,7 +163,7 @@ class StringIO:
                 break
             lines.append(line)
             total += len(line)
-            if hint is not None and 0 < hint <= total:
+            if hint is not None and 0 < hint < total:
                 break
         return lines
 

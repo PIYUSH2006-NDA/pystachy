@@ -12,6 +12,9 @@ s.seek(0)
 print(repr(s.readline(2)), repr(s.readline(0)), repr(s.readline(-1)), repr(s.readline(100)), repr(s.readline()))
 s.seek(0)
 print(s.readlines(), s.readlines(), s.seek(0), s.readlines(3), s.readlines(None))
+# hint is a threshold: the lines stop once their total is past it, not at it
+for h in [1, 2, 3, 4, 5, 6]:
+    print(h, StringIO("a\nb\nc\n").readlines(h), StringIO("ab\ncd\n").readlines(h))
 s.seek(1)
 print(repr(s.read(None)), s.seek(0), repr(s.readline(None)))
 s.seek(0)

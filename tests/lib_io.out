@@ -2,6 +2,12 @@
 'hel' '' 3 'lo\nworld\n' '' 12
 'he' '' 'llo\n' 'world\n' ''
 ['hello\n', 'world\n'] [] 0 ['hello\n'] ['world\n']
+1 ['a\n'] ['ab\n']
+2 ['a\n', 'b\n'] ['ab\n']
+3 ['a\n', 'b\n'] ['ab\n', 'cd\n']
+4 ['a\n', 'b\n', 'c\n'] ['ab\n', 'cd\n']
+5 ['a\n', 'b\n', 'c\n'] ['ab\n', 'cd\n']
+6 ['a\n', 'b\n', 'c\n'] ['ab\n', 'cd\n']
 'ello\nworld\n' 0 'hello\n'
 'hello\n'
 'world\n'

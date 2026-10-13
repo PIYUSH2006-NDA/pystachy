@@ -19754,7 +19754,10 @@ class Gen:
                 self.pwrite(fd, fv, sep, fo)
             self.pwrite(fd, fv, self.to_str(vals[i]).v, fo)
         self.pwrite(fd, fv, end, fo)
-        if flush != "":
+        if flush != "" and fo.t != "" and "flush" not in self.classes[fo.t].methods:
+            # CPython looks flush() up only where flush is true
+            self.guard(flush, f"AttributeError: '{tname(fo.t)}' object has no attribute 'flush'")
+        elif flush != "":
             l1 = self.label()
             l2 = self.label()
             self.cbr(flush, l1, l2)

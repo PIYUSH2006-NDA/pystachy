@@ -69,3 +69,23 @@ except OSError as e:
 import sys
 print("to stdout", file=sys.stdout)
 print("to stdout", file=None)
+
+
+class Sink:
+    # write() and no flush(): CPython looks flush() up only where flush is true
+    def __init__(self) -> None:
+        self.out = ""
+
+    def write(self, s: str) -> None:
+        self.out += s
+
+
+sink = Sink()
+print("ok", file=sink, flush=False)
+print("ok", 2, file=sink, flush=0)
+print("ok", 3, file=sink, flush=len(sys.argv) > 5)
+try:
+    print("now", file=sink, flush=True)
+except AttributeError as e:
+    print("AttributeError:", e)
+print(repr(sink.out))

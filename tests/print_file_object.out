@@ -34,4 +34,6 @@
 OSError: disk full 3
 to stdout
 to stdout
+AttributeError: 'Sink' object has no attribute 'flush'
+'ok\nok 2\nok 3\nnow\n'
 [exit 0]
