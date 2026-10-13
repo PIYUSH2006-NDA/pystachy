@@ -1,6 +1,7 @@
 # Documented deviations of lib/csv (Pystachy's csv, after CPython 3.13's Modules/_csv.c and
 # Lib/csv.py) from CPython 3.13.
 import csv
+import sys
 
 # A reader parses all of its input when its iteration starts (CPython's reader is an iterator,
 # which parses a row at each step): an error in the data is raised before the loop sees a row, and
@@ -80,6 +81,16 @@ try:
     d.delimiter = ","
 except AttributeError as e:
     print("AttributeError:", e)
+# A writer writes with the settings its dialect had when it was made: the assignment changes nothing
+# there (CPython raises the AttributeError above).
+w = csv.writer(sys.stdout, lineterminator="\n")
+try:
+    w.dialect.delimiter = ";"
+    w.dialect.quoting = csv.QUOTE_ALL
+    print("assigned", w.dialect.delimiter)
+except AttributeError as e:
+    print("AttributeError:", e)
+w.writerow(["a;b", "c"])
 
 # csv.Error is the class of module csv, which an uncaught error names; CPython's is _csv.Error
 print(list(csv.reader(['"x'], strict=True)))

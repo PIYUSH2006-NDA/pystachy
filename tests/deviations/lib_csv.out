@@ -14,5 +14,7 @@ NotImplementedError: csv.DictReader gives restval None for the fields a short ro
 Error: unexpected end of data
 True
 assigned ;
+assigned ;
+a;b,c
 csv.Error: unexpected end of data
 [exit 1]

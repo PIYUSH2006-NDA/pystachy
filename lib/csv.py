@@ -750,6 +750,12 @@ class Writer:
     def __init__(self, f, dialect: Dialect) -> None:
         self._f = f
         self.dialect = dialect
+        # the dialect's settings when the writer is made, which it writes with: CPython's dialect is
+        # read-only, and an assignment to this one's fields changes nothing here
+        self._quoting: int = dialect.quoting
+        self._doublequote: bool = dialect.doublequote
+        self._delimiter: str = dialect.delimiter
+        self._lineterminator: str = dialect.lineterminator
         q = dialect.quotechar
         e = dialect.escapechar
         self._quote: str = "" if q is None else q  # ("": none)
@@ -773,8 +779,7 @@ class Writer:
         # escapechar, and a quotechar without doublequote), doubles a quotechar or quotes the field
         # for it: which of them the field holds decides that, so each is replaced throughout, the
         # escapechar first, and the error is the one of the first character it would escape
-        d = self.dialect
-        quoting = d.quoting
+        quoting = self._quoting
         if self._spaces and len(field) == 0:
             if quoting == QUOTE_NONE or (null and (quoting == QUOTE_STRINGS or quoting == QUOTE_NOTNULL)):
                 raise Error("empty field must be quoted if delimiter is a space and skipinitialspace is true")
@@ -801,12 +806,12 @@ class Writer:
                     if field.find(c) >= 0:
                         text = text.replace(c, esc + c)
             else:
-                if hasq and not d.doublequote and len(esc) == 0:
+                if hasq and not self._doublequote and len(esc) == 0:
                     raise Error("need to escape, but no escapechar set")
                 if hase:
                     text = text.replace(esc, esc + esc)
                 if hasq:
-                    if d.doublequote:
+                    if self._doublequote:
                         text = text.replace(quote, quote + quote)
                         quoted = True
                     else:
@@ -815,7 +820,7 @@ class Writer:
                     quoted = True
         parts = self._parts
         if self._nfields > 0:
-            parts.append(d.delimiter)
+            parts.append(self._delimiter)
         if quoted:
             parts.append(quote)
             parts.append(text)
@@ -827,7 +832,7 @@ class Writer:
     def _append(self, field) -> bool:
         # a field of csv_writerow: quoted as the dialect's quoting says for its type, a str of
         # str(), None as an empty field; whether it is None
-        quoting = self.dialect.quoting
+        quoting = self._quoting
         if field is None:
             self._join("", True, quoting == QUOTE_ALL or quoting == QUOTE_NONNUMERIC)
             return True
@@ -851,14 +856,14 @@ class Writer:
         # the end of csv_writerow: a record of one empty field is quoted, the line terminated and
         # written; null: whether the last field was None
         parts = self._parts
-        quoting = self.dialect.quoting
+        quoting = self._quoting
         if self._nfields == 1 and len(parts) == 1 and len(parts[0]) == 0:
             if quoting == QUOTE_NONE or (null and (quoting == QUOTE_STRINGS or quoting == QUOTE_NOTNULL)):
                 raise Error("single empty field record must be quoted")
             parts.pop()
             self._nfields = 0
             self._join("", True, True)
-        parts.append(self.dialect.lineterminator)
+        parts.append(self._lineterminator)
         return self._f.write("".join(parts))
 
     def writerow(self, row):

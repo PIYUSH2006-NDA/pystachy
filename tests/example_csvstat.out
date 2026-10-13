@@ -153,4 +153,43 @@ column,type,values,empty,distinct,min,max,mean,median,stdev,top,top count
 a,float,4,1,4,1,4.5,2.625,2.5,1.49304,1,1
 b,text,3,2,3,w,y,,,,x,1
 c,text,2,3,2,q,z,,,,z,1
+big: 4 rows, 2 columns
+  1. id
+         type: int
+       values: 4
+        empty: 0
+     distinct: 4
+          min: 9007199254740992
+          max: 9223372036854775807
+         mean: 2.3126e+18
+       median: 9.0072e+15
+        stdev: 4.60718e+18
+          top: 9007199254740993
+    top count: 1
+  2. n
+         type: int
+       values: 4
+        empty: 0
+     distinct: 4
+          min: 1
+          max: 4
+         mean: 2.5
+       median: 2.5
+        stdev: 1.29099
+          top: 1
+    top count: 1
+mixed: 3 rows, 1 columns
+  1. id
+         type: float
+       values: 3
+        empty: 0
+     distinct: 3
+          min: 1.5
+          max: 9.0072e+15
+         mean: 6.0048e+15
+       median: 9.0072e+15
+        stdev: 5.20031e+15
+          top: 9007199254740992
+    top count: 1
+['int', '2', '0', '2', '9007199254740992', '9007199254740993', '9.0072e+15', '9.0072e+15', '0.707107', '9007199254740992', '1']
 [exit 0]

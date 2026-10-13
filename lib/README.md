@@ -74,8 +74,9 @@ each field `str()`-ed as CPython does; a tuple's items may have different types
   `csv.Dialect` with, so a dialect of the program's is a registered name
   (`register_dialect("pipes", delimiter="|")`) or keyword arguments. `Dialect` is the type CPython
   calls `_csv.Dialect` (what `get_dialect()` returns, and a reader's or writer's `dialect`), whose
-  fields can be assigned (CPython's are read-only), and `dialect=` is a registered name, a
-  `Dialect` or `None`.
+  fields can be assigned (CPython's are read-only): a writer writes with the settings its dialect
+  had when it was made, and a reader reads with those it has when its iteration starts.
+  `dialect=` is a registered name, a `Dialect` or `None`.
 - An uncaught error is reported as `csv.Error` (CPython's class is `_csv.Error`). A writer of an
   object without `write()` (`tests/errors/lib_csv_no_write.py`), a format parameter that is an object
   of the program's class, a row that cannot be iterated (but an int, float, bool or `None`, which

@@ -7,7 +7,8 @@ The first row names the columns. A column's type is int where each of its values
 are not empty) is an int, else float where each is a number, else text. For each column it prints
 the count of values and of empty fields, the count of distinct values, the most common value, and
 the smallest and largest value: for a number column by number, with the mean, the median and the
-standard deviation (of a sample); for a text column by the order of the characters. A row shorter
+standard deviation (of a sample); for a text column by the order of the characters. An int column
+keeps its values as ints, so its least and largest are exact also past 2**53. A row shorter
 than the header leaves the columns it lacks empty, and a row longer than it is counted.
 
 --csv writes the statistics as CSV instead, one row per column, with csv.writer.
@@ -26,7 +27,8 @@ class Column:
         self.counts: dict[str, int] = {}  # each distinct value, and how often it occurs
         self.isint = True
         self.isnumber = True
-        self.numbers: list[float] = []  # the values, while they are numbers
+        self.ints: list[int] = []  # the values, while they are ints
+        self.numbers: list[float] = []  # the values, while they are numbers and not all ints
 
     def add(self, value: str) -> None:
         if value == "":
@@ -35,10 +37,12 @@ class Column:
         self.counts[value] = self.counts.get(value, 0) + 1
         if self.isint:
             try:
-                self.numbers.append(float(int(value)))
+                self.ints.append(int(value))
                 return
             except ValueError:
                 self.isint = False
+                self.numbers = [float(x) for x in self.ints]
+                self.ints = []
         if self.isnumber:
             try:
                 self.numbers.append(float(value))
@@ -73,9 +77,16 @@ def collect(rows) -> tuple[list[Column], int, int]:
     return columns, count, longer
 
 
-def number(c: Column, x: float) -> str:
-    # x as the column's type shows it
-    return str(int(x)) if c.isint else f"{x:.6g}"
+def moments(xs: list[float]) -> tuple[float, float, float]:
+    # the mean, the median and the standard deviation (of a sample) of sorted numbers
+    n = len(xs)
+    mean = math.fsum(xs) / n
+    half = n // 2
+    median = xs[half] if n % 2 == 1 else (xs[half - 1] + xs[half]) / 2
+    stdev = 0.0
+    if n > 1:
+        stdev = math.sqrt(math.fsum([(x - mean) ** 2 for x in xs]) / (n - 1))
+    return mean, median, stdev
 
 
 def statistics(c: Column) -> list[str]:
@@ -89,15 +100,18 @@ def statistics(c: Column) -> list[str]:
             top = value
             most = n
     out = [c.kind(), str(values), str(c.empty), str(len(c.counts))]
-    if values > 0 and c.isnumber:
+    if values > 0 and c.isint:
+        # the least and largest exactly, and the others from each value's distance to the least,
+        # which a float holds exactly while the column's range fits in its 53 bits (an int past
+        # 2**53 does not fit in one)
+        ints = sorted(c.ints)
+        base = ints[0]
+        mean, median, stdev = moments([float(x - base) for x in ints])
+        out += [str(ints[0]), str(ints[-1]), f"{base + mean:.6g}", f"{base + median:.6g}", f"{stdev:.6g}"]
+    elif values > 0 and c.isnumber:
         xs = sorted(c.numbers)
-        mean = math.fsum(xs) / values
-        half = values // 2
-        median = xs[half] if values % 2 == 1 else (xs[half - 1] + xs[half]) / 2
-        stdev = 0.0
-        if values > 1:
-            stdev = math.sqrt(math.fsum([(x - mean) ** 2 for x in xs]) / (values - 1))
-        out += [number(c, xs[0]), number(c, xs[-1]), f"{mean:.6g}", f"{median:.6g}", f"{stdev:.6g}"]
+        mean, median, stdev = moments(xs)
+        out += [f"{xs[0]:.6g}", f"{xs[-1]:.6g}", f"{mean:.6g}", f"{median:.6g}", f"{stdev:.6g}"]
     elif values > 0:
         out += [min(c.counts), max(c.counts), "", "", ""]
     else:
