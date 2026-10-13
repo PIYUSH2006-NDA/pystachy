@@ -283,12 +283,28 @@ the two agree everywhere except 19 valid files Pystachy cannot parse (tabs in in
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs `make verify` once per commit: on each pull request, from this
+`.github/workflows/ci.yml` runs every verification stage on each pull request, from this
 repository or a fork, with its branch merged with `main` as it is then; on each push to `main`;
 and on demand for any branch. A newer push to a pull request cancels its older run; on `main`
-every commit runs to the end. It runs on ubuntu-24.04 with LLVM 18, which `tools/setup.sh`
-installs where the runner image lacks it, and the CPython of `.python-version`, within a
-45-minute time limit, and uploads the report as an artifact. Beside it, on the same events,
-`.github/workflows/lint.yml` runs `make lint` and then `make check-recordings`, with the CPython
-of `.python-version` too: it needs no compiler, so a recording that CPython no longer prints is
-named within a minute or two.
+every commit runs to the end. It runs on ubuntu-24.04 with LLVM 18 and the CPython of
+`.python-version`.
+
+Seven independent groups run in parallel, each with a 15-minute limit and its own bootstrap
+fixed-point check: `hosted`, `native` (including optimization-off), `python-free`, `ubsan`,
+`gc-stress`, `contracts` and `benchmarks`. `tests/verify.sh GROUP` runs a group locally;
+`make verify` still runs all 25 stages. Every differential test run retains its exact expected
+check-count guard, including collection at every allocation. A failed group does not cancel
+the others. The benchmarks group reuses its verified native compiler for the extended
+benchmark correctness check, avoiding a second bootstrap.
+
+Each group uploads its report and logs. The final required check keeps the name
+`make verify (Linux x86-64, LLVM 18, Python 3.13)` and passes only when every group succeeds.
+`tools/merge_verification.py` also rejects missing or unexpected reports/stages, mismatched
+source commits, source hashes or toolchains, and different bootstrap IR. It uploads one
+combined 25-stage `verification` report. Its duration is the longest group's verification
+work; `ci.runner_seconds` records aggregate verification work across runners. Queue, setup
+and the extended benchmark check add to the workflow's elapsed time.
+
+Beside it, on the same events, `.github/workflows/lint.yml` runs `make lint`, the CI report
+gate's tests and `make check-recordings`, with the CPython of `.python-version` too: it needs
+no compiler, so a recording that CPython no longer prints is named within a minute or two.

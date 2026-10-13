@@ -57,7 +57,7 @@ SIG=" $(grep -lE 'kill -INT|KeyboardInterrupt' "$@" | while read -r f; do printf
 
 # Each case adds to $pass and $fail and prints what the report shows for it.
 program() { # tests/NAME.py
-  n=$(basename "$1" .py); in=/dev/null; [ -f "tests/$n.in" ] && in="tests/$n.in"
+  n=${1##*/}; n=${n%.py}; in=/dev/null; [ -f "tests/$n.in" ] && in="tests/$n.in"
   o=1; [ -f "tests/$n.full" ] && o=3
   mp=$PYSTACHY_PATH; [ -f "tests/$n.path" ] && mp=$(cat "tests/$n.path")
   for mode in $MODES; do
@@ -89,7 +89,7 @@ program() { # tests/NAME.py
 # Documented deviations from CPython: tests/deviations/*.out is written by hand and holds
 # stdout and stderr together (the runtime flushes stdout before reporting an error).
 deviation() { # tests/deviations/NAME.py
-  n=$(basename "$1" .py); exp="tests/deviations/$n.out"
+  n=${1##*/}; n=${n%.py}; exp="tests/deviations/$n.out"
   for mode in $MODES; do
     if [ $mode = jit ]; then
       ($PYS run "$1" a1 a2 < /dev/null 2>&1; echo "[exit $?]") > "$T/dev.$n.$mode"
@@ -109,8 +109,9 @@ diag() {
   case $line in *"$want"*) ;; *) return 1 ;; esac
 }
 rejection() { # tests/errors/NAME.py
-  n=$(basename "$1" .py)
-  want=$(head -1 "$1" | sed 's/^# error: //')
+  n=${1##*/}; n=${n%.py}
+  IFS= read -r want < "$1"
+  want=${want#"# error: "}
   how=ir
   case $n in rtmode_*) how=rt ;; esac  # compiled as runtime.py is
   $PYS $how "$1" > /dev/null 2> "$T/rej.$n"; st=$?
