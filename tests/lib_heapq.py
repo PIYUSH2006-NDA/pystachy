@@ -1,5 +1,6 @@
-# CPython's own Lib/heapq.py (lib/heapq.py, unmodified), compiled for each element type it is
-# used with: ints, floats, strings, tuples and objects ordered by __lt__
+# CPython's own Lib/heapq.py (lib/heapq.py, whose heap functions are unmodified), compiled for each
+# element type it is used with: ints, floats, strings, tuples and objects ordered by __lt__
+# (nlargest() and nsmallest(): tests/lib_heapq_topk.py)
 import heapq
 from heapq import heappush, heappop
 from dataclasses import dataclass

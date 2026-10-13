@@ -57,7 +57,8 @@ hash lookup for `if k in d: d[k] += 1` and the like), and so can a choice of the
 comma-separated, or `-all`; the tests pass with each one off.
 The programs cover arithmetic and overflow edges,
 strings (also their Unicode whitespace), escapes and f-strings, a 400-case sample of the
-format-spec language, lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
+format-spec language, float repr's shortest digits (every power of two, the ends of the ranges,
+4,096 random doubles and 2,048 random decimals), lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
 (also their container protocol, static and class methods, and class variables), dataclasses, NamedTuples, typing's forms (`collections.abc`, `Final`, `@overload`, `TypeVar`,
 `os.PathLike`), `Optional` structures, optional values (also boxed numbers) and
 their narrowing (with CPython's error for each use of `None` where only a value works), rich comparisons, defaults,
@@ -130,7 +131,8 @@ versions, platform, git commit and a timestamp:
   runtime ([runtime-in-subset.md](runtime-in-subset.md) §1.4) is used while nothing it is built
   from changes (also by the AOT tier, and through another path to the same tools), and built
   again, its new entry replacing the old, when `runtime.py` changes by an edit of the same size
-  whose mtime is set back, when `runtime.c` changes, when both change while the runtime is built
+  whose mtime is set back, when `runtime.c` changes, when a file it includes from `ryu/` changes
+  (the home's, not one in the current directory), when both change while the runtime is built
   (the run after builds the new bytes), when a tool changes and when the compiler changes;
   `PYSTACHY_CFLAGS`, `PYSTACHY_OPT` (the same passes named otherwise share one) and tools found
   through `PATH` get entries of their own; a failed `llvm-link` and a build killed after `opt`
@@ -233,7 +235,7 @@ holds, which `tests/verify.sh` counts from its files as `tests/run.sh` makes the
 deviation once per mode, each rejection once, and `pystachy check` of the syntax tests): a run
 that covered fewer cases fails, as one with a failure does. The report gives each of these steps'
 `passed`, `failed` and `expected` counts. The **runtime-cache** step expects `tests/cache.sh`'s
-checks the same way: 56 with the native compiler, 55 with CPython's (one `PATH` case fewer).
+checks the same way: 58 with the native compiler, 57 with CPython's (one `PATH` case fewer).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
 others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,

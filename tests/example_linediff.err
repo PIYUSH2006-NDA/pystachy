@@ -1,0 +1,1 @@
+usage: linediff.py [-U N] [--words] [-q] OLD NEW
