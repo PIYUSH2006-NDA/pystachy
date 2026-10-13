@@ -69,8 +69,10 @@ use, loops with `else`, the `lib/` modules (`tests/lib_*.py`, and for `re` CPyth
 streams, exceptions and exit statuses, runtime errors (also CPython's wording of the type and argument errors Pystachy reports
 when it compiles), garbage-collector churn, classic
 algorithms, a small interpreter, and 16 programs from Ouro v2. Where `tests/NAME.full`
-exists, the program's stdout is `/dev/full`. Current result: **1931 passed, 0 failed** with
-both the CPython-hosted and the self-compiled compiler.
+exists, the program's stdout is `/dev/full`. Current result: **2,454 passed, 0 failed** (at
+1eb23de: 698 programs and 23 deviations in each mode, 870 rejections and the `pystachy check`
+cases), with both the CPython-hosted and the self-compiled compiler; `make verify` counts them
+from the files and reports them in `build/verification.json`.
 
 ### Recording expected output
 
