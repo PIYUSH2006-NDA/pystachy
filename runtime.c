@@ -1813,7 +1813,12 @@ static int skeq(Set *s, I a, I b) {
   return a == b || (s->kind == 1 ? pys_str_eq((Str *)a, (Str *)b) : s->kind > 1 && eqv(a, b, ((Str *)s->kind)->s));
 }
 static void stable(Set *s, I size) {                 /* an empty table of size slots */
-  s->keys = keymem(s->kind, size); s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
+  /* the 8 slots of a new or cleared set are scanned whatever its kind: the compiler gives an empty
+     set from a template the kind of the type its caller expects (typed_empty) only after it is
+     made. A larger table comes from insertions, of the set's own kind by then (a dict's tables
+     come at its first insertion, so a dict needs no such care) */
+  s->keys = size > 8 ? keymem(s->kind, size) : pys_alloc(size * 8);
+  s->hs = pys_alloc_atomic(size * 8); memset(s->hs, 0xff, size * 8);
   s->mask = size - 1; s->fill = 0;
 }
 Set *pys_set_new(I kind) { Set *s = pys_alloc(sizeof(Set)); s->kind = kind; stable(s, 8); return s; }

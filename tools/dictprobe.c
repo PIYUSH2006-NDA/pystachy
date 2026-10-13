@@ -19,8 +19,9 @@
    The string-cache check counts calls/bytes through the real runtime.py hash, so repeated
    lookups must not rescan bytes. The storage check reads the kinds of the tables from the page
    map: the collector never scans the key arrays of dicts and sets of ints, and scans those of
-   strs and tuples and every dict's values; so ints that are the addresses of strs nothing else
-   holds keep none of them alive (#210). --hash-cache runs only these two checks, also under GC
+   strs and tuples and every dict's values, and the 8 slots of a new set whatever its kind (the
+   compiler may change the kind of an empty set); so ints that are the addresses of strs nothing
+   else holds keep none of them alive (#210). --hash-cache runs only these two checks, also under GC
    stress. runtime.c's dict hash functions are in runtime.py, so the build links its IR
    (pystachy rt).
    usage: make dictprobe   (build/dictprobe [N...] or build/dictprobe --hash-cache) */
@@ -152,11 +153,13 @@ __attribute__((noinline)) static void addresses(void) {   /* ints that are the a
 }
 __attribute__((noinline)) static void held(void) {        /* strs that are keys, elements, values, tuple items */
   Dict *ds = pys_dict_new(1, 0), *dv = pys_dict_new(0, 0), *dt = pys_dict_new((I)cstr("T2si"), 0);
-  Set *ss = pys_set_new(1);
-  keys = pys_list_new(4); keys->a[0] = (I)ds; keys->a[1] = (I)dv; keys->a[2] = (I)dt; keys->a[3] = (I)ss; keys->len = 4;
-  for (I i = 0; i < 16; i++) {
+  Set *ss = pys_set_new(1), *sk = pys_set_new(0);
+  sk->kind = 1;                        /* (made of ints, then of strs: the compiler's typed_empty) */
+  keys = pys_list_new(5); keys->a[0] = (I)ds; keys->a[1] = (I)dv; keys->a[2] = (I)dt; keys->a[3] = (I)ss; keys->a[4] = (I)sk; keys->len = 5;
+  for (I i = 0; i < 20; i++) {
     Str *x = big(i);
-    if (i % 4 == 0) pys_dict_set(ds, (I)x, i);
+    if (i >= 16) pys_set_add(sk, (I)x);  /* (4 of them: its 8 slots, not a table of strs it grew) */
+    else if (i % 4 == 0) pys_dict_set(ds, (I)x, i);
     else if (i % 4 == 1) pys_dict_set(dv, i, (I)x);
     else if (i % 4 == 2) { I *t = pys_alloc(16); t[0] = (I)x; t[1] = i; pys_dict_set(dt, (I)t, i); }
     else pys_set_add(ss, (I)x);
@@ -184,7 +187,7 @@ static void storage(void) {
     pys_dict_clear(dict); pys_dict_set(dict, skey(kind, 1), 1);
     dict_kinds(dict, ints, "a dict filled again after clear()");
     Set *s = pys_set_new(k2); keys->a[1] = (I)s; keys->len = 2;
-    set_kinds(s, ints, "a new set");
+    set_kinds(s, 0, "a new set (its 8 slots are scanned: typed_empty may give it another kind)");
     for (I i = 0; i < 100; i++) pys_set_add(s, skey(kind, i));
     set_kinds(s, ints, "a set that grew");
     set_kinds(pys_set_copy(s), ints, "set.copy()");
@@ -195,14 +198,15 @@ static void storage(void) {
   if (d->len != 16 || s->len != 16) storage_bad("int keys lost");
   for (I e = 0; e < d->n; e++) if (!pys_dict_has(d, d->keys[e]) || !pys_set_has(s, d->keys[e])) storage_bad("an int key not found");
   held(); scrub_collect(); scrub_collect();
-  if (gc_live < 16 * MIB) storage_bad("a str that is a key, element, value or tuple item was freed");
-  Dict *ds = (Dict *)keys->a[0], *dv = (Dict *)keys->a[1], *dt = (Dict *)keys->a[2]; Set *ss = (Set *)keys->a[3];
+  if (gc_live < 20 * MIB) storage_bad("a str that is a key, element, value or tuple item was freed");
+  Dict *ds = (Dict *)keys->a[0], *dv = (Dict *)keys->a[1], *dt = (Dict *)keys->a[2]; Set *ss = (Set *)keys->a[3], *sk = (Set *)keys->a[4];
   for (I e = 0; e < ds->n; e++) big_ok((Str *)ds->keys[e], ds->vals[e]);
   for (I e = 0; e < dv->n; e++) big_ok((Str *)dv->vals[e], dv->keys[e]);
   for (I e = 0; e < dt->n; e++) big_ok((Str *)((I *)dt->keys[e])[0], dt->vals[e]);
   I n = 0;
   for (I j = 0; j <= ss->mask; j++) if (ss->hs[j] != -1) { Str *x = (Str *)ss->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
-  if (ds->len + dv->len + dt->len + n != 16) storage_bad("kept strs lost");
+  for (I j = 0; j <= sk->mask; j++) if (sk->hs[j] != -1) { Str *x = (Str *)sk->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
+  if (sk->mask != 7 || ds->len + dv->len + dt->len + n != 20) storage_bad("kept strs lost");
   keys = 0; dict = 0;
   printf("storage: the key tables of ints are never scanned; those of strs and tuples, and dict values, are\n");
 }
