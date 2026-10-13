@@ -46,8 +46,9 @@ The edits, the same in both functions:
   of an object without `__len__` is a compile-time error. A `__len__` that raises `TypeError` is
   caught, as in CPython.
 - `zip(range(n), it)` (`range(0, -n, -1)` in `nlargest()`), which takes the first n items, is a
-  comprehension over `range(min(n, len(it)))` that indexes `it`: `range()` cannot be nested in
-  `zip()`. The loop over the other items, which goes on with `zip()`'s iterator in CPython, is
+  comprehension over `range(min(n, len(it)))` that indexes `it`, and with a `key` a loop that reads
+  each item once, before its key is called, as `zip()`'s iterator reads it (a key may change the
+  list): `range()` cannot be nested in `zip()`. The loop over the other items, which goes on with `zip()`'s iterator in CPython, is
   `for i, elem in enumerate(it)`, which skips the first n: a list is read in place, as CPython's
   iterator reads it, with no copy.
 - An empty `result` returns `[]`, not `result`: its tuples are not of the items' type, which the

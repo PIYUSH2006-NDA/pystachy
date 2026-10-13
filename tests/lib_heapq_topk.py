@@ -184,3 +184,21 @@ nums = [rand() for _ in range(2000)]
 print(nsmallest(5, nums) == sorted(nums)[:5], nlargest(7, nums) == sorted(nums, reverse=True)[:7])
 print(nlargest(5, nums, key=lambda x: x % 1000), nsmallest(5, nums, key=lambda x: (x % 10, -x)))
 print(heapq.nsmallest(3, nums)[0] == min(nums), heapq.nlargest(1, nums) == [max(nums)])
+
+
+# a key that changes the list it is reading: each item is read once, before its key is called, as
+# CPython's iterator reads it
+mut = [5, 4, 3, 2, 1, 0]
+
+
+def mutating_key(x: int) -> int:
+    if mut[0] == 5:
+        mut[0] = 0
+    return x
+
+
+print(nlargest(2, mut, key=mutating_key), mut)
+mut[0] = 5
+print(nsmallest(2, mut, key=mutating_key), mut)
+mut[0] = 5
+print(nlargest(3, mut, key=lambda x: -x), nsmallest(3, mut, key=mutating_key), mut)

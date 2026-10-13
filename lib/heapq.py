@@ -514,9 +514,16 @@ def nsmallest(n, iterable, key=None):
         return [elem for (elem, order) in result]
 
     # General case, slowest method
-    # Pystachy port: it, result and [] as above, and the loop that skips the first n
+    # Pystachy port: it, [] and the loop that skips the first n as above; result is filled by a
+    # loop that reads each of the first n items once, before its key is called, as zip()'s
+    # iterator reads them (a key may change the list)
     it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
-    result = [(key(it[i]), i, it[i]) for i in range(min(n, len(it)))]
+    result = []
+    i = 0
+    while i < n and i < len(it):
+        elem = it[i]
+        result.append((key(elem), i, elem))
+        i += 1
     if not result:
         return []
     _heapify_max(result)
@@ -579,9 +586,14 @@ def nlargest(n, iterable, key=None):
         return [elem for (elem, order) in result]
 
     # General case, slowest method
-    # Pystachy port: it, result and [] as above, and the loop that skips the first n
+    # Pystachy port: it, result and [] as in nsmallest(), with -i for the i of range(0, -n, -1)
     it = iterable if isinstance(iterable, list) else [elem for elem in iterable]
-    result = [(key(it[i]), -i, it[i]) for i in range(min(n, len(it)))]
+    result = []
+    i = 0
+    while i < n and i < len(it):
+        elem = it[i]
+        result.append((key(elem), -i, elem))
+        i += 1
     if not result:
         return []
     heapify(result)

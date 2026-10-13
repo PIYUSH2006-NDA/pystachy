@@ -14,7 +14,7 @@ print(top_pairs)
 print(longest)
 print(rarest)
 print(topk.pick(10, words, pairs, True) == (top_words, top_pairs, longest, rarest))
-for n in [0, 1, 2, 3, 100, 5000]:
+for n in [-1, 0, 1, 2, 3, 100, 5000]:
     p = topk.pick(n, words, pairs, False)
     print(n, p == topk.pick(n, words, pairs, True), len(p[0]), len(p[1]), len(p[2]), len(p[3]), p[1][:2], p[3][-1:])
 print(topk.count(["The cat, the hat.", "", "(the) THE cat -- 'cat'"], words, pairs), words["the"], words["cat"])

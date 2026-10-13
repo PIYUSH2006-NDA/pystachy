@@ -44,10 +44,11 @@ def count_of(item):
 def pick(n, words, pairs, by_sort):
     # the n most frequent words and pairs, the n longest words and the n rarest
     if by_sort:
-        return (sorted(words.items(), key=count_of, reverse=True)[:n],
-                sorted(pairs.items(), key=count_of, reverse=True)[:n],
-                sorted(words, key=len, reverse=True)[:n],
-                sorted(words.items(), key=count_of)[:n])
+        k = max(n, 0)  # (nlargest() of an n below 1 is [], as a slice to 0 is)
+        return (sorted(words.items(), key=count_of, reverse=True)[:k],
+                sorted(pairs.items(), key=count_of, reverse=True)[:k],
+                sorted(words, key=len, reverse=True)[:k],
+                sorted(words.items(), key=count_of)[:k])
     return (nlargest(n, words.items(), key=count_of),
             nlargest(n, pairs.items(), key=count_of),
             nlargest(n, words, key=len),

@@ -5,6 +5,7 @@ Rukavofe of the vonequzo the lozokami nerunelo, rupequru jimimimi, pesa tiguka r
 ['qulorudaka', 'xivozozoka', 'damisaneka', 'xifefemika', 'jijimisaka', 'peguloneka', 'pevokazoka', 'kakapeguka', 'fegunemika', 'pezomivoka']
 [('rukavofe', 1), ('vonequzo', 1), ('lozokami', 1), ('nerunelo', 1), ('rupequru', 1), ('jimimimi', 1), ('pesa', 1), ('rugufexi', 1), ('qulorudaka', 1), ('fetipeka', 1)]
 True
+-1 True 0 0 0 0 [] []
 0 True 0 0 0 0 [] []
 1 True 1 1 1 1 [(('the', 'the'), 15)] [('rukavofe', 1)]
 2 True 2 2 2 2 [(('the', 'the'), 15), (('of', 'the'), 11)] [('vonequzo', 1)]
