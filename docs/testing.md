@@ -180,8 +180,9 @@ versions, platform, git commit and a timestamp:
   other pattern on strs that hold UTF-8, as Pystachy's do; about 390,000 cases. The cases of
   `test_re.py` that `tests/upstream_re_*.py` run smaller (too many allocations for gc-stress)
   run there at upstream's size;
-- **re-probe** — `tools/re_probe.py` (`make re-probe`) runs `lib/re` on CPython for the
-  inputs of `tools/re_bench.py`, textwrap's patterns on 20 paragraphs and 20 blocks of lines:
+- **re-probe** — `tools/re_probe.py` (`make re-probe`) runs `lib/re` on CPython for
+  textwrap's patterns on 20 paragraphs and 20 blocks of lines made as `tools/re_bench.py` makes
+  its inputs:
   each result must be CPython's `re`'s, and the matcher's entries and the contexts it makes must
   stay within fixed limits, deterministic counts that a slower change to the engine exceeds;
 - **rt-abi** — `tools/rtabi.py`: every function `runtime.py` defines or declares has one LLVM
@@ -203,6 +204,10 @@ versions, platform, git commit and a timestamp:
   Both counts must stay linear; native ir/run/build also succeed at N = 800 under 256 MiB.
   Each inherited method keeps its declaration metadata but shares an immutable body until
   it is needed, when its own class binding and definite-assignment checks are applied;
+- **streaming** — `tools/streamprobe.py` builds a program that takes `sum()` (of ints, of floats,
+  with a start), `max()` and `min()` of 100,000,000 items of `range()` and generator expressions,
+  and runs it under 64 MiB, where a list of the items alone would take 800 MB: these take the
+  items as they come (#88). Its output is checked against closed forms, without RSS or timing thresholds;
 - **list-storage** — `tools/listprobe.c` retains 64 cleared lists that each held 65,536 slots,
   checks that their backing capacity is released and collected live bytes stay below 1 MiB,
   and checks empty copying, reuse and sort mutation markers, normally and with collection

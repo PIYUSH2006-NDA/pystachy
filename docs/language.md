@@ -124,8 +124,11 @@ imports `annotations` from `__future__`.
   which reads as the dict CPython makes: `kwargs["k"]` (a name the call did not pass raises
   `KeyError`), `get()`, `in` (also decided at compile time for a literal name, as `if kwargs:` is),
   `len()`, iteration and `keys()`, and, where its values share a type, `values()`, `items()` and
-  `dict(kwargs)`; it prints as that dict. Changing it (`kwargs["k"] = v`, `pop()`) is rejected:
-  copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
+  `dict(kwargs)`; it prints as that dict. Where a call passes no extra keyword arguments, a loop or
+  comprehension over `kwargs.values()` or `kwargs.items()` never runs, and, as a loop over `()`,
+  is compiled for that call only where it names the parameter of a `**kwargs: T`, whose values
+  then have that type (not another name for it, `d = kwargs`). Changing it
+  (`kwargs["k"] = v`, `pop()`) is rejected: copy it, `dict(kwargs)`. In `def f[T](x: T) -> T` (PEP 695) what mentions a type parameter is
   unannotated, as are a function's parameters and return that mention a module-level
   `T = TypeVar("T")` or `Ts = TypeVarTuple("Ts")` (`*args: *Ts`; from `typing` or
   `typing_extensions`; a method's too, but `__init__`'s, and but a generic class's own, below).
@@ -143,8 +146,9 @@ imports `annotations` from `__future__`.
   it for their arguments' types, with `self` of its class. So are the operator methods
   (`__add__` & co for `+ - * / // % @ & | ^ << >>` and their in-place forms, as parsy's parsers
   define `|`, `>>` and `<<`; the comparisons, which `sorted()`, `in` and `==` of containers call
-  with two objects of the class, and must return `bool`), `__call__`, `__getitem__` and
-  `__contains__`; not `__init__` (but a class template's, below), nor the other special methods.
+  with two objects of the class, `in` of a tuple also with an item or value of another type, and
+  must return `bool`), `__call__`, `__getitem__` and `__contains__`; not `__init__` (but a class
+  template's, below), nor the other special methods.
   A field is typed by `__init__` as before, so a template that assigns one must give it a value
   of its type.
 - A class whose `__init__` has a parameter without an annotation (also `*args` or `**kwargs`), or
