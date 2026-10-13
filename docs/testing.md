@@ -296,7 +296,9 @@ fixed-point check: `hosted`, `native` (including optimization-off), `python-free
 `make verify` still runs all 25 stages. Every differential test run retains its exact expected
 check-count guard, including collection at every allocation. A failed group does not cancel
 the others. The benchmarks group reuses its verified native compiler for the extended
-benchmark correctness check, avoiding a second bootstrap.
+benchmark correctness check, avoiding a second bootstrap. The GC group runs its stress suite
+while its compiler self-compilation is still in the background, then waits for the compiler
+and compares its IR. Both exit statuses and the suite's exact check count must pass.
 
 Each group uploads its report and logs. The final required check keeps the name
 `make verify (Linux x86-64, LLVM 18, Python 3.13)` and passes only when every group succeeds.
