@@ -59,5 +59,15 @@ def maybe(n: P | None) -> None:
 
 maybe(p)
 maybe(None)
+
+
+def bind(n: P | None) -> None:
+    g = n.__init__
+    h: Callable[[int, int], None] = n.__init__
+    print("bind", g(1, 2), h(3, 4), n)
+
+
+bind(p)
+bind(None)
 x, y = p
 print(x, y, len(p), list(p))

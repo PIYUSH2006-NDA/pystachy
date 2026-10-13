@@ -18049,7 +18049,8 @@ class Gen:
                 self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
             if f.iters:
                 self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
-            self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
+                self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[m:{t}.{name}]")
         base = "list" if is_list(t) else "dict" if is_dict(t) else "frozenset" if is_fset(t) else "set" if is_set(t) else t
         if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t) or is_set(t)):

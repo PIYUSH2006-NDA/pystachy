@@ -11,5 +11,7 @@ P(x=1, y=2) [None, None] P(x=1, y=2)
 caught boom P(x=1, y=2)
 maybe None P(x=1, y=2)
 maybe None None
+bind None None P(x=1, y=2)
+bind None None None
 1 2 2 [1, 2]
 [exit 0]
