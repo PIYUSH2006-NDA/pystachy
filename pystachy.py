@@ -16543,6 +16543,8 @@ class Gen:
                     v = Val(v.v, ws[i])  # (None as an object, T as T | None)
                 elif i < len(ws) and self.converts(v.t, ws[i]) and not is_sopt(v.t):
                     v = self.coerce(v, ws[i])  # (an int as an int | None: its box)
+                elif i < len(ws) and is_fn(v.t) and is_callable(unopt(ws[i])):
+                    v = self.coerce(v, ws[i])  # (a function where a Callable is expected: made one)
                 vals.append(v)
             return self.tuple_(vals)
         if k == "listcomp":
