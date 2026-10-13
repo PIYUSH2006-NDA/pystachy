@@ -84,6 +84,17 @@ eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	build/eqprobe
 	PYSTACHY_GC_STRESS=1 build/eqprobe
 
+# Writable files' malloc'd buffers count as heap bytes: dropped files run collections, closes balance.
+fileprobe: tools/fileprobe.c runtime.c runtime.py pystachy
+	mkdir -p build
+	./pystachy rt runtime.py -o build/fileprobe-rt.ll
+	$(LLVMBIN)clang -O2 -S -emit-llvm tools/fileprobe.c -o build/fileprobe.ll
+	$(LLVMBIN)llvm-link build/fileprobe-rt.ll build/fileprobe.ll -o build/fileprobe.bc
+	$(LLVMBIN)clang -O2 build/fileprobe.bc -o build/fileprobe -lm
+	build/fileprobe
+	build/fileprobe --lib
+	PYSTACHY_GC_STRESS=1 build/fileprobe
+
 # Inspect the bitcode passed to lli, then run it: dead functions must not reach code generation.
 jitprobe: pystachy
 	$(PY) tools/jitprobe.py
@@ -95,8 +106,9 @@ verify:
 
 # IR oracle for refactors (tools/irsame.sh): ./pystachy must emit what the compiler of commit REF (default
 # HEAD) emits -- IR, messages, exit status -- for every corpus program, or for FILES; irsame-py compares the
-# CPython-hosted compilers. build/ref holds REF's pystachy.py, runtime.c, lib/ and stage-2 compiler, built
-# as above and rebuilt only for another commit; each compiler uses the runtime.c and lib/ beside it.
+# CPython-hosted compilers. build/ref holds REF's pystachy.py, runtime.c (with ryu/, which it includes),
+# lib/ and stage-2 compiler, built as above and rebuilt only for another commit; each compiler uses the
+# runtime.c and lib/ beside it.
 REF ?= HEAD
 irsame: pystachy ref
 	PYSTACHY_HOME= tools/irsame.sh build/ref/pystachy ./pystachy $(FILES)
@@ -114,6 +126,7 @@ ref:
 	  git show $$c:pystachy.py > build/ref/pystachy.py && git show $$c:runtime.c > build/ref/runtime.c && \
 	  { ! git cat-file -e $$c:runtime.py 2> /dev/null || git show $$c:runtime.py > build/ref/runtime.py; } && \
 	  { ! git cat-file -e $$c:lib 2> /dev/null || git archive $$c lib | tar -xf - -C build/ref; } && \
+	  { ! git cat-file -e $$c:ryu 2> /dev/null || git archive $$c ryu | tar -xf - -C build/ref; } && \
 	  PYSTACHY_HOME= $(PY) build/ref/pystachy.py build build/ref/pystachy.py -o build/ref/pystachy1 && \
 	  PYSTACHY_HOME= build/ref/pystachy1 build build/ref/pystachy.py -o build/ref/pystachy && \
 	  echo $$c > build/ref/commit; \
@@ -147,10 +160,10 @@ re-fuzz:
 lint:
 	ruff check
 	shellcheck -s sh -S warning $(wildcard tests/*.sh tests/ffi/*.sh tools/*.sh bench/*.sh)
-	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c pyext.c pyembed.c
+	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror runtime.c tools/dictprobe.c tools/listprobe.c tools/eqprobe.c tools/fileprobe.c pyext.c pyembed.c
 	$(LLVMBIN)clang -fsyntax-only -Wall -Wextra -Werror -DPYX_ABI3T pyext.c
 
 clean:
 	rm -rf build pystachy
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings re-fuzz lint clean

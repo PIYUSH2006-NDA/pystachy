@@ -226,6 +226,18 @@ License, whose text and copyright notice ("Copyright (c) 2014 Jeff Quast
 <contact@jeffquast.com>") are in ports/wcwidth/LICENSE, with the permission notice of Markus
 Kuhn's code that wcwidth derives from.
 
+Ryu (ryu/)
+----------
+
+ryu/d2s.c, common.h, d2s_intrinsics.h, d2s_small_table.h, digit_table.h and ryu.h are the files of
+those names in the ryu/ directory of Ryu (https://github.com/ulfjack/ryu), at commit
+4c0618b0e44f7ef027ebae05d2cc7812048f7c8f, with their #include "ryu/NAME" lines changed to
+#include "NAME" (ryu/README.md); runtime.c includes ryu/d2s.c for the digits of a float's repr.
+Upstream offers these files under the Apache License, Version 2.0 or, alternatively, the Boost
+Software License, Version 1.0. Pystachy uses them under the Boost Software License, Version 1.0,
+whose text is in ryu/LICENSE-Boost; their copyright notice ("Copyright 2018 Ulf Adams") is kept in
+each file's header.
+
 CPython's list sort (runtime.c)
 -------------------------------
 
@@ -373,6 +385,23 @@ tests/upstream/CPYTHON-LICENSE.txt.
 Summary of changes: the unittest scaffolding becomes tables of the upstream arguments and
 expected values, and each case prints its result (the recorded output is CPython's re's); the
 cases each file's header lists are left out, and some run on smaller inputs.
+
+CPython's set tests (tests/upstream_set_*.py)
+---------------------------------------------
+
+tests/upstream_set_joint_ops.py adapts TestJointOps (run for set and frozenset, as TestSet and
+TestFrozenSet run it) and TestSet's and TestFrozenSet's own tests, and
+tests/upstream_set_basic_ops.py adapts TestBasicOps (its Empty, Singleton, Tuple and String
+cases), TestExceptionPropagation.test_changingSizeWhileIterating, TestBinaryOps, TestUpdateOps,
+TestMutate, TestSubsets, TestOnlySetsInBinaryOps and TestIdentities, all from CPython 3.13.16's
+Lib/test/test_set.py at commit cbc944f4bc59639a444dd971c737788ba2283a91. They are used under the
+Python Software Foundation License Version 2; the complete CPython license and copyright notices
+are retained in tests/upstream/CPYTHON-LICENSE.txt.
+
+Summary of changes: unittest scaffolding becomes assertions, with prints of the values compared;
+self.thetype and the loops over set, frozenset, dict.fromkeys, str, list and tuple become calls of
+templates; generator functions become generator expressions; the cases each file's header lists
+are left out, with the reason. Differential output is recorded with CPython 3.13.16.
 
 APACHE LICENSE VERSION 2.0
 --------------------------

@@ -8,10 +8,11 @@
 #   tests-opt-off  tests/run.sh with the stage-2 compiler and every optimization on the IR turned off
 #                  (PYSTACHY_OPT=-all): the passes change no output
 #   runtime-cache  tests/cache.sh with both compilers: the cached runtime is used while nothing it is
-#                  built from changes, built again when runtime.c, runtime.py, the compiler or a tool
-#                  changes (also by a same-size edit whose mtime is set back, or one made while it is
-#                  built), keyed by the flags too, never left by a failed build; ext's glue cached
-#                  beside it; a run's own runtime while a tool is not settled; PATH's rules
+#                  built from changes, built again when runtime.c, a file it includes from ryu/,
+#                  runtime.py, the compiler or a tool changes (also by a same-size edit whose mtime is
+#                  set back, or one made while it is built), keyed by the flags too, never left by a
+#                  failed build; ext's glue cached beside it; a run's own runtime while a tool is not
+#                  settled; PATH's rules
 #   python-free    PATH holds only symlinks to the LLVM tools, the linker and the POSIX tools that the
 #                  driver and tests/run.sh call (no python3): the native compiler rebuilds its runtime
 #                  and itself, reproduces the same IR and passes the tests
@@ -43,6 +44,9 @@
 #                  empty operations/reuse preserve sort's sentinel, without allocation in clear
 #   container-eq   tools/eqprobe.c: shared DAG comparisons stop within a fixed comparison budget,
 #                  including ordering and list searches, normally and with GC stress
+#   file-buffers   tools/fileprobe.c: writable files' malloc'd buffers count as heap bytes, so files
+#                  dropped without close() run collections; every close takes back exactly what was
+#                  counted, a standard stream's are never counted (deterministic counts, no RSS)
 #   dict-probes    tools/dictprobe.c: dict lookups visit few table slots for keys that defeat a weak
 #                  hash or probe sequence (deterministic counts against a fixed limit, no timings)
 #   compile-limits tools/compilelimits.py: hosted/native ir/run/build reject growing types,
@@ -70,8 +74,8 @@ rm -rf "$V" "$OUT"
 mkdir -p "$V/home" "$V/ubsan-home"
 cp runtime.c runtime.py "$V/home/"
 cp runtime.c runtime.py "$V/ubsan-home/"
-cp -R lib "$V/home/"
-cp -R lib "$V/ubsan-home/"
+cp -R lib ryu "$V/home/"
+cp -R lib ryu "$V/ubsan-home/"
 export PYSTACHY_HOME="$ROOT"
 # The steps set the knobs they test themselves: one left in the caller's environment would weaken a
 # step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they
@@ -180,12 +184,12 @@ x=$(tests $((nl * ALL)) $logs 2>> "$L") && r=pass || r=fail
 step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
 
 # ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
-# whose checks are 56 with the native compiler and 55 with CPython's, which runs no PATH search)
+# whose checks are 58 with the native compiler and 57 with CPython's, which runs no PATH search)
 L=$V/runtime-cache.log; s=$(now)
 PY=$PY tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
 tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
 for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
-x=$(tests $((56 + 55)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
+x=$(tests $((58 + 57)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
 step runtime-cache $r "$s" "$L" ', "compilers": ["stage2", "CPython-hosted"]'"$x"
 
 # ---- python-free: the native compiler and the tests with only LLVM + POSIX tools on PATH
@@ -323,6 +327,14 @@ L=$V/container-eq.log; s=$(now); r=fail
   "${LLVM}clang" -O2 "$V/eqprobe.bc" -o "$V/eqprobe" -lm &&
   "$V/eqprobe" && PYSTACHY_GC_STRESS=1 "$V/eqprobe" && r=pass; } > "$L" 2>&1
 step container-eq $r "$s" "$L" ', "shared_levels": 32, "comparison_limit": 64'
+
+# ---- file-buffers: dropped files' buffers run collections; opens, closes and the exit balance the counts
+L=$V/file-buffers.log; s=$(now); r=fail
+{ "${LLVM}clang" -O2 -S -emit-llvm tools/fileprobe.c -o "$V/fileprobe.ll" &&
+  "${LLVM}llvm-link" "$V/rt1.ll" "$V/fileprobe.ll" -o "$V/fileprobe.bc" &&
+  "${LLVM}clang" -O2 "$V/fileprobe.bc" -o "$V/fileprobe" -lm &&
+  "$V/fileprobe" && "$V/fileprobe" --lib && PYSTACHY_GC_STRESS=1 "$V/fileprobe" && r=pass; } > "$L" 2>&1
+step file-buffers $r "$s" "$L" ', "dropped_files": 128, "buffer_bytes": 136314880, "outstanding_limit": 41975808'
 
 # ---- dict-probes: table slots per dict lookup for colliding keys, sequential keys the control
 L=$V/dict-probes.log; s=$(now); r=fail

@@ -22,6 +22,7 @@ honest.
 | `make dictprobe` | bounded dictionary probe counts and one string hash scan per object, including GC stress |
 | `make listprobe` | empty lists release backing storage; deterministic capacity and collected live-byte checks |
 | `make eqprobe` | shared container DAGs compare within a fixed comparison budget, including ordering and searches |
+| `make fileprobe` | writable files' buffers count as heap bytes: files dropped without `close()` run collections, and every close takes back exactly what was counted |
 | `make jitprobe` | unused functions do not reach `lli`; live calls, defaults, import effects and runtime callbacks match CPython |
 | `make lint` | `ruff check` (findings only, `ruff.toml`), `shellcheck` of the scripts as POSIX sh, and clang's warnings on the C sources; `pip install -r tools/requirements-dev.txt` gives the versions that CI's Lint workflow (`.github/workflows/lint.yml`) runs on every push, with `make check-recordings` after it |
 
@@ -56,7 +57,8 @@ hash lookup for `if k in d: d[k] += 1` and the like), and so can a choice of the
 comma-separated, or `-all`; the tests pass with each one off.
 The programs cover arithmetic and overflow edges,
 strings (also their Unicode whitespace), escapes and f-strings, a 400-case sample of the
-format-spec language, lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
+format-spec language, float repr's shortest digits (every power of two, the ends of the ranges,
+4,096 random doubles and 2,048 random decimals), lists, dicts (also keys that collide in the hash table, and tuple keys), tuples, classes
 (also their container protocol, static and class methods, and class variables), dataclasses, NamedTuples, typing's forms (`collections.abc`, `Final`, `@overload`, `TypeVar`,
 `os.PathLike`), `Optional` structures, optional values (also boxed numbers) and
 their narrowing (with CPython's error for each use of `None` where only a value works), rich comparisons, defaults,
@@ -70,8 +72,10 @@ use, loops with `else`, the `lib/` modules (`tests/lib_*.py`, and for `re` CPyth
 streams, exceptions and exit statuses, runtime errors (also CPython's wording of the type and argument errors Pystachy reports
 when it compiles), garbage-collector churn, classic
 algorithms, a small interpreter, and 16 programs from Ouro v2. Where `tests/NAME.full`
-exists, the program's stdout is `/dev/full`. Current result: **1931 passed, 0 failed** with
-both the CPython-hosted and the self-compiled compiler.
+exists, the program's stdout is `/dev/full`. Current result: **2,454 passed, 0 failed** (at
+1eb23de: 698 programs and 23 deviations in each mode, 870 rejections and the `pystachy check`
+cases), with both the CPython-hosted and the self-compiled compiler; `make verify` counts them
+from the files and reports them in `build/verification.json`.
 
 ### Recording expected output
 
@@ -127,7 +131,8 @@ versions, platform, git commit and a timestamp:
   runtime ([runtime-in-subset.md](runtime-in-subset.md) §1.4) is used while nothing it is built
   from changes (also by the AOT tier, and through another path to the same tools), and built
   again, its new entry replacing the old, when `runtime.py` changes by an edit of the same size
-  whose mtime is set back, when `runtime.c` changes, when both change while the runtime is built
+  whose mtime is set back, when `runtime.c` changes, when a file it includes from `ryu/` changes
+  (the home's, not one in the current directory), when both change while the runtime is built
   (the run after builds the new bytes), when a tool changes and when the compiler changes;
   `PYSTACHY_CFLAGS`, `PYSTACHY_OPT` (the same passes named otherwise share one) and tools found
   through `PATH` get entries of their own; a failed `llvm-link` and a build killed after `opt`
@@ -200,6 +205,15 @@ versions, platform, git commit and a timestamp:
 - **container-eq** — `tools/eqprobe.c` compares a 32-level shared container DAG, orders it and
   searches for it in lists, normally and with collection at every allocation. More than 64
   recursive comparisons fail immediately, so an exponential traversal fails without hanging;
+- **file-buffers** — `tools/fileprobe.c` drops 128 files without `close()`, each buffering 16 KiB
+  more than the last (136 MB in all, #100): collections must run, the buffers outstanding stay
+  below 32 MiB and four of the largest, and each file the collector closed has its text written.
+  A file's buffers must count exactly as handed out and in the heap, and as live bytes while it is
+  open; `close()`, the compiler's drop, the collector, a reopening, running out of descriptors
+  and the exit must take back exactly them; a standard stream's are never counted, `PYSTACHY_GC=off`
+  collects nothing, and a buffer that cannot be allocated changes no counter. It runs normally,
+  started as an extension module is, and with collection at every allocation; a wrapper of
+  `malloc` and `free` counts the buffers themselves, without RSS or timing thresholds;
 - **compile-limits** — `tools/compilelimits.py` checks that growing type representations,
   active signatures, branching template specializations and the signature bytes they retain
   (16 MiB per compilation) fail with bounded source diagnostics in hosted/native `ir`, JIT `run`
@@ -221,7 +235,7 @@ holds, which `tests/verify.sh` counts from its files as `tests/run.sh` makes the
 deviation once per mode, each rejection once, and `pystachy check` of the syntax tests): a run
 that covered fewer cases fails, as one with a failure does. The report gives each of these steps'
 `passed`, `failed` and `expected` counts. The **runtime-cache** step expects `tests/cache.sh`'s
-checks the same way: 56 with the native compiler, 55 with CPython's (one `PATH` case fewer).
+checks the same way: 58 with the native compiler, 57 with CPython's (one `PATH` case fewer).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
 others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,

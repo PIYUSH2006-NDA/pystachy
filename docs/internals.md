@@ -36,6 +36,7 @@ flowchart TD
 | `pystachy.py` | 16,682 | lexer 611 · parser 1,724 · scopes (CPython's symbol-table errors) 685 · module loader 2,014 · types and tables (the `RUNTIME` table among them) 1,455 · the IR's classes and the definite-assignment pass 352 · type checker + IR generator, the IR's passes and its lowering 9,577 · driver 210 |
 | `runtime.c` | 3,340 | garbage collector, string, list and dict memory, timsort, dict and set tables, generic repr/compare, float digits, files and I/O, clocks, exceptions and their unwinding |
 | `runtime.py` | 1,366 | the runtime's part written in the subset: str methods, the format-spec mini-language, `math`'s integer functions, `fsum` and `prod`, dict hashing ([runtime-in-subset.md](runtime-in-subset.md)) |
+| `ryu/` | 1,247 | Ryu's `d2s`, which runtime.c includes for a float's shortest round-trip digits: upstream's files, under the Boost Software License 1.0 ([`ryu/README.md`](../ryu/README.md)) |
 | `lib/` | 9 modules | unmodified CPython 3.13 standard library modules that compile as they are ([`lib/README.md`](../lib/README.md)) |
 | `tests/` | 539 programs, 634 rejection cases, 16 deviation cases, 12 IR probes | each program must print exactly what CPython prints, JIT and AOT ([testing.md](testing.md)) |
 | `bench/` | 9 programs | the benchmarks of [performance.md](performance.md) |
@@ -315,14 +316,18 @@ frame address and a table of those globals, because under the JIT they live in m
 no scanner would find. A collection runs once max(32 MiB, live bytes) have been
 allocated since the last one, so the heap stays near twice the live set.
 Open files that become unreachable are closed after marking, before the sweep. A
-collection also runs when `open()` runs out of file descriptors.
+collection also runs when `open()` runs out of file descriptors. The buffers of a file open
+for writing are malloc'd, but count as heap bytes (allocated, live and in the heap), and
+`open()` allocates them as a large object is allocated, so files dropped without `close()`
+start collections too; a close takes back exactly what was counted. `sys.stdout`'s, which no
+collection frees, are not counted.
 `PYSTACHY_GC_STRESS=N` collects every N allocations; `PYSTACHY_GC=off` and
 `PYSTACHY_GC=stats` turn collection off or print a summary at exit.
 
 ### Python semantics in the runtime
 
-Floor division and modulo, float `repr` (shortest
-round-trip digits), `round` with exact half-even rounding, Neumaier-compensated `sum`,
+Floor division and modulo, float `repr` (the shortest digits that round-trip, and of those the
+closest, by Ryu's `d2s` in `ryu/`), `round` with exact half-even rounding, Neumaier-compensated `sum`,
 `int()`/`float()` string grammar (with the 4,300-digit limit), `str.split`, string `repr`
 quoting and escapes (a table of the code points `str.isprintable()` rejects), modular
 `pow` with inverses, and the format-spec mini-language are implemented to match CPython's
@@ -391,8 +396,9 @@ reads, an in-place string builder, `memchr`, `memcmp` and `memmem`, wrapping and
 arithmetic), each a few checked LLVM instructions. The driver links it to runtime.c's bitcode
 and optimizes the two as one module (`build/runtime-py-<L>-<K>.bc` and its `.o`) when it
 builds the cached runtime. The name is a hash of all the runtime is built from: the bytes of
-`runtime.c`, `runtime.py` and the running compiler, the flags and the LLVM tools' files, so an
-edit of any of them, also one made while the runtime is built, makes a run build it again
+`runtime.c`, of the files it includes from `ryu/`, of `runtime.py` and of the running compiler,
+the flags and the LLVM tools' files, so an edit of any of them, also one made while the runtime
+is built, makes a run build it again
 ([runtime-in-subset.md](runtime-in-subset.md) §1.4; `tests/cache.sh` tests the rules).
 Programs' IR does not change (but for an `invoke` inside a `try` where a moved function can
 raise). A raise in a `runtime.py` function unwinds to
