@@ -1,0 +1,15 @@
+None P(x=1, y=2)
+P(x=1, y=2) 1 2 1 True True
+repeated P(x=1, y=2)
+arg a
+arg b
+P(x=3, y=7) P(x=3, y=8) P(x=3, y=7)
+P(x=9, y=7) P(x=3, y=7) P(x=3, y=4) P(x=5, y=7) P(x=6, y=7)
+reset None P(x=3, y=7)
+None P(x=1, y=2)
+P(x=1, y=2) [None, None] P(x=1, y=2)
+caught boom P(x=1, y=2)
+maybe None P(x=1, y=2)
+maybe None None
+1 2 2 [1, 2]
+[exit 0]

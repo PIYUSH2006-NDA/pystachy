@@ -302,7 +302,8 @@ imports `annotations` from `__future__`.
   nor of a function that returns `None`: annotate the field). An exception class (below) also
   has its base's fields, and an object of it is an object of its bases too.
 - A `typing.NamedTuple` class (annotated fields with defaults, a docstring, methods) is a
-  dataclass whose fields only its `__init__` assigns, read like the tuple of them: unpacking
+  dataclass whose fields only its construction assigns (a call `p.__init__(...)` evaluates its
+  arguments and does nothing, as CPython's `object.__init__` does there), read like the tuple of them: unpacking
   (also as a `for` target), constant indexing, iteration, `in`, `len()`, `%` formatting,
   `+` and `*` (which make a tuple), the prefixes of `str.startswith()` or suffixes of `endswith()`,
   `p._replace(f=v)`, `_fields`, `_asdict()` (of fields of

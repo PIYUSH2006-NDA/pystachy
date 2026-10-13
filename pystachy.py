@@ -17923,6 +17923,16 @@ class Gen:
             return self.kw_method(o, m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
+        if o.t in self.nts and m == "__init__":
+            # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+            # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
+            # of its own, and does nothing, also on None. The __init__ that makes the object is the
+            # compiler's (see nt_class), which only construction and _replace() call
+            for a in args:
+                x = a.kids[0] if a.kind == "kw" else a
+                if not pure_arg(x):
+                    self.expr(x, "")
+            return Val("null", "None")
         if (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")) and (m == "__str__" or m == "__repr__") and len(args) == 0 and not self.curfn.ll.startswith("@x."):
             # e.__str__() is str(e): that of the class of e's object, which may derive from o.t's
             # (but for the ExcClass's own functions, see exc_helpers)
