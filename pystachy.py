@@ -18066,6 +18066,16 @@ class Gen:
             return self.kw_method(o, m, args)
         if is_opt(o.t):
             o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
+        if o.t in self.nts and m == "__init__":
+            # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+            # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
+            # of its own, and does nothing, also on None. The __init__ that makes the object is the
+            # compiler's (see nt_class), which only construction and _replace() call
+            for a in args:
+                x = a.kids[0] if a.kind == "kw" else a
+                if not pure_arg(x):
+                    self.expr(x, "")
+            return Val("null", "None")
         if (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")) and (m == "__str__" or m == "__repr__") and len(args) == 0 and not self.curfn.ll.startswith("@x."):
             # e.__str__() is str(e): that of the class of e's object, which may derive from o.t's
             # (but for the ExcClass's own functions, see exc_helpers)
@@ -18182,7 +18192,8 @@ class Gen:
                 self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
             if f.iters:
                 self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
-            self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
+                self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
             return Val(o.v, f"fn[m:{t}.{name}]")
         base = "list" if is_list(t) else "dict" if is_dict(t) else "frozenset" if is_fset(t) else "set" if is_set(t) else t
         if has_method(base, name) and (t == "str" or t == "file" or is_list(t) or is_dict(t) or is_set(t)):
@@ -19386,6 +19397,10 @@ class Gen:
             self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
         if key not in METHODS:
             self.err(f"'{o.t}' has no method '{m}'")
+        if key == "dict.get" and (len(args) == 0 or len(args) > 2):
+            # (CPython's TypeError; not left to the arity check below, as d.get(k, d2, None) would
+            # read as d.get(k, None))
+            self.err(f"get expected at {'least 1 argument' if len(args) == 0 else 'most 2 arguments'}, got {len(args)}")
         # d.get(k) and d.get(k, None): the value or None, for values that can be None
         optget = key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and self.optional(V) != ""
         if optget:

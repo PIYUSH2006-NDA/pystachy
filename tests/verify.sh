@@ -51,8 +51,12 @@
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
 #                  scan, grow no faster than the programs
+# A step that runs tests/run.sh over the suite passes only with as many passes as the checks the suite
+# holds, counted from its files (checks): a run that covered fewer cases fails.
 # usage: tests/verify.sh   (make verify)   env: PY (default python3), PYSTACHY_LLVM (LLVM 18 bin dir)
 cd "$(dirname "$0")/.." || exit 1
+# shellcheck disable=SC3045 # (ulimit -c is not POSIX, but dash, bash, ksh and busybox have it)
+ulimit -c 0 2> /dev/null  # (no core file of a crashing compiler or test program in the tree)
 ROOT=$(pwd)
 PY=${PY:-python3}
 UBSAN="-fsanitize=undefined -fno-sanitize-recover=all"
@@ -88,18 +92,35 @@ step() {
   printf '%-14s %s  %8ss  %s\n' "$1" "$2" "$t" "${4#"$ROOT"/}"
   [ "$2" = pass ] || { nfail=$((nfail + 1)); tail -15 "$4" | sed 's/^/    | /'; }
 }
-# tests LOG...: JSON counts summed over tests/run.sh outputs (the "N passed, M failed" line ends
-# each log, FAIL lines name the failures); false if anything failed or a log has no summary
+# checks MODES: the checks tests/run.sh makes of the whole suite in MODES, counted from the files as
+# its loops make them: each program and each deviation once per mode, each rejection once, and one
+# "pystachy check" more of each syntax_*.py program and of each syntax_*.py rejection whose error is
+# in its own file
+checks() {
+  c=0; m=0
+  for x in $1; do m=$((m + 1)); done
+  for f in tests/*.py tests/deviations/*.py; do [ -f "$f" ] && c=$((c + m)); done
+  for f in tests/syntax_*.py tests/errors/*.py; do [ -f "$f" ] && c=$((c + 1)); done
+  for f in tests/errors/syntax_*.py; do
+    n=${f##*/}; [ -f "$f" ] && case $(head -1 "$f") in "# error: ${n%.py}.py:"*) c=$((c + 1)) ;; esac
+  done
+  echo $c
+}
+ALL=$(checks "jit aot")
+# tests N LOG...: JSON counts summed over tests/run.sh outputs (the "N passed, M failed" line ends
+# each log, FAIL lines name the failures); false if anything failed, a log has no summary, or the
+# runs passed other than the N checks the suite holds (said on stderr)
 tests() {
-  np=0; nf=0; fl=""; ok=0
+  np=0; nf=0; fl=""; ok=0; want=$1; shift
   for l; do
     c=$(tail -1 "$l" 2>/dev/null | sed -n 's/^\([0-9]*\) passed, \([0-9]*\) failed$/\1 \2/p')
     [ -n "$c" ] || { ok=1; continue; }
     np=$((np + ${c% *})); nf=$((nf + ${c#* }))
     fl="$fl$(sed -n 's/^FAIL \(.*\)$/\1/p' "$l" | while read -r x; do printf ', %s' "$(js "$x")"; done)"
   done
-  printf ', "passed": %s, "failed": %s, "failures": [%s]' $np $nf "${fl#, }"
-  [ $ok = 0 ] && [ $nf = 0 ]
+  printf ', "passed": %s, "failed": %s, "expected": %s, "failures": [%s]' $np $nf "$want" "${fl#, }"
+  [ $ok = 0 ] && [ $nf = 0 ] || return 1
+  [ $np = "$want" ] || { echo "$np passed, where the suite holds $want checks (tests/verify.sh's checks)" >&2; false; }
 }
 
 # ---- bootstrap: fixed point of the self-hosting compiler
@@ -138,28 +159,29 @@ fi
 L=$V/tests-cpython.log; s=$(now)
 { $PY -c 'import py_compile as c; c.compile("pystachy.py", doraise=True, invalidation_mode=c.PycInvalidationMode.CHECKED_HASH)' &&
   tests/run.sh "$PY -m pystachy"; } > "$L" 2>&1
-x=$(tests "$L") && r=pass || r=fail
+x=$(tests $ALL "$L" 2>> "$L") && r=pass || r=fail
 step tests-cpython $r "$s" "$L" ', "compiler": "CPython-hosted", "modes": ["jit", "aot"]'"$x"
 L=$V/tests-native.log; s=$(now)
 tests/run.sh "$V/pystachy2" > "$L" 2>&1
-x=$(tests "$L") && r=pass || r=fail
+x=$(tests $ALL "$L" 2>> "$L") && r=pass || r=fail
 step tests-native $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"]'"$x"
-L=$V/tests-opt-off.log; s=$(now); logs=""; offs=""
+L=$V/tests-opt-off.log; s=$(now); logs=""; offs=""; nl=0
 # shellcheck disable=SC2043 # (a list of one, for now)
 for o in all; do
   PYSTACHY_OPT=-$o tests/run.sh "$V/pystachy2" > "$V/tests-opt-off-$o.log" 2>&1
-  logs="$logs $V/tests-opt-off-$o.log"; offs="$offs, \"-$o\""
+  logs="$logs $V/tests-opt-off-$o.log"; offs="$offs, \"-$o\""; nl=$((nl + 1))
 done
 for l in $logs; do echo "== $(basename "$l")"; cat "$l"; done > "$L"
-x=$(tests $logs) && r=pass || r=fail
+x=$(tests $((nl * ALL)) $logs 2>> "$L") && r=pass || r=fail
 step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
 
-# ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh)
+# ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
+# whose checks are 56 with the native compiler and 55 with CPython's, which runs no PATH search)
 L=$V/runtime-cache.log; s=$(now)
 tests/cache.sh "$V/pystachy2" > "$V/cache-native.log" 2>&1
 tests/cache.sh "$PY -m pystachy" > "$V/cache-cpython.log" 2>&1
 for l in native cpython; do echo "== $l"; cat "$V/cache-$l.log"; done > "$L"
-x=$(tests "$V/cache-native.log" "$V/cache-cpython.log") && r=pass || r=fail
+x=$(tests $((56 + 55)) "$V/cache-native.log" "$V/cache-cpython.log" 2>> "$L") && r=pass || r=fail
 step runtime-cache $r "$s" "$L" ', "compilers": ["stage2", "CPython-hosted"]'"$x"
 
 # ---- python-free: the native compiler and the tests with only LLVM + POSIX tools on PATH
@@ -189,7 +211,7 @@ nopy() { env -i PATH="$NP" TMPDIR="${TMPDIR:-/tmp}" PYSTACHY_HOME="$V/home" ${PY
     echo "rebuilt compiler emits the rt1 IR of runtime.py" &&
     nopy sh tests/run.sh "$V/pystachy-nopy" && r=pass
 } > "$L" 2>&1
-x=$(tests "$L") || r=fail
+x=$(tests $ALL "$L" 2>> "$L") || r=fail
 step python-free $r "$s" "$L" "$(printf ', "python_on_path": %s, "path_tools": [%s], "ir_identical": %s' "$py" \
   "$(ls "$NP" | while read -r t; do printf '"%s", ' "$t"; done | sed 's/, $//')" "$(same "$V/stage1.ll" "$V/stage-nopy.ll")")$x"
 rm -rf "$NP"
@@ -214,7 +236,7 @@ UBSO=$("${LLVM}clang" -print-file-name="libclang_rt.ubsan_standalone-$(uname -m)
     for m in aot jit; do echo "-- tests ($m)"; cat "$V/ubsan-$m.log"; done
   fi
 } > "$L" 2>&1
-x=$(tests "$V/ubsan-aot.log" "$V/ubsan-jit.log") && [ $built = 1 ] && r=pass
+x=$(tests $(($(checks aot) + $(checks jit))) "$V/ubsan-aot.log" "$V/ubsan-jit.log" 2>> "$L") && [ $built = 1 ] && r=pass
 step ubsan $r "$s" "$L" ", \"cflags\": $(js "$UBSAN"), \"modes\": [\"aot\", \"jit\"], \"jit_preload\": $(js "$UBSO"), \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-ubsan.ll")$x"
 
 # ---- check-ir: the IR of every program of the corpus passes the IR check and is valid LLVM
@@ -237,7 +259,7 @@ L=$V/gc-stress.log; s=$(now); r=fail
   PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1
   echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
 } > "$L" 2>&1
-x=$(tests "$V/gc-stress-tests.log") || r=fail
+x=$(tests $ALL "$V/gc-stress-tests.log" 2>> "$L") || r=fail
 step gc-stress $r "$s" "$L" ", \"compiler_interval\": 1000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
 
 # ---- benchmarks: same output as CPython, JIT and AOT
