@@ -17736,6 +17736,15 @@ class Gen:
             for i in range(len(targs(b.t))):
                 item = self.tget(b, i)
                 if not self.comparable(item.t, a.t):
+                    # item == x of types whose values are never equal: CPython still calls the
+                    # item's __eq__(x), or where the item's class has none (a builtin type's
+                    # declines) x's __eq__(item); with neither, they are not equal
+                    c = self.foreign_eq(item, a)
+                    if c.t != "":
+                        nx = self.label()
+                        self.incoming(ph, "true", self.cur)
+                        self.cbr(c.v, lend, nx)
+                        self.place(nx)
                     continue
                 u = unopt(item.t)
                 if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
@@ -17873,6 +17882,19 @@ class Gen:
         if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
             return True
         return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))
+
+    def foreign_eq(self, a: Val, b: Val) -> Val:
+        # a == b of types whose values comparable() finds never equal: the __eq__ of a's class
+        # where it takes a b, else, where a's class has none (a builtin type's declines, as
+        # object's does), the __eq__ of b's class where it takes an a (CPython's reflected
+        # call); Val("", "") where neither applies, and CPython finds them not equal
+        if a.t in self.classes and "__eq__" in self.classes[a.t].methods:
+            if self.cmp_method(a.t, "__eq__", b.t) == "":
+                return Val("", "")
+            return self.eqcall(self.classes[a.t].methods["__eq__"], True, a, b)
+        if self.cmp_method(b.t, "__eq__", a.t) != "":
+            return self.eqcall(self.classes[b.t].methods["__eq__"], True, b, a)
+        return Val("", "")
 
     # ---- calls
     def call(self, n: Node, want: str) -> Val:

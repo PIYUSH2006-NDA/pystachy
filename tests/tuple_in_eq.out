@@ -1,0 +1,16 @@
+True False
+False True
+True True False
+True False True False
+True
+ZeroDivisionError: compared
+   a == ...
+   b == ...
+True
+True False True False
+False False
+True
+False True
+True
+False True False True
+[exit 0]
