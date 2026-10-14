@@ -88,8 +88,8 @@ def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
             nt = self.isinst_narrow(t, n.kids[2], truth)
             if nt != "":
                 out[nm] = nt
-        elif self.isinst(self.ltype[nm], n.kids[2]) == (-2 if truth else -3):
-            out[nm] = unopt(self.ltype[nm])
+        elif self.isinst(t, n.kids[2]) == (-2 if truth else -3):
+            out[nm] = unopt(t)
 
 def gen_narrowable(self, name: str) -> bool:
     # a local (or parameter) of an optional type, or a union: a global or a field may change in a
