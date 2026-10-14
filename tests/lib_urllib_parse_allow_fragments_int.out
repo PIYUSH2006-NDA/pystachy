@@ -1,0 +1,3 @@
+SplitResult(scheme='http', netloc='example.com', path='/#f', query='', fragment='')
+SplitResult(scheme='http', netloc='example.com', path='/', query='', fragment='f')
+[exit 0]

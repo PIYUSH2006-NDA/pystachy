@@ -135,3 +135,11 @@ def inferred_none_call() -> list[int | None]:
 
 empty_constructors()
 print(inferred_none_call())
+
+# A new optional local binding is allowed; explicit return types still apply.
+def optional_rebind(value: str | None) -> str | None:
+    result = "default"
+    result = value
+    return result
+
+print(optional_rebind(None), optional_rebind("text"))
