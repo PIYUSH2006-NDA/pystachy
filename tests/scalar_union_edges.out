@@ -1,0 +1,9 @@
+bool false int:11 WORD none
+I5 Soriginal N Schanged I22
+Schanged
+N
+Schanged N
+int:42,WORD 42:Schanged
+N F1.5 N BFalse BTrue
+Sdynamically allocateddynamically allocateddynamically allocated:9500 I42:9500 N:9500
+[exit 0]

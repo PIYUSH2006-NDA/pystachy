@@ -1,0 +1,6 @@
+int:7 float:1.5
+str:event none
+int:3 str:x none
+5 none WORD
+4 value kept:int:9
+[exit 0]

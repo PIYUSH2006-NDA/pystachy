@@ -14,6 +14,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Scalars | `int`, `float`, `bool`, `str` |
 | Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
+| Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
 | Generics | Function templates and constructor-inferred `Generic` classes using `TypeVar` / `TypeVarTuple` |
@@ -23,8 +24,9 @@ have a restricted set of types: integers, strings and supported tuples (whose it
 include booleans).
 Tuples have a fixed shape, with at most nine items and constant indices.
 
-Optional unions are supported; arbitrary unions such as `int | str` and dynamic `Any` values
-are not. Generic class support is limited: construction infers type arguments, but explicit
+Explicit closed scalar unions such as `int | str` and optional unions are supported.
+General object unions and dynamic `Any` values are not. Generic class support is limited:
+construction infers type arguments, but explicit
 `Box[int]` annotations and subscriptions are not yet supported.
 
 See the [type reference](language/typing.md#supported-types) for exact forms, conversions and constraints.
@@ -194,7 +196,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 
 ## Unsupported features
 
-The main gaps are multiple inheritance, arbitrary unions and `Any`, generators, `async`,
+The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
 `bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
 dynamic attribute access, stepped slices and unrestricted argument expansion.
 
