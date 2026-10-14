@@ -15,6 +15,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
 | Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
+| Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
 | Generics | Function templates and constructor-inferred `Generic` classes using `TypeVar` / `TypeVarTuple` |
@@ -24,9 +25,9 @@ have a restricted set of types: integers, strings and supported tuples (whose it
 include booleans).
 Tuples have a fixed shape, with at most nine items and constant indices.
 
-Explicit closed scalar unions such as `int | str` and optional unions are supported.
-General object unions and dynamic `Any` values are not. Generic class support is limited:
-construction infers type arguments, but explicit
+Explicit closed scalar unions such as `int | str`, bounded native reference unions,
+and optional unions are supported. Dynamic `Any` values are not.
+Generic class support is limited: construction infers type arguments, but explicit
 `Box[int]` annotations and subscriptions are not yet supported.
 
 See the [type reference](language/typing.md#supported-types) for exact forms, conversions and constraints.

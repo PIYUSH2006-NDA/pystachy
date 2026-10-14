@@ -83,9 +83,11 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 | `IFn` | Function signature, parameter indices, entry slots, blocks, loops, handlers and effect summary |
 
 Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
-`union[int,str]`. A closed scalar union is an immutable pointer to a program-wide
+`union[int,str]`. A closed union is an immutable pointer to a program-wide
 type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
-Narrowing checks the tag before reading the concrete payload.
+Native reference unions keep the original object/file pointer in that payload;
+their method calls dispatch by member tag. Narrowing checks the tag before reading
+the concrete payload.
 An `Ins` uses only the fields its operation needs:
 
 | Field | Meaning |
@@ -238,7 +240,9 @@ CPython extension modules **are supported** through `pystachy ext` and boundary 
 They do not implement the historical proposal to represent all compiled containers as
 CPython objects. See the [FFI guide](ffi.md) for the actual boundary contract and limitations.
 Explicit [closed scalar unions](language/typing.md#closed-scalar-unions) are supported.
-General object unions and dynamic values remain outside the current language.
+[Bounded native reference unions](language/typing.md#native-reference-unions) also
+support explicitly declared class/file alternatives. General dynamic values remain
+outside the current language.
 
 <a id="appendix-a-how-this-design-was-chosen"></a>
 <a id="appendix-b-prior-art-and-the-measurements-behind-the-exception-and-none-designs"></a>

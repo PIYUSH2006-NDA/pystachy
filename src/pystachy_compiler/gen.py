@@ -1,6 +1,8 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.unions import (
+    gen_reference_union as unions_reference_union,
+    gen_umethod as unions_umethod,
     gen_uboxes as unions_uboxes,
     gen_umember_problem as unions_umember_problem,
     gen_union_type as unions_union_type,
@@ -2200,6 +2202,12 @@ class Gen:
 
     def repr(self, v: Val) -> Val:
         return containers_repr(self, v)
+
+    def reference_union(self, t: str) -> bool:
+        return unions_reference_union(self, t)
+
+    def umethod(self, o: Val, m: str, args: list[Node]) -> Val:
+        return unions_umethod(self, o, m, args)
 
     def uboxes(self, a: str, b: str) -> bool:
         return unions_uboxes(self, a, b)
