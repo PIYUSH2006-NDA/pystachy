@@ -12,7 +12,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Kind | Supported forms |
 |---|---|
 | Scalars | `int`, `float`, `bool`, `str` |
-| Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B, ...]` |
+| Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B]`, runtime-length `tuple[T, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
 | Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
 | Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
