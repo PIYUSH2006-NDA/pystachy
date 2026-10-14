@@ -42,6 +42,7 @@ from src.pystachy_compiler.utils import (
     is_set,
     is_sopt,
     is_tuple,
+    is_vtuple,
     key_problem,
     lt,
     rename,
@@ -156,6 +157,11 @@ def gen_ann(self, n: Node) -> str:
             return self.ctype("callable", cts)
         if base == "union" and len([x for x in a if self.pathlike(x)]) > 0:
             return self.path_union(a)
+        if base == "tuple" and len(a) == 2 and a[1].kind == "ellipsis":
+            t = self.ann(a[0])
+            if unopt(t) not in ["int", "float", "bool", "str"]:
+                return "!runtime-length tuple elements must be int, float, bool, str or their optional types"
+            return self.ctype("vtuple", [t])
         ts: list[str] = self.ann_items(a) if base == "tuple" else [self.ann(x) for x in a]
         for t in ts:
             if t.startswith("!"):
@@ -461,7 +467,7 @@ def gen_optional(self, t: str) -> str:
     if is_union(t):
         # (a union that holds a class's objects may be None, as the class's objects may)
         return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
-    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_callable(t)) and "?" not in t:
+    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
 
@@ -576,6 +582,10 @@ def gen_widens(self, a: str, b: str) -> bool:
         if a == "None":
             return self.optional(b) == b
         return is_union(a) and len([m for m in umembers(a) if m not in umembers(b)]) == 0
+    if is_vtuple(a) and is_vtuple(b):
+        # Tuples are immutable: widening str to str | None changes no slot's
+        # representation. Numeric optional elements require actual boxes instead.
+        return self.widens(targs(a)[0], targs(b)[0])
     if not is_tuple(a) or not is_tuple(b) or len(targs(a)) != len(targs(b)):
         return False
     bs = targs(b)
@@ -724,7 +734,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         if i == 0 and takes_self(f):
             f.ptypes.append("" if receiver else cls)
         elif p.kids[0].kind == "noann":
-            if not f.generic:
+            if not f.generic and p not in held:
+                # A generic class's TypeVar annotation is restored on its specializations.
                 self.err(f"parameter '{p.s}' of '{d.s}' needs a type annotation")
             f.ptypes.append("")
         elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):
@@ -1213,7 +1224,42 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if c in self.classes or c in self.unsupported:
             return c if c in self.classes else "!" + self.unsupported[c]
         if c in self.funcs:
-            return self.funcs[c].ret if self.funcs[c].bad == "" else "!" + self.funcs[c].bad
+            helper = self.funcs[c]
+            if helper.bad != "":
+                return "!" + helper.bad
+            if self.compiling and helper.generic and helper.ret == "" and helper.cls == "" and helper.clo < 0 and helper.vararg < 0 and helper.kwarg < 0 and not helper.extern and not helper.pyexport:
+                # A constructor field can keep the return type of an ordinary
+                # helper specialized for its known argument types. This compiles
+                # the existing template; it neither evaluates source nor guesses
+                # the return from one branch of the helper's body.
+                assigned: dict[str, bool] = {}
+                local_names(f.node.kids[2].kids, assigned)
+                args = e.kids[1:]
+                if c in f.params or c in assigned or len(args) > len(helper.params) or (helper.npos >= 0 and len(args) > helper.npos):
+                    return ""
+                ts: list[str] = []
+                for i in range(len(helper.params)):
+                    if i < len(args):
+                        arg = args[i]
+                        if arg.kind == "kw" or arg.kind == "starred" or arg.kind == "dstar":
+                            return ""
+                        t = "None" if arg.kind == "None" else self.guess(arg, f)
+                    elif helper.defaults[i].kind == "noann":
+                        return ""
+                    else:
+                        t = helper.dtypes[i]
+                        if t == "":
+                            t = "None" if helper.defaults[i].kind == "None" else self.guess(helper.defaults[i], FnInfo("", "", helper.node, ""))
+                    if t == "" or t.startswith("!"):
+                        return ""
+                    target = helper.ptypes[i]
+                    if target != "" and t != target:
+                        if not self.widens(t, target) and not (is_sopt(target) and t == unopt(target)):
+                            return ""
+                        t = target
+                    ts.append(t)
+                return self.instance(helper, ts, []).ret
+            return helper.ret
         if c == "str" or c == "int" or c == "float" or c == "bool":
             return c
         if c == "len" or c == "ord":

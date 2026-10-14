@@ -83,6 +83,49 @@ the algorithm preserves comparison and key-call order for list inputs.
 an open file directly. Materialize a generator expression with a supported
 consumer before passing it to a top-k function.
 
+## Html
+
+`escape`, `unescape` and the HTML4/HTML5 entity mappings follow CPython 3.13.16.
+Numeric references produce Unicode text, including Latin-1 characters, and named
+references use the upstream HTML5 table. Oversized references are replaced according
+to HTML rules without requiring arbitrary-precision integers. Decimal conversion
+keeps the default 4,300-digit limit; changing that limit with `sys` is unavailable.
+Caller indexing, slicing and lengths retain Pystachy's UTF-8 byte semantics.
+
+## Keyword
+
+`kwlist`, `softkwlist`, `iskeyword` and `issoftkeyword` use CPython 3.13.16's
+keyword sets. Predicates accept positional strings or `None`; other input types
+fail compilation. Membership uses frozen snapshots, so changing the public lists
+does not change the predicates.
+
+## Collections
+
+The shipped module provides `deque` only. It supports both ends, optional `maxlen`,
+extension, rotation, insertion/removal, indexing, containment/search, copies,
+comparisons and repetition. Compiled construction needs a typed list, including
+an explicitly typed empty list; materialize other supported iterables with `list()`.
+Named generic subscriptions such as `deque[int]` remain unsupported.
+
+Iteration is a snapshot, and `maxlen` is writable. Rich comparisons also use
+snapshots when item comparison callbacks mutate a queue. Searches (`count`,
+`index`, containment and `remove`) read live items and detect structural mutations
+with CPython's operation-specific errors; same-size replacements are preserved.
+`reversed`, reflected multiplication, comparisons with other containers, pickling,
+`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable.
+
+## Shlex
+
+`split`, `quote`, `join` and the lexer support POSIX/compatibility modes, comments,
+quotes, escapes, whitespace splitting, punctuation, token pushback and source
+stacking. Input text is read through `StringIO`; Unicode characters are read whole.
+
+Files are read eagerly. Pushed files are closed on push rather than on source
+pop; constructor files remain the caller's responsibility. Iteration materializes
+remaining tokens. `punctuation_chars` is writable;
+its constructor accepts bools or strings, while lists fail compilation. Lexer
+subclasses and arbitrary stream types are outside the compiled surface.
+
 ## Io
 
 `StringIO` supports construction with `initial_value` and `newline`, reading and
@@ -147,12 +190,14 @@ lazy and possessive), groups and backreferences, lookarounds, conditionals,
 atomic groups, scoped flags, escapes and Unicode character classes/case folding.
 The module and `Pattern` expose matching, searching, splitting, substitution,
 escaping and cache purging. `Match` supports group queries (up to five groups
-per `group` call), indexing, dictionaries, positions, spans and expansion.
+per `group` call), runtime-length `groups(default=None)` tuples, indexing,
+dictionaries, positions, spans and expansion.
 
 - Matches decode code points, but positions (`pos`, `endpos`, group spans and
   pattern-error positions) are byte indices.
-- `findall` with two or more groups raises `NotImplementedError`;
-  `Match.groups` and `Match.regs` are unsupported variable-length tuples.
+- `findall` with two or more groups still raises `NotImplementedError`; its
+  ported result contract remains `list[str]`. `Match.regs` remains unsupported
+  because its runtime-length tuple contains tuple elements.
 - `split` returns `list[str]` and raises `NotImplementedError` if an unmatched
   capturing group would add `None`.
 - `finditer` eagerly returns a list of matches.
@@ -212,6 +257,18 @@ omitted. `cache_parameters` is unavailable.
 `typed=True` is accepted, but static parameter types already separate the calls
 it would distinguish. Programs run on one thread; caches need no lock.
 The module uses CPython's C wrapper when CPython imports it.
+
+`reduce(function, iterable[, initial])` folds supported iterables once, including
+files and `StringIO`. The callback and accumulator must retain the types inferred
+for this call. Omitted initial values, explicit `None`, empty inputs and callback
+exceptions follow CPython; integer results retain checked 64-bit arithmetic.
+
+`cmp_to_key(comparator)` returns a key function for `sorted` and list sorting.
+The comparator accepts two values of one supported type and returns an int.
+Key objects expose writable `obj` and the five comparison methods. Hashing is
+rejected at compile time. The factory is a function rather than CPython's
+`KeyWrapper`, so factory attributes, reflection and pickling are unavailable.
+`partial`, `wraps`, `update_wrapper` and `total_ordering` remain unsupported.
 
 ## Textwrap
 
@@ -283,8 +340,9 @@ CPython error for `None`.
   than its `UnicodeEncodeError`/`UnicodeDecodeError` subclasses.
 - A Pystachy string can contain invalid UTF-8 bytes. These are quoted byte for
   byte; Latin-1/ASCII treat a byte that begins no character as its numeric value.
-- `urlsplit` has no compiled result cache. `cache_info`, `cache_clear` and
-  `clear_cache` are unsupported.
+- `urlsplit` uses the upstream 128-entry typed LRU cache, including default and
+  keyword calls, `cache_info` and `cache_clear`. `clear_cache` also clears the
+  adapted string-quote tables. Byte APIs remain unavailable.
 - Result properties `username`, `password`, `hostname`, `port`, and `encode`
   are unavailable. Bytes inputs/results, `quote_from_bytes` and
   `unquote_to_bytes` are unsupported.
