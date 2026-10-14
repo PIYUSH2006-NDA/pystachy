@@ -70,8 +70,36 @@ necessarily supported on methods the program actually uses; see [module rules](m
 
 ## Variables and empty containers
 
-Each variable has one type for its lifetime, fixed by an annotation or inferred assignment.
-Python's local, `global` and `nonlocal` scoping rules apply.
+An unannotated local or parameter can change type at a simple assignment at the top
+level of a function body. The compiler gives the new binding its own native slot;
+the right-hand side still reads the previous binding. Expressions that need a
+target type retain the previous context: for example, `items = [1]` followed by
+`items = ["x"]` is still rejected. The new slot is created only after the RHS has
+a concrete type. This works in ordinary AOT
+and JIT compilation without a flag, runtime profiling, or a dynamic value box.
+
+```python
+def parse_count(value):
+    value = value.strip()
+    value = int(value)
+    return value + 1
+
+print(parse_count(" 41 "))  # 42
+```
+
+An explicit local or parameter annotation remains a contract for every assignment.
+Stores inside branches and loops, augmented assignments, tuple/chained assignments,
+globals and object fields retain their existing consistent-type rules. A simple
+assignment after a branch or loop can start a new binding when the existing
+unbound-variable analysis proves the name safe.
+
+This bounded pass leaves a function unchanged when it contains nested functions or
+lambdas, comprehensions, exception handlers, context managers, imports, `global`,
+`nonlocal`, assignment expressions, generators, async constructs, or pattern
+matching. Closures and variadic functions retain the existing rules. `None` and
+initially untyped empty bindings retain the existing inference machinery. A name
+that is deleted or may be read before assignment is not retyped. Python's scoping
+rules and the compiler's existing unbound-variable checks continue to apply.
 
 Empty `[]` and `{}` take their types from an annotated variable, parameter, field or return
 context. Otherwise their first useful operation determines the type: `append`, `insert`,

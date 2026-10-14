@@ -473,8 +473,11 @@ def gen_stmt(self, n: Node) -> None:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
             v = self.expr(val, self.target_type(t0))
-            for i in range(len(n.kids) - 1):
-                self.assign(n.kids[i], v)
+            if n.s == "local-retype":
+                self.store_name(t0.s, v, True)
+            else:
+                for i in range(len(n.kids) - 1):
+                    self.assign(n.kids[i], v)
         self.copying = False
     elif k == "annassign" and self.tmpl_ann(n.kids[1]):
         # an annotation that names a class template types nothing: x: Box = v is x = v

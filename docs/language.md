@@ -48,8 +48,9 @@ print(total([1.5, 2.5]), counts["request"])
 
 The main rules are:
 
-- A variable keeps one static type. Numeric operations can convert values, but rebinding a
-  variable from an integer to a string is rejected.
+- An unannotated local or parameter can change type at a simple, unconditional assignment
+  in a supported function body. An explicit annotation remains a contract; branches, loops,
+  fields and globals still require consistent types. See [local bindings](language/typing.md#variables-and-empty-containers).
 - Mutable containers are invariant: a `list[int]` cannot become a `list[int | None]`.
 - Empty lists and dictionaries need an annotation or a use that determines their type.
 - A function whose parameters are all annotated uses those types; if its return annotation is omitted,

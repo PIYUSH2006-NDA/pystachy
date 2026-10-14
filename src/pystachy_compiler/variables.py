@@ -1232,7 +1232,7 @@ def gen_declare(self, name: str, t: str) -> None:
     if old != t:
         self.err(f"'{name}' was declared as {old}, not {t}")
 
-def gen_store_name(self, name: str, v: Val) -> None:
+def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
     if name in self.noneglobals and name not in self.ltype:
         if v.t != "None":
             self.err(f"'{name}' is None in its module's code: giving it a {v.t} elsewhere (a function or another module) is not supported")
@@ -1266,6 +1266,15 @@ def gen_store_name(self, name: str, v: Val) -> None:
             if self.branch > 0:
                 self.err(f"'{name}' is None here, and giving it a {v.t if '?' not in v.t else v.t[: v.t.find('[')]} inside an if branch or a loop is not supported")
             self.nonevars[name] = self.line
+        if retype and name in self.ltype and name not in self.nonevars:
+            old = self.ltype[name]
+            # A None/empty binding still needs the existing inference machinery.
+            # Compatible stores retain their slot, including optional boxing and
+            # class upcasts. Only a concrete incompatible type starts a new one.
+            if old != NONEVAR and "?" not in old and v.t != "" and v.t != "None" and "?" not in v.t and not self.widens(v.t, old) and not self.converts(v.t, old):
+                self.alloca(v.t, name)
+                self.narrowed.pop(name, False)
+                self.lkk.pop(name, "")
         if name not in self.ltype and v.t == "None":
             # first None: T | None, typed by the first store of another value, or by a read
             # that needs the type before it (see none_read)
