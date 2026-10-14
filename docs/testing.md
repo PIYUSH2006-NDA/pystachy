@@ -248,7 +248,8 @@ holds, which `tests/verify.sh` counts from its files as `tests/run.sh` makes the
 deviation once per mode, each rejection once, and `pystachy check` of the syntax tests): a run
 that covered fewer cases fails, as one with a failure does. The report gives each of these steps'
 `passed`, `failed` and `expected` counts. The **runtime-cache** step expects `tests/cache.sh`'s
-checks the same way: 58 with the native compiler, 57 with CPython's (one `PATH` case fewer).
+checks the same way: 58 with the native compiler and 60 with CPython's (one `PATH`
+case fewer and three component-cache checks).
 
 The steps set the `PYSTACHY_*` variables they test themselves. `tests/verify.sh` drops the
 others that would change what a step checks (`PYSTACHY_OPT`, `PYSTACHY_JIT_INLINE`, `PYSTACHY_GC`, `PYSTACHY_GC_STRESS`,

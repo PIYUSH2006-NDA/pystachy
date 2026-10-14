@@ -31,6 +31,17 @@ Appendix B records the prior art and the measurements behind the exception and `
 Appendix C lists, step by step and feature by feature, where the code departs from the text
 below.
 
+The compiler source now lives under [`src/pystachy_compiler`](../src/README.md).
+Current IR records are in [`ir.py`](../src/pystachy_compiler/ir.py), instruction
+building in [`emission.py`](../src/pystachy_compiler/emission.py), verification and
+effect analysis in [`ircheck.py`](../src/pystachy_compiler/ircheck.py), passes in
+[`optimizations.py`](../src/pystachy_compiler/optimizations.py), and LLVM lowering
+in [`lowering.py`](../src/pystachy_compiler/lowering.py). Exception construction
+lives in [`exceptions.py`](../src/pystachy_compiler/exceptions.py). The
+[`Gen` facade](../src/pystachy_compiler/gen.py) forwards to these components;
+references below to the original monolithic `pystachy.py` describe the historical
+design and measurements.
+
 ## Summary
 
 - **Where the cut is.** `Gen` keeps its single walk over the AST. That walk resolves names where they are used, checks and infers types, folds static tests and instantiates templates. Only its output changes. Today it appends LLVM text to `self.body`. Instead it builds one `IFn` per compiled function, made of blocks of typed instructions (`Ins`). A separate lowering prints the LLVM text after the whole program has been built. Type checking stays a single walk because static folding decides which code gets type-checked at all (§4.4).
