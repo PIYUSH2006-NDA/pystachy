@@ -1,0 +1,4 @@
+bool:True bool:False word none
+4 word none
+3 4 -1
+[exit 0]
