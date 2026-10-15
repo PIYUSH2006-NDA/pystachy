@@ -106,7 +106,7 @@ def gen_load_name(self, name: str) -> Val:
             t = self.none_read(name)
             if t == "None":
                 return Val("null", "None")
-        r = self.ins(f"load {lt(t)}, ptr {self.lreg[name]}")
+        r = self.mem_load(Val(self.lreg[name], "*" + t)).v
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
         if name in self.narrowed and (is_opt(t) or is_union(t) or t in self.classes) and t != NONEVAR:
@@ -115,7 +115,7 @@ def gen_load_name(self, name: str) -> Val:
     self.read_ahead(name)
     if name in self.gtypes:
         t = self.gtypes[name]
-        r = self.ins(f"load {lt(t)}, ptr @g.{name}")
+        r = self.mem_load(Val(f"@g.{name}", "*" + t)).v
         if is_opt(t) or is_union(t):
             self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
         return Val(r, t)
@@ -452,11 +452,11 @@ def gen_read(self, n: Node) -> Val:
     initialized = constant and not self.modlevel and owner(name) == self.curfn.mod and self.curfn.node.kind == "def" and self.intat[name] < self.curfn.node.line
     if n.chk and name in self.ltype:
         if name in self.lflag and name not in self.compvars:
-            bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr {self.lflag[name]}')}, true")
+            bad = self.ins(f"xor i1 {self.mem_load(Val(self.lflag[name], '*bool')).v}, true")
             self.guard(bad, f"UnboundLocalError: cannot access local variable '{name}' where it is not associated with a value")
     elif not initialized and (n.chk or self.foreign(name)) and name in self.gflag and (name in self.gtypes or (name in self.funcs and name not in self.ltype)):
         # (a global, or a function whose def statement may not have run yet)
-        bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{name}.def')}, true")
+        bad = self.ins(f"xor i1 {self.mem_load(Val(f'@g.{name}.def', '*bool')).v}, true")
         self.guard(bad, self.unbound(name, self.copying))
     if constant:
         # Keep a variable read dynamic for frontend rules (tuple index/length), while LLVM
@@ -488,7 +488,7 @@ def gen_modchk(self, n: Node) -> None:
         elif p[2] == "L":
             un = f"UnboundLocalError: cannot access local variable '{p[1]}' where it is not associated with a value"
         flag = f"@init.{p[0]}.done" if p[2] == "A" else self.imp_flag(p[0], p[2] == "G" or p[2] == "M" or p[2] == "I")
-        self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr {flag}')}, true"), un)
+        self.guard(self.ins(f"xor i1 {self.mem_load(Val(flag, '*bool')).v}, true"), un)
 
 def gen_imp_flag(self, x: str, glob: bool) -> str:
     # the flag of name x, which an import in a try statement binds (Loader.import_binds()), set
@@ -1255,9 +1255,9 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         if "?" in t and same_kind(t, v.t) and "?" not in v.t:
             self.refine(name, v.t)
             t = v.t
-        self.emit(f"store {lt(t)} {self.coerce(v, t, self.assigned_to(v, t, name)).v}, ptr @g.{name}")
+        self.mem_store(Val(f"@g.{name}", "*" + t), self.coerce(v, t, self.assigned_to(v, t, name)))
         if name in self.gflag:
-            self.emit(f"store i1 true, ptr @g.{name}.def")
+            self.mem_store(Val(f"@g.{name}.def", "*bool"), Val("true", "bool"))
     else:
         if name in self.nonevars and name not in self.ltype and name not in self.compvars:
             # a parameter whose argument is None: assigning None keeps it so; any other value
@@ -1292,9 +1292,9 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         if "?" in t and same_kind(t, v.t) and "?" not in v.t:
             self.refine(name, v.t)
             t = v.t
-        self.emit(f"store {lt(t)} {self.coerce(v, t, self.assigned_to(v, t, name)).v}, ptr {self.lreg[name]}")
+        self.mem_store(Val(self.lreg[name], "*" + t), self.coerce(v, t, self.assigned_to(v, t, name)))
         if name in self.lflag and name not in self.compvars:
-            self.emit(f"store i1 true, ptr {self.lflag[name]}")
+            self.mem_store(Val(self.lflag[name], "*bool"), Val("true", "bool"))
         held = "" if is_union(unopt(t)) and name in self.nlw else self.holds(t, v.t)
         if held == "":
             self.narrowed.pop(name, "")

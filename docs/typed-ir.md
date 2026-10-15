@@ -122,6 +122,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Purpose | Operations |
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
+| Native memory access | `mem.load`, `mem.store` |
 | Fixed-layout allocation | `alloc.fixed` |
 | Fixed tuple slots | `tuple.load`, `tuple.store` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
@@ -137,6 +138,21 @@ The exact operation table is `IROPS`; its current groups are:
 A `raw` operation is one LLVM instruction that loads, stores or computes. It cannot contain a
 call, phi or terminator: those must remain explicit so passes can reason about them.
 Entry slots lower to `alloca`; LLVM's `mem2reg` later builds SSA form.
+
+`mem.load` and `mem.store` keep a native value type on both sides of a typed
+address (`*int`, `*Box`, and so on). The verifier checks operand counts, matching
+address/value/result types, result numbers and absence of unused metadata; runtime
+pseudo-types and nested address types are rejected. Lowering selects the existing
+native LLVM type (`None` payloads use a null pointer). Variable and parameter slots,
+globals, assignment/import flags and native values held in closure cells use these
+operations. Closure environment pointers and layout-specific/runtime memory paths
+remain separate follow-ups. No LLVM text is parsed to construct these operations.
+
+Effects retain the existing address classification: local slots have none, globals
+use `rG`/`wG`, known field addresses use `rO`/`wO`, and other addresses conservatively
+read/write lists, dictionaries and objects. Canonicalization follows reaching loads
+and stores across both typed and raw operations, including the existing alias and
+call barriers, so the representation change preserves dictionary lookup fusion.
 
 `alloc.fixed` allocates a declared class (including specialized classes and custom
 exceptions) or a fixed tuple. Its result retains the native type; LLVM lowering alone
@@ -221,7 +237,8 @@ fixed-point oracle; `tests/summary_worklist.py` also executes the solver nativel
 | `rG`, `wG` | Read/write globals or assignment flags |
 | `rF`, `wF` | Read/write files |
 
-`rawfx` classifies the limited raw loads and stores, using known field addresses where needed.
+`mem.load`/`mem.store` classify their typed addresses directly; `rawfx` retains the
+same classification for remaining raw loads and stores, using known field addresses where needed.
 Effects describe observable behavior for optimization, not an ownership or alias type system.
 `U?` applies only when a static descriptor can contain user classes or custom exceptions.
 Allocation-triggered collection can close unreachable files; that unspecified cleanup timing

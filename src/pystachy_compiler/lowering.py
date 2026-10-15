@@ -35,6 +35,11 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     o = self.out
     if op == "raw":
         o.append("  " + i.s)
+    elif op == "mem.load":
+        o.append(f"  %t{i.r[0]} = load {'ptr' if i.t == 'None' else lt(i.t)}, ptr {i.a[0].v}")
+    elif op == "mem.store":
+        v = i.a[1]
+        o.append(f"  store {'ptr' if v.t == 'None' else lt(v.t)} {v.v}, ptr {i.a[0].v}")
     elif op == "alloc.fixed":
         size = str(8 * len(targs(i.t))) if is_tuple(i.t) else f"ptrtoint (ptr getelementptr (%C.{i.t}, ptr null, i32 1) to i64)"
         o.append(f"  %t{i.r[0]} = call ptr @{self.rtfns['alloc'].sym}(i64 {size})")

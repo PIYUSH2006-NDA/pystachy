@@ -131,6 +131,18 @@ def gen_ins(self, s: str) -> str:
     self.add(i)
     return r
 
+def gen_mem_load(self, a: Val) -> Val:
+    # Read a native value through its typed address. LLVM alone selects its spelling.
+    i = Ins("mem.load", a.t[1:], "")
+    i.a = [a]
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", i.t)
+
+def gen_mem_store(self, a: Val, v: Val) -> None:
+    i = Ins("mem.store", "", "")
+    i.a = [a, v]
+    self.add(i)
+
 def gen_place(self, l: str) -> None:
     if not self.term:
         self.jump(l)

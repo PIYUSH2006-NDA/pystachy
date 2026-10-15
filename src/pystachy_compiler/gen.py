@@ -218,6 +218,8 @@ from src.pystachy_compiler.emission import (
     gen_iop as emission_iop,
     gen_jump as emission_jump,
     gen_label as emission_label,
+    gen_mem_load as emission_mem_load,
+    gen_mem_store as emission_mem_store,
     gen_notnone as emission_notnone,
     gen_phi as emission_phi,
     gen_place as emission_place,
@@ -794,6 +796,12 @@ class Gen:
 
     def ins(self, s: str) -> str:
         return emission_ins(self, s)
+
+    def mem_load(self, a: Val) -> Val:
+        return emission_mem_load(self, a)
+
+    def mem_store(self, a: Val, v: Val) -> None:
+        return emission_mem_store(self, a, v)
 
     def place(self, l: str) -> None:
         return emission_place(self, l)
