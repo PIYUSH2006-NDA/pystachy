@@ -957,7 +957,7 @@ I pys_ceil(double d) { return pys_f2i(ceil(d)); }
    frozenset, O<id> object of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
    has three digits or more (O007, O1234): a letter or the end of the descriptor follows it;
    ?<e> None (null) or a value of <e>; E an exception (an Exc);
-   U<n>:<tag>:<e>... a tagged scalar union, n program-wide tags and their member descriptors */
+   U<n>:<tag>:<e>... a tagged union, n program-wide tags and their member descriptors */
 I pys_obj_eq(I c, I a, I b);
 I pys_obj_cmp(I c, I op, I a, I b);
 Str *pys_obj_repr(I c, I a, I b);
@@ -2190,6 +2190,7 @@ Str *pys_format(I v, Str *desc, Str *spec) {
     if (!v) return cstr("None");
     v = unbox(v, ++ds);
   }
+  if (*ds == 'U') ds = umember(&v, ds);
   char d = *ds;
   if ((d != 'i' && d != 'b' && d != 'f' && d != 's') || (d == 'b' && !spec->len)) {   /* format(True, "") is str(True) */
     if (spec->len) failf("TypeError: unsupported format string passed to %s.__format__", tyname(d));

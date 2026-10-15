@@ -1,0 +1,40 @@
+True True word [1, 2] {'a': 3}
+word [1, 2] None
+['value0', 'value4', 'value3', 'value4', 'value5', 'value0', 'value3', 'value4', 'value6']
+7
+7
+       7
+       7
+['value0', 'spec:', 'value0', 'spec:', 'value0', 'spec:>8', 'value0']
+1.25
+1.25
+    1.25
+    1.25
+['value1', 'spec:', 'value1', 'spec:', 'value1', 'spec:>8', 'value1']
+True
+True
+       1
+       1
+['value2', 'spec:', 'value2', 'spec:', 'value2', 'spec:>8', 'value2']
+word
+word
+    word
+    word
+['value3', 'spec:', 'value3', 'spec:', 'value3', 'spec:>8', 'value3']
+[1, 2]
+[1, 2]
+unsupported format string passed to list.__format__
+unsupported format string passed to list.__format__
+['value4', 'spec:', 'value4', 'spec:', 'value4', 'spec:>8', 'value4']
+{'a': 3}
+{'a': 3}
+unsupported format string passed to dict.__format__
+unsupported format string passed to dict.__format__
+['value5', 'spec:', 'value5', 'spec:', 'value5', 'spec:>8', 'value5']
+None
+None
+unsupported format string passed to NoneType.__format__
+unsupported format string passed to NoneType.__format__
+['value6', 'spec:', 'value6', 'spec:', 'value6', 'spec:>8', 'value6']
+spec failed ['value4', 'raising spec']
+[exit 0]

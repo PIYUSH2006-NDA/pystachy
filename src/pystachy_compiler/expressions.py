@@ -1124,6 +1124,11 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
         return self.call_fn(self.classes[v.t].methods["__format__"], [v, sv], [])
     if empty:
         return self.to_str(v)
+    if is_union(unopt(v.t)):
+        # Both value and spec run once, before the selected native member formats
+        # or raises. A nonempty spec is legal for some members and not for others.
+        sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
+        return Val(self.rt("pys_format", "ptr", ["i64 " + self.to_slot(v), f"ptr {self.sconst(self.desc(v.t, 'repr'))}", f"ptr {sv.v}"]), "str")
     if v.t == "None":
         if spec.kind == "str":
             self.err("unsupported format string passed to NoneType.__format__")

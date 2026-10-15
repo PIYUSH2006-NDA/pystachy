@@ -19,10 +19,13 @@ def gen_reference_union(self, t: str) -> bool:
 def gen_scalar_union(self, t: str) -> bool:
     return is_union(unopt(t)) and all([m in ["int", "float", "bool", "str"] for m in umembers(unopt(t))])
 
+def gen_value_union(self, t: str) -> bool:
+    return is_union(unopt(t)) and all([m in ["int", "float", "bool", "str"] or is_list(m) or is_dict(m) for m in umembers(unopt(t))])
+
 def gen_uop(self, v: Val, op: str) -> Val:
     # Truth and str select the existing native member operation. Evaluate v once,
     # handle None before loading the tag, and join only the operation's result.
-    if not self.scalar_union(v.t):
+    if not self.value_union(v.t):
         self.err("closed reference union operations require narrowing with isinstance() first")
     t = "bool" if op == "truth" else "str"
     end = self.label()
