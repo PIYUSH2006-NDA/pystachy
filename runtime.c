@@ -1900,6 +1900,19 @@ static I dpop(Dict *d, I k, I dflt, int has) {
 }
 I pys_dict_pop(Dict *d, I k) { return dpop(d, k, 0, 0); }
 I pys_dict_pop_default(Dict *d, I k, I dflt) { return dpop(d, k, dflt, 1); }
+/* d.popitem() (dict_popitem_impl): the last entry's (key, value) tuple. The entries end where it
+   was, as CPython sets dk_nentries, so the holes before it are not walked again: popping every
+   item takes linear time. Its idx slot is found by its position (lookdict_index), not its key */
+I *pys_dict_popitem(Dict *d) {
+  if (!d->len) pys_fail("KeyError: 'popitem(): dictionary is empty'");
+  I e = d->n - 1;
+  while (!d->hs[e]) e--;
+  uint64_t h = d->hs[e], m = d->size * 2 - 1, i = h & m, p = h;
+  while (d->idx[i] != e + 1) { p >>= 5; i = (i * 5 + p + 1) & m; }
+  I *t = pys_alloc(16); t[0] = d->keys[e]; t[1] = d->vals[e];
+  d->idx[i] = -1; d->hs[e] = 0; d->keys[e] = d->vals[e] = 0; d->len--; d->n = e;
+  return t;
+}
 /* d.get(k) and d.pop(k, None) of int, float and bool values: the value's box, or dflt (None or a box) */
 LOOKUP I pys_dict_getbox(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : (I)pys_box(d->vals[e]); }
 LOOKUP I pys_dict_popbox(Dict *d, I k, I dflt) { return entry(d, k) < 0 ? dflt : (I)pys_box(dpop(d, k, 0, 0)); }
