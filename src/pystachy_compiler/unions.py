@@ -53,7 +53,7 @@ def gen_uop(self, v: Val, op: str) -> Val:
         nxt = self.label() if i + 1 < len(members) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {self.utag(members[i])}"), arm, nxt)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(self.utag(members[i])), "int")).v, arm, nxt)
             self.place(arm)
         item = self.uget(Val(v.v, unopt(v.t)), members[i])
         result = Val(self.truth(item), "bool") if op == "truth" else self.to_str(item)
@@ -73,7 +73,7 @@ def gen_uequal(self, op: str, a: Val, b: Val) -> Val:
     a = self.coerce(a, t)
     b = self.coerce(b, t)
     r = self.rt("pys_eq", "i64", ["i64 " + self.to_slot(a), "i64 " + self.to_slot(b), f"ptr {self.sconst(self.desc(t, '=='))}"])
-    return Val(self.ins(f"icmp {'ne' if op == '==' else 'eq'} i64 {r}, 0"), "bool")
+    return self.num_cmp('!=' if op == '==' else '==', Val(r, "int"), Val('0', "int"))
 
 def gen_umember_problem(self, t: str) -> str:
     # why a value of type t cannot be one of a union's (A | B), or ""
@@ -159,7 +159,7 @@ def gen_utest(self, u: Val, ms: list[str], may_none: bool) -> str:
     tag = f"%t{i.r[0]}"
     r = ""
     for m in ms:
-        x = self.ins(f"icmp eq i64 {tag}, {self.utag(m)}")
+        x = self.num_cmp('==', Val(tag, "int"), Val(str(self.utag(m)), "int")).v
         r = x if r == "" else self.ins(f"or i1 {r}, {x}")
     if not may_none:
         return r
@@ -312,7 +312,7 @@ def gen_umethod(self, o: Val, m: str, args: list[Node]) -> Val:
         hit = self.label()
         miss = self.label() if i + 1 < len(members) else ""
         if miss != "":
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {self.utag(members[i])}"), hit, miss)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(self.utag(members[i])), "int")).v, hit, miss)
         else:
             self.br(hit)
         self.place(hit)

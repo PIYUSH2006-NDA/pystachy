@@ -14,7 +14,6 @@ from src.pystachy_compiler.specs import (
     ICMP,
     IOPS,
     IRT,
-    MIXCMP,
     MODATTRS,
     NONEVAR,
     ORDOP,
@@ -356,7 +355,7 @@ def gen_obj_isinst(self, v: Val, t: Node) -> Val:
     r = "false"
     for c in self.classes.values():
         if c.tag > 0 and self.derives(c.name, v.t) and self.class_matches(c.name, t):
-            hit = self.ins(f"icmp eq i64 {tag}, {c.tag}")
+            hit = self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v
             r = hit if r == "false" else self.ins(f"or i1 {r}, {hit}")
     done = self.cur
     self.br(end)
@@ -424,7 +423,7 @@ def gen_truth(self, v: Val) -> str:
     if t == "float":
         return self.num_cmp("!=", v, Val("0.0", "float")).v
     if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
-        return self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {v.v}')}, 0")
+        return self.num_cmp('!=', Val(self.ins(f'load i64, ptr {v.v}'), "int"), Val('0', "int")).v
     if t == "None":
         return "false"
     if is_tuple(t):
@@ -466,7 +465,7 @@ def gen_truth(self, v: Val) -> str:
                 nxt = self.label() if i + 1 < len(cs) else ""
                 if nxt != "":
                     arm = self.label()
-                    self.cbr(self.ins(f"icmp eq i64 {tag}, {c.tag}"), arm, nxt)
+                    self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
                     self.place(arm)
                 self.narrowed = dict(narrow)
                 r = "true"
@@ -474,8 +473,8 @@ def gen_truth(self, v: Val) -> str:
                     r = self.coerce(self.call_fn(c.methods["__bool__"], [Val(v.v, c.name)], [], direct=True), "bool").v
                 elif "__len__" in c.methods:
                     size = self.coerce(self.call_fn(c.methods["__len__"], [Val(v.v, c.name)], [], direct=True), "int")
-                    self.guard(self.ins(f"icmp slt i64 {size.v}, 0"), "ValueError: __len__() should return >= 0")
-                    r = self.ins(f"icmp ne i64 {size.v}, 0")
+                    self.guard(self.num_cmp('<', Val(size.v, "int"), Val('0', "int")).v, "ValueError: __len__() should return >= 0")
+                    r = self.num_cmp('!=', Val(size.v, "int"), Val('0', "int")).v
                 if not self.term:
                     self.incoming(ph, r, self.cur)
                     self.br(end)
@@ -495,7 +494,7 @@ def gen_truth(self, v: Val) -> str:
         if "__bool__" in ms:
             r = self.coerce(self.call_fn(ms["__bool__"], [Val(v.v, t)], []), "bool").v
         else:
-            r = self.ins(f"icmp ne i64 {self.objlen(Val(v.v, t)).v}, 0")
+            r = self.num_cmp('!=', Val(self.objlen(Val(v.v, t)).v, "int"), Val('0', "int")).v
         e2 = self.cur
         self.br(l2)
         self.place(l2)
@@ -607,7 +606,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
                     tag = self.ins(f"load i64, ptr {o.v}")
                     for cc in self.classes.values():
                         if cc.tag > 0 and cc.name != cn and self.derives(cc.name, cn):
-                            matches = self.ins(f"icmp eq i64 {tag}, {cc.tag}")
+                            matches = self.num_cmp('==', Val(tag, "int"), Val(str(cc.tag), "int")).v
                             subname = self.sconst(short(cc.methods[mn].cls) + "." + mn)
                             qn = self.ins(f"select i1 {matches}, ptr {subname}, ptr {qn}")
                 return Val(qn, "str")
@@ -623,7 +622,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
             return self.tuple_([Val(self.sconst(x), "str") for x in self.classes[o.t].fields])
         if o.t == "file" and (n.s == "closed" or n.s == "name" or n.s == "mode"):
             r = self.rt(f"pys_file_{n.s}", "i64" if n.s == "closed" else "ptr", [f"ptr {o.v}"])
-            return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool") if n.s == "closed" else Val(r, "str")
+            return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if n.s == "closed" else Val(r, "str")
         bm = self.method_value(o, n.s)
         if bm.t != "":
             return bm
@@ -649,7 +648,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
                 # a given bound of -2**63 clamps exactly like -2**63 + 1, which is not the marker
                 bd = self.coerce(self.as_int(bv), "int").v  # (as ival)
                 if bd.startswith("%"):
-                    bd = self.select(self.ins(f"icmp eq i64 {bd}, -9223372036854775808"), Val("-9223372036854775807", "int"), Val(bd, "int"))
+                    bd = self.select(self.num_cmp('==', Val(bd, "int"), Val('-9223372036854775808', "int")).v, Val("-9223372036854775807", "int"), Val(bd, "int"))
                 elif bd == "-9223372036854775808":
                     bd = "-9223372036854775807"
                 bnd.append(bd)
@@ -1083,7 +1082,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             # A subclass's __format__ takes precedence over the object's str fallback,
             # even with an empty spec. Evaluate a computed spec once before dispatch.
             sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-            nonempty = self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {sv.v}')}, 0")
+            nonempty = self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v
             absent = self.label()
             present = self.label()
             done = self.label()
@@ -1100,7 +1099,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
                 nxt = self.label() if i + 1 < len(cs) else ""
                 if nxt != "":
                     arm = self.label()
-                    self.cbr(self.ins(f"icmp eq i64 {tag}, {ci.tag}"), arm, nxt)
+                    self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(ci.tag), "int")).v, arm, nxt)
                     self.place(arm)
                 obj = Val(v.v, ci.name)
                 if "__format__" in ci.methods:
@@ -1133,7 +1132,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             self.err("unsupported format string passed to NoneType.__format__")
         # a computed spec runs, as for any value: str(None) when it turns out empty, else TypeError
         sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-        self.guard(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {sv.v}')}, 0"), "TypeError: unsupported format string passed to NoneType.__format__")
+        self.guard(self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v, "TypeError: unsupported format string passed to NoneType.__format__")
         return self.to_str(v)
     if is_opt(v.t):
         # None's __format__ accepts only an empty spec, the value's its own (the runtime checks)
@@ -1146,7 +1145,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             self.err(f"unsupported format string passed to {tname(v.t)}.__format__")
         # a computed spec: str(v) when it turns out empty, TypeError otherwise
         sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-        self.guard(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {sv.v}')}, 0"), f"TypeError: unsupported format string passed to {tname(v.t)}.__format__")
+        self.guard(self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v, f"TypeError: unsupported format string passed to {tname(v.t)}.__format__")
         return self.to_str(v)
     if spec.kind == "str" and not self.isnum(v.t) and v.t != "str":
         self.err(f"unsupported format string passed to {tname(v.t)}.__format__")
@@ -1163,7 +1162,7 @@ def gen_optbound(self, v: Val) -> str:
     self.cbr(self.ins(f"icmp ne ptr {v.v}, null"), l1, l2)
     self.place(l1)
     bd = self.as_int(self.deref(v)).v
-    bd = self.select(self.ins(f"icmp eq i64 {bd}, -9223372036854775808"), Val("-9223372036854775807", "int"), Val(bd, "int"))
+    bd = self.select(self.num_cmp('==', Val(bd, "int"), Val('-9223372036854775808', "int")).v, Val("-9223372036854775807", "int"), Val(bd, "int"))
     e1 = self.cur
     self.br(l2)
     self.place(l2)
@@ -1200,7 +1199,8 @@ def gen_numkey(self, v: Val, t: str) -> list[str]:
             return [fv, "true"]
         inr = self.ins(f"fcmp olt double {fv}, 0x43E0000000000000")  # (2**63, where an int's float may round to)
         back = self.select(inr, Val(self.ins(f"fptosi double {fv} to i64"), "int"), Val("0", "int"))
-        return [fv, self.ins(f"and i1 {inr}, {self.ins(f'icmp eq i64 {back}, {v.v}')}")]
+        exact = self.num_cmp("==", Val(back, "int"), Val(v.v, "int")).v
+        return [fv, self.ins(f"and i1 {inr}, {exact}")]
     iv = v.v
     ok = "true"
     if v.t == "float":
@@ -1210,7 +1210,7 @@ def gen_numkey(self, v: Val, t: str) -> list[str]:
         back = self.ins(f"sitofp i64 {iv} to double")
         ok = self.ins(f"and i1 {inr}, {self.ins(f'fcmp oeq double {back}, {v.v}')}")
     if t == "bool":
-        b01 = self.ins(f"icmp ult i64 {iv}, 2")
+        b01 = self.int_ucmp('<', Val(iv, "int"), Val('2', "int")).v
         ok = b01 if ok == "true" else self.ins(f"and i1 {ok}, {b01}")
         iv = self.ins(f"trunc i64 {iv} to i1")
     return [iv, ok]
@@ -1315,7 +1315,7 @@ def gen_keep_stack(self, n: Node) -> None:
         ldone = self.label()
         self.cbr(self.ins(f"icmp eq ptr {v}, {h}"), ldone, lchk)  # (it holds the copy: a statement before kept it)
         self.place(lchk)
-        self.cbr(self.ins(f"icmp ne i64 {self.rt('pys_on_stack', 'i64', [f'ptr {v}'])}, 0"), lcopy, ldone)
+        self.cbr(self.num_cmp('!=', Val(self.rt('pys_on_stack', 'i64', [f'ptr {v}']), "int"), Val('0', "int")).v, lcopy, ldone)
         self.place(lcopy)
         self.cbr(self.ins(f"icmp eq ptr {h}, null"), lnew, lold)
         self.place(lold)
@@ -1503,7 +1503,7 @@ def gen_list_read(self, o: Val, i: Val) -> Val:
     length = Ins("list.len", "int", "")
     length.a = [o]
     self.put(length, 1)
-    self.cbr(self.ins(f"icmp ult i64 {i.v}, %t{length.r[0]}"), fast, slow)
+    self.cbr(self.int_ucmp('<', Val(i.v, "int"), Val(f'%t{length.r[0]}', "int")).v, fast, slow)
     ph = Ins("phi", "int", "")
     self.place(fast)
     read = Ins("list.load", "int", "")
@@ -1917,7 +1917,7 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {self.classes[cs[i]].tag}"), arm, nxt)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(self.classes[cs[i]].tag), "int")).v, arm, nxt)
             self.place(arm)
         r = self.inherit_cmp(op, Val(v.v, cs[i]) if phase == 0 else a, b if phase == 0 else Val(v.v, cs[i]), phase + 1)
         if not self.term:
@@ -1973,7 +1973,7 @@ def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {ci.tag}"), arm, nxt)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(ci.tag), "int")).v, arm, nxt)
             self.place(arm)
         obj = Val(b.v, ci.name)
         result = Val("false", "bool")
@@ -2202,7 +2202,7 @@ def gen_compare(self, n: Node) -> Val:
         hit = self.rt("pys_range_has", "i64", [f"i64 {self.as_int(a).v}", f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"])
         if nn != "":
             hit = self.select(nn, Val(hit, "int"), Val("0", "int"))
-        return Val(self.ins(f"icmp {'ne' if ops[0] == 'in' else 'eq'} i64 {hit}, 0"), "bool")
+        return self.num_cmp('!=' if ops[0] == 'in' else '==', Val(hit, "int"), Val('0', "int"))
     if len(ops) == 1:
         w = a.t
         if (ops[0] == "in" or ops[0] == "not in") and n.kids[1].kind == "list" and (is_list(a.t) or is_dict(a.t)):
@@ -2447,7 +2447,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             r = self.rt("pys_set_has", "i64", [f"ptr {b.v}", f"i64 {s}"])
         else:
             self.err(f"'in' is not supported for {b.t}")
-        return Val(self.ins(f"icmp {'ne' if op == 'in' else 'eq'} i64 {r}, 0"), "bool")
+        return self.num_cmp('!=' if op == 'in' else '==', Val(r, "int"), Val('0', "int"))
     if (is_sopt(a.t) or is_sopt(b.t)) and self.isnum(unopt(a.t)) and self.isnum(unopt(b.t)):
         return self.optcmp(op, a, b)
     if self.isnum(a.t) and self.isnum(b.t):
@@ -2462,14 +2462,20 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         fv = a if a.t == "float" else b
         r = self.rt("pys_cmp_if", "i64", [f"i64 {iv.v}", f"double {fv.v}"])
         if a.t == "float":
-            r = self.select(self.ins(f"icmp eq i64 {r}, 2"), Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
-        return Val(self.ins(MIXCMP[op].replace("R", r)), "bool")
+            r = self.select(self.num_cmp('==', Val(r, "int"), Val('2', "int")).v, Val("2", "int"), Val(self.ins(f"sub i64 0, {r}"), "int"))
+        # cmp_if returns -1, 0, 1, or 2 for unordered (NaN). Unsigned <= 1
+        # excludes both -1 and 2 for >=; signed <= 0 keeps -1 and 0 for <=.
+        if op == ">=":
+            return self.int_ucmp("<=", Val(r, "int"), Val("1", "int"))
+        if op == "<" or op == ">":
+            return self.num_cmp("==", Val(r, "int"), Val("-1" if op == "<" else "1", "int"))
+        return self.num_cmp(op, Val(r, "int"), Val("0", "int"))
     if is_set(a.t) and is_set(b.t) and op in ICMP:
         # subsets and equality (a set equals a frozenset of its elements)
         if self.wider(selem(a.t), selem(b.t)) == "":
             self.err(f"cannot compare {typestr(a.t)} {op} {typestr(b.t)}")
         r = self.rt("pys_set_cmp", "i64", [f"ptr {a.v}", f"ptr {b.v}", f"i64 {ORDOP[op] if op in ORDOP else 4 if op == '==' else 5}"])
-        return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool")
+        return self.num_cmp('!=', Val(r, "int"), Val('0', "int"))
     eq = op == "==" or op == "!="
     if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):
         return Val("false" if op == "==" else "true", "bool")  # a number or bool never equals None
@@ -2494,9 +2500,9 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         sb = self.to_slot(b)
         if eq:
             r = self.rt("pys_eq", "i64", [f"i64 {sa}", f"i64 {sb}", d])
-            return Val(self.ins(f"icmp {'ne' if op == '==' else 'eq'} i64 {r}, 0"), "bool")
+            return self.num_cmp('!=' if op == '==' else '==', Val(r, "int"), Val('0', "int"))
         r = self.rt("pys_cmpop", "i64", [f"i64 {sa}", f"i64 {sb}", d, f"i64 {ORDOP[op]}"])
-        return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool")
+        return self.num_cmp('!=', Val(r, "int"), Val('0', "int"))
     x = "an exception" if a.t == "exc" else a.t
     y = "an exception" if b.t == "exc" else b.t
     self.err(f"cannot compare {x} {op} {y}")

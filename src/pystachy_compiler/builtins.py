@@ -106,7 +106,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
     if name == "__pys_repr_enter" or name == "__pys_repr_leave":
         o = self.expr(args[0], "")
         r = self.rt(name[2:], "i64" if name.endswith("enter") else "void", [f"ptr {o.v}"])
-        return Val(self.ins(f"icmp ne i64 {r}, 0"), "bool") if name.endswith("enter") else Val("null", "None")
+        return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
     if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii":
         # compiler-written calls (f"{x!r}", dataclass __repr__): always the builtin
         name = name[6:]
@@ -175,7 +175,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
                 nxt = self.label() if i + 1 < len(cs) else ""
                 if nxt != "":
                     arm = self.label()
-                    self.cbr(self.ins(f"icmp eq i64 {tag}, {ci.tag}"), arm, nxt)
+                    self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(ci.tag), "int")).v, arm, nxt)
                     self.place(arm)
                 hy = self.has(ci.name, attr)
                 if attr in ci.fflag and attr not in ci.fdefault and attr not in ci.methods:
@@ -281,7 +281,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         if name == "any" and v0.t == "file":
             # any(f) reads one line: lines are never empty
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
-            return Val(self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {first}')}, 0"), "bool")
+            return self.num_cmp('!=', Val(self.ins(f'load i64, ptr {first}'), "int"), Val('0', "int"))
         vals = [self.as_list(v0, name)]
         fresh = fresh or is_set(v0.t)  # (the list of a set's elements is a new one)
         if v0.t == "tuple[]" and is_list(w):
@@ -339,8 +339,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         vals[1] = self.as_int(self.unwrap(vals[1], "TypeError: " + NONEARG["chr"]))
         nb = vals[1].v
         if is_opt(vals[0].t) and vals[1].t == "int" and not (nb.isdigit() and int(nb) <= 36 and nb != "1"):
-            out = self.ins(f"icmp ugt i64 {self.ins(f'sub i64 {nb}, 2')}, 34")
-            self.guard(self.ins(f"and i1 {out}, {self.ins(f'icmp ne i64 {nb}, 0')}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
+            out = self.int_ucmp('>', Val(self.ins(f'sub i64 {nb}, 2'), "int"), Val('34', "int")).v
+            nonzero = self.num_cmp("!=", Val(nb, "int"), Val("0", "int")).v
+            self.guard(self.ins(f"and i1 {out}, {nonzero}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
     for i in range(len(vals)):
         if vals[i].t == "None" and name in NONERET and len(vals) == 1:
             # None itself (a template's parameter whose argument is None): CPython's error
@@ -451,7 +452,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         return self.as_float(v)
     elif name == "abs" and (t == "int" or t == "bool"):
         v = self.as_int(v)
-        c = self.ins(f"icmp slt i64 {v.v}, 0")
+        c = self.num_cmp('<', Val(v.v, "int"), Val('0', "int")).v
         neg = self.iop("-", "0", v.v)
         return Val(self.select(c, Val(neg, "int"), v), "int")
     elif (name == "hex" or name == "oct" or name == "bin") and (t == "int" or t == "bool"):
@@ -552,7 +553,7 @@ def gen_keys_of(self, xs: Val, key: Val) -> Val:
     self.place(lc)
     i = self.ins(f"load i64, ptr {ctr}")
     lp.idx = [i]
-    self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {xs.v}'), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t))
     k = self.call_key(key, item)
@@ -596,7 +597,7 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     self.place(lc)
     i = self.ins(f"load i64, ptr {ctr}")
     lp.idx = [i]
-    self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {xs.v}')}"), lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {xs.v}'), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
     self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
@@ -605,7 +606,7 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
         self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
     bk = self.alloca(k.t, "")
     # the first item is the best so far; each other is if its key compares so with the best's
-    first = self.ins(f"icmp eq i64 {i}, 0")
+    first = self.num_cmp('==', Val(i, "int"), Val('0', "int")).v
     lf = self.label()
     self.cbr(first, ln, lf)
     self.place(lf)
@@ -618,7 +619,7 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     self.place(lt_)
     self.br(lc)
     self.place(le)
-    self.guard(self.ins(f"icmp eq i64 {self.ins(f'load i64, ptr {ctr}')}, 0"), f"ValueError: {name}() iterable argument is empty")
+    self.guard(self.num_cmp('==', Val(self.ins(f'load i64, ptr {ctr}'), "int"), Val('0', "int")).v, f"ValueError: {name}() iterable argument is empty")
     return Val(self.ins(f"load {lt(et)}, ptr {best}"), et)
 
 def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
@@ -658,7 +659,7 @@ def gen_anyall(self, v: Val, name: str) -> Val:
     self.place(lc)
     i = self.ins(f"load i64, ptr {ctr}")
     lp.idx = [i]
-    self.cbr(self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {v.v}')}"), lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {v.v}'), "int")).v, lb, le)
     self.place(lb)
     c = self.truth(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
     if name == "any":

@@ -212,7 +212,7 @@ def gen_try_(self, n: Node) -> None:
         ksel = self.ins(f"load i64, ptr {fx.sel}")
         for j in range(len(fx.conts) - 1):
             nx = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {ksel}, {j}"), fx.conts[j], nx)
+            self.cbr(self.num_cmp('==', Val(ksel, "int"), Val(str(j), "int")).v, fx.conts[j], nx)
             self.place(nx)
         self.br(fx.conts[-1])
         if live:

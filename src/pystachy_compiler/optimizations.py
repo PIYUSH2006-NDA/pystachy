@@ -191,6 +191,13 @@ def gen_dictfuse(self, fn: IFn) -> int:
                     if i.s == "dict.has":
                         has[f"%t{i.r[0]}"] = len(looks)
                     looks.append(Lookup(i, j, x, d, k))
+            elif i.op == "num.cmp" and i.a[0].t == "int" and i.a[1].v == "0" and (i.s == "==" or i.s == "!="):
+                # A typed membership truth test carries the same has-result fact as
+                # the former raw icmp; not/branch handling below stays shared.
+                r = i.a[0].v
+                if r in has:
+                    cond[f"%t{i.r[0]}"] = has[r]
+                    pos[f"%t{i.r[0]}"] = i.s == "!="
             elif i.op == "raw" and i.k > 0:
                 # %c = icmp ne i64 %r, 0 of a has's result (k in d; eq: k not in d), %c = xor i1 %t, true of one (not)
                 s = i.s
@@ -275,7 +282,7 @@ def gen_canon(self, vs: Values, v: str) -> str:
                 r = self.same(vs, v, f"rt {i.s} {', '.join([self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "slot.pack" or i.op == "slot.unpack":
             r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
-        elif i.op == "num.cast" or i.op == "num.cmp":
+        elif i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp":
             r = self.same(vs, v, f"{i.op} {i.t} {i.s} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "mem.load":
             x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)

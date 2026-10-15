@@ -1378,7 +1378,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             assigned = own
             for sub in self.classes.values():
                 if sub.tag != 0 and self.derives(sub.name, ci.name) and name in sub.fdefault:
-                    match = self.ins(f"icmp eq i64 {tag}, {sub.tag}")
+                    match = self.num_cmp('==', Val(tag, "int"), Val(str(sub.tag), "int")).v
                     if sub.name + "." + name in self.cvars or not is_const(sub.fdefault[name]):
                         self.class_default(sub, name)
                         dv = self.mem_load(Val(sub.fglob[name], "*" + p.t))
@@ -1412,7 +1412,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
                 c = self.sconst(short(ci.name))
                 for sub in self.classes.values():
                     if sub.tag != 0 and sub.name != ci.name and self.derives(sub.name, ci.name):
-                        match = self.ins(f"icmp eq i64 {tag}, {sub.tag}")
+                        match = self.num_cmp('==', Val(tag, "int"), Val(str(sub.tag), "int")).v
                         c = self.select(match, Val(self.sconst(short(sub.name)), "str"), Val(c, "str"))
             q = self.sconst("'")
             t = self.sconst("' object has no attribute '" + name + "'")

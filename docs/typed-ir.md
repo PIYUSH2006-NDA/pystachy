@@ -128,7 +128,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Object layout addresses | `field.addr` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
-| Numeric promotion and comparison | `num.cast`, `num.cmp` |
+| Numeric promotion and comparison | `num.cast`, `num.cmp`, `int.ucmp` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -209,6 +209,13 @@ shared promotion/comparison helpers use these operations, so numeric-union dispa
 can reuse them without new IR or runtime machinery. Exact mixed integer/float comparison
 still uses its existing frontend/runtime path; float-to-int checks, overflow checks,
 arithmetic and other LLVM-text operations remain outside this increment.
+
+Loop tests, native integer truth tests and union/class tag dispatch also use `num.cmp`.
+`int.ucmp` keeps unsigned `<`, `<=`, `>` and `>=` explicit for bounds checks over native
+integer bits; a negative index still fails an unsigned length check. Runtime string
+primitives and the exact mixed integer/float result tests share these typed operations.
+Both lower to the existing LLVM predicates. Dictionary lookup fusion reads membership
+conditions from typed operands, preserving its branch facts and mutation barriers.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

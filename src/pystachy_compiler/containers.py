@@ -296,7 +296,7 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
             # name the int
             l1 = self.label()
             l2 = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)])}, 0"), l1, l2)
+            self.cbr(self.num_cmp('==', Val(self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)]), "int"), Val('0', "int")).v, l1, l2)
             self.place(l1)
             self.raise_("KeyError", self.repr(v).v)
             self.place(l2)
@@ -377,7 +377,7 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
         hit = self.rt("pys_set_cmp", "i64", [ov, f"ptr {v.v}", "i64 1" if m == "issubset" else "i64 3"])
     else:
         hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
-    return Val(self.ins(f"icmp ne i64 {hit}, 0"), "bool")
+    return self.num_cmp('!=', Val(hit, "int"), Val('0', "int"))
 
 def gen_fromkeys(self, args: list[Node], want: str) -> Val:
     # dict.fromkeys(xs, v=None): a dict of xs's items, each mapped to v. Both are evaluated
@@ -473,7 +473,7 @@ def gen_bool_find(self, d: str, k: Val, key: str) -> str:
     e = self.rt("pys_dict_find", "i64", [f"ptr {d}", f"i64 {key}"])
     l1 = self.label()
     l2 = self.label()
-    self.cbr(self.ins(f"icmp slt i64 {e}, 0"), l1, l2)
+    self.cbr(self.num_cmp('<', Val(e, "int"), Val('0', "int")).v, l1, l2)
     self.place(l1)
     self.raise_("KeyError", self.repr(k).v)
     self.place(l2)
@@ -581,7 +581,7 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
             nxt = self.label() if i + 1 < len(cs) else ""
             if nxt != "":
                 arm = self.label()
-                self.cbr(self.ins(f"icmp eq i64 {tag}, {c.tag}"), arm, nxt)
+                self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
                 self.place(arm)
             self.narrowed = dict(narrow)
             method = m if m in c.methods else "__repr__"
