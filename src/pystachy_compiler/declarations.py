@@ -689,9 +689,9 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.generic = True  # (-> Box: what it returns is one of the class's specializations)
     if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
         f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
-    if d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and len(ps) == (1 if cls != "" and f.deco != "staticmethod" else 0) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
-        # No argument needs to provide a type: use the existing one-signature
-        # specialization to infer an ordinary no-argument function or method.
+    if d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
+        # The declared parameter types still coerce every call. Reuse return
+        # inference even when all parameter types are already concrete.
         # Initializers and other implicit special methods keep their contracts.
         f.void_default = not f.generic
         f.generic = True

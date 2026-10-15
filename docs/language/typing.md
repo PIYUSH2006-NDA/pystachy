@@ -66,9 +66,10 @@ tests of these annotations are decided using the compiled type.
 
 ## Annotations
 
-A function whose parameters are annotated uses those types. A missing return annotation
-means `-> None`, unless the function is a template. Ordinary functions taking no arguments
-(methods taking only `self` or `cls`) also infer their return type when they return a value.
+A function whose parameters are annotated uses those types. Ordinary functions and methods
+infer a missing return annotation from their supported return statements, even when every
+parameter is annotated or no arguments are taken. A function without a value return keeps
+its `None` result type; an explicit `-> None` still rejects returning a value.
 Unannotated `__str__` and `__repr__` use their required `str` result type and `__bool__`
 uses `bool`; their bodies are checked against those contracts. An unannotated `__len__`
 infers `int` or `bool`. Constructors keep their `None` result contract.
@@ -360,10 +361,10 @@ boxing and dispatch have costs, so no performance improvement is claimed.
 A module-level function with an unannotated parameter is a template, compiled once for
 each argument type combination that calls it. Annotated parameters keep their declared
 types; the first value-returning statement determines an inferred return type.
-An ordinary function without arguments, or method with only its receiver, uses the same
-inference when it has no return annotation and returns a value. Existing recursive
-functions returning only `None` retain that contract. A recursive call before a value
-return type is known requires an explicit return annotation.
+An ordinary function or method with fully annotated parameters, including one with no
+arguments, uses the same inference when it has no return annotation and returns a value.
+Its recursive calls can retain the existing `None` signature; value-returning recursion
+before a result type is known requires an explicit return annotation.
 Unsupported code becomes an error when that specialization needs it; syntax errors are
 checked regardless of use.
 

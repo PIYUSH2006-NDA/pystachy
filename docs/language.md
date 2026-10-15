@@ -59,9 +59,10 @@ The main rules are:
   fields and globals still require consistent types. See [local bindings](language/typing.md#variables-and-empty-containers).
 - Mutable containers are invariant: a `list[int]` cannot become a `list[int | None]`.
 - Empty lists and dictionaries need an annotation or a use that determines their type.
-- A function whose parameters are all annotated uses those types; if its return annotation is omitted,
-  it returns `None`. Ordinary functions without arguments and methods with only `self` or `cls`
-  can infer a value return; constructors and implicit special methods keep their declared contracts.
+- Ordinary functions and methods infer an omitted return annotation from their supported returns,
+  including no-argument and fully annotated parameter signatures. Parameters keep their declared
+  types, explicit `-> None` stays a contract, and functions without value returns return `None`.
+  Constructors and implicit special methods keep their own result contracts.
 - A module-level function or ordinary method with an unannotated parameter is specialized for
   each call's argument types. Its supported branches and returns must have consistent types.
 - An unannotated constructor can specialize its class from the fields it initializes.
