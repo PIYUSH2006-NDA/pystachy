@@ -3,3 +3,6 @@ class C:
     @property
     def value(self):
         return 1
+
+
+print(C().value)
