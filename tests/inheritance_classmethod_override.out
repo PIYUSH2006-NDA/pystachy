@@ -1,0 +1,15 @@
+Square.parse ab
+Square.parse xyz
+Shape a(3) Square AB(2) Cube XYZ(3)
+Square.parse unit:1
+Square.parse unit:1
+Shape unit(1) Square UNIT:1(6) Cube UNIT:1(6)
+shape with 0 sides | shape with 4 sides | solid of squares
+10 20 20
+6 12 12
+Square.parse unit:1
+Square.parse q
+Shape s(2) 0
+Square UNIT:1(6) 4
+Cube Q(1) 4
+[exit 0]

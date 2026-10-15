@@ -388,9 +388,11 @@ supported alternatives.
 ### Classes, dataclasses and NamedTuples
 
 - multiple inheritance; ordinary inheritance involving a class template, `Generic`, dataclass,
-  NamedTuple or builtin type; a decorated subclass; overriding a static or class method;
-  calls whose possible instance-method overrides cannot accept the arguments or return a
-  common supported type. See [single inheritance](typing.md#single-inheritance).
+  NamedTuple or builtin type; a decorated subclass; overriding a method with another kind of
+  method (instance, static or class method); calls whose possible instance-method overrides
+  cannot accept the arguments or return a common supported type, and calls through a
+  base-typed object of a static or class method that a subclass overrides. See
+  [single inheritance](typing.md#single-inheritance).
 - assigning an inherited class attribute through a subclass that does not declare its own
   default; changing an inherited field's type; reading derived-only fields through a base
   annotation without [supported narrowing](typing.md#single-inheritance) of a stable local or

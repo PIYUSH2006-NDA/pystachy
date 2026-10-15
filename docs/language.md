@@ -114,10 +114,11 @@ errors rather than catchable exceptions. Repeated slot declarations and
 class variables or methods shadowing inherited slots are also unsupported, as are
 new slots shadowing inherited methods, properties or class variables.
 
-Ordinary classes support single inheritance, inherited fields and constructors, instance-method
-overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
-class's override. Constructors in these hierarchies need annotated parameters; inheritance
-involving class templates, dataclasses, NamedTuples or builtin types is unsupported. Exception
+Ordinary classes support single inheritance, inherited fields and constructors, overrides of
+instance, static and class methods, `super()` and runtime `isinstance()` checks. A base-typed
+receiver calls its concrete class's instance-method override. Constructors in these
+hierarchies need annotated parameters; inheritance involving class templates, dataclasses,
+NamedTuples or builtin types is unsupported. Exception
 classes retain their separate inheritance rules, and `Generic[...]` declares a generic class.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.

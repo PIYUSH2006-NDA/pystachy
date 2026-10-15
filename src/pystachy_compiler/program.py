@@ -130,9 +130,9 @@ def gen_inherit(self, ci: ClassInfo) -> None:
         elif f.prop != ci.methods[m].prop:
             self.line = ci.methods[m].node.line
             self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
-        elif ci.exc == "" and (f.deco != "" or ci.methods[m].deco != ""):
+        elif ci.exc == "" and f.deco != ci.methods[m].deco:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
+            self.err(f"overriding '{m}' of '{short(b.name)}' with another kind of method (instance, static or class method) in '{short(ci.name)}' is not supported")
         elif ci.exc != "" and m != "__init__" and m != "__str__" and m != "__repr__":
             self.line = ci.methods[m].node.line
             self.err(f"method '{m}' of '{short(ci.name)}' overrides that of '{short(b.methods[m].cls)}': only __init__, __str__ and __repr__ may be overridden")
