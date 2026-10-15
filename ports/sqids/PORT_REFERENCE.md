@@ -18,12 +18,12 @@ Archive SHA-256: `5ac08f0c5c9b6814bc2e7c79ee5931e0849d25d95c50e415771b022a44f58a
 |---|---|---|
 | `__init__.py` | `dec511d0fd42c1fb20907eba8161abdadf6278c31d1d0b341038e242a204eaa1` | none |
 | `constants.py` | `9b0e801cfcd48c0d028669d84a73a174a99f51da57ecc250e464a92eaf8ac1ae` | 2 set displays made lists (4 lines) |
-| `sqids.py` | `7e9765b179f1b25e4b9fdf71d606d2048b2a037ed089933d8a2243e67ffb761e` | 12 regions |
+| `sqids.py` | `7e9765b179f1b25e4b9fdf71d606d2048b2a037ed089933d8a2243e67ffb761e` | 9 regions |
 
 ## Adaptation record
 
 - Blocklists are lists rather than sets/variable-length tuples; character-membership operations use strings plus `all()`/`any()`.
-- Uniqueness checks use character counts; reversed slices become `reversed()` consumers.
+- Uniqueness checks use character counts.
 - Prefix/suffix tuple checks become per-word loops. This loop is a measured cost when the adapted package runs under CPython.
 - The encode/decode/shuffle algorithms and defaults are retained, with marked changes in `constants.py` and `sqids.py`.
 

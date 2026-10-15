@@ -221,9 +221,9 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
 
         """
         self._len = 0
-        self._lists.clear()  # Pystachy port: was 'del xs[:]' (del of a slice: M7)
-        self._maxes.clear()
-        self._index.clear()
+        del self._lists[:]
+        del self._maxes[:]
+        del self._index[:]
         self._offset = 0
 
     def _clear(self) -> None:  # Pystachy port: method alias as a def (functions as values, M3)
@@ -284,13 +284,13 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
 
             _lists_pos = _lists[pos]
             half = _lists_pos[_load:]
-            _lists[pos] = _lists_pos = _lists_pos[:_load]  # Pystachy port: was 'del _lists_pos[_load:]' (M7)
+            del _lists_pos[_load:]
             _maxes[pos] = _lists_pos[-1]
 
             _lists.insert(pos + 1, half)
             _maxes.insert(pos + 1, half[-1])
 
-            _index.clear()  # Pystachy port: was 'del _index[:]' (del of a slice: M7)
+            del _index[:]
         else:
             if _index:
                 child = self._offset + pos
@@ -333,7 +333,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
                       for pos in range(0, len(values), _load))
         _maxes.extend(sublist[-1] for sublist in _lists)
         self._len = len(values)
-        self._index.clear()  # Pystachy port: was 'del self._index[:]' (del of a slice: M7)
+        del self._index[:]
 
     def _update(self, iterable: list[int]) -> None:  # Pystachy port: method alias as a def (M3)
         self.update(iterable)
@@ -486,7 +486,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
 
             del _lists[pos]
             del _maxes[pos]
-            _index.clear()  # Pystachy port: was 'del _index[:]' (del of a slice: M7)
+            del _index[:]
 
             self._expand(prev)
         elif len_lists_pos:
@@ -494,7 +494,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         else:
             del _lists[pos]
             del _maxes[pos]
-            _index.clear()  # Pystachy port: was 'del _index[:]' (del of a slice: M7)
+            del _index[:]
 
 
     def _loc(self, pos: int, idx: int) -> int:  # Pystachy port: annotated (M2)
@@ -709,13 +709,12 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
 
         """
         # Pystachy port: rewritten without map(len, ...), iter() pairing, starmap(add, ...),
-        # repeat(), reduce(iadd, ...) (M3, M6) and slice assignment (M7), in the next line
-        # and the places marked below; it builds the same rows.
+        # repeat() and reduce(iadd, ...) (M3, M6), in the next line and the places marked
+        # below; it builds the same rows.
         row0 = [len(sublist) for sublist in self._lists]
 
         if len(row0) == 1:
-            self._index.clear()  # Pystachy port: was self._index[:] = row0 (M7)
-            self._index.extend(row0)
+            self._index[:] = row0
             self._offset = 0
             return
 
@@ -726,8 +725,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             row1.append(row0[-1])
 
         if len(row1) == 1:
-            self._index.clear()  # Pystachy port: was self._index[:] = row1 + row0 (M7)
-            self._index.extend(row1 + row0)
+            self._index[:] = row1 + row0
             self._offset = 1
             return
 

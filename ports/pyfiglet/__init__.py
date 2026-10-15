@@ -462,7 +462,7 @@ def _chars(text: str) -> list[str]:
 # Pystachy port: FigletString subclasses str, which upstream computes from bytes (M7, #12) and
 # Pystachy cannot hold in a variable (M2, #7). The class stays uncompiled (inheritance, M2):
 # getString() and renderText() return the str, and reverse(), flip() and the other methods,
-# which need str.translate() and slice steps (M7), are left out.
+# which need str.translate() (M7), are left out.
 # unicode_string = type(''.encode('ascii').decode('ascii'))
 
 
