@@ -708,7 +708,10 @@ def gen_expr(self, n: Node, want: str) -> Val:
                 hint = self.list_hint_type(hint, v.t) if hint != "" else ""
             for v in items if hint != "" else items[:0]:
                 if not (self.term and v.v == "undef") and not self.widens(v.t, et) and not self.converts(v.t, et):
-                    self.err(f"expected {typestr(et)}, got {typestr(v.t)}; annotate the list as list[{typestr(hint)}] to preserve its mixed item types")
+                    self.line = n.line
+                    advice = typestr(hint).replace("float | int", "int | float")
+                    numeric = "; for numeric promotion instead, write float literals or use float() on the integer items" if all(x.t in ["int", "float"] for x in items) else ""
+                    self.err(f"expected {typestr(et)}, got {typestr(v.t)}; this list literal needs list[{advice}] to preserve its mixed item types (include enclosing containers in the annotation){numeric}")
         items = [self.coerce(v, et) for v in items]
         r = self.rt("pys_list_new", "ptr", [f"i64 {len(items)}"])
         for v in items:
