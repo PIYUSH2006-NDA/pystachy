@@ -241,8 +241,11 @@ current calls happen to pass integers. Declare that result bound explicitly in
 returns and mutable storage. Power, bitwise operations, and unions containing
 strings or other nonnumeric members still require narrowing.
 
-Narrow before other arithmetic, ordering, member methods and format specifications that
-require a concrete member. No union is inferred from unrelated assignments or
+`format(value, spec)` and f-string format specifications select the native member's
+formatter after evaluating the value and specification once. Numeric and string
+members retain their supported formats; `None` accepts only an empty specification.
+
+Narrow before other arithmetic, ordering and member methods. No union is inferred from unrelated assignments or
 return values; annotate it explicitly. Arbitrary `Any`, recursive
 JSON types, runtime compilation and speculative type assumptions are out of scope.
 Boxing may allocate; this feature expands supported programs and makes no performance
@@ -282,9 +285,18 @@ concrete list type.
 This supports explicitly typed, finite-depth JSON-shaped data. Recursive aliases
 such as `type Value = None | int | str | list[Value] | dict[str, Value]` remain
 unsupported; this is not yet arbitrary-depth JSON or `Any`. Native class/file
-members retain the separate reference-union restrictions below. Narrow containers
-before using their operations; this representation increment does not add generic
-mixed-container comparison, formatting or method dispatch.
+members retain the separate reference-union restrictions below.
+
+Truth tests, `bool()`, `str()`, `repr()`, printing and f-strings support these mixed
+unions without narrowing, including nested containers and different list/dict
+member types. Each operation dispatches to the original native value; truth tests
+observe its current length, and formatting preserves the existing recursive
+container representation guards. `format()` accepts an empty specification for
+containers; a nonempty one raises the selected container's `TypeError`. A string
+member uses string formatting, and a numeric member uses numeric formatting.
+
+Narrow before container methods, indexing, equality or searching. This increment
+does not enable generic mixed-container comparison or method dispatch.
 
 ## Native reference unions
 

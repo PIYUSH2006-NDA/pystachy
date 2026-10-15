@@ -6,6 +6,7 @@ from src.pystachy_compiler.union_arithmetic import (
 )
 from src.pystachy_compiler.unions import (
     gen_scalar_union as unions_scalar_union,
+    gen_value_union as unions_value_union,
     gen_uop as unions_uop,
     gen_uequal as unions_uequal,
     gen_reference_union as unions_reference_union,
@@ -2214,6 +2215,9 @@ class Gen:
 
     def scalar_union(self, t: str) -> bool:
         return unions_scalar_union(self, t)
+
+    def value_union(self, t: str) -> bool:
+        return unions_value_union(self, t)
 
     def uop(self, v: Val, op: str) -> Val:
         return unions_uop(self, v, op)
