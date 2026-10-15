@@ -130,14 +130,14 @@ __all__ = [
 ]
 
 import math
-# Pystachy port: the imports of what Pystachy does not have are optional (numbers, random,
-# fractions, decimal, itertools, functools' reduce, collections), as only functions that it leaves
-# uncompiled use them; _random = random is in the try of random, and sumprod is imported below
+# Pystachy port: optional imports, as only functions Pystachy leaves uncompiled use them; random's
+# in CPython only (Pystachy has no types module, and drops that block); sumprod is imported below
 try:
     import numbers
 except ImportError:
     pass
 try:
+    import types
     import random
     _random = random
 except ImportError:
@@ -1894,10 +1894,10 @@ _triweight_invcdf = _newton_raphson(
     f = lambda t: 35/32 * (-1/7*t**7 + 3/5*t**5 - t**3 + t) + 1/2,
     f_prime = lambda t: 35/32 * (1.0 - t * t) ** 3)
 
-# Pystachy port: made where random imports, which kde_random() needs (Pystachy has none): a dict
+# Pystachy port: made in CPython only (Pystachy has no types module, and drops this block): a dict
 # of Pystachy holds functions of one type, and it does not compile NormalDist (its properties)
 try:
-    import random
+    import types
     _kernel_invcdfs = {
         'normal': NormalDist().inv_cdf,
         'logistic': lambda p: log(p / (1 - p)),
