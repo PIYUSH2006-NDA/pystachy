@@ -1069,6 +1069,11 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
             evs: list[Val] = []
             for a in args:
                 v = self.expr(a, "")
+                if fn == "reversed" and v.t in self.classes and v.t not in self.nts and "__reversed__" in self.classes[v.t].methods:
+                    # (CPython calls __reversed__, whose iterator the loop steps through forwards)
+                    seq = self.obj_iter(v, "TypeError: 'NoneType' object is not reversible", "", "__reversed__")
+                    self.for_seq(tgt, [seq], "", body, "0", hide, arg)
+                    return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts:
                     # (CPython calls __reversed__, or __len__ and __getitem__, never __iter__)
                     self.err(f"'{tname(v.t)}' object is not reversible" if "__getitem__" not in self.classes[v.t].methods else f"reversed() of {short(v.t)} by its __len__ and __getitem__ is not supported")

@@ -347,14 +347,15 @@ supported alternatives.
 - comparison dunders and `__bool__` that do not return `bool`, `__str__`/`__repr__` that do not
   return `str`, a `__len__` that returns neither an `int` nor a `bool`, methods without `self` (or
   a class method without `cls`)
-- an `__iter__` that is a generator, or that returns anything but `iter(xs)` of a list, a tuple, a
-  `str` or an object with such an `__iter__` (an iterator class, whose `__iter__` returns an object
-  with `__next__`, too; the list it returns as it is is rejected by CPython too:
+- an `__iter__` or `__reversed__` that is a generator, or that returns anything but `iter(xs)` of
+  a list, a tuple, a `str` or an object with such an `__iter__` (an iterator class, whose `__iter__`
+  returns an object with `__next__`, too; the list it returns as it is is rejected by CPython too:
   `iter() returned non-iterator of type 'list'`; and `iter(d.keys())`, `values()` or `items()`,
   whose iterator raises if the dict changes size: `iter(list(d.keys()))` copies them), and a call
   of it (`o.__iter__()`)
 - iterating over an object, or `x in o`, by its `__getitem__` alone (CPython's old sequence
-  protocol), and `reversed()` of an object
+  protocol), and `reversed()` of an object without `__reversed__` (by its `__len__` and
+  `__getitem__`)
 - reflected operator methods (`__radd__` & co), which CPython calls when the left operand's class
   has no method for the operator and the right operand's class is another (`3 & o` calls
   `o.__rand__(3)`), and first when the right operand's class derives from the left one's and

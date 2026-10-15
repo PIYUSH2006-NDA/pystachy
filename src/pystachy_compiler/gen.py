@@ -1929,8 +1929,8 @@ class Gen:
     def protocol(self, o: Val, m: str, args: list[Val]) -> Val:
         return expressions_protocol(self, o, m, args)
 
-    def obj_iter(self, v: Val, none: str, missing: str) -> Val:
-        return expressions_obj_iter(self, v, none, missing)
+    def obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") -> Val:
+        return expressions_obj_iter(self, v, none, missing, name)
 
     def iter_ret(self, e: Node) -> Val:
         return expressions_iter_ret(self, e)

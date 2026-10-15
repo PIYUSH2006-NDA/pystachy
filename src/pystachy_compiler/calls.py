@@ -586,7 +586,7 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         if m not in ci.methods:
             return self.replace(o, args)
         if ci.methods[m].iters:
-            self.err(f"calling {short(o.t)}.__iter__() is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"calling {short(o.t)}.{m}() is not supported (its iterator is the list it steps through here): iterate over the object")
         if ci.methods[m].prop:
             return self.obj_call(self.call_fn(ci.methods[m], [o], []), args, "")
         self.cls_bound(ci.methods[m], o.t, True)
@@ -686,7 +686,7 @@ def gen_method_value(self, o: Val, name: str) -> Val:
         if f.deco != "":
             self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
         if f.iters:
-            self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"{short(t)}.{name} as a value is not supported (its iterator is the list it steps through here): iterate over the object")
         if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
         return Val(o.v, f"fn[m:{t}.{name}]")

@@ -89,6 +89,7 @@ and fields are available. See [single inheritance](typing.md#single-inheritance)
 | Representation | `__str__`, `__repr__`, `__format__` |
 | Call, indexing, assignment, deletion | `__call__`, `__getitem__`, `__setitem__`, `__delitem__` |
 | Membership and iteration | `__contains__`, or supported `__iter__` |
+| `reversed()` | Supported `__reversed__` |
 
 Rich comparisons use reflection, such as trying `b.__gt__(a)` for `a < b`.
 Reflected arithmetic methods such as `__radd__` and object `__pow__` are unsupported.
@@ -105,8 +106,9 @@ A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and ret
 `iter(xs)` for a list, tuple, string or another object with the same supported protocol.
 It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
 `list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
-Generator implementations, general `__next__` iterator classes, and direct calls of
-`o.__iter__()` are unsupported.
+A supported `__reversed__` has the same form; every consumer of `reversed(o)` steps through
+the iterator it returns. Generator implementations, general `__next__` iterator classes, and
+direct calls of `o.__iter__()` are unsupported.
 
 A missing protocol method produces a compilation error using CPython's message.
 An object that is `None` when the operation executes raises the corresponding runtime error.
