@@ -738,6 +738,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         elif p.kids[0].kind == "noann":
             if not f.generic and p not in held:
                 # A generic class's TypeVar annotation is restored on its specializations.
+                if cls != "" and d.s == "__exit__":
+                    self.err("unannotated __exit__() is not supported; user-defined context managers cannot be used in 'with' (files only)")
                 self.err(f"parameter '{p.s}' of '{d.s}' needs a type annotation")
             f.ptypes.append("")
         elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):

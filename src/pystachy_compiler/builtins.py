@@ -1204,6 +1204,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
             self.err(f"missing argument for {m}()")
         i += 1
     if i < len(args):
+        if base == "str" and m == "replace" and len(args) == 3:
+            self.err("str.replace() with a count is not supported (only replace(old, new) is)")
         self.err(f"too many arguments for {m}()")
     for j in range(len(nones)):
         self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
