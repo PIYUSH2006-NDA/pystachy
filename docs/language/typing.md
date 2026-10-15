@@ -69,7 +69,10 @@ tests of these annotations are decided using the compiled type.
 A function whose parameters are annotated uses those types. A missing return annotation
 means `-> None`, unless the function is a template. There is no implicit `int` to `float`
 conversion in an assignment, argument or return: write `1.0`, or convert explicitly.
-Arithmetic and numeric list searches may mix integers and floats.
+Arithmetic and numeric list searches may mix integers and floats. Equality and
+membership also compare matching list, dict and tuple shapes with different numeric
+item types exactly, including nested containers. This does not widen their stored types;
+ordering between containers with different numeric item types remains unsupported.
 
 Parameter, return, class-body and module-level annotations follow CPython 3.13's evaluation
 timing. They are checked even in unused imported definitions. A name must be bound when its
