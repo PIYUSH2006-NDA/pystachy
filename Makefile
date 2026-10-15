@@ -109,6 +109,10 @@ streamprobe: pystachy
 jitprobe: pystachy
 	$(PY) tools/jitprobe.py
 
+# Opt-in Unicode porting checks, including cache reuse and GC-stress exception paths.
+unicode-audit: pystachy
+	$(PY) tools/unicode_audit.py
+
 # Full verification (bootstrap, both compilers, the runtime cache, Python-free stage, UBSan, GC stress, IR check,
 # benchmarks, dict probes, scaling) -> build/verification.json
 verify:
@@ -214,4 +218,4 @@ uninstall:
 test-install:
 	$(PY) -m unittest discover -s tools -p test_install.py
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe unicode-audit verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install
