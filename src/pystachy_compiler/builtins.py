@@ -339,9 +339,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         vals[1] = self.as_int(self.unwrap(vals[1], "TypeError: " + NONEARG["chr"]))
         nb = vals[1].v
         if is_opt(vals[0].t) and vals[1].t == "int" and not (nb.isdigit() and int(nb) <= 36 and nb != "1"):
-            out = self.int_ucmp('>', Val(self.ins(f'sub i64 {nb}, 2'), "int"), Val('34', "int")).v
+            out = self.int_ucmp('>', Val(self.scalar('sub', [Val(nb, 'int'), Val('2', 'int')]), "int"), Val('34', "int")).v
             nonzero = self.num_cmp("!=", Val(nb, "int"), Val("0", "int")).v
-            self.guard(self.ins(f"and i1 {out}, {nonzero}"), "ValueError: int() base must be >= 2 and <= 36, or 0")
+            self.guard(self.scalar('and', [Val(out, 'bool'), Val(nonzero, 'bool')]), "ValueError: int() base must be >= 2 and <= 36, or 0")
     for i in range(len(vals)):
         if vals[i].t == "None" and name in NONERET and len(vals) == 1:
             # None itself (a template's parameter whose argument is None): CPython's error
@@ -491,7 +491,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             return self.tuple_([self.arith("//", dn, dd), self.arith("%", dn, dd)])
         dn = self.as_float(dn)
         dd = self.as_float(dd)
-        self.guard(self.ins(f"fcmp oeq double {dd.v}, 0.0"), "ZeroDivisionError: float divmod()")
+        self.guard(self.scalar_cmp('oeq', Val(dd.v, 'float'), Val('0.0', 'float')), "ZeroDivisionError: float divmod()")
         return self.tuple_([self.arith("//", dn, dd), self.arith("%", dn, dd)])
     elif name == "pow" and len(vals) == 2:
         return self.arith("**", v, vals[1])
@@ -560,7 +560,7 @@ def gen_keys_of(self, xs: Val, key: Val) -> Val:
     if "?" in k.t:
         self.err(f"the key function returns an empty container whose type is not known here ({typestr(k.t)})")
     self.rt("pys_list_append", "void", [f"ptr {ks}", "i64 " + self.to_slot(k)])
-    self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
+    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
     self.br(lc)
     self.place(le)
     return Val(ks, self.ctype("list", [k.t]))
@@ -600,7 +600,7 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {xs.v}'), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
-    self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
+    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
     k = self.call_key(key, item)
     if "?" in k.t or k.t == "None":
         self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
@@ -670,7 +670,7 @@ def gen_anyall(self, v: Val, name: str) -> Val:
     self.emit(f"store i1 {'true' if name == 'any' else 'false'}, ptr {res}")
     self.br(le)
     self.place(ls)
-    self.emit(f"store i64 {self.ins(f'add i64 {i}, 1')}, ptr {ctr}")
+    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
     self.br(lc)
     self.place(le)
     return Val(self.ins(f"load i1, ptr {res}"), "bool")
@@ -747,10 +747,10 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     # fsum's end: the compensation is added where it is a finite number other than 0
     s = self.ins(f"load double, ptr {r.acc}")
     c = self.ins(f"load double, ptr {r.comp}")
-    fin = self.ins(f"fcmp olt double {self.rt('fabs', 'double', [f'double {c}'])}, 0x7FF0000000000000")
-    nz = self.ins(f"fcmp une double {c}, {fbits('0.0')}")
-    use = self.ins(f"and i1 {nz}, {fin}")
-    return Val(self.select(use, Val(self.ins(f"fadd double {s}, {c}"), "float"), Val(s, "float")), "float")
+    fin = self.scalar_cmp('olt', Val(self.rt('fabs', 'double', [f'double {c}']), 'float'), Val('0x7FF0000000000000', 'float'))
+    nz = self.scalar_cmp('une', Val(c, 'float'), Val(fbits('0.0'), 'float'))
+    use = self.scalar('and', [Val(nz, 'bool'), Val(fin, 'bool')])
+    return Val(self.select(use, Val(self.scalar('fadd', [Val(s, 'float'), Val(c, 'float')]), "float"), Val(s, "float")), "float")
 
 def gen_reduce_item(self, r: Reduce, e: Node) -> None:
     # an item of reduce()'s generator: added to the sum, or compared with the item kept. Its
@@ -797,7 +797,7 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
     if r.t != "float":
         # ints from a float start: added as floats, not compensated (pys_sum_int_float)
         sf = self.ins(f"load double, ptr {r.acc}")
-        self.emit(f"store double {self.ins(f'fadd double {sf}, {self.as_float(self.as_int(v)).v}')}, ptr {r.acc}")
+        self.emit(f"store double {self.scalar('fadd', [Val(sf, 'float'), Val(self.as_float(self.as_int(v)).v, 'float')])}, ptr {r.acc}")
         return
     nm = self.label()
     if r.first != "":
@@ -807,19 +807,19 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
         self.cbr(self.ins(f"load i1, ptr {r.first}"), plain, comp)
         self.place(plain)
         s0 = self.ins(f"load double, ptr {r.acc}")
-        self.emit(f"store double {self.ins(f'fadd double {s0}, {v.v}')}, ptr {r.acc}")
+        self.emit(f"store double {self.scalar('fadd', [Val(s0, 'float'), Val(v.v, 'float')])}, ptr {r.acc}")
         self.emit(f"store i1 false, ptr {r.first}")
         self.br(nm)
         self.place(comp)
     # Neumaier's step, as runtime.c's fsum takes it
     s = self.ins(f"load double, ptr {r.acc}")
-    t = self.ins(f"fadd double {s}, {v.v}")
-    ge = self.ins(f"fcmp oge double {self.rt('fabs', 'double', [f'double {s}'])}, {self.rt('fabs', 'double', [f'double {v.v}'])}")
-    d1 = self.ins(f"fadd double {self.ins(f'fsub double {s}, {t}')}, {v.v}")
-    d2 = self.ins(f"fadd double {self.ins(f'fsub double {v.v}, {t}')}, {s}")
+    t = self.scalar('fadd', [Val(s, 'float'), Val(v.v, 'float')])
+    ge = self.scalar_cmp('oge', Val(self.rt('fabs', 'double', [f'double {s}']), 'float'), Val(self.rt('fabs', 'double', [f'double {v.v}']), 'float'))
+    d1 = self.scalar('fadd', [Val(self.scalar('fsub', [Val(s, 'float'), Val(t, 'float')]), 'float'), Val(v.v, 'float')])
+    d2 = self.scalar('fadd', [Val(self.scalar('fsub', [Val(v.v, 'float'), Val(t, 'float')]), 'float'), Val(s, 'float')])
     d = self.select(ge, Val(d1, "float"), Val(d2, "float"))
     c = self.ins(f"load double, ptr {r.comp}")
-    self.emit(f"store double {self.ins(f'fadd double {c}, {d}')}, ptr {r.comp}")
+    self.emit(f"store double {self.scalar('fadd', [Val(c, 'float'), Val(d, 'float')])}, ptr {r.comp}")
     self.emit(f"store double {t}, ptr {r.acc}")
     self.br(nm)
     self.place(nm)
@@ -926,7 +926,7 @@ def gen_reverse_val(self, r: Val, name: str) -> str:
     # sorted(..., reverse=r) and list.sort(reverse=r): r is a bool or an int, as in CPython
     if r.t != "bool" and r.t != "int":
         self.err(f"{name}() argument 'reverse' must be a bool, not {tname(r.t)}")
-    return self.ins(f"zext i1 {self.truth(r)} to i64")
+    return self.scalar_cast('zext', Val(self.truth(r), 'bool'), 'int')
 
 def gen_parse_expr(self, text: str) -> Node:
     return Parser(Lexer(text, self.line).run()).test()
@@ -1207,7 +1207,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if i < len(args):
         self.err(f"too many arguments for {m}()")
     for j in range(len(nones)):
-        self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
     if alts.t != "":
         return self.affix_any(alts, m, av)
     r = spec[:c]
@@ -1222,7 +1222,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if optget and is_sopt(rtype) and not is_sopt(V):
         fn = "pys_dict_getbox"  # (the value's box: an int | None)
     if numok != "true" and m == "remove":
-        self.guard(self.ins(f"xor i1 {numok}, true"), "ValueError: list.remove(x): x not in list")
+        self.guard(self.scalar('xor', [Val(numok, 'bool'), Val('true', 'bool')]), "ValueError: list.remove(x): x not in list")
     if numx.t != "" and m == "index":
         fn = "pys_list_index_as"  # (its ValueError names x, not the item)
         av = av + ["i64 " + self.to_slot(Val(numok, "bool")), "i64 " + self.to_slot(numx), f"ptr {self.sconst(self.desc(numx.t, '=='))}"]

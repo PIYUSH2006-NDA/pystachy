@@ -54,7 +54,7 @@ def gen_call(self, n: Node, want: str) -> Val:
         self.read_ahead(f.s)
         if (f.chk or self.foreign(f.s)) and f.s in self.gflag:
             # a call that may run before the def or class statement
-            bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{f.s}.def')}, true")
+            bad = self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{f.s}.def'), 'bool'), Val('true', 'bool')])
             self.guard(bad, self.unbound(f.s))
         if f.s in self.funcs:
             return self.call_fn(self.funcs[f.s], [], args, want)
@@ -537,7 +537,7 @@ def gen_open_(self, args: list[Node]) -> Val:
             v = Val(v.v, "str")
         vals[nm] = self.coerce(v, want).v
     for j in range(len(nones)):
-        self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
     return Val(self.rt("pys_open", "ptr", [f"ptr {vals['file']}", f"ptr {vals['mode']}", f"ptr {vals['encoding']}", f"ptr {vals['newline']}",
                                            f"i64 {vals['buffering']}"]), "file")
 

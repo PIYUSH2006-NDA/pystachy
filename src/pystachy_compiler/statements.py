@@ -1214,7 +1214,7 @@ def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[
         # i < stop (or i > stop), so i + 1 (i - 1) fits: an nsw add, which lets LLVM bound i
         # and drop the index checks that compare it with a length. (This would hold for every
         # program, but it changes their IR: see docs/runtime-in-subset.md.)
-        self.emit(f"store i64 {self.ins(f'add nsw i64 {i}, {step}')}, ptr {ctr}")
+        self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val(step, 'int')], 'nsw')}, ptr {ctr}")
         self.br(lc)
         self.place(le)
         return
@@ -1245,9 +1245,9 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     c = self.ins(f"load i64, ptr {ctr}")
     self.cbr(self.num_cmp('!=', Val(c, "int"), Val('0', "int")).v, lb, le)
     self.place(lb)
-    k = self.ins(f"sub i64 {c}, 1")
+    k = self.scalar('sub', [Val(c, 'int'), Val('1', 'int')])
     self.emit(f"store i64 {k}, ptr {ctr}")
-    self.assign(tgt, Val(self.ins(f"add i64 {vs[0]}, {self.ins(f'mul i64 {k}, {vs[2]}')}"), "int"))
+    self.assign(tgt, Val(self.scalar('add', [Val(vs[0], 'int'), Val(self.scalar('mul', [Val(k, 'int'), Val(vs[2], 'int')]), 'int')]), "int"))
     self.loop(body, lp)
     self.place(ls)
     self.br(lc)
@@ -1294,19 +1294,19 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         elif is_set(s.t):
             # the slot of the next element, as CPython's set iterator finds it
             j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.ins(f'load i64, ptr {st[k]}')}", f"i64 {used[k]}"])
-            nx = self.ins(f"add i64 {j}, 1")
+            nx = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
         elif is_dict(s.t):
             p = self.ins(f"load i64, ptr {st[k]}")
             if mode == "reversed":
                 j = self.rt("pys_dict_prev", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
-                nx = self.ins(f"sub i64 {j}, 1")
+                nx = self.scalar('sub', [Val(j, 'int'), Val('1', 'int')])
             else:
                 j = self.rt("pys_dict_next", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
-                nx = self.ins(f"add i64 {j}, 1")
+                nx = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
         elif mode == "reversed":
-            j = self.ins(f"sub i64 {self.ins(f'sub i64 {st[k]}, 1')}, {i}")
+            j = self.scalar('sub', [Val(self.scalar('sub', [Val(st[k], 'int'), Val('1', 'int')]), 'int'), Val(i, 'int')])
             # 0 <= j < the current length, as CPython's reversed iterator checks
             ok = self.int_ucmp('<', Val(j, "int"), Val(self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k], "int")).v
         else:
@@ -1330,7 +1330,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         if is_list(s.t):
             vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
         elif is_vtuple(s.t):
-            off = self.ins(f"add i64 {j}, 1")
+            off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {off}')}"), targs(s.t)[0]))
         elif is_tuple(s.t):
             vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {j}')}"), targs(s.t)[0]))
@@ -1355,7 +1355,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         self.assign(tgt, self.tuple_(vals))
     self.loop(body, lp)
     self.place(ls)
-    nx2 = self.ins(f"add i64 {i}, 1")
+    nx2 = self.scalar('add', [Val(i, 'int'), Val('1', 'int')])
     self.emit(f"store i64 {nx2}, ptr {ctr}")
     self.br(lc)
     self.place(le)
@@ -1379,7 +1379,7 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         pos = self.alloca("int", "")
         p0 = "0"
         if mode == "reversed":
-            p0 = self.ins(f"sub i64 {self.rt('pys_dict_end', 'i64', [f'ptr {s.v}'])}, 1")
+            p0 = self.scalar('sub', [Val(self.rt('pys_dict_end', 'i64', [f'ptr {s.v}']), 'int'), Val('1', 'int')])
         self.emit(f"store i64 {p0}, ptr {pos}")
         made.st.append(pos)
     else:

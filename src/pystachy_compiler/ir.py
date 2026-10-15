@@ -265,7 +265,7 @@ class Values:
                 i = code[x]
                 if i.op == "raw" and i.k > 0:
                     self.at[i.k] = j * self.stride + x
-                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mem.load" or i.op == "field.addr" or i.op == "int.ucmp" or i.op == "ptr.cmp") and len(i.r) == 1:
+                elif (i.op == "select" or i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp" or i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mem.load" or i.op == "field.addr" or i.op == "int.ucmp" or i.op == "ptr.cmp") and len(i.r) == 1:
                     self.at[i.r[0]] = j * self.stride + x
                 elif i.op == "union.payload" and len(i.r) == 2:
                     self.at[i.r[1]] = j * self.stride + x

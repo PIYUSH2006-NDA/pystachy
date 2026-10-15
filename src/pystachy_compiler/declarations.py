@@ -1385,8 +1385,8 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
                     else:
                         dv = self.coerce(self.expr(sub.fdefault[name], p.t), p.t)
                     cv = Val(self.select(match, dv, cv), p.t)
-                    assigned = self.ins(f"or i1 {assigned}, {match}")
-            bad = self.ins(f"xor i1 {assigned}, true")
+                    assigned = self.scalar('or', [Val(assigned, 'bool'), Val(match, 'bool')])
+            bad = self.scalar('xor', [Val(assigned, 'bool'), Val('true', 'bool')])
             r = self.select(own, fv, cv)
         else:
             self.class_default(ci, name)
@@ -1397,7 +1397,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     if name in ci.fflag:
         f = self.fgep(o, ci.fflag[name])
         if bad == "":
-            bad = self.ins(f"xor i1 {self.mem_load(Val(f, '*bool')).v}, true")
+            bad = self.scalar('xor', [Val(self.mem_load(Val(f, '*bool')).v, 'bool'), Val('true', 'bool')])
         subs = [x for x in self.classes.values() if x.base == o.t]
         if len(subs) > 0 and (ci.exc != "" or ci.tag != 0):
             # CPython's missing-attribute error names the concrete object's class.

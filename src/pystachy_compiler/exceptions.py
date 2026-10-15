@@ -120,7 +120,7 @@ def gen_try_(self, n: Node) -> None:
                 self.modchk(c)  # (read through an import that may have raised)
                 if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
                     # a class whose class statement may not have run yet
-                    self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c.s}.def')}, true"), self.unbound(c.s))
+                    self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{c.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c.s))
             if sets[j] != "":
                 l = self.label()
                 nxt = self.label()

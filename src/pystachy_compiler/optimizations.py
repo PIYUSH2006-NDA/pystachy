@@ -198,6 +198,11 @@ def gen_dictfuse(self, fn: IFn) -> int:
                 if r in has:
                     cond[f"%t{i.r[0]}"] = has[r]
                     pos[f"%t{i.r[0]}"] = i.s == "!="
+            elif i.op == "scalar.bin" and i.s == "xor" and i.t == "bool" and i.a[1].v == "true":
+                r = i.a[0].v
+                if r in cond:
+                    cond[f"%t{i.r[0]}"] = cond[r]
+                    pos[f"%t{i.r[0]}"] = not pos[r]
             elif i.op == "raw" and i.k > 0:
                 # %c = icmp ne i64 %r, 0 of a has's result (k in d; eq: k not in d), %c = xor i1 %t, true of one (not)
                 s = i.s
@@ -242,8 +247,9 @@ def gen_dictfuse(self, fn: IFn) -> int:
             fi.a = [i.a[0], i.a[1]]
             fi.r = [f.e]
             code[x] = fi
-            ad = Ins("raw", "", f"%t{i.r[0]} = add i64 %t{f.e}, 1")
-            ad.k = i.r[0]
+            ad = Ins("scalar.bin", "int", "add")
+            ad.a = [Val(f"%t{f.e}", "int"), Val("1", "int")]
+            ad.r = [i.r[0]]
             code.insert(x + 1, ad)
         else:
             self.runtime("pys_dict_entry")
@@ -282,8 +288,8 @@ def gen_canon(self, vs: Values, v: str) -> str:
                 r = self.same(vs, v, f"rt {i.s} {', '.join([self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "slot.pack" or i.op == "slot.unpack":
             r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
-        elif i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp" or i.op == "ptr.cmp":
-            r = self.same(vs, v, f"{i.op} {i.t} {i.s} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
+        elif i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp" or i.op == "select" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp" or i.op == "ptr.cmp":
+            r = self.same(vs, v, f"{i.op} {i.t} {i.s} {i.x} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "mem.load":
             x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)
             if x != "":

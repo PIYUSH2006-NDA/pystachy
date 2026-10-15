@@ -452,16 +452,16 @@ def gen_read(self, n: Node) -> Val:
     initialized = constant and not self.modlevel and owner(name) == self.curfn.mod and self.curfn.node.kind == "def" and self.intat[name] < self.curfn.node.line
     if n.chk and name in self.ltype:
         if name in self.lflag and name not in self.compvars:
-            bad = self.ins(f"xor i1 {self.mem_load(Val(self.lflag[name], '*bool')).v}, true")
+            bad = self.scalar('xor', [Val(self.mem_load(Val(self.lflag[name], '*bool')).v, 'bool'), Val('true', 'bool')])
             self.guard(bad, f"UnboundLocalError: cannot access local variable '{name}' where it is not associated with a value")
     elif not initialized and (n.chk or self.foreign(name)) and name in self.gflag and (name in self.gtypes or (name in self.funcs and name not in self.ltype)):
         # (a global, or a function whose def statement may not have run yet)
-        bad = self.ins(f"xor i1 {self.mem_load(Val(f'@g.{name}.def', '*bool')).v}, true")
+        bad = self.scalar('xor', [Val(self.mem_load(Val(f'@g.{name}.def', '*bool')).v, 'bool'), Val('true', 'bool')])
         self.guard(bad, self.unbound(name, self.copying))
     if constant:
         # Keep a variable read dynamic for frontend rules (tuple index/length), while LLVM
         # folds the identity operation to a literal for opcode dispatch and other arithmetic.
-        return Val(self.ins(f"add i64 {self.intglobals[name]}, 0"), "int")
+        return Val(self.scalar('add', [Val(self.intglobals[name], 'int'), Val('0', 'int')]), "int")
     return self.load_name(name)
 
 def gen_modchk(self, n: Node) -> None:
@@ -488,7 +488,7 @@ def gen_modchk(self, n: Node) -> None:
         elif p[2] == "L":
             un = f"UnboundLocalError: cannot access local variable '{p[1]}' where it is not associated with a value"
         flag = f"@init.{p[0]}.done" if p[2] == "A" else self.imp_flag(p[0], p[2] == "G" or p[2] == "M" or p[2] == "I")
-        self.guard(self.ins(f"xor i1 {self.mem_load(Val(flag, '*bool')).v}, true"), un)
+        self.guard(self.scalar('xor', [Val(self.mem_load(Val(flag, '*bool')).v, 'bool'), Val('true', 'bool')]), un)
 
 def gen_imp_flag(self, x: str, glob: bool) -> str:
     # the flag of name x, which an import in a try statement binds (Loader.import_binds()), set

@@ -1,5 +1,12 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.scalar_ir import (
+    gen_scalar as scalar_ir_scalar,
+    gen_scalar_cast as scalar_ir_scalar_cast,
+    gen_scalar_cmp as scalar_ir_scalar_cmp,
+    gen_lower_scalar as scalar_ir_lower_scalar,
+    gen_verify_scalar as scalar_ir_verify_scalar,
+)
 from src.pystachy_compiler.union_arithmetic import (
     gen_unumeric as union_arithmetic_unumeric,
     gen_unumeric_case as union_arithmetic_unumeric_case,
@@ -798,6 +805,21 @@ class Gen:
 
     def ins(self, s: str) -> str:
         return emission_ins(self, s)
+
+    def scalar(self, op: str, args: list[Val], flags: str = "") -> str:
+        return scalar_ir_scalar(self, op, args, flags)
+
+    def scalar_cast(self, op: str, a: Val, t: str) -> str:
+        return scalar_ir_scalar_cast(self, op, a, t)
+
+    def scalar_cmp(self, predicate: str, a: Val, b: Val) -> str:
+        return scalar_ir_scalar_cmp(self, predicate, a, b)
+
+    def lower_scalar(self, i: Ins) -> None:
+        return scalar_ir_lower_scalar(self, i)
+
+    def verify_scalar(self, fn: IFn, b: Blk, i: Ins) -> None:
+        return scalar_ir_verify_scalar(self, fn, b, i)
 
     def mem_load(self, a: Val) -> Val:
         return emission_mem_load(self, a)
