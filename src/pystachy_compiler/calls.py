@@ -35,7 +35,7 @@ from src.pystachy_compiler.utils import (
 )
 
 
-def gen_call(self, n: Node, want: str) -> Val:
+def gen_call(self, n: Node, want: str, typeargs: str = "") -> Val:
     f = n.kids[0]
     args = n.kids[1:]
     if f.kind == "badattr":
@@ -45,9 +45,9 @@ def gen_call(self, n: Node, want: str) -> Val:
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
         if sc.startswith("!"):
             self.err(sc[1:])
-        return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), sc)
+        return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), want, sc)
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
-        return self.star_call(n, want)
+        return self.star_call(n, want, typeargs)
     if f.kind == "name":
         self.modchk(f)
     if f.kind == "name" and f.s not in self.ltype:
@@ -69,7 +69,7 @@ def gen_call(self, n: Node, want: str) -> Val:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])
                 made = [Val("", f.s)]
-                self.call_fn(self.classes[f.s].methods["__init__"], made, args, want)
+                self.call_fn(self.classes[f.s].methods["__init__"], made, args, want, typeargs=typeargs)
                 return made[0]
             o = self.new_obj(f.s)
             self.call_fn(self.classes[f.s].methods["__init__"], [o], args, direct=True)
@@ -117,7 +117,7 @@ def gen_call(self, n: Node, want: str) -> Val:
         self.not_callable(f.s, self.ltype[f.s])
     return self.obj_call(self.expr(f, ""), args, want)
 
-def gen_star_call(self, n: Node, want: str) -> Val:
+def gen_star_call(self, n: Node, want: str, typeargs: str = "") -> Val:
     # f(a, *t, k=v): the items a star unpacks are positional arguments. CPython evaluates the
     # function (o.m binds o first), then the positional arguments in order, unpacking each star,
     # then the keyword ones; here each is evaluated so (but a constant or a name, which nothing
@@ -178,7 +178,7 @@ def gen_star_call(self, n: Node, want: str) -> Val:
     out = pos + kws
     if printing and len([a for a in out if a.kind == "starred"]) > 0:
         return self.print_star(n, out)
-    return self.call(mk("call", n.s, n.line, [f] + out), want)
+    return self.call(mk("call", n.s, n.line, [f] + out), want, typeargs)
 
 def gen_static_callee(self, f: Node) -> bool:
     # does evaluating callee f (or the object of o.m) read nothing a call's arguments may change:
@@ -798,7 +798,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         self.unreachable()
     return Val("null", "None") if t == "None" else Val(self.phi(ph), t)
 
-def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "", cache: Val | None = None, direct: bool = False) -> Val:
+def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "", cache: Val | None = None, direct: bool = False, typeargs: str = "") -> Val:
     # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
     if f.pyexport:
         self.err(f"{f.name}() is @export, so Pystachy code may not call it (under CPython each call goes through the export's checks and conversions): call a private function that both use")
@@ -816,7 +816,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     line = self.line
     np = len(f.params)
     vals: list[Val] = []
-    hint = self.want_params(f.cls, want) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
+    # A surrounding annotation is a storage contract; C[T](...) alone only hints
+    # at unbound or conflicting arguments. Keep both through unpacked calls.
+    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, want)) > 0
+    context = want if contract or typeargs == "" else typeargs
+    hint = self.want_params(f.cls, context) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))
     pos = len(pre)
@@ -906,17 +910,17 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                     break
             targets = [j for j in range(1, len(hint)) if is_union(unopt(hint[j])) or is_opt(hint[j])]
             fits = all([self.widens(vals[j].t, hint[j]) or (self.boxes(vals[j].t, hint[j]) and (not is_opt(vals[j].t) or self.optional(hint[j]) == hint[j])) for j in targets])
-            if conflict and fits:
-                # Resolve conflicting bindings with fitting named union/optional parameters.
-                # Preserve consistent inferred types (Box[int | str]("x") still stores str),
-                # and never reinterpret a mutable container as a wider member type.
+            if (conflict or contract) and fits:
+                # A destination needs its named union storage even for homogeneous values.
+                # Explicit type arguments alone still preserve consistent inferred types;
+                # no existing mutable container is reinterpreted as a wider member type.
                 for j in targets:
                     vals[j] = self.pcoerce(vals[j], hint[j], f, j)
         elif f.cls in self.tparams:
             union_args = self.constructor_unions(f.cls, [v.t for v in vals[1:]])
             for j in range(len(union_args)):
                 vals[j + 1] = self.pcoerce(vals[j + 1], union_args[j], f, j + 1)
-        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
+        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
         f = self.classes[sc].methods["__init__"]

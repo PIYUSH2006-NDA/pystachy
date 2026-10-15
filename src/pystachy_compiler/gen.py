@@ -1928,11 +1928,11 @@ class Gen:
     def foreign_eq(self, a: Val, b: Val) -> Val:
         return expressions_foreign_eq(self, a, b)
 
-    def call(self, n: Node, want: str) -> Val:
-        return calls_call(self, n, want)
+    def call(self, n: Node, want: str, typeargs: str="") -> Val:
+        return calls_call(self, n, want, typeargs)
 
-    def star_call(self, n: Node, want: str) -> Val:
-        return calls_star_call(self, n, want)
+    def star_call(self, n: Node, want: str, typeargs: str="") -> Val:
+        return calls_star_call(self, n, want, typeargs)
 
     def static_callee(self, f: Node) -> bool:
         return calls_static_callee(self, f)
@@ -2027,8 +2027,8 @@ class Gen:
     def pcoerce(self, v: Val, t: str, f: FnInfo, j: int) -> Val:
         return calls_pcoerce(self, v, t, f, j)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False) -> Val:
-        return calls_call_fn(self, f, pre, args, want, none, cache, direct)
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False, typeargs: str='') -> Val:
+        return calls_call_fn(self, f, pre, args, want, none, cache, direct, typeargs)
 
     def virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: str, none: str) -> Val:
         return calls_virtual_call(self, f, pre, args, want, none)
