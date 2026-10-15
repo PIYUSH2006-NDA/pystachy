@@ -452,6 +452,8 @@ def gen_stmt(self, n: Node) -> None:
                 vs.append(self.expr(val.kids[i], self.target_type(t0.kids[i])))
             for i in range(len(vs)):
                 self.assign(t0.kids[i], vs[i])
+        elif len(n.kids) == 2 and t0.kind == "slice" and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
+            self.slice_assign(t0, val)  # (xs[a:b] = range(n), = (f(x) for x in ys), ...)
         else:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
@@ -652,6 +654,11 @@ def gen_stmt(self, n: Node) -> None:
         for dt in n.kids:
             if dt.kind == "name":
                 self.del_name(dt)
+                continue
+            if dt.kind == "slice":
+                bnd: list[str] = []
+                o = self.slice_target(dt, bnd, "TypeError: 'NoneType' object does not support item deletion")
+                self.rt("pys_list_del_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {bnd[2]}"])
                 continue
             o = self.expr(dt.kids[0], "") if dt.kind == "index" else Val("", "")
             nodel = "TypeError: 'NoneType' object does not support item deletion"
@@ -870,6 +877,15 @@ def gen_augassign(self, n: Node) -> None:
         if t.s == "__slots__" and t.s not in ci.fpos:
             self.err("rebinding __slots__ through an instance is not supported")
         self.setfield(o, p, t.s, self.inplace(op, cur, n.kids[1]))
+    elif t.kind == "slice":
+        # xs[a:b] op= v: the slice (a new list, which += extends and *= repeats) stored back
+        bnd: list[str] = []
+        o = self.slice_target(t, bnd, "TypeError: 'NoneType' object is not subscriptable")
+        av = [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]
+        if bnd[2] != "1":
+            av.append(f"i64 {bnd[2]}")
+        cur = Val(self.rt("pys_list_slice" if bnd[2] == "1" else "pys_list_slice_step", "ptr", av), o.t)
+        self.slice_store(o, bnd, self.inplace(op, cur, n.kids[1]))
     elif t.kind == "index":
         o = self.expr(t.kids[0], "")
         sub = "TypeError: 'NoneType' object is not subscriptable"

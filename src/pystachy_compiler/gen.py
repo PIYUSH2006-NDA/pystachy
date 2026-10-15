@@ -358,6 +358,9 @@ from src.pystachy_compiler.expressions import (
     gen_protocol as expressions_protocol,
     gen_puretype as expressions_puretype,
     gen_richcmp as expressions_richcmp,
+    gen_slice_bound as expressions_slice_bound,
+    gen_slice_step as expressions_slice_step,
+    gen_slice_tuple as expressions_slice_tuple,
     gen_stack_ok as expressions_stack_ok,
     gen_stack_target as expressions_stack_target,
     gen_stack_tuple as expressions_stack_tuple,
@@ -586,6 +589,10 @@ from src.pystachy_compiler.variables import (
     gen_rtype as variables_rtype,
     gen_scope_names as variables_scope_names,
     gen_sets as variables_sets,
+    gen_slice_assign as variables_slice_assign,
+    gen_slice_check as variables_slice_check,
+    gen_slice_store as variables_slice_store,
+    gen_slice_target as variables_slice_target,
     gen_static_now as variables_static_now,
     gen_static_whole as variables_static_whole,
     gen_store_name as variables_store_name,
@@ -1341,6 +1348,18 @@ class Gen:
     def assign(self, t: Node, v: Val) -> None:
         return variables_assign(self, t, v)
 
+    def slice_target(self, t: Node, bnd: list[str], nosub: str) -> Val:
+        return variables_slice_target(self, t, bnd, nosub)
+
+    def slice_check(self, step: str) -> None:
+        return variables_slice_check(self, step)
+
+    def slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
+        return variables_slice_store(self, o, bnd, v)
+
+    def slice_assign(self, t: Node, g: Node) -> None:
+        return variables_slice_assign(self, t, g)
+
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
 
@@ -1877,6 +1896,15 @@ class Gen:
 
     def optbound(self, v: Val) -> str:
         return expressions_optbound(self, v)
+
+    def slice_bound(self, x: Node, fold: bool=False) -> str:
+        return expressions_slice_bound(self, x, fold)
+
+    def slice_step(self, x: Node, fold: bool=False) -> str:
+        return expressions_slice_step(self, x, fold)
+
+    def slice_tuple(self, o: Val, bnd: list[str], step: str) -> Val:
+        return expressions_slice_tuple(self, o, bnd, step)
 
     def optint(self, v: Val, none: str) -> str:
         return expressions_optint(self, v, none)

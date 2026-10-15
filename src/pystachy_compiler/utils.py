@@ -628,6 +628,24 @@ def targs(t: str) -> list[str]:
     return out
 
 
+def slice_items(lo: int, hi: int, st: int, n: int) -> list[int]:
+    # the indices of n items that lo:hi:st selects, as CPython's slice.indices(n) gives them: -2**63
+    # is an omitted bound (Gen.slice_bound), and st is not 0
+    if lo == -9223372036854775808:
+        lo = n - 1 if st < 0 else 0
+    elif lo < 0:
+        lo = max(lo + n, -1 if st < 0 else 0)
+    elif lo >= n:
+        lo = n - 1 if st < 0 else n
+    if hi == -9223372036854775808:
+        hi = -1 if st < 0 else n
+    elif hi < 0:
+        hi = max(hi + n, -1 if st < 0 else 0)
+    elif hi >= n:
+        hi = n - 1 if st < 0 else n
+    return list(range(lo, hi, st))
+
+
 def hpush(h: list[int], x: int) -> None:
     # h is a binary min-heap (heapq's layout)
     h.append(x)

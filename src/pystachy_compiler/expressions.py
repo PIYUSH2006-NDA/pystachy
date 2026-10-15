@@ -52,6 +52,7 @@ from src.pystachy_compiler.utils import (
     plain_args,
     same_kind,
     selem,
+    slice_items,
     targs,
     tname,
     typestr,
@@ -651,37 +652,26 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "index":
         return self.index(n)
     if k == "slice":
-        if len(n.kids) == 4:
-            self.err("slice steps are not supported")
         o = self.expr(n.kids[0], "")
-        bnd: list[str] = []
-        for x in n.kids[1:]:
-            if x.kind == "omit":
-                bnd.append("-9223372036854775808")  # the runtime's "omitted" marker
-            else:
-                bv = self.expr(x, "int")
-                if bv.t == "None":
-                    bnd.append("-9223372036854775808")  # an explicit None is omitted too
-                    continue
-                if is_sopt(bv.t):
-                    bnd.append(self.optbound(bv))  # (None: omitted)
-                    continue
-                # a given bound of -2**63 clamps exactly like -2**63 + 1, which is not the marker
-                bd = self.coerce(self.as_int(bv), "int").v  # (as ival)
-                if bd.startswith("%"):
-                    bd = self.select(self.num_cmp('==', Val(bd, "int"), Val('-9223372036854775808', "int")).v, Val("-9223372036854775807", "int"), Val(bd, "int"))
-                elif bd == "-9223372036854775808":
-                    bd = "-9223372036854775807"
-                bnd.append(bd)
+        fold = is_tuple(unopt(o.t)) or o.t in self.nts  # (constant bounds: the items' types)
+        bnd = [self.slice_bound(n.kids[1], fold), self.slice_bound(n.kids[2], fold)]
+        step = self.slice_step(n.kids[3], fold) if len(n.kids) == 4 else "1"
         o = self.unwrap(o, "TypeError: 'NoneType' object is not subscriptable")
         if o.t in self.classes and o.t not in self.nts and "__getitem__" not in self.classes[o.t].methods:
             self.err(f"'{tname(o.t)}' object is not subscriptable")
         if o.t in self.classes and o.t not in self.nts:
             self.err(f"slicing an object is not supported: {short(o.t)}.__getitem__ would take a slice object, which Pystachy does not have")
+        if is_tuple(o.t) or o.t in self.nts:
+            return self.slice_tuple(o, bnd, step)
+        if is_vtuple(o.t):
+            return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
         if o.t != "str" and not is_list(o.t):
             self.err(f"'{o.t}' cannot be sliced")
-        fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
-        return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]), o.t)
+        if step == "1":
+            fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
+            return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]), o.t)
+        fn = "pys_str_slice_step" if o.t == "str" else "pys_list_slice_step"
+        return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
     if k == "list":
         et = elem(want) if is_list(want) and "?" not in want else ""
         soft = n is self.soft  # (an operand of ==: as its items are, see compare)
@@ -1204,6 +1194,62 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
     sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
     d = self.sconst(self.desc(v.t, "repr"))
     return Val(self.rt("pys_format", "ptr", ["i64 " + self.to_slot(v), f"ptr {d}", f"ptr {sv.v}"]), "str")
+
+def gen_slice_bound(self, x: Node, fold: bool = False) -> str:
+    # a slice's start or stop: an int, or the runtime's marker of an omitted bound (-2**63), which
+    # an explicit None is too; with fold, True and False are the constants 1 and 0
+    if x.kind == "omit":
+        return "-9223372036854775808"
+    bv = self.expr(x, "int")
+    if bv.t == "None":
+        return "-9223372036854775808"
+    if fold and bv.t == "bool" and (bv.v == "true" or bv.v == "false"):
+        return "1" if bv.v == "true" else "0"
+    if is_sopt(bv.t):
+        return self.optbound(bv)  # (None: omitted)
+    # a given bound of -2**63 clamps exactly like -2**63 + 1, which is not the marker
+    bd = self.coerce(self.as_int(bv), "int").v  # (as ival)
+    if bd.startswith("%"):
+        bd = self.select(self.num_cmp('==', Val(bd, "int"), Val('-9223372036854775808', "int")).v, Val("-9223372036854775807", "int"), Val(bd, "int"))
+    elif bd == "-9223372036854775808":
+        bd = "-9223372036854775807"
+    return bd
+
+def gen_slice_step(self, x: Node, fold: bool = False) -> str:
+    # a slice's step: an int, 1 where it is omitted or None (the runtime raises CPython's
+    # ValueError for 0, and takes -2**63 as -(2**63 - 1)); fold as for slice_bound
+    if x.kind == "omit":
+        return "1"
+    bv = self.expr(x, "int")
+    if bv.t == "None":
+        return "1"
+    if fold and bv.t == "bool" and (bv.v == "true" or bv.v == "false"):
+        return "1" if bv.v == "true" else "0"
+    if is_sopt(bv.t):
+        return self.optint(bv, "1")
+    return self.coerce(self.as_int(bv), "int").v
+
+def gen_slice_tuple(self, o: Val, bnd: list[str], step: str) -> Val:
+    # o[lo:hi:st] of a fixed-shape tuple or a NamedTuple (a plain tuple of its fields, as in
+    # CPython), where o is not None: with constant bounds, the tuple of the items they select,
+    # whose types are known; otherwise one of a single item type that a runtime-length tuple can
+    # hold gives a tuple[T, ...]
+    if o.t in self.nts:
+        self.notnone(o, "TypeError: 'NoneType' object is not subscriptable")
+        o = self.ntup(o, True)
+    ts = targs(o.t)
+    if all(not x.startswith("%") for x in bnd + [step]):
+        if int(step) == 0:
+            self.guard("true", "ValueError: slice step cannot be zero")
+            return self.tuple_([])
+        ix = slice_items(int(bnd[0]), int(bnd[1]), int(step), len(ts))
+        if ix == list(range(len(ts))):
+            return o  # (all of a tuple is the tuple itself, as in CPython)
+        return self.tuple_([self.tget(o, i) for i in ix])
+    if len(ts) == 0 or any(x != ts[0] for x in ts) or unopt(ts[0]) not in ["int", "float", "bool", "str"]:
+        self.err(f"slicing a {typestr(o.t)} by bounds or a step computed at run time is not supported: the types of the items it selects would not be known (use constants, or a tuple[T, ...] of int, float, bool or str items)")
+    vt = self.coerce(o, self.ctype("vtuple", [ts[0]]))
+    return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {vt.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), vt.t)
 
 def gen_optbound(self, v: Val) -> str:
     # a slice bound that is an int | None: None is an omitted bound (the runtime's marker -2**63,
