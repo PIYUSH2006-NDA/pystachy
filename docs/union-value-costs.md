@@ -62,7 +62,7 @@ standard extended benchmark also reports startup, compilation and wall time.
 
 ## Follow-up mixed-value operations
 
-Against prior value stack `1f2237a`, follow-up `2792273` emits byte-identical LLVM
+Against prior value stack `e22cb90`, follow-up `c6f5b67` emits byte-identical LLVM
 for all 27 existing controls (12 benchmarks, 14 IR probes and the relocated
 `tools/union_values_bench.py`), plus the same three generated drivers. The mixed
 truth, formatting, equality and search changes retain the existing tag/payload
@@ -73,14 +73,14 @@ Using the process-CPU procedure above, seven alternating AOT process pairs with
 one warmup and five samples each produced these medians of process medians.
 Every checksum matched CPython independently.
 
-| Existing kernel | N | `1f2237a` CPU time | Follow-up CPU time |
+| Existing kernel | N | `e22cb90` CPU time | Follow-up CPU time |
 |---|---:|---:|---:|
 | `object_dispatch` | 20000 | 4.751 ms | 4.411 ms |
 | `text_pipeline` | 10000 | 98.015 ms | 96.143 ms |
 | `list_churn` | 10000 | 15.114 ms | 15.775 ms |
 
-Timing binaries were built at `31fc027`; the compiler-only correction in
-`2792273` leaves their runtime sources and all 30 control IR outputs unchanged.
+Timing binaries were built from the tree published as `10ecf90`; the compiler-only
+correction in `c6f5b67` leaves their runtime sources and all 30 control IR outputs unchanged.
 The shared host was running other validation and showed substantial variability.
 These advisory observations, from 7.2% faster to 4.4% slower, establish neither a
 performance improvement nor a strict regression bound. No timing threshold is
