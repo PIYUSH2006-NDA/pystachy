@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.analysis import calls_init, local_names
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import ClassInfo, FnInfo, Val
+from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
@@ -45,7 +45,6 @@ from src.pystachy_compiler.utils import (
     is_tuple,
     is_vtuple,
     key_problem,
-    lt,
     rename,
     selem,
     takes_self,
@@ -1394,8 +1393,15 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
     return Val(self.fgep(o, ci.fpos[name]), ci.ftypes[name])
 
 def gen_fgep(self, o: Val, i: int) -> str:
-    # the address of field or flag i of object o (IFn.fa holds it, for rawfx)
-    r = self.ins(f"getelementptr %C.{o.t}, ptr {o.v}, i32 0, i32 {i}")
+    # Keep the declared object layout and member type until lowering. The address
+    # remains in IFn.fa so raw and typed memory operations have identical effects.
+    ci = self.classes[o.t]
+    t = ci.ftypes[ci.fields[i]] if i < len(ci.fields) else "bool"
+    op = Ins("field.addr", "*" + t, "")
+    op.k = i
+    op.a = [o]
+    self.put(op, 1)
+    r = f"%t{op.r[0]}"
     self.fn.fa[r] = True
     return r
 
@@ -1406,13 +1412,13 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     bad = ""
     if o.t + "." + name in self.cvars:
         # a class variable: the object's own value once it has assigned one, else the class's
-        own = self.ins(f"load i1, ptr {self.fgep(o, ci.fflag[name])}")
-        fv = Val(self.ins(f"load {lt(p.t)}, ptr {p.v}"), p.t)
+        own = self.mem_load(Val(self.fgep(o, ci.fflag[name]), "*bool")).v
+        fv = self.mem_load(Val(p.v, "*" + p.t))
         if ci.tag != 0:
             # Each concrete class may shadow its base's class attribute. All related
             # mutable defaults share the inherited instance-assignment flag, but their
             # fallback globals still belong to the classes that define those defaults.
-            tag = self.ins(f"load i64, ptr {self.fgep(o, ci.fpos[' class'])}")
+            tag = self.mem_load(Val(self.fgep(o, ci.fpos[" class"]), "*int")).v
             cv = fv
             assigned = own
             for sub in self.classes.values():
@@ -1420,7 +1426,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
                     match = self.ins(f"icmp eq i64 {tag}, {sub.tag}")
                     if sub.name + "." + name in self.cvars or not is_const(sub.fdefault[name]):
                         self.class_default(sub, name)
-                        dv = Val(self.ins(f"load {lt(p.t)}, ptr {sub.fglob[name]}"), p.t)
+                        dv = self.mem_load(Val(sub.fglob[name], "*" + p.t))
                     else:
                         dv = self.coerce(self.expr(sub.fdefault[name], p.t), p.t)
                     cv = Val(self.select(match, dv, cv), p.t)
@@ -1429,14 +1435,14 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             r = self.select(own, fv, cv)
         else:
             self.class_default(ci, name)
-            r = self.select(own, fv, Val(self.ins(f"load {lt(p.t)}, ptr {ci.fglob[name]}"), p.t))
+            r = self.select(own, fv, self.mem_load(Val(ci.fglob[name], "*" + p.t)))
             if is_opt(p.t) or is_union(p.t):
                 self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
             return Val(r, p.t)
     if name in ci.fflag:
         f = self.fgep(o, ci.fflag[name])
         if bad == "":
-            bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr {f}')}, true")
+            bad = self.ins(f"xor i1 {self.mem_load(Val(f, '*bool')).v}, true")
         subs = [x for x in self.classes.values() if x.base == o.t]
         if len(subs) > 0 and (ci.exc != "" or ci.tag != 0):
             # CPython's missing-attribute error names the concrete object's class.
@@ -1447,7 +1453,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             if ci.exc != "":
                 c = self.rt("pys_exc_cls", "ptr", [f"ptr {o.v}"])
             else:
-                tag = self.ins(f"load i64, ptr {self.fgep(o, ci.fpos[' class'])}")
+                tag = self.mem_load(Val(self.fgep(o, ci.fpos[" class"]), "*int")).v
                 c = self.sconst(short(ci.name))
                 for sub in self.classes.values():
                     if sub.tag != 0 and sub.name != ci.name and self.derives(sub.name, ci.name):
@@ -1462,16 +1468,16 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
         else:
             self.guard(bad, f"AttributeError: '{tname(o.t)}' object has no attribute '{name}'")
     if r == "":
-        r = self.ins(f"load {lt(p.t)}, ptr {p.v}")
+        r = self.mem_load(Val(p.v, "*" + p.t)).v
     if is_opt(p.t) or is_union(p.t):
         self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
     return Val(r, p.t)
 
 def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
     what = f"the value assigned to field '{name}' ({typestr(p.t)})" if is_opt(v.t) else ""
-    self.emit(f"store {lt(p.t)} {self.coerce(v, p.t, what).v}, ptr {p.v}")
+    self.mem_store(Val(p.v, "*" + p.t), self.coerce(v, p.t, what))
     ci = self.classes[o.t]
     if name in ci.fflag:
-        self.emit(f"store i1 true, ptr {self.fgep(o, ci.fflag[name])}")
+        self.mem_store(Val(self.fgep(o, ci.fflag[name]), "*bool"), Val("true", "bool"))
 
 # ---- variables
