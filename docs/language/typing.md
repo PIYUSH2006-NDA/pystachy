@@ -68,8 +68,10 @@ tests of these annotations are decided using the compiled type.
 
 A function whose parameters are annotated uses those types. A missing return annotation
 means `-> None`, unless the function is a template. Ordinary functions taking no arguments
-(methods taking only `self` or `cls`) also infer their return type when they return a value;
-constructors and implicit special methods still require return annotations for values.
+(methods taking only `self` or `cls`) also infer their return type when they return a value.
+Unannotated `__str__` and `__repr__` use their required `str` result type and `__bool__`
+uses `bool`; their bodies are checked against those contracts. An unannotated `__len__`
+infers `int` or `bool`. Constructors keep their `None` result contract.
 There is no implicit `int` to `float`
 conversion in an assignment, argument or return: write `1.0`, or convert explicitly.
 Arithmetic and numeric list searches may mix integers and floats.
