@@ -1,0 +1,11 @@
+mods: init mods
+mods.shapes: init mods.shapes
+NameError: name 'LATE' is not defined
+<2>
+NameError: name 'LATER' is not defined
+TypeError: not enough arguments for format string
+arg k
+arg v
+3 items k='v' ab    |   7 c     |   8
+TypeError: not enough arguments for format string
+[exit 0]

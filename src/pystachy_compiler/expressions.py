@@ -573,6 +573,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
+    if k == "binop" and n.s == "%" and n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str":
+        return self.percent(self.strglobals[n.kids[0].s], n.kids[1])  # (FMT % args of a module's FMT = "...")
     if k == "binop":
         a = self.expr(n.kids[0], want, resultsoft=resultsoft)
         return self.arith(n.s, a, self.expr(n.kids[1], a.t, resultsoft=resultsoft))
@@ -1070,13 +1072,20 @@ def gen_str_format(self, fmt: str, m: str, args: list[Node]) -> Val:
     return r if r.t != "" else Val(self.sconst(""), "str")
 
 def gen_format_of(self, f: Node) -> Node:
-    # FMT.format (or format_map) of a module's FMT = "..." (module_strs) as the literal's method,
-    # once FMT is read (with its checks), as evaluating f reads it; any other f as it is
-    o = f.kids[0] if f.kind == "attr" and (f.s == "format" or f.s == "format_map") else f
-    if o is f or o.kind != "name" or o.s not in self.strglobals or not self.globread(o.s) or self.gtype(o.s) != "str":
+    # FMT.format (or format_map) of a module's FMT = "..." as the literal's method (const_str);
+    # any other f as it is
+    if f.kind != "attr" or (f.s != "format" and f.s != "format_map"):
         return f
+    o = self.const_str(f.kids[0])
+    return f if o is f.kids[0] else mk("attr", f.s, f.line, [o])
+
+def gen_const_str(self, o: Node) -> Node:
+    # the literal that name o reads where it is a module's FMT = "..." (module_strs), once it is
+    # read (with its checks), as a format is read before its arguments; any other o as it is
+    if o.kind != "name" or o.s not in self.strglobals or not self.globread(o.s) or self.gtype(o.s) != "str":
+        return o
     self.expr(o, "")
-    return mk("attr", f.s, f.line, [mk("str", self.strglobals[o.s], o.line, [])])
+    return mk("str", self.strglobals[o.s], o.line, [])
 
 def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
     # str.format()'s arguments, evaluated into fa: the positional ones in order (* of a tuple
@@ -2499,7 +2508,7 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         self.err("dict | dict is not supported; copy the first dict and use update()")
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)
-        self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
+        self.err('% formatting with a format string computed at run time is not supported (only of a string literal, "%d" % x, or of a module global that one assignment binds to one)')
     # CPython's TypeError, at compile time
     an = tname(a.t)
     bn = tname(b.t)

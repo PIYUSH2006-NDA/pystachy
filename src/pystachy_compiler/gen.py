@@ -325,6 +325,7 @@ from src.pystachy_compiler.expressions import (
     gen_format_arg as expressions_format_arg,
     gen_format_args as expressions_format_args,
     gen_format_of as expressions_format_of,
+    gen_const_str as expressions_const_str,
     gen_format_dup as expressions_format_dup,
     gen_format_kw as expressions_format_kw,
     gen_foreign_eq as expressions_foreign_eq,
@@ -1879,6 +1880,9 @@ class Gen:
 
     def format_of(self, f: Node) -> Node:
         return expressions_format_of(self, f)
+
+    def const_str(self, o: Node) -> Node:
+        return expressions_const_str(self, o)
 
     def format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
         return expressions_format_args(self, fa, args)

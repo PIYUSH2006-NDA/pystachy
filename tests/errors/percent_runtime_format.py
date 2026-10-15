@@ -1,4 +1,4 @@
-# error: percent_runtime_format.py:5: error: % formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)
+# error: percent_runtime_format.py:5: error: % formatting with a format string computed at run time is not supported (only of a string literal, "%d" % x, or of a module global that one assignment binds to one)
 # fmt % x where fmt is known only when it runs: CPython formats x with whatever fmt holds,
 # while Pystachy compiles each conversion of a literal format
 def f(fmt: str, x: float) -> str:

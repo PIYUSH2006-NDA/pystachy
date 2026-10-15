@@ -1,5 +1,6 @@
 ROW = "{:<6}|{:>4}"
 TITLE: str = "== {title} =="
+PCT = "%-6s|%4d"
 
 
 def row(name: str, n: int) -> str:

@@ -36,20 +36,21 @@ Strings support raw and triple-quoted literals, implicit concatenation and escap
 than `\N{...}`.
 
 F-strings support `!r`, `!s`, `!a`, debug `=`, nested format specifications and the
-format-spec mini-language. `%` formatting requires a literal format string. It supports
+format-spec mini-language. `%` formatting requires a literal format string, or a module global
+that a single assignment binds to one (`FMT = "%8.3f"`, also `Final`). It supports
 `s r a d i u x X o e E f F g G c`, flags, widths and precisions, but not named substitutions,
 `*` widths or precisions, or integer precisions. A variable format string such as
 `fmt % value` is rejected.
 
-`str.format()` and `str.format_map()` also require a literal format string, compiled like an
-f-string: automatic and manual numbering, keyword fields, `.attr` and `[key]` lookups, `!r`,
-`!s`, `!a` and nested fields in a spec. The arguments are evaluated first, then the fields are
-formatted left to right; a malformed format, mixed numbering, a missing argument or an unknown
-conversion raises CPython's error when that field is reached. `*` unpacks a tuple, or a list
-after the other positional arguments; `**` unpacks a function's `**kwargs`, a dict display with
-string keys or one `dict[str, T]`. A module global that a single assignment binds to a literal
-(`FMT = "{:>8}"`) serves as one. `"...".format` can be `map()`'s function, but neither method is
-otherwise a value, and `fmt.format(value)` of any other variable format string is rejected.
+`str.format()` and `str.format_map()` also require a literal format string (or such a module
+global), compiled like an f-string: automatic and manual numbering, keyword fields, `.attr` and
+`[key]` lookups, `!r`, `!s`, `!a` and nested fields in a spec. The arguments are evaluated first,
+then the fields are formatted left to right; a malformed format, mixed numbering, a missing
+argument or an unknown conversion raises CPython's error when that field is reached. `*` unpacks
+a tuple, or a list after the other positional arguments; `**` unpacks a function's `**kwargs`, a
+dict display with string keys or one `dict[str, T]`. `"...".format` can be `map()`'s function,
+but neither method is otherwise a value, and `fmt.format(value)` of another variable format
+string is rejected.
 
 ## Operators and containers
 
