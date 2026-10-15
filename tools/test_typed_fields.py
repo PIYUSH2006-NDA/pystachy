@@ -70,11 +70,11 @@ class TypedFieldTests(unittest.TestCase):
                     fixture().verify(function(i), False)
                 self.assertIn("field.addr", error.getvalue())
 
-    def test_canonical_address_matches_raw_gep(self):
+    def test_repeated_field_addresses_are_canonical(self):
         g = fixture()
         a = address()
-        b = Ins("raw", "", "%t2 = getelementptr %C.Box, ptr %a0, i32 0, i32 0")
-        b.k = 2
+        b = address()
+        b.r = [2]
         fn = function(a)
         fn.blocks[0].code.insert(1, b)
         vs = Values(fn, {"entry": []})
@@ -84,8 +84,10 @@ class TypedFieldTests(unittest.TestCase):
         g = fixture()
         p = g.fgep(Val("%a0", "Box"), 1)
         self.assertEqual(g.fn.blocks[0].code[-1].t, "*str")
-        load = Ins("raw", "", f"%t2 = load ptr, ptr {p}")
-        store = Ins("raw", "", f"store ptr %a1, ptr {p}")
+        load = Ins("mach.load", "%ptr", "")
+        load.a = [Val(p, "%ptr")]
+        store = Ins("mach.store", "", "")
+        store.a = [Val(p, "%ptr"), Val("%a1", "%ptr")]
         self.assertEqual(g.opfx(load, g.fn.fa), FXBIT["rO"])
         self.assertEqual(g.opfx(store, g.fn.fa), FXBIT["wO"])
 

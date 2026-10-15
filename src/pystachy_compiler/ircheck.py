@@ -145,6 +145,23 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                     self.bad_ir(fn, b, "select needs a bool condition and matching value and result types")
                 if t == "" or t == "None" or t.startswith("*") or t == "#" or (t.startswith("%") and t not in ["%ptr", "%byte", "%i32", "%slot"]) or (t in ["T", "K", "V", "S"] and t not in self.classes):
                     self.bad_ir(fn, b, "select needs a native or machine scalar value type")
+
+            if i.op == "mach.load" or i.op == "mach.store":
+                load = i.op == "mach.load"
+                if len(i.a) != (1 if load else 2) or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
+                if i.a[0].t != "%ptr":
+                    self.bad_ir(fn, b, f"{i.op} needs a machine pointer address")
+                t = i.t if load else i.a[1].t
+                if t == "" or t == "None" or (t.startswith("%") and t not in ["%ptr", "%byte", "%i32"]) or t.startswith("*") or t == "#" or (t in ["T", "K", "V", "S"] and t not in self.classes):
+                    self.bad_ir(fn, b, f"{i.op} needs a machine storage value type")
+                if (not load and i.t != "") or i.s not in ["", "length", "length.range", "bytes"] or (i.s == "length.range" and not load) or (i.s.startswith("length") and t != "int") or (i.s == "bytes" and t != "%byte"):
+                    self.bad_ir(fn, b, f"{i.op} has invalid value or memory metadata")
+            if i.op == "mach.addr":
+                if len(i.a) != 2 or i.t != "%ptr" or i.s not in ["int", "%ptr", "%byte"] or i.x != "" or i.k not in [0, 1] or len(i.b) != 0:
+                    self.bad_ir(fn, b, "mach.addr needs a machine element type and inbounds flag")
+                if i.a[0].t != "%ptr" or i.a[1].t != "int":
+                    self.bad_ir(fn, b, "mach.addr needs a machine pointer and int index")
             if i.op == "mem.load" or i.op == "mem.store":
                 if len(i.a) != (1 if i.op == "mem.load" else 2) or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
@@ -262,7 +279,7 @@ def gen_nums(self, i: Ins) -> int:
     if i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp":
         return 1
     # how many numbers op i defines (%tN): what its lowering prints
-    if i.op == "field.addr":
+    if i.op == "field.addr" or i.op == "mach.load" or i.op == "mach.addr":
         return 1
     if i.op == "ovf":
         return 3
@@ -322,8 +339,8 @@ def gen_opfx(self, i: Ins, fa: dict[str, bool]) -> int:
         # (an exception, E, may be an object of an exception class, whose __str__ and __repr__ run)
         f = self.rtfns[i.s]
         return FXALL if f.q and ("O" in i.x or ("E" in i.x and len(self.xcls) > 0)) else f.fx
-    if i.op == "mem.load" or i.op == "mem.store":
-        st = i.op == "mem.store"
+    if i.op == "mem.load" or i.op == "mem.store" or i.op == "mach.load" or i.op == "mach.store":
+        st = i.op == "mem.store" or i.op == "mach.store"
         a = i.a[0].v
         if a.startswith("@"):
             return FXBIT["wG"] if st else FXBIT["rG"]

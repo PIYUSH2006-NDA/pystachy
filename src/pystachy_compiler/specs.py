@@ -421,6 +421,7 @@ IROPS: dict[str, str] = {
     "list.load": "rL", "list.len": "rL",
     "alloc.fixed": "A",
     "mem.load": "*", "mem.store": "*",
+    "mach.load": "*", "mach.store": "*", "mach.addr": "",
     "tuple.load": "rL rD rO", "tuple.store": "wL wD wO",
     "field.addr": "",
     "slot.pack": "", "slot.unpack": "",

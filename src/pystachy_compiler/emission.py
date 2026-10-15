@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, unionnames
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, Data, Frame, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, RTL, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CHECKED, RTL, RTSYM
 from src.pystachy_compiler.utils import (
     RtFn,
     is_opt,
@@ -320,33 +320,33 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
         return Val(self.scalar_cmp('eq', Val(a[0], '%ptr'), Val('null', '%ptr')), "bool")
     if name == "same":
         # same(a, i, b, j, n): within both, and n >= 0
-        n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
-        n1 = self.ins(f"load i64, ptr {a[2]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+        n0 = self.mload('int', a[0], 'length.range')
+        n1 = self.mload('int', a[2], 'length.range')
         for p, lhs, rhs in [("<", a[4], "0"), (">", a[1], n0), (">", a[4], self.scalar('sub', [Val(n0, 'int'), Val(a[1], 'int')])),
                             (">", a[3], n1), (">", a[4], self.scalar('sub', [Val(n1, 'int'), Val(a[3], 'int')]))]:
             x = self.num_cmp(p, Val(lhs, "int"), Val(rhs, "int")) if p == "<" else self.int_ucmp(p, Val(lhs, "int"), Val(rhs, "int"))
             self.guard(x.v, "IndexError: compare out of range")
-        p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
-        p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.scalar('add', [Val(a[3], 'int'), Val('16', 'int')])}")
+        p0 = self.maddr('%byte', a[0], f"{self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
+        p1 = self.maddr('%byte', a[2], f"{self.scalar('add', [Val(a[3], 'int'), Val('16', 'int')])}")
         return Val(self.scalar_cmp('eq', Val(self.rt('memcmp', 'i32', [f'ptr {p0}', f'ptr {p1}', f'i64 {a[4]}']), '%i32'), Val('0', '%i32')), "bool")
     if name == "find_byte":
         # find_byte(s, c, st, en): 0 <= st <= en <= len(s)
-        n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+        n0 = self.mload('int', a[0], 'length.range')
         for lhs, rhs in [(a[3], n0), (a[2], a[3])]:
             self.guard(self.int_ucmp(">", Val(lhs, "int"), Val(rhs, "int")).v, "IndexError: search out of range")
         self.guard(self.int_ucmp('>', Val(a[1], "int"), Val('255', "int")).v, "ValueError: byte must be in range(0, 256)")
-        p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.scalar('add', [Val(a[2], 'int'), Val('16', 'int')])}")
+        p0 = self.maddr('%byte', a[0], f"{self.scalar('add', [Val(a[2], 'int'), Val('16', 'int')])}")
         f = self.rt("memchr", "ptr", [f"ptr {p0}", f"i32 {self.scalar_cast('trunc', Val(a[1], 'int'), '%i32')}", f"i64 {self.scalar('sub', [Val(a[3], 'int'), Val(a[2], 'int')])}"])
         d = self.scalar('sub', [Val(self.scalar_cast('ptrtoint', Val(f, '%ptr'), 'int'), 'int'), Val(self.scalar_cast('ptrtoint', Val(a[0], '%ptr'), 'int'), 'int')])
         return Val(self.select(self.scalar_cmp('eq', Val(f, '%ptr'), Val('null', '%ptr')), Val('-1', 'int'), Val(self.scalar('sub', [Val(d, 'int'), Val('16', 'int')]), 'int')), "int")
     if name == "find_sub":
         # find_sub(h, n, st, en): 0 <= st <= en <= len(h)
-        n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+        n0 = self.mload('int', a[0], 'length.range')
         for lhs, rhs in [(a[3], n0), (a[2], a[3])]:
             self.guard(self.int_ucmp(">", Val(lhs, "int"), Val(rhs, "int")).v, "IndexError: search out of range")
-        p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.scalar('add', [Val(a[2], 'int'), Val('16', 'int')])}")
-        p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 16")
-        m = self.ins(f"load i64, ptr {a[1]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+        p0 = self.maddr('%byte', a[0], f"{self.scalar('add', [Val(a[2], 'int'), Val('16', 'int')])}")
+        p1 = self.maddr('%byte', a[1], '16')
+        m = self.mload('int', a[1], 'length.range')
         f = self.rt("memmem", "ptr", [f"ptr {p0}", f"i64 {self.scalar('sub', [Val(a[3], 'int'), Val(a[2], 'int')])}", f"ptr {p1}", f"i64 {m}"])
         d = self.scalar('sub', [Val(self.scalar_cast('ptrtoint', Val(f, '%ptr'), 'int'), 'int'), Val(self.scalar_cast('ptrtoint', Val(a[0], '%ptr'), 'int'), 'int')])
         return Val(self.select(self.scalar_cmp('eq', Val(f, '%ptr'), Val('null', '%ptr')), Val('-1', 'int'), Val(self.scalar('sub', [Val(d, 'int'), Val('16', 'int')]), 'int')), "int")
@@ -355,27 +355,27 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
         # is CPython's MemoryError, as in runtime.c
         self.guard(self.int_ucmp('>', Val(a[0], "int"), Val('9223372036854775790', "int")).v, "MemoryError: ")
         r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.scalar('add', [Val(a[0], 'int'), Val('17', 'int')], 'nuw nsw')}"])  # zeroed: dict_hash and NUL
-        self.emit(f"store i64 {a[0]}, ptr {r}, !tbaa !{TBAA_LEN}")
+        self.mstore('int', a[0], r, 'length')
         return Val(r, "str")
     # the others index a str: an unsigned compare with its length also rejects a negative index
-    n = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+    n = self.mload('int', a[0], 'length.range')
     if name == "copy":
         # copy(dst, at, src, lo, n): dst[at:at + n] = src[lo:lo + n], within both
-        m = self.ins(f"load i64, ptr {a[2]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
+        m = self.mload('int', a[2], 'length.range')
         for p, lhs, rhs in [("<", a[4], "0"), (">", a[1], n), (">", a[4], self.scalar('sub', [Val(n, 'int'), Val(a[1], 'int')])),
                             (">", a[3], m), (">", a[4], self.scalar('sub', [Val(m, 'int'), Val(a[3], 'int')]))]:
             x = self.num_cmp(p, Val(lhs, "int"), Val(rhs, "int")) if p == "<" else self.int_ucmp(p, Val(lhs, "int"), Val(rhs, "int"))
             self.guard(x.v, "IndexError: copy out of range")
-        dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
-        src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.scalar('add', [Val(a[3], 'int'), Val('16', 'int')])}")
+        dst = self.maddr('%byte', a[0], f"{self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
+        src = self.maddr('%byte', a[2], f"{self.scalar('add', [Val(a[3], 'int'), Val('16', 'int')])}")
         self.rt("llvm.memmove.p0.p0.i64", "void", [f"ptr {dst}", f"ptr {src}", f"i64 {a[4]}", "i1 false"])
         return Val("null", "None")
     self.guard(self.int_ucmp('>=', Val(a[1], "int"), Val(n, "int")).v, "IndexError: string index out of range")
-    p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
+    p = self.maddr('%byte', a[0], f"{self.scalar('add', [Val(a[1], 'int'), Val('16', 'int')])}")
     if name == "byte":
-        return Val(self.scalar_cast('zext', Val(self.ins(f'load i8, ptr {p}, !tbaa !{TBAA_BYTES}'), '%byte'), 'int'), "int")
+        return Val(self.scalar_cast('zext', Val(self.mload('%byte', p, 'bytes'), '%byte'), 'int'), "int")
     self.guard(self.int_ucmp('>', Val(a[2], "int"), Val('255', "int")).v, "ValueError: byte must be in range(0, 256)")
-    self.emit(f"store i8 {self.scalar_cast('trunc', Val(a[2], 'int'), '%byte')}, ptr {p}, !tbaa !{TBAA_BYTES}")
+    self.mstore('%byte', f"{self.scalar_cast('trunc', Val(a[2], 'int'), '%byte')}", p, 'bytes')
     return Val("null", "None")
 
 def gen_iop(self, op: str, a: str, b: str) -> str:
@@ -401,7 +401,7 @@ def gen_deref(self, v: Val) -> Val:
     # int's, float's or bool's box read
     if not is_sopt(v.t):
         return Val(v.v, unopt(v.t))
-    return self.from_slot(self.ins(f"load i64, ptr {v.v}"), unopt(v.t))
+    return self.from_slot(self.mload('int', v.v), unopt(v.t))
 
 def gen_reboxes(self, a: str, b: str) -> bool:
     # is tuple type a tuple type b, but for items that are ints, floats or bools where b's may

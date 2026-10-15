@@ -1,4 +1,4 @@
-"""Typed native storage contracts and raw/typed optimization interoperability."""
+"""Typed native storage contracts and native/machine storage optimization interoperability."""
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -103,7 +103,7 @@ class TypedStorageTests(unittest.TestCase):
                 self.assertEqual(g.out, [f"  %t1 = load {ll}, ptr %x.1",
                                          f"  store {ll} %a0, ptr %x.1"])
 
-    def test_reaching_preserves_all_raw_and_typed_load_store_combinations(self):
+    def test_reaching_preserves_native_and_machine_load_store_combinations(self):
         for typed_store in (False, True):
             for typed_load in (False, True):
                 for address in ("%x.1", "@g.x", "%a1"):
@@ -113,8 +113,8 @@ class TypedStorageTests(unittest.TestCase):
                         if typed_store:
                             g.mem_store(a, Val("%a0", "int"))
                         else:
-                            g.emit(f"store i64 %a0, ptr {address}")
-                        v = g.mem_load(a).v if typed_load else g.ins(f"load i64, ptr {address}")
+                            g.mstore("int", "%a0", address)
+                        v = g.mem_load(a).v if typed_load else g.mload("int", address)
                         again = g.mem_load(a).v
                         g.fn.n = g.n
                         vs = Values(g.fn, {"entry": []})
@@ -130,7 +130,7 @@ class TypedStorageTests(unittest.TestCase):
                     if typed:
                         g.mem_store(Val(address, "*int"), Val("99", "int"))
                     else:
-                        g.emit(f"store i64 99, ptr {address}")
+                        g.mstore("int", "99", address)
                     v = g.mem_load(Val("%a1", "*int"))
                     g.fn.n = g.n
                     vs = Values(g.fn, {"entry": []})

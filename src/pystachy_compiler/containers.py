@@ -50,7 +50,7 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
     ldone = ""
     if const:
         self.global_var(g, "frozenset[?]")
-        old = self.ins(f"load ptr, ptr {g}")
+        old = self.mload('%ptr', g)
         l0 = self.cur
         lmake = self.label()
         ldone = self.label()
@@ -85,7 +85,7 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
         self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"])
         r = c
         if const:
-            self.emit(f"store ptr {r}, ptr {g}")
+            self.mstore('%ptr', r, g)
             l1 = self.cur
             self.br(ldone)
             self.place(ldone)
@@ -577,7 +577,7 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
         self.incoming(ph, self.sconst("None"), start)
         self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, nonnull)
         self.place(nonnull)
-        tag = self.ins(f"load i64, ptr {v.v}")
+        tag = self.mload('int', v.v)
         narrow = dict(self.narrowed)
         for i in range(len(cs)):
             c = cs[i]

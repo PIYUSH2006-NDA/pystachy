@@ -27,7 +27,6 @@ from src.pystachy_compiler.utils import (
     is_opt,
     is_sopt,
     is_tuple,
-    lt,
     meet,
     pure_arg,
     targs,
@@ -120,7 +119,7 @@ def gen_try_(self, n: Node) -> None:
                 self.modchk(c)  # (read through an import that may have raised)
                 if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
                     # a class whose class statement may not have run yet
-                    self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{c.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c.s))
+                    self.guard(self.scalar('xor', [Val(self.mload('bool', f'@g.{c.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c.s))
             if sets[j] != "":
                 l = self.label()
                 nxt = self.label()
@@ -172,12 +171,12 @@ def gen_try_(self, n: Node) -> None:
         if fx.entry != "":
             # (the exception goes on after the finally block, from a slot of its own)
             sl = self.alloca("exc", "")
-            self.emit(f"store ptr {e.v}, ptr {sl}")
-            self.emit(f"store i64 {len(fx.conts)}, ptr {fx.sel}")
+            self.mstore('%ptr', e.v, sl)
+            self.mstore('int', f'{len(fx.conts)}', fx.sel)
             fx.conts.append(self.label())
             self.br(fx.entry)
             self.place(fx.conts[-1])
-            self.throw(Val(self.ins(f"load ptr, ptr {sl}"), "exc"))
+            self.throw(Val(self.mload('%ptr', sl), "exc"))
         else:
             self.exits.append(Exit("handler", old, outer))  # (a break or return in F drops the exception)
             self.excs.append(e)
@@ -191,7 +190,7 @@ def gen_try_(self, n: Node) -> None:
     self.branch -= 1
     if live and fx.entry != "":
         self.place(done)
-        self.emit(f"store i64 {len(fx.conts)}, ptr {fx.sel}")
+        self.mstore('int', f'{len(fx.conts)}', fx.sel)
         fx.conts.append(self.label())
         self.br(fx.entry)
     if fx.entry != "":
@@ -209,7 +208,7 @@ def gen_try_(self, n: Node) -> None:
         self.exits.pop()
         disp = self.label()
         self.place(disp)
-        ksel = self.ins(f"load i64, ptr {fx.sel}")
+        ksel = self.mload('int', fx.sel)
         for j in range(len(fx.conts) - 1):
             nx = self.label()
             self.cbr(self.num_cmp('==', Val(ksel, "int"), Val(str(j), "int")).v, fx.conts[j], nx)
@@ -435,7 +434,7 @@ def gen_landing(self, l: str, slot: str, mark: Val) -> Val:
     self.put(i, 2)
     self.term = True
     self.place(j)
-    x = self.ins(f"load ptr, ptr {slot}")
+    x = self.mload('%ptr', slot)
     return Val(self.rt("pys_exc_begin", "ptr", [f"ptr {x}", f"i64 {mark.v}"]), "exc")
 
 def gen_exc_match(self, e: Val, names: str) -> str:
@@ -450,14 +449,14 @@ def gen_unbind(self, name: str) -> None:
     # the end of except ... as name: name is unbound, as after del name (but nothing is read),
     # and so are the variables of that name around it (bind_as)
     if name in self.ltype and name in self.lflag:
-        self.emit(f"store i1 false, ptr {self.lflag[name]}")
+        self.mstore('bool', 'false', self.lflag[name])
     elif name != "" and name not in self.ltype and name in self.gflag:
-        self.emit(f"store i1 false, ptr @g.{name}.def")
+        self.mstore('bool', 'false', f'@g.{name}.def')
     for s in self.shadows:
         if s[0] == name and s[3] != "":
-            self.emit(f"store i1 false, ptr {s[3]}")
+            self.mstore('bool', 'false', s[3])
         elif s[0] == name and s[1] == "" and name in self.gflag:
-            self.emit(f"store i1 false, ptr @g.{name}.def")
+            self.mstore('bool', 'false', f'@g.{name}.def')
 
 def gen_exc_args(self, e: Node) -> list[Node]:
     # the arguments of raise E / raise E(args), checking that E is a builtin exception
@@ -590,9 +589,9 @@ def gen_raise_stmt(self, n: Node) -> None:
         self.global_var(g, "bool")
         l1 = self.label()
         l2 = self.label()
-        self.cbr(self.ins(f"load i1, ptr {g}"), l1, l2)
+        self.cbr(self.mload('bool', g), l1, l2)
         self.place(l1)
-        self.emit(f"store i1 false, ptr {self.curfn.ll}.done")
+        self.mstore('bool', 'false', f'{self.curfn.ll}.done')
         self.ret_(Val("null", "None"))
         self.place(l2)
     if name == "SystemExit":
@@ -832,7 +831,7 @@ def gen_class_defaults(self, o: Val) -> None:
             t = ci.ftypes[fl]
             if not is_const(ci.fdefault[fl]):
                 self.class_default(h, fl)  # (compiled before the class statement runs)
-            v = Val(self.ins(f"load {lt(t)}, ptr {h.fglob[fl]}"), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
+            v = Val(self.mload(t, h.fglob[fl]), t) if fl in h.fglob else self.coerce(self.expr(ci.fdefault[fl], t), t)
             self.setfield(o, self.field(o, fl), fl, v)
 
 def gen_exc_keep(self, o: Val, vals: list[Val], coded: bool = True) -> None:

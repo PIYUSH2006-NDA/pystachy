@@ -290,10 +290,13 @@ def gen_canon(self, vs: Values, v: str) -> str:
             r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
         elif i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp" or i.op == "select" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp" or i.op == "ptr.cmp":
             r = self.same(vs, v, f"{i.op} {i.t} {i.s} {i.x} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
-        elif i.op == "mem.load":
+        elif i.op == "mem.load" or (i.op == "mach.load" and i.s == ""):
             x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)
             if x != "":
                 r = self.canon(vs, x)
+        elif i.op == "mach.addr":
+            element = "i64" if i.s == "int" else "i8" if i.s == "%byte" else "ptr"
+            r = self.same(vs, v, f"getelementptr{' inbounds' if i.k == 1 else ''} {element}, ptr {self.canon(vs, i.a[0].v)}, i64 {self.canon(vs, i.a[1].v)}")
         elif i.op == "field.addr":
             # Keep the canonical address used by raw GEPs and inheritance-aware disjoint().
             r = self.same(vs, v, f"getelementptr %C.{i.a[0].t}, ptr {self.canon(vs, i.a[0].v)}, i32 0, i32 {i.k}")
@@ -309,7 +312,7 @@ def gen_canon(self, vs: Values, v: str) -> str:
                 x = self.reaching(vs, self.addr(vs, f"%t{i.r[0]}"), w // vs.stride, w % vs.stride)
                 if x != "":
                     r = self.canon(vs, x)
-        else:
+        elif i.op == "raw":
             s = i.s[i.s.find(" = ") + 3 :]
             if s.startswith("load "):
                 x = self.reaching(vs, self.addr(vs, s[s.rfind(" ") + 1 :]), w // vs.stride, w % vs.stride)
@@ -369,12 +372,14 @@ def gen_reaching(self, vs: Values, a: str, j: int, x: int) -> str:
             if steps > REACH:
                 return ""
             i = code[y]
-            if i.op == "mem.load" or i.op == "mem.store":
+            if i.op == "mem.load" or i.op == "mem.store" or i.op == "mach.load" or i.op == "mach.store":
+                if i.op == "mach.load" and i.s != "":
+                    continue
                 p = i.a[0].v
                 q = self.addr(vs, p)
                 if q == a:
-                    return i.a[1].v if i.op == "mem.store" else f"%t{i.r[0]}"
-                if i.op == "mem.store" and heap and not p.startswith("@") and "." not in p and not self.disjoint(vs, a, q):
+                    return i.a[1].v if i.op == "mem.store" or i.op == "mach.store" else f"%t{i.r[0]}"
+                if (i.op == "mem.store" or i.op == "mach.store") and heap and not p.startswith("@") and "." not in p and not self.disjoint(vs, a, q):
                     return ""
                 continue
             if i.op == "tuple.load" or i.op == "tuple.store":

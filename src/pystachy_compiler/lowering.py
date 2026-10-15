@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, ICMP
+from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
 
 
@@ -37,6 +37,17 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         o.append("  " + i.s)
     elif op == "scalar.bin" or op == "scalar.cast" or op == "scalar.cmp":
         self.lower_scalar(i)
+
+    elif op == "mach.load" or op == "mach.store":
+        metadata = f", !tbaa !{TBAA_LEN}" if i.s == "length" or i.s == "length.range" else f", !tbaa !{TBAA_BYTES}" if i.s == "bytes" else ""
+        if i.s == "length.range":
+            metadata += f", !range !{STRLEN_RANGE}"
+        if op == "mach.load":
+            o.append(f"  %t{i.r[0]} = load {lt(i.t)}, ptr {i.a[0].v}{metadata}")
+        else:
+            o.append(f"  store {lt(i.a[1].t)} {i.a[1].v}, ptr {i.a[0].v}{metadata}")
+    elif op == "mach.addr":
+        o.append(f"  %t{i.r[0]} = getelementptr{' inbounds' if i.k == 1 else ''} {lt(i.s)}, ptr {i.a[0].v}, i64 {i.a[1].v}")
     elif op == "mem.load":
         o.append(f"  %t{i.r[0]} = load {'ptr' if i.t == 'None' else lt(i.t)}, ptr {i.a[0].v}")
     elif op == "mem.store":
@@ -191,7 +202,9 @@ def gen_eh_ir(self, fn: IFn) -> None:
                 self.runtime("pys_exc_new")
                 code.append(i)
                 ex = f"%t{fn.n}"
-            code.append(Ins("raw", "", f"store ptr {ex}, ptr {lp.a[0].v}"))
+            st = Ins("mach.store", "", "")
+            st.a = [Val(lp.a[0].v, "%ptr"), Val(ex, "%ptr")]
+            code.append(st)
             br = Ins("br", "", "")
             br.b = [lp.b[0]]
             code.append(br)
