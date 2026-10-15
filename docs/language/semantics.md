@@ -47,8 +47,9 @@ f-string: automatic and manual numbering, keyword fields, `.attr` and `[key]` lo
 formatted left to right; a malformed format, mixed numbering, a missing argument or an unknown
 conversion raises CPython's error when that field is reached. `*` unpacks a tuple, or a list
 after the other positional arguments; `**` unpacks a function's `**kwargs`, a dict display with
-string keys or one `dict[str, T]`. `"...".format` can be `map()`'s function, but neither method
-is otherwise a value, and `fmt.format(value)` of a variable format string is rejected.
+string keys or one `dict[str, T]`. A module global that a single assignment binds to a literal
+(`FMT = "{:>8}"`) serves as one. `"...".format` can be `map()`'s function, but neither method is
+otherwise a value, and `fmt.format(value)` of any other variable format string is rejected.
 
 ## Operators and containers
 

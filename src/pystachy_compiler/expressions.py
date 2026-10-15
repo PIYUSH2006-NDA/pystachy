@@ -1069,6 +1069,15 @@ def gen_str_format(self, fmt: str, m: str, args: list[Node]) -> Val:
     r = self.str_fields(fmt, 2, fa)
     return r if r.t != "" else Val(self.sconst(""), "str")
 
+def gen_format_of(self, f: Node) -> Node:
+    # FMT.format (or format_map) of a module's FMT = "..." (module_strs) as the literal's method,
+    # once FMT is read (with its checks), as evaluating f reads it; any other f as it is
+    o = f.kids[0] if f.kind == "attr" and (f.s == "format" or f.s == "format_map") else f
+    if o is f or o.kind != "name" or o.s not in self.strglobals or not self.globread(o.s) or self.gtype(o.s) != "str":
+        return f
+    self.expr(o, "")
+    return mk("attr", f.s, f.line, [mk("str", self.strglobals[o.s], o.line, [])])
+
 def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
     # str.format()'s arguments, evaluated into fa: the positional ones in order (* of a tuple
     # gives its items; of a list, as the last, a copy of it), then the keywords (** of a function's

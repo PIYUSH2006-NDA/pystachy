@@ -324,6 +324,7 @@ from src.pystachy_compiler.expressions import (
     gen_fmt_raise as expressions_fmt_raise,
     gen_format_arg as expressions_format_arg,
     gen_format_args as expressions_format_args,
+    gen_format_of as expressions_format_of,
     gen_format_dup as expressions_format_dup,
     gen_format_kw as expressions_format_kw,
     gen_foreign_eq as expressions_foreign_eq,
@@ -720,6 +721,7 @@ class Gen:
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.intglobals: dict[str, str] = {}  # single-binding module int literals, after normal read checks
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
+        self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
@@ -1874,6 +1876,9 @@ class Gen:
 
     def str_format(self, fmt: str, m: str, args: list[Node]) -> Val:
         return expressions_str_format(self, fmt, m, args)
+
+    def format_of(self, f: Node) -> Node:
+        return expressions_format_of(self, f)
 
     def format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
         return expressions_format_args(self, fa, args)

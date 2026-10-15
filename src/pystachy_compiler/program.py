@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 import sys
-from src.pystachy_compiler.analysis import all_imports, collect, module_ints, needs_eh, none_assigns
+from src.pystachy_compiler.analysis import all_imports, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -539,6 +539,7 @@ def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
     if "moduleints" in self.opts:
         self.intglobals = module_ints(mods, self.intat)
+    self.strglobals = module_strs(mods)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
     for m in mods:

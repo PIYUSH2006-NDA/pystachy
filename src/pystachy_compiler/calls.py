@@ -40,6 +40,7 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
     args = n.kids[1:]
     if f.kind == "badattr":
         self.err(f.s)
+    f = self.format_of(f)
     if literal_format(f):
         return self.str_format(f.kids[0].s, f.s, args)
     if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0 and args[0].kind == "str":

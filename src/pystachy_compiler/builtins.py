@@ -854,7 +854,8 @@ def gen_mapgen(self, n: Node) -> Node:
     if fn == "filter" and len(args) != 2:
         self.err(f"filter expected 2 arguments, got {len(args)}")
     # ("...".format, which evaluates to the same method each time, is called as it is written)
-    f = args[0] if (fn == "filter" and args[0].kind == "None") or literal_format(args[0]) else self.vnode(self.expr(args[0], ""))
+    fmt = self.format_of(args[0])
+    f = args[0] if fn == "filter" and args[0].kind == "None" else fmt if literal_format(fmt) else self.vnode(self.expr(args[0], ""))
     if fn == "filter":
         cond = mk("name", "__item", line, []) if f.kind == "None" else mk("call", "", line, [f, mk("name", "__item", line, [])])
         return mk("listcomp", "gen", line, [mk("name", "__item", line, []), mk("name", "__item", line, []), args[1], cond])
@@ -1081,7 +1082,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if key not in METHODS and o.t == "exc":
         self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
     if key == "str.format" or key == "str.format_map":
-        self.err(f'str.{m}() of a format string computed at run time is not supported (only of a string literal: "{{}}".{m}(...))')
+        self.err(f'str.{m}() of a format string computed at run time is not supported (only of a string literal, "{{}}".{m}(...), or of a module global that one assignment binds to one)')
     if key not in METHODS:
         self.err(f"'{o.t}' has no method '{m}'")
     if key == "dict.get" and (len(args) == 0 or len(args) > 2):

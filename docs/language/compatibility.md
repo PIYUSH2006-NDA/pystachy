@@ -537,11 +537,12 @@ supported alternatives.
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
-- `str.format()` and `str.format_map()` of a format string other than a literal (`fmt.format(x)`,
-  also of an f-string), either method as a value other than `map()`'s function, `*` of a `str`
-  or of a list followed by other positional arguments, `**` of more than one dict whose keys
-  only run time knows, and a field's item key that the static types rule out (`"{0[1]}"` of a
-  `dict[str, int]`, where CPython raises `KeyError`)
+- `str.format()` and `str.format_map()` of a format string other than a literal or a module
+  global bound once to one (`fmt.format(x)` of a parameter, also of an f-string), either method
+  as a value other than `map()`'s function, `*` of a `str` or of a list followed by other
+  positional arguments, `**` of more than one dict whose keys only run time knows, and a field's
+  item key that the static types rule out (`"{0[1]}"` of a `dict[str, int]`, where CPython
+  raises `KeyError`)
 - `functools.lru_cache()` and `cache()` of a function whose parameters or return are not
   annotated, that returns `None`, that takes `*args` or `**kwargs`, or whose parameter is no dict key type (a `float`,
   an object), or of a builtin, a method or a lambda; a required keyword-only parameter or a
