@@ -631,7 +631,13 @@ def gen_program(self, mods: list[Mod]) -> str:
                 self.classes[st.s].mod = m.name
                 if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
                     self.err(dc_args(st.kids[1])[1:])
-                self.classes[st.s].kwonly = len(st.kids) > 1 and dc_args(st.kids[1]) == "kw"
+                for o in dc_args(st.kids[1]).split() if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" else []:
+                    self.classes[st.s].dcopts[o] = True
+                self.classes[st.s].kwonly = "kw_only" in self.classes[st.s].dcopts
+                if "order" in self.classes[st.s].dcopts and "no-eq" in self.classes[st.s].dcopts:
+                    self.err("eq must be true if order is true")  # (CPython's ValueError where it creates the class)
+                if "frozen" in self.classes[st.s].dcopts:
+                    self.hasfrozen = True
                 if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
                     self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
                 if len(st.kids) > 2:

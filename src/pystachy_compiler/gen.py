@@ -74,6 +74,7 @@ from src.pystachy_compiler.calls import (
     gen_adapter_ret as calls_adapter_ret,
     gen_arity as calls_arity,
     gen_asdict as calls_asdict,
+    gen_dc_replace as calls_dc_replace,
     gen_bound as calls_bound,
     gen_cached_wrapper as calls_cached_wrapper,
     gen_call as calls_call,
@@ -175,6 +176,9 @@ from src.pystachy_compiler.declarations import (
     gen_fgep as declarations_fgep,
     gen_field as declarations_field,
     gen_frozen as declarations_frozen,
+    gen_frozen_store as declarations_frozen_store,
+    gen_dc_field as declarations_dc_field,
+    gen_dc_factory as declarations_dc_factory,
     gen_is_prop as declarations_is_prop,
     gen_prop_store as declarations_prop_store,
     gen_generic_base as declarations_generic_base,
@@ -789,6 +793,7 @@ class Gen:
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)
+        self.hasfrozen = False  # a @dataclass(frozen=True) class: except clauses list dataclasses.FrozenInstanceError
         # "C.x": class attribute x of plain class C, which the program assigns through the class
         # (C.x = v, cls.x += 1): a global that objects read until they assign x (see cvar_stores)
         self.cvars: dict[str, bool] = {}
@@ -1115,6 +1120,15 @@ class Gen:
 
     def frozen(self, t: str, name: str) -> None:
         return declarations_frozen(self, t, name)
+
+    def frozen_store(self, o: Val, name: str, delete: bool=False) -> bool:
+        return declarations_frozen_store(self, o, name, delete)
+
+    def dc_field(self, ci: ClassInfo, st: Node) -> None:
+        return declarations_dc_field(self, ci, st)
+
+    def dc_factory(self, ci: ClassInfo, fl: str) -> None:
+        return declarations_dc_factory(self, ci, fl)
 
     def is_prop(self, t: str, name: str) -> bool:
         return declarations_is_prop(self, t, name)
@@ -2111,6 +2125,9 @@ class Gen:
 
     def asdict(self, o: Val, args: list[Node]) -> Val:
         return calls_asdict(self, o, args)
+
+    def dc_replace(self, args: list[Node]) -> Val:
+        return calls_dc_replace(self, args)
 
     def new_obj(self, c: str) -> Val:
         return calls_new_obj(self, c)

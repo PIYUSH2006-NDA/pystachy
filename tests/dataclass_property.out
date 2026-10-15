@@ -1,0 +1,11 @@
+[Release(version=Version(major=0, minor=1), tags=[], name='z'), Release(version=Version(major=1, minor=2), tags=['a'], name=''), Release(version=Version(major=1, minor=2), tags=['b'], name='')]
+True True
+set 3.5
+set 4.5
+Temperature(_c=4.5) 4.5
+frozen cannot assign to field 'c'
+frozen cannot assign to field 'c'
+frozen cannot delete field 'c'
+2.0
+False True True
+[exit 0]

@@ -222,7 +222,7 @@ def gen_has(self, t: str, a: str) -> int:
     if t in self.classes:
         ci = self.classes[t]
         if "." in a:
-            return 0  # (no attribute name: a key of a property's setter, x.setter)
+            return 0  # (no attribute name: a key of a property's setter, x.setter, or a default_factory's)
         if a in ci.methods and ci.methods[a].prop:
             self.err(f"hasattr() of property '{a}' is not supported: read it in a try/except AttributeError block")
         if a in ci.fflag and t + "." + a not in self.cvars:
@@ -233,7 +233,7 @@ def gen_has(self, t: str, a: str) -> int:
             self.err(f"hasattr() of '{a}' on a NamedTuple is not supported")
         if a in HASATTR["obj"].split():
             return -1
-        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() else 0
+        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() and not (a == "__match_args__" and "no-match_args" in ci.dcopts) else 0
     b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:

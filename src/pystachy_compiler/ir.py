@@ -376,6 +376,11 @@ class ClassInfo:
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used
         self.hook = ""  # the same for a special method Pystachy never calls (UNCALLED): its class statement compiles
         self.kwonly = False  # @dataclass(kw_only=True): its __init__ takes the fields by keyword only
+        self.dcopts: dict[str, bool] = {}  # @dataclass(...)'s other options that differ from their defaults (frozen, order, no-eq, ...: dc_args)
+        # dataclasses.field(...)'s options of each field that differ from their defaults
+        # (no-init, no-repr, no-compare, kw_only), and the default_factory of those that have one
+        self.fopts: dict[str, dict[str, bool]] = {}
+        self.factory: dict[str, Node] = {}
         # its single base (a class of the program or a builtin exception class), and the
         # builtin exception class it derives from through it ("" for an ordinary class)
         self.base = ""

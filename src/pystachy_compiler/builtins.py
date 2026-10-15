@@ -130,6 +130,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return Val(self.rt("pys_vtuple_new", "ptr", [f"ptr {v.v}"]), self.ctype("vtuple", [elem(v.t)]))
     if name == "typing.NamedTuple":
         self.err("the functional NamedTuple form is not supported: write a class, class P(NamedTuple): with annotated fields")
+    if name == "dataclasses.replace":
+        return self.dc_replace(args)
+    if name == "dataclasses.field":
+        self.err("dataclasses.field() is only supported as the value of a field in the body of a @dataclass class")
     if "." not in name and name not in PYBUILTINS:
         self.err(f"name '{short(name)}' is not defined")
     # builtins and module functions ("os.system"); most are one call listed in CALLS

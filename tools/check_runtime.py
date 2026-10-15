@@ -61,6 +61,7 @@ compiler builds for runtime.py, in this process:
 The exit status is 1 if a check fails. Clang and llvm-as come from PATH, or PYSTACHY_LLVM.
 """
 import builtins
+import dataclasses
 import importlib.util
 import io
 import os
@@ -720,7 +721,7 @@ def main():
             bad.append(f"{pys.RTSYM[s]}: RUNTIME's entry is for {s}, which compiler source never names")
     # exceptions
     for k, v in pys.EXCBASES.items():
-        c = io.UnsupportedOperation if k == "io.UnsupportedOperation" else getattr(builtins, k, None)
+        c = io.UnsupportedOperation if k == "io.UnsupportedOperation" else dataclasses.FrozenInstanceError if k == "dataclasses.FrozenInstanceError" else getattr(builtins, k, None)
         if not (isinstance(c, type) and issubclass(c, BaseException) and c.__name__ == k.split(".")[-1]):
             bad.append(f"EXCBASES: {k} is no builtin exception class of this Python")
         elif ",".join(b.__name__ for b in c.__bases__ if b is not object) != v:

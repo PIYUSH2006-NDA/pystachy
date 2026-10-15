@@ -1409,7 +1409,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
             return
         p = self.field(o, t.s, True)
         self.frozen(o.t, t.s)
-        self.setfield(o, p, t.s, v)
+        if not self.frozen_store(o, t.s):
+            self.setfield(o, p, t.s, v)
     elif k == "index" and t.kids[0].kind == "name" and "?" in self.rtype(t.kids[0].s):
         # d[k] = v or xs[i] = v on an empty dict or list without a type: k and v decide it
         self.allowq = True

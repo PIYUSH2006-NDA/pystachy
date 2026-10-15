@@ -408,8 +408,11 @@ supported alternatives.
   statement still runs), and a class whose base defines `__init_subclass__`, which
   CPython calls when it creates the class (also in an imported module, whose code creates it when
   it is imported)
-- `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
-  and `KW_ONLY`
+- `@dataclass(slots=True)` and `weakref_slot=`, `@dataclass` and `field()` options that are not
+  `True` or `False` literals, `field(metadata=...)`, a `default_factory` that is not a function,
+  a class or a lambda without parameters, `dataclasses.asdict()`, `astuple()`, `fields()` and
+  `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
+  `except` clause, and `hash()` of a dataclass object
 - a property's `@x.getter`, a setter or deleter of another name than its property, `property()`
   called as a function, assigning `super().x`, and `del` of an attribute that is not a property
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
@@ -421,7 +424,8 @@ supported alternatives.
   types, the functional `NamedTuple("P", [...])`, slicing a tuple, a NamedTuple or an object (whose
   `__getitem__` would take a slice object), a tuple `*` a number that is not a constant, and
   CPython's class-creation errors of a NamedTuple (a field after a default, an underscored field,
-  an overwritten `__init__`) and of a dataclass (a field without a default after one with it)
+  an overwritten `__init__`) and of a dataclass (a field without a default after one with it, a
+  mutable default, `order=True` without `eq`, a generated method the class defines)
 
 ### Optional values
 
