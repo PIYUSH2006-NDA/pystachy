@@ -476,8 +476,10 @@ Constructor arguments bind first; the named specialization or surrounding annota
 variables the arguments leave unbound. Thus `q: Stack[int] = Stack()` and
 `Stack[int]([])` can type empty containers, while `Box[float](1)` still infers `Box[int]`.
 An enclosing annotation remains a contract and rejects a conflicting specialization.
-Nonempty homogeneous displays infer the same types as stored arguments; empty and nested
-empty displays, and heterogeneous displays with an explicit union, use contextual types.
+Nonempty homogeneous displays infer the same types as stored arguments. Empty and nested
+empty displays use contextual types where their contents do not already determine a type.
+Heterogeneous displays with known item types can use an explicit union context. Opaque
+calls and operations infer normally; their syntax alone does not request a union layout.
 A variable that neither arguments nor context bind is an error.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its

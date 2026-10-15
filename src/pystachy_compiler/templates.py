@@ -209,17 +209,31 @@ def gen_generic_hint(self, e: Node, t: str) -> str:
         if n.kind in ["list", "dict", "set"]:
             parts = [n.kids[j] for j in range(1, len(n.kids), 2)] if n.kind == "dict" else n.kids
             if "union[" in t:
-                kinds = [self.probe_type(x) or x.kind for x in parts]
-                if len(kinds) > 1 and any([kind != kinds[0] for kind in kinds]):
-                    return t
+                kinds = [x.kind if x.kind in ["int", "float", "str", "None"] else "bool" if x.kind in ["True", "False"] else self.probe_type(x) for x in parts]
+                if len(kinds) > 1 and "" not in kinds:
+                    joined = kinds[0]
+                    for kind in kinds[1:]:
+                        joined = self.join(joined, kind)
+                        if joined == "":
+                            return t
             if n.kind == "dict":
                 pending.extend(n.kids[:1])  # (the first key also fixes its type)
             for x in parts:
                 if x.kind != "None":
                     pending.append(x)
                     break
-        else:
-            pending.extend(n.kids)
+        elif n.kind == "tuple":
+            pending.extend(n.kids)  # (each field has its own expected type)
+        elif n.kind in ["listcomp", "setcomp", "binop"]:
+            pending.append(n.kids[0])  # (result body, or the left operand that types the right)
+        elif n.kind == "ifexp":
+            st = self.static(n.kids[0])
+            pending.append(n.kids[2] if st == 0 or (st < 0 and n.kids[1].kind == "None") else n.kids[1])
+        elif n.kind == "boolop":
+            st = self.static(n.kids[0])
+            pending.append(n.kids[1] if (st >= 0 and (st == 1) != (n.s == "or")) or (n.kids[0].kind == "None" and n.s == "or") else n.kids[0])
+        # Calls, indices, tests and other operations determine their own operands'
+        # types. Empty displays inside them do not receive this expression's hint.
     return ""
 
 def gen_generic_ann(self, c: str, a: Node) -> str:
