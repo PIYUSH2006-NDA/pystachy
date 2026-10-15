@@ -1349,7 +1349,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
 
 def gen_fgep(self, o: Val, i: int) -> str:
     # Keep the declared object layout and member type until lowering. The address
-    # remains in IFn.fa so raw and typed memory operations have identical effects.
+    # remains in IFn.fa so native and machine memory operations have identical effects.
     ci = self.classes[o.t]
     t = ci.ftypes[ci.fields[i]] if i < len(ci.fields) else "bool"
     op = Ins("field.addr", "*" + t, "")

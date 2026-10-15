@@ -2,8 +2,8 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
-from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, LLNOTRAW, RAWR, RAWW, RUNTIME
-from src.pystachy_compiler.utils import is_opt, is_tuple, is_union, lt, rawfx, targs, umembers
+from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, RAWR, RAWW, RUNTIME
+from src.pystachy_compiler.utils import is_opt, is_tuple, is_union, lt, targs, umembers
 
 
 class EffectSummaries:
@@ -87,8 +87,7 @@ class EffectSummaries:
 
 def gen_verify(self, fn: IFn, eh: bool) -> None:
     # PYSTACHY_IRCHECK=1: fn is well formed. Every op is in IROPS, an rt op's key in RUNTIME;
-    # a raw op is one LLVM instruction that is no call (calls are rt, call and init ops, whose
-    # effects are known), no phi and no terminator, and call and init ops call compiled
+    # call and init ops call compiled
     # functions (or, in runtime mode, runtime.c's functions that runtime.py declares); every block ends with its one terminator; branches go to blocks of fn; a phi
     # starts its block, and its predecessors branch there; each op holds exactly the numbers
     # its lowering prints (Ins.r), and no number or label is above IFn.n. Exceptions (once the
@@ -248,13 +247,6 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
             for x in i.r:
                 if x > fn.n:
                     self.bad_ir(fn, b, f"{i.op} {i.s} numbered {x}, above IFn.n ({fn.n})")
-            if i.op == "raw":
-                # one LLVM instruction that loads, stores or computes: not a call, a phi, a
-                # terminator or a label (its first word, after the "%x = " of a value it defines)
-                w = i.s[i.s.find(" = ") + 3 :] if i.s.startswith("%") and " = " in i.s else i.s
-                w = w[: w.find(" ")] if " " in w else w
-                if w in LLNOTRAW or w.endswith(":") or "\n" in i.s:
-                    self.bad_ir(fn, b, f"LLVM text that must be an op: {i.s}")
             if (i.op == "call" and i.s not in self.fll and i.s not in self.externs) or (i.op == "init" and "@init." + i.s not in self.fll):
                 self.bad_ir(fn, b, f"a call of {i.s}, which is not compiled")
             if i.op != "phi":
@@ -309,17 +301,14 @@ def gen_effects(self) -> None:
         seen: dict[int, bool] = {}
         for b in fn.blocks:
             for i in b.code:
-                if i.op == "raw":
-                    m |= rawfx(i.s, fn.fa)
+                c = i.s if i.op == "call" else "@init." + i.s if i.op == "init" else ""
+                if c in self.fll:
+                    ix = self.fll[c]
+                    if ix not in seen:
+                        seen[ix] = True
+                        cs.append(ix)
                 else:
-                    c = i.s if i.op == "call" else "@init." + i.s if i.op == "init" else ""
-                    if c in self.fll:
-                        ix = self.fll[c]
-                        if ix not in seen:
-                            seen[ix] = True
-                            cs.append(ix)
-                    else:
-                        m |= self.opfx(i, fn.fa)
+                    m |= self.opfx(i, fn.fa)
         direct.append(m & ~FXBIT["N"])
         calls.append(cs)
     self.summaries.update(direct, calls)
@@ -329,7 +318,7 @@ def gen_effects(self) -> None:
 def gen_opfx(self, i: Ins, fa: dict[str, bool]) -> int:
     # the effects of op i (FX bits) of a function whose field addresses are fa (IFn.fa): a
     # call's and an init's are its callee's summary (IFn.fx: every letter until effects has
-    # computed it, and if the callee is not compiled), a raw op's what its text does (rawfx)
+    # computed it, and if the callee is not compiled). Memory effects use typed addresses.
     if i.op == "call" or i.op == "init":
         c = i.s if i.op == "call" else "@init." + i.s
         return self.fns[self.fll[c]].fx if c in self.fll else FXALL
@@ -349,8 +338,6 @@ def gen_opfx(self, i: Ins, fa: dict[str, bool]) -> int:
         if a in fa:
             return FXBIT["wO"] if st else FXBIT["rO"]
         return RAWW if st else RAWR
-    if i.op == "raw":
-        return rawfx(i.s, fa)
     return self.opfxs[i.op]
 
 # ---- optimizations (OPTS): passes over an IFn, once the program is built and its effect

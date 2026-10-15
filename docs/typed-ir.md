@@ -25,11 +25,11 @@ implemented. Optional values, closures and constructor-inferred class templates 
 implemented; their language rules belong in the [language guide](language.md).
 
 The separation is partial. `Gen` still resolves, types, folds and specializes code while
-building IR. Native variable and class-field accesses and numeric/reference comparisons
-are explicit typed operations. Arithmetic, some internal memory accesses and backend
-helper templates still contain raw LLVM text. The IR supports the current LLVM backend,
-but is not yet a backend-neutral
-representation of every operation. WebAssembly and dynamic `Any` values remain future work.
+building IR. Every function instruction is a registered typed operation, including
+arithmetic, internal storage, closure pointers and runtime byte accesses. There is no
+`raw` instruction or instruction-text builder. Module declarations, constants and ABI
+wrappers are serialized by the LLVM backend. This completes instruction coverage for
+the current backend; WebAssembly and dynamic `Any` values remain future work.
 
 <a id="4-passes"></a>
 <a id="41-the-pipeline"></a>
@@ -132,7 +132,9 @@ The exact operation table is `IROPS`; its current groups are:
 
 | Purpose | Operations |
 |---|---|
-| Storage and LLVM text | `slot`, `raw` |
+| Entry storage | `slot` |
+| Internal storage and addressing | `mach.load`, `mach.store`, `mach.addr` |
+| Scalar arithmetic, bitwise operations and machine conversions | `scalar.bin`, `scalar.cast`, `scalar.cmp` |
 | Native memory access | `mem.load`, `mem.store` |
 | Fixed-layout allocation | `alloc.fixed` |
 | Fixed tuple slots | `tuple.load`, `tuple.store` |
@@ -148,9 +150,10 @@ The exact operation table is `IROPS`; its current groups are:
 | Optimized list reads | `list.len`, `list.load` |
 | Exception handling | `landing`, `throw`, `exc.match` |
 
-A `raw` operation is one LLVM instruction that loads, stores or computes. It cannot contain a
-call, phi or terminator: those must remain explicit so passes can reason about them.
-Entry slots lower to `alloca`; LLVM's `mem2reg` later builds SSA form.
+The operation registry is closed: unknown operations, including `raw`, are rejected.
+Operations carry typed operands and finite operators, predicates, flags and metadata;
+they never carry an LLVM instruction string. Entry slots lower to `alloca`; LLVM's
+`mem2reg` later builds SSA form.
 
 `mem.load` and `mem.store` keep a native value type on both sides of a typed
 address (`*int`, `*Box`, and so on). The verifier checks operand counts, matching
@@ -158,13 +161,13 @@ address/value/result types, result numbers and absence of unused metadata; runti
 pseudo-types and nested address types are rejected. Lowering selects the existing
 native LLVM type (`None` payloads use a null pointer). Variable and parameter slots,
 globals, assignment/import flags and native values held in closure cells use these
-operations. Closure environment pointers and layout-specific/runtime memory paths
-remain separate follow-ups. No LLVM text is parsed to construct these operations.
+operations. Internal closure and runtime storage use the machine operations below.
+No LLVM instruction text is parsed to construct these operations.
 
 Effects retain the existing address classification: local slots have none, globals
 use `rG`/`wG`, known field addresses use `rO`/`wO`, and other addresses conservatively
 read/write lists, dictionaries and objects. Canonicalization follows reaching loads
-and stores across both typed and raw operations, including the existing alias and
+and stores across native and machine operations, including the existing alias and
 call barriers, so the representation change preserves dictionary lookup fusion.
 
 `alloc.fixed` allocates a declared class (including specialized classes and custom
@@ -220,7 +223,7 @@ canonicalization, including repeated numeric dictionary keys. Numeric truth and 
 shared promotion/comparison helpers use these operations, so numeric-union dispatch
 can reuse them without new IR or runtime machinery. Exact mixed integer/float comparison
 still uses its existing frontend/runtime path; float-to-int checks, overflow checks,
-arithmetic and other LLVM-text operations remain outside this increment.
+and arithmetic use the scalar operations below.
 
 Loop tests, native integer truth tests and union/class tag dispatch also use `num.cmp`.
 `int.ucmp` keeps unsigned `<`, `<=`, `>` and `>=` explicit for bounds checks over native
@@ -233,7 +236,24 @@ conditions from typed operands, preserving its branch facts and mutation barrier
 boxed optional scalars, optional unions, classes and callables. It permits only `==`
 and `!=`, returns `bool` and has no effects. The verifier rejects native scalars and
 runtime pseudo-types; lowering selects the existing pointer equality predicate.
-Internal closure code/environment pointers and runtime interior pointers remain raw.
+Internal closure code/environment pointers and runtime interior pointers use
+`scalar.cmp` with the explicit machine pointer type `%ptr`.
+
+`scalar.bin` records integer/boolean arithmetic and bitwise operations, floating
+arithmetic and negation, and the existing finite overflow flags. `scalar.cast` records
+checked frontend-selected machine conversions; `scalar.cmp` covers machine integer,
+floating and pointer predicates. Verifiers reject mismatched operands, unsupported
+operators/conversions and extra metadata. These operations are pure; frontend guards
+retain responsibility for bounds, overflow and division checks. `select` also checks
+its boolean condition and matching result/value types.
+
+`mach.load`, `mach.store` and `mach.addr` cover internal storage and indexed addresses
+that have no Python value type: closure code/environment pointers, loop/reduction
+temporaries, variable tuple traversal, string headers and bytes. Storage retains native value
+types or one of the finite machine types (`%ptr`, `%byte`, `%i32`); addresses carry
+explicit operands and indices. String alias/range metadata and in-bounds addressing are finite
+choices checked before lowering. These operations preserve the existing effects,
+layout and guard order; they do not introduce unchecked Python operations.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per
@@ -271,8 +291,8 @@ fixed-point oracle; `tests/summary_worklist.py` also executes the solver nativel
 | `rG`, `wG` | Read/write globals or assignment flags |
 | `rF`, `wF` | Read/write files |
 
-`mem.load`/`mem.store` classify their typed addresses directly; `rawfx` retains the
-same classification for remaining raw loads and stores, using known field addresses where needed.
+`mem.load`/`mem.store` and `mach.load`/`mach.store` classify their addresses directly,
+using known field addresses where needed. Effect analysis never parses LLVM text.
 Effects describe observable behavior for optimization, not an ownership or alias type system.
 `U?` applies only when a static descriptor can contain user classes or custom exceptions.
 Allocation-triggered collection can close unreachable files; that unspecified cleanup timing
@@ -351,10 +371,10 @@ self-compile timings in the design log are not current test totals or performanc
 
 ## Remaining work
 
-A backend-neutral IR needs explicit memory/arithmetic operations to replace the remaining
-LLVM text and a clearer separation of frontend elaboration from backend lowering. WebAssembly
-GC, more general check elimination and a Python-object representation backend are design
-possibilities, not supported modes.
+Typed instruction coverage is complete for the LLVM backend. Further backend neutrality
+needs shared compiler/runtime layout definitions and a clearer separation of frontend
+elaboration from machine contracts. WebAssembly GC, more general check elimination and a
+Python-object representation backend are design possibilities, not supported modes.
 
 CPython extension modules **are supported** through `pystachy ext` and boundary wrappers.
 They do not implement the historical proposal to represent all compiled containers as

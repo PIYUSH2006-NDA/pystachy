@@ -33,9 +33,7 @@ def gen_lower(self, fn: IFn) -> None:
 def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     op = i.op
     o = self.out
-    if op == "raw":
-        o.append("  " + i.s)
-    elif op == "scalar.bin" or op == "scalar.cast" or op == "scalar.cmp":
+    if op == "scalar.bin" or op == "scalar.cast" or op == "scalar.cmp":
         self.lower_scalar(i)
 
     elif op == "mach.load" or op == "mach.store":

@@ -106,8 +106,6 @@ def gen_label(self) -> str:
     self.n += 1
     return f"L{self.n}"
 
-def gen_emit(self, s: str) -> None:
-    self.add(Ins("raw", "", s))
 
 def gen_add(self, i: Ins) -> None:
     # code after a terminator (dead code) goes to a block of its own
@@ -124,12 +122,6 @@ def gen_put(self, i: Ins, k: int) -> None:
         self.n += 1
         i.r.append(self.n)
 
-def gen_ins(self, s: str) -> str:
-    r = self.tmp()
-    i = Ins("raw", "", f"{r} = {s}")
-    i.k = self.n
-    self.add(i)
-    return r
 
 def gen_mem_load(self, a: Val) -> Val:
     # Read a native value through its typed address. LLVM alone selects its spelling.
