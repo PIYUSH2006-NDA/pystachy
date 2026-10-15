@@ -136,12 +136,12 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             if c.ctypes[i] == "None":
                 self.nonevars[c.caps[i]] = 0  # (a parameter whose argument is None: it reads as None)
                 continue
-            a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {i}")
-            self.lreg[c.caps[i]] = self.ins(f"load ptr, ptr {a}")
+            a = self.maddr('%ptr', env, f'{i}', True)
+            self.lreg[c.caps[i]] = self.mload('%ptr', a)
             self.ltype[c.caps[i]] = c.ctypes[i]
         for j in range(len(c.iflags)):
-            a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {len(c.caps) + len(c.defs) + j}")
-            self.iflag[c.iflags[j]] = self.ins(f"load ptr, ptr {a}")
+            a = self.maddr('%ptr', env, f'{len(c.caps) + len(c.defs) + j}', True)
+            self.iflag[c.iflags[j]] = self.mload('%ptr', a)
     self.none_ends()
     if f.ll.startswith("@init."):
         # a module's code runs once, when the first import of it runs

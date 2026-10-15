@@ -12,6 +12,11 @@ from src.pystachy_compiler.union_arithmetic import (
     gen_unumeric as union_arithmetic_unumeric,
     gen_unumeric_case as union_arithmetic_unumeric_case,
 )
+from src.pystachy_compiler.memory_ir import (
+    gen_mload as memory_ir_mload,
+    gen_mstore as memory_ir_mstore,
+    gen_maddr as memory_ir_maddr,
+)
 from src.pystachy_compiler.unions import (
     gen_ueq_type as unions_ueq_type,
     gen_scalar_union as unions_scalar_union,
@@ -828,6 +833,15 @@ class Gen:
 
     def verify_scalar(self, fn: IFn, b: Blk, i: Ins) -> None:
         return scalar_ir_verify_scalar(self, fn, b, i)
+
+    def mload(self, t: str, p: str, metadata: str = "") -> str:
+        return memory_ir_mload(self, t, p, metadata)
+
+    def mstore(self, t: str, v: str, p: str, metadata: str = "") -> None:
+        memory_ir_mstore(self, t, v, p, metadata)
+
+    def maddr(self, t: str, p: str, index: str, inbounds: bool = False) -> str:
+        return memory_ir_maddr(self, t, p, index, inbounds)
 
     def mem_load(self, a: Val) -> Val:
         return emission_mem_load(self, a)

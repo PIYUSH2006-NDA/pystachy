@@ -472,7 +472,7 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
     if k == "name":
         if (e.chk or self.foreign(e.s)) and e.s in self.gflag:
             self.flagged[e.s] = True
-            self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{e.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(e.s))
+            self.guard(self.scalar('xor', [Val(self.mload('bool', f'@g.{e.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(e.s))
         t = self.gtypes.get(e.s, "")
         if use == 3 and (e.s in self.funcs or e.s in self.hooks or ("$" not in e.s and (e.s in local or (e.s in PYBUILTINS and e.s not in PURE)))):
             return f"it passes {short(e.s)} to a function that may call it"

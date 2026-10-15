@@ -157,6 +157,10 @@ class Ins:
         # in s and compares two operands of the same native numeric type.
         # mem.load/store transfer native values through an address of type *<native>.
         # Their effects retain local/global/field/unknown address classification.
+        # mach.load/store additionally access runtime headers, closure slots and byte
+        # buffers through %ptr. s is finite metadata: length, length.range, bytes or empty.
+        # mach.addr computes an indexed address: s is its machine element type, a holds
+        # the pointer and int index, and k is the inbounds flag. No LLVM text is retained.
         # int.ucmp retains unsigned order semantics for native int bounds checks.
         # ptr.cmp tests native reference identity (==/!=), including None's null.
         # alloc.fixed keeps the class or fixed tuple type; lowering computes its byte size.
@@ -277,7 +281,7 @@ class Values:
                 i = code[x]
                 if i.op == "raw" and i.k > 0:
                     self.at[i.k] = j * self.stride + x
-                elif (i.op == "select" or i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp" or i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mem.load" or i.op == "field.addr" or i.op == "int.ucmp" or i.op == "ptr.cmp") and len(i.r) == 1:
+                elif (i.op == "select" or i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp" or i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mach.load" or i.op == "mach.addr" or i.op == "mem.load" or i.op == "field.addr" or i.op == "int.ucmp" or i.op == "ptr.cmp") and len(i.r) == 1:
                     self.at[i.r[0]] = j * self.stride + x
                 elif i.op == "union.payload" and len(i.r) == 2:
                     self.at[i.r[1]] = j * self.stride + x

@@ -35,7 +35,6 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
-    lt,
     meet,
     same_kind,
     selem,
@@ -148,7 +147,7 @@ def gen_check_import(self, a: Node) -> None:
 def gen_hidden(self, name: str, v: Val) -> str:
     # a compiler-made global, assigned here
     self.global_var(name, v.t)
-    self.emit(f"store {lt(v.t)} {v.v}, ptr {name}")
+    self.mstore(v.t, v.v, name)
     return name
 
 def gen_dflt_fn(self, f: FnInfo) -> FnInfo:
@@ -217,7 +216,7 @@ def gen_hoist(self, f: FnInfo) -> None:
                 # a call compiled before this statement declared its global (early_default)
                 del self.pending[f"{f.ll}.{j}"]
                 if f.dglob[j] != "=None":
-                    self.emit(f"store {lt(f.dtypes[j])} {self.coerce(v, f.dtypes[j]).v}, ptr {f.dglob[j]}")
+                    self.mstore(f.dtypes[j], self.coerce(v, f.dtypes[j]).v, f.dglob[j])
                 continue
             if v.t == "None" and t == "":
                 f.dglob[j] = "=None"  # a None value is no global: calls pass None
@@ -284,7 +283,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
             if (cv or not is_const(st.kids[2])) and fl in ci.fglob and ci.fglob[fl] in self.pending:
                 # code compiled before this statement declared its global (class_default)
                 del self.pending[ci.fglob[fl]]
-                self.emit(f"store {lt(t)} {self.coerce(self.expr(st.kids[2], t), t).v}, ptr {ci.fglob[fl]}")
+                self.mstore(t, self.coerce(self.expr(st.kids[2], t), t).v, ci.fglob[fl])
             elif (cv or not is_const(st.kids[2])) and fl not in ci.fglob:
                 ci.fglob[fl] = self.hidden(f"@d.c.{ci.name}.{fl}", self.coerce(self.expr(st.kids[2], t), t))
         elif st.kind == "def":
@@ -386,14 +385,14 @@ def gen_leave(self, depth: int) -> bool:
             sl = ""
             if cv.v.startswith("%"):
                 sl = self.alloca(cv.t, "")
-                self.emit(f"store {lt(cv.t)} {cv.v}, ptr {sl}")
-            self.emit(f"store i64 {len(x.conts)}, ptr {x.sel}")
+                self.mstore(cv.t, cv.v, sl)
+            self.mstore('int', f'{len(x.conts)}', x.sel)
             x.conts.append(self.label())
             self.br(x.entry)
             self.place(x.conts[-1])
             self.narrowed = self.unnarrowed([x.body])  # (what the block may bind on the way)
             if sl != "":
-                cv = Val(self.ins(f"load {lt(cv.t)}, ptr {sl}"), cv.t)
+                cv = Val(self.mload(cv.t, sl), cv.t)
         else:
             exits = self.exits
             loops = self.loops
@@ -700,7 +699,7 @@ def gen_stmt(self, n: Node) -> None:
         else:
             self.cbr(c, go, hit)
         self.place(hit)
-        self.emit(f"store i1 {'true' if n.s == 'any' else 'false'}, ptr {self.lcs[-1]}")
+        self.mstore('bool', 'true' if n.s == 'any' else 'false', self.lcs[-1])
         self.br(self.loops[-1].exit)
         self.place(go)
     elif k == "lcappend":
@@ -729,7 +728,7 @@ def gen_stmt(self, n: Node) -> None:
         else:
             self.hoist_class(self.classes[n.s])
         if n.s in self.gflag:
-            self.emit(f"store i1 true, ptr @g.{n.s}.def")
+            self.mstore('bool', 'true', f'@g.{n.s}.def')
     elif k == "lclass":
         self.left_out(self.cnodes[n.line], self.unsupported[n.s])
     elif k == "import":
@@ -739,16 +738,16 @@ def gen_stmt(self, n: Node) -> None:
         for x in n.kids:
             if x.kind == "guard":
                 # an optional import of a module whose code raises ImportError: it returns there
-                self.emit(f"store i1 true, ptr @init.{x.s}.guard")
+                self.mstore('bool', 'true', f'@init.{x.s}.guard')
                 self.add(Ins("init", "", x.s))
-                self.emit(f"store i1 false, ptr @init.{x.s}.guard")
+                self.mstore('bool', 'false', f'@init.{x.s}.guard')
             else:
                 self.add(Ins("init", "", x.s))
     elif k == "bound":
         # an import has bound these names, which an import in a try statement may leave unbound
         self.modchk(n)  # a from-import must read an existing source-module attribute first
         for bn in n.s.split():
-            self.emit(f"store i1 true, ptr {self.imp_flag(bn, self.modlevel)}")
+            self.mstore('bool', 'true', self.imp_flag(bn, self.modlevel))
     elif k == "def" and (n.s in self.decorated if self.modlevel else self.applies(n, False, self.scope_names())):
         self.store_name(n.s, self.decorate(n))  # (its name binds what its decorators give)
     elif k == "def" and not self.modlevel:
@@ -809,9 +808,9 @@ def gen_del_name(self, n: Node) -> None:
     self.nonecmp = False
     self.narrowed.pop(name, "")
     if name in self.ltype and name in self.lflag:
-        self.emit(f"store i1 false, ptr {self.lflag[name]}")
+        self.mstore('bool', 'false', self.lflag[name])
     elif name not in self.ltype and name in self.gflag:
-        self.emit(f"store i1 false, ptr @g.{name}.def")
+        self.mstore('bool', 'false', f'@g.{name}.def')
 
 def gen_augassign(self, n: Node) -> None:
     t = n.kids[0]
@@ -1169,7 +1168,7 @@ def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[
     self.hide(hide)
     after = self.forget(body, tgt)
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 {start}, ptr {ctr}")
+    self.mstore('int', start, ctr)
     lc = self.label()
     lb = self.label()
     ls = self.label()
@@ -1179,7 +1178,7 @@ def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[
     lp.stop = Val(stop, "int")
     self.fn.loops.append(lp)
     self.place(lc)
-    i = self.ins(f"load i64, ptr {ctr}")
+    i = self.mload('int', ctr)
     if not step.startswith("%"):
         c = self.num_cmp('<' if int(step) > 0 else '>', Val(i, "int"), Val(stop, "int")).v
     else:
@@ -1196,13 +1195,13 @@ def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[
         # i < stop (or i > stop), so i + 1 (i - 1) fits: an nsw add, which lets LLVM bound i
         # and drop the index checks that compare it with a length. (This would hold for every
         # program, but it changes their IR: see docs/runtime-in-subset.md.)
-        self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val(step, 'int')], 'nsw')}, ptr {ctr}")
+        self.mstore('int', f"{self.scalar('add', [Val(i, 'int'), Val(step, 'int')], 'nsw')}", ctr)
         self.br(lc)
         self.place(le)
         return
     # a step that overflows 64 bits has passed any stop value: the loop is over
     r = self.checked("+", i, step)
-    self.emit(f"store i64 {r[0]}, ptr {ctr}")
+    self.mstore('int', r[0], ctr)
     self.cbr(r[1], le, lc)
     self.place(le)
     self.narrowed = after
@@ -1215,7 +1214,7 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     self.hide(hide)
     after = self.forget(body, tgt)
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 {n}, ptr {ctr}")
+    self.mstore('int', n, ctr)
     lc = self.label()
     lb = self.label()
     ls = self.label()
@@ -1224,11 +1223,11 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     lp.ctr = ctr
     self.fn.loops.append(lp)
     self.place(lc)
-    c = self.ins(f"load i64, ptr {ctr}")
+    c = self.mload('int', ctr)
     self.cbr(self.num_cmp('!=', Val(c, "int"), Val('0', "int")).v, lb, le)
     self.place(lb)
     k = self.scalar('sub', [Val(c, 'int'), Val('1', 'int')])
-    self.emit(f"store i64 {k}, ptr {ctr}")
+    self.mstore('int', k, ctr)
     self.assign(tgt, Val(self.scalar('add', [Val(vs[0], 'int'), Val(self.scalar('mul', [Val(k, 'int'), Val(vs[2], 'int')]), 'int')]), "int"))
     self.loop(body, lp)
     self.place(ls)
@@ -1246,7 +1245,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     # exhausted sequence. made: the state of each iterator, taken as it was made (seq_start),
     # else taken now
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 0, ptr {ctr}")
+    self.mstore('int', '0', ctr)
     if made is None:
         made = SeqStart()
         for s in seqs:
@@ -1265,21 +1264,21 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     lp.ctr = ctr
     self.fn.loops.append(lp)
     self.place(lc)
-    i = self.ins(f"load i64, ptr {ctr}")
+    i = self.mload('int', ctr)
     at: list[str] = []
     for k in range(len(seqs)):
         s = seqs[k]
         if s.t == "file":
             j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
-            ok = self.num_cmp('!=', Val(self.ins(f'load i64, ptr {j}'), "int"), Val('0', "int")).v
+            ok = self.num_cmp('!=', Val(self.mload('int', j), "int"), Val('0', "int")).v
             nx = ""
         elif is_set(s.t):
             # the slot of the next element, as CPython's set iterator finds it
-            j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.ins(f'load i64, ptr {st[k]}')}", f"i64 {used[k]}"])
+            j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.mload('int', st[k])}", f"i64 {used[k]}"])
             nx = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
         elif is_dict(s.t):
-            p = self.ins(f"load i64, ptr {st[k]}")
+            p = self.mload('int', st[k])
             if mode == "reversed":
                 j = self.rt("pys_dict_prev", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
                 nx = self.scalar('sub', [Val(j, 'int'), Val('1', 'int')])
@@ -1290,10 +1289,10 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         elif mode == "reversed":
             j = self.scalar('sub', [Val(self.scalar('sub', [Val(st[k], 'int'), Val('1', 'int')]), 'int'), Val(i, 'int')])
             # 0 <= j < the current length, as CPython's reversed iterator checks
-            ok = self.int_ucmp('<', Val(j, "int"), Val(self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k], "int")).v
+            ok = self.int_ucmp('<', Val(j, "int"), Val(self.mload('int', s.v) if is_list(s.t) else st[k], "int")).v
         else:
             j = i
-            ok = self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {s.v}') if not is_tuple(s.t) else st[k], "int")).v
+            ok = self.num_cmp('<', Val(i, "int"), Val(self.mload('int', s.v) if not is_tuple(s.t) else st[k], "int")).v
         go = self.label()
         self.cbr(ok, go, le)
         self.place(go)
@@ -1301,7 +1300,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         lp.tests.append(go)
         lp.idx.append(j)
         if is_dict(s.t) or is_set(s.t):
-            self.emit(f"store i64 {nx}, ptr {st[k]}")
+            self.mstore('int', nx, st[k])
         at.append(j)
     vals: list[Val] = []
     if mode == "enumerate":
@@ -1313,9 +1312,9 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
             vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
         elif is_vtuple(s.t):
             off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
-            vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {off}')}"), targs(s.t)[0]))
+            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{off}')), targs(s.t)[0]))
         elif is_tuple(s.t):
-            vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {j}')}"), targs(s.t)[0]))
+            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0]))
         elif s.t == "str":
             vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
         elif s.t == "file":
@@ -1338,7 +1337,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     self.loop(body, lp)
     self.place(ls)
     nx2 = self.scalar('add', [Val(i, 'int'), Val('1', 'int')])
-    self.emit(f"store i64 {nx2}, ptr {ctr}")
+    self.mstore('int', nx2, ctr)
     self.br(lc)
     self.place(le)
     self.narrowed = after
@@ -1355,14 +1354,14 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         made.st.append("")
         made.used.append("")
         return
-    n0 = self.ins(f"load i64, ptr {s.v}") if not is_tuple(s.t) else str(len(targs(s.t)))
+    n0 = self.mload('int', s.v) if not is_tuple(s.t) else str(len(targs(s.t)))
     made.used.append(n0)
     if is_dict(s.t) or is_set(s.t):
         pos = self.alloca("int", "")
         p0 = "0"
         if mode == "reversed":
             p0 = self.scalar('sub', [Val(self.rt('pys_dict_end', 'i64', [f'ptr {s.v}']), 'int'), Val('1', 'int')])
-        self.emit(f"store i64 {p0}, ptr {pos}")
+        self.mstore('int', p0, pos)
         made.st.append(pos)
     else:
         made.st.append(n0)

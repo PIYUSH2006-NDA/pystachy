@@ -353,7 +353,7 @@ def gen_obj_isinst(self, v: Val, t: Node) -> Val:
     start = self.cur
     self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, nonnull)
     self.place(nonnull)
-    tag = self.ins(f"load i64, ptr {v.v}")
+    tag = self.mload('int', v.v)
     r = "false"
     for c in self.classes.values():
         if c.tag > 0 and self.derives(c.name, v.t) and self.class_matches(c.name, t):
@@ -378,7 +378,7 @@ def gen_isinst_reads(self, c: Node) -> None:
         self.class_ahead(c.s)
         self.modchk(c)
         if (c.chk or self.foreign(c.s)) and c.s in self.gflag and c.s in self.classes:
-            self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{c.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c.s))
+            self.guard(self.scalar('xor', [Val(self.mload('bool', f'@g.{c.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c.s))
 
 def gen_puretype(self, c: Node, u: bool) -> bool:
     # can c, isinstance's second argument, be built without running code or raising, as
@@ -425,7 +425,7 @@ def gen_truth(self, v: Val) -> str:
     if t == "float":
         return self.num_cmp("!=", v, Val("0.0", "float")).v
     if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
-        return self.num_cmp('!=', Val(self.ins(f'load i64, ptr {v.v}'), "int"), Val('0', "int")).v
+        return self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v
     if t == "None":
         return "false"
     if is_tuple(t):
@@ -460,7 +460,7 @@ def gen_truth(self, v: Val) -> str:
             self.incoming(ph, "false", start)
             self.cbr(nz, nonnull, end)
             self.place(nonnull)
-            tag = self.ins(f"load i64, ptr {v.v}")
+            tag = self.mload('int', v.v)
             narrow = dict(self.narrowed)
             for i in range(len(cs)):
                 c = cs[i]
@@ -619,7 +619,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
                 ci = self.classes[cn]
                 qn = self.sconst(short(ci.methods[mn].cls) + "." + mn)
                 if ci.tag > 0:
-                    tag = self.ins(f"load i64, ptr {o.v}")
+                    tag = self.mload('int', o.v)
                     for cc in self.classes.values():
                         if cc.tag > 0 and cc.name != cn and self.derives(cc.name, cn):
                             matches = self.num_cmp('==', Val(tag, "int"), Val(str(cc.tag), "int")).v
@@ -791,7 +791,7 @@ def gen_class_attr(self, cn: Node, a: str) -> Val:
     if is_const(ci.fdefault[a]) and cn.s + "." + a not in self.cvars:
         return self.coerce(self.expr(ci.fdefault[a], t), t)
     self.class_default(ci, a)
-    return Val(self.ins(f"load {lt(t)}, ptr {ci.fglob[a]}"), t)
+    return Val(self.mload(t, ci.fglob[a]), t)
 
 def gen_cvar_stores(self, ns: list[Node]) -> None:
     # the class attributes the program assigns through their class (C.x = v, C.x += v; a class
@@ -837,7 +837,7 @@ def gen_cvar(self, cn: Node, a: str) -> ClassInfo:
 def gen_class_store(self, ci: ClassInfo, a: str, v: Val) -> None:
     # C.a = v through the class: its class variable's global
     self.class_default(ci, a)
-    self.emit(f"store {lt(ci.ftypes[a])} {self.coerce(v, ci.ftypes[a]).v}, ptr {ci.fglob[a]}")
+    self.mstore(ci.ftypes[a], self.coerce(v, ci.ftypes[a]).v, ci.fglob[a])
 
 def gen_no_class_attr(self, c: str, a: str) -> None:
     # C.a where class C binds no class attribute a: CPython's AttributeError, or why it is not supported
@@ -864,7 +864,7 @@ def gen_class_ready(self, cn: Node) -> ClassInfo:
         self.err(ci.bad)
     self.modchk(cn)
     if (cn.chk or self.foreign(c)) and c in self.gflag:
-        self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{c}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c))
+        self.guard(self.scalar('xor', [Val(self.mload('bool', f'@g.{c}.def'), 'bool'), Val('true', 'bool')]), self.unbound(c))
     return ci
 
 def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
@@ -1109,7 +1109,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             # A subclass's __format__ takes precedence over the object's str fallback,
             # even with an empty spec. Evaluate a computed spec once before dispatch.
             sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-            nonempty = self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v
+            nonempty = self.num_cmp('!=', Val(self.mload('int', sv.v), "int"), Val('0', "int")).v
             absent = self.label()
             present = self.label()
             done = self.label()
@@ -1120,7 +1120,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             self.incoming(ph, self.sconst("None"), self.cur)
             self.br(done)
             self.place(present)
-            tag = self.ins(f"load i64, ptr {v.v}")
+            tag = self.mload('int', v.v)
             for i in range(len(cs)):
                 ci = cs[i]
                 nxt = self.label() if i + 1 < len(cs) else ""
@@ -1159,7 +1159,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             self.err("unsupported format string passed to NoneType.__format__")
         # a computed spec runs, as for any value: str(None) when it turns out empty, else TypeError
         sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-        self.guard(self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v, "TypeError: unsupported format string passed to NoneType.__format__")
+        self.guard(self.num_cmp('!=', Val(self.mload('int', sv.v), "int"), Val('0', "int")).v, "TypeError: unsupported format string passed to NoneType.__format__")
         return self.to_str(v)
     if is_opt(v.t):
         # None's __format__ accepts only an empty spec, the value's its own (the runtime checks)
@@ -1172,7 +1172,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             self.err(f"unsupported format string passed to {tname(v.t)}.__format__")
         # a computed spec: str(v) when it turns out empty, TypeError otherwise
         sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
-        self.guard(self.num_cmp('!=', Val(self.ins(f'load i64, ptr {sv.v}'), "int"), Val('0', "int")).v, f"TypeError: unsupported format string passed to {tname(v.t)}.__format__")
+        self.guard(self.num_cmp('!=', Val(self.mload('int', sv.v), "int"), Val('0', "int")).v, f"TypeError: unsupported format string passed to {tname(v.t)}.__format__")
         return self.to_str(v)
     if spec.kind == "str" and not self.isnum(v.t) and v.t != "str":
         self.err(f"unsupported format string passed to {tname(v.t)}.__format__")
@@ -1333,8 +1333,8 @@ def gen_keep_stack(self, n: Node) -> None:
         if ".stk" not in self.lreg:
             self.alloca(t, ".stk")  # (the heap copy, once made)
         hs = self.lreg[".stk"]
-        v = self.ins(f"load ptr, ptr {self.lreg[nm]}")
-        h = self.ins(f"load ptr, ptr {hs}")
+        v = self.mload('%ptr', self.lreg[nm])
+        h = self.mload('%ptr', hs)
         lchk = self.label()
         lcopy = self.label()
         lnew = self.label()
@@ -1346,15 +1346,15 @@ def gen_keep_stack(self, n: Node) -> None:
         self.place(lcopy)
         self.cbr(self.scalar_cmp('eq', Val(h, '%ptr'), Val('null', '%ptr')), lnew, lold)
         self.place(lold)
-        self.emit(f"store ptr {h}, ptr {self.lreg[nm]}")  # (the copy another local's statement made)
+        self.mstore('%ptr', h, self.lreg[nm])  # (the copy another local's statement made)
         self.br(ldone)
         self.place(lnew)
         cp = self.alloc_fixed(t).v
         for j in range(len(targs(t))):
-            wd = self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {v}, i64 {j}')}")
-            self.emit(f"store i64 {wd}, ptr {self.ins(f'getelementptr i64, ptr {cp}, i64 {j}')}")
-        self.emit(f"store ptr {cp}, ptr {hs}")
-        self.emit(f"store ptr {cp}, ptr {self.lreg[nm]}")
+            wd = self.mload('int', self.maddr('int', f'{v}', f'{j}'))
+            self.mstore('int', wd, self.maddr('int', f'{cp}', f'{j}'))
+        self.mstore('%ptr', cp, hs)
+        self.mstore('%ptr', cp, self.lreg[nm])
         self.br(ldone)
         self.place(ldone)
 
@@ -1613,7 +1613,7 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     h = Ins("", "", "")
     if mode == "any" or mode == "all":
         res = self.alloca("bool", "")
-        self.emit(f"store i1 {'false' if mode == 'any' else 'true'}, ptr {res}")
+        self.mstore('bool', 'false' if mode == 'any' else 'true', res)
     elif mode != "":
         res = ""  # (a reduction: mode is # and the key of its Reduce, which holds what it keeps)
     elif into != "":
@@ -1650,7 +1650,7 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
         if self.compvars[nm] == 0:
             del self.compvars[nm]
     if mode == "any" or mode == "all":
-        return Val(self.ins(f"load i1, ptr {res}"), "bool")
+        return Val(self.mload('bool', res), "bool")
     if mode != "":
         return Val("", "")
     if et == "":
@@ -1941,7 +1941,7 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
             self.incoming(ph, r.v, self.cur)
             self.br(end)
         self.place(some)
-    tag = self.ins(f"load i64, ptr {v.v}") if len(cs) > 1 else ""
+    tag = self.mload('int', v.v) if len(cs) > 1 else ""
     for i in range(len(cs)):
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
@@ -1994,7 +1994,7 @@ def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
     # A subclass can add __contains__ even when its base already supplies __iter__.
     self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
     cs = [c for c in self.classes.values() if c.tag != 0 and self.derives(c.name, b.t)]
-    tag = self.ins(f"load i64, ptr {b.v}") if len(cs) > 1 else ""
+    tag = self.mload('int', b.v) if len(cs) > 1 else ""
     end = self.label()
     ph = Ins("phi", "bool", "")
     for i in range(len(cs)):
@@ -2315,10 +2315,10 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         return Val(eqv if op == "==" or op == "is" else self.scalar('xor', [Val(eqv, 'bool'), Val('true', 'bool')]), "bool")
     if is_callable(a.t) and a.t == b.t and (op == "==" or op == "!=" or op == "is" or op == "is not"):
         # one function, as Callables of one type: the same code and the same env (a closure's)
-        ca = self.ins(f"load ptr, ptr {a.v}")
-        cb = self.ins(f"load ptr, ptr {b.v}")
-        ea = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {a.v}, i64 1')}")
-        eb = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {b.v}, i64 1')}")
+        ca = self.mload('%ptr', a.v)
+        cb = self.mload('%ptr', b.v)
+        ea = self.mload('%ptr', self.maddr('%ptr', f'{a.v}', '1', True))
+        eb = self.mload('%ptr', self.maddr('%ptr', f'{b.v}', '1', True))
         both = self.scalar('and', [Val(self.scalar_cmp('eq', Val(ca, '%ptr'), Val(cb, '%ptr')), 'bool'), Val(self.scalar_cmp('eq', Val(ea, '%ptr'), Val(eb, '%ptr')), 'bool')])
         return Val(both if op == "==" or op == "is" else self.scalar('xor', [Val(both, 'bool'), Val('true', 'bool')]), "bool")
     if (is_fn(a.t) or is_fn(b.t)) and (op == "==" or op == "!=" or op == "is" or op == "is not"):

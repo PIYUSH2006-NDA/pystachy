@@ -269,14 +269,14 @@ def gen_closure(self, n: Node) -> Val:
     for i in range(len(c.caps)):
         if c.ctypes[i] != "None":
             x = c.caps[i]
-            a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {i}")
-            self.emit(f"store ptr {self.cells[x] if x in self.cells else self.lreg[x]}, ptr {a}")
+            a = self.maddr('%ptr', env, f'{i}', True)
+            self.mstore('%ptr', self.cells[x] if x in self.cells else self.lreg[x], a)
     for j in range(len(dvals)):
-        a = self.ins(f"getelementptr inbounds i64, ptr {env}, i64 {len(c.caps) + j}")
-        self.emit(f"store {lt(dvals[j].t)} {dvals[j].v}, ptr {a}")
+        a = self.maddr('int', env, f'{len(c.caps) + j}', True)
+        self.mstore(dvals[j].t, dvals[j].v, a)
     for j in range(len(c.iflags)):
-        a = self.ins(f"getelementptr inbounds ptr, ptr {env}, i64 {len(c.caps) + len(c.defs) + j}")
-        self.emit(f"store ptr {self.iflag[c.iflags[j]]}, ptr {a}")
+        a = self.maddr('%ptr', env, f'{len(c.caps) + len(c.defs) + j}', True)
+        self.mstore('%ptr', self.iflag[c.iflags[j]], a)
     self.nn[env] = True
     return Val(env, c.t)
 
@@ -989,7 +989,7 @@ def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
     if t != want:
         self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'set[T]' if is_set(t) else 'dict[K, V]'} = {short(f.name)}()"
     if is_dict(t) or is_set(t):
-        self.emit(f"store i64 {self.key_kind(targs(t)[0] if is_dict(t) else selem(t))}, ptr {self.ins(f'getelementptr i64, ptr {v.v}, i64 1')}")
+        self.mstore('int', f'{self.key_kind(targs(t)[0] if is_dict(t) else selem(t))}', self.maddr('int', v.v, '1'))
     return Val(v.v, t)
 
 def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
@@ -1391,7 +1391,7 @@ def gen_assign(self, t: Node, v: Val) -> None:
         # a, b = xs: the length is checked when it runs, as CPython does. CPython takes every
         # item before it stores the first, so where a store may change the list (xs[1], xs[0] =
         # xs, or a __setitem__ that empties it), the items are all read first
-        self.rt("pys_unpack_check", "void", [f"i64 {self.ins(f'load i64, ptr {v.v}')}", f"i64 {len(t.kids)}"])
+        self.rt("pys_unpack_check", "void", [f"i64 {self.mload('int', v.v)}", f"i64 {len(t.kids)}"])
         first = v.t != "str" and not name_targets(t)
         items: list[Val] = []
         for i in range(len(t.kids)):

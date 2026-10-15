@@ -21,8 +21,6 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     OSCONST,
     PYBUILTINS,
-    STRLEN_RANGE,
-    TBAA_LEN,
 )
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
@@ -168,7 +166,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             self.incoming(ph, "true" if self.has("None", attr) == 1 else "false", start)
             self.cbr("true" if hv.v in self.nn else self.ptr_cmp('!=', hv, Val('null', 'None')).v, present, done)
             self.place(present)
-            tag = self.ins(f"load i64, ptr {hv.v}")
+            tag = self.mload('int', hv.v)
             cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, hv.t)]
             for i in range(len(cs)):
                 ci = cs[i]
@@ -281,7 +279,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         if name == "any" and v0.t == "file":
             # any(f) reads one line: lines are never empty
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
-            return self.num_cmp('!=', Val(self.ins(f'load i64, ptr {first}'), "int"), Val('0', "int"))
+            return self.num_cmp('!=', Val(self.mload('int', first), "int"), Val('0', "int"))
         vals = [self.as_list(v0, name)]
         fresh = fresh or is_set(v0.t)  # (the list of a set's elements is a new one)
         if v0.t == "tuple[]" and is_list(w):
@@ -431,9 +429,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         if t == "str" and self.rtmode:
             # (tagged as the primitives' loads are, and bounded: LLVM then sees that index
             # arithmetic on lengths cannot overflow)
-            return Val(self.ins(f"load i64, ptr {v.v}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}"), "int")
+            return Val(self.mload('int', v.v, 'length.range'), "int")
         if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
-            return Val(self.ins(f"load i64, ptr {v.v}"), "int")
+            return Val(self.mload('int', v.v), "int")
         if is_tuple(t):
             return Val(str(len(targs(t))), "int")
     elif name == "str":
@@ -538,9 +536,9 @@ def gen_call_key(self, key: Val, x: Val) -> Val:
 def gen_keys_of(self, xs: Val, key: Val) -> Val:
     # [key(x) for x in xs]: the keys of a sort, computed in order, as CPython computes them
     # before it sorts; xs is a list that no other code sees (a copy, or the items a list gave up)
-    ks = self.rt("pys_list_new", "ptr", [f"i64 {self.ins(f'load i64, ptr {xs.v}')}"])
+    ks = self.rt("pys_list_new", "ptr", [f"i64 {self.mload('int', xs.v)}"])
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 0, ptr {ctr}")
+    self.mstore('int', '0', ctr)
     lc = self.label()
     lb = self.label()
     le = self.label()
@@ -551,16 +549,16 @@ def gen_keys_of(self, xs: Val, key: Val) -> Val:
     self.fn.loops.append(lp)
     self.br(lc)
     self.place(lc)
-    i = self.ins(f"load i64, ptr {ctr}")
+    i = self.mload('int', ctr)
     lp.idx = [i]
-    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {xs.v}'), "int")).v, lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', xs.v), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t))
     k = self.call_key(key, item)
     if "?" in k.t:
         self.err(f"the key function returns an empty container whose type is not known here ({typestr(k.t)})")
     self.rt("pys_list_append", "void", [f"ptr {ks}", "i64 " + self.to_slot(k)])
-    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
+    self.mstore('int', f"{self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}", ctr)
     self.br(lc)
     self.place(le)
     return Val(ks, self.ctype("list", [k.t]))
@@ -582,7 +580,7 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     et = elem(xs.t)
     best = self.alloca(et, "")
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 0, ptr {ctr}")
+    self.mstore('int', '0', ctr)
     lc = self.label()
     lb = self.label()
     lt_ = self.label()
@@ -595,12 +593,12 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     self.fn.loops.append(lp)
     self.br(lc)
     self.place(lc)
-    i = self.ins(f"load i64, ptr {ctr}")
+    i = self.mload('int', ctr)
     lp.idx = [i]
-    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {xs.v}'), "int")).v, lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', xs.v), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
-    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
+    self.mstore('int', f"{self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}", ctr)
     k = self.call_key(key, item)
     if "?" in k.t or k.t == "None":
         self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
@@ -610,17 +608,17 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     lf = self.label()
     self.cbr(first, ln, lf)
     self.place(lf)
-    c = self.cmp2(">" if name == "max" else "<", k, Val(self.ins(f"load {lt(k.t)}, ptr {bk}"), k.t))
+    c = self.cmp2(">" if name == "max" else "<", k, Val(self.mload(k.t, bk), k.t))
     self.cbr(self.truth(c), ln, lt_)
     self.place(ln)
-    self.emit(f"store {lt(et)} {item.v}, ptr {best}")
-    self.emit(f"store {lt(k.t)} {k.v}, ptr {bk}")
+    self.mstore(et, item.v, best)
+    self.mstore(k.t, k.v, bk)
     self.br(lt_)
     self.place(lt_)
     self.br(lc)
     self.place(le)
-    self.guard(self.num_cmp('==', Val(self.ins(f'load i64, ptr {ctr}'), "int"), Val('0', "int")).v, f"ValueError: {name}() iterable argument is empty")
-    return Val(self.ins(f"load {lt(et)}, ptr {best}"), et)
+    self.guard(self.num_cmp('==', Val(self.mload('int', ctr), "int"), Val('0', "int")).v, f"ValueError: {name}() iterable argument is empty")
+    return Val(self.mload(et, best), et)
 
 def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
     # min(a, b, ..., key=f) and max(...): the key of each argument in turn, compared with the
@@ -643,9 +641,9 @@ def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
 def gen_anyall(self, v: Val, name: str) -> Val:
     # any(xs) / all(xs) by each item's truth, stopping at the first item that decides
     res = self.alloca("bool", "")
-    self.emit(f"store i1 {'false' if name == 'any' else 'true'}, ptr {res}")
+    self.mstore('bool', 'false' if name == 'any' else 'true', res)
     ctr = self.alloca("int", "")
-    self.emit(f"store i64 0, ptr {ctr}")
+    self.mstore('int', '0', ctr)
     lc = self.label()
     lb = self.label()
     hit = self.label()
@@ -657,9 +655,9 @@ def gen_anyall(self, v: Val, name: str) -> Val:
     lp.ctr = ctr
     self.fn.loops.append(lp)
     self.place(lc)
-    i = self.ins(f"load i64, ptr {ctr}")
+    i = self.mload('int', ctr)
     lp.idx = [i]
-    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {v.v}'), "int")).v, lb, le)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', v.v), "int")).v, lb, le)
     self.place(lb)
     c = self.truth(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
     if name == "any":
@@ -667,13 +665,13 @@ def gen_anyall(self, v: Val, name: str) -> Val:
     else:
         self.cbr(c, ls, hit)
     self.place(hit)
-    self.emit(f"store i1 {'true' if name == 'any' else 'false'}, ptr {res}")
+    self.mstore('bool', 'true' if name == 'any' else 'false', res)
     self.br(le)
     self.place(ls)
-    self.emit(f"store i64 {self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}, ptr {ctr}")
+    self.mstore('int', f"{self.scalar('add', [Val(i, 'int'), Val('1', 'int')])}", ctr)
     self.br(lc)
     self.place(le)
-    return Val(self.ins(f"load i1, ptr {res}"), "bool")
+    return Val(self.mload('bool', res), "bool")
 
 def gen_stream_start(self, name: str, args: list[Node]) -> str:
     # whether sum(), min() or max() takes its items as they come (reduce), "-" if not: of a
@@ -720,33 +718,33 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     if name == "sum":
         sv = self.expr(args[1], "") if len(args) == 2 else Val("0" if r.t != "float" else fbits("0.0"), "int" if r.t != "float" else "float")
         if r.t == "float":
-            self.emit(f"store double {self.as_float(sv).v}, ptr {r.acc}")
-            self.emit(f"store double {fbits('0.0')}, ptr {r.comp}")
+            self.mstore('float', self.as_float(sv).v, r.acc)
+            self.mstore('float', fbits('0.0'), r.comp)
             if r.first != "":
-                self.emit(f"store i1 true, ptr {r.first}")
+                self.mstore('bool', 'true', r.first)
         elif sv.t == "float":
-            self.emit(f"store double {sv.v}, ptr {r.acc}")
+            self.mstore('float', sv.v, r.acc)
         else:
-            self.emit(f"store i64 {self.as_int(sv).v}, ptr {r.acc}")
+            self.mstore('int', self.as_int(sv).v, r.acc)
     elif r.collect:
-        self.emit(f"store ptr {self.rt('pys_list_new', 'ptr', ['i64 0'])}, ptr {r.acc}")
+        self.mstore('%ptr', self.rt('pys_list_new', 'ptr', ['i64 0']), r.acc)
     else:
-        self.emit(f"store i1 true, ptr {r.first}")
+        self.mstore('bool', 'true', r.first)
     self.br(arg.trav)
     self.place(back)
     if name != "sum" and r.collect:
         d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
-        lv = self.ins(f"load ptr, ptr {r.acc}")
+        lv = self.mload('%ptr', r.acc)
         return self.from_slot(self.rt("pys_list_minmax", "i64", [f"ptr {lv}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"]), r.t)
     if name != "sum":
-        self.guard(self.ins(f"load i1, ptr {r.first}"), f"ValueError: {name}() iterable argument is empty")
-        return Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+        self.guard(self.mload('bool', r.first), f"ValueError: {name}() iterable argument is empty")
+        return Val(self.mload(r.t, r.acc), r.t)
     if r.comp == "":
         ft = "float" if r.stt == "float" else "int"
-        return Val(self.ins(f"load {lt(ft)}, ptr {r.acc}"), ft)
+        return Val(self.mload(ft, r.acc), ft)
     # fsum's end: the compensation is added where it is a finite number other than 0
-    s = self.ins(f"load double, ptr {r.acc}")
-    c = self.ins(f"load double, ptr {r.comp}")
+    s = self.mload('float', r.acc)
+    c = self.mload('float', r.comp)
     fin = self.scalar_cmp('olt', Val(self.rt('fabs', 'double', [f'double {c}']), 'float'), Val('0x7FF0000000000000', 'float'))
     nz = self.scalar_cmp('une', Val(c, 'float'), Val(fbits('0.0'), 'float'))
     use = self.scalar('and', [Val(nz, 'bool'), Val(fin, 'bool')])
@@ -773,54 +771,54 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
             r.collect = True
             r.acc = self.alloca(self.ctype("list", [v.t]), "")
     if r.collect:
-        self.rt("pys_list_append", "void", [f"ptr {self.ins(f'load ptr, ptr {r.acc}')}", "i64 " + self.to_slot(self.coerce(v, r.t))])
+        self.rt("pys_list_append", "void", [f"ptr {self.mload('%ptr', r.acc)}", "i64 " + self.to_slot(self.coerce(v, r.t))])
         return
     if r.name != "sum":
         # the first item is kept; another where it is greater (max) or less (min) than the kept one
         take = self.label()
         test = self.label()
         skip = self.label()
-        self.cbr(self.ins(f"load i1, ptr {r.first}"), take, test)
+        self.cbr(self.mload('bool', r.first), take, test)
         self.place(test)
-        kept = Val(self.ins(f"load {lt(r.t)}, ptr {r.acc}"), r.t)
+        kept = Val(self.mload(r.t, r.acc), r.t)
         self.cbr(self.truth(self.cmp2(">" if r.name == "max" else "<", v, kept)), take, skip)
         self.place(take)
-        self.emit(f"store {lt(r.t)} {v.v}, ptr {r.acc}")
-        self.emit(f"store i1 false, ptr {r.first}")
+        self.mstore(r.t, v.v, r.acc)
+        self.mstore('bool', 'false', r.first)
         self.br(skip)
         self.place(skip)
         return
     if r.t != "float" and r.stt != "float":
-        si = self.ins(f"load i64, ptr {r.acc}")
-        self.emit(f"store i64 {self.iop('+', si, self.as_int(v).v)}, ptr {r.acc}")
+        si = self.mload('int', r.acc)
+        self.mstore('int', self.iop('+', si, self.as_int(v).v), r.acc)
         return
     if r.t != "float":
         # ints from a float start: added as floats, not compensated (pys_sum_int_float)
-        sf = self.ins(f"load double, ptr {r.acc}")
-        self.emit(f"store double {self.scalar('fadd', [Val(sf, 'float'), Val(self.as_float(self.as_int(v)).v, 'float')])}, ptr {r.acc}")
+        sf = self.mload('float', r.acc)
+        self.mstore('float', f"{self.scalar('fadd', [Val(sf, 'float'), Val(self.as_float(self.as_int(v)).v, 'float')])}", r.acc)
         return
     nm = self.label()
     if r.first != "":
         # floats from an int start: the first is added as it is (pys_sum_float_int)
         plain = self.label()
         comp = self.label()
-        self.cbr(self.ins(f"load i1, ptr {r.first}"), plain, comp)
+        self.cbr(self.mload('bool', r.first), plain, comp)
         self.place(plain)
-        s0 = self.ins(f"load double, ptr {r.acc}")
-        self.emit(f"store double {self.scalar('fadd', [Val(s0, 'float'), Val(v.v, 'float')])}, ptr {r.acc}")
-        self.emit(f"store i1 false, ptr {r.first}")
+        s0 = self.mload('float', r.acc)
+        self.mstore('float', f"{self.scalar('fadd', [Val(s0, 'float'), Val(v.v, 'float')])}", r.acc)
+        self.mstore('bool', 'false', r.first)
         self.br(nm)
         self.place(comp)
     # Neumaier's step, as runtime.c's fsum takes it
-    s = self.ins(f"load double, ptr {r.acc}")
+    s = self.mload('float', r.acc)
     t = self.scalar('fadd', [Val(s, 'float'), Val(v.v, 'float')])
     ge = self.scalar_cmp('oge', Val(self.rt('fabs', 'double', [f'double {s}']), 'float'), Val(self.rt('fabs', 'double', [f'double {v.v}']), 'float'))
     d1 = self.scalar('fadd', [Val(self.scalar('fsub', [Val(s, 'float'), Val(t, 'float')]), 'float'), Val(v.v, 'float')])
     d2 = self.scalar('fadd', [Val(self.scalar('fsub', [Val(v.v, 'float'), Val(t, 'float')]), 'float'), Val(s, 'float')])
     d = self.select(ge, Val(d1, "float"), Val(d2, "float"))
-    c = self.ins(f"load double, ptr {r.comp}")
-    self.emit(f"store double {self.scalar('fadd', [Val(c, 'float'), Val(d, 'float')])}, ptr {r.comp}")
-    self.emit(f"store double {t}, ptr {r.acc}")
+    c = self.mload('float', r.comp)
+    self.mstore('float', f"{self.scalar('fadd', [Val(c, 'float'), Val(d, 'float')])}", r.comp)
+    self.mstore('float', t, r.acc)
     self.br(nm)
     self.place(nm)
 

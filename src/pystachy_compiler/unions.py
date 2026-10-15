@@ -47,7 +47,7 @@ def gen_uop(self, v: Val, op: str) -> Val:
         self.incoming(ph, "false" if op == "truth" else self.sconst("None"), self.cur)
         self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, arm)
         self.place(arm)
-    tag = self.ins(f"load i64, ptr {v.v}")
+    tag = self.mload('int', v.v)
     members = umembers(unopt(v.t))
     for i in range(len(members)):
         nxt = self.label() if i + 1 < len(members) else ""
@@ -303,7 +303,7 @@ def gen_umethod(self, o: Val, m: str, args: list[Node]) -> Val:
             bound.append(mk("kw", a.s, a.line, [self.vnode(self.expr(a.kids[0], ""))]))
         else:
             bound.append(self.vnode(self.expr(a, "")))
-    tag = self.ins(f"load i64, ptr {o.v}")
+    tag = self.mload('int', o.v)
     end = self.label()
     results: list[Val] = []
     edges: list[str] = []
