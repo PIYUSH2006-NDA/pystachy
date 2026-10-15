@@ -492,8 +492,10 @@ An enclosing generic annotation requires its named storage even for homogeneous
 arguments: `p: Pair[int | float] = Pair(1, 2)` stores union-valued fields that can
 later accept a float. This also works for annotated parameters, returns and fields,
 including calls with explicit type arguments. A constructor subscription alone remains
-a hint: `Box[int | str]("x")` still stores a concrete `str`. Existing objects stay
-invariant, and container members must fit exactly: neither `Box[int]` nor `list[int]`
+a hint: `Box[int | str]("x")` still stores a concrete `str`, and
+`Pair[int | float](1, 2)` still makes `Pair[int]`. Use
+`p: Pair[int | float] = Pair(1, 2)` when later field writes need to accept floats.
+Existing objects stay invariant, and container members must fit exactly: neither `Box[int]` nor `list[int]`
 can be reinterpreted with wider mutable contents.
 
 Without a named specialization or surrounding generic annotation, conflicting direct
@@ -505,6 +507,16 @@ variable; nested forms such as `list[T]`, variadic bindings, and non-scalar conf
 still need annotations. This does not add container covariance, mixed-display or
 function-return union inference. Nested generic parameter forms still require their
 arguments' container types to match; this does not infer wider mutable contents.
+
+A method's `-> T` promises the same bound type as its fields. With
+`Pair(True, 2.5)`, that type is `bool | float`; a method adding its two `T` fields
+can also produce `int` (from `bool + bool`), so `-> T` is rejected. Annotate this
+numeric result as `-> int | float`, or use an enclosing
+`Pair[bool | int | float]` annotation when the fields and result need all three
+members. The compiler does not track correlations between individual union fields.
+The inferred union uses the existing tagged boxes; per-argument unboxed generic
+fields are separate work, and operations outside the supported union surface
+still require narrowing.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
 methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class

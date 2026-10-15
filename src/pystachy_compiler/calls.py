@@ -911,6 +911,15 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             targets = [j for j in range(1, len(hint)) if is_union(unopt(hint[j])) or is_opt(hint[j])]
             fits = all([self.widens(vals[j].t, hint[j]) or (self.boxes(vals[j].t, hint[j]) and (not is_opt(vals[j].t) or self.optional(hint[j]) == hint[j])) for j in targets])
             if (conflict or contract) and fits:
+                # Check the complete candidate before changing any value. A nested
+                # invariant argument can still conflict; report its original types.
+                candidate: dict[str, str] = {}
+                for j in range(1, len(hint)):
+                    t = hint[j] if j in targets else vals[j].t
+                    if self.match(f.node.kids[0].kids[j].kids[0], t, candidate, self.tparams[f.cls]) != "":
+                        fits = False
+                        break
+            if (conflict or contract) and fits:
                 # A destination needs its named union storage even for homogeneous values.
                 # Explicit type arguments alone still preserve consistent inferred types;
                 # no existing mutable container is reinterpreted as a wider member type.
