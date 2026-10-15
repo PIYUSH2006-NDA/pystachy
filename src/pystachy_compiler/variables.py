@@ -997,7 +997,7 @@ def gen_retval(self, e: Node, want: str) -> Val:
 def gen_adopt(self, t: str) -> None:
     # the template's function being compiled, which returned an empty container without a
     # type (see retval), returns t: the containers it returned have that type too
-    if self.curfn.ll in self.qused:
+    if self.curfn.ll in self.qused and self.qused[self.curfn.ll] != t:
         self.err(f"cannot infer what {short(self.curfn.name)}() returns: it calls itself before a use shows what the {tname(t)} it returns holds; annotate its return type")
     self.ret = t
     self.curfn.ret = t
@@ -1018,6 +1018,7 @@ def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
         # retval's direct forwarding call: keep the result open, and let a later
         # concrete return fix this call's key layout without changing its callee.
         self.qret[self.curfn.ll] = self.qret.get(self.curfn.ll, "")
+        self.qforward[self.curfn.ll] = True
         if is_dict(v.t) or is_set(v.t):
             i = Ins("empty.kind", "", "")
             i.a = [v]

@@ -1617,7 +1617,7 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     if len(n.kids) == 4:
         body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
     self.lcs.append(res)
-    self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
+    self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
     self.lcsoft.append(resultsoft)
     pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
     self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)

@@ -419,7 +419,10 @@ guess; annotate the receiving value to provide the intended type.
 This also applies to direct `return []`, `return {}` and `return set()` results. Direct list
 and dict empties can share an open-result specialization across caller container types.
 Direct forwarding wrappers (`return empty(n)`) retain that result context, including through
-multiple wrappers. A caller can also type fresh returned list, dict, set and tuple displays,
+multiple wrappers. When a forwarded empty result joins `None`, its caller context or the
+same fallback supplies the optional container's layout. A recursive call may consume an
+empty result before later inference only when that inference preserves the consumed layout.
+A caller can also type fresh returned list, dict, set and tuple displays,
 including homogeneous or nested displays and calls inside their items:
 
 ```python

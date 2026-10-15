@@ -927,8 +927,13 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
         self.guessed[self.curfn.ll] = self.guessed[f.ll]  # (what it returns may hold a guess)
     self.put(c, 1)
     if "?" in f.ret:
-        self.qused[f.ll] = True  # (a recursive call: what it returns can no longer change)
-        return self.typed_empty(Val(f"%t{c.r[0]}", f.ret), want, f)
+        v = self.typed_empty(Val(f"%t{c.r[0]}", f.ret), want, f)
+        if f.ll in self.building:
+            # A recursive call may already consume a concrete layout. Later
+            # inference can adopt exactly that layout, never a different one.
+            old = self.qused.get(f.ll, v.t)
+            self.qused[f.ll] = v.t if old == v.t else "?"
+        return v
     return Val(f"%t{c.r[0]}", f.ret)
 
 def gen_fname(self, f: FnInfo) -> str:
