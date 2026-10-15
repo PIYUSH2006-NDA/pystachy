@@ -1,0 +1,28 @@
+other False
+guard -1
+assert failed
+or
+child 12 12 True ['changed']
+guard 24
+assert 12
+and 12
+or
+child 13 113 True ['changed']
+deep 113
+guard 126
+assert 13
+and 113
+or
+other False
+guard -1
+assert failed
+or
+other True
+guard -1
+assert failed
+or
+loop 14
+loop end True
+snapshot 16 False
+AttributeError: 'Child' object has no attribute 'extra'
+[exit 0]

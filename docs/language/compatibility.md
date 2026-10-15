@@ -25,7 +25,8 @@ In these cases a program can compile but behave differently from CPython.
   fractional power (CPython returns a complex).
 
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
-  tuples holding the same NaN object compare, and sort, as if they held different ones. The
+  tuples holding the same NaN object compare, and sort, as if they held different ones.
+  Scalar union boxes retain this rule; a shared box does not give its NaN payload identity. The
   sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
   `1.0`, where CPython returns the int start.
 
@@ -165,7 +166,8 @@ In these cases a program can compile but behave differently from CPython.
   that a builtin operation in its body raises where Pystachy does not evaluate it (see [module rules](modules.md)), as
   `1 // n` of the body's own `n`. A template's code is compiled per argument
   types, so a type error in code a program never calls is not reported (syntax errors are), and its
-  variables keep one type, so code that rebinds one to another type (`a /= b` on ints) is
+  assignments must obey the [local binding rules](typing.md#variables-and-empty-containers).
+  For example, augmented assignment that changes type (`a /= b` on ints) is still
   rejected when it is compiled.
 
 - An optional import of a module that Pystachy does not find runs its handler, also where

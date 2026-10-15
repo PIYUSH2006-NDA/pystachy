@@ -15,7 +15,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
-| `A \| B` | Explicit closed unions of `int`, `float`, `bool` and `str` |
+| `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
 
@@ -42,7 +42,7 @@ nested tuples of these. Floats, objects and frozensets cannot be keys or set ele
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
 Explicit closed scalar unions such as `int | str` are supported, including `None`.
-General object unions and a dynamic `Any` type are unsupported.
+Bounded native reference unions are also supported; a dynamic `Any` type is unsupported.
 `None` alone can annotate a return, but cannot be a container's entire element type.
 
 `List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `Callable`, `TextIO`
@@ -90,8 +90,36 @@ necessarily supported on methods the program actually uses; see [module rules](m
 
 ## Variables and empty containers
 
-Each variable has one type for its lifetime, fixed by an annotation or inferred assignment.
-Python's local, `global` and `nonlocal` scoping rules apply.
+An unannotated local or parameter can change type at a simple assignment at the top
+level of a function body. The compiler gives the new binding its own native slot;
+the right-hand side still reads the previous binding. Expressions that need a
+target type retain the previous context: for example, `items = [1]` followed by
+`items = ["x"]` is still rejected. The new slot is created only after the RHS has
+a concrete type. This works in ordinary AOT
+and JIT compilation without a flag, runtime profiling, or a dynamic value box.
+
+```python
+def parse_count(value):
+    value = value.strip()
+    value = int(value)
+    return value + 1
+
+print(parse_count(" 41 "))  # 42
+```
+
+An explicit local or parameter annotation remains a contract for every assignment.
+Stores inside branches and loops, augmented assignments, tuple/chained assignments,
+globals and object fields retain their existing consistent-type rules. A simple
+assignment after a branch or loop can start a new binding when the existing
+unbound-variable analysis proves the name safe.
+
+This bounded pass leaves a function unchanged when it contains nested functions or
+lambdas, comprehensions, exception handlers, context managers, imports, `global`,
+`nonlocal`, assignment expressions, generators, async constructs, or pattern
+matching. Closures and variadic functions retain the existing rules. `None` and
+initially untyped empty bindings retain the existing inference machinery. A name
+that is deleted or may be read before assignment is not retyped. Python's scoping
+rules and the compiler's existing unbound-variable checks continue to apply.
 
 Empty `[]` and `{}` take their types from an annotated variable, parameter, field or return
 context. Otherwise their first useful operation determines the type: `append`, `insert`,
@@ -190,13 +218,136 @@ calls. Copy their value to an ordinary local before testing it. The copy remains
 valid when the original storage is changed because the tagged box is immutable.
 Container types stay invariant: `list[int]` cannot become `list[int | str]`.
 
-Narrow before arithmetic, truth testing, comparison, formatting or other operations
-that require a concrete member. Generic container equality and printing of union
-items are not implemented. No union is inferred from unrelated assignments or
-return values; annotate it explicitly. Class/container members, arbitrary `Any`,
-recursive JSON types, runtime compilation and speculative type assumptions are out
-of scope. Boxing may allocate; this feature expands supported programs and makes
-no performance claim.
+Truth tests, `bool()`, `str()`, `repr()`, printing, plain f-strings and `==`/`!=`
+operate on scalar unions without narrowing. Lists, dictionaries and tuples containing
+scalar-union values support printing and equality; lists also support membership, `count`,
+`index` and `remove`. Search queries may name another scalar type: `True` and `1.0`
+find an integer `1`. Numeric equality uses the existing exact int/float comparison,
+including integers above the exact range of a float. `None` equals only `None`.
+
+These operations select the existing native operation by the tag. A concrete value
+keeps its native representation until it enters a union; widening a union reuses
+its box. A concrete equality/search operand may allocate a temporary box. The boxes
+do not create Python numeric object identity: the existing [NaN identity
+deviation](compatibility.md#deviations-from-cpython) also applies to union payloads.
+
+Numeric unions of `int`, `float` and `bool`, optionally including `None`, support
+`+`, `-`, `*`, `/`, `//`, `%` and unary `+` or `-` without narrowing. Tag dispatch
+reuses the native typed operations and their checked 64-bit integer, division and
+exception behavior. Each operand evaluates once, left to right, before dispatch;
+`None` raises `TypeError`. Results remain `int` or `float` according to the actual
+operands; when both are possible the result is `int | float`, including when all
+current calls happen to pass integers. Declare that result bound explicitly in
+returns and mutable storage. Power, bitwise operations, and unions containing
+strings or other nonnumeric members still require narrowing.
+
+`format(value, spec)` and f-string format specifications select the native member's
+formatter after evaluating the value and specification once. Numeric and string
+members retain their supported formats; `None` accepts only an empty specification.
+
+Narrow before other arithmetic, ordering and member methods. No union is inferred from unrelated assignments or
+return values; annotate it explicitly. Arbitrary `Any`, recursive
+JSON types, runtime compilation and speculative type assumptions are out of scope.
+Boxing may allocate; this feature expands supported programs and makes no performance
+claim.
+
+## Mixed scalar and container unions
+
+Explicit unions may also combine scalar types with `list[T]` and `dict[K, V]`,
+optionally including `None`. Their elements and values may themselves be unions:
+
+```python
+def count(value: int | str | list[int | str] | dict[str, int | str]) -> int:
+    if isinstance(value, list):
+        value.append("seen")
+        return len(value)
+    if isinstance(value, dict):
+        return len(value)
+    if isinstance(value, str):
+        return len(value)
+    return value
+
+print(count([1, "event"]))
+```
+
+The tagged box holds the original container pointer. Narrowing returns that same
+list or dictionary, so identity, aliases and mutations are preserved. The collector
+traces the box and its container using existing allocation rules. Concrete values
+keep their ordinary native representation; boxing occurs at a union boundary.
+
+A fresh list/dict display or list comprehension uses the expected union's single
+matching container member, including empty displays. Existing mutable containers
+remain invariant: `list[int]` cannot become `list[int | str]`, even through a union.
+`isinstance(value, list)` cannot distinguish `list[int]` from `list[str]`; a union
+containing both retains both members after that test and cannot be used as either
+concrete list type.
+
+This supports explicitly typed, finite-depth JSON-shaped data. Recursive aliases
+such as `type Value = None | int | str | list[Value] | dict[str, Value]` remain
+unsupported; this is not yet arbitrary-depth JSON or `Any`. Native class/file
+members retain the separate reference-union restrictions below.
+
+Truth tests, `bool()`, `str()`, `repr()`, printing and f-strings support these mixed
+unions without narrowing, including nested containers and different list/dict
+member types. Each operation dispatches to the original native value; truth tests
+observe its current length, and formatting preserves the existing recursive
+container representation guards. `format()` accepts an empty specification for
+containers; a nonempty one raises the selected container's `TypeError`. A string
+member uses string formatting, and a numeric member uses numeric formatting.
+
+Equality and list membership, `count`, `index` and `remove` also work for finite
+builtin value trees: scalars, lists, dictionaries and nested tuples. Each operand
+retains its own descriptor, so `[1]` can equal `[1.0]` without interpreting integer
+storage as floats. Separately boxing one container preserves its identity, including
+when it is searched for inside another container; scalar boxes still do not create
+numeric object identity. Fresh homogeneous search needles infer their own storage
+type; heterogeneous displays still use explicitly declared element unions. Empty
+or `None`-only displays retain context from an unambiguous declared member.
+
+Dictionary equality keeps hashed lookup for matching key layouts. Different key
+layouts compare keys pairwise, which can take quadratic time; ordinary string-keyed
+JSON-shaped dictionaries use hashed lookup. User objects, files, functions and sets
+inside mixed-value equality remain unsupported. Narrow before ordering, container
+methods on a union receiver or indexing; there is no generic method dispatch.
+
+## Native reference unions
+
+Explicit unions can also hold up to four native class or `TextIO` types. This lets an
+ordinary AOT/JIT-compiled function accept either a file or `io.StringIO`, or objects
+from unrelated classes that implement the same method:
+
+```python
+from io import StringIO
+from typing import TextIO
+
+def read_character(stream: TextIO | StringIO) -> str:
+    return stream.read(1)
+```
+
+Arguments, returns, fields, locals, list elements and dict values may use these
+unions. A tagged box retains the original object or file pointer: passing through
+storage preserves object identity, mutation and file position. The box and referenced
+object remain reachable through normal GC roots. As with other Pystachy class types,
+a union containing a class permits `None`; method calls on it raise `AttributeError`
+before evaluating their arguments.
+
+Method calls dispatch on the union member and use ordinary native class dispatch
+within that member's family. Every member must declare the requested method, and
+all implementations must return the same static type. Positional and keyword
+arguments run once; each selected method uses its own defaults. A subclass may be
+stored under one base member, but a union cannot contain overlapping class families
+such as `Base | Child`. `isinstance()` checks the actual subclass; narrowing to a
+whole declared member is supported, while narrowing a base member to a subclass is
+not yet implemented.
+
+Reference unions cannot mix with scalar or container members or exception types.
+Callable fields, bound-method extraction and unpacked method arguments
+are unsupported. Use a typed local for an empty-container argument that needs an
+expected type. Narrow a local to a member before field access, identity/equality
+comparison, truth testing or formatting. Containers remain invariant, and no union
+is inferred from unrelated assignments. This adds deterministic native execution,
+without profiles, an interpreter, runtime compilation or speculative assumptions;
+boxing and dispatch have costs, so no performance improvement is claimed.
 
 ## Function and method templates
 
@@ -398,7 +549,14 @@ across base and derived views of the same receiver.
 subclass inherits that method. `super(C, self)` may name that class or one of its ancestors;
 `Base.method(obj, ...)` explicitly selects the named base's implementation. These forms keep
 the concrete receiver for further method calls. Runtime `isinstance(obj, Derived)` checks the
-hierarchy, but does not narrow a base-typed value to expose derived-only fields.
+hierarchy and narrows a base-typed local or parameter on the matching path, exposing derived
+fields and methods. This also works after `assert isinstance(obj, Derived)` and a guard such
+as `if not isinstance(obj, Derived): return`. The reference and its native representation stay
+unchanged; calls still select the actual subclass's override. Reassignment and control-flow
+joins discard refinements that no longer hold. Globals, fields and locals assigned by a
+`nonlocal` closure are not refined; copy a reference to a stable local and test that local.
+Only a single named derived class refines a base type; tuple/union tests and exception-class
+narrowing retain their existing restrictions.
 
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through

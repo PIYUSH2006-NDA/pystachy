@@ -1,6 +1,17 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.union_arithmetic import (
+    gen_unumeric as union_arithmetic_unumeric,
+    gen_unumeric_case as union_arithmetic_unumeric_case,
+)
 from src.pystachy_compiler.unions import (
+    gen_ueq_type as unions_ueq_type,
+    gen_scalar_union as unions_scalar_union,
+    gen_value_union as unions_value_union,
+    gen_uop as unions_uop,
+    gen_uequal as unions_uequal,
+    gen_reference_union as unions_reference_union,
+    gen_umethod as unions_umethod,
     gen_uboxes as unions_uboxes,
     gen_umember_problem as unions_umember_problem,
     gen_union_type as unions_union_type,
@@ -641,10 +652,10 @@ class Gen:
         # may hold a value of another type: its first binding (none_ends), once compiled the line
         # that gives it that value (see assign, static_type)
         self.nonevars: dict[str, int] = {}
-        # optional and union locals: the narrower type a read has at this point (see narrows)
+        # optional, union and class locals: the narrower type a read has here (see narrows)
         self.narrowed: dict[str, str] = {}
         self.nonecmp = False  # the read being compiled is compared with None (see none_type)
-        self.anyopt = False  # an optional or union local exists: narrows has something to look for
+        self.anyopt = False  # an optional, union or class local exists: narrows has work to do
         self.building: dict[str, bool] = {}  # the functions being compiled
         self.wide: dict[str, bool] = {}  # optional values read from a global or a field (function + register), which no test narrows
         self.soft = Node("", "", 0)  # a display compared with a value: what it holds widens the type expected of it (see wider)
@@ -1240,8 +1251,8 @@ class Gen:
     def declare(self, name: str, t: str) -> None:
         return variables_declare(self, name, t)
 
-    def store_name(self, name: str, v: Val) -> None:
-        return variables_store_name(self, name, v)
+    def store_name(self, name: str, v: Val, retype: bool = False) -> None:
+        return variables_store_name(self, name, v, retype)
 
     def assigned_to(self, v: Val, t: str, name: str) -> str:
         return variables_assigned_to(self, v, t, name)
@@ -2202,6 +2213,33 @@ class Gen:
 
     def repr(self, v: Val) -> Val:
         return containers_repr(self, v)
+
+    def ueq_type(self, t: str) -> bool:
+        return unions_ueq_type(self, t)
+
+    def scalar_union(self, t: str) -> bool:
+        return unions_scalar_union(self, t)
+
+    def value_union(self, t: str) -> bool:
+        return unions_value_union(self, t)
+
+    def uop(self, v: Val, op: str) -> Val:
+        return unions_uop(self, v, op)
+
+    def uequal(self, op: str, a: Val, b: Val) -> Val:
+        return unions_uequal(self, op, a, b)
+
+    def unumeric(self, op: str, a: Val, b: Val, shown: str, unary: bool) -> Val:
+        return union_arithmetic_unumeric(self, op, a, b, shown, unary)
+
+    def unumeric_case(self, op: str, a: Val, b: Val, shown: str, unary: bool) -> Val:
+        return union_arithmetic_unumeric_case(self, op, a, b, shown, unary)
+
+    def reference_union(self, t: str) -> bool:
+        return unions_reference_union(self, t)
+
+    def umethod(self, o: Val, m: str, args: list[Node]) -> Val:
+        return unions_umethod(self, o, m, args)
 
     def uboxes(self, a: str, b: str) -> bool:
         return unions_uboxes(self, a, b)

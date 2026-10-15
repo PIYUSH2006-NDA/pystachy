@@ -21,6 +21,7 @@ from src.pystachy_compiler.utils import (
     is_opt,
     is_set,
     is_tuple,
+    is_union,
     kw_names,
     kw_types,
     lt,
@@ -120,7 +121,10 @@ def gen_star_call(self, n: Node, want: str) -> Val:
     f = n.kids[0]
     args = n.kids[1:]
     if f.kind == "attr" and not self.static_callee(f) and f.kids[0].kind != "val":
-        f = mk("attr", f.s, f.line, [self.vnode(self.expr(f.kids[0], ""))])
+        receiver = self.expr(f.kids[0], "")
+        if self.reference_union(receiver.t):
+            self.err("reference union methods do not support unpacked arguments")
+        f = mk("attr", f.s, f.line, [self.vnode(receiver)])
     elif f.kind != "attr" and f.kind != "val" and not self.static_callee(f):
         f = self.vnode(self.expr(f, ""))
     printing = f.kind == "name" and f.s == "print" and not self.bound("print")
@@ -538,6 +542,8 @@ def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
         return self.kw_method(o, m, args)
     if is_opt(o.t):
         o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
+    if is_union(o.t):
+        return self.umethod(o, m, args)
     if o.t in self.nts and m == "__init__":
         # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
         # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__

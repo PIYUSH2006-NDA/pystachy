@@ -1,0 +1,21 @@
+True True 2 2
+2 2 2
+5 False
+[1, 'one', None, [1]]
+[2.0] is not in list
+1 1
+[{}, [1], None]
+1
+1
+list.remove(x): x not in list
+True True 2 0
+True
+True 1
+True True
+True 1
+1 0
+False 0
+0 0
+True ['left', 'right']
+needle failed ['receiver', 'failure']
+[exit 0]

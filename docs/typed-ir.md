@@ -83,9 +83,19 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 | `IFn` | Function signature, parameter indices, entry slots, blocks, loops, handlers and effect summary |
 
 Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
-`union[int,str]`. A closed scalar union is an immutable pointer to a program-wide
+`union[int,str]`. A closed union is an immutable pointer to a program-wide
 type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
-Narrowing checks the tag before reading the concrete payload.
+Mixed scalar/list/dict unions store the original container pointer in that slot;
+unboxing never copies a container or changes its element storage type.
+Truth and string conversion select a typed member operation. Runtime `U` descriptors
+describe mixed members for representation/formatting and builtin-value equality.
+Equality resolves both operands' descriptors independently, including optional boxes
+and nested union payloads; it never guesses container element storage from the first
+descriptor character. Original container identity shortcuts shared descendants.
+User callbacks are excluded from this paired-descriptor equality path.
+Native reference unions keep the original object/file pointer in that payload;
+their method calls dispatch by member tag. Narrowing checks the tag before reading
+the concrete payload.
 An `Ins` uses only the fields its operation needs:
 
 | Field | Meaning |
@@ -257,7 +267,17 @@ CPython extension modules **are supported** through `pystachy ext` and boundary 
 They do not implement the historical proposal to represent all compiled containers as
 CPython objects. See the [FFI guide](ffi.md) for the actual boundary contract and limitations.
 Explicit [closed scalar unions](language/typing.md#closed-scalar-unions) are supported.
-General object unions and dynamic values remain outside the current language.
+[Bounded native reference unions](language/typing.md#native-reference-unions) also
+support explicitly declared class/file alternatives. General dynamic values remain
+outside the current language.
+
+Mixed scalar/list/dict unions permit finite, explicitly written nesting. Recursive
+JSON aliases remain a separate representation milestone: the parser currently
+discards PEP 695 alias bodies, and type operations compare expanded canonical
+strings. A recursive alias must retain its declaration and use a finite reference
+to its type graph, with cycle-safe equivalence and descriptor traversal. Repeated
+string expansion or a chosen maximum JSON depth would not provide recursive
+types. Mutable list/dict element types must remain invariant through that change.
 
 <a id="appendix-a-how-this-design-was-chosen"></a>
 <a id="appendix-b-prior-art-and-the-measurements-behind-the-exception-and-none-designs"></a>
