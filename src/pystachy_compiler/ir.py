@@ -155,6 +155,8 @@ class Ins:
         # opaque slot (s: member type, r: address then payload). Narrowing proves those reads safe.
         # num.cast promotes one numeric operand; num.cmp records the source comparison
         # in s and compares two operands of the same native numeric type.
+        # empty.kind fixes a fresh dict/set result's key layout, using its typed
+        # operand or the deferred type hole k; it never retypes a filled container.
         # mem.load/store transfer native values through an address of type *<native>.
         # Their effects retain local/global/field/unknown address classification.
         # mach.load/store additionally access runtime headers, closure slots and byte

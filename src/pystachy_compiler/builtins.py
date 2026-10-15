@@ -99,6 +99,9 @@ def gen_modattr(self, path: str) -> Val:
     return Val("", "")
 
 def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
+    # retval's open-result marker belongs to forwarding calls, not to the
+    # arguments a builtin consumes (sorted/list/dict may reuse their context).
+    want = "" if want == "?" else want
     if name == "__pys_exc_repr":
         return self.exc_brepr(self.expr(args[0], ""))  # (exc_helpers)
     if name == "__pys_repr_enter" or name == "__pys_repr_leave":

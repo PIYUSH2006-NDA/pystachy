@@ -430,6 +430,9 @@ type, the fallback is `list[int]`, `dict[int, int]` or `set[int]`. A resulting t
 guess; annotate the receiving value to provide the intended type.
 This also applies to direct `return []`, `return {}` and `return set()` results; callers with
 different expected container types can share the same empty-result specialization.
+Direct forwarding wrappers (`return empty(n)`) retain that result context, including through
+multiple wrappers. Nested tuple results and forwarding through local assignments retain
+their existing inference rules; annotate their containers or the producing function.
 A union context supplies a list or dict result's type when exactly one member has the same
 container kind; ambiguous contexts retain the fallback above.
 

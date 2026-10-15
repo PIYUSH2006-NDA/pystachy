@@ -433,6 +433,7 @@ IROPS: dict[str, str] = {
     "slot.pack": "", "slot.unpack": "",
     "scalar.bin": "", "scalar.cast": "", "scalar.cmp": "",
     "num.cast": "", "num.cmp": "", "int.ucmp": "", "ptr.cmp": "",
+    "empty.kind": "wD",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
