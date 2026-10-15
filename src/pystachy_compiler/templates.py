@@ -10,7 +10,7 @@ from src.pystachy_compiler.specs import (
     TEMPLATE_INSTANCES,
     TEMPLATE_RETAINED,
 )
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, mentions, mk
 from src.pystachy_compiler.utils import (
     elem,
     is_callable,
@@ -422,6 +422,46 @@ def gen_fn_sig(self, t: str) -> list[str]:
         return [f"!{name} has no return annotation, which the type variable it matches takes its type from"]
     return out
 
+def local_result(body: list[Node], params: list[str]) -> list[str]:
+    # A short straight-line chain may forward a fresh result through locals.
+    # Each name is assigned once and read only by the next alias or return;
+    # no mutation, escape, capture, control flow or parameter is widened.
+    if len(body) < 2 or body[-1].kind != "return" or len(body[-1].kids) != 1 or body[-1].kids[0].kind != "name":
+        return []
+    values: dict[str, Node] = {}
+    order: dict[str, int] = {}
+    for st in body[:-1]:
+        if st.kind == "expr" and st.kids[0].kind == "str":
+            continue
+        if st.kind != "assign" or len(st.kids) != 2 or st.kids[0].kind != "name":
+            return []
+        name = st.kids[0].s
+        if name in values:
+            return []
+        order[name] = len(values)
+        values[name] = st.kids[1]
+    name = body[-1].kids[0].s
+    aliases: list[str] = []
+    while name in values and name not in params and name not in aliases and len(aliases) < 32:
+        aliases.append(name)
+        e = values[name]
+        if e.kind == "name":
+            if e.s not in order or order[e.s] >= order[name]:
+                return []
+            name = e.s
+        elif e.kind in ["call", "list", "dict", "set", "tuple"]:
+            for key in values:
+                v = values[key]
+                if v.kind == "name" and key in aliases:
+                    continue
+                if mentions(v, aliases):
+                    return []
+            return aliases
+        else:
+            return []
+    return []
+
+
 def contextual_result(n: Node) -> bool:
     # Only fresh return displays and direct forwarding calls can use a result
     # hint. Nested functions have their own callers; ordinary stored returns
@@ -441,7 +481,10 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     # decides what it returns; nnp: the parameters whose objects are known not to be None
     # Only container contexts can type fresh displays. Include the full context
     # in the key and budgets: two callers may require different native storage.
-    want = want if f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want or "tuple[" in want) and contextual_result(f.orig.kids[2] if f.pending else f.node.kids[2]) else ""
+    body = f.orig.kids[2] if f.pending else f.node.kids[2]
+    context = f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want or "tuple[" in want)
+    locals = local_result(body.kids, f.params) if context and not resultsoft else []
+    want = want if context and (contextual_result(body) or len(locals) > 0) else ""
     key = ",".join(ts) + (" " + ",".join(nnp) if len(nnp) > 0 else "")
     if key in f.insts and f.insts[key].ll in self.building:
         # Recursion into the active argument specialization must retain its
@@ -503,6 +546,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     g.infer = f.ret == ""
     g.rctx = want
     g.rsoft = resultsoft and want != ""
+    g.rlocals = locals if want != "" else []
     g.inst = True
     g.npos = f.npos
     g.posonly = f.posonly

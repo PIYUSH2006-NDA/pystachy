@@ -445,10 +445,15 @@ integers: list[int | float] = pair(1, 2)
 Such contextual results specialize for both argument types and result context; scalar values
 retain their original types. Fresh return branches can use the same explicitly named element
 union; unrelated return types still do not infer a union. Stored mutable containers, fields
-and declared function results are never widened. Forwarding through local assignments retains
-its existing inference rules. Context follows direct displays and calls; other operations
-retain their existing inference. A comparison's context is a hint: an incompatible fresh
-display keeps its own element types, preserving exact integer comparisons.
+and declared function results are never widened. Context follows direct displays and calls;
+other operations retain their existing inference. A comparison's context is a hint: an
+incompatible fresh display keeps its own element types, preserving exact integer comparisons.
+
+A template consisting of simple local assignments and a final return may assign a fresh
+display or call to a local and return it, with up to 32 single-assignment aliases. Each alias
+may only be read by the next alias or the final return. Mutations, escapes, captures,
+reassignments, annotated locals and control flow retain their existing inference rules;
+stored parameters, fields and globals are never widened.
 User method calls, bound method values and callable fields retain the same expected result context.
 A union context supplies a list or dict result's type when exactly one member has the same
 container kind; ambiguous contexts retain the fallback above.
