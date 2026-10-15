@@ -1,4 +1,4 @@
-# error: expected dict[str,int] | list[float | int], got list[int]
+# error: expected Box[dict[str,int] | list[float | int]], got Box[list[int]]
 from typing import Generic, TypeVar
 
 T = TypeVar("T")
@@ -10,4 +10,4 @@ class Box(Generic[T]):
 
 
 ints = [1]
-Box[list[int | float] | dict[str, int]](ints)
+box: Box[list[int | float] | dict[str, int]] = Box(ints)

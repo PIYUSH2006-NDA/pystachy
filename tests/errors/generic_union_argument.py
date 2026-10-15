@@ -1,4 +1,4 @@
-# error: expected float | int, got str
+# error: Pair() cannot bind its type variables from the argument for 'right', a str: 'T' is int already, and str here
 from typing import Generic, TypeVar
 
 T = TypeVar("T")

@@ -20,8 +20,8 @@ def show(pair: Pair[int | float]) -> None:
     print(isinstance(pair.left, int), isinstance(pair.right, float))
 
 
-def choose(flag: bool) -> Pair[int | float]:
-    return Pair(1 if flag else 2.5, 4.5)
+def make() -> Pair[int | float]:
+    return Pair(5, 6.5)
 
 
 show(Pair[int | float](1, 2.5))
@@ -31,16 +31,16 @@ pair: Pair[int | float] = Pair(3, 4.5)
 show(pair)
 pair.replace(6.5)
 print(pair.right)
-show(Pair[int | float](1))
+show(Pair[int | float](1.5))
 show(Pair[int | float](right=2.5, left=1))
 show(Pair[int | float](*(1, 2.5)))
 show(Pair[int | float](**{"left": 1, "right": 2.5}))
-show(choose(True))
-show(choose(False))
+show(make())
 
 nullable = Pair[int | str | None](None, "ok")
 print(nullable.values, nullable.left is None, nullable.right)
 print(Pair[bool | int](True, 1).values)
+print(Pair[int | None](1, None).values)
 
 # A union containing exact container types preserves the original mutable object.
 ints = [1]
@@ -61,3 +61,19 @@ print(ints)
 value: int | str = 7
 wider = Pair[int | float | str](value, 2.5)
 print(wider.values, isinstance(wider.left, int))
+
+
+class Box(Generic[T]):
+    def __init__(self, value: T = "default") -> None:
+        self.value = value
+
+
+# Consistent inferred bindings keep their concrete methods and representations,
+# including arguments and defaults outside the named hint's members.
+print(Box[int | float]("abc").value.upper())
+print(Box[int | str]("ABC").value.lower())
+print(Box[int | float]().value.upper())
+print(Pair[int | str]("A", "B").left.lower())
+inferred = Box[list[int | float] | dict[str, int]](ints)
+inferred.value.append(5)
+print(ints)

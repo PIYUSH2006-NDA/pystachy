@@ -482,13 +482,16 @@ Heterogeneous displays with known item types can use an explicit union context. 
 calls and operations infer normally; their syntax alone does not request a union layout.
 A variable that neither arguments nor context bind is an error.
 
-When a named type makes a constructor parameter itself a closed union, that union
-is preserved: `Pair[int | float](1, 2.5)` and
+When ordinary argument matching cannot bind the type variables consistently,
+fitting named union or optional parameter types resolve the conflict:
+`Pair[int | float](1, 2.5)`, `Pair[int | None](1, None)` and
 `p: Pair[int | float] = Pair(1, 2.5)` bind both parameters annotated `T` to
-`int | float`. Existing union conversions preserve each value's tag, including
-integer precision, and check defaults and unpacked arguments too. A container
-member must fit exactly: `list[int]` cannot become `list[int | float]` through a
-union annotation. This does not add automatic union inference or container covariance.
+their named type. Existing conversions preserve each value's representation,
+including integer precision, and handle defaults and unpacked arguments too.
+Consistent bindings still infer first: `Box[int | str]("x")` stores a concrete
+`str`. A container member must fit exactly: `list[int]` cannot become
+`list[int | float]` through a union annotation. This does not add automatic union
+inference or container covariance.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
 methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class

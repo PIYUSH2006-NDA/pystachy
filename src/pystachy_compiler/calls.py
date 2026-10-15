@@ -845,10 +845,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             e = a.kids[0]
         else:
             pos += 1
-        t = f.ptypes[j]
-        if t == "" and j < len(hint):
-            t = hint[j] if is_union(unopt(hint[j])) else self.generic_hint(e, hint[j])
-        vals[j] = self.pcoerce(self.expr(e, t), f.ptypes[j], f, j)
+        vals[j] = self.pcoerce(self.expr(e, f.ptypes[j] if f.ptypes[j] != "" or j >= len(hint) else self.generic_hint(e, hint[j])), f.ptypes[j], f, j)
         if j in f.pats:
             vals[j] = self.pat_arg(vals[j], f.pats[j])
     if f.vararg >= 0:
@@ -900,12 +897,21 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tmpl:
         # C(args) of a class template C: its arguments' types decide the specialization the
         # object belongs to (see specialize), whose __init__ initializes it
-        for j in range(1, min(len(vals), len(hint))):
-            if is_union(unopt(hint[j])):
-                # Named union parameters accept their existing member representations.
-                # Box them before binding T, retaining int/float tags and checking exact
-                # container member types; never widen list[int] to list[int | float].
-                vals[j] = self.pcoerce(vals[j], hint[j], f, j)
+        if len(hint) > 0:
+            inferred: dict[str, str] = {}
+            conflict = False
+            for j in range(1, len(hint)):
+                if self.match(f.node.kids[0].kids[j].kids[0], vals[j].t, inferred, self.tparams[f.cls]) != "":
+                    conflict = True
+                    break
+            targets = [j for j in range(1, len(hint)) if is_union(unopt(hint[j])) or is_opt(hint[j])]
+            fits = all([self.widens(vals[j].t, hint[j]) or (self.boxes(vals[j].t, hint[j]) and (not is_opt(vals[j].t) or self.optional(hint[j]) == hint[j])) for j in targets])
+            if conflict and fits:
+                # Resolve conflicting bindings with fitting named union/optional parameters.
+                # Preserve consistent inferred types (Box[int | str]("x") still stores str),
+                # and never reinterpret a mutable container as a wider member type.
+                for j in targets:
+                    vals[j] = self.pcoerce(vals[j], hint[j], f, j)
         sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
