@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.pystachy_compiler import diagnostics
 from src.pystachy_compiler.gen import Gen
-from src.pystachy_compiler.ir import ClassInfo, FnInfo, IFn, Ins, Val
+from src.pystachy_compiler.ir import ClassInfo, FnInfo, IFn, Ins, Val, Values
 from src.pystachy_compiler.loader import Loader
 from src.pystachy_compiler.specs import FXBIT
 from src.pystachy_compiler.syntax import Node
@@ -59,6 +59,16 @@ def compare_op(t="int", predicate="=="):
 def fixed_allocation(t="tuple[int,str]"):
     i = Ins("alloc.fixed", t, "")
     i.r = [1]
+    return i
+
+
+def tuple_op(op, t="tuple[int,str]", index=1, member="str"):
+    i = Ins(op, "%slot" if op == "tuple.load" else "", member)
+    i.k = index
+    i.a = [Val("%a0", t)]
+    if op == "tuple.store":
+        i.a.append(Val("%a1", "%slot"))
+    i.r = [1, 2] if op == "tuple.load" else [1]
     return i
 
 
@@ -437,6 +447,102 @@ class TypedIRTests(unittest.TestCase):
                                         for i in captured))
                 if name == "varargs_stack.py":
                     self.assertTrue(any(i.t == "tuple[]" for i in captured))
+
+    def test_fixed_tuple_slots_retain_native_members_and_memory_effects(self):
+        for member in ("int", "str", "float", "bool", "None", "opt[str]",
+                       "union[int,str]", "list[float]", "tuple[int,str]"):
+            for op, effects in (("tuple.load", "rL rD rO"), ("tuple.store", "wL wD wO")):
+                with self.subTest(member=member, op=op):
+                    i = tuple_op(op, "tuple[" + member + "]", 0, member)
+                    g = Gen()
+                    g.verify(function_with(i), False)
+                    self.assertEqual(g.nums(i), 2 if op == "tuple.load" else 1)
+                    self.assertEqual(g.opfx(i, {}), sum(FXBIT[e] for e in effects.split()))
+
+    def test_fixed_tuple_slots_reject_invalid_layout_index_and_member(self):
+        for op in ("tuple.load", "tuple.store"):
+            for t in ("", "int", "%slot", "vtuple[str]", "opt[tuple[int,str]]",
+                      "tuple[]", "tuple[int,str", "tuple[int,str]]", "tuple[int,]",
+                      "tuple[int,...]"):
+                with self.subTest(op=op, type=t):
+                    self.assert_bad(tuple_op(op, t))
+            for index in (-1, 2):
+                with self.subTest(op=op, index=index):
+                    self.assert_bad(tuple_op(op, index=index))
+            for member in ("", "int", "%slot", "T", "#", "*T"):
+                with self.subTest(op=op, member=member):
+                    self.assert_bad(tuple_op(op, member=member))
+            for member in ("%slot", "T", "#", "*T"):
+                with self.subTest(op=op, tuple_member=member):
+                    self.assert_bad(tuple_op(op, "tuple[" + member + "]", 0, member))
+
+    def test_fixed_tuple_slots_reject_wrong_operands_results_and_metadata(self):
+        for op in ("tuple.load", "tuple.store"):
+            for field, value in (("a", []), ("a", [Val("%a0", "tuple[int,str]")] * 3),
+                                 ("x", "str"), ("b", ["entry"]), ("r", []),
+                                 ("r", [1] if op == "tuple.load" else [1, 2]),
+                                 ("t", "str")):
+                with self.subTest(op=op, field=field, value=value):
+                    i = tuple_op(op)
+                    setattr(i, field, value)
+                    self.assert_bad(i)
+        i = tuple_op("tuple.store")
+        i.a[1].t = "str"
+        self.assert_bad(i)
+        i.a = i.a[:1]
+        self.assert_bad(i)
+        i = tuple_op("tuple.load")
+        i.a.append(Val("%a1", "%slot"))
+        self.assert_bad(i)
+
+    def test_fixed_tuple_slots_lower_to_existing_llvm(self):
+        g = Gen()
+        fn = function_with(tuple_op("tuple.load"))
+        g.lower_ins(fn, tuple_op("tuple.load"))
+        g.lower_ins(fn, tuple_op("tuple.store"))
+        self.assertEqual(g.out, [
+            "  %t1 = getelementptr i64, ptr %a0, i64 1",
+            "  %t2 = load i64, ptr %t1",
+            "  %t1 = getelementptr i64, ptr %a0, i64 1",
+            "  store i64 %a1, ptr %t1",
+        ])
+
+    def test_fixed_tuple_slots_preserve_reaching_values_and_alias_barriers(self):
+        for alias in (False, True):
+            with self.subTest(alias=alias):
+                g = Gen()
+                v = Val("%a0", "tuple[int,str]")
+                g.tstore(v, 0, "%a1")
+                if alias:
+                    g.tstore(Val("%a2", v.t), 0, "%a3")
+                value = g.tget(v, 0)
+                again = g.tget(v, 0)
+                g.fn.n = g.n
+                vs = Values(g.fn, {"entry": []})
+                self.assertEqual(g.canon(vs, value.v), value.v if alias else "%a1")
+                self.assertEqual(g.canon(vs, again.v), g.canon(vs, value.v))
+
+    def test_sources_build_typed_tuple_reads_and_heap_and_stack_stores(self):
+        root = Path(__file__).resolve().parent.parent / "tests"
+        lower = Gen.lower
+        captured = []
+
+        def capture(g, fn):
+            g.verify(fn, False)
+            captured.extend(i for b in fn.blocks for i in b.code
+                            if i.op in ("tuple.load", "tuple.store"))
+            lower(g, fn)
+
+        with patch.object(Gen, "lower", capture):
+            for name in ("typed_ir_slots.py", "class_templates.py", "varargs_stack.py",
+                         "kwargs.py", "mixed_union_format.py"):
+                Gen().program(Loader([str(root.parent / "lib")]).program(name, (root / name).read_text()))
+        self.assertTrue(any(i.op == "tuple.load" for i in captured))
+        stores = [i for i in captured if i.op == "tuple.store"]
+        self.assertTrue(any(i.a[0].v.startswith("%stk.") for i in stores))
+        self.assertTrue(any(i.a[0].v.startswith("%t") for i in stores))
+        for i in captured:
+            self.assertEqual(i.s, targs(i.a[0].t)[i.k])
 
 
 if __name__ == "__main__":

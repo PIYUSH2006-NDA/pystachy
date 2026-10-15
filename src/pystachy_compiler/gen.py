@@ -351,6 +351,7 @@ from src.pystachy_compiler.expressions import (
     gen_static_type as expressions_static_type,
     gen_subscript as expressions_subscript,
     gen_tget as expressions_tget,
+    gen_tstore as expressions_tstore,
     gen_truth as expressions_truth,
     gen_tuple_ as expressions_tuple_,
     gen_tuple_order as expressions_tuple_order,
@@ -1845,6 +1846,9 @@ class Gen:
 
     def tget(self, v: Val, i: int) -> Val:
         return expressions_tget(self, v, i)
+
+    def tstore(self, v: Val, index: int, slot: str) -> None:
+        expressions_tstore(self, v, index, slot)
 
     def index(self, n: Node) -> Val:
         return expressions_index(self, n)

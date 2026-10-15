@@ -146,6 +146,8 @@ class Ins:
         # num.cast promotes one numeric operand; num.cmp records the source comparison
         # in s and compares two operands of the same native numeric type.
         # alloc.fixed keeps the class or fixed tuple type; lowering computes its byte size.
+        # tuple.load/store use a fixed tuple operand, k: item index, s: native item type.
+        # They transfer an opaque slot; r holds its address, then the loaded slot if any.
         # text immediate: for "raw", one line of LLVM text; a slot's name; an rt op's RUNTIME key; the
         # symbol a call calls; the module an init runs; a check's message "Kind: text"; the
         # exception a raise raises; ovf's operator + - *
@@ -265,6 +267,9 @@ class Values:
                     self.at[i.r[0]] = j * self.stride + x
                 elif i.op == "union.payload" and len(i.r) == 2:
                     self.at[i.r[1]] = j * self.stride + x
+                elif i.op == "tuple.load" or i.op == "tuple.store":
+                    for r in i.r:
+                        self.at[r] = j * self.stride + x
 
 
 class Exit:
