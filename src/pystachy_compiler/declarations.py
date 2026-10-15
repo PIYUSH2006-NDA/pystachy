@@ -938,6 +938,66 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
+    # Slot names constrain layout; the declaration remains a class attribute. A
+    # subclass without its own __slots__, or with an unslotted base, has a dict.
+    if ci.base in self.classes:
+        ci.slots = list(self.classes[ci.base].slots)
+        if "__slots__" in self.classes[ci.base].fdefault:
+            ci.ftypes["__slots__"] = self.classes[ci.base].ftypes["__slots__"]
+            ci.fdefault["__slots__"] = self.classes[ci.base].fdefault["__slots__"]
+    slots_declared = False
+    for st in ci.node.kids[0].kids:
+        if st.kind not in ["assign", "annassign"] or st.kids[0].kind != "name" or st.kids[0].s != "__slots__":
+            continue
+        self.line = st.line
+        if slots_declared:
+            why = "multiple __slots__ declarations are not supported; use one literal declaration"
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+        slots_declared = True
+        slot_node = st.kids[-1]
+        names = [slot_node] if slot_node.kind == "str" else slot_node.kids if slot_node.kind in ["tuple", "list"] else []
+        own_slots: list[str] = []
+        why = ""
+        if slot_node.kind not in ["str", "tuple", "list"] or (st.kind == "annassign" and len(st.kids) != 3):
+            why = "__slots__ needs a literal string, tuple or list of strings"
+        for n in names:
+            if n.kind != "str" or n.s == "" or not (n.s[0].isalpha() or n.s[0] == "_") or not n.s.replace("_", "a").isalnum():
+                why = "__slots__ needs literal attribute names"
+            elif n.s in ["__dict__", "__weakref__"] or (n.s.startswith("__") and not n.s.endswith("__")):
+                why = f"__slots__ entry '{n.s}' is not supported"
+            else:
+                ci.slots.append(n.s)
+                own_slots.append(n.s)
+        if why != "":
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+        # Reuse class-default globals without reserving an instance field: a
+        # subclass may declare a different tuple length, or use a list/string.
+        t = "str" if slot_node.kind == "str" else "list[str]" if slot_node.kind == "list" else self.ctype("tuple", ["str" for n in names])
+        if st.kind == "annassign" and len(st.kids) == 3:
+            why = self.ann_problem(st.kids[1], False) if ci.mod != "" else ""
+            if why != "":
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+            else:
+                t = self.vtype(st.kids[1])
+        ci.ftypes["__slots__"] = t
+        ci.fdefault["__slots__"] = slot_node
+        if st.kind == "assign":
+            st.kind = "annassign"
+            st.kids = [st.kids[0], noann, slot_node]
+        ci.slotlimit = ci.exc == "" and (ci.base not in self.classes or self.classes[ci.base].slotlimit)
+        # A slot's descriptor cannot coexist with a class variable or method of
+        # that name. Reject shadowing inherited descriptors too.
+        for d in ci.node.kids[0].kids:
+            name = d.s if d.kind == "def" else d.kids[0].s if d.kind in ["assign", "annassign"] and d.kids[0].kind == "name" and (d.kind == "assign" or len(d.kids) == 3) else ""
+            if name in ci.slots:
+                why = f"'{name}' in __slots__ conflicts with class variable or method" if name in own_slots else f"shadowing inherited slot '{name}' with a class variable or method is not supported"
+                if ci.mod == "":
+                    self.err(why)
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
     if ci.base in self.classes:
         # an exception class's objects begin with its base's fields (and their flags, see fl_fields)
         b = self.classes[ci.base]
@@ -955,6 +1015,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
     for st in ci.node.kids[0].kids:
         self.line = st.line
+        if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
+            continue
         if st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
             # (a class attribute of the base bound again, with the same type: as x = v is)
             b = self.classes[ci.base]
@@ -1373,6 +1435,8 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
     ci = self.classes[o.t]
     if name in ci.methods and ci.methods[name].prop:
         self.err(f"property '{name}' of '{short(o.t)}' is read-only")
+    if store and ci.slotlimit and name not in ci.slots:
+        self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:
         if name in ci.methods:
             self.err(f"{o.t}.{name} is a method: call it, {name}(...) (methods are not values)")
@@ -1390,6 +1454,11 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.err(f"'{o.t}' object has no attribute '{name}'")
     extra = " and no __dict__ for setting new attributes" if store else ""
     self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'{extra}")
+    if name == "__slots__" and name not in ci.fpos:
+        if store:
+            self.err("rebinding __slots__ through an instance is not supported")
+        self.class_default(ci, name)
+        return Val(ci.fglob[name], ci.ftypes[name])
     return Val(self.fgep(o, ci.fpos[name]), ci.ftypes[name])
 
 def gen_fgep(self, o: Val, i: int) -> str:
@@ -1410,6 +1479,24 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     ci = self.classes[o.t]
     r = ""
     bad = ""
+    if name == "__slots__" and name not in ci.fpos:
+        if ci.exc != "":
+            # Exceptions use their runtime class identity rather than ordinary
+            # object tags. Do not silently read the static base's metadata.
+            for sub in self.classes.values():
+                if sub.name != ci.name and self.derives(sub.name, ci.name) and name in sub.fdefault and self.default_home(sub, name) is not self.default_home(ci, name):
+                    self.err(f"reading __slots__ through exception base {short(ci.name)} is not supported when a subclass overrides it; read it through the concrete class")
+        r = self.mem_load(Val(p.v, "*" + p.t)).v
+        if ci.tag != 0:
+            tag = self.mem_load(Val(self.fgep(o, ci.fpos[" class"]), "*int")).v
+            for sub in self.classes.values():
+                if sub.tag != 0 and sub.name != ci.name and self.derives(sub.name, ci.name) and name in sub.fdefault:
+                    if sub.ftypes[name] != p.t:
+                        self.err(f"reading __slots__ through {short(ci.name)} is not supported when subclasses use different declaration types; read it through the concrete class")
+                    self.class_default(sub, name)
+                    dv = self.mem_load(Val(sub.fglob[name], "*" + p.t))
+                    r = self.select(self.num_cmp("==", Val(tag, "int"), Val(str(sub.tag), "int")).v, dv, Val(r, p.t))
+        return Val(r, p.t)
     if o.t + "." + name in self.cvars:
         # a class variable: the object's own value once it has assigned one, else the class's
         own = self.mem_load(Val(self.fgep(o, ci.fflag[name]), "*bool")).v
@@ -1474,9 +1561,9 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     return Val(r, p.t)
 
 def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
+    ci = self.classes[o.t]
     what = f"the value assigned to field '{name}' ({typestr(p.t)})" if is_opt(v.t) else ""
     self.mem_store(Val(p.v, "*" + p.t), self.coerce(v, p.t, what))
-    ci = self.classes[o.t]
     if name in ci.fflag:
         self.mem_store(Val(self.fgep(o, ci.fflag[name]), "*bool"), Val("true", "bool"))
 

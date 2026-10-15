@@ -279,7 +279,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
                 if m in self.classes[t].methods and (now or ci.mod == ""):
                     self.err(why)
                 later = later if later != "" or m not in self.classes[t].methods else f"class {shown(ci.name)} is not supported: {why}"
-            cv = ci.name + "." + fl in self.cvars  # (a class variable's constant default needs its global too)
+            cv = fl == "__slots__" or ci.name + "." + fl in self.cvars  # (a class variable's constant default needs its global too)
             if (cv or not is_const(st.kids[2])) and fl in ci.fglob and ci.fglob[fl] in self.pending:
                 # code compiled before this statement declared its global (class_default)
                 del self.pending[ci.fglob[fl]]
@@ -851,6 +851,11 @@ def gen_augassign(self, n: Node) -> None:
         p = self.field(o, t.s, False)
         self.frozen(o.t, t.s)
         cur = self.getfield(o, p, t.s)
+        ci = self.classes[o.t]
+        if ci.slotlimit and t.s not in ci.slots:
+            self.err(f"field '{t.s}' is outside __slots__ of '{short(ci.name)}'")
+        if t.s == "__slots__" and t.s not in ci.fpos:
+            self.err("rebinding __slots__ through an instance is not supported")
         self.setfield(o, p, t.s, self.inplace(op, cur, n.kids[1]))
     elif t.kind == "index":
         o = self.expr(t.kids[0], "")
