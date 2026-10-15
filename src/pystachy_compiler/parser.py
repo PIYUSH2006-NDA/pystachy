@@ -1,7 +1,7 @@
 """Parser component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import CPYSTACK, MAXNEST, TOODEEP, fail
-from src.pystachy_compiler.lexer import ESCAPES, Lexer, Tok, utf8
+from src.pystachy_compiler.lexer import ESCAPES, Lexer, Tok, string_end, utf8
 from src.pystachy_compiler.scope import Symtable
 from src.pystachy_compiler.syntax import (
     AUGOPS,
@@ -20,6 +20,8 @@ from src.pystachy_compiler.syntax import (
     start,
 )
 
+ATOMS: list[str] = "id int float complex str fstr rfstr bytes ... None True False ) ] }".split()  # what ends an atom
+
 
 class Parser:
     def __init__(self, toks: list[Tok]):
@@ -36,6 +38,10 @@ class Parser:
         # an f-string field's parser: the parsers it is in, and where each is, whose tokens follow
         self.outer: list[list[Tok]] = []
         self.outerp: list[int] = []
+        self.fend = -1  # (in a field's parser: where its expression ends, see fail())
+        self.cutmsg = ""  # the tokenizer's error that cut short the f-string being parsed (see field())
+        self.cutline = 0
+        self.fnl: list[int] = []  # where the newlines are in the text of the f-string being parsed
         self.orp = -1  # the tokens of the disjunction that an expression ended with (see comma())
         self.ore = -1
         self.orn = mk("omit", "", 0, [])
@@ -89,12 +95,51 @@ class Parser:
             k = self.ahead()
         if (k not in STARTS and k != "id") or k == "yield":
             return
+        b = self.toks[self.orp + 1].kind
+        named = a.kind == "id" and (b == "str" or b == "fstr" or b == "rfstr" or b == "bytes")
+        if self.fend >= 0:
+            # (in an f-string field, CPython's parser reads the expression after it as far as it
+            # goes, and after a name's strings the one after those: a tokenizer error there, or
+            # where a field cut short ends, comes first)
+            r = self.reach(self.p)
+            if named and self.toks[r].kind in STARTS:
+                r = self.reach(r)
+            if self.toks[r].kind == "error" or self.toks[r].kind == "stop":
+                fail(self.toks[r].text, self.toks[r].line)
+            if self.cutmsg != "" and r >= self.fend:
+                fail(self.cutmsg, self.cutline)
         if e.kind == "name" and (e.s == "print" or e.s == "exec"):
             self.fail(f"Missing parentheses in call to '{e.s}'. Did you mean {e.s}(...)?", e.line)
-        b = self.toks[self.orp + 1].kind
-        if a.kind == "id" and (b == "str" or b == "fstr" or b == "rfstr" or b == "bytes" or a.text == "match" or a.text == "case" or a.text == "_" or a.text == "type"):
+        if named or (a.kind == "id" and (a.text == "match" or a.text == "case" or a.text == "_" or a.text == "type")):
             return
         self.fail("invalid syntax. Perhaps you forgot a comma?", start(e))
+
+    def reach(self, i: int) -> int:
+        # the token where CPython's parser stops reading the expression that starts at token i:
+        # one that cannot continue it, or a tokenizer error
+        operand = True  # (where an operand is expected)
+        depth = 0
+        while True:
+            k = self.toks[i].kind
+            if k == "error" or k == "stop" or k == "?" or k == "eof":
+                return i
+            opening = k == "(" or k == "[" or k == "{"
+            closing = k == ")" or k == "]" or k == "}"
+            binop = k in CMPOPS or k == "**" or k == "." or k == "if" or k == "else" or k == "and" or k == "or" or k == "is" or k == "not"
+            for ops in BINOPS:
+                binop = binop or k in ops
+            if depth > 0 or (opening and (operand or k != "{")):
+                depth += 1 if opening else (-1 if closing else 0)
+                operand = False
+            elif operand and k in ATOMS and not closing:
+                operand = False
+            elif operand and (k == "-" or k == "+" or k == "~" or k == "not" or k == "await" or k == "*"):
+                pass
+            elif not operand and binop:
+                operand = True
+            else:
+                return i
+            i += 1
 
     def colon(self) -> None:
         # a ':' that CPython's grammar forces (after a def's signature, try, else and finally)
@@ -108,13 +153,35 @@ class Parser:
     def fail(self, msg: str, line: int) -> None:
         # an error of CPython's parser: CPython then tokenizes the rest of the file, and an error
         # its tokenizer raises there replaces it ("error" tokens); a bracket never closed does
-        # only if it opened on a line before the one the parser got to
-        cur = self.toks[min(self.p, len(self.toks) - 1)].line
-        for k in range(len(self.outer) + 1):
-            toks = self.toks if k == 0 else self.outer[-k]
-            for t in toks[self.p if k == 0 else self.outerp[-k] :]:
-                if t.kind == "error" or (t.kind == "stop" and t.text.endswith("was never closed") and t.line < cur):
-                    fail(t.text, t.line)
+        # only if it opened on a line before the one the parser got to, outside an f-string.
+        # (At the end of a field cut short, CPython's parser meets the tokenizer's error first.)
+        if self.cutmsg != "" and self.fend >= 0 and self.p >= self.fend:
+            fail(self.cutmsg, self.cutline)
+        if msg == "invalid syntax" and self.fend >= 0:
+            # in an f-string field's expression, CPython's parser expects '=', '!', ':' or '}'
+            # after the longest expression it can read from the field's start (if any: one ends
+            # with an atom outside brackets, but not with a lambda's parameter)
+            msg = "f-string: expecting a valid expression after '{'"
+            line = self.toks[1].line
+            depth = 0
+            for k in range(1, min(self.p, self.fend)):
+                t = self.toks[k]
+                depth += 1 if t.kind == "(" or t.kind == "[" or t.kind == "{" else 0
+                depth -= 1 if t.kind == ")" or t.kind == "]" or t.kind == "}" else 0
+                if depth == 0 and t.kind == "lambda":
+                    break
+                if depth == 0 and (t.kind in ATOMS or (k == 1 and t.kind == "yield")):
+                    msg = "f-string: expecting '=', or '!', or ':', or '}'"
+                    line = self.toks[k + 1].line  # (at the token after it)
+            if self.toks[1].kind == "=":
+                msg = "f-string: valid expression required before '='"
+        cur = max(self.toks[min(self.p, len(self.toks) - 1)].line, line)
+        # (in an f-string field, those after the outermost f-string: CPython's tokenizer errors in
+        # an f-string replace no parser error)
+        toks = self.toks if len(self.outer) == 0 else self.outer[0]
+        for t in toks[self.p if len(self.outer) == 0 else self.outerp[0] :]:
+            if t.kind == "error" or (t.kind == "stop" and not t.part and t.text.endswith("was never closed") and t.line < cur):
+                fail(t.text, t.line)
         fail(msg, line)
 
     def assignable(self, t: Node) -> Node:
@@ -1270,22 +1337,39 @@ class Parser:
             self.invalid(line)  # (a yield expression stands only where rhs() parses it, or in parentheses)
         if k == "str" or k == "fstr" or k == "rfstr" or k == "bytes":
             # adjacent literals concatenate; any f-string among them makes the whole an f-string.
-            # CPython decodes each in turn, then checks that all or none are bytes.
-            parts: list[Tok] = [t]
-            while self.peek() == "str" or self.peek() == "fstr" or self.peek() == "rfstr" or self.peek() == "bytes":
-                parts.append(self.toks[self.p])
-                self.p += 1
+            # CPython decodes each in turn (before it reads the next token), then checks that all
+            # or none are bytes.
             n = mk("fstr", "", line, [])
             nb = 0
-            for pt in parts:
+            parts = 0
+            pt = t
+            while True:
+                parts += 1
                 if pt.kind == "bytes":
                     self.bytes_check(pt)
                     nb += 1
                 elif pt.kind == "str":
                     n.kids.append(mk("str", self.unescape(pt.text, pt.line) if pt.esc else pt.text, pt.line, []))
                 else:
-                    self.fparts(pt.text, pt.kind == "rfstr", pt.line, n)
-            if nb > 0 and nb < len(parts):
+                    saved = self.cutmsg
+                    savedline = self.cutline
+                    if pt.part:
+                        self.cutmsg = self.toks[self.p].text  # (the error after it)
+                        self.cutline = self.toks[self.p].line
+                    self.fnl = []
+                    nl = pt.text.find("\n")
+                    while nl >= 0:
+                        self.fnl.append(nl)
+                        nl = pt.text.find("\n", nl + 1)
+                    self.fparts(pt.text, 0, pt.kind == "rfstr", pt.line, n, 0)
+                    self.cutmsg = saved
+                    self.cutline = savedline
+                k = self.peek()
+                if k != "str" and k != "fstr" and k != "rfstr" and k != "bytes":
+                    break
+                pt = self.toks[self.p]
+                self.p += 1
+            if nb > 0 and nb < parts:
                 self.fail("cannot mix bytes and nonbytes literals", self.line())
             if nb > 0:
                 return mk("bytes", "", line, [])
@@ -1399,132 +1483,193 @@ class Parser:
             return d
         if k == "indent":
             fail("unexpected indent", line)  # (CPython reports it as it finds it)
+        if self.fend >= 0:
+            self.p -= 1  # (in an f-string field, fail() reads the tokens before this one)
         self.invalid(line)
         return mk("omit", "", line, [])
 
-    def fparts(self, s: str, raw: bool, line: int, n: Node) -> None:
-        # the parts of an f-string body (or of a format spec with nested fields), appended to n:
-        # literal text as str nodes, each replacement field as fmt(expression, spec). (Errors of
-        # CPython's tokenizer in an f-string are reported where they are, with fail().)
-        lit: list[str] = []
-        i = 0
+    def fparts(self, s: str, i: int, raw: bool, line: int, n: Node, spec: int) -> int:
+        # the parts of an f-string body from s[i] (or of a format spec: spec 1, or 2 after a field
+        # in it), appended to n: literal text as str nodes, each replacement field as fmt(expression,
+        # spec). A format spec ends at its field's '}', whose index is returned (len(s) if none).
+        # Lexer.fstring() read the f-string as CPython's tokenizer does (line: its first line)
+        text: list[str] = []  # the literal text so far, decoded: CPython decodes it to each doubled brace
+        lit: list[str] = []  # (and the rest, as it stands)
         while i < len(s):
             c = s[i]
-            if (c == "{" or c == "}") and s[i + 1 : i + 2] == c:
+            if c == "}" and spec > 0:
+                break
+            if (c == "{" and s[i + 1 : i + 2] == "{" and spec != 1) or (c == "}" and s[i + 1 : i + 2] == "}"):
                 lit.append(c)
+                text.append("".join(lit) if raw else self.unescape("".join(lit), line))
+                lit = []
                 i += 2
             elif c == "}":
-                fail("f-string: single '}' is not allowed", line)
+                fail("f-string: single '}' is not allowed", self.fline(line, i))
             elif c == "{":
-                # the expression ends at a top-level '}', ':' or '!' (but not '!='); its text
-                # leaves out the comments in it, which run to the end of their line
-                j = i + 1
-                depth = 0
-                code: list[str] = []
-                while j < len(s) and (depth > 0 or not (s[j] == "}" or s[j] == ":" or (s[j] == "!" and s[j + 1 : j + 2] != "="))):
-                    k = j + 1
-                    if s[j] == "'" or s[j] == '"':
-                        while k < len(s) and s[k] != s[j]:
-                            k += 2 if s[k] == "\\" else 1
-                        if k >= len(s):
-                            fail("f-string: unterminated string", line)
-                        k += 1
-                    elif s[j] == "#":
-                        k = s.find("\n", j)
-                        j = len(s) if k < 0 else k
-                        continue
-                    elif s[j] == "(" or s[j] == "[" or s[j] == "{":
-                        depth += 1
-                    elif s[j] == ")" or s[j] == "]" or s[j] == "}":
-                        depth -= 1
-                        if depth < 0:
-                            fail(f"f-string: unmatched '{s[j]}'", line)
-                    code.append(s[j:k])
-                    j = k
-                if j >= len(s):
-                    self.fail("f-string: expecting '}'", line)
-                self.flush(lit, raw, line, n)
+                self.flush(text, lit, raw, line, n)
+                text = []
                 lit = []
-                text = "".join(code)
-                src = text.rstrip()
-                selfdoc = src.endswith("=") and not (src.endswith("==") or src.endswith("!=") or src.endswith("<=") or src.endswith(">="))
-                if selfdoc:
-                    # f"{x=}" prints the expression's text, then its value
-                    n.kids.append(mk("str", text, line, []))
-                    src = src[:-1]
-                if src.strip() == "":
-                    self.fail("f-string: valid expression required before '}'", line)
-                lam = src.strip()
-                if lam.startswith("lambda") and not (lam[6:7].isalnum() or lam[6:7] == "_") and s[j] == ":":
-                    self.fail("f-string: lambda expressions are not allowed without parentheses", line)
-                # (in parentheses, an expression may continue over lines: f"""{x\n + 1}"""); an
-                # error at the closing parenthesis is on the field's last line
-                toks = Lexer("(" + src.strip() + "\n)", line).run()
-                last = line + src.strip().count("\n")
-                for t in toks:
-                    t.line = min(t.line, last)
-                sub = Parser(toks)
-                sub.nest = self.nest
-                sub.extra = self.extra + 5  # (33 levels in CPython's parser, 28 for parentheses)
-                sub.outer = self.outer + [self.toks]
-                sub.outerp = self.outerp + [self.p]
-                sub.expect("(")
-                e = sub.no_star(sub.rhs())
-                if sub.peek() != ")":
-                    sub.fail("f-string: invalid syntax", line)
-                for cat in [0, 2]:
-                    if sub.errs[cat] != "":
-                        self.later(cat, sub.errs[cat], sub.at[cat])
-                conv = ""
-                if s[j] == "!":
-                    # !r, !s or !a, right after the '!'; then (white space and) ':' or '}'
-                    k = self.fskip(s, j + 1)
-                    m = k
-                    while m < len(s) and ((s[m].isalnum() and ord(s[m]) < 128) or s[m] == "_"):
-                        m += 1
-                    conv = s[k:m]
-                    if conv == "" and (s[k : k + 1] == ":" or s[k : k + 1] == "}"):
-                        self.fail("f-string: missing conversion character", line)
-                    if conv == "" or (conv[0] >= "0" and conv[0] <= "9"):
-                        self.fail("f-string: invalid conversion character", line)
-                    if k > j + 1:
-                        self.fail("f-string: conversion type must come right after the exclamation mark", line)
-                    if conv != "r" and conv != "s" and conv != "a":
-                        self.fail(f"f-string: invalid conversion character '{conv}': expected 's', 'r', or 'a'", line)
-                    j = self.fskip(s, m)
-                    if j >= len(s) or (s[j] != ":" and s[j] != "}"):
-                        self.fail("f-string: expecting ':' or '}'", line)
-                spec = mk("str", "", line, [])
-                if j < len(s) and s[j] == ":":
-                    # the spec runs to the matching '}' and may hold nested fields: {x:>{w}}
-                    k = j + 1
-                    depth = 0
-                    while k < len(s) and (depth > 0 or s[k] != "}"):
-                        if s[k] == "{":
-                            depth += 1
-                        elif s[k] == "}":
-                            depth -= 1
-                        k += 1
-                    st = s[j + 1 : k]
-                    if "{" in st:
-                        spec = mk("fstr", "", line, [])
-                        self.fparts(st, raw, line, spec)
-                    else:
-                        spec = mk("str", st if raw else self.unescape(st, line), line, [])
-                    j = k
-                if j >= len(s) or s[j] != "}":
-                    self.fail("f-string: expecting '}'", line)
-                if selfdoc and conv == "" and (spec.kind != "str" or spec.s == ""):
-                    conv = "r"
-                if conv != "":
-                    fn = "__pys_repr" if conv == "r" else ("__pys_str" if conv == "s" else "__pys_ascii")
-                    e = mk("call", "", line, [mk("name", fn, line, []), e])
-                n.kids.append(mk("fmt", "", line, [e, spec]))
-                i = j + 1
+                i = self.field(s, i + 1, raw, line, n)
+                spec = 2 if spec > 0 else 0
+            elif c == "\\" and s[i + 1 : i + 2] != "{" and s[i + 1 : i + 2] != "}":
+                # an escaped character; a \N{...} escape is one, whose '}' closes no field
+                k = i + 2
+                if not raw and s[i + 1 : i + 3] == "N{":
+                    k = s.find("}", i) + 1 if s.find("}", i) >= 0 else len(s)
+                lit.append(s[i : max(k, i + 2)])
+                i = max(k, i + 2)
             else:
                 lit.append(c)
                 i += 1
-        self.flush(lit, raw, line, n)
+        self.flush(text, lit, raw, line, n)
+        return i
+
+    def field(self, s: str, i: int, raw: bool, line: int, n: Node) -> int:
+        # the replacement field whose expression starts at s[i], appended to n (after its text, if
+        # it is self-documenting); returns the index past its '}'. The expression ends at a
+        # top-level '}', ':' or '!' (but not '!='); its text leaves out the comments in it, which
+        # run to the end of their line
+        j = i
+        depth = 0
+        code: list[str] = []
+        while j < len(s) and (depth > 0 or not (s[j] == "}" or s[j] == ":" or (s[j] == "!" and s[j + 1 : j + 2] != "="))):
+            k = j + 1
+            if s[j] == "'" or s[j] == '"':
+                k = string_end(s, j)
+            elif s[j] == "#":
+                k = s.find("\n", j)
+                j = len(s) if k < 0 else k
+                continue
+            elif s[j] == "(" or s[j] == "[" or s[j] == "{":
+                depth += 1
+            elif s[j] == ")" or s[j] == "]" or s[j] == "}":
+                depth -= 1
+            code.append(s[j:k])
+            j = k
+        at = self.fline(line, j)  # (the line of s[j])
+        ran = j >= len(s)  # (to the end of an f-string cut short, see cut())
+        text = "".join(code)
+        src = text.rstrip()
+        selfdoc = src.endswith("=") and not (src.endswith("==") or src.endswith("!=") or src.endswith("<=") or src.endswith(">="))
+        if selfdoc:
+            # f"{x=}" prints the expression's text, then its value
+            n.kids.append(mk("str", text, line, []))
+            src = src[:-1]
+        # (the line of the expression's first token: a comment holds no newline)
+        eline = self.fline(line, i) + text[: len(text) - len(text.lstrip())].count("\n")
+        if src.strip() == "" and ran:
+            self.cut("f-string: expecting '}'", at)
+        if src.strip() == "":
+            self.fail("f-string: valid expression required before '" + ("=" if selfdoc else s[j]) + "'", eline if selfdoc else at)
+        lam = src.strip()
+        if lam.startswith("lambda") and not (lam[6:7].isalnum() or lam[6:7] == "_") and s[j : j + 1] == ":":
+            self.fail("f-string: lambda expressions are not allowed without parentheses", eline)
+        # (in parentheses, an expression may continue over lines: f"""{x\n + 1}"""); an error at
+        # the closing parenthesis is on the field's last line, after which CPython's parser
+        # expects '=', '!', ':' or '}' (see fail())
+        lx = Lexer("(" + src.strip() + "\n)", eline)
+        toks = lx.run()
+        last = eline + src.strip().count("\n")
+        cut = -1
+        for k in range(len(toks)):
+            toks[k].line = min(toks[k].line, last)
+            if (toks[k].kind == "error" or toks[k].kind == "stop") and ran and self.cutmsg != "" and lx.halt >= len(lx.src) - 1:
+                # a bracket left open in a field cut short: where it ends (instead of the
+                # parenthesis added), CPython's parser meets the error that cut it
+                toks[k].kind = "stop"
+                toks[k].text = self.cutmsg
+                toks[k].line = self.cutline
+                cut = k
+        if cut > 0 and toks[cut - 1].kind == ")":
+            toks = toks[: cut - 1] + toks[cut:]
+        sub = Parser(toks)
+        sub.nest = self.nest
+        sub.extra = self.extra + 32  # (33 levels in CPython's parser, one of them the deeper() of the expression)
+        sub.outer = self.outer + [self.toks]
+        sub.outerp = self.outerp + [self.p]
+        sub.fend = len(toks) - 3
+        if ran and not selfdoc:
+            sub.cutmsg = self.cutmsg  # (where the expression ends, CPython's parser meets the error)
+            sub.cutline = self.cutline
+        sub.expect("(")
+        e = sub.no_star(sub.rhs())
+        if sub.peek() == "=":
+            sub.fail("f-string: expecting '!', or ':', or '}'", sub.line())
+        if sub.peek() != ")" and sub.ore == sub.p:
+            sub.comma()
+        if sub.peek() != ")":
+            sub.fail("f-string: expecting '=', or '!', or ':', or '}'", sub.line())
+        for cat in [0, 2]:
+            if sub.errs[cat] != "":
+                self.later(cat, sub.errs[cat], sub.at[cat])
+        if ran:
+            self.cut("f-string: expecting '}'", at)
+        conv = ""
+        if s[j] == "!":
+            # !r, !s or !a, right after the '!'; then (white space and) ':' or '}'
+            k = self.fskip(s, j + 1)
+            m = k
+            while m < len(s) and ((s[m].isalnum() and ord(s[m]) < 128) or s[m] == "_"):
+                m += 1
+            conv = s[k:m]
+            at = self.fline(line, k)
+            if k >= len(s):
+                self.cut("f-string: missing conversion character", at)
+            if conv == "" and (s[k : k + 1] == ":" or s[k : k + 1] == "}"):
+                self.fail("f-string: missing conversion character", at)
+            if conv == "" or (conv[0] >= "0" and conv[0] <= "9"):
+                self.fail("f-string: invalid conversion character", at)
+            if k > j + 1:
+                self.fail("f-string: conversion type must come right after the exclamation mark", self.fline(line, j))
+            if conv != "r" and conv != "s" and conv != "a":
+                self.fail(f"f-string: invalid conversion character '{conv}': expected 's', 'r', or 'a'", at)
+            j = self.fskip(s, m)
+            if j >= len(s):
+                self.cut("f-string: expecting ':' or '}'", self.fline(line, j))
+            if s[j] != ":" and s[j] != "}":
+                self.fail("f-string: expecting ':' or '}'", self.fline(line, j))
+        spec = mk("str", "", line, [])
+        colon = j < len(s) and s[j] == ":"
+        if colon:
+            # the spec runs to the field's '}' and may hold fields: {x:>{w}}
+            sp = mk("fstr", "", line, [])
+            j = self.fparts(s, j + 1, raw, line, sp, 1)
+            if j >= len(s):
+                self.cut("f-string: expecting '}', or format specs", self.fline(line, j))
+            plain = True
+            for kd in sp.kids:
+                if kd.kind != "str":
+                    plain = False
+            spec = sp if not plain else mk("str", "".join([kd.s for kd in sp.kids]), line, [])
+        if j >= len(s) or s[j] != "}":
+            self.fail("f-string: expecting '}'", self.fline(line, j))
+        if selfdoc and conv == "" and not colon:
+            conv = "r"
+        if conv != "":
+            fn = "__pys_repr" if conv == "r" else ("__pys_str" if conv == "s" else "__pys_ascii")
+            e = mk("call", "", line, [mk("name", fn, line, []), e])
+        n.kids.append(mk("fmt", "", line, [e, spec]))
+        return j + 1
+
+    def fline(self, line: int, i: int) -> int:
+        # the line of character i of the f-string being parsed, whose first line is line
+        lo = 0
+        hi = len(self.fnl)
+        while lo < hi:
+            m = (lo + hi) // 2
+            if self.fnl[m] < i:
+                lo = m + 1
+            else:
+                hi = m
+        return line + lo
+
+    def cut(self, msg: str, line: int) -> None:
+        # an error where an f-string's text ends, after the tokenizer's error that cut it short
+        # (see Lexer.string), if any
+        if self.cutmsg != "":
+            fail(self.cutmsg, self.cutline)
+        self.fail(msg, line)
 
     def fskip(self, s: str, j: int) -> int:
         # past the white space and comments from s[j] in a replacement field
@@ -1536,9 +1681,10 @@ class Parser:
                 j += 1
         return j
 
-    def flush(self, lit: list[str], raw: bool, line: int, n: Node) -> None:
-        if len(lit) > 0:
-            n.kids.append(mk("str", "".join(lit) if raw else self.unescape("".join(lit), line), line, []))
+    def flush(self, text: list[str], lit: list[str], raw: bool, line: int, n: Node) -> None:
+        # an f-string's literal text: text decoded, then lit
+        if len(text) > 0 or len(lit) > 0:
+            n.kids.append(mk("str", "".join(text) + ("".join(lit) if raw else self.unescape("".join(lit), line)), line, []))
 
     def unescape(self, s: str, line: int) -> str:
         # decode the backslash escapes of a string literal's source text. CPython's error for an
