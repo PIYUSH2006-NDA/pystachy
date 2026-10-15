@@ -410,7 +410,7 @@ parameter, rather than an alias.
 Arguments are evaluated in CPython's order: the callable first, then positional and starred
 arguments, then keyword arguments. Each unpacking operation happens at its position.
 
-### Empty template results
+### Contextual template results
 
 An empty list, dict or set returned by a template can get its type from a later fill or return,
 or from its caller's annotation, argument type or other expected context. If none supplies a
@@ -419,21 +419,24 @@ guess; annotate the receiving value to provide the intended type.
 This also applies to direct `return []`, `return {}` and `return set()` results. Direct list
 and dict empties can share an open-result specialization across caller container types.
 Direct forwarding wrappers (`return empty(n)`) retain that result context, including through
-multiple wrappers. A caller can also type fresh displays nested in a returned tuple, or a
-fresh nonempty display whose statically known item types require an explicit union:
+multiple wrappers. A caller can also type fresh returned list, dict, set and tuple displays,
+including homogeneous or nested displays and calls inside their items:
 
 ```python
 def pair(a, b):
     return [a, b]
 
 values: list[int | float] = pair(1, 2.5)
+integers: list[int | float] = pair(1, 2)
 ```
 
 Such contextual results specialize for both argument types and result context; scalar values
-retain their original types. Stored mutable containers are never widened. Homogeneous
-nonempty results and forwarding through local assignments retain their existing inference
-rules. Calls nested inside displays (`return [empty(n)]`) still infer their own result;
-annotate the producing function when those rules need more information.
+retain their original types. Fresh return branches can use the same explicitly named element
+union; unrelated return types still do not infer a union. Stored mutable containers, fields
+and declared function results are never widened. Forwarding through local assignments retains
+its existing inference rules. Context follows direct displays and calls; other operations
+retain their existing inference. A comparison's context is a hint: an incompatible fresh
+display keeps its own element types, preserving exact integer comparisons.
 User method calls, bound method values and callable fields retain the same expected result context.
 A union context supplies a list or dict result's type when exactly one member has the same
 container kind; ambiguous contexts retain the fallback above.

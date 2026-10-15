@@ -47,6 +47,7 @@ def gen_enter(self, f: FnInfo, body: list[Node]) -> None:
     self.iflag = {}
     self.lcs = []
     self.lct = []
+    self.lcsoft = []
     self.nonevars = {}
     self.narrowed = {}
     self.lkk = {}

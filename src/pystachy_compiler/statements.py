@@ -723,7 +723,7 @@ def gen_stmt(self, n: Node) -> None:
         self.place(go)
     elif k == "lcappend":
         et = self.lct[-1]
-        v = self.expr(n.kids[0], et)
+        v = self.expr(n.kids[0], et, resultsoft=self.lcsoft[-1])
         if et == "":
             self.lct[-1] = self.none_items(v.t) if n.s == "set" and is_tuple(v.t) else v.t
             et = self.lct[-1]

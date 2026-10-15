@@ -505,9 +505,14 @@ def gen_truth(self, v: Val) -> str:
         return self.phi(ph)
     return nz
 
-def gen_expr(self, n: Node, want: str) -> Val:
+def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool = False) -> Val:
     self.line = n.line
     k = n.kind
+    resultsoft = resultsoft or n is self.soft
+    if returnctx and k in ["binop", "boolop", "ifexp"]:
+        # Contextual return inference follows fresh literal trees and calls.
+        # Other operations keep the hints their operands already needed.
+        want = self.generic_hint(n, want)
     if k == "val":
         return self.vnodes[int(n.s)]  # (a value computed already: see vnode)
     if k == "int":
@@ -545,28 +550,28 @@ def gen_expr(self, n: Node, want: str) -> Val:
     if k == "lambda":
         return self.closure(n)
     if k == "set":
-        return self.set_display(n, want, False)
+        return self.set_display(n, want, False, returnctx, resultsoft)
     if k == "setcomp":
         if n.kids[0].kind != "listcomp":
             self.err(UNSUPPORTED[n.kids[0].kind])
-        return self.listcomp(n.kids[0], want, "", "", None, "set")
+        return self.listcomp(n.kids[0], want, "", "", None, "set", resultsoft)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
     if k == "binop":
-        a = self.expr(n.kids[0], want)
-        return self.arith(n.s, a, self.expr(n.kids[1], a.t))
+        a = self.expr(n.kids[0], want, resultsoft=resultsoft)
+        return self.arith(n.s, a, self.expr(n.kids[1], a.t, resultsoft=resultsoft))
     if k == "unary":
         return self.unary(n)
     if k == "boolop":
-        return self.boolop(n, False, want)
+        return self.boolop(n, False, want, resultsoft)
     if k == "cmp":
         return self.compare(n)
     if k == "ifexp":
-        return self.ifexp(n, want)
+        return self.ifexp(n, want, resultsoft)
     if k == "call":
-        return self.call(n, want)
+        return self.call(n, want, resultsoft)
     if k == "attr":
         path = self.dotted(n)
         if path != "" and path[: path.rfind(".")] not in MODATTRS:
@@ -669,11 +674,19 @@ def gen_expr(self, n: Node, want: str) -> Val:
         given = et != ""
         jt = ""
         for e in n.kids:
-            v = self.expr(e, et)
+            v = self.expr(e, et, returnctx, resultsoft)
             if et == "" and v.t != "None":
                 et = v.t
             jt = v.t if jt == "" else self.join(jt, v.t) or "-"  # (the items' types together)
             items.append(v)
+        if returnctx and given and len([v for v in items if not self.widens(v.t, et) and not self.boxes(v.t, et) and not (is_fn(v.t) and is_callable(unopt(et)))]) > 0:
+            # A comparison's expected type is only a hint. Keep the display's
+            # own inference if an item cannot enter that representation.
+            given = False
+            et = ""
+            for v in items:
+                if et == "" and v.t != "None":
+                    et = v.t
         if not given and (is_opt(jt) or is_tuple(jt)):
             et = jt  # None among strings (or T | None among T): T | None (also as tuple items)
         if given and soft:
@@ -702,16 +715,25 @@ def gen_expr(self, n: Node, want: str) -> Val:
         jt = ""
         kj = ""
         for i in range(0, len(n.kids), 2):
-            a = self.expr(n.kids[i], kv[0])
+            a = self.expr(n.kids[i], kv[0], returnctx, resultsoft)
             if kv[0] == "":
                 kv[0] = a.t
-            b = self.expr(n.kids[i + 1], kv[1])
+            b = self.expr(n.kids[i + 1], kv[1], returnctx, resultsoft)
             if kv[1] == "" and b.t != "None":
                 kv[1] = b.t
             jt = b.t if jt == "" else self.join(jt, b.t) or "-"
             kj = a.t if kj == "" else self.join(kj, a.t) or "-"
             ks.append(a)
             vs.append(b)
+        if returnctx and kgiven and len([v for v in ks if not self.widens(v.t, kv[0]) and not self.boxes(v.t, kv[0])]) > 0:
+            kgiven = False
+            kv[0] = ks[0].t
+        if returnctx and given and len([v for v in vs if not self.widens(v.t, kv[1]) and not self.boxes(v.t, kv[1]) and not (is_fn(v.t) and is_callable(unopt(kv[1])))]) > 0:
+            given = False
+            kv[1] = ""
+            for v in vs:
+                if kv[1] == "" and v.t != "None":
+                    kv[1] = v.t
         if not given and (is_opt(jt) or is_tuple(jt)):
             kv[1] = jt  # None among strings (or T | None among T): T | None (also as tuple items)
         if not kgiven and is_tuple(kj):
@@ -733,7 +755,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
         ws = targs(want) if is_tuple(want) else []
         vals: list[Val] = []
         for i in range(len(n.kids)):
-            v = self.expr(n.kids[i], ws[i] if i < len(ws) else "")
+            v = self.expr(n.kids[i], ws[i] if i < len(ws) else "", returnctx, resultsoft)
             if i < len(ws) and v.t != ws[i] and self.widens(v.t, ws[i]):
                 v = Val(v.v, ws[i])  # (None as an object, T as T | None)
             elif i < len(ws) and self.converts(v.t, ws[i]) and not is_sopt(v.t):
@@ -745,7 +767,7 @@ def gen_expr(self, n: Node, want: str) -> Val:
     if k == "listcomp":
         if n.s == "gen":
             self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
-        return self.listcomp(n, want)
+        return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []
         for part in n.kids:
@@ -843,11 +865,11 @@ def gen_class_ready(self, cn: Node) -> ClassInfo:
         self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{c}.def')}, true"), self.unbound(c))
     return ci
 
-def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
+def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str, resultsoft: bool = False) -> Val:
     # C.m(...): a static or class method called through its class (cls.m(...) in a class method)
     ci = self.class_ready(cn)
     if m not in ci.methods and m in ci.fdefault and cn.s not in self.nts:
-        return self.obj_call(self.class_attr(cn, m), args, want)  # (C.k(args) of a class attribute k)
+        return self.obj_call(self.class_attr(cn, m), args, want, resultsoft)  # (C.k(args) of a class attribute k)
     if m not in ci.methods:
         self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
     f = ci.methods[m]
@@ -861,10 +883,10 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
             if o.t not in self.classes or not self.derives(o.t, cn.s):
                 self.err(f"{short(cn.s)}.{m}() needs an instance of {short(cn.s)}")
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
-            return self.call_fn(f, [o], args[1:], want, direct=True)
+            return self.call_fn(f, [o], args[1:], want, direct=True, resultsoft=resultsoft)
         self.err(f"{short(cn.s)}.{m}() is a method of its objects: calling it through the class is not supported; call it on an object, o.{m}(...)")
     self.cls_bound(f, cn.s, False)
-    return self.call_fn(f, [], args, want)
+    return self.call_fn(f, [], args, want, resultsoft=resultsoft)
 
 def gen_cls_bound(self, f: FnInfo, c: str, obj: bool) -> None:
     # a class method that uses cls, called through class c (obj: through an object of c, which
@@ -1568,7 +1590,7 @@ def gen_iter_ret(self, e: Node) -> Val:
         self.err(f"iter() of {typestr(v.t)} in __iter__ is not supported: return iter(xs) of a list xs of the items")
     return v
 
-def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: IterArg | None = None, kind: str = "list") -> Val:
+def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: IterArg | None = None, kind: str = "list", resultsoft: bool = False) -> Val:
     # [e for t in it if c] runs as a loop appending to a fresh list (or to list into, of type
     # want, as xs.extend(e for ...) does item by item); t is scoped to it. mode any/all:
     # any(e for ...) / all(...) instead, stopping at the deciding element. kind "set": {e for
@@ -1596,11 +1618,13 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
         body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
     self.lcs.append(res)
     self.lct.append(elem(want) if is_list(want) and kind == "list" else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
+    self.lcsoft.append(resultsoft)
     pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
     self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
     self.narrowed = pre
     et = self.lct.pop()
     self.lcs.pop()
+    self.lcsoft.pop()
     for i in range(len(names)):
         nm = names[i]
         sp = saved[i].find(" ")
@@ -1625,11 +1649,11 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
             self.key_kind(et)  # (a tuple element's descriptor, a string constant, which lowering prints)
     return Val(res, self.ctype("list" if kind == "list" else "set", [et]))
 
-def gen_ifexp(self, n: Node, want: str) -> Val:
+def gen_ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
     st = self.static(n.kids[0])
     if st >= 0:
         self.static_reads(n.kids[0])
-        return self.expr(n.kids[1] if st == 1 else n.kids[2], want)
+        return self.expr(n.kids[1] if st == 1 else n.kids[2], want, resultsoft=resultsoft)
     c = self.cond(n.kids[0])
     l1 = self.label()
     l2 = self.label()
@@ -1637,7 +1661,7 @@ def gen_ifexp(self, n: Node, want: str) -> Val:
     self.cbr(c, l1, l2)
     self.place(l1)
     pre = self.narrow_by(n.kids[0], True)
-    a = self.expr(n.kids[1], want)
+    a = self.expr(n.kids[1], want, resultsoft=resultsoft)
     if is_vtuple(unopt(want)):
         a = self.coerce(a, want)  # (construct the requested representation in its arm)
     if (is_fn(a.t) and is_callable(unopt(want))) or is_union(unopt(want)):
@@ -1651,7 +1675,7 @@ def gen_ifexp(self, n: Node, want: str) -> Val:
     wb = want if want != "" else a.t
     if want == "" and n.kids[2].kind == "ifexp" and self.optional(a.t) != "":
         wb = self.optional(a.t)  # (x if c else y if d else None: T | None)
-    b = self.expr(n.kids[2], wb)
+    b = self.expr(n.kids[2], wb, resultsoft=resultsoft)
     if is_vtuple(unopt(want)):
         b = self.coerce(b, want)
     if (is_fn(b.t) and is_callable(unopt(want))) or is_union(unopt(want)):
@@ -1672,29 +1696,29 @@ def gen_ifexp(self, n: Node, want: str) -> Val:
         return Val("null", "None")  # (None either way)
     return Val(self.phi(ph), t)
 
-def gen_boolop(self, n: Node, ascond: bool, want: str) -> Val:
+def gen_boolop(self, n: Node, ascond: bool, want: str, resultsoft: bool = False) -> Val:
     # Python semantics: `a or b` yields a if a is truthy, else b (same static type)
     c0 = n.kids[0]
     c1 = n.kids[1]
     if n.s == "or" and c0.kind == "cmp" and c0.s == "is" and c1.kind == "cmp" and c1.s == "==" and c0.kids[0].kind == "name" and c0.kids[1].kind == "name" and c1.kids[0].kind == "name" and c1.kids[1].kind == "name" and c0.kids[0].s == c1.kids[0].s and c0.kids[1].s == c1.kids[1].s and self.isnum(self.static_type(c0.kids[0])) and self.isnum(self.static_type(c0.kids[1])):
         # x is y or x == y, the identity-or-equality test, on numbers: x == y (numbers have no
         # identity here; see the deviation about NaN)
-        return Val(self.cond(c1), "bool") if ascond else self.expr(c1, want)
+        return Val(self.cond(c1), "bool") if ascond else self.expr(c1, want, resultsoft=resultsoft)
     st = self.static(n.kids[0])
     if st >= 0:
         # a static test on the left: it is the value if it decides, else the right operand
         # (where the test is not compiled, static_reads() reads its classes)
         if (st == 1) == (n.s == "or") and not ascond:
-            return self.expr(n.kids[0], want)
+            return self.expr(n.kids[0], want, resultsoft=resultsoft)
         self.static_reads(n.kids[0])
         if (st == 1) == (n.s == "or"):
             return Val("true" if st == 1 else "false", "bool")
-        return Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], want)
-    a = Val(self.cond(n.kids[0]), "bool") if ascond else self.expr(n.kids[0], want)
+        return Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], want, resultsoft=resultsoft)
+    a = Val(self.cond(n.kids[0]), "bool") if ascond else self.expr(n.kids[0], want, resultsoft=resultsoft)
     if a.t == "None":
         # None is false: `None and b` is None without evaluating b, `None or b` is b
         if n.s == "or":
-            return self.expr(n.kids[1], want)
+            return self.expr(n.kids[1], want, resultsoft=resultsoft)
         return Val("null", "None")
     c = self.truth(a)
     if self.term:
@@ -1714,7 +1738,7 @@ def gen_boolop(self, n: Node, ascond: bool, want: str) -> Val:
         self.cbr(c, l3, l2)
     self.place(l2)
     pre = self.narrow_by(n.kids[0], n.s == "and")
-    b = Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], a.t)
+    b = Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], a.t, resultsoft=resultsoft)
     self.narrowed = pre
     # a right operand that ends the program (sys.exit()) has no edge to the join, and no value
     rt = a.t
@@ -2172,7 +2196,7 @@ def gen_compare(self, n: Node) -> Val:
                 w = elem(ms["__iter__"].ret)
         if len(n.kids[0].kids) > 0:
             self.soft = n.kids[0]
-        return self.cmp2(ops[0], self.expr(n.kids[0], w), b)
+        return self.cmp2(ops[0], self.expr(n.kids[0], w, resultsoft=True), b)
     # (x is None reads a local that only None was assigned to so far, see none_type)
     self.nonecmp = len(ops) == 1 and n.kids[1].kind == "None" and n.kids[0].kind == "name" and (ops[0] == "is" or ops[0] == "is not" or ops[0] == "==" or ops[0] == "!=")
     if len(ops) == 1 and (ops[0] == "in" or ops[0] == "not in") and self.lookup_key(n.kids[0]):
@@ -2205,12 +2229,12 @@ def gen_compare(self, n: Node) -> Val:
             # frozenset constant (see set_display)
             return self.cmp2(ops[0], a, self.set_display(n.kids[1], "", True))
         self.soft = n.kids[1]  # (a display there may hold what may be None where a holds none)
-        return self.cmp2(ops[0], a, self.expr(n.kids[1], w))
+        return self.cmp2(ops[0], a, self.expr(n.kids[1], w, resultsoft=True))
     l3 = self.label()
     ph = Ins("phi", "bool", "")
     r = a
     for i in range(len(ops)):
-        b = self.expr(n.kids[i + 1], a.t)
+        b = self.expr(n.kids[i + 1], a.t, resultsoft=True)
         r = self.cmp2(ops[i], a, b)
         if i < len(ops) - 1:
             nx = self.label()
