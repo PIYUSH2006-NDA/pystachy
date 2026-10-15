@@ -79,28 +79,6 @@ def gen_obj_helpers(self, c: str) -> None:
         self.function(f, bodies[i])
     self.lenient = False
 
-def gen_dispatch(self, op: str) -> None:
-    # pys_obj_<op>(class id, [op code,] a, b), called by the runtime for "O<id>" descriptors
-    r = "ptr" if op == "repr" else "i64"
-    self.out.append(f"define {r} @pys_obj_{op}(i64 %c, {'i64 %op, ' if op == 'cmp' else ''}i64 %a, i64 %b) {{")
-    self.out.append("entry:")
-    self.out.append("  %pa = inttoptr i64 %a to ptr")
-    self.out.append("  %pb = inttoptr i64 %b to ptr")
-    self.out.append(f"  switch i64 %c, label %none [{' '.join([f'i64 {self.ocls[c]}, label %k{self.ocls[c]}' for c in self.ocls])}]")
-    for c in self.ocls:
-        i = self.ocls[c]
-        self.out.append(f"k{i}:")
-        if op == "repr":
-            self.out.append(f"  %r{i} = call ptr @o.repr.{c}(ptr %pa, ptr %pb)")
-            self.out.append(f"  ret ptr %r{i}")
-        else:
-            self.out.append(f"  %r{i} = call i1 @o.{op}.{c}({'i64 %op, ' if op == 'cmp' else ''}ptr %pa, ptr %pb)")
-            self.out.append(f"  %z{i} = zext i1 %r{i} to i64")
-            self.out.append(f"  ret i64 %z{i}")
-    self.out.append("none:")
-    self.out.append("  unreachable")
-    self.out.append("}")
-
 def gen_check_special(self, f: FnInfo) -> None:
     # the special methods Pystachy calls implicitly must have the shape it relies on; in an
     # imported module's class, a wrong one is an error where the method is called, as is a
@@ -169,7 +147,7 @@ def gen_check_import(self, a: Node) -> None:
 
 def gen_hidden(self, name: str, v: Val) -> str:
     # a compiler-made global, assigned here
-    self.global_var(name, lt(v.t))
+    self.global_var(name, v.t)
     self.emit(f"store {lt(v.t)} {v.v}, ptr {name}")
     return name
 
@@ -206,7 +184,7 @@ def gen_early_default(self, f: FnInfo, j: int) -> None:
         return
     f.dtypes[j] = t
     f.dglob[j] = f"@d.{f.ll[1:]}.{f.params[j]}"
-    self.global_var(f.dglob[j], lt(t))
+    self.global_var(f.dglob[j], t)
 
 def gen_class_default(self, ci: ClassInfo, fl: str) -> None:
     # a class-body default read before the class statement runs (see early_default), or a
@@ -215,7 +193,7 @@ def gen_class_default(self, ci: ClassInfo, fl: str) -> None:
     h = self.default_home(ci, fl)
     if fl not in h.fglob:
         h.fglob[fl] = f"@d.c.{h.name}.{fl}"
-        self.global_var(h.fglob[fl], lt(h.ftypes[fl]))
+        self.global_var(h.fglob[fl], h.ftypes[fl])
         self.pending[h.fglob[fl]] = True
     ci.fglob[fl] = h.fglob[fl]
 

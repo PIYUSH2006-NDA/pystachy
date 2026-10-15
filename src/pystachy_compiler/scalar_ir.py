@@ -1,7 +1,6 @@
 """Typed machine scalar computations; LLVM spellings are chosen only at lowering."""
 from __future__ import annotations
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.utils import lt
 
 
 SCALAR_INTS = ["bool", "%byte", "%i32", "int"]
@@ -34,17 +33,6 @@ def gen_scalar_cmp(self, predicate: str, a: Val, b: Val) -> str:
     return f"%t{i.r[0]}"
 
 
-def gen_lower_scalar(self, i: Ins) -> None:
-    a = i.a[0]
-    if i.op == "scalar.bin":
-        s = i.s + (" " + i.x if i.x != "" else "") + " " + lt(a.t) + " " + a.v
-        if len(i.a) == 2:
-            s += ", " + i.a[1].v
-    elif i.op == "scalar.cast":
-        s = i.s + " " + lt(a.t) + " " + a.v + " to " + lt(i.t)
-    else:
-        s = ("fcmp" if a.t == "float" else "icmp") + " " + i.s + " " + lt(a.t) + " " + a.v + ", " + i.a[1].v
-    self.out.append(f"  %t{i.r[0]} = {s}")
 
 
 def gen_verify_scalar(self, fn: IFn, b: Blk, i: Ins) -> None:

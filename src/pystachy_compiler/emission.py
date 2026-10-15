@@ -2,15 +2,15 @@
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, unionnames
 from src.pystachy_compiler.diagnostics import fail
-from src.pystachy_compiler.ir import Blk, Frame, Ins, Val
+from src.pystachy_compiler.ir import Blk, Data, Frame, Ins, Val
 from src.pystachy_compiler.specs import CHECKED, RTL, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import (
     RtFn,
     is_opt,
     is_sopt,
     is_tuple,
-    llstr,
     optnames,
+    runtime_decl,
     targs,
     typestr,
     unopt,
@@ -233,7 +233,7 @@ def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
                 fail(f"internal error: {name} called with the descriptor {v}, which is no string constant", 0)
             i.x = self.strvals[int(v[3:])]
     if not ok:
-        fail(f"internal error: {name} called as {ret} ({', '.join(args)}), but RUNTIME declares it as {self.rtfns[k].decl}", 0)
+        fail(f"internal error: {name} called as {ret} ({', '.join(args)}), but RUNTIME declares it as {runtime_decl(k)}", 0)
     if ret == "void":
         self.add(i)
         return ""
@@ -457,9 +457,9 @@ def gen_sconst(self, s: str) -> str:
     name = f"@s.{len(self.strs)}"
     self.strs[s] = name
     self.strvals.append(s)
-    n = len(s) + 1
-    # Bytes stay immutable; the dictionary hash cache must be writable (runtime.c Str).
-    self.consts.append(f'{name} = private unnamed_addr global {{i64, i64, [{n} x i8]}} {{i64 {n - 1}, i64 0, [{n} x i8] c"{llstr(s)}\\00"}}, align 8')
+    d = Data("string", name)
+    d.text = s
+    self.consts.append(d)
     return name
 
 def gen_alloca(self, t: str, name: str) -> str:

@@ -10,7 +10,7 @@ from src.pystachy_compiler.analysis import (
     reads,
 )
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import Exit, FnInfo, Ins, Try, Val
+from src.pystachy_compiler.ir import Data, Exit, FnInfo, Ins, Try, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     EXCBASES,
@@ -587,7 +587,7 @@ def gen_raise_stmt(self, n: Node) -> None:
         # import (a "guard" in a uimport) the module returns, not imported, so that the importer's
         # handler runs and a later import runs its code again
         g = self.curfn.ll + ".guard"
-        self.global_var(g, "i1")
+        self.global_var(g, "bool")
         l1 = self.label()
         l2 = self.label()
         self.cbr(self.ins(f"load i1, ptr {g}"), l1, l2)
@@ -966,8 +966,9 @@ def gen_exc_helpers(self, c: str) -> None:
         f.dglob = [""]
         f.ret = "exc" if i == 2 else "str"
         self.function(f, bodies[i])
-    ex = f"ptr @x.exit.{c}" if len(bodies) == 3 else "ptr null"
-    self.consts.append(f"@x.{c} = private constant {{ptr, ptr, ptr, ptr, ptr}} {{ptr {self.sconst(c)}, ptr {self.sconst(shown(c))}, ptr @x.str.{c}, ptr @x.repr.{c}, {ex}}}")
+    d = Data("exception", f"@x.{c}")
+    d.refs = [self.sconst(c), self.sconst(shown(c)), f"@x.str.{c}", f"@x.repr.{c}", f"@x.exit.{c}" if len(bodies) == 3 else "null"]
+    self.consts.append(d)
 
 def gen_throw(self, e: Val) -> None:
     # raise exception e: to the landing block around, or out of the function (pys_throw)

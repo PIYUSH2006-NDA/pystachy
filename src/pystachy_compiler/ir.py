@@ -10,6 +10,16 @@ class Val:
         self.t = t
 
 
+class Data:
+    # Immutable module data: string bytes, a callable's code/env, or an exception descriptor.
+    # LLVM's concrete layout and declaration syntax belong to lower_module.
+    def __init__(self, kind: str, name: str):
+        self.kind = kind
+        self.name = name
+        self.text = ""
+        self.refs: list[str] = []
+
+
 class IterArg:
     # A consumer's next argument: evaluate it after its iterator is constructed, before traversal.
     # With split, a label, there is none: the code after the iterator is constructed goes on at

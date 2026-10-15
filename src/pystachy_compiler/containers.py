@@ -43,12 +43,13 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
     # run after that copies it into a new set, or (folded) is it, as CPython's code object keeps
     # it (an operator's result is made on each run, as CPython leaves one beyond its limits)
     const = (folded or (len(n.kids) > 2 and folds(mk("tuple", "", n.line, n.kids)))) and literal(mk("tuple", "", n.line, n.kids)) and not self.rtmode
-    g = f"@fs.{len(self.globs)}"
+    gi = len(self.globs)
+    g = f"@fs.{gi}"
     old = ""
     l0 = ""
     ldone = ""
     if const:
-        self.global_var(g, "ptr")
+        self.global_var(g, "frozenset[?]")
         old = self.ins(f"load ptr, ptr {g}")
         l0 = self.cur
         lmake = self.label()
@@ -73,6 +74,8 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
         self.err("cannot infer the type of a set of None")
     if elem_problem(et) != "":
         self.err(elem_problem(et))
+    if const:
+        self.globs[gi].t = self.ctype("frozenset", [et])
     items = [self.store_elem(v, et) for v in items]
     r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
     for v in items:
