@@ -453,7 +453,10 @@ def gen_stmt(self, n: Node) -> None:
         ekind = self.empty_of(val)
         if len(n.kids) == 2 and t0.kind == "name" and ekind != "" and self.ltype.get(t0.s, "") == NONEVAR and not self.is_global(t0.s):
             self.err(f"cannot infer the type of '{t0.s}' from None and an empty {ekind}; annotate it ({t0.s}: {ekind}[{'K, V' if ekind == 'dict' else 'T'}] | None = None)")
-        if len(n.kids) == 2 and t0.kind == "name" and ekind != "" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
+        if len(n.kids) == 2 and t0.kind == "name" and t0.s in self.curfn.rlocals and val.kind != "name":
+            v = self.expr(val, self.curfn.rctx) if val.kind == "call" and ekind == "" else self.retval(val, self.target_type(t0))
+            self.assign(t0, v)
+        elif len(n.kids) == 2 and t0.kind == "name" and ekind != "" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
             self.assign(t0, self.empty(ekind, t0.s))
         elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "call" and len(val.kids) == 2 and val.kids[0].kind == "name" and val.kids[0].s == "dict" and not self.bound("dict") and val.kids[1].kind == "name" and self.static_type(val.kids[1]) == "kw[]" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
             self.assign(t0, self.empty("dict", t0.s))  # (d = dict(kwargs) of a call without extra keywords: d = {})
