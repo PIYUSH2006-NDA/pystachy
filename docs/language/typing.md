@@ -473,8 +473,9 @@ Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
 `Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
 dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
-no type variable. Repeated bindings must preserve the values' types: mixed `int` and `bool`
-constructor arguments do not implicitly join to `int`. Callable matching uses annotated positional parameters and
+no type variable on its own. Repeated bindings must preserve the values' types: mixed `int`
+and `bool` constructor arguments can use the direct-scalar union fallback below, but do not
+implicitly join to `int`. Callable matching uses annotated positional parameters and
 returns, or an existing `Callable` signature.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
@@ -504,8 +505,17 @@ their named type. Existing conversions preserve each value's representation,
 including integer precision, and handle defaults and unpacked arguments too.
 Consistent bindings still infer first: `Box[int | str]("x")` stores a concrete
 `str`. A container member must fit exactly: `list[int]` cannot become
-`list[int | float]` through a union annotation. This does not add automatic union
-inference or container covariance.
+`list[int | float]` through a union annotation.
+
+Without a named specialization or surrounding generic annotation, conflicting direct
+scalar `T` arguments can infer a closed union: `Pair(1, 2.5)` and `Pair(1, "x")`
+retain both Python value types. This fallback supports `int`, `float`, `bool`, `str`
+and `None`, including existing scalar unions. Ordinary consistent inference still wins.
+Every constructor annotation that mentions a type variable must be a direct type
+variable; nested forms such as `list[T]`, variadic bindings, and non-scalar conflicts
+still need annotations. This does not add container covariance, mixed-display or
+function-return union inference. A homogeneous call may still need a union-valued
+argument to satisfy a wider generic destination annotation.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
 methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class

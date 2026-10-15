@@ -496,6 +496,7 @@ from src.pystachy_compiler.statements import (
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.templates import (
     gen_bind as templates_bind,
+    gen_constructor_unions as templates_constructor_unions,
     gen_fn_sig as templates_fn_sig,
     gen_instance as templates_instance,
     gen_generic_ann as templates_generic_ann,
@@ -2066,6 +2067,9 @@ class Gen:
 
     def want_tvars(self, c: str, want: str) -> dict[str, str]:
         return templates_want_tvars(self, c, want)
+
+    def constructor_unions(self, c: str, ts: list[str]) -> list[str]:
+        return templates_constructor_unions(self, c, ts)
 
     def want_params(self, c: str, want: str) -> list[str]:
         return templates_want_params(self, c, want)

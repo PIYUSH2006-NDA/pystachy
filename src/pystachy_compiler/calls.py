@@ -916,6 +916,10 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 # and never reinterpret a mutable container as a wider member type.
                 for j in targets:
                     vals[j] = self.pcoerce(vals[j], hint[j], f, j)
+        elif f.cls in self.tparams:
+            union_args = self.constructor_unions(f.cls, [v.t for v in vals[1:]])
+            for j in range(len(union_args)):
+                vals[j + 1] = self.pcoerce(vals[j + 1], union_args[j], f, j + 1)
         sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
