@@ -959,9 +959,10 @@ def gen_retval(self, e: Node, want: str) -> Val:
     # infers it). A template's function returns an empty container that nothing fills (see
     # unfilled) as it is, and each call gives it the type its context expects (typed_empty),
     # unless a use further on (in a loop, a call or another return) gives it a type (adopt)
+    contextual = False
     if self.curfn.rctx != "" and (want == "" or "?" in want):
-        # Use a caller's context only where a fresh display needs it. Existing
-        # values keep their inferred types; no mutable container is widened.
+        # Fresh displays can choose the caller's layout before allocating.
+        # Their items still infer normally when that layout does not fit.
         kind = self.empty_of(e)
         t = unopt(self.curfn.rctx)
         if is_union(t):
@@ -969,9 +970,10 @@ def gen_retval(self, e: Node, want: str) -> Val:
             t = matches[0] if len(matches) == 1 else ""
         if e.kind in ["list", "dict", "set", "tuple"] or kind != "":
             if t.startswith((kind if kind != "" else e.kind) + "["):
-                hint = self.generic_hint(e, t) if kind == "" else t
+                hint = self.generic_hint(e, t) if self.curfn.rsoft and kind == "" else t
                 if hint != "":
                     want = hint
+                    contextual = not self.curfn.rsoft
     q = self.qret.get(self.curfn.ll, "")
     kind = self.empty_of(e) if want == "" or "?" in want else ""
     if kind != "":
@@ -992,7 +994,7 @@ def gen_retval(self, e: Node, want: str) -> Val:
         return v
     # A direct forwarding call keeps its fresh empty result open until this
     # template's caller supplies a type. Argument evaluation keeps normal contexts.
-    return self.expr(e, "?" if e.kind == "call" and (want == "" or "?" in want) else want)
+    return self.expr(e, "?" if e.kind == "call" and (want == "" or "?" in want) else want, contextual, self.curfn.rsoft)
 
 def gen_adopt(self, t: str) -> None:
     # the template's function being compiled, which returned an empty container without a

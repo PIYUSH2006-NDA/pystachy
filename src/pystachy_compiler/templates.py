@@ -435,19 +435,20 @@ def contextual_result(n: Node) -> bool:
             return True
     return False
 
-def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "") -> FnInfo:
+def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "", resultsoft: bool = False) -> FnInfo:
     # the function template f compiles to for arguments of types ts, compiled when first
     # needed, in the middle of the function that calls it: its first return statement
     # decides what it returns; nnp: the parameters whose objects are known not to be None
     # Only container contexts can type fresh displays. Include the full context
     # in the key and budgets: two callers may require different native storage.
-    want = want if f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want) and contextual_result(f.orig.kids[2] if f.pending else f.node.kids[2]) else ""
+    want = want if f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want or "tuple[" in want) and contextual_result(f.orig.kids[2] if f.pending else f.node.kids[2]) else ""
     key = ",".join(ts) + (" " + ",".join(nnp) if len(nnp) > 0 else "")
     if key in f.insts and f.insts[key].ll in self.building:
         # Recursion into the active argument specialization must retain its
         # inference cycle, including the diagnostic for an open empty result.
         want = ""
-    size = len(ts) + len(nnp) + len(want)
+    mode = " ~ " if resultsoft else " -> "
+    size = len(ts) + len(nnp) + len(want) + (len(mode) if want != "" else 0)
     for t in ts:
         size += len(t)
     for p in nnp:
@@ -455,7 +456,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "")
     if size > TEMPLATE_BYTES:
         self.err(f"{short(f.name)}() template signature exceeds {TEMPLATE_BYTES} bytes; annotate its parameters")
     if want != "":
-        key += " -> " + want
+        key += mode + want
     if key in f.insts:
         g = f.insts[key]
         if g.ret == "":
@@ -501,6 +502,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "")
     g.ret = f.ret
     g.infer = f.ret == ""
     g.rctx = want
+    g.rsoft = resultsoft and want != ""
     g.inst = True
     g.npos = f.npos
     g.posonly = f.posonly

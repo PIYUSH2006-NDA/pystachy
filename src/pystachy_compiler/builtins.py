@@ -98,7 +98,7 @@ def gen_modattr(self, path: str) -> Val:
     self.err(f"unsupported module attribute {path}")
     return Val("", "")
 
-def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
+def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool = False) -> Val:
     # retval's open-result marker belongs to forwarding calls, not to the
     # arguments a builtin consumes (sorted/list/dict may reuse their context).
     want = "" if want == "?" else want
@@ -118,7 +118,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             self.err("tuple() takes zero or one positional iterable argument")
         if len(args) == 0:
             return self.coerce(self.tuple_([]), want) if is_vtuple(unopt(want)) else self.tuple_([])
-        v = self.unwrap(self.expr(args[0], self.ctype("list", [targs(unopt(want))[0]]) if is_vtuple(unopt(want)) else ""), "TypeError: 'NoneType' object is not iterable")
+        v = self.unwrap(self.expr(args[0], self.ctype("list", [targs(unopt(want))[0]]) if is_vtuple(unopt(want)) else "", resultsoft=resultsoft), "TypeError: 'NoneType' object is not iterable")
         if is_vtuple(v.t) or is_tuple(v.t):
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
         if v.t == "str":
@@ -138,7 +138,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
     if name == "open":
         return self.open_(args)
     if name == "set" or name == "frozenset":
-        return self.set_new(name, args, want)
+        return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
         self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
     if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
@@ -272,7 +272,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
         lazy = self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")
         ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and lazy else None
-        v0 = self.consume(args[0], w, ka)
+        v0 = self.consume(args[0], w, ka, resultsoft)
         if ka is not None:
             kvals = [self.tget(ka.value, j) for j in range(len(kws))]
         elif len(kws) > 0:
@@ -302,7 +302,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
         vals = [self.read(args[0])]
         self.allowq = False
     else:
-        vals = [self.expr(a, w) for a in args if a.kind != "kw"]
+        vals = [self.expr(a, w, resultsoft=resultsoft) for a in args if a.kind != "kw"]
         kvals = [self.expr(a.kids[0], "") for a in kws]
     rev = "0"
     keyv = Val("", "")
@@ -864,7 +864,7 @@ def gen_mapgen(self, n: Node) -> Node:
     elt = mk("call", "", line, [f] + [mk("name", x.s, line, []) for x in items])
     return mk("listcomp", "gen", line, [elt, mk("tuple", "", line, items), mk("call", "", line, [mk("name", "zip", line, [])] + args[1:])])
 
-def gen_consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
+def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft: bool = False) -> Val:
     # range(), reversed(), enumerate(), zip() and generator expressions where their items are
     # used at once (list(), sorted(), "".join(), ...) become a fresh list of those items, built
     # by the for loop machinery; anywhere else they are rejected, as a list would behave
@@ -872,9 +872,9 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
     if self.is_mapcall(n):
         n = self.mapgen(n)
     if n.kind == "listcomp":
-        return self.listcomp(n, want, "", "", arg)
+        return self.listcomp(n, want, "", "", arg, resultsoft=resultsoft)
     if not self.iterator_call(n):
-        return self.expr(n, want)
+        return self.expr(n, want, resultsoft=resultsoft)
     if n.kids[0].s == "range":
         # The runtime backing is pointer-free: keep list[int] regardless of want.
         # Optional/union item storage needs a fresh scanned allocation, never retyping.
@@ -883,7 +883,7 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
         self.iterarg(arg)
         return r
     it = mk("name", "__item", n.line, [])
-    return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want, "", "", arg)
+    return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want, "", "", arg, resultsoft=resultsoft)
 
 def gen_as_list(self, v: Val, name: str) -> Val:
     # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item
@@ -1147,7 +1147,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     pending.extend(query.kids)
                 if not contextual:
                     want_arg = ""
-            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg)
+            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove"] and i == 0)
             self.stkkey = self.nokey
             if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)

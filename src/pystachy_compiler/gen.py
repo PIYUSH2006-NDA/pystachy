@@ -654,6 +654,7 @@ class Gen:
         self.opts: dict[str, bool] = {}  # the optimizations on (optimizations()), once program() starts
         self.lcs: list[str] = []
         self.lct: list[str] = []
+        self.lcsoft: list[bool] = []
         self.reds: dict[str, Reduce] = {}  # the reductions (reduce), by the key their items' node holds
         self.ret = "None"
         self.retann = False
@@ -1815,8 +1816,8 @@ class Gen:
     def truth(self, v: Val) -> str:
         return expressions_truth(self, v)
 
-    def expr(self, n: Node, want: str) -> Val:
-        return expressions_expr(self, n, want)
+    def expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool = False) -> Val:
+        return expressions_expr(self, n, want, returnctx, resultsoft)
 
     def list_hint_type(self, a: str, b: str) -> str:
         return expressions_list_hint_type(self, a, b)
@@ -1839,8 +1840,8 @@ class Gen:
     def class_ready(self, cn: Node) -> ClassInfo:
         return expressions_class_ready(self, cn)
 
-    def class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
-        return expressions_class_call(self, cn, m, args, want)
+    def class_call(self, cn: Node, m: str, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return expressions_class_call(self, cn, m, args, want, resultsoft)
 
     def cls_bound(self, f: FnInfo, c: str, obj: bool) -> None:
         return expressions_cls_bound(self, f, c, obj)
@@ -1932,14 +1933,14 @@ class Gen:
     def iter_ret(self, e: Node) -> Val:
         return expressions_iter_ret(self, e)
 
-    def listcomp(self, n: Node, want: str, mode: str='', into: str='', arg: IterArg | None=None, kind: str='list') -> Val:
-        return expressions_listcomp(self, n, want, mode, into, arg, kind)
+    def listcomp(self, n: Node, want: str, mode: str='', into: str='', arg: IterArg | None=None, kind: str='list', resultsoft: bool = False) -> Val:
+        return expressions_listcomp(self, n, want, mode, into, arg, kind, resultsoft)
 
-    def ifexp(self, n: Node, want: str) -> Val:
-        return expressions_ifexp(self, n, want)
+    def ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
+        return expressions_ifexp(self, n, want, resultsoft)
 
-    def boolop(self, n: Node, ascond: bool, want: str) -> Val:
-        return expressions_boolop(self, n, ascond, want)
+    def boolop(self, n: Node, ascond: bool, want: str, resultsoft: bool = False) -> Val:
+        return expressions_boolop(self, n, ascond, want, resultsoft)
 
     def unary(self, n: Node) -> Val:
         return expressions_unary(self, n)
@@ -2001,11 +2002,11 @@ class Gen:
     def foreign_eq(self, a: Val, b: Val) -> Val:
         return expressions_foreign_eq(self, a, b)
 
-    def call(self, n: Node, want: str, typeargs: str="") -> Val:
-        return calls_call(self, n, want, typeargs)
+    def call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str = "") -> Val:
+        return calls_call(self, n, want, resultsoft, typeargs)
 
-    def star_call(self, n: Node, want: str, typeargs: str="") -> Val:
-        return calls_star_call(self, n, want, typeargs)
+    def star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str = "") -> Val:
+        return calls_star_call(self, n, want, resultsoft, typeargs)
 
     def static_callee(self, f: Node) -> bool:
         return calls_static_callee(self, f)
@@ -2019,14 +2020,14 @@ class Gen:
     def not_callable(self, name: str, t: str) -> None:
         return calls_not_callable(self, name, t)
 
-    def obj_call(self, o: Val, args: list[Node], want: str) -> Val:
-        return calls_obj_call(self, o, args, want)
+    def obj_call(self, o: Val, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return calls_obj_call(self, o, args, want, resultsoft)
 
     def cached_wrapper(self, t: str) -> bool:
         return calls_cached_wrapper(self, t)
 
-    def call_cache(self, o: Val, args: list[Node], want: str) -> Val:
-        return calls_call_cache(self, o, args, want)
+    def call_cache(self, o: Val, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return calls_call_cache(self, o, args, want, resultsoft)
 
     def to_callable(self, v: Val, t: str) -> Val:
         return calls_to_callable(self, v, t)
@@ -2046,8 +2047,8 @@ class Gen:
     def call_callable(self, o: Val, args: list[Node]) -> Val:
         return calls_call_callable(self, o, args)
 
-    def call_value(self, v: Val, args: list[Node], want: str) -> Val:
-        return calls_call_value(self, v, args, want)
+    def call_value(self, v: Val, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return calls_call_value(self, v, args, want, resultsoft)
 
     def bound(self, s: str) -> bool:
         return calls_bound(self, s)
@@ -2061,8 +2062,8 @@ class Gen:
     def open_(self, args: list[Node]) -> Val:
         return calls_open_(self, args)
 
-    def method(self, o: Val, m: str, args: list[Node], want: str='') -> Val:
-        return calls_method(self, o, m, args, want)
+    def method(self, o: Val, m: str, args: list[Node], want: str='', resultsoft: bool = False) -> Val:
+        return calls_method(self, o, m, args, want, resultsoft)
 
     def unbound_call(self, tn: str, m: str, args: list[Node]) -> Val:
         return calls_unbound_call(self, tn, m, args)
@@ -2100,11 +2101,11 @@ class Gen:
     def pcoerce(self, v: Val, t: str, f: FnInfo, j: int) -> Val:
         return calls_pcoerce(self, v, t, f, j)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False, typeargs: str='') -> Val:
-        return calls_call_fn(self, f, pre, args, want, none, cache, direct, typeargs)
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False, resultsoft: bool = False, typeargs: str = "") -> Val:
+        return calls_call_fn(self, f, pre, args, want, none, cache, direct, resultsoft, typeargs)
 
-    def virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: str, none: str) -> Val:
-        return calls_virtual_call(self, f, pre, args, want, none)
+    def virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: str, none: str, resultsoft: bool = False) -> Val:
+        return calls_virtual_call(self, f, pre, args, want, none, resultsoft)
 
     def fname(self, f: FnInfo) -> str:
         return calls_fname(self, f)
@@ -2157,8 +2158,8 @@ class Gen:
     def fn_sig(self, t: str) -> list[str]:
         return templates_fn_sig(self, t)
 
-    def instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "") -> FnInfo:
-        return templates_instance(self, f, ts, nnp, want)
+    def instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "", resultsoft: bool = False) -> FnInfo:
+        return templates_instance(self, f, ts, nnp, want, resultsoft)
 
     def dotted(self, n: Node) -> str:
         return builtins_dotted(self, n)
@@ -2166,8 +2167,8 @@ class Gen:
     def modattr(self, path: str) -> Val:
         return builtins_modattr(self, path)
 
-    def builtin(self, name: str, args: list[Node], want: str) -> Val:
-        return builtins_builtin(self, name, args, want)
+    def builtin(self, name: str, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return builtins_builtin(self, name, args, want, resultsoft)
 
     def vnode(self, v: Val) -> Node:
         return builtins_vnode(self, v)
@@ -2211,8 +2212,8 @@ class Gen:
     def mapgen(self, n: Node) -> Node:
         return builtins_mapgen(self, n)
 
-    def consume(self, n: Node, want: str, arg: IterArg | None=None) -> Val:
-        return builtins_consume(self, n, want, arg)
+    def consume(self, n: Node, want: str, arg: IterArg | None=None, resultsoft: bool = False) -> Val:
+        return builtins_consume(self, n, want, arg, resultsoft)
 
     def as_list(self, v: Val, name: str) -> Val:
         return builtins_as_list(self, v, name)
@@ -2238,14 +2239,14 @@ class Gen:
     def update(self, o: Val, args: list[Node]) -> Val:
         return builtins_update(self, o, args)
 
-    def set_display(self, n: Node, want: str, folded: bool) -> Val:
-        return containers_set_display(self, n, want, folded)
+    def set_display(self, n: Node, want: str, folded: bool, returnctx: bool = False, resultsoft: bool = False) -> Val:
+        return containers_set_display(self, n, want, folded, returnctx, resultsoft)
 
     def iter_elem(self, t: str) -> str:
         return containers_iter_elem(self, t)
 
-    def siter(self, n: Node, et: str, what: str) -> Val:
-        return containers_siter(self, n, et, what)
+    def siter(self, n: Node, et: str, what: str, resultsoft: bool = False) -> Val:
+        return containers_siter(self, n, et, what, resultsoft)
 
     def sitems(self, v: Val, et: str, what: str) -> Val:
         return containers_sitems(self, v, et, what)
@@ -2268,8 +2269,8 @@ class Gen:
     def keys_list(self, v: Val) -> Val:
         return containers_keys_list(self, v)
 
-    def set_new(self, name: str, args: list[Node], want: str) -> Val:
-        return containers_set_new(self, name, args, want)
+    def set_new(self, name: str, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return containers_set_new(self, name, args, want, resultsoft)
 
     def setop(self, op: str, a: Val, b: Val) -> Val:
         return containers_setop(self, op, a, b)
@@ -2277,8 +2278,8 @@ class Gen:
     def smethod(self, o: Val, m: str, args: list[Node]) -> Val:
         return containers_smethod(self, o, m, args)
 
-    def fromkeys(self, args: list[Node], want: str) -> Val:
-        return containers_fromkeys(self, args, want)
+    def fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) -> Val:
+        return containers_fromkeys(self, args, want, resultsoft)
 
     def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
         return containers_affix_any(self, tup, m, av)
