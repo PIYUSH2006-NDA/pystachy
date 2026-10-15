@@ -32,7 +32,7 @@ __all__ = ['get_close_matches', 'ndiff', 'restore', 'SequenceMatcher',
 
 from heapq import nlargest as _nlargest
 # Pystachy port: Match is a typing.NamedTuple class, where CPython makes it with
-# collections.namedtuple() (Pystachy has no collections, nor types.GenericAlias)
+# collections.namedtuple() (Pystachy's collections has no namedtuple, nor types.GenericAlias)
 from typing import Callable, NamedTuple
 
 class Match(NamedTuple):

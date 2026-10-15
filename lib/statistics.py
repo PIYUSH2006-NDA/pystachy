@@ -899,9 +899,9 @@ def mode(data):
     If *data* is empty, ``mode``, raises StatisticsError.
 
     """
-    # Pystachy port: a dict counts the items, as Counter(iter(data)) does (Pystachy has no
-    # collections), and most_common(1)'s pair is max()'s of its items by count, the first of the
-    # highest count, as heapq.nlargest(1, ...) picks it
+    # Pystachy port: a dict counts the items, as Counter(iter(data)) does (iter() of any data
+    # is not supported), and most_common(1)'s pair is max()'s of its items by count, the first of
+    # the highest count, as heapq.nlargest(1, ...) picks it
     counts = {}
     for elem in data:
         counts[elem] = counts.get(elem, 0) + 1
@@ -1488,7 +1488,7 @@ def correlation(x, y, /, *, method='linear'):
         raise StatisticsError('at least one of the inputs is constant')
 
 
-# Pystachy port: made where collections imports (Pystachy has none)
+# Pystachy port: made where collections has namedtuple (Pystachy's has not)
 try:
     from collections import namedtuple
     LinearRegression = namedtuple('LinearRegression', ('slope', 'intercept'))

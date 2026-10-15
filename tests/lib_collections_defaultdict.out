@@ -1,0 +1,45 @@
+defaultdict(<class 'int'>, {'a': 3, 'b': 1, 'c': 1, 'ω': 2, 'é': 1, 'zz': 0}) 0 defaultdict(<class 'int'>, {'a': 3, 'b': 1, 'c': 1, 'ω': 2, 'é': 1, 'zz': 0})
+defaultdict(<class 'list'>, {'x': [0, 2], 'y': [1], 'z': [3]}) True
+['p', 'q'] 2 [1, 2]
+defaultdict(<class 'str'>, {'k': 'vw'})
+defaultdict(<class 'float'>, {'f': 0.5})
+False defaultdict(<class 'bool'>, {'b': False})
+defaultdict(<class 'dict'>, {'outer': {'inner': 1}})
+defaultdict(<class 'list'>, {'a': ['x', 'y'], 'b': ['z']})
+defaultdict(<class 'int'>, {'p': 1, 'q': 2}) defaultdict(<class 'int'>, {'o': 5}) defaultdict(<class 'list'>, {'a': ['x', 'y'], 'b': ['z'], 'c': ['w']}) defaultdict(<class 'list'>, {'a': ['x', 'y'], 'b': ['z']})
+1 0 [('q', 1), ('r', 0)]
+7 True
+? [(1, 2)] 1
+1 2 1 [1, 2]
+defaultdict(None, {}) True
+KeyError 'missing' KeyError('missing')
+defaultdict(None, {'a': 1}) 1
+defaultdict(<class 'int'>, {'e': 2})
+None False [0] 0 defaultdict(<class 'list'>, {})
+[5] [5] defaultdict(<class 'list'>, {'y': [5]})
+[5] None [0] defaultdict(<class 'list'>, {})
+KeyError 'nope'
+('q', [2]) defaultdict(<class 'list'>, {'p': [1]})
+defaultdict(<class 'list'>, {})
+KeyError 'p'
+KeyError 'popitem(): dictionary is empty'
+0 defaultdict(<class 'int'>, {'x': 0})
+defaultdict(<class 'int'>, {'a': 0})
+defaultdict(None, {'a': 0})
+KeyError 'b'
+defaultdict(<class 'int'>, {'a': 0, 'c': 0}) 0
+defaultdict(<class 'list'>, {'a': [1, 2]}) defaultdict(<class 'list'>, {'a': [1, 2], 'b': [3]}) False True
+defaultdict(<class 'list'>, {'a': [1, 2], 'z': [9]}) defaultdict(<class 'list'>, {'a': [1, 2], 'b': [3]})
+defaultdict(<class 'list'>, {'a': [1, 2], 'y': [8]})
+defaultdict(<class 'list'>, {'a': [1, 2], 'y': [8], 'w': [7], 'extra': [6], 'v': [5], 'b': [3]})
+defaultdict(<class 'list'>, {}) 0 False
+1 True
+defaultdict(<class 'list'>, {'a': ['b', 'c'], 'b': ['a'], 'c': ['a']}) defaultdict(<class 'list'>, {2: ['hi', 'yo'], 3: ['hey'], 1: ['a']})
+a ['b', 'c']
+b ['a']
+c ['a']
+['a', 'b', 'c'] ['a', 'b', 'c'] ['a', 'b', 'c']
+[99] [('k', [99]), ('other', [1])]
+['val 1', 'key a', 'key b', 'val 2', 'key c', 'val 3'] OrderedDict({'a': 1}) Counter({'b': 2}) defaultdict(<class 'int'>, {'c': -3})
+['key x', 'factory', 'val 1', 'key x', 'val 1'] [('x', 12)]
+[exit 0]

@@ -1,0 +1,60 @@
+OrderedDict() OrderedDict({'b': 2, 'a': 1}) OrderedDict({'x': 1.5, 'y': 2.5})
+OrderedDict({'t': [1], 'u': [2]}) OrderedDict({'k': 1})
+OrderedDict({'p': 1, 'q': 2}) OrderedDict({'p': 1, 'q': 2, 'r': 3}) OrderedDict({'p': 1, 'q': 2}) OrderedDict({'a': 2, 'z': 1})
+OrderedDict({'d': 4})
+OrderedDict() 0 False OrderedDict()
+OrderedDict({'a': 0, 'b': 0, 'c': 0}) OrderedDict({'x': [1], 'y': [1]}) OrderedDict()
+['three', 'two', 'one'] [('three', 3), ('two', 2), ('one', 1)] ['three', 'one']
+['a', 'c', 'd', 'e', 'b'] OrderedDict({'a': 0, 'c': 2, 'd': 3, 'e': 4, 'b': 1})
+['e', 'b', 'a', 'c', 'd'] [4, 1, 0, 2, 3] [('e', 4), ('b', 1), ('a', 0), ('c', 2), ('d', 3)]
+OrderedDict({'e': 4, 'b': 1, 'c': 2, 'd': 3, 'a': 0})
+KeyError 'zz' KeyError('zz')
+KeyError 'x'
+('a', 0) ('e', 4) ('b', 1) OrderedDict({'c': 2, 'd': 3})
+OrderedDict({'c': 100, 'd': 3, 'n': 5})
+OrderedDict({'d': 3, 'n': 5}) False True
+KeyError 'c'
+KeyError 'c'
+('only', 1) OrderedDict()
+KeyError 'dictionary is empty' KeyError('dictionary is empty')
+KeyError 'dictionary is empty'
+OrderedDict({'a': 10, 'b': 2, 'c': 3})
+OrderedDict({'b': 2, 'c': 3, 'a': 11})
+False True True False
+True False
+False
+True True False True True
+True True True True False
+False True True True
+1 None -1 1 3 OrderedDict({'a': 1, 'b': 2, 'c': 3})
+3 0 None OrderedDict({'a': 1, 'b': 2})
+KeyError 'zz'
+OrderedDict({'a': -1, 'b': 2, 'm': 7, 'n': 8, 'o': 9})
+OrderedDict({'a': -1, 'b': 2, 'm': 7, 'n': 8, 'o': 9, 'q': 1}) OrderedDict({'a': 0, 'b': 2, 'm': 7, 'n': 8, 'o': 9})
+OrderedDict({'a': -1, 'b': 2, 'm': 7, 'n': 8, 'o': 9, 'r': 2})
+a -1
+b 2
+m 7
+n 8
+o 9
+r 2
+['aa', 'bb', 'mm', 'nn', 'oo', 'rr'] ['a', 'b', 'm', 'n', 'o', 'r'] r
+OrderedDict() 0
+('a', 0) ('h', 7) ('b', 1) ['c', 'd', 'e', 'f', 'g']
+OrderedDict({'f': 60, 'd': 3, 'e': 4, 'g': 6, 'c': 2, 'b': -1, 'z': 26}) 7 ['f', 'd', 'e', 'g', 'c', 'b', 'z'] ['z', 'b', 'c', 'g', 'e', 'd', 'f'] ['f', 'd', 'e', 'g', 'c', 'b', 'z'] [60, 3, 4, 6, 2, -1, 26] [('f', 60), ('d', 3), ('e', 4), ('g', 6), ('c', 2), ('b', -1), ('z', 26)]
+True True False 60 60 0 60 25
+60 3 None OrderedDict({'e': 4, 'g': 6, 'c': 2, 'b': -1, 'z': 26, 'y': 25}) True OrderedDict({'e': 4, 'g': 6, 'c': 2, 'b': -1, 'z': 26, 'y': 25})
+OrderedDict({'y': 25, 'z': 26, 'g': 6, 'c': 2, 'b': -1}) True False
+True OrderedDict({'y': 25, 'z': 26, 'g': 6, 'c': 2, 'b': -1, 'q': 0}) OrderedDict({'y': 25, 'z': 26, 'g': 6, 'c': 2, 'b': -1})
+defaultdict(<class 'int'>, {'y': 25, 'z': 26, 'g': 6, 'c': 2, 'b': -1}) True True
+('y', 25) ('b', -1) ('z', 26) ('c', 2) ('g', 6) OrderedDict() 0
+OrderedDict() ('new', 1) OrderedDict()
+[0, 1, 2] 499 [999, 998, 997] 750 250 [500, 501] [748, 749]
+[509, 508, 507, 506, 505, 504, 503, 502, 501, 500, 510, 511] [1009, 1008, 1007] 260
+[509, 1009, 1008, 508, 1007, 1006, 507, 1005] 260 True
+1 None
+evict ('b', 2)
+evict ('a', 1)
+OrderedDict({'c': 3, 'd': 4}) 1
+OrderedDict({'bob': 9, 'zoë': 9, 'eve': 5, 'ann': 3})
+[exit 0]

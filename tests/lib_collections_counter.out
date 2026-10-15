@@ -1,0 +1,44 @@
+Counter({'l': 3, 'o': 2, 'h': 1, 'e': 1, ' ': 1, 'w': 1, 'r': 1, 'd': 1}) Counter({'élan': 1, 'à': 1, 'la': 1, 'çà': 1}) Counter({'a': 2, 'b': 1}) Counter({'x': 2, 'y': 1})
+Counter({'a': 2, 'b': -1}) Counter({3: 3, 2: 2, 1: 1}) Counter({(1, 'x'): 2}) Counter({(1, True): 2})
+Counter({'a': 2, 'b': 1}) Counter({'a': 12, 'b': 1}) Counter({'a': 2, 'b': 1}) True Counter({'q': 4})
+Counter({'z': 3})
+Counter() False 0 Counter() Counter({'a': 1, 'b': 1})
+4 0 False 4 0 Counter({'i': 4, 's': 4, 'p': 2, 'm': 1})
+Counter({'i': 4, 's': 4, 'p': 2}) False 0
+Counter({'h': 5, 'w': 3, 'c': 3, 'i': 2, 't': 2, 'a': 2, 'b': 2, 'q': 0}) 5
+Counter({'h': 3, 'b': 2, 'w': 1, 'i': 1, 'c': 1, 't': 0, 'a': 0, 'q': -5}) 1
+Counter({'m': 4, 'n': 0})
+['m', 'i', 's', 'p'] [1, 4, 4, 2] [('m', 1), ('i', 4), ('s', 4), ('p', 2)]
+4 None 7 4 1 Counter({'i': 4, 's': 4, 'p': 2, 'm': 1, 'y': 1})
+1 -1 None ('p', 2) Counter({'i': 4, 's': 4, 'm': 1})
+KeyError 'nope'
+m 1
+i 4
+s 4
+['i', 'm', 's'] ['m', 'i', 's'] ['mm', 'ii', 'ss'] s i ['s', 'i', 'm']
+Counter() 0 [] []
+KeyError 'popitem(): dictionary is empty'
+NotImplementedError Counter.fromkeys() is undefined.  Use Counter(iterable) instead.
+[('a', 5), ('b', 2)] [('a', 5), ('b', 2), ('r', 2), ('c', 1), ('d', 1)] [] [] [('a', 5), ('b', 2), ('r', 2), ('c', 1), ('d', 1)]
+[('c', 2), ('a', 1), ('b', 1)] [('x', 0)]
+['a', 'a', 'a', 'a', 'a', 'b', 'b', 'c', 'd', 'r', 'r'] ['x', 'x', 'w'] 11
+13 -3
+Counter({'b': 4, 'c': 2, 'a': 1}) Counter({'b': 2, 'a': 1}) Counter({'b': 3, 'c': 2, 'a': 1}) Counter({'b': 1}) Counter({'c': 2})
+Counter({'a': 3}) Counter({'b': 2}) Counter({'a': 3}) Counter({'a': 3}) Counter({'b': 2}) Counter({'a': 3}) Counter({'a': 3})
+Counter({'b': 4, 'c': 2, 'a': 1})
+Counter({'c': 2, 'a': 1})
+Counter({'a': 3, 'c': 2, 'z': 1})
+Counter({'a': 1, 'z': 1})
+Counter({'p': 1})
+True False True False True False
+True True True False False True True
+True False True True True
+True False False True True
+the: 3
+and: 2
+cat: 1
+8 5
+Counter({'b': 3, 'a': 2, 'c': 1}) b [('x', 2)] Counter({'ω': 3, 'b': 2, 'a': 1})
+Counter({'a': 2, 'b': 1})
+[1, 1, 2, 3]
+[exit 0]
