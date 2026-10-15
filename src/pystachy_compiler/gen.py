@@ -323,6 +323,7 @@ from src.pystachy_compiler.expressions import (
     gen_fmt_error as expressions_fmt_error,
     gen_foreign_eq as expressions_foreign_eq,
     gen_forget as expressions_forget,
+    gen_forget_walrus as expressions_forget_walrus,
     gen_format_ as expressions_format_,
     gen_has as expressions_has,
     gen_ifexp as expressions_ifexp,
@@ -601,6 +602,7 @@ from src.pystachy_compiler.variables import (
     gen_unfilled as variables_unfilled,
     gen_unpacked as variables_unpacked,
     gen_unready as variables_unready,
+    gen_walrus as variables_walrus,
     gen_where_def as variables_where_def,
 )
 
@@ -1345,6 +1347,9 @@ class Gen:
     def star_assign(self, t: Node, v: Val) -> None:
         return variables_star_assign(self, t, v)
 
+    def walrus(self, n: Node, want: str) -> Val:
+        return variables_walrus(self, n, want)
+
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
 
@@ -1776,6 +1781,9 @@ class Gen:
 
     def narrow_by(self, test: Node, truth: bool) -> dict[str, str]:
         return expressions_narrow_by(self, test, truth)
+
+    def forget_walrus(self, pre: dict[str, str], es: list[Node]) -> dict[str, str]:
+        return expressions_forget_walrus(self, pre, es)
 
     def forget(self, body: list[Node], tgt: Node) -> dict[str, str]:
         return expressions_forget(self, body, tgt)

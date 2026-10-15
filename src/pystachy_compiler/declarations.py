@@ -1019,6 +1019,11 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
     for st in ci.node.kids[0].kids:
         self.line = st.line
+        if has_kind(st, "walrus") or (st.kind == "def" and len([p for p in st.kids[0].kids if has_kind(p, "walrus")]) > 0):
+            why = "an assignment expression (:=) in a class body is not supported (CPython binds a class attribute)"
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
         if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
             continue
         if st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
@@ -1385,6 +1390,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         return "bool"
     if k == "ifexp":
         return self.guess(e.kids[1], f)
+    if k == "walrus":
+        return self.guess(e.kids[0], f)
     if k == "list" and len(e.kids) > 0:
         t = self.guess(e.kids[0], f)
         return self.ctype("list", [t]) if t != "" and not t.startswith("!") else t

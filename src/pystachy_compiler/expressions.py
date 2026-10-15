@@ -1,7 +1,7 @@
 """Expressions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.analysis import collect, deleted, only_none, stack_aliases, stack_kept
+from src.pystachy_compiler.analysis import collect, deleted, only_none, stack_aliases, stack_kept, walrus_names
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Val
 from src.pystachy_compiler.names import short
@@ -71,14 +71,18 @@ def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
         self.narrows(n.kids[0], not truth, out)
     elif k == "boolop" and (n.s == "and") == truth:
         self.narrows(n.kids[0], truth, out)
+        w: dict[str, bool] = {}
+        walrus_names(n.kids[1], w)
+        for nm in w:
+            out.pop(nm, "")  # (the right operand binds it again)
         self.narrows(n.kids[1], truth, out)
-    elif k == "name" and truth and self.narrowable(n.s):
-        out[n.s] = unopt(out[n.s] if n.s in out else self.now_type(n.s))
-    elif k == "cmp" and n.kids[1].kind == "None" and n.kids[0].kind == "name" and (n.s == "is not" or n.s == "!=" or n.s == "is" or n.s == "==") and self.narrowable(n.kids[0].s):
+    elif (k == "name" or k == "walrus") and truth and self.narrowable(n.s):
+        out[n.s] = unopt(out[n.s] if n.s in out else self.now_type(n.s))  # (x, or (x := v): what x holds now)
+    elif k == "cmp" and n.kids[1].kind == "None" and (n.kids[0].kind == "name" or n.kids[0].kind == "walrus") and (n.s == "is not" or n.s == "!=" or n.s == "is" or n.s == "==") and self.narrowable(n.kids[0].s):
         if (n.s == "is not" or n.s == "!=") == truth:
             nm = n.kids[0].s
             out[nm] = unopt(out[nm] if nm in out else self.now_type(nm))
-    elif k == "call" and len(n.kids) == 3 and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and n.kids[1].kind == "name" and self.narrowable(n.kids[1].s):
+    elif k == "call" and len(n.kids) == 3 and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and (n.kids[1].kind == "name" or n.kids[1].kind == "walrus") and self.narrowable(n.kids[1].s):
         nm = n.kids[1].s
         t = out[nm] if nm in out else self.now_type(nm)
         if self.bound("isinstance"):
@@ -93,6 +97,20 @@ def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
             out[nm] = n.kids[2].s
         elif self.isinst(t, n.kids[2]) == (-2 if truth else -3):
             out[nm] = unopt(t)
+
+def gen_forget_walrus(self, pre: dict[str, str], es: list[Node]) -> dict[str, str]:
+    # narrowed as it was before expressions es that may not run, or run in a loop, and whose
+    # narrowing is not kept (pre), less the names a := in them may have bound since
+    w: dict[str, bool] = {}
+    for e in es:
+        walrus_names(e, w)
+    if len(w) == 0:
+        return pre
+    out: dict[str, str] = {}
+    for nm in pre:
+        if nm not in w:
+            out[nm] = pre[nm]
+    return out
 
 def gen_narrowable(self, name: str) -> bool:
     # a local (or parameter) of an optional type, union, or ordinary class: a global or field
@@ -570,6 +588,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.listcomp(n.kids[0], want, "", "", None, "set", resultsoft)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
+    if k == "walrus":
+        return self.walrus(n, want)
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
     if k == "binop":
@@ -1658,9 +1678,9 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     self.lcs.append(res)
     self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
     self.lcsoft.append(resultsoft)
-    pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
+    pre = self.narrowed  # (its variables are its own: the loop binds no outer local, but by :=)
     self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
-    self.narrowed = pre
+    self.narrowed = self.forget_walrus(pre, [n])
     et = self.lct.pop()
     self.lcs.pop()
     self.lcsoft.pop()
@@ -1719,7 +1739,7 @@ def gen_ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
         b = self.coerce(b, want)
     if (is_fn(b.t) and is_callable(unopt(want))) or is_union(unopt(want)):
         b = self.coerce(b, want)
-    self.narrowed = pre
+    self.narrowed = self.forget_walrus(pre, n.kids[1:])
     e2 = "" if self.term else self.cur
     t = b.t if e1 == "" or (a.t == "None" and e2 != "") else a.t
     if e1 != "" and e2 != "" and a.t != b.t and (want == "" or is_opt(want)) and is_opt(self.join(a.t, b.t)):
@@ -1778,7 +1798,7 @@ def gen_boolop(self, n: Node, ascond: bool, want: str, resultsoft: bool = False)
     self.place(l2)
     pre = self.narrow_by(n.kids[0], n.s == "and")
     b = Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], a.t, resultsoft=resultsoft)
-    self.narrowed = pre
+    self.narrowed = self.forget_walrus(pre, n.kids[1:])
     # a right operand that ends the program (sys.exit()) has no edge to the join, and no value
     rt = a.t
     if not ascond and (is_opt(a.t) or is_opt(b.t) or b.t == "None"):
@@ -2286,6 +2306,7 @@ def gen_compare(self, n: Node) -> Val:
     self.incoming(ph, r.v, self.cur)
     self.br(l3)
     self.place(l3)
+    self.narrowed = self.forget_walrus(self.narrowed, n.kids[2:])  # (operands that may not run)
     return Val(self.phi(ph), "bool")
 
 def gen_exc_id(self, v: Val) -> Val:

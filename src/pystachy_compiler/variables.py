@@ -18,6 +18,7 @@ from src.pystachy_compiler.analysis import (
     shows_items,
     stmt_binds,
     typed_default,
+    walrus_values,
 )
 from src.pystachy_compiler.diagnostics import MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, Val
@@ -423,7 +424,7 @@ def gen_none_type(self, name: str) -> str:
 
 def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
     # the values that statements in body (into blocks, in order) assign to variable name: of
-    # a, b = e the item of e (an index node if e is not a display)
+    # a, b = e the item of e (an index node if e is not a display), of name := v v
     for st in body:
         if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
             continue
@@ -440,6 +441,9 @@ def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
                             after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
                             at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
                             out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
+        for kid in st.kids:
+            if kid.kind != "block" and kid.kind != "except":
+                walrus_values(kid, name, out)  # (name := v)
         for kid in st.kids:
             if kid.kind == "block":
                 self.none_values(kid.kids, name, out)
@@ -1170,7 +1174,7 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
         return True
     if e.kind == "lambda" or e.kind in UNSUPPORTED:
         return False
-    for k in e.kids:
+    for k in e.kids:  # (x := v as v: typing it assigns nothing, see walrus)
         if not self.typed_now(k, own):
             return False
     return True
@@ -1493,6 +1497,22 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.assign(t.kids[i], self.tget(v, i))
     else:
         self.err("cannot assign to this expression")
+
+def gen_walrus(self, n: Node, want: str) -> Val:
+    # (x := v): v, assigned to x as x = v assigns it, in the function or module code around the
+    # expression (also from a comprehension, as PEP 572 has it); its value is v. While dry()
+    # types an expression from further on, nothing is assigned
+    e = n.kids[0]
+    if self.drying > 0:
+        return self.expr(e, want)
+    t = mk("name", n.s, n.line, [])
+    tt = self.target_type(t)
+    if self.empty_of(e) != "" and (tt == "" or "?" in tt):
+        v = self.empty(self.empty_of(e), n.s)
+    else:
+        v = self.expr(e, tt if tt != "" else want)
+    self.assign(t, v)
+    return v
 
 def gen_star_assign(self, t: Node, v: Val) -> None:
     # a, *b, c = v: as CPython's UNPACK_EX, the items before the star, a new list of the rest and

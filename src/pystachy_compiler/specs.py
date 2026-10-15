@@ -346,7 +346,7 @@ UNSUPPORTED: dict[str, str] = {
     "dictstar": "dict displays with ** are not supported",
     "dstar": "star arguments are not supported", "bytes": "bytes literals are not supported (there is no bytes type)",
     "ellipsis": "Ellipsis (...) is not supported", "complex": "complex numbers are not supported",
-    "walrus": "assignment expressions (:=) are not supported", "await": "'await' is not supported",
+    "await": "'await' is not supported",
     "async": "'async' statements are not supported",
     "asynccomp": "asynchronous comprehensions are not supported",
     "sliceitem": "a slice inside a tuple subscript (x[a:b, c]) is not supported", "match": "'match' statements are not supported",

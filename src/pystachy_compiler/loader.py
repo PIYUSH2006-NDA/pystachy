@@ -31,6 +31,7 @@ from src.pystachy_compiler.analysis import (
     specials,
     surely_binds,
     top_bindings,
+    walrus_names,
 )
 from src.pystachy_compiler.diagnostics import FILES, LINES, MODDUNDERS, RAW, fail
 from src.pystachy_compiler.lexer import Lexer
@@ -1816,7 +1817,12 @@ class Loader:
             inner = dict(loc)
             for p in n.kids[0].kids:
                 inner[p.s] = True
+            walrus_names(n.kids[1], inner)  # (and the names its := bind)
             self.qexpr(m, n.kids[1], inner)
+        elif k == "walrus":
+            # x := v binds x where an assignment to x would (in a comprehension, around it)
+            self.qexpr(m, n.kids[0], loc)
+            n.s = self.qname(m, n.s, loc)
         elif k == "listcomp":
             # [element for target in iterable if condition]: the target's names are the comprehension's
             # (added to loc while the rest is qualified, not to a copy: loc has all of a function's locals)

@@ -141,6 +141,7 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Feature | Scope |
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
+| Assignment expressions | `x := v` in conditions, comprehensions, arguments and other expressions, binding `x` as `x = v` does |
 | Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
 | Containers | List, dictionary, set and tuple displays; list and set comprehensions |
 | Indexing and slicing | Negative indices; string and list slices without a step |
@@ -217,7 +218,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 ## Unsupported features
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
-`bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
+`bytes` and binary files, complex and arbitrary-precision numbers, `match`,
 dynamic attribute access, stepped slices and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.

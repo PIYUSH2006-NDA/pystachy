@@ -318,7 +318,7 @@ def gen_while_(self, n: Node) -> None:
     l3 = self.label()
     lp = Loop("while", l1, l2, l1, l3)
     self.fn.loops.append(lp)
-    after = self.forget(n.kids[1].kids, n.kids[1])
+    after = self.forget(n.kids[1].kids + [mk("expr", "", n.line, [n.kids[0]])], n.kids[1])  # (and what a := in its test binds)
     self.place(l1)
     self.cbr(self.cond(n.kids[0]), l2, l3)
     self.place(l2)
@@ -644,7 +644,10 @@ def gen_stmt(self, n: Node) -> None:
         l2 = self.label()
         self.cbr(self.cond(n.kids[0]), l2, l1)
         self.place(l1)
+        pre = self.narrowed
+        self.narrowed = dict(pre)  # (what a := in the message binds is not bound where the assertion holds)
         self.assert_fails(n)
+        self.narrowed = pre
         self.place(l2)
         self.narrow_by(n.kids[0], True)
     elif k == "raise":

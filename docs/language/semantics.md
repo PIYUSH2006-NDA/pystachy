@@ -60,6 +60,13 @@ comprehensions; and tuple concatenation or repetition by a constant. Set and fro
 operations support union, intersection, difference, symmetric difference, subset ordering
 and in-place forms.
 
+An assignment expression, `x := v`, assigns `v` to `x` as `x = v` would, in the function or
+module code around it, also from a comprehension or generator expression (PEP 572); its value is
+`v`. Tests such as `if (m := pattern.match(s)) is not None:` narrow `x` as a test of the name
+does. Where the expression may not have run (after `and` or `or`, in one arm of a conditional
+expression, in a comprehension over nothing), a later read of `x` raises `UnboundLocalError` or
+`NameError`.
+
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.
 Comparisons with `None` are supported where the static types permit them.

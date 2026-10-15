@@ -14,7 +14,7 @@ from src.pystachy_compiler.analysis import (
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, has_kind, mk
 from src.pystachy_compiler.utils import is_const
 
 
@@ -649,9 +649,12 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
         self.fl_expr(fl, self.cnodes[n.line])  # (the reads of a class Pystachy leaves out, also in its methods)
     elif k == "expr" or k == "assert" or k == "del":
         for c in n.kids:
+            mark = len(fl.log)
             self.fl_expr(fl, c)
             if k == "del" and c.kind == "name":
                 fl.drop(c.s)  # unbound from here on
+            if k == "assert" and c is not n.kids[0]:
+                fl.undo(mark)  # (the message runs only where the assertion fails: its := bind nothing after it)
     elif k == "with":
         for it in n.kids[:-1]:
             self.fl_expr(fl, it.kids[0])
@@ -749,7 +752,8 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
         elif "." + e.s not in fl.defd and " dead" not in fl.defd:
             fl.unsafe[e.s] = True
     elif k == "listcomp":
-        # [elt for target in iter if cond]: iter is read outside, the rest with target bound
+        # [elt for target in iter if cond]: iter is read outside, the rest with target bound (what
+        # a := there binds is not surely bound after it)
         self.fl_expr(fl, e.kids[2])
         mark = len(fl.log)
         self.fl_target(fl, e.kids[1])
@@ -757,6 +761,27 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
             if i != 1 and i != 2:
                 self.fl_expr(fl, e.kids[i])
         fl.undo(mark)
+    elif k == "walrus":
+        self.fl_expr(fl, e.kids[0])
+        fl.put(e.s)
+    elif (k == "boolop" or k == "ifexp" or k == "cmp") and has_kind(e, "walrus"):
+        # what may not run: the operands of and/or after the first, the arms of an if-else and
+        # the comparisons of a chain after the first. What a := there binds is not surely bound
+        # after it (each arm is analysed from the state after the test, and they are joined)
+        n = 1 if k != "cmp" else 2
+        for c in e.kids[:n]:
+            self.fl_expr(fl, c)
+        mark = len(fl.log)
+        if k == "ifexp":
+            self.fl_expr(fl, e.kids[1])
+            then = fl.since(mark)
+            fl.undo(mark)
+            self.fl_expr(fl, e.kids[2])
+            fl.join(then, mark)
+        else:
+            for c in e.kids[n:]:
+                self.fl_expr(fl, c)
+            fl.undo(mark)
     elif k == "call":
         c = e.kids[0]
         if c.kind == "attr":
