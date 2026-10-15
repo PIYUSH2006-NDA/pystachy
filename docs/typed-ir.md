@@ -122,6 +122,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Purpose | Operations |
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
+| Fixed-layout allocation | `alloc.fixed` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp` |
@@ -135,6 +136,15 @@ The exact operation table is `IROPS`; its current groups are:
 A `raw` operation is one LLVM instruction that loads, stores or computes. It cannot contain a
 call, phi or terminator: those must remain explicit so passes can reason about them.
 Entry slots lower to `alloca`; LLVM's `mem2reg` later builds SSA form.
+
+`alloc.fixed` allocates a declared class (including specialized classes and custom
+exceptions) or a fixed tuple. Its result retains the native type; LLVM lowering alone
+chooses the class layout's byte size or the tuple's eight-byte slot count. It uses the
+existing zeroed, GC-scanned `pys_alloc` allocation and keeps its `A` effect. Object
+initialization, field and tuple stores, stack tuple promotion, and the runtime ABI
+retain their existing behavior. The verifier checks the layout type, one result,
+runtime declaration and absence of unused operands or metadata. Variable-sized
+allocations and closure/cell layouts still use runtime calls.
 
 `slot.pack` preserves a native value's bits in an opaque `%slot` (eight bytes), and
 `slot.unpack` recovers the declared native type. Their operands retain that type through

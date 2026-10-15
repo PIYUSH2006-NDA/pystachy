@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.pystachy_compiler import diagnostics
 from src.pystachy_compiler.gen import Gen
-from src.pystachy_compiler.ir import FnInfo, IFn, Ins, Val
+from src.pystachy_compiler.ir import ClassInfo, FnInfo, IFn, Ins, Val
 from src.pystachy_compiler.loader import Loader
 from src.pystachy_compiler.specs import FXBIT
 from src.pystachy_compiler.syntax import Node
@@ -52,6 +52,12 @@ def cast_op(source="bool", target="float"):
 def compare_op(t="int", predicate="=="):
     i = Ins("num.cmp", "bool", predicate)
     i.a = [Val("%a0", t), Val("%a1", t)]
+    i.r = [1]
+    return i
+
+
+def fixed_allocation(t="tuple[int,str]"):
+    i = Ins("alloc.fixed", t, "")
     i.r = [1]
     return i
 
@@ -97,10 +103,13 @@ class ClosurePathTests(unittest.TestCase):
 
 
 class TypedIRTests(unittest.TestCase):
-    def assert_bad(self, i):
+    def assert_bad(self, i, declared=True):
         error = StringIO()
+        g = Gen()
+        if i.op == "alloc.fixed" and declared:
+            g.runtime("pys_alloc")
         with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
-            Gen().verify(function_with(i), False)
+            g.verify(function_with(i), False)
         self.assertEqual(raised.exception.code, 1)
         self.assertIn("bad IR", error.getvalue())
         self.assertIn(i.op, error.getvalue())
@@ -362,6 +371,72 @@ class TypedIRTests(unittest.TestCase):
                          for p in ("==", "!=", "<", "<=", ">", ">=")}.issubset(comparisons))
         self.assertTrue(any(i.op == "rt" and i.s == "cmp_if" for i in captured))
         self.assertTrue({"bool", "int"}.issubset(g.funcs["real"].insts))
+
+    def test_fixed_allocations_retain_layout_type_and_allocation_effect(self):
+        g = Gen()
+        g.runtime("pys_alloc")
+        g.classes["Box"] = ClassInfo("Box", Node("class", "Box", 1))
+        for t in ("Box", "tuple[]", "tuple[int,str]", "tuple[union[int,str],list[float]]"):
+            with self.subTest(type=t):
+                i = fixed_allocation(t)
+                g.verify(function_with(i), False)
+                self.assertEqual(g.nums(i), 1)
+                self.assertEqual(g.opfx(i, {}), FXBIT["A"])
+                self.assertEqual(g.opfx(i, {}), g.rtfns["alloc"].fx)
+
+    def test_fixed_allocation_retains_runtime_self_recursion_guard(self):
+        g = Gen()
+        g.rtmode = True
+        g.curfn.ll = "@pys_alloc"
+        error = StringIO()
+        with redirect_stderr(error), self.assertRaises(SystemExit):
+            g.alloc_fixed("tuple[int]")
+        self.assertIn("pys_alloc() implements an operation that it uses", error.getvalue())
+        self.assertEqual(g.fn.blocks[0].code, [])
+
+    def test_fixed_allocation_rejects_non_layout_types_and_extra_metadata(self):
+        for t in ("", "Box", "int", "str", "list[int]", "vtuple[int]", "%ptr",
+                  "opt[tuple[int]]", "union[int,str]", "tuple[int", "tuple[int]]",
+                  "tuple[int,]", "tuple[,str]", "tuple[int,...]"):
+            with self.subTest(type=t):
+                self.assert_bad(fixed_allocation(t))
+        for field, value in (("a", [Val("8", "int")]), ("s", "pys_alloc"),
+                             ("x", "tuple[int]"), ("k", 1), ("b", ["entry"]),
+                             ("r", []), ("r", [1, 2])):
+            with self.subTest(field=field):
+                i = fixed_allocation()
+                setattr(i, field, value)
+                self.assert_bad(i)
+        self.assert_bad(fixed_allocation(), declared=False)
+
+    def test_sources_build_typed_class_exception_and_tuple_allocations(self):
+        root = Path(__file__).resolve().parent.parent / "tests"
+        lower = Gen.lower
+        for name in ("typed_ir_slots.py", "class_templates.py", "exc_class_init_args.py",
+                     "varargs_stack.py"):
+            captured = []
+
+            def capture(g, fn, captured=captured):
+                g.verify(fn, False)
+                captured.extend(i for b in fn.blocks for i in b.code
+                                if i.op == "alloc.fixed")
+                lower(g, fn)
+
+            with self.subTest(source=name), patch.object(Gen, "lower", capture):
+                g = Gen()
+                g.program(Loader([str(root.parent / "lib")]).program(name, (root / name).read_text()))
+                self.assertTrue(captured)
+                for i in captured:
+                    self.assertTrue(i.t in g.classes or i.t.startswith("tuple["))
+                    self.assertEqual((i.a, i.s, i.x, i.k, i.b), ([], "", "", 0, []))
+                if name == "class_templates.py":
+                    self.assertTrue(any(i.t in g.classes and g.classes[i.t].origin
+                                        for i in captured))
+                if name == "exc_class_init_args.py":
+                    self.assertTrue(any(i.t in g.classes and g.classes[i.t].exc
+                                        for i in captured))
+                if name == "varargs_stack.py":
+                    self.assertTrue(any(i.t == "tuple[]" for i in captured))
 
 
 if __name__ == "__main__":

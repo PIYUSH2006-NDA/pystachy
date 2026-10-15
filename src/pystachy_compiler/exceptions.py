@@ -808,8 +808,7 @@ def gen_exc_object(self, c: str, args: list[Node]) -> Val:
             vals.append(self.expr(a, init.ptypes[j] if init is not None and j < init.npos else ""))
     if init is not None and len(vals) >= init.npos:
         self.err(f"{short(init.cls)}.__init__() takes {init.npos} positional argument{'s' if init.npos > 1 else ''} but {len(vals) + 1} were given")
-    size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
-    o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
+    o = self.alloc_fixed(c)
     self.nn[o.v] = True
     self.xcls[c] = True
     self.setfield(o, self.field(o, " cls"), " cls", Val(f"@x.{c}", "str"))

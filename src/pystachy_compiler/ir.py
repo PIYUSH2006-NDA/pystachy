@@ -145,6 +145,7 @@ class Ins:
         # opaque slot (s: member type, r: address then payload). Narrowing proves those reads safe.
         # num.cast promotes one numeric operand; num.cmp records the source comparison
         # in s and compares two operands of the same native numeric type.
+        # alloc.fixed keeps the class or fixed tuple type; lowering computes its byte size.
         # text immediate: for "raw", one line of LLVM text; a slot's name; an rt op's RUNTIME key; the
         # symbol a call calls; the module an init runs; a check's message "Kind: text"; the
         # exception a raise raises; ovf's operator + - *

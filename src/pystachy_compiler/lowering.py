@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
 from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, ICMP
-from src.pystachy_compiler.utils import is_dict, lt, selem, takes_self, targs
+from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
 
 
 def gen_lower(self, fn: IFn) -> None:
@@ -35,6 +35,9 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     o = self.out
     if op == "raw":
         o.append("  " + i.s)
+    elif op == "alloc.fixed":
+        size = str(8 * len(targs(i.t))) if is_tuple(i.t) else f"ptrtoint (ptr getelementptr (%C.{i.t}, ptr null, i32 1) to i64)"
+        o.append(f"  %t{i.r[0]} = call ptr @{self.rtfns['alloc'].sym}(i64 {size})")
     elif op == "slot.pack":
         v = i.a[0]
         c = f"bitcast double {v.v} to i64" if v.t == "float" else f"zext i1 {v.v} to i64" if v.t == "bool" else f"bitcast i64 {v.v} to i64" if v.t == "int" else f"ptrtoint ptr {v.v} to i64"
