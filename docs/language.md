@@ -144,7 +144,7 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Containers | List, dictionary, set and tuple displays; list and set comprehensions |
 | Indexing and slicing | Negative indices; string and list slices without a step |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
-| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join` |
+| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join` |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
 Generator expressions consumed this way do not provide general generator objects. Functions

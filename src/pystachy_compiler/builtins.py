@@ -118,7 +118,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.err("tuple() takes zero or one positional iterable argument")
         if len(args) == 0:
             return self.coerce(self.tuple_([]), want) if is_vtuple(unopt(want)) else self.tuple_([])
-        v = self.unwrap(self.expr(args[0], self.ctype("list", [targs(unopt(want))[0]]) if is_vtuple(unopt(want)) else "", resultsoft=resultsoft), "TypeError: 'NoneType' object is not iterable")
+        v = self.unwrap(self.consume(args[0], self.ctype("list", [targs(unopt(want))[0]]) if is_vtuple(unopt(want)) else "", resultsoft=resultsoft), "TypeError: 'NoneType' object is not iterable")
         if is_vtuple(v.t) or is_tuple(v.t):
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
         if v.t == "str":

@@ -30,3 +30,5 @@ def noisy(n: int) -> int:
 
 
 print(sum((noisy(x) for x in [1, 2]), noisy(10)), sum((x * 1.5 for x in [1, 2]), 0.5))
+print(tuple(x * 2 for x in xs), tuple(range(3)), tuple(reversed(xs)), tuple(map(str, xs)), tuple(filter(None, [0, 1])))
+print(tuple(noisy(x) for x in [4]), tuple(x for x in "ab" if x != "a"), tuple(x for x in xs if x > 5))
