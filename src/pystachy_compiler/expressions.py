@@ -222,6 +222,8 @@ def gen_has(self, t: str, a: str) -> int:
         return -1 if r == 1 else 0  # (unless it is None)
     if t in self.classes:
         ci = self.classes[t]
+        if a in ci.methods and ci.methods[a].prop:
+            self.err(f"hasattr() of property '{a}' is not supported: read it in a try/except AttributeError block")
         if a in ci.fflag and t + "." + a not in self.cvars:
             return -2
         if a in ci.methods or a in ci.ftypes:
@@ -573,6 +575,8 @@ def gen_expr(self, n: Node, want: str) -> Val:
             self.modchk(n)
             return self.modattr(path)
         tc = n.kids[0]
+        if is_super(tc) and not self.bound("super"):
+            return self.super_call(tc, n.s, [], read=True)
         if n.s == "__name__" and tc.kind == "call" and len(tc.kids) == 2 and tc.kids[0].kind == "name" and tc.kids[0].s == "type" and not self.bound("type"):
             # type(e).__name__ of an exception: its class's name
             v = self.expr(tc.kids[1], "")
@@ -825,6 +829,8 @@ def gen_no_class_attr(self, c: str, a: str) -> None:
     if c in self.nts and a in ci.fields:
         self.err(f"reading a NamedTuple's field through its class ({short(c)}.{a}, a descriptor in CPython) is not supported")
     if a in ci.methods:
+        if ci.methods[a].prop:
+            self.err(f"{short(c)}.{a} is a property: read it on an instance")
         self.err(f"method '{short(c)}.{a}' cannot be used as a value (call it)")
     if a in ci.fields:
         self.err(f"type object '{short(c)}' has no attribute '{a}' (its objects have the field '{a}')")
@@ -851,6 +857,8 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
     if m not in ci.methods:
         self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
     f = ci.methods[m]
+    if f.prop:
+        self.err(f"{short(cn.s)}.{m} is a property: read it on an instance")
     if f.bad == STUB.replace("NAME", m):
         self.err(f.bad)  # (an imported module's: CPython's stub raises NotImplementedError, however it is called)
     if f.deco == "":
@@ -1426,6 +1434,8 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
     # o[i], where o is the value of n.kids[0] and n.kids[1] the index
     t = unopt(o.t)
     sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
+    if t in ["fn[b:list]", "fn[b:dict]", "fn[b:tuple]", "fn[b:set]", "fn[b:frozenset]"]:
+        self.err(f"{t[5:-1]}[...] as a value is not supported (type aliases are not supported; write the type directly in an annotation)")
     if is_kw(t) and n.kids[1].kind == "str":
         # kwargs["name"]: the keyword argument name, or CPython's KeyError where the call passed none
         names = kw_names(t)
@@ -2141,6 +2151,8 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         return self.arith(op, b, a)
     if op == "+" and is_list(a.t) and is_list(b.t):
         self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
+    if op == "|" and is_dict(a.t) and is_dict(b.t):
+        self.err("dict | dict is not supported; copy the first dict and use update()")
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)
         self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
