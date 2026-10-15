@@ -36,6 +36,24 @@ def report(group, steps):
 
 
 class ContractTests(unittest.TestCase):
+    def test_real_plan_requires_both_native_suites(self):
+        groups = merge.load_groups()
+        self.assertEqual(groups["native"], ["bootstrap", "tests-native"])
+        self.assertEqual(groups["opt-off"], ["bootstrap", "tests-opt-off"])
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            for group, steps in groups.items():
+                if group == "all":
+                    continue
+                path = directory / f"verification-{group}" / "verification.json"
+                path.parent.mkdir()
+                path.write_text(json.dumps(report(group, steps)))
+            result = merge.merge_reports(directory, groups, COMMIT)
+            self.assertEqual([step["name"] for step in result["steps"]], groups["all"])
+            (directory / "verification-opt-off" / "verification.json").unlink()
+            with self.assertRaisesRegex(ValueError, "missing report groups.*opt-off"):
+                merge.merge_reports(directory, groups, COMMIT)
+
     def test_missing_duplicate_or_unknown_checks_cannot_weaken_the_gate(self):
         contracts = [CONTRACT.replace("contracts bootstrap check-ir", "contracts bootstrap"),
                      CONTRACT + "extra bootstrap check-ir\n",

@@ -25,7 +25,7 @@
 #   runtime-table  tools/check_runtime.py: the compiler's RUNTIME table agrees with runtime.c and
 #                  runtime.py (types, coverage, and the effects their call graphs show), and no
 #                  function of runtime.py reaches itself through runtime.c
-#   gc-stress      PYSTACHY_GC_STRESS: the native compiler collecting every 1000 allocations reproduces
+#   gc-stress      PYSTACHY_GC_STRESS: the native compiler collecting every 5000 allocations reproduces
 #                  the IR, and every test passes JIT and AOT with a collection at every allocation of the
 #                  program (PYSTACHY_GC_STRESS_PROGRAM=1), compiled by the compiler collecting every 1000
 #   benchmarks     bench/*.py print exactly what CPython prints, JIT and AOT; timings recorded
@@ -79,7 +79,8 @@ plan() {
   case $1 in
     all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-stress benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
     hosted) echo 'bootstrap tests-cpython' ;;
-    native) echo 'bootstrap tests-native tests-opt-off' ;;
+    native) echo 'bootstrap tests-native' ;;
+    opt-off) echo 'bootstrap tests-opt-off' ;;
     python-free) echo 'bootstrap python-free' ;;
     ubsan) echo 'bootstrap ubsan' ;;
     gc-stress) echo 'bootstrap gc-stress' ;;
@@ -88,10 +89,10 @@ plan() {
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
 }
-[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|python-free|ubsan|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|opt-off|python-free|ubsan|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
 GROUP=${1:-all}
 if [ "$GROUP" = --list ]; then
-  for g in all hosted native python-free ubsan gc-stress contracts benchmarks; do
+  for g in all hosted native opt-off python-free ubsan gc-stress contracts benchmarks; do
     printf '%s %s\n' "$g" "$(plan "$g")"
   done
   exit 0
@@ -197,10 +198,12 @@ cancel_gc() {
 }
 trap cancel_gc INT TERM
 if want gc-stress && [ -x "$V/pystachy2" ]; then
-  echo 'gc-self: starting (30-minute limit; build/verify/gc-self.log)'
-  timeout --verbose --kill-after=10s 30m sh -c '
+  # At 1000, self-compilation spent 23 minutes in 15,543 full-heap collections.
+  # 5000 still exercises thousands of collections; the test suite keeps its stronger intervals.
+  echo 'gc-self: starting (10-minute limit; build/verify/gc-self.log)'
+  timeout --verbose --kill-after=10s 10m sh -c '
     started=$(date +%s)
-    echo "gc-self: started $(date -u +%Y-%m-%dT%H:%M:%SZ), limit 30m"
+    echo "gc-self: started $(date -u +%Y-%m-%dT%H:%M:%SZ), limit 10m"
     "$@" & child=$!
     trap '\''kill "$child" 2>/dev/null'\'' INT TERM
     wait "$child"
@@ -210,7 +213,7 @@ if want gc-stress && [ -x "$V/pystachy2" ]; then
     if [ "$status" -gt 128 ]; then wait "$child"; status=$?; fi
     echo "gc-self: finished after $(($(date +%s) - started))s, exit $status"
     exit "$status"
-  ' gc-self env PYSTACHY_GC=stats PYSTACHY_GC_STRESS=1000 \
+  ' gc-self env PYSTACHY_GC=stats PYSTACHY_GC_STRESS=5000 \
     "$V/pystachy2" ir pystachy.py -o "$V/stage-gc.ll" > "$V/gc-self.log" 2>&1 &
   gcpid=$!
 fi
@@ -335,11 +338,12 @@ L=$V/gc-stress.log; s=$(now); r=fail
 {
   # Run the suite before waiting, so the isolated CI group overlaps it with self-compilation.
   # The latter writes IR only; it neither reads nor rebuilds the suite's runtime cache.
-  suite_ok=0
+  suite_ok=0; suite_started=$(now)
   PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1 && suite_ok=1
+  suite_seconds=$(secs "$suite_started" "$(now)")
   echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
-  # (every 1000, not 100: the compiler keeps each function's IR until the program is built, and at
-  # every 100 its collections, which mark all of it, take minutes; started after the bootstrap)
+  echo "gc-tests: finished after ${suite_seconds}s"
+  # The self-compile started after bootstrap; its full-heap scans dominate with the growing IR.
   self_ok=0; self_status=127
   if [ -n "$gcpid" ]; then
     echo '-- waiting for bounded GC self-compile (exit 124 means timeout)'
@@ -351,11 +355,11 @@ L=$V/gc-stress.log; s=$(now); r=fail
   cat "$V/gc-self.log"
   echo "gc-self: exit $self_status"
   [ "$self_ok" = 1 ] &&
-    cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 1000 allocations emits the stage1 IR" &&
+    cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 5000 allocations emits the stage1 IR" &&
     [ "$suite_ok" = 1 ] && r=pass
 } > "$L" 2>&1
 x=$(tests $ALL "$V/gc-stress-tests.log" 2>> "$L") || r=fail
-step gc-stress $r "$s" "$L" ", \"compiler_interval\": 1000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
+step gc-stress $r "$s" "$L" ", \"compiler_interval\": 5000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"tests_seconds\": $suite_seconds, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
 fi
 
 # ---- benchmarks: same output as CPython, JIT and AOT

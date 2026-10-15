@@ -47,7 +47,7 @@ if args[0] == "build":
 else:
     text = "fixed point\\n"
     if os.environ.get("PYSTACHY_GC_STRESS"):
-        assert os.environ["PYSTACHY_GC_STRESS"] == "1000"
+        assert os.environ["PYSTACHY_GC_STRESS"] == "5000"
         assert os.environ["PYSTACHY_GC"] == "stats"
         Path("gc-child.pid").write_text(str(os.getpid()))
         mode = os.environ["VERIFY_MOCK_MODE"]
@@ -66,6 +66,8 @@ else:
         compiler.chmod(0o755)
         suite = self.root / "tests/run.sh"
         suite.write_text('''#!/bin/sh
+[ "$PYSTACHY_GC_STRESS" = 1000 ] || exit 9
+[ "$PYSTACHY_GC_STRESS_PROGRAM" = 1 ] || exit 9
 if [ "$VERIFY_MOCK_MODE" = suite-failure ]; then
   echo '0 passed, 2 failed'
   exit 1
@@ -76,7 +78,7 @@ echo '2 passed, 0 failed'
         timeout = self.root / "bin/timeout"
         timeout.write_text(f"#!{sys.executable}\n" + f'''import os
 import sys
-assert sys.argv[1:4] == ["--verbose", "--kill-after=10s", "30m"]
+assert sys.argv[1:4] == ["--verbose", "--kill-after=10s", "10m"]
 limit = "0.2s" if os.environ["VERIFY_MOCK_MODE"].startswith("timeout") else "10s"
 os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sys.argv[4:]])
 ''')
@@ -99,7 +101,12 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
         step = report["steps"][-1]
         self.assertEqual((step["passed"], step["failed"], step["expected"]), (2, 0, 2))
         self.assertTrue(step["ir_identical"])
-        for text in ("gc-self: started", "gc-self: finished after", "gc statistics", "gc-self: exit 0"):
+        self.assertEqual((step["compiler_interval"], step["tests_compiler_interval"],
+                          step["tests_interval"]), (5000, 1000, 1))
+        self.assertGreaterEqual(step["tests_seconds"], 0)
+        self.assertLessEqual(step["tests_seconds"], step["seconds"])
+        for text in ("gc-self: started", "limit 10m", "gc-self: finished after", "gc statistics",
+                     "gc-self: exit 0", "gc-tests: finished after"):
             self.assertIn(text, log)
 
     def test_failure_timeout_mismatch_and_failed_suite_cannot_pass(self):
