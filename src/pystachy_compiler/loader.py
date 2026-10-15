@@ -261,7 +261,11 @@ class Loader:
         # module path or in the parent package, else the directories of a namespace package
         # (separated by ":"); "" if there is none
         if name in CBUILTIN:
-            return ""  # a module built into CPython: no file on the path replaces it
+            return ""  # a module built into CPython: no file on the path replaces it (find())
+        return self.filepath(name)
+
+    def filepath(self, name: str) -> str:
+        # modpath(), also of a module built into CPython
         dirs = self.dirs
         base = name
         dot = name.rfind(".")
@@ -301,6 +305,8 @@ class Loader:
         if p == "":
             # (an optional import other than try: <imports> / except ImportError:, which optional() decides)
             hint = "; an optional import is supported only as try: <imports> / except ImportError: (except clauses naming only ImportError or ModuleNotFoundError, and no finally)" if self.optry else ""
+            if name in CBUILTIN and self.filepath(name) != "":
+                fail(f"module '{name}' is not supported: it is built into CPython, which imports it rather than the {name} module on the module path, and Pystachy does not have it{hint}", line)
             fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi'])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
         if p.endswith("/__init__.py"):
             return self.load(name, p, p[:-12])

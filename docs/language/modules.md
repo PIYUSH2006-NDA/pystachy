@@ -14,7 +14,8 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 3. `lib/` beside the compiler.
 
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
-`ffi.py` takes precedence over the builtin `ffi` module.
+`ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
+CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's
