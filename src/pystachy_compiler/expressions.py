@@ -1232,8 +1232,8 @@ def gen_slice_step(self, x: Node, fold: bool = False) -> str:
 def gen_slice_tuple(self, o: Val, bnd: list[str], step: str) -> Val:
     # o[lo:hi:st] of a fixed-shape tuple or a NamedTuple (a plain tuple of its fields, as in
     # CPython), where o is not None: with constant bounds, the tuple of the items they select,
-    # whose types are known; otherwise one of a single item type that a runtime-length tuple can
-    # hold gives a tuple[T, ...]
+    # whose types are known; otherwise the empty tuple is empty, and one of a single item type that
+    # a runtime-length tuple can hold gives a tuple[T, ...]
     if o.t in self.nts:
         self.notnone(o, "TypeError: 'NoneType' object is not subscriptable")
         o = self.ntup(o, True)
@@ -1246,7 +1246,10 @@ def gen_slice_tuple(self, o: Val, bnd: list[str], step: str) -> Val:
         if ix == list(range(len(ts))):
             return o  # (all of a tuple is the tuple itself, as in CPython)
         return self.tuple_([self.tget(o, i) for i in ix])
-    if len(ts) == 0 or any(x != ts[0] for x in ts) or unopt(ts[0]) not in ["int", "float", "bool", "str"]:
+    if len(ts) == 0:
+        self.slice_check(step)  # (*args of a call without extra arguments)
+        return o
+    if any(x != ts[0] for x in ts) or unopt(ts[0]) not in ["int", "float", "bool", "str"]:
         self.err(f"slicing a {typestr(o.t)} by bounds or a step computed at run time is not supported: the types of the items it selects would not be known (use constants, or a tuple[T, ...] of int, float, bool or str items)")
     vt = self.coerce(o, self.ctype("vtuple", [ts[0]]))
     return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {vt.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), vt.t)

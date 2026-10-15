@@ -73,6 +73,21 @@ def fixed_step(t: tuple[int, int, int], i: int) -> tuple[int, ...]:
 
 print(fixed_step((1, 2, 3), 0), fixed_step((1, 2, 3), 1), fixed_step((1, 2, 3), -1))
 
+
+def rest(n: int, *args: int) -> None:
+    # (*args holds each call's arguments: items of one type, or none)
+    try:
+        print(args[n:], args[::n], args[n::-n])
+    except ValueError as e:
+        print("ValueError", e)
+
+
+rest(1)
+rest(1, 5, 6, 7)
+rest(-2, 5, 6, 7)
+rest(0)
+rest(0, 1)
+
 # a step of 0 raises once the object and the bounds are evaluated; None raises before it
 try:
     print(xs[say(1):say(2):say(0)])
