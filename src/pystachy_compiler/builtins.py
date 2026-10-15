@@ -1161,6 +1161,9 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 nk = self.numkey(v, unopt(T))
                 v = Val(nk[0], unopt(T))
                 numok = nk[1]
+            if base == "list" and p == "*T" and self.scalar_union(T) and (m == "index" or m == "count" or m == "remove"):
+                pt = self.union_type([T, v.t])
+                dt = pt
             if is_opt(v.t) and unopt(v.t) == pt and dflt == "null":
                 v = Val(v.v, pt)  # None is the default
             elif is_opt(v.t) and not slot and unopt(v.t) == pt == "str":

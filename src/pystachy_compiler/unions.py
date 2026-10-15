@@ -16,6 +16,50 @@ def gen_uboxes(self, a: str, b: str) -> bool:
 def gen_reference_union(self, t: str) -> bool:
     return is_union(unopt(t)) and all([m == "file" or m in self.classes for m in umembers(unopt(t))])
 
+def gen_scalar_union(self, t: str) -> bool:
+    return is_union(unopt(t)) and all([m in ["int", "float", "bool", "str"] for m in umembers(unopt(t))])
+
+def gen_uop(self, v: Val, op: str) -> Val:
+    # Truth and str select the existing native member operation. Evaluate v once,
+    # handle None before loading the tag, and join only the operation's result.
+    if not self.scalar_union(v.t):
+        self.err("closed reference union operations require narrowing with isinstance() first")
+    t = "bool" if op == "truth" else "str"
+    end = self.label()
+    ph = Ins("phi", t, "")
+    if is_opt(v.t):
+        arm = self.label()
+        self.incoming(ph, "false" if op == "truth" else self.sconst("None"), self.cur)
+        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), end, arm)
+        self.place(arm)
+    tag = self.ins(f"load i64, ptr {v.v}")
+    members = umembers(unopt(v.t))
+    for i in range(len(members)):
+        nxt = self.label() if i + 1 < len(members) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.ins(f"icmp eq i64 {tag}, {self.utag(members[i])}"), arm, nxt)
+            self.place(arm)
+        item = self.uget(v.v, members[i])
+        result = Val(self.truth(item), "bool") if op == "truth" else self.to_str(item)
+        self.incoming(ph, result.v, self.cur)
+        self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    self.place(end)
+    return Val(self.phi(ph), t)
+
+def gen_uequal(self, op: str, a: Val, b: Val) -> Val:
+    # Both operands are already evaluated. Boxes of a narrower union keep their
+    # pointers and tags; a concrete scalar is boxed only at this dynamic boundary.
+    t = self.union_type([a.t, b.t])
+    if t.startswith("!") or not self.scalar_union(t):
+        self.err("closed scalar union equality requires scalar operands")
+    a = self.coerce(a, t)
+    b = self.coerce(b, t)
+    r = self.rt("pys_eq", "i64", ["i64 " + self.to_slot(a), "i64 " + self.to_slot(b), f"ptr {self.sconst(self.desc(t, '=='))}"])
+    return Val(self.ins(f"icmp {'ne' if op == '==' else 'eq'} i64 {r}, 0"), "bool")
+
 def gen_umember_problem(self, t: str) -> str:
     # why a value of type t cannot be one of a union's (A | B), or ""
     if t == "int" or t == "float" or t == "bool" or t == "str":

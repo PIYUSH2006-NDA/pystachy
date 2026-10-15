@@ -1,6 +1,6 @@
 """Conversions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.utils import is_union
+from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Val
 from src.pystachy_compiler.names import short
@@ -135,7 +135,13 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
 
 def gen_desc(self, t: str, use: str) -> str:
     if is_union(unopt(t)):
-        self.err("closed union operations require narrowing with isinstance() first")
+        if not self.scalar_union(t) or use not in ["repr", "=="]:
+            self.err("closed union operations require narrowing with isinstance() first")
+        members = umembers(unopt(t))
+        d = "U" + str(len(members)) + ":"
+        for m in members:
+            d += str(self.utag(m)) + ":" + self.desc(m, use)
+        return ("?" if is_opt(t) else "") + d
     # type descriptor for the runtime's generic repr (use "repr"), equality ("==") or ordering
     # ("<", ">", ...; a list or tuple compares its items with == first)
     if t == "int":

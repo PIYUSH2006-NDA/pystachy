@@ -19,6 +19,7 @@ from src.pystachy_compiler.utils import (
     is_set,
     is_sopt,
     is_tuple,
+    is_union,
     is_vtuple,
     key_problem,
     literal,
@@ -537,6 +538,8 @@ def gen_none_arg(self, m: str, k: int) -> str:
 
 def gen_to_str(self, v: Val) -> Val:
     t = v.t
+    if is_union(unopt(t)):
+        return self.uop(v, "str")
     if t == "str":
         return v
     if is_kw(t):
