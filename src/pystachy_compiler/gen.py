@@ -130,6 +130,7 @@ from src.pystachy_compiler.conversions import (
     gen_num_cast as conversions_num_cast,
     gen_num_cmp as conversions_num_cmp,
     gen_int_ucmp as conversions_int_ucmp,
+    gen_ptr_cmp as conversions_ptr_cmp,
     gen_as_float as conversions_as_float,
     gen_as_int as conversions_as_int,
     gen_coerce as conversions_coerce,
@@ -914,6 +915,9 @@ class Gen:
 
     def int_ucmp(self, op: str, a: Val, b: Val) -> Val:
         return conversions_int_ucmp(self, op, a, b)
+
+    def ptr_cmp(self, op: str, a: Val, b: Val) -> Val:
+        return conversions_ptr_cmp(self, op, a, b)
 
     def floats(self, v: Val) -> Val:
         return conversions_floats(self, v)

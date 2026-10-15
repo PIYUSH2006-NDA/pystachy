@@ -129,6 +129,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp`, `int.ucmp` |
+| Native reference identity and null tests | `ptr.cmp` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -216,6 +217,12 @@ integer bits; a negative index still fails an unsigned length check. Runtime str
 primitives and the exact mixed integer/float result tests share these typed operations.
 Both lower to the existing LLVM predicates. Dictionary lookup fusion reads membership
 conditions from typed operands, preserving its branch facts and mutation barriers.
+
+`ptr.cmp` retains the native reference operands of identity and null tests, including
+boxed optional scalars, optional unions, classes and callables. It permits only `==`
+and `!=`, returns `bool` and has no effects. The verifier rejects native scalars and
+runtime pseudo-types; lowering selects the existing pointer equality predicate.
+Internal closure code/environment pointers and runtime interior pointers remain raw.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

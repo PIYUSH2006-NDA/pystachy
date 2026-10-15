@@ -349,7 +349,7 @@ def gen_obj_isinst(self, v: Val, t: Node) -> Val:
     end = self.label()
     nonnull = self.label()
     start = self.cur
-    self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), end, nonnull)
+    self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, nonnull)
     self.place(nonnull)
     tag = self.ins(f"load i64, ptr {v.v}")
     r = "false"
@@ -430,7 +430,7 @@ def gen_truth(self, v: Val) -> str:
         return "false" if t == "tuple[]" else "true"
     if is_opt(t):
         # not None, and then the value's own truth
-        nn = self.ins(f"icmp ne ptr {v.v}, null")
+        nn = self.ptr_cmp('!=', v, Val('null', 'None')).v
         e0 = self.cur
         l1 = self.label()
         l2 = self.label()
@@ -444,7 +444,7 @@ def gen_truth(self, v: Val) -> str:
         self.incoming(ph, "false", e0)
         self.incoming(ph, r, e1)
         return self.phi(ph)
-    nz = self.ins(f"icmp ne ptr {v.v}, null")
+    nz = self.ptr_cmp('!=', v, Val('null', 'None')).v
     if t in self.classes and self.classes[t].tag > 0:
         cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, t)]
         if any(["__bool__" in c.methods or "__len__" in c.methods for c in cs]):
@@ -902,7 +902,7 @@ def gen_percent_opt(self, fmt: str, v: Val) -> Val:
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, l1, l2)
     self.place(l1)
     a = self.pformat(fmt, [Val("null", "None")], True)
     ph = Ins("phi", "str", "")
@@ -1087,7 +1087,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
             present = self.label()
             done = self.label()
             ph = Ins("phi", "str", "")
-            self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), absent, present)
+            self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, absent, present)
             self.place(absent)
             self.guard(nonempty, "TypeError: unsupported format string passed to NoneType.__format__")
             self.incoming(ph, self.sconst("None"), self.cur)
@@ -1118,7 +1118,7 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
         sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
         if v.v not in self.nn:
             # None's own __format__ accepts only an empty spec
-            self.guard(self.ins(f"icmp eq ptr {v.v}, null"), "TypeError: unsupported format string passed to NoneType.__format__")
+            self.guard(self.ptr_cmp('==', v, Val('null', 'None')).v, "TypeError: unsupported format string passed to NoneType.__format__")
         return self.call_fn(self.classes[v.t].methods["__format__"], [v, sv], [])
     if empty:
         return self.to_str(v)
@@ -1159,7 +1159,7 @@ def gen_optbound(self, v: Val) -> str:
     e0 = self.cur
     l1 = self.label()
     l2 = self.label()
-    self.cbr(self.ins(f"icmp ne ptr {v.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('!=', v, Val('null', 'None')).v, l1, l2)
     self.place(l1)
     bd = self.as_int(self.deref(v)).v
     bd = self.select(self.num_cmp('==', Val(bd, "int"), Val('-9223372036854775808', "int")).v, Val("-9223372036854775807", "int"), Val(bd, "int"))
@@ -1176,7 +1176,7 @@ def gen_optint(self, v: Val, none: str) -> str:
     e0 = self.cur
     l1 = self.label()
     l2 = self.label()
-    self.cbr(self.ins(f"icmp ne ptr {v.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('!=', v, Val('null', 'None')).v, l1, l2)
     self.place(l1)
     n = self.as_int(self.deref(v)).v
     e1 = self.cur
@@ -1865,7 +1865,7 @@ def gen_ntup(self, v: Val, known: bool = False) -> Val:
     lread = self.label() if maybe else ""
     lend = self.label() if maybe else ""
     if maybe:
-        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), lend, lread)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, lend, lread)
         self.place(lread)
     t = self.tuple_([self.getfield(v, Val(self.fgep(v, ci.fpos[x]), ci.ftypes[x]), x) for x in ci.fields])
     if not maybe:
@@ -1905,7 +1905,7 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
     if v.v not in self.nn:
         null = self.label()
         some = self.label()
-        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), null, some)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, null, some)
         self.place(null)
         r = self.inherit_cmp(op, Val("null", "None") if phase == 0 else a, b if phase == 0 else Val("null", "None"), phase + 1)
         if not self.term:
@@ -1955,7 +1955,7 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
     if op == "==" or op == "!=":
         # object.__eq__ declines, then Python falls back to object identity.
         if (a.t in self.classes or a.t == "None") and (b.t in self.classes or b.t == "None"):
-            return Val(self.ins(f"icmp {'eq' if op == '==' else 'ne'} ptr {a.v}, {b.v}"), "bool")
+            return self.ptr_cmp('==' if op == '==' else '!=', a, b)
         return Val("false" if op == "==" else "true", "bool")
     self.raise_("TypeError", self.sconst(f"'{op}' not supported between instances of '{tname(a.t)}' and '{tname(b.t)}'"))
     return Val("false", "bool")
@@ -2001,7 +2001,7 @@ def gen_isnull(self, v: Val) -> str:
     if v.t == "None":
         return "true"
     if (v.t in self.classes and v.v not in self.nn) or is_opt(v.t) or (is_union(v.t) and self.optional(v.t) == v.t and v.v not in self.nn):
-        return self.ins(f"icmp eq ptr {v.v}, null")
+        return self.ptr_cmp('==', v, Val('null', 'None')).v
     return "false"
 
 def gen_richcmp(self, op: str, a: Val, b: Val) -> Val:
@@ -2071,12 +2071,12 @@ def gen_eqcall(self, f: FnInfo, iseq: bool, a: Val, b: Val) -> Val:
     lcall = self.label()
     lend = self.label()
     ph = Ins("phi", "bool", "")
-    self.cbr(self.ins(f"icmp eq ptr {a.v}, null"), lnull, lcall)
+    self.cbr(self.ptr_cmp('==', a, Val('null', 'None')).v, lnull, lcall)
     self.place(lnull)
     if b.t == a.t:
         lboth = self.label()
         lrefl = self.label()
-        self.cbr(self.ins(f"icmp eq ptr {b.v}, null"), lboth, lrefl)
+        self.cbr(self.ptr_cmp('==', b, Val('null', 'None')).v, lboth, lrefl)
         self.place(lboth)
         self.incoming(ph, same, lboth)
         self.br(lend)
@@ -2194,7 +2194,7 @@ def gen_compare(self, n: Node) -> Val:
         # None that is None equals no item
         nn = ""
         if is_sopt(a.t) and unopt(a.t) != "float":
-            nn = self.ins(f"icmp ne ptr {a.v}, null")
+            nn = self.ptr_cmp('!=', a, Val('null', 'None')).v
             a = Val(self.optint(a, "0"), "int")
         if a.t != "int" and a.t != "bool":
             self.err(f"'in range(...)' needs an int, not {typestr(a.t)}")
@@ -2268,8 +2268,8 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         a = self.coerce(a, unopt(b.t))
     if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and unopt(a.t) == unopt(b.t) and (is_opt(a.t) or is_opt(b.t)):
         # Callables that may be None: both are, or both hold one function (below)
-        nula = self.ins(f"icmp eq ptr {a.v}, null")
-        nulb = self.ins(f"icmp eq ptr {b.v}, null")
+        nula = self.ptr_cmp('==', a, Val('null', 'None')).v
+        nulb = self.ptr_cmp('==', b, Val('null', 'None')).v
         lsome = self.label()
         ldone = self.label()
         cph = Ins("phi", "bool", "")
@@ -2302,17 +2302,17 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 if op == "is" or op == "is not":
                     self.err(f"'{op}' between bound methods is not supported: CPython makes a new method object each time one is read (compare them with ==)")
                 if am == bm:
-                    return Val(self.ins(f"icmp {'eq' if op == '==' else 'ne'} ptr {a.v}, {b.v}"), "bool")
+                    return self.ptr_cmp('==' if op == '==' else '!=', a, b)
         if a.t == b.t and (a.t.startswith("fn[m:") or a.t.startswith("fn[d:")) and (op == "is" or op == "is not"):
             self.err(f"'{op}' between bound methods is not supported: CPython makes a new method object each time one is read (compare them with ==)")
         if a.t == b.t and (a.t.startswith("fn[c:") or a.t.startswith("fn[m:") or a.t.startswith("fn[d:")):
             # (bound methods of one method are equal where they are bound to one object)
-            return Val(self.ins(f"icmp {'eq' if op == '==' or op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
+            return self.ptr_cmp('==' if op == '==' or op == 'is' else '!=', a, b)
         same = a.t == b.t
         return Val("true" if same == (op == "==" or op == "is") else "false", "bool")
     if (op == "==" or op == "!=") and a.t == b.t and a.t == "file":
         # files compare by identity, as CPython's do
-        return Val(self.ins(f"icmp {'eq' if op == '==' else 'ne'} ptr {a.v}, {b.v}"), "bool")
+        return self.ptr_cmp('==' if op == '==' else '!=', a, b)
     xa = a.t == "exc" or (a.t in self.classes and self.classes[a.t].exc != "")
     xb = b.t == "exc" or (b.t in self.classes and self.classes[b.t].exc != "")
     if xa and xb and a.t != b.t and a.t in self.classes and b.t in self.classes and (op == "==" or op == "!="):
@@ -2331,7 +2331,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             x = "an exception" if a.t == "exc" else f"an object of {short(a.t)}"
             y = "an exception" if b.t == "exc" else f"an object of {short(b.t)}"
             self.exc_eq("exc", "between exceptions" if a.t == b.t else f"between {x} and {y}")
-        return Val(self.ins(f"icmp {'eq' if op == '==' or op == 'is' else 'ne'} ptr {self.exc_id(a).v}, {self.exc_id(b).v}"), "bool")
+        return self.ptr_cmp('==' if op == '==' or op == 'is' else '!=', self.exc_id(a), self.exc_id(b))
     if op == "is" or op == "is not":
         if (a.t == "None") != (b.t == "None") and (not self.isref(a.t) or not self.isref(b.t)):
             # a number or bool is never None
@@ -2341,7 +2341,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} i1 {a.v}, {b.v}"), "bool")
         if not self.isref(a.t) or not self.isref(b.t) or (is_sopt(a.t) and b.t != "None") or (is_sopt(b.t) and a.t != "None"):
             self.err("'is' is only supported for objects and None")
-        return Val(self.ins(f"icmp {'eq' if op == 'is' else 'ne'} ptr {a.v}, {b.v}"), "bool")
+        return self.ptr_cmp('==' if op == 'is' else '!=', a, b)
     du = self.dunder(op, a, b)
     if du.t != "":
         return du
@@ -2366,7 +2366,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     kt = targs(b.t)[0] if is_dict(b.t) else selem(b.t) if is_set(b.t) else ""
     if (op == "in" or op == "not in") and is_opt(a.t) and ((kt != "" and (unopt(a.t) == kt or (is_sopt(a.t) and bool_for_int(unopt(a.t), kt)))) or (is_sopt(a.t) and is_list(b.t) and (unopt(a.t) == elem(b.t) or self.isnum(elem(b.t))))):
         # None is no key of the dict (and no int of a list[int])
-        nn = self.ins(f"icmp ne ptr {a.v}, null")
+        nn = self.ptr_cmp('!=', a, Val('null', 'None')).v
         e0 = self.cur
         l1 = self.label()
         l2 = self.label()
@@ -2406,7 +2406,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 # and a str's is its value)
                 nx = self.label()
                 self.incoming(ph, "true", self.cur)
-                self.cbr(self.ins(f"icmp eq ptr {item.v}, {a.v}"), lend, nx)
+                self.cbr(self.ptr_cmp('==', item, a).v, lend, nx)
                 self.place(nx)
             c = self.cmp2("==", item, a)
             nx = self.label()
@@ -2482,7 +2482,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     if eq and (a.t == "None" or b.t == "None" or (a.t == b.t and a.t in self.classes)) and self.isref(a.t) and self.isref(b.t):
         if a.t == "exc" or b.t == "exc":
             self.exc_eq("exc", "between an exception and None")
-        return Val(self.ins(f"icmp {ICMP[op]} ptr {a.v}, {b.v}"), "bool")
+        return self.ptr_cmp(op, a, b)
     if op in ORDOP and is_tuple(a.t) and is_tuple(b.t) and len(targs(a.t)) != len(targs(b.t)):
         return self.tuple_order(op, a, b)  # (of different lengths, which no one tuple type holds)
     # T and T | None (also as items): None == None, None == x is False, and None < x raises
@@ -2527,7 +2527,7 @@ def gen_tuple_order(self, op: str, a: Val, b: Val) -> Val:
         else:
             if (x.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(y.t):
                 lcmp = self.label()
-                self.cbr(self.ins(f"icmp eq ptr {x.v}, {y.v}"), lnext, lcmp)
+                self.cbr(self.ptr_cmp('==', x, y).v, lnext, lcmp)
                 self.place(lcmp)
             self.cbr(self.cmp2("==", x, y).v, lnext, ldiff)
         self.place(ldiff)

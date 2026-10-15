@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
 from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, LLNOTRAW, RAWR, RAWW, RUNTIME
-from src.pystachy_compiler.utils import is_opt, is_tuple, is_union, rawfx, targs, umembers
+from src.pystachy_compiler.utils import is_opt, is_tuple, is_union, lt, rawfx, targs, umembers
 
 
 class EffectSummaries:
@@ -186,6 +186,15 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                     self.bad_ir(fn, b, "int.ucmp needs two operands and no extra metadata")
                 if i.t != "bool" or i.s not in ["<", "<=", ">", ">="] or i.a[0].t != "int" or i.a[1].t != "int":
                     self.bad_ir(fn, b, "int.ucmp needs an unsigned order comparison of two ints, returning bool")
+            if i.op == "ptr.cmp":
+                if len(i.a) != 2 or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, "ptr.cmp needs two operands and no extra metadata")
+                if i.t != "bool" or (i.s != "==" and i.s != "!="):
+                    self.bad_ir(fn, b, "ptr.cmp needs == or !=, returning bool")
+                for a in i.a:
+                    t = a.t
+                    if t == "" or t.startswith("%") or t.startswith("*") or t == "#" or (t in ["T", "K", "V", "S"] and t not in self.classes) or (t != "None" and lt(t) != "ptr"):
+                        self.bad_ir(fn, b, "ptr.cmp needs native references or None")
             if i.op == "slot.pack" or i.op == "slot.unpack":
                 if len(i.a) != 1 or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} needs one operand and no immediates or labels")
@@ -249,7 +258,7 @@ def gen_nums(self, i: Ins) -> int:
         return 4
     if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload" or i.op == "tuple.load":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed" or i.op == "tuple.store" or i.op == "mem.load" or i.op == "int.ucmp":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed" or i.op == "tuple.store" or i.op == "mem.load" or i.op == "int.ucmp" or i.op == "ptr.cmp":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1

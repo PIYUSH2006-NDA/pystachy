@@ -287,7 +287,7 @@ def gen_exc_isinst(self, v: Val, t: Node) -> Val:
             yes = yes or self.derives(v.t, c.s)
             maybe = maybe or self.derives(c.s, v.t)
         if yes or not maybe:
-            return Val(self.ins(f"icmp ne ptr {v.v}, null") if yes and v.v not in self.nn else "true" if yes else "false", "bool")
+            return Val(self.ptr_cmp('!=', v, Val('null', 'None')).v if yes and v.v not in self.nn else "true" if yes else "false", "bool")
     sets = self.catch_set(t)
     if v.t == "exc":
         return Val("true" if sets == "" else self.exc_match(v, sets), "bool")

@@ -387,13 +387,13 @@ def gen_iop(self, op: str, a: str, b: str) -> str:
 def gen_notnone(self, v: Val, msg: str) -> None:
     # objects may be None (null); using one that is raises like CPython
     if v.t in self.classes and v.v not in self.nn:
-        self.guard(self.ins(f"icmp eq ptr {v.v}, null"), msg)
+        self.guard(self.ptr_cmp('==', v, Val('null', 'None')).v, msg)
 
 def gen_unwrap(self, v: Val, msg: str) -> Val:
     # an optional value used where only the type it holds works: None raises msg ("Kind: text")
     if not is_opt(v.t):
         return v
-    self.guard(self.ins(f"icmp eq ptr {v.v}, null"), msg)
+    self.guard(self.ptr_cmp('==', v, Val('null', 'None')).v, msg)
     return self.deref(v)
 
 def gen_deref(self, v: Val) -> Val:
