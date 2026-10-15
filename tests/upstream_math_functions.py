@@ -12,8 +12,8 @@
 # that prints the exception. to_ulps() reads a float's bits with struct (not supported); here it
 # computes the same int from math.frexp(). result_check() converts an int argument to a float,
 # rebinding it (a variable has one type here): ftest converts both before it calls it, and every
-# call passes a float as got, as upstream's do. Its messages use % (str.format() is not
-# supported). test_exceptions runs upstream only in verbose mode.
+# call passes a float as got, as upstream's do. Its messages use % where upstream's use
+# str.format(). test_exceptions runs upstream only in verbose mode.
 # EXCLUDED upstream cases (see also tests/upstream_math_float_ops.py and
 # tests/upstream_math_integer.py):
 # - every assertRaises(TypeError, math.f) of a call without arguments (testAcos, testAcosh,

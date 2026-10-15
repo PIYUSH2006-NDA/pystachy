@@ -13,8 +13,7 @@
 # the tuple of pairs upstream iterates holds a different function type in each pair.
 # assertIs(type(got), int) is isinstance(got, int) (type() is not supported).
 # check_float_conversion compares reprs, as one variable holds the float or 'overflow' upstream
-# (a variable has one type here), and formats its message with % (str.format() is not
-# supported). int_to_float's q * 2**shift is q * 2.0**shift: 2**shift of a
+# (a variable has one type here). int_to_float's q * 2**shift is q * 2.0**shift: 2**shift of a
 # negative shift is a float in CPython, and int ** negative int a ValueError here (a documented
 # deviation).
 # EXCLUDED upstream cases (ints are 64-bit here; a value that needs more raises OverflowError, a
@@ -402,8 +401,8 @@ def check_float_conversion(n: int) -> int:
     except OverflowError:
         expected = 'overflow'
 
-    msg = ("Error in conversion of integer %d to float.  "  # {} and str.format() upstream
-           "Got %s, expected %s." % (n, actual, expected))
+    msg = ("Error in conversion of integer {} to float.  "
+           "Got {}, expected {}.".format(n, actual, expected))
     assert actual == expected, msg
     return 1
 

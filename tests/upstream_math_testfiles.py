@@ -12,8 +12,9 @@
 # result_check()'s comparison of names is check_result(). to_ulps() reads a float's bits with
 # struct upstream (not supported); here it computes the same int from math.frexp(), as in
 # tests/upstream_math_functions.py. parse_testfile() and parse_mtestfile() return lists of
-# tuples, not generators (generator functions are not supported). str.format() is %, and
-# fail_fmt is written where it is used (a % format is a literal here).
+# tuples, not generators (generator functions are not supported). Messages use % where
+# upstream's use str.format(), and fail_fmt is written where it is used (a format string is a
+# literal here).
 # TESTFILE holds the 505 of cmath_testcases.txt's 2097 cases that test_testfile checks,
 # those whose argument and expected value are real and whose function is neither rect nor polar;
 # its tests that skip the others are kept, and skip none here.
