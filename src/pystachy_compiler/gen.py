@@ -475,6 +475,7 @@ from src.pystachy_compiler.program import (
     gen_hook as program_hook,
     gen_inherit as program_inherit,
     gen_init_template as program_init_template,
+    gen_template_fix as program_template_fix,
     gen_left_out as program_left_out,
     gen_makes_tmpl as program_makes_tmpl,
     gen_objects as program_objects,
@@ -1465,6 +1466,9 @@ class Gen:
 
     def init_template(self, st: Node) -> bool:
         return program_init_template(self, st)
+
+    def template_fix(self, cs: list[Node]) -> str:
+        return program_template_fix(self, cs)
 
     def makes_tmpl(self, n: Node) -> bool:
         return program_makes_tmpl(self, n)

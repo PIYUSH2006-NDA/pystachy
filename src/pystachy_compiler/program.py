@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 import sys
-from src.pystachy_compiler.analysis import all_imports, collect, module_ints, needs_eh, none_assigns
+from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -62,7 +62,7 @@ def gen_subclass_problem(self, st: Node) -> str:
         if self.is_dc(base_ci.name) or base_ci.name in self.nts:
             return "inheritance from a dataclass or NamedTuple is not supported"
         if base_ci.name in self.tparams or self.init_template(base_ci.node) or self.init_template(st.kids[0]):
-            return "inheritance with generic class templates is not supported: annotate __init__ parameters"
+            return "inheritance with generic class templates is not supported: " + self.template_fix([base_ci.node, st.kids[0]])
         if len(st.kids[0].kids) > 1:
             return "a class with inheritance and a decorator is not supported"
         return ""
@@ -167,6 +167,16 @@ def gen_init_template(self, st: Node) -> bool:
                 return True  # (a field may hold an object of a class template: typed where the object is made)
     return False
 
+def gen_template_fix(self, cs: list[Node]) -> str:
+    # what to change so that classes cs are no class templates: their __init__'s parameters,
+    # unless it calls iter() or takes an iterator (an iterator's type is its class)
+    for st in cs:
+        for d in st.kids[0].kids:
+            if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
+                if calls_iter(d.kids[2], False) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
+                    return "an __init__ that calls iter() or takes an Iterator[T] or Iterable[T] makes one (an iterator's type is its class)"
+    return "annotate __init__ parameters"
+
 def gen_makes_tmpl(self, n: Node) -> bool:
     # does n call a class template, making an object of one of its specializations? iter(x)
     # makes one of lib's iterator classes (see guess_iter)
@@ -179,9 +189,14 @@ def gen_makes_tmpl(self, n: Node) -> bool:
 
 def gen_tmpl_ann(self, a: Node) -> bool:
     # does annotation a name a class template (Box, "Box", Box | None, list[Box])? Each of its
-    # specializations being a type of its own, the annotation then types nothing, as if left out
+    # specializations being a type of its own, the annotation then types nothing, as if left out;
+    # as Iterator[T] and Iterable[T] do, an iterator's type being its class (see iter_)
     if a.kind == "name":
         return a.s in self.tmpl
+    if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") and (self.ann_base(a.kids[0]) == "iterator" or self.ann_base(a.kids[0]) == "iterable"):
+        return True
+    if a.kind == "str" and ("Iterator" in a.s or "Iterable" in a.s):
+        return self.tmpl_ann(self.parse_expr(a.s))
     if a.kind == "str":
         w = ""
         for c in a.s + " ":
@@ -631,7 +646,7 @@ def gen_program(self, mods: list[Mod]) -> str:
     for ci in self.classes.values():
         if ci.tag != 0 and ci.name in self.tmpl:
             self.line = ci.node.line
-            self.err("inheritance with generic class templates is not supported: annotate __init__ parameters")
+            self.err("inheritance with generic class templates is not supported: " + self.template_fix([ci.node]))
     for m in mods:
         top: list[Node] = []
         for st in m.body.kids:

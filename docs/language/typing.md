@@ -365,7 +365,9 @@ boxing and dispatch have costs, so no performance improvement is claimed.
 
 A module-level function with an unannotated parameter is a template, compiled once for
 each argument type combination that calls it. Annotated parameters keep their declared
-types; the first value-returning statement determines an inferred return type.
+types; the first value-returning statement determines an inferred return type. An
+`Iterator[T]` or `Iterable[T]` annotation counts as none, an iterator's type being its class
+([iterators](semantics.md#iterators)).
 An ordinary function or method with fully annotated parameters, including one with no
 arguments, uses the same inference when it has no return annotation and returns a value.
 Its recursive calls can retain the existing `None` signature; value-returning recursion
@@ -472,7 +474,8 @@ The annotation preserves the individual values' types; it does not convert integ
 ## Class templates and generic classes
 
 A class specializes when its `__init__` has an unannotated parameter, variadic parameters,
-or a parameter or constructed field using another class template. Calls whose fields have
+a parameter or constructed field using another class template, an `Iterator[T]` or
+`Iterable[T]` parameter, or an `iter()` call. Calls whose fields have
 the same types share a specialization: `Box(1)` and `Box(2)` share one, while `Box("s")`
 uses another. Methods compile when needed; non-template special methods compile when the
 specialization is created.
@@ -510,7 +513,8 @@ print(Box(7).value)
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
 `Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
-dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
+dict, string or homogeneous tuple, or of an object's iterator (what its `__next__` returns);
+an empty tuple binds nothing. A direct `None` argument binds
 no type variable on its own. Repeated bindings must preserve the values' types: mixed `int`
 and `bool` constructor arguments can use the direct-scalar union fallback below, but do not
 implicitly join to `int`. Callable matching uses annotated positional parameters and

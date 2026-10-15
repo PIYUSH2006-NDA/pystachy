@@ -359,6 +359,9 @@ supported alternatives.
   `reversed()` or a generator expression; `next(it, default)` where the default's type and the
   items' join to no type; and an iterator class without `__iter__` where CPython 3.13 calls
   `iter()` of the iterator again: in a comprehension and in `str.join()`
+- a class in an inheritance hierarchy whose `__init__` calls `iter()` or takes an
+  `Iterator[T]` or `Iterable[T]` parameter (a class template, see
+  [iterators](semantics.md#iterators))
 - iterating over an object, or `x in o`, by its `__getitem__` alone (CPython's old sequence
   protocol), and `reversed()` of an object
 - reflected operator methods (`__radd__` & co), which CPython calls when the left operand's class

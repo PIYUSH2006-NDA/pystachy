@@ -95,9 +95,11 @@ of both, such as `T | None` for a `None` default. `iter(callable, sentinel)` and
 `enumerate()`, `zip()`, `map()`, `filter()`, `reversed()` or a generator expression are
 unsupported.
 
-An iterator's type is its class: a class whose `__init__` calls `iter()` is a class template,
-and functions that take iterators are templates (unannotated parameters). `Iterator[T]` does
-not annotate a variable, field or ordinary parameter.
+An iterator's type is its class. `Iterator[T]` and `Iterable[T]` annotations (`typing`'s or
+`collections.abc`'s) therefore type nothing, as a class template's name does: a function with
+such a parameter or return is compiled for each call's argument types, a class whose
+`__init__` takes one or calls `iter()` is a class template, and an annotated variable or field
+has its value's type. A `Generic[T]` class's `Iterable[T]` parameter binds `T` to the items.
 
 ## Object protocols
 
