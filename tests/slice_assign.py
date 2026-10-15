@@ -251,3 +251,28 @@ def key2(x: int) -> int:
 
 srt2.sort(key=key2)
 print(srt2)
+
+# an empty list's first slice assignment types it, as list.extend() does, also where the list is
+# read before it and the value is a generator expression, map() or an iterator call
+inferred = []
+inferred[:] = ["p", "q"]
+print(inferred)
+
+
+def fill(ys: list[int]) -> None:
+    xs = []
+    print(len(xs))
+    xs[len(xs) :] = (y * 2 for y in ys)
+    rs = []
+    print(rs)
+    rs[:] = range(3)
+    ms = []
+    print(ms)
+    ms[0:0] = map(str, ys)
+    es = []
+    print(es)
+    es.extend(y + 1 for y in ys)
+    print(xs, rs, ms, es)
+
+
+fill([1, 2])

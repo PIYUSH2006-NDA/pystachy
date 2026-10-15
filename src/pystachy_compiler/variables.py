@@ -917,6 +917,8 @@ def gen_lookahead(self, name: str, ahead: bool = False) -> str:
             return ""
     if found[0].kind == "omit" and not is_list(t) and not is_set(t):
         return ""  # (d += ... or d.extend(...) on a dict: an error where it is compiled)
+    if found[0].kind == "omit" and not self.bound("list") and (self.iterator_call(e) or self.is_mapcall(e) or (e.kind == "listcomp" and e.s == "gen")):
+        e = mk("call", "", e.line, [mk("name", "list", e.line, []), e])  # (its items, which the fill takes at once)
     it = self.dry(e)
     if found[0].kind == "omit" and is_list(t):
         if not is_list(it):
@@ -1061,6 +1063,9 @@ def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
             return True
         if (k == "assign" or k == "augassign") and st.kids[0].kind == "index" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name and k == "assign":
             found.append(st.kids[0].kids[1])
+            found.append(st.kids[-1])
+        elif k == "assign" and st.kids[0].kind == "slice" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name:
+            found.append(mk("omit", "", st.line, []))  # (xs[a:b] = ys, as xs.extend(ys))
             found.append(st.kids[-1])
         elif k == "assign" and len(st.kids) == 2 and st.kids[0].kind == "index" and empty_default(st.kids[0].kids[0], name, "dict"):
             # name.setdefault(k, {})[k2] = v: the item is {k2: v} (see default_want)

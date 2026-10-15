@@ -82,4 +82,10 @@ TypeError 'NoneType' object is not subscriptable
 ValueError list modified during sort
 [1, 2, 3]
 [1, 2, 3]
+['p', 'q']
+0
+[]
+[]
+[]
+[2, 4] [0, 1, 2] ['1', '2'] [2, 3]
 [exit 0]
