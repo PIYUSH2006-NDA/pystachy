@@ -169,3 +169,33 @@ t2 = ("p", "q")
 print("{k}{}{}{}".format(arg("a"), k=arg("k"), *t2))
 print("{k}{j}{}".format(*t2, k=arg("k"), **{"j": arg("j")}))
 print(list(map("{:>3}|".format, [1, 22])), list(map("{}{}".format, "ab", [1, 2])))
+
+
+# a class attribute's default, a lambda, a function's *args, optional values
+class Cell:
+    label = "{}-{}".format(1, "a")
+    width: int = 3
+
+    def show(self, v: int) -> str:
+        return "{:>{w}}".format(v, w=self.width)
+
+
+def spread(*args: int) -> str:
+    return "{} {}".format(*args)
+
+
+def head(first: str, *rest: str) -> str:
+    return "{0}:{1}{2}".format(first, *rest)
+
+
+fmt = lambda x: "<{:>3}>".format(x)
+print(Cell.label, Cell().show(7), fmt(5), spread(1, 2), spread(3, 4, 5), head("h", "a", "b"))
+try:
+    print(spread(1))
+except IndexError as e:
+    print("IndexError", e)
+fs = [1.5, 2.25]
+print("{:.1f}|{:.2f}".format(*fs), "{}".format(sum(x for x in fs)), "{0[0]:>4}{0[1]:<5}|".format(fs))
+opt: str | None = "x"
+none: int | None = None
+print("{}".format(opt), "{!r}".format(None), "{:>3}".format(True), "{}|{!s}|{!r}".format(none, none, none))
