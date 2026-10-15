@@ -22,7 +22,11 @@ top-level code runs once, when its first import executes; after a failed import,
 import runs that code again.
 
 `__name__` and `m.__name__` are the module's name, and `__debug__` is `True`.
-`__file__`, `__doc__`, `__spec__` and CPython's other module metadata are unsupported.
+`__doc__`, `m.__doc__` and `from m import __doc__` give the module's docstring, cleaned as
+CPython 3.13 cleans it, or `None`. A module may bind its own `__doc__`, as `datetime` does;
+assigning another module's `__doc__`, and reading `__doc__` in a class body, are not supported.
+A `lib/` subset implementation's docstring differs from CPython's module's.
+`__file__`, `__spec__` and CPython's other module metadata are unsupported.
 An imported module cannot bind `__name__`.
 
 ## Module scope

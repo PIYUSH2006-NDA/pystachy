@@ -240,7 +240,8 @@ supported alternatives.
   too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
   which assigns the local
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
-  one named like a builtin or `__name__`, also in an imported module
+  one named like a builtin or `__name__`, also in an imported module, and `__doc__` in a class
+  body (the class's docstring)
 - a local read textually before its first assignment (declare it first: `x: int`), where a name
   that a function deletes, defines with `def` or `class`, or binds with `:=`, a `match` capture
   or a `type` statement is its local too, also where the name is a class's that the read uses
@@ -282,7 +283,7 @@ supported alternatives.
   the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
-- `del` of another module's attribute
+- `del` of another module's attribute, and an assignment of another module's `__doc__`
 - an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
   module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time: from
   another module, or from m's own code after it imports itself

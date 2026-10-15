@@ -86,6 +86,32 @@ def builtin_module(path: str) -> bool:
     return path in MODULES or root in MODULES or path == "collections.abc"
 
 
+def clean_doc(s: str) -> str:
+    # a docstring as CPython 3.13's compiler keeps it (_PyCompile_CleanDoc): tabs expanded (in
+    # columns of characters, which UTF-8 continuation bytes do not start), the first line's leading
+    # spaces and the indentation that the other lines with text share removed
+    out: list[str] = []
+    col = 0
+    for i in range(len(s)):
+        c = s[i]
+        if c == "\t":
+            out.append(" " * (8 - col % 8))
+            col += 8 - col % 8
+        else:
+            out.append(c)
+            col = 0 if c == "\n" or c == "\r" else col if ord(c) & 192 == 128 else col + 1
+    lines = "".join(out).split("\n")
+    margin = -1
+    for ln in lines[1:]:
+        k = len(ln) - len(ln.lstrip(" "))
+        if k < len(ln) and (margin < 0 or k < margin):
+            margin = k
+    kept = [lines[0].lstrip(" ")]
+    for ln in lines[1:]:
+        kept.append(ln[min(margin, len(ln) - len(ln.lstrip(" "))) if margin > 0 else 0 :])
+    return "\n".join(kept)
+
+
 def builtin_import(st: Node, a: Node) -> bool:
     # does alias a of import statement st bind a builtin module or a name of one: import os.path
     # binds os, a builtin module, but import collections.abc the Python package collections

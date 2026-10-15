@@ -43,7 +43,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
 NOCALL: dict[str, bool] = {}
 for _k in ("name str int float None True False list tuple dict attr assign annassign expr pass global import alias "
-           "uimport guard bound badimport block raise def params param starparam dstarparam noann class").split():
+           "uimport guard bound badimport block raise def params param starparam dstarparam noann class moddoc").split():
     NOCALL[_k] = True
 
 

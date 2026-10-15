@@ -10,6 +10,7 @@ from src.pystachy_compiler.analysis import (
     builtin_of,
     calls,
     catches_import,
+    clean_doc,
     collect,
     deleted,
     false_flag,
@@ -145,6 +146,10 @@ class Loader:
         # the names of dm's code that deftime() has seen bound to a class without bases, decorators
         # or __class_getitem__ (a type, which CPython cannot subscript) and not bound again since
         self.known: dict[str, bool] = {}
+        # the module-level statements name.__doc__ = ... that simplify() dropped, each a "docset"
+        # node, with its module
+        self.docsets: list[Node] = []
+        self.docsetm: list[Mod] = []
 
     def program(self, path: str, src: str) -> list[Mod]:
         # the main program and the modules it imports, in the order their code may first run
@@ -153,6 +158,7 @@ class Loader:
         m.body = Parser(Lexer(src, 1).file()).module()
         self.prescan(m)
         self.simplify(m, m.body, {})
+        self.docstring(m)
         self.bindings(m)
         self.sure = m.sure
         self.maybe = m.maybe
@@ -197,9 +203,40 @@ class Loader:
             env: list[dict[str, bool]] = [{}, {}, {}, {}]  # (a package binds __path__, annotations __annotations__)
             mark((["__path__"] if x.pdir != "" else []) + (["__annotations__"] if has_kind(x.body, "annassign") else []), env[0], env[1], [])
             self.deftime(x, x.body.kids, env, "", [], True)
+        for i in range(len(self.docsets)):
+            k = self.docsetm[i].kinds.get(self.docsets[i].s, "")
+            if k.startswith("m:"):
+                fail(f"assigning the __doc__ of module '{k[2:]}' is not supported", self.docsets[i].line)
         for x in self.order:
             self.qstmts(x, x.body.kids, {}, False)
         return self.order
+
+    def docstring(self, m: Mod) -> None:
+        # m's __doc__ (Mod.doc): its docstring, a string literal alone in its first statement, as
+        # CPython 3.13's compiler cleans it; else None. Where m's code binds __doc__ itself (what
+        # simplify() left of it), it is a variable, which CPython's code assigns the docstring (or
+        # None) before its first statement (after a docstring and the from __future__ imports here)
+        b = m.body
+        if b.s == "doc" and b.kids[0].kind == "expr" and b.kids[0].kids[0].kind == "str":
+            m.doc = mk("str", clean_doc(b.kids[0].kids[0].s), b.kids[0].line, [])
+        if "__doc__" in rebound(b.kids, True):
+            i = 1 if b.s == "doc" else 0
+            while i < len(b.kids) and b.kids[i].kind == "import" and b.kids[i].s == "from" and b.kids[i].kids[0].kids[1].s == "__future__":
+                i += 1
+            line = b.kids[i].line if i < len(b.kids) else 1
+            v = mk(m.doc.kind, m.doc.s, line, [])
+            if m.doc.kind == "str":
+                b.kids.insert(i, mk("assign", "", line, [mk("name", "__doc__", line, []), v]))
+            else:
+                # (__doc__: str | None = None, so that its code can bind it a str)
+                t = mk("binop", "|", line, [mk("name", "str", line, []), mk("None", "", line, [])])
+                b.kids.insert(i, mk("annassign", "", line, [mk("name", "__doc__", line, []), t, v]))
+
+    def moddoc(self, n: Node, t: Mod) -> None:
+        # n, a read of module t's __doc__ where t's code binds none, becomes that constant
+        n.kind = t.doc.kind
+        n.s = t.doc.s
+        n.kids = []
 
     def loaded(self, m: Mod, st: Node) -> bool:
         # are the user modules import statement st names (and from-imported submodules) loaded
@@ -215,7 +252,7 @@ class Loader:
                 return False
             if st.s.startswith("from") and a.s != "*":
                 x = a.kids[0].s[a.kids[0].s.rfind(".") + 1 :]
-                if x not in self.mods[p].kinds and p + "." + x not in self.mods:
+                if x not in self.mods[p].kinds and p + "." + x not in self.mods and x != "__doc__":
                     return False
         return True
 
@@ -286,6 +323,7 @@ class Loader:
             r[0].s = "init"  # (an optional import of the module returns there instead: Gen.raise_stmt)
             m.fails = import_error(r[0].kids[0])
         self.simplify(m, m.body, {})
+        self.docstring(m)
         self.bindings(m)
         sure = self.sure
         maybe = self.maybe
@@ -694,7 +732,10 @@ class Loader:
             if blk is m.body:
                 self.pos = i
             if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "attr" and st.kids[0].s == "__doc__" and st.kids[0].kids[0].kind == "name" and blk is m.body:
-                # f.__doc__ = g.__doc__: docstrings cannot be read in Pystachy, so this is dropped
+                # f.__doc__ = g.__doc__: the docstrings of functions and classes cannot be read in
+                # Pystachy, so this is dropped; a read of a module's __doc__ that it assigns is an error
+                self.docsets.append(mk("docset", st.kids[0].kids[0].s, st.line, []))
+                self.docsetm.append(m)
                 continue
             run: list[Node] = []
             if self.static_if(m, st, scope, run) or self.optional(m, st, run, False):
@@ -946,6 +987,8 @@ class Loader:
         # 1 maybe (in a branch, by a function's global statement or a star import, ...), 0 not. A
         # module not loaded yet runs its code to its end (what static_if() and optional() leave of
         # it); one whose code is running (a circular import, or p is m) has run it up to that import
+        if x == "__doc__":
+            return 2  # (every module has one: Mod.doc)
         path = self.mods[p].path if p in self.mods else self.modpath(p)
         if not path.endswith(".py"):
             return 0  # (a namespace package binds nothing)
@@ -1667,6 +1710,14 @@ class Loader:
             k = ""
         if not infn and (m.kinds.get(name, "") == "f" or m.kinds.get(name, "") == "c"):
             fail(f"'{name}' is bound both by an import and by a def or class (not supported)", line)
+        if x == "__doc__" and k == "":
+            # src's docstring or None (qexpr() reads it), copied as a variable is
+            if not infn:
+                if m.kinds.get(name, "v") != "v":
+                    fail(f"'{name}' is bound both as a variable and by an import (not supported)", line)
+                m.kinds[name] = "v"
+            copies.append(mk("assign", "from", line, [mk("name", name, line, []), mk("moddoc", src.name, line, [])]))
+            return "v"
         if not infn and m.kinds.get(name, "") == "v" and k != "v" and (k != "" or src.pdir != ""):
             fail(f"'{name}' is bound both as a variable and by an import (not supported)", line)
         if k == "" and src.pdir != "":
@@ -1743,6 +1794,9 @@ class Loader:
             n.kids = []
             return ""
         t = self.mods[base]
+        if n.s == "__doc__" and "__doc__" not in t.kinds:
+            self.moddoc(n, t)
+            return ""
         k = t.kinds.get(n.s, "")
         key = f"{base}  {n.s}"
         if key in self.fragile:
@@ -1779,6 +1833,9 @@ class Loader:
                 return
             if k == "name" and n.s == "__debug__":
                 n.kind = "True"  # (CPython runs without -O; nothing can bind __debug__)
+                return
+            if k == "name" and n.s == "__doc__" and n.s not in loc and n.s not in self.fk and n.s not in m.kinds:
+                self.moddoc(n, m)
                 return
             root = n
             while root.kind == "attr":
@@ -1819,6 +1876,8 @@ class Loader:
                 n.s = self.qname(m, n.s, loc)
             elif n.kind == "attr":
                 self.qexpr(m, n.kids[0], loc)
+        elif k == "moddoc":
+            self.moddoc(n, self.mods[n.s])  # (from m import __doc__: take())
         elif k == "lambda":
             # lambda params: body: its defaults are evaluated where it is, its body sees its parameters
             # and the names of the function around it
@@ -1856,6 +1915,11 @@ class Loader:
                 self.qstore(m, x, loc)
             return
         b = self.modof(m, t.kids[0], loc) if t.kind == "attr" else ""
+        if b != "" and t.s == "__doc__" and "__doc__" not in self.mods[b].kinds:
+            t.kind = "badattr"
+            t.s = f"assigning the __doc__ of module '{b}' is not supported"
+            t.kids = []
+            return
         if b != "" and t.s in self.mods[b].amb:
             t.kind = "badattr"
             t.s = f"assigning '{b}.{t.s}' is not supported: the program's first import of the submodule '{b}.{t.s}' binds it too"
@@ -2015,7 +2079,11 @@ class Loader:
                 st.s = self.qname(m, st.s, loc)
                 for d in st.kids[1:]:
                     self.qdeco(m, d, loc)
-                self.qstmts(m, st.kids[0].kids, {} if cls else dict(loc), True)  # (class scopes do not nest)
+                # (class scopes do not nest; a class body's __doc__ is the class's docstring, which
+                # cannot be read: it stays unqualified, an error in Gen)
+                cloc: dict[str, bool] = {} if cls else dict(loc)
+                cloc["__doc__"] = True
+                self.qstmts(m, st.kids[0].kids, cloc, True)
                 if cls:
                     loc[short(st.s)] = True
             elif cls and k == "assign":

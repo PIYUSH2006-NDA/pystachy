@@ -138,7 +138,8 @@ snapshots when item comparison callbacks mutate a queue. Searches (`count`,
 `index`, containment and `remove`) read live items and detect structural mutations
 with CPython's operation-specific errors; same-size replacements are preserved.
 `reversed`, reflected multiplication, comparisons with other containers, pickling,
-`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable.
+`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable. The package's
+`__doc__` is its own docstring.
 
 ## Shlex
 

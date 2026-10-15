@@ -14,3 +14,9 @@ print(d)
 # maxlen is a plain field, which an assignment changes: CPython's is read-only (AttributeError).
 d.maxlen = 2
 print(d.maxlen)
+
+# The package's __doc__ is lib/collections' own docstring; CPython's begins "This module implements
+# specialized container datatypes".
+import collections
+
+print(collections.__doc__.split(":")[0])
