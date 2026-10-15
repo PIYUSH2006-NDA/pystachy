@@ -108,7 +108,7 @@ def gen_call(self, n: Node, want: str, typeargs: str = "") -> Val:
         if f.kids[0].kind == "name" and f.kids[0].s in self.classes and f.kids[0].s not in self.ltype:
             return self.class_call(f.kids[0], f.s, args, want)
         o = self.expr(f.kids[0], self.default_want(f.kids[0], f.s, args, ""))
-        r = self.method(o, f.s, args)
+        r = self.method(o, f.s, args, want)
         if f.s != "close":
             self.close_temp(f.kids[0], o)
         return r
@@ -467,7 +467,7 @@ def gen_call_value(self, v: Val, args: list[Node], want: str) -> Val:
     if k.startswith("u:"):
         return self.unbound_call(k[2 : k.find(".")], k[k.find(".") + 1 :], args)
     if k.startswith("m:"):
-        return self.method(Val(v.v, k[2 : k.rfind(".")]), k[k.rfind(".") + 1 :], args)  # (a bound method: o.name(args))
+        return self.method(Val(v.v, k[2 : k.rfind(".")]), k[k.rfind(".") + 1 :], args, want)  # (a bound method: o.name(args))
     if k.startswith("d:"):
         return self.method(Val(v.v, k[k.find(":", 2) + 1 :]), k[2 : k.find(":", 2)], args)
     if k.startswith("b:"):
@@ -542,7 +542,7 @@ def gen_open_(self, args: list[Node]) -> Val:
     return Val(self.rt("pys_open", "ptr", [f"ptr {vals['file']}", f"ptr {vals['mode']}", f"ptr {vals['encoding']}", f"ptr {vals['newline']}",
                                            f"i64 {vals['buffering']}"]), "file")
 
-def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
+def gen_method(self, o: Val, m: str, args: list[Node], want: str = "") -> Val:
     if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
         return self.unbound_call(o.t[5:-1], m, args)
     if is_kw(o.t):
@@ -573,11 +573,11 @@ def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
         ci = self.classes[o.t]
         if m == "__call__" and self.cached_wrapper(o.t):
             self.notnone(o, "AttributeError: 'NoneType' object has no attribute '__call__'")
-            return self.call_cache(o, args, "")
+            return self.call_cache(o, args, want)
         if m not in ci.methods and ci.exc != "" and m in HASATTR["any"].split() + ["add_note", "with_traceback"]:
             self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
         if m not in ci.methods and m in ci.ftypes:
-            return self.obj_call(self.getfield(o, self.field(o, m), m), args, "")  # (o.f(args) of a field f)
+            return self.obj_call(self.getfield(o, self.field(o, m), m), args, want)  # (o.f(args) of a field f)
         if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
             self.err(f"'{shown(o.t)}' object has no method '{m}'")  # (a specialization's is its class's)
         self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
@@ -590,7 +590,9 @@ def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
         if ci.methods[m].prop:
             return self.obj_call(self.call_fn(ci.methods[m], [o], []), args, "")
         self.cls_bound(ci.methods[m], o.t, True)
-        return self.call_fn(ci.methods[m], [o] if ci.methods[m].deco == "" else [], args)  # (a static or class method gets no o)
+        # Only user calls consume the result context; builtin methods retain their
+        # normal argument contexts, including when forwarding an open empty result.
+        return self.call_fn(ci.methods[m], [o] if ci.methods[m].deco == "" else [], args, want)  # (a static or class method gets no o)
     return self.bmethod(o, m, args)
 
 def gen_unbound_call(self, tn: str, m: str, args: list[Node]) -> Val:
