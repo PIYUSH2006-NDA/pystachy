@@ -25,8 +25,10 @@ implemented. Optional values, closures and constructor-inferred class templates 
 implemented; their language rules belong in the [language guide](language.md).
 
 The separation is partial. `Gen` still resolves, types, folds and specializes code while
-building IR. Most loads, stores and arithmetic are `raw` instructions containing LLVM text.
-The IR therefore supports the current LLVM backend, but is not yet a backend-neutral
+building IR. Native variable and class-field accesses and numeric/reference comparisons
+are explicit typed operations. Arithmetic, some internal memory accesses and backend
+helper templates still contain raw LLVM text. The IR supports the current LLVM backend,
+but is not yet a backend-neutral
 representation of every operation. WebAssembly and dynamic `Any` values remain future work.
 
 <a id="4-passes"></a>
