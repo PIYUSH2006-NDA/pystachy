@@ -1,0 +1,12 @@
+('x',) ('x',) 7
+True True
+('renamed',) ('renamed',) 1
+() ()
+value value
+['item', 'extra'] ['item', 'extra'] 2
+True True
+('a',)
+('b',)
+('a',)
+('b',) ('a',)
+[exit 0]

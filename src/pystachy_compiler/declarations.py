@@ -900,10 +900,13 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
-    # Keep slots as layout metadata rather than an instance field. A
+    # Slot names constrain layout; the declaration remains a class attribute. A
     # subclass without its own __slots__, or with an unslotted base, has a dict.
     if ci.base in self.classes:
         ci.slots = list(self.classes[ci.base].slots)
+        if "__slots__" in self.classes[ci.base].fdefault:
+            ci.ftypes["__slots__"] = self.classes[ci.base].ftypes["__slots__"]
+            ci.fdefault["__slots__"] = self.classes[ci.base].fdefault["__slots__"]
     slots_declared = False
     for st in ci.node.kids[0].kids:
         if st.kind not in ["assign", "annassign"] or st.kids[0].kind != "name" or st.kids[0].s != "__slots__":
@@ -933,6 +936,20 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             if ci.mod == "":
                 self.err(why)
             ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+        # Reuse class-default globals without reserving an instance field: a
+        # subclass may declare a different tuple length, or use a list/string.
+        t = "str" if slot_node.kind == "str" else "list[str]" if slot_node.kind == "list" else self.ctype("tuple", ["str" for n in names])
+        if st.kind == "annassign" and len(st.kids) == 3:
+            why = self.ann_problem(st.kids[1], False) if ci.mod != "" else ""
+            if why != "":
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+            else:
+                t = self.vtype(st.kids[1])
+        ci.ftypes["__slots__"] = t
+        ci.fdefault["__slots__"] = slot_node
+        if st.kind == "assign":
+            st.kind = "annassign"
+            st.kids = [st.kids[0], noann, slot_node]
         ci.slotlimit = ci.exc == "" and (ci.base not in self.classes or self.classes[ci.base].slotlimit)
         # A slot's descriptor cannot coexist with a class variable or method of
         # that name. Reject shadowing inherited descriptors too.
@@ -1393,6 +1410,11 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.err(f"'{o.t}' object has no attribute '{name}'")
     extra = " and no __dict__ for setting new attributes" if store else ""
     self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'{extra}")
+    if name == "__slots__" and name not in ci.fpos:
+        if store:
+            self.err("rebinding __slots__ through an instance is not supported")
+        self.class_default(ci, name)
+        return Val(ci.fglob[name], ci.ftypes[name])
     return Val(self.fgep(o, ci.fpos[name]), ci.ftypes[name])
 
 def gen_fgep(self, o: Val, i: int) -> str:
@@ -1406,6 +1428,18 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     ci = self.classes[o.t]
     r = ""
     bad = ""
+    if name == "__slots__" and name not in ci.fpos:
+        r = self.ins(f"load {lt(p.t)}, ptr {p.v}")
+        if ci.tag != 0:
+            tag = self.ins(f"load i64, ptr {self.fgep(o, ci.fpos[' class'])}")
+            for sub in self.classes.values():
+                if sub.tag != 0 and sub.name != ci.name and self.derives(sub.name, ci.name) and name in sub.fdefault:
+                    if sub.ftypes[name] != p.t:
+                        self.err(f"reading __slots__ through {short(ci.name)} is not supported when subclasses use different declaration types; read it through the concrete class")
+                    self.class_default(sub, name)
+                    dv = Val(self.ins(f"load {lt(p.t)}, ptr {sub.fglob[name]}"), p.t)
+                    r = self.select(self.ins(f"icmp eq i64 {tag}, {sub.tag}"), dv, Val(r, p.t))
+        return Val(r, p.t)
     if o.t + "." + name in self.cvars:
         # a class variable: the object's own value once it has assigned one, else the class's
         own = self.ins(f"load i1, ptr {self.fgep(o, ci.fflag[name])}")
@@ -1471,8 +1505,6 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
 
 def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
     ci = self.classes[o.t]
-    if ci.slotlimit and name not in ci.slots:
-        self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     what = f"the value assigned to field '{name}' ({typestr(p.t)})" if is_opt(v.t) else ""
     self.emit(f"store {lt(p.t)} {self.coerce(v, p.t, what).v}, ptr {p.v}")
     if name in ci.fflag:

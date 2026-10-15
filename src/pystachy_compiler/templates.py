@@ -63,6 +63,8 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
     for x in t.fields:
         s.fpos[x] = t.fpos[x]
         s.ftypes[x] = t.ftypes[x]
+    if "__slots__" in t.ftypes:
+        s.ftypes["__slots__"] = t.ftypes["__slots__"]
     s.fdefault = t.fdefault
     s.fglob = t.fglob
     self.classes[name] = s
