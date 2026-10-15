@@ -289,6 +289,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
                 ci.fglob[fl] = self.hidden(f"@d.c.{ci.name}.{fl}", self.coerce(self.expr(st.kids[2], t), t))
         elif st.kind == "def":
             f = ci.methods[st.s]
+            for k in [st.s + ".setter", st.s + ".deleter"]:
+                f = ci.methods[k] if k in ci.methods and ci.methods[k].node is st else f  # (a property's setter or deleter)
             for d in f.defaults:
                 self.no_class_names(d, bound, ci)
             bound[st.s] = True
@@ -653,6 +655,12 @@ def gen_stmt(self, n: Node) -> None:
             if dt.kind == "name":
                 self.del_name(dt)
                 continue
+            if dt.kind == "attr" and self.dotted(dt) == "" and not (dt.kids[0].kind == "name" and dt.kids[0].s in self.classes and dt.kids[0].s not in self.ltype):
+                o = self.expr(dt.kids[0], "")
+                if self.is_prop(o.t, dt.s):
+                    self.prop_store(o, dt.s, None)  # (del o.x of a property x: its deleter)
+                    continue
+                self.err("del of an attribute is only supported for a property (which calls its deleter)")
             o = self.expr(dt.kids[0], "") if dt.kind == "index" else Val("", "")
             nodel = "TypeError: 'NoneType' object does not support item deletion"
             if is_list(unopt(o.t)):
@@ -861,6 +869,10 @@ def gen_augassign(self, n: Node) -> None:
         self.class_store(ci, t.s, self.inplace(op, self.class_attr(t.kids[0], t.s), n.kids[1]))
     elif t.kind == "attr":
         o = self.expr(t.kids[0], "")
+        if self.is_prop(o.t, t.s):
+            # o.x op= v of a property x: its getter, then its setter
+            self.prop_store(o, t.s, self.inplace(op, self.method_value(o, t.s), n.kids[1]))
+            return
         p = self.field(o, t.s, False)
         self.frozen(o.t, t.s)
         cur = self.getfield(o, p, t.s)

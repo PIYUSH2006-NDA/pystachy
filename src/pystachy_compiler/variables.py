@@ -1374,6 +1374,10 @@ def gen_target_type(self, n: Node, base: bool = False) -> str:
         self.err("assignment to a slice is not supported")
     if n.kind == "attr" or n.kind == "index":
         t = self.target_type(n.kids[0], True)
+        if n.kind == "attr" and self.is_prop(t, n.s):
+            ms = self.classes[t].methods
+            s = n.s + ".setter"
+            return ms[s].ptypes[1] if s in ms and len(ms[s].ptypes) > 1 else ""  # (its setter's value)
         if n.kind == "attr" and t in self.classes:
             return self.classes[t].ftypes.get(n.s, "")
         if n.kind == "index" and is_list(t):
@@ -1400,6 +1404,9 @@ def gen_assign(self, t: Node, v: Val) -> None:
         self.class_store(self.cvar(t.kids[0], t.s), t.s, v)
     elif k == "attr":
         o = self.expr(t.kids[0], "")
+        if self.is_prop(o.t, t.s):
+            self.prop_store(o, t.s, v)
+            return
         p = self.field(o, t.s, True)
         self.frozen(o.t, t.s)
         self.setfield(o, p, t.s, v)

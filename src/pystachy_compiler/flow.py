@@ -721,6 +721,9 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
 def gen_fl_target(self, fl: Flow, t: Node) -> None:
     if t.kind == "name":
         fl.put(t.s)
+    elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me and t.s not in fl.fields:
+        fl.exposed()  # (self.x = v of a property x: its setter takes self)
+        fl.escaped = True
     elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me:
         fl.put("." + t.s)
     elif t.kind == "tuple":

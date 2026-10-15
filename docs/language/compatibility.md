@@ -400,7 +400,8 @@ supported alternatives.
   or explicit `super(C, self)` with an unrelated class or a different receiver expression
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`) outside an ordinary
-  inheritance hierarchy, and decorators other than these, `@dataclass` and `@overload`
+  inheritance hierarchy, and decorators other than these, `@property` (and its `.setter` and
+  `.deleter`), `@dataclass` and `@overload`
 - a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
   `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
   never does (in an imported module, an error where the program uses the class; its class
@@ -409,6 +410,8 @@ supported alternatives.
   it is imported)
 - `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
   and `KW_ONLY`
+- a property's `@x.getter`, a setter or deleter of another name than its property, `property()`
+  called as a function, assigning `super().x`, and `del` of an attribute that is not a property
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
   its class to a dataclass's or NamedTuple's class attribute, or to one its class body does not
   bind

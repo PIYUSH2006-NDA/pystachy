@@ -110,9 +110,10 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
         if d.kind == "def":
             self.line = d.line
             self.lib = s.mod != ""
-            s.methods[d.s] = self.declare_fn(d, name)
+            g = self.declare_fn(d, name)
             self.lib = False
-            s.methods[d.s].mod = s.mod
+            g.mod = s.mod
+            s.methods[g.name] = g  # (x.setter: a property's setter)
     s.hook = t.hook
     for f in s.methods.values():
         self.check_special(f)

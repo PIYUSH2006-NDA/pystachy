@@ -606,16 +606,23 @@ iteration variable. Nonconstant defaults are evaluated when the closure is defin
 
 Function decorators run when their `def` executes: expressions from top to bottom, then
 defaults, then decorator calls from bottom to top. The function name binds the final result.
-Methods support the dedicated decorators `@staticmethod`, `@classmethod`, read-only
-`@property` and recognized `@overload` stubs. Other method decorators, including `@final` and `@override`,
-are unsupported when the class is used.
+Methods support the dedicated decorators `@staticmethod`, `@classmethod`, `@property`
+with its `@value.setter` and `@value.deleter`, and recognized `@overload` stubs. Other method
+decorators, including `@final` and `@override`, are unsupported when the class is used.
 
 A property getter takes only `self` and needs a return annotation. Reading `obj.value`
 calls the getter each time; inherited getters, property overrides and `super().value`
 use the ordinary method dispatch. A callable-valued property can be called as `obj.value(args)`.
-Assignment, setters/deleters, property objects read through the class, and replacing a
-property with a field or method are unsupported. `hasattr(obj, "value")` on a property
-is rejected because it must run the getter; read it in `try/except AttributeError` instead.
+A setter, defined after the getter under the same name, takes `self` and the value;
+`obj.value = v` and `obj.value += v` call it, and `del obj.value` calls the deleter. Without
+one, they raise CPython's `AttributeError` (`property 'value' of 'C' object has no setter`).
+`self.value = v` in `__init__` calls the setter, and the fields it assigns are fields of the
+class. In a subclass, `@property def value` starts a new property without the base's setter
+and deleter, while `@Base.value.setter` keeps the base's getter and deleter; a base-typed
+receiver calls the methods of its object's class. `@value.getter`, `property(fget, fset)`,
+property objects read through the class, `super().value = v`, and replacing a property with a
+field or method are unsupported. `hasattr(obj, "value")` on a property is rejected because it
+must run the getter; read it in `try/except AttributeError` instead.
 
 ## Fields, dataclasses and NamedTuples
 

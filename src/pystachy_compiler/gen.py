@@ -175,6 +175,8 @@ from src.pystachy_compiler.declarations import (
     gen_fgep as declarations_fgep,
     gen_field as declarations_field,
     gen_frozen as declarations_frozen,
+    gen_is_prop as declarations_is_prop,
+    gen_prop_store as declarations_prop_store,
     gen_generic_base as declarations_generic_base,
     gen_getfield as declarations_getfield,
     gen_guess as declarations_guess,
@@ -461,6 +463,7 @@ from src.pystachy_compiler.program import (
     gen_exc_base as program_exc_base,
     gen_hook as program_hook,
     gen_inherit as program_inherit,
+    gen_accessor as program_accessor,
     gen_init_template as program_init_template,
     gen_left_out as program_left_out,
     gen_makes_tmpl as program_makes_tmpl,
@@ -1113,6 +1116,12 @@ class Gen:
     def frozen(self, t: str, name: str) -> None:
         return declarations_frozen(self, t, name)
 
+    def is_prop(self, t: str, name: str) -> bool:
+        return declarations_is_prop(self, t, name)
+
+    def prop_store(self, o: Val, name: str, v: Val | None) -> None:
+        return declarations_prop_store(self, o, name, v)
+
     def synth(self, ci: ClassInfo, name: str, ret: str, body: list[Node]) -> None:
         return declarations_synth(self, ci, name, ret, body)
 
@@ -1433,6 +1442,9 @@ class Gen:
 
     def inherit(self, ci: ClassInfo) -> None:
         return program_inherit(self, ci)
+
+    def accessor(self, ci: ClassInfo, d: Node) -> str:
+        return program_accessor(self, ci, d)
 
     def derives(self, c: str, base: str) -> bool:
         return program_derives(self, c, base)

@@ -1,0 +1,56 @@
+set celsius 21.5
+get celsius
+21.5
+set celsius 30.0
+set celsius 100.0
+get celsius
+get celsius
+100.0 212.0
+eval value
+eval holder
+set celsius 10.0
+eval holder
+get celsius
+eval increment
+set celsius 12.5
+get celsius
+12.5
+get celsius
+set celsius 10.5
+get celsius
+set celsius 21.0
+get celsius
+21.0
+delete celsius
+get celsius
+0.0
+set celsius 0.0
+delete celsius
+set celsius 1.0
+set celsius 5.0
+set celsius 5.0
+get celsius
+get celsius
+5.0 5.0
+set celsius 7.0
+set celsius 8.0
+get celsius
+get celsius
+7.0 8.0
+set celsius -300.0
+caught below absolute zero
+get celsius
+8.0
+eval kelvin
+eval holder
+caught property 'kelvin' of 'Temperature' object has no setter
+caught property 'kelvin' of 'Temperature' object has no setter
+caught property 'kelvin' of 'Temperature' object has no deleter
+caught property 'fahrenheit' of 'Temperature' object has no deleter
+eval none
+caught 'NoneType' object has no attribute 'celsius' and no __dict__ for setting new attributes
+caught 'NoneType' object has no attribute 'celsius' and no __dict__ for setting new attributes
+default of the setter
+3 4 7
+['é', 'ü'] ['é', 'ü']
+[exit 1]

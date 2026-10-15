@@ -1,4 +1,4 @@
-# error: conflicts with read-only property 'value'
+# error: conflicts with property 'value'
 class C:
     @property
     def value(self) -> int:

@@ -221,6 +221,8 @@ def gen_has(self, t: str, a: str) -> int:
         return -1 if r == 1 else 0  # (unless it is None)
     if t in self.classes:
         ci = self.classes[t]
+        if "." in a:
+            return 0  # (no attribute name: a key of a property's setter, x.setter)
         if a in ci.methods and ci.methods[a].prop:
             self.err(f"hasattr() of property '{a}' is not supported: read it in a try/except AttributeError block")
         if a in ci.fflag and t + "." + a not in self.cvars:

@@ -106,6 +106,8 @@ def gen_inherit(self, ci: ClassInfo) -> None:
     b = self.classes[ci.base]
     for m in b.methods:
         f = b.methods[m]
+        if f.acc != "" and m not in ci.methods and f.node.s in ci.methods and ci.methods[f.node.s].cls == ci.name:
+            continue  # (its own @property def makes a new property, without the base's setter and deleter)
         if m not in ci.methods and f.clsuse and f.mod == ci.mod and len([x for x in f.defaults if not is_const(x) and x.kind != "noann"]) == 0:
             self.line = f.node.line
             self.lib = f.mod != ""
@@ -136,6 +138,33 @@ def gen_inherit(self, ci: ClassInfo) -> None:
         elif ci.exc != "" and m != "__init__" and m != "__str__" and m != "__repr__":
             self.line = ci.methods[m].node.line
             self.err(f"method '{m}' of '{short(ci.name)}' overrides that of '{short(b.methods[m].cls)}': only __init__, __str__ and __repr__ may be overridden")
+    for m in ci.methods:
+        f = ci.methods[m]
+        if f.cls == ci.name and f.acc != "" and short(f.accof) != f.node.s:
+            # @Base.x.setter: a new property x with the getter (and deleter) of Base's, the
+            # property this class inherits, and this method
+            p = f.node.s
+            bn = f.accof[: f.accof.rfind(".")]
+            if p not in ci.methods or not ci.methods[p].prop or ci.methods[p].cls == ci.name or bn not in self.classes or p not in self.classes[bn].methods or ci.methods[p] is not self.classes[bn].methods[p]:
+                self.line = f.node.line
+                self.err(f"@{short(f.accof)}.{f.acc} is not supported here: {short(bn)} must be the base class whose property {f.node.s} this class inherits")
+
+def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
+    # method d of class ci, decorated @x.setter or @x.deleter (or @Base.x.setter, see inherit):
+    # ".setter" or ".deleter", which adds it to property x (its methods key is x.setter); else ""
+    s = d.kids[3].s if len(d.kids) == 4 and len(d.kids[3].kids) == 0 else ""
+    acc = s[s.rfind(".") + 1 :]
+    if "." in s and acc == "getter" and short(s[: s.rfind(".")]) == d.s:
+        self.err(f"unsupported decorator @{short(s)}: define the property's getter once, with @property")
+    if "." not in s or (acc != "setter" and acc != "deleter"):
+        return ""
+    of = short(s[: s.rfind(".")])
+    if of == d.s and (d.s not in ci.methods or not ci.methods[d.s].prop):
+        # (CPython's NameError, or AttributeError: 'function' object has no attribute 'setter')
+        self.err(f"@{of}.{acc} needs property {d.s}, a @property def {d.s} before it in the class body")
+    if of != d.s and (of[of.rfind(".") + 1 :] != d.s or ci.base not in self.classes):
+        self.err(f"@{of}.{acc} on method {d.s} is not supported: a property's {acc} takes its name ({of[of.rfind('.') + 1 :]}), and a base's property is named through the base class")
+    return "." + acc
 
 def gen_derives(self, c: str, base: str) -> bool:
     # is c, a class of the program or a builtin exception class, base or derived from it
@@ -215,7 +244,8 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
+            acc = deco.endswith(".setter") or deco.endswith(".deleter")
+            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property" and not acc) or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:
                 return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
@@ -663,14 +693,15 @@ def gen_program(self, mods: list[Mod]) -> str:
                 for d in self.classes[st.s].node.kids[0].kids:
                     if d.kind == "def":
                         self.line = d.line
-                        if d.s in self.classes[st.s].methods:
+                        key = d.s + self.accessor(self.classes[st.s], d)
+                        if key in self.classes[st.s].methods:
                             self.err(f"redefinition of method '{st.s}.{d.s}' is not supported")
                         self.lib = m.name != ""
                         self.selfcls = st.s
-                        self.classes[st.s].methods[d.s] = self.declare_fn(d, st.s)
+                        self.classes[st.s].methods[key] = self.declare_fn(d, st.s)
                         self.selfcls = ""
                         self.lib = False
-                        self.classes[st.s].methods[d.s].mod = m.name
+                        self.classes[st.s].methods[key].mod = m.name
                 top.append(mk("cdefaults", st.s, st.line, []))
             else:
                 top.append(st)

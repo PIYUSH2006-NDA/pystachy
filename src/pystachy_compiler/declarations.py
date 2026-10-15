@@ -664,8 +664,15 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
                 break
             if st.s == "property" or ((st.kind == "assign" or st.kind == "annassign") and st.kids[0].kind == "name" and st.kids[0].s == "property"):
                 self.err("unsupported decorator @property: the name is shadowed in the class body")
+    acc = deco[deco.rfind(".") + 1 :] if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and "." in deco else ""
+    if acc == "setter" or acc == "deleter":
+        # @x.setter, @Base.x.setter: the property's other method (the class checks the name, see accessor)
+        f.acc = acc
+        f.accof = deco[: deco.rfind(".")]
+        f.name = d.s + "." + acc
+        f.ll = f"@m.{cls}.{f.name}"
     deco = short(deco)
-    if deco != "" and f.deco == "" and not f.prop and not self.lib and not f.extern and not f.pyexport:
+    if deco != "" and f.deco == "" and not f.prop and f.acc == "" and not self.lib and not f.extern and not f.pyexport:
         # (CPython applies a decorator when the def runs, called or not: see decorators())
         if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
             self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -782,7 +789,7 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
     if f.vararg >= 0:
         f.npos = f.vararg
-    if len(d.kids) > 3 and f.deco == "" and not f.prop and not f.extern and not f.pyexport:
+    if len(d.kids) > 3 and f.deco == "" and not f.prop and f.acc == "" and not f.extern and not f.pyexport:
         bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
         bad = STUB.replace("NAME", short(d.s)) if stub else bad
     if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
@@ -794,6 +801,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
             bad = f"@property on the special method {d.s} is not supported"
         elif d.kids[1].kind == "noann" and d not in held:
             bad = f"property {d.s} needs a return annotation"
+    if f.acc != "" and (len(ps) != (2 if f.acc == "setter" else 1) or len([p for p in ps if p.kind != "param"]) > 0 or f.npos < len(ps)):
+        bad = f"property {f.acc} {d.s} must take only self" + (" and the value, by position" if f.acc == "setter" else "")
     if not inherited and f.deco == "classmethod" and bad == "" and ps[0].kind == "param":
         # its cls parameter names the class in its body: cls(...) makes one, cls.x reads a
         # class attribute, cls.m(...) calls a static or class method
@@ -924,7 +933,7 @@ def gen_init_after(self, ci: ClassInfo, name: str) -> bool:
 
 def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
     if name in ci.methods and ci.methods[name].prop:
-        self.err(f"field '{name}' of '{short(ci.name)}' conflicts with read-only property '{name}'")
+        self.err(f"field '{name}' of '{short(ci.name)}' conflicts with property '{name}'")
     if name not in ci.ftypes:
         self.exc_attr(ci, name)
     if name in ci.ftypes:
@@ -1043,6 +1052,11 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.err(f"a class attribute without an annotation ({st.kids[0].s} = ...), which is no field of a {'NamedTuple' if ci.name in self.nts else 'dataclass'}, is not supported: annotate it")
         elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name":
             # x = v: a class attribute, typed by v as a field is (and from here on read as x: T = v)
+            if st.kids[1].kind == "call" and st.kids[1].kids[0].kind == "name" and st.kids[1].kids[0].s == "property" and "property" not in self.funcs:
+                why = "property() called as a function is not supported: decorate the getter with @property and the setter with @x.setter"
+                if ci.mod == "":
+                    self.err(why)
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
             t = self.guess(st.kids[1], FnInfo("", "", ci.node, ""))
             bt = self.classes[ci.base].ftypes.get(st.kids[0].s, "") if ci.base in self.classes else ""
             if t != "" and bt != "" and (self.widens(t, bt) or self.boxes(t, bt)):
@@ -1225,7 +1239,8 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
         k = st.kind
         if (k == "assign" or k == "annassign") and st.kids[0].kind == "attr" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == f.params[0]:
             name = st.kids[0].s
-            if name not in ci.ftypes:
+            ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods  # (a specialization's are declared after its fields)
+            if name not in ci.ftypes and not (name in ms and ms[name].prop):  # (a property's setter takes it)
                 self.exc_attr(ci, name)
                 why = self.ann_problem(st.kids[1], False) if k == "annassign" and ci.mod != "" else ""
                 t = "" if why != "" else self.vtype(st.kids[1]) if k == "annassign" else self.guess(st.kids[-1], f)
@@ -1241,6 +1256,11 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
                     ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
                     t = "int"
                 self.add_field(ci, name, t)
+            elif name not in ci.ftypes and f.acc == "" and name + ".setter" in ms and ms[name + ".setter"].cls == (ci.origin if ci.origin != "" else ci.name):
+                # self.x = v of property x in __init__: the fields its setter assigns too
+                g = ms[name + ".setter"]
+                self.scan_fields(ci, g, g.node.kids[2].kids)
+                self.line = st.line
         for kid in st.kids:
             if kid.kind == "block":
                 self.scan_fields(ci, f, kid.kids)
@@ -1570,5 +1590,55 @@ def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
     self.mem_store(Val(p.v, "*" + p.t), self.coerce(v, p.t, what))
     if name in ci.fflag:
         self.mem_store(Val(self.fgep(o, ci.fflag[name]), "*bool"), Val("true", "bool"))
+
+def gen_is_prop(self, t: str, name: str) -> bool:
+    # is attribute name of objects of type t a property (of the class or its specialization's template)
+    if t not in self.classes:
+        return False
+    ci = self.classes[t]
+    ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods
+    return name in ms and ms[name].prop
+
+
+def gen_prop_store(self, o: Val, name: str, v: Val | None) -> None:
+    # o.name = v, or del o.name (v None), of a property: its setter (deleter), selected by the
+    # object's class as a method call is; a class whose property has none raises CPython's
+    # AttributeError, which names the object's class
+    kind = "deleter" if v is None else "setter"
+    key = name + "." + kind
+    none = f"AttributeError: 'NoneType' object has no attribute '{name}' and no __dict__ for setting new attributes"
+    args: list[Node] = []
+    if v is not None:
+        args.append(self.vnode(v))
+    ci = self.classes[o.t]
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
+    if len([c for c in cs if key not in c.methods]) == 0:
+        self.call_fn(ci.methods[key], [o], args, none=none)
+        return
+    self.notnone(o, none)
+    tag = self.mload('int', o.v) if len(cs) > 1 else ""
+    end = self.label()
+    reached = False
+    narrow = dict(self.narrowed)
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        self.narrowed = dict(narrow)
+        if key in c.methods:
+            self.call_fn(c.methods[key], [Val(o.v, c.name)], args, direct=True)
+        else:
+            self.raise_("AttributeError", self.sconst(f"property '{name}' of '{short(c.name)}' object has no {kind}"))
+        if not self.term:
+            reached = True
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    self.narrowed = narrow
+    if reached:
+        self.place(end)
 
 # ---- variables
