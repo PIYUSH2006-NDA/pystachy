@@ -43,17 +43,18 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
     # run after that copies it into a new set, or (folded) is it, as CPython's code object keeps
     # it (an operator's result is made on each run, as CPython leaves one beyond its limits)
     const = (folded or (len(n.kids) > 2 and folds(mk("tuple", "", n.line, n.kids)))) and literal(mk("tuple", "", n.line, n.kids)) and not self.rtmode
-    g = f"@fs.{len(self.globs)}"
+    gi = len(self.globs)
+    g = f"@fs.{gi}"
     old = ""
     l0 = ""
     ldone = ""
     if const:
-        self.global_var(g, "ptr")
-        old = self.ins(f"load ptr, ptr {g}")
+        self.global_var(g, "frozenset[?]")
+        old = self.mload('%ptr', g)
         l0 = self.cur
         lmake = self.label()
         ldone = self.label()
-        self.cbr(self.ins(f"icmp eq ptr {old}, null"), lmake, ldone)
+        self.cbr(self.scalar_cmp('eq', Val(old, '%ptr'), Val('null', '%ptr')), lmake, ldone)
         self.place(lmake)
     et = selem(want) if is_set(want) and "?" not in want else ""
     given = et != ""
@@ -73,6 +74,8 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
         self.err("cannot infer the type of a set of None")
     if elem_problem(et) != "":
         self.err(elem_problem(et))
+    if const:
+        self.globs[gi].t = self.ctype("frozenset", [et])
     items = [self.store_elem(v, et) for v in items]
     r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
     for v in items:
@@ -82,7 +85,7 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
         self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"])
         r = c
         if const:
-            self.emit(f"store ptr {r}, ptr {g}")
+            self.mstore('%ptr', r, g)
             l1 = self.cur
             self.br(ldone)
             self.place(ldone)
@@ -296,7 +299,7 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
             # name the int
             l1 = self.label()
             l2 = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)])}, 0"), l1, l2)
+            self.cbr(self.num_cmp('==', Val(self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)]), "int"), Val('0', "int")).v, l1, l2)
             self.place(l1)
             self.raise_("KeyError", self.repr(v).v)
             self.place(l2)
@@ -377,7 +380,7 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
         hit = self.rt("pys_set_cmp", "i64", [ov, f"ptr {v.v}", "i64 1" if m == "issubset" else "i64 3"])
     else:
         hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
-    return Val(self.ins(f"icmp ne i64 {hit}, 0"), "bool")
+    return self.num_cmp('!=', Val(hit, "int"), Val('0', "int"))
 
 def gen_fromkeys(self, args: list[Node], want: str) -> Val:
     # dict.fromkeys(xs, v=None): a dict of xs's items, each mapped to v. Both are evaluated
@@ -427,7 +430,7 @@ def gen_affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
     for i in range(len(targs(tup.t))):
         item = self.tget(tup, i)
         if is_opt(item.t):
-            self.guard(self.ins(f"icmp eq ptr {item.v}, null"), f"TypeError: tuple for {m} must only contain str, not NoneType")
+            self.guard(self.ptr_cmp('==', item, Val('null', 'None')).v, f"TypeError: tuple for {m} must only contain str, not NoneType")
         c = self.rres(self.rt(f"pys_str_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
         nx = self.label()
         self.incoming(ph, "true", self.cur)
@@ -473,7 +476,7 @@ def gen_bool_find(self, d: str, k: Val, key: str) -> str:
     e = self.rt("pys_dict_find", "i64", [f"ptr {d}", f"i64 {key}"])
     l1 = self.label()
     l2 = self.label()
-    self.cbr(self.ins(f"icmp slt i64 {e}, 0"), l1, l2)
+    self.cbr(self.num_cmp('<', Val(e, "int"), Val('0', "int")).v, l1, l2)
     self.place(l1)
     self.raise_("KeyError", self.repr(k).v)
     self.place(l2)
@@ -501,12 +504,12 @@ def gen_nonekey(self, k: Val, none: str, fn: str, av: list[str]) -> str:
     if not is_opt(k.t):
         return self.rt(fn, "i64", av)
     if none == "":
-        self.guard(self.ins(f"icmp eq ptr {k.v}, null"), "KeyError: None")
+        self.guard(self.ptr_cmp('==', k, Val('null', 'None')).v, "KeyError: None")
         return self.rt(fn, "i64", self.keyed(k, av))
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {k.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('==', k, Val('null', 'None')).v, l1, l2)
     self.place(l2)
     r = self.rt(fn, "i64", self.keyed(k, av))
     e2 = self.cur
@@ -555,7 +558,7 @@ def gen_to_str(self, v: Val) -> Val:
     if t in self.classes:
         return self.obj_str(v, "__str__")
     if t == "opt[str]":
-        return Val(self.select(self.ins(f"icmp eq ptr {v.v}, null"), Val(self.sconst("None"), "str"), Val(v.v, "str")), "str")
+        return Val(self.select(self.ptr_cmp('==', v, Val('null', 'None')).v, Val(self.sconst("None"), "str"), Val(v.v, "str")), "str")
     if t == "exc":
         return Val(self.rt("pys_exc_str", "ptr", [f"ptr {v.v}"]), "str")
     return self.repr(v)
@@ -572,16 +575,16 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
         start = self.cur
         ph = Ins("phi", "str", "")
         self.incoming(ph, self.sconst("None"), start)
-        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), end, nonnull)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, nonnull)
         self.place(nonnull)
-        tag = self.ins(f"load i64, ptr {v.v}")
+        tag = self.mload('int', v.v)
         narrow = dict(self.narrowed)
         for i in range(len(cs)):
             c = cs[i]
             nxt = self.label() if i + 1 < len(cs) else ""
             if nxt != "":
                 arm = self.label()
-                self.cbr(self.ins(f"icmp eq i64 {tag}, {c.tag}"), arm, nxt)
+                self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
                 self.place(arm)
             self.narrowed = dict(narrow)
             method = m if m in c.methods else "__repr__"
@@ -613,7 +616,7 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, l1, l2)
     self.place(l1)
     self.br(l3)
     self.place(l2)
