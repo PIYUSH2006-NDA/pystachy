@@ -40,14 +40,14 @@ def gen_call(self, n: Node, want: str) -> Val:
     args = n.kids[1:]
     if f.kind == "badattr":
         self.err(f.s)
-    if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
-        return self.star_call(n, want)
     if f.kind == "index" and f.kids[0].kind == "name" and f.kids[0].s in self.tparams and f.kids[0].s not in self.ltype:
         self.modchk(f.kids[0])
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
         if sc.startswith("!"):
             self.err(sc[1:])
         return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), sc)
+    if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+        return self.star_call(n, want)
     if f.kind == "name":
         self.modchk(f)
     if f.kind == "name" and f.s not in self.ltype:
@@ -897,6 +897,21 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tmpl:
         # C(args) of a class template C: its arguments' types decide the specialization the
         # object belongs to (see specialize), whose __init__ initializes it
+        if len(hint) > 0:
+            inferred: dict[str, str] = {}
+            conflict = False
+            for j in range(1, len(hint)):
+                if self.match(f.node.kids[0].kids[j].kids[0], vals[j].t, inferred, self.tparams[f.cls]) != "":
+                    conflict = True
+                    break
+            targets = [j for j in range(1, len(hint)) if is_union(unopt(hint[j])) or is_opt(hint[j])]
+            fits = all([self.widens(vals[j].t, hint[j]) or (self.boxes(vals[j].t, hint[j]) and (not is_opt(vals[j].t) or self.optional(hint[j]) == hint[j])) for j in targets])
+            if conflict and fits:
+                # Resolve conflicting bindings with fitting named union/optional parameters.
+                # Preserve consistent inferred types (Box[int | str]("x") still stores str),
+                # and never reinterpret a mutable container as a wider member type.
+                for j in targets:
+                    vals[j] = self.pcoerce(vals[j], hint[j], f, j)
         sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
