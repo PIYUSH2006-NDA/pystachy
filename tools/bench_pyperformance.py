@@ -162,9 +162,10 @@ def unmarked_hunks(upstream, port):
     main = [i for i, line in enumerate(new) if "Pystachy port: a deterministic main replaces" in line]
     out = []
     for group in difflib.SequenceMatcher(None, old, new, autojunk=False).get_grouped_opcodes(1):
-        lo, hi = group[0][3], group[-1][4]
-        if not any("Pystachy port" in line for line in new[max(0, lo - 3):hi]) and not (main and lo > main[0]):
-            out.append(f"{lo + 1}-{hi}")
+        changed = [(j1, j2) for tag, _, _, j1, j2 in group if tag != "equal"]
+        lo, hi = changed[0][0], max(j2 for _, j2 in changed)
+        if not any("Pystachy port" in line for line in new[max(0, lo - 3):hi + 1]) and not (main and lo > main[0]):
+            out.append(f"{lo + 1}-{max(hi, lo + 1)}")
     return out
 
 
@@ -181,10 +182,12 @@ def census(args, compiler, env):
             source = text.decode("utf-8")
             path = Path(tmp) / f"bm_{name}.py"
             path.write_text(census_source(source, CENSUS_CALLS[name]))
-            result = subprocess.run(compiler + ["ir", path.name, "-o", os.devnull], cwd=tmp, env=env,
+            # (from the root, as tests/run.sh runs a compiler: "python3 -m pystachy" works too)
+            result = subprocess.run(compiler + ["ir", str(path), "-o", os.devnull], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=args.timeout)
+            output = (result.stdout + result.stderr).replace(str(path.parent) + os.sep, "")
             row = {"name": name, "ported": name in BENCHMARKS,
-                   "first_error": first_error(result.stdout + result.stderr) if result.returncode else "",
+                   "first_error": first_error(output) if result.returncode else "",
                    "returncode": result.returncode}
             if name in BENCHMARKS:
                 row["unmarked_hunks"] = unmarked_hunks(source, (BENCH / f"{name}.py").read_text())
@@ -257,12 +260,16 @@ def measure(name, arguments, args, compiler, env, directory):
                 "aot": [exe] + arguments}
     oracle = run(commands["cpython"], env, args.timeout)
     build = execute(compiler + ["build", source, "-o", exe], env, args.timeout)
+    # PYSTACHY_GC_STRESS_PROGRAM=N stresses the JIT's program; an executable reads
+    # PYSTACHY_GC_STRESS, as tests/run.sh sets it
+    stress = env.get("PYSTACHY_GC_STRESS_PROGRAM", "")
+    envs = {"cpython": env, "jit": env, "aot": dict(env, PYSTACHY_GC_STRESS=stress) if stress else env}
     runs = {mode: [] for mode in commands}
     for repeat in range(args.runs):
         # rotate the order of the modes from one repetition to the next; never in parallel
         modes = ["cpython", "jit", "aot"]
         for mode in modes[repeat % 3:] + modes[:repeat % 3]:
-            runs[mode].append(run(commands[mode], env, args.timeout, oracle["stdout"]))
+            runs[mode].append(run(commands[mode], envs[mode], args.timeout, oracle["stdout"]))
     summary = {mode: {key: median(records, key) for key in ("wall_s", "cpu_s", "loop_s")}
                for mode, records in runs.items()}
     return {"name": name, "arguments": arguments, "output": oracle["stdout"],

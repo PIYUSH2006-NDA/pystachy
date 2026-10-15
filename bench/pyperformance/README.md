@@ -23,7 +23,10 @@ sizes. It prints its results to standard output and the seconds of the part that
 time to standard error. The check runs small inputs once and compares CPython, JIT and AOT
 output, without timings. `make bench-pyperformance` runs five processes per mode and writes
 `build/pyperformance.json`. Both targets accept `BENCH_COMPILER`; `BENCH_ARGS` adds options to
-the measured run.
+the measured run. `--compiler "python3 -m pystachy"` uses the CPython-hosted compiler.
+`PYSTACHY_*` settings apply to the compiled runs: `PYSTACHY_OPT=-all` disables the typed-IR
+passes, and `PYSTACHY_GC_STRESS_PROGRAM=1` collects at every allocation in JIT and AOT runs, as
+in `tests/run.sh`.
 
 ## Provenance
 
