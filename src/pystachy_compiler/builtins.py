@@ -1132,7 +1132,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     if query.kind in ["list", "dict"] and only_nones(query):
                         contextual = True
                     if nested_union and query.kind in ["list", "dict"]:
-                        parts = query.kids[1::2] if query.kind == "dict" else query.kids
+                        parts = [query.kids[j] for j in range(1, len(query.kids), 2)] if query.kind == "dict" else query.kids
                         kinds = [self.probe_type(part) or part.kind for part in parts]
                         # Heterogeneous displays still use explicitly declared element
                         # unions; this change does not infer new union element types.
