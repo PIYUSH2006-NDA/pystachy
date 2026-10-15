@@ -15,8 +15,6 @@ from src.pystachy_compiler.specs import (
     INERT,
     METHODS,
     OPTS,
-    RAWR,
-    RAWW,
     RUNTIME,
     SETMETHODS,
     SPECIAL,
@@ -167,22 +165,6 @@ def optimizations() -> dict[str, bool]:
     return on
 
 
-def rawfx(s: str, fa: dict[str, bool]) -> int:
-    # the effects (FX bits) of a raw op, whose LLVM text s loads, stores or computes: a load or a
-    # store of a slot (%name.N, an alloca, which is never address-taken) has none, of a global
-    # (@name) rG or wG, of an object's field or flag (an address in fa, IFn.fa) rO or wO; one
-    # through another address may read (RAWR) or write (RAWW) a list or a dict
-    st = s.startswith("store ")
-    if not st and not s.startswith("load ", s.find(" = ") + 3):
-        return 0
-    a = s.rfind(" ") + 1  # where the address is: the last word of "load T, ptr A" and "store T V, ptr A"
-    if s.startswith("@", a):
-        return FXBIT["wG"] if st else FXBIT["rG"]
-    if s.find(".", a) >= 0:
-        return 0  # (a temporary, %tN, has no dot)
-    if len(fa) > 0 and s[a:] in fa:
-        return FXBIT["wO"] if st else FXBIT["rO"]
-    return RAWW if st else RAWR
 
 
 class RtFn:
@@ -723,11 +705,10 @@ def rename(n: Node, name: str, to: str) -> None:
 
 # ---------------------------------------------------------------- the IR
 # Gen builds one IFn per compiled function: blocks of instructions (Ins), each an op string
-# whose fields mean what the op says (docs/typed-ir.md 3.4). Until all of Gen builds ops, most
-# are "raw": one line of LLVM text. Once the whole program is built, lowering prints the LLVM
-# text of each IFn (lower).
+# whose fields mean what the op says (docs/typed-ir.md 3.4). Every instruction is typed.
+# Once the whole program is built, lowering prints the LLVM text of each IFn (lower).
 # The lists an op starts with: shared, and never changed (Gen.program checks it). An op that has
-# numbers, operands or labels gets lists of its own (most ops are raw and have none of them).
+# numbers, operands or labels gets lists of its own.
 
 
 def is_union(t: str) -> bool:

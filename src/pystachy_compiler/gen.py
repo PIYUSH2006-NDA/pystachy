@@ -224,12 +224,10 @@ from src.pystachy_compiler.emission import (
     gen_convert_in as emission_convert_in,
     gen_converts as emission_converts,
     gen_deref as emission_deref,
-    gen_emit as emission_emit,
     gen_err as emission_err,
     gen_guard as emission_guard,
     gen_hole as emission_hole,
     gen_incoming as emission_incoming,
-    gen_ins as emission_ins,
     gen_iop as emission_iop,
     gen_jump as emission_jump,
     gen_label as emission_label,
@@ -628,7 +626,7 @@ class Gen:
         # the runtime functions declared, by RUNTIME key, in the order of their first use (which
         # the program's declare lines keep)
         self.rtfns: dict[str, RtFn] = {}
-        self.opfxs: dict[str, int] = {}  # the effects of each op of IROPS but raw, rt, call and init
+        self.opfxs: dict[str, int] = {}  # the effects of each op of IROPS with fixed effects
         for op in IROPS:
             self.opfxs[op] = fxmask(IROPS[op].replace("T", "").replace("*", ""))
         self.out: list[str] = []
@@ -807,8 +805,6 @@ class Gen:
     def label(self) -> str:
         return emission_label(self)
 
-    def emit(self, s: str) -> None:
-        return emission_emit(self, s)
 
     def add(self, i: Ins) -> None:
         return emission_add(self, i)
@@ -816,8 +812,6 @@ class Gen:
     def put(self, i: Ins, k: int) -> None:
         return emission_put(self, i, k)
 
-    def ins(self, s: str) -> str:
-        return emission_ins(self, s)
 
     def scalar(self, op: str, args: list[Val], flags: str = "") -> str:
         return scalar_ir_scalar(self, op, args, flags)

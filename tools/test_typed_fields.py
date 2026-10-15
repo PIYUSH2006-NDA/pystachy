@@ -91,6 +91,55 @@ class TypedFieldTests(unittest.TestCase):
         self.assertEqual(g.opfx(load, g.fn.fa), FXBIT["rO"])
         self.assertEqual(g.opfx(store, g.fn.fa), FXBIT["wO"])
 
+    def test_semantic_field_keys_retain_inheritance_aliases(self):
+        g = fixture()
+        for name, base in (("Child", "Box"), ("Other", "")):
+            ci = ClassInfo(name, Node("class", name, 1))
+            ci.base = base
+            ci.fields = ["value"]
+            ci.ftypes = {"value": "int"}
+            g.classes[name] = ci
+        fields = [g.fgep(Val("%a0", cls), index)
+                  for cls, index in (("Box", 0), ("Box", 1), ("Box", 0),
+                                     ("Child", 0), ("Other", 0))]
+        g.fn.n = g.n
+        vs = Values(g.fn, {"entry": []})
+        first, distinct, same, inherited, unrelated = [g.canon(vs, p) for p in fields]
+        self.assertEqual(first, same)
+        self.assertFalse(g.disjoint(vs, first, same))
+        self.assertTrue(g.disjoint(vs, first, distinct))
+        self.assertFalse(g.disjoint(vs, first, inherited))
+        self.assertFalse(g.disjoint(vs, inherited, first))
+        self.assertTrue(g.disjoint(vs, first, unrelated))
+
+    def test_native_and_machine_accesses_share_field_alias_barriers(self):
+        for native_store in (False, True):
+            for native_load in (False, True):
+                for cls, index, expected in (("Box", 0, "99"), ("Box", 1, "41"),
+                                              ("Child", 0, None), ("Other", 0, "41")):
+                    with self.subTest(store=native_store, load=native_load,
+                                      intervening_class=cls, index=index):
+                        g = fixture()
+                        for name, base in (("Child", "Box"), ("Other", "")):
+                            ci = ClassInfo(name, Node("class", name, 1))
+                            ci.base = base
+                            ci.fields = ["value"]
+                            ci.ftypes = {"value": "int"}
+                            g.classes[name] = ci
+                        p = g.fgep(Val("%a0", "Box"), 0)
+                        same = g.fgep(Val("%a0", "Box"), 0)
+                        other = g.fgep(Val("%a0", cls), index)
+                        if native_store:
+                            g.mem_store(Val(p, "*int"), Val("41", "int"))
+                        else:
+                            g.mstore("int", "41", p)
+                        g.mstore("str" if index == 1 else "int",
+                                 "@text" if index == 1 else "99", other)
+                        result = g.mem_load(Val(same, "*int")).v if native_load else g.mload("int", same)
+                        g.fn.n = g.n
+                        vs = Values(g.fn, {"entry": []})
+                        self.assertEqual(g.canon(vs, result), result if expected is None else expected)
+
     def test_source_uses_typed_declared_layouts(self):
         root = Path(__file__).resolve().parent.parent / "tests"
         captured = []

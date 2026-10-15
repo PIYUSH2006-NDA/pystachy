@@ -414,10 +414,9 @@ FSETMETHODS: list[str] = "copy difference intersection isdisjoint issubset issup
 SETMETHODS: list[str] = FSETMETHODS + "add clear difference_update discard intersection_update pop remove symmetric_difference_update update".split()
 # the IR's ops (Ins.op) and their effects (docs/typed-ir.md 3.4 and 3.7, and FX below): T ends
 # a block; an rt op has its runtime function's effects (RUNTIME), a call or an init its callee's
-# summary (IFn.fx); a raw op is LLVM text that loads, stores or computes (never a call), whose
-# letters its text gives (rawfx)
+# summary (IFn.fx). Every instruction has typed operands; there is no text escape hatch.
 IROPS: dict[str, str] = {
-    "raw": "*", "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
+    "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
     "list.load": "rL", "list.len": "rL",
     "alloc.fixed": "A",
@@ -431,10 +430,6 @@ IROPS: dict[str, str] = {
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
-# the LLVM instructions a raw op may not be: the ones that end a block, and phi and call (ops of their own)
-LLNOTRAW: dict[str, bool] = {}
-for _k in "ret br switch indirectbr invoke callbr resume catchswitch catchret cleanupret unreachable phi call tail musttail notail".split():
-    LLNOTRAW[_k] = True
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -623,7 +618,7 @@ for _k in RUNTIME:
 
 
 FXALL = (1 << len(FX)) - 1 - FXBIT["N"]
-# what a raw op that loads or stores through an address other than a slot's, a global's or a
+# what a memory op that loads or stores through an address other than a slot's, a global's or a
 # field's may read or write: a list's or a dict's header or items (or a tuple's items, which need
 # no letter); and an object's fields, for an address the IR does not show to be a field's
 RAWR = FXBIT["rL"] | FXBIT["rD"] | FXBIT["rO"]
