@@ -424,10 +424,14 @@ arguments, then keyword arguments. Each unpacking operation happens at its posit
 
 ### Empty template results
 
-An empty list or dict returned by a template can get its type from a later fill or return,
+An empty list, dict or set returned by a template can get its type from a later fill or return,
 or from its caller's annotation, argument type or other expected context. If none supplies a
-type, the fallback is `list[int]` or `dict[int, int]`. A resulting type error identifies the
+type, the fallback is `list[int]`, `dict[int, int]` or `set[int]`. A resulting type error identifies the
 guess; annotate the receiving value to provide the intended type.
+This also applies to direct `return []`, `return {}` and `return set()` results; callers with
+different expected container types can share the same empty-result specialization.
+A union context supplies a list or dict result's type when exactly one member has the same
+container kind; ambiguous contexts retain the fallback above.
 
 For mixed scalar list literals, an error names a supported union annotation, such as
 `xs: list[int | float] = [1, 2.5]`. Rows can use unions within tuple fields:

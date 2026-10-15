@@ -1,6 +1,6 @@
 """Variables component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.utils import is_union
+from src.pystachy_compiler.utils import is_union, umembers
 import os
 from src.pystachy_compiler.analysis import (
     aliases,
@@ -960,6 +960,16 @@ def gen_retval(self, e: Node, want: str) -> Val:
     # unfilled) as it is, and each call gives it the type its context expects (typed_empty),
     # unless a use further on (in a loop, a call or another return) gives it a type (adopt)
     q = self.qret.get(self.curfn.ll, "")
+    kind = self.empty_of(e) if want == "" or "?" in want else ""
+    if kind != "":
+        # A fresh empty result has the same open type as an unfilled local.
+        # Keep its allocation hole so a later concrete return can type its keys.
+        i = self.hole(kind)
+        self.qret[self.curfn.ll] = q
+        if self.curfn.ll not in self.qholes:
+            self.qholes[self.curfn.ll] = []
+        self.qholes[self.curfn.ll].append(i.k)
+        return Val(f"%t{i.r[0]}", i.t)
     known = e.kind == "name" and e.s in q.split() and "?" in self.ltype.get(e.s, "")  # (and still so)
     if e.kind == "name" and (want == "" or "?" in want) and (known or self.unfilled(e.s)):
         self.qret[self.curfn.ll] = q if known else q + " " + e.s
@@ -979,12 +989,20 @@ def gen_adopt(self, t: str) -> None:
     for nm in self.qret[self.curfn.ll].split():
         if "?" in self.ltype[nm]:
             self.refine(nm, t)
+    for h in self.qholes.get(self.curfn.ll, []):
+        self.holes[h] = t
+        if is_dict(t) or is_set(t):
+            self.key_kind(targs(t)[0] if is_dict(t) else selem(t))
 
 def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
     # the empty list or dict a template's function f returns (see retval): the type the call's
     # context expects, else list[int] or dict[int, int] (as sum() of an empty list is the int 0),
     # which a type error further on in this function then explains (guessed). A new dict is made
     # by each call, so it gets the key kind of its type here (a dict's second word)
+    if is_union(unopt(want)):
+        candidates = [m for m in umembers(unopt(want)) if same_kind(m, v.t)]
+        if len(candidates) == 1:
+            want = candidates[0]  # a fresh empty result has one compatible container layout
     t = want if same_kind(want, v.t) and "?" not in want else "list[int]" if is_list(v.t) else "set[int]" if is_set(v.t) else "dict[int,int]"
     if t != want:
         self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'set[T]' if is_set(t) else 'dict[K, V]'} = {short(f.name)}()"
