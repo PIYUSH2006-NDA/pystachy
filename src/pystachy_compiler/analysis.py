@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODULES, NOREF, TYPING
-from src.pystachy_compiler.syntax import Node, mentions, mk, names_in
+from src.pystachy_compiler.syntax import Node, mentions, mk, names_in, other_return
 from src.pystachy_compiler.utils import int_fits
 
 
@@ -489,11 +489,36 @@ def module_ints(mods: list[Mod], at: dict[str, int]) -> dict[str, str]:
     return out
 
 
+def calls_iter(n: Node, listed: bool) -> bool:
+    # may n call iter() (it names it, or builtins.iter), which then makes an iterator object of
+    # a builtin container (lib/_pystachy_iterators.py)? Not where an __iter__ annotated
+    # -> Iterator[T] returns iter(x) (listed, see Gen.iter_ret), which steps through a list
+    if n.kind == "def" and n.s == "__iter__":
+        a = n.kids[1]
+        t = a.s if a.kind == "str" else ""
+        if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr"):
+            t = a.kids[0].s + "["
+        t = t[: t.find("[")] if "[" in t else ""
+        t = t[t.rfind(".") + 1 :]
+        listed = (t == "Iterator" or t == "Iterable") and not other_return(n.kids[2])
+    elif n.kind == "def" or n.kind == "lambda":
+        listed = False
+    if listed and n.kind == "return" and len(n.kids) == 1 and n.kids[0].kind == "call" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "iter":
+        return calls_iter(n.kids[0], False) if len(n.kids[0].kids) != 2 else calls_iter(n.kids[0].kids[1], listed)
+    if (n.kind == "name" and n.s == "iter") or (n.kind == "attr" and n.s == "iter" and n.kids[0].kind == "name" and n.kids[0].s == "builtins"):
+        return True
+    for k in n.kids:
+        if calls_iter(k, listed):
+            return True
+    return False
+
+
 def needs_eh(body: list[Node]) -> bool:
     # does body need exception handling or with-file cleanup, also in the functions and classes
-    # it defines (a class with bases is a subclass node whose first kid is the class)
+    # it defines (a class with bases is a subclass node whose first kid is the class); a
+    # __next__ method too, whose StopIteration a loop over its object catches
     for st in body:
-        if st.kind == "try" or st.kind == "with":
+        if st.kind == "try" or st.kind == "with" or (st.kind == "def" and st.s == "__next__"):
             return True
         for kid in st.kids if st.kind != "subclass" else st.kids[0].kids:
             if kid.kind == "block" and needs_eh(kid.kids):

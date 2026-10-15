@@ -6,6 +6,7 @@ from src.pystachy_compiler.analysis import (
     binds,
     builtin_has,
     builtin_module,
+    calls_iter,
     calls,
     catches_import,
     collect,
@@ -42,6 +43,7 @@ from src.pystachy_compiler.specs import (
     ANNKINDS,
     CBUILTIN,
     GENERICS,
+    ITERS,
     MODNAMES,
     MODULES,
     NOCALL,
@@ -178,6 +180,11 @@ class Loader:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
         self.intry = 0
+        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if calls_iter(x.body, False)]) > 0:
+            # iter() makes iterator objects of builtin containers: of lib's classes, whose module
+            # nothing imports (it imports nothing either, so it comes first)
+            self.load(ITERS, self.dirs[-1] + "/" + ITERS + ".py", "")
+            self.order = [self.order[-1]] + self.order[:-1]
         self.guarded()
         self.submodules()
         more = True
@@ -221,6 +228,8 @@ class Loader:
         # (separated by ":"); "" if there is none
         if name in CBUILTIN:
             return ""  # a module built into CPython: no file on the path replaces it
+        if name == ITERS:
+            return ""  # (iter()'s classes, which no program imports: see program)
         dirs = self.dirs
         base = name
         dot = name.rfind(".")

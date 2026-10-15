@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
 from src.pystachy_compiler.analysis import builtin_has
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, Val
+from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, StopCatch, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     ABCS,
@@ -1126,6 +1126,9 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
         seq = self.set_display(it, "", True)
     else:
         seq = self.iterable(self.expr(it, ""))
+    if n.s == "comp" and self.is_iterator(seq.t):
+        # a comprehension's iterator object: CPython 3.13 takes iter() of it again, its __iter__
+        seq = self.obj_iterator(seq, "", f"'{tname(seq.t)}' object is not iterable")
     if seq.t == "tuple[]":
         self.iterarg(arg)
         self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
@@ -1136,7 +1139,7 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
 def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not iterable") -> Val:
     # what a for loop steps through (for_seq): a tuple as it is, whose items must then share
     # one type (with PYSTACHY_OPT=-tupleiter, a list of them), an object the list its __iter__
-    # steps through; None raises msg
+    # steps through or the iterator object it returns (obj_iterator); None raises msg
     v = self.unwrap(v, msg)
     if is_kw(v.t):
         return self.kw_list(v)  # (iterating **kwargs gives the names)
@@ -1144,7 +1147,7 @@ def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not i
         self.notnone(v, msg)
         v = self.ntup(v, True)  # (the tuple of its fields)
     if v.t in self.classes:
-        return self.obj_iter(v, msg, f"'{tname(v.t)}' object is not iterable")
+        return self.obj_iterator(v, msg, f"'{tname(v.t)}' object is not iterable")
     if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
         return v  # (no list: for_seq reads its slots, as many as its type has)
     if not is_tuple(v.t) or v.t == "tuple[]":
@@ -1254,12 +1257,13 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     self.narrowed = after
 
 def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None, made: SeqStart | None = None) -> None:
-    # One loop serves lists, strings, tuples, dicts, sets, enumerate, zip and reversed. Each
-    # round takes the next item of every sequence, in order, the way its CPython iterator
-    # would: lists and strings by index, checked against their current length (reversed:
-    # counting down from the length at the start), tuples by index below the length their type
-    # gives; dicts by entry position, skipping deleted entries and failing if the dict changed
-    # size; sets by slot, failing if the set changed size. The loop ends at the first
+    # One loop serves lists, strings, tuples, dicts, sets, iterator objects, enumerate, zip and
+    # reversed. Each round takes the next item of every sequence, in order, the way its CPython
+    # iterator would: lists and strings by index, checked against their current length
+    # (reversed: counting down from the length at the start), tuples by index below the length
+    # their type gives; dicts by entry position, skipping deleted entries and failing if the
+    # dict changed size; sets by slot, failing if the set changed size; an iterator object by
+    # its __next__, whose StopIteration ends the loop (stop_catch). The loop ends at the first
     # exhausted sequence. made: the state of each iterator, taken as it was made (seq_start),
     # else taken now
     ctr = self.alloca("int", "")
@@ -1273,6 +1277,10 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     self.iterarg(arg)
     self.hide(hide)
     after = self.forget(body, tgt)
+    # with an iterator object, each sequence's item is taken where its test passes, before
+    # the next sequence's __next__ runs (which may change it), as zip() takes them
+    nexts = len([s for s in seqs if self.is_iterator(s.t)]) > 0
+    c = self.stop_catch() if nexts else None
     lc = self.label()
     ls = self.label()
     le = self.label()
@@ -1284,8 +1292,20 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     self.place(lc)
     i = self.mload('int', ctr)
     at: list[str] = []
+    vals: list[Val] = []
+    if mode == "enumerate" and nexts:
+        vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
     for k in range(len(seqs)):
         s = seqs[k]
+        if c is not None and self.is_iterator(s.t):
+            vals.append(self.next_in(s, c))
+            go = self.label()
+            self.place(go)
+            lp.body = go
+            lp.tests.append(go)
+            lp.idx.append("")
+            at.append("")
+            continue
         if s.t == "file":
             j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
             ok = self.num_cmp('!=', Val(self.mload('int', j), "int"), Val('0', "int")).v
@@ -1320,31 +1340,12 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         if is_dict(s.t) or is_set(s.t):
             self.mstore('int', nx, st[k])
         at.append(j)
-    vals: list[Val] = []
-    if mode == "enumerate":
+        if c is not None:
+            vals.extend(self.seq_item(s, j, mode))
+    if mode == "enumerate" and not nexts:
         vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
-    for k in range(len(seqs)):
-        s = seqs[k]
-        j = at[k]
-        if is_list(s.t):
-            vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
-        elif is_vtuple(s.t):
-            off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
-            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{off}')), targs(s.t)[0]))
-        elif is_tuple(s.t):
-            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0]))
-        elif s.t == "str":
-            vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
-        elif s.t == "file":
-            vals.append(Val(j, "str"))
-        elif is_set(s.t):
-            vals.append(self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t)))
-        else:
-            kv = targs(s.t)
-            if mode != "values":
-                vals.append(self.from_slot(self.rt("pys_dict_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[0]))
-            if mode == "values" or mode == "items":
-                vals.append(self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[1]))
+    for k in range(len(seqs) if not nexts else 0):
+        vals.extend(self.seq_item(seqs[k], at[k], mode))
     if len(vals) == 1 and mode != "zip":
         self.assign(tgt, vals[0])
     elif (tgt.kind == "tuple" or tgt.kind == "list") and len(tgt.kids) == len(vals):
@@ -1357,15 +1358,45 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     nx2 = self.scalar('add', [Val(i, 'int'), Val('1', 'int')])
     self.mstore('int', nx2, ctr)
     self.br(lc)
+    if c is not None:
+        self.stop_landing(c, le)
     self.place(le)
     self.narrowed = after
+
+def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
+    # the item of sequence s at index (or slot, entry) j, which a for loop (for_seq) takes; a
+    # dict's items() give its key and value
+    if is_list(s.t):
+        return [self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t))]
+    if is_vtuple(s.t):
+        off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
+        return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{off}')), targs(s.t)[0])]
+    if is_tuple(s.t):
+        return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0])]
+    if s.t == "str":
+        return [Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str")]
+    if s.t == "file":
+        return [Val(j, "str")]
+    if is_set(s.t):
+        return [self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t))]
+    kv = targs(s.t)
+    out: list[Val] = []
+    if mode != "values":
+        out.append(self.from_slot(self.rt("pys_dict_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[0]))
+    if mode == "values" or mode == "items":
+        out.append(self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[1]))
+    return out
 
 def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
     # the state of an iterator over sequence s (for_seq, in mode), as CPython's takes it when it
     # is made: a dict's or a set's size, and the slot it reads first; a list's or a str's
-    # length, from which reversed() counts down
+    # length, from which reversed() counts down (an iterator object keeps its own)
     if is_set(s.t) and mode == "reversed":
         self.err(f"'{tname(s.t)}' object is not reversible")
+    if self.is_iterator(s.t) and mode != "reversed":
+        made.st.append("")
+        made.used.append("")
+        return
     if not (s.t == "str" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
     if s.t == "file":
@@ -1383,5 +1414,74 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         made.st.append(pos)
     else:
         made.st.append(n0)
+
+def gen_stop_catch(self) -> StopCatch:
+    # a handler for the StopIteration that ends the items of the iterator objects a loop (or
+    # next(it, default)) takes: the try's mark and the exception being handled are taken now,
+    # before the first __next__ call (next_in); stop_landing places its landing block
+    if not self.eh:
+        self.err("internal error: an iterator's __next__ needs exception handling (needs_eh)")
+    c = StopCatch(Val(self.rt("pys_try_mark", "i64", []), "int"), self.rt("pys_exc_handled", "ptr", []), self.alloca("exc", ""), self.label())
+    c.tr.landing = c.landing
+    self.fn.tries.append(c.tr)
+    return c
+
+def gen_next_in(self, it: Val, c: StopCatch) -> Val:
+    # it.__next__(), of an iterator object known not to be None, in a block of its own that the
+    # landing block of c covers; the caller places the block the call goes on to
+    outer = self.handler
+    self.handler = c.landing
+    l = self.label()
+    if c.tr.body == "":
+        c.tr.body = l
+    self.place(l)
+    v = self.protocol(it, "__next__", [])
+    self.handler = outer
+    return v
+
+def gen_stop_landing(self, c: StopCatch, stop: str) -> None:
+    # the landing block of c, placed where no code falls through to it: a StopIteration (or an
+    # exception of a class derived from it) goes on at stop, once the exception being handled
+    # is again the one before; any other is raised again
+    e = self.landing(c.landing, c.slot, c.mark)
+    yes = self.label()
+    no = self.label()
+    self.cbr(self.exc_match(e, self.stop_classes()), yes, no)
+    self.place(no)
+    self.throw(e)
+    self.place(yes)
+    self.rt("pys_exc_restore", "void", [f"ptr {c.old}"])
+    self.br(stop)
+    c.tr.exit = stop
+
+def gen_stop_classes(self) -> str:
+    # the exception classes a loop over an iterator object catches (pys_exc_in): StopIteration
+    # and the program's classes derived from it
+    out = ["StopIteration"]
+    for k in self.classes:
+        if self.classes[k].exc != "" and self.derives(k, "StopIteration"):
+            out.append(k)
+    return "\x01" + "\x01".join(out) + "\x01"
+
+def gen_drain(self, it: Val) -> Val:
+    # a new list of the items of iterator object it, which list(it) takes at once: its __next__
+    # until StopIteration (the list's type is decided by the first item's, see listcomp)
+    h = self.hole("list")
+    res = f"%t{h.r[0]}"
+    c = self.stop_catch()
+    lc = self.label()
+    le = self.label()
+    self.fn.loops.append(Loop("while", lc, lc, lc, le))
+    self.place(lc)
+    v = self.next_in(it, c)
+    if v.t == "None" or "?" in v.t:
+        self.err(f"the items of {short(it.t)}'s __next__ ({typestr(v.t)}) cannot be a list's")
+    self.place(self.label())
+    self.rt("pys_list_append", "void", [f"ptr {res}", "i64 " + self.to_slot(v)])
+    self.br(lc)
+    self.stop_landing(c, le)
+    self.place(le)
+    self.holes[h.k] = self.ctype("list", [v.t])
+    return Val(res, self.ctype("list", [v.t]))
 
 # ---- narrowing: optional locals known not to be None

@@ -143,6 +143,13 @@ Handlers match exception classes and rethrow unmatched exceptions. `finally` and
 cleanup run on the relevant normal and exceptional exits. Nested `finally` handling avoids
 exponential duplication. The C runtime is compiled with exception support in both tiers.
 
+Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
+over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
+(and its subclasses), restores the exception being handled and leaves the loop; the loop
+body itself stays outside that handler. `iter()` of a builtin container makes an object of a
+class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that calls
+`iter()` and whose classes compile only when specialized.
+
 <a id="whole-program-optimization"></a>
 <a id="two-tiers"></a>
 

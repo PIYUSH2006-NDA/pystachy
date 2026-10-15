@@ -85,11 +85,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
 
 - `dict.keys()`, `.values()` and `.items()` return list snapshots, so `enumerate()`, `zip()`
   and `reversed()` of them do not notice a dict that changes size (a plain `for` over
-  `d.items()` steps the dict itself and does), and neither do `in`, `min()` and `max()` over
-  `d.values()` when an `__eq__` or `__lt__` of the values changes the dict, where CPython
-  raises `RuntimeError`; they print as lists and compare equal to lists. A snapshot is taken
-  where the call is evaluated, so a later argument that changes the dict does not change it
-  (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
+  `d.items()` and `iter(d.items())` step the dict itself and do), and neither do `in`,
+  `min()` and `max()` over `d.values()` when an `__eq__` or `__lt__` of the values changes the
+  dict, where CPython raises `RuntimeError`; they print as lists and compare equal to lists. A
+  snapshot is taken where the call is evaluated, so a later argument that changes the dict
+  does not change it (`sum(d.values(), d.pop(k))`, `e.update(d.items(), k=d.pop(k))`,
   `dict.fromkeys(d.keys(), d.pop(k))`), where CPython's view shows the change.
 
 - A set of strs (or of tuples with str items) iterates and prints in an order of its own: a
@@ -104,8 +104,9 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   before they test them against the set, where CPython tests each as it is made, which differs
   only where the generator's expressions change the set.
 
-- `min()` and `max()` stream generator-expression items of type `int`, `float`, `bool` or
-  `str` when called without keyword arguments. Other element types and `key=` calls first
+- `min()` and `max()` stream the items of generator expressions and iterator objects of type
+  `int`, `float`, `bool` or `str` when called without keyword arguments, and an iterator
+  object's items with `key=`. Other element types and generator expressions with `key=` first
   materialize the items, as do `math.fsum()` and `math.prod()`. Where CPython stops at an item
   (a `__lt__` that raises, or fsum's `OverflowError: intermediate overflow in fsum`), those
   materialized paths have already evaluated later items, and an exception from one of them
@@ -347,12 +348,17 @@ supported alternatives.
 - comparison dunders and `__bool__` that do not return `bool`, `__str__`/`__repr__` that do not
   return `str`, a `__len__` that returns neither an `int` nor a `bool`, methods without `self` (or
   a class method without `cls`)
-- an `__iter__` that is a generator, or that returns anything but `iter(xs)` of a list, a tuple, a
-  `str` or an object with such an `__iter__` (an iterator class, whose `__iter__` returns an object
-  with `__next__`, too; the list it returns as it is is rejected by CPython too:
-  `iter() returned non-iterator of type 'list'`; and `iter(d.keys())`, `values()` or `items()`,
-  whose iterator raises if the dict changes size: `iter(list(d.keys()))` copies them), and a call
-  of it (`o.__iter__()`)
+- an `__iter__` that is a generator, or that returns something other than an iterator object
+  (a list it returns as it is is rejected by CPython too: `iter() returned non-iterator of type
+  'list'`); in an `__iter__` annotated `-> Iterator[T]` that returns `iter(x)`, an `x` other than
+  a list, a tuple, a `str` or an object with such an `__iter__` (a dict or its `keys()`,
+  `values()` or `items()`, whose iterator raises if the dict changes size, or an object whose
+  `__iter__` returns an iterator object: leave out the annotation), and a call of that
+  `__iter__` (`o.__iter__()`)
+- `iter(callable, sentinel)`; `iter()` of `enumerate()`, `zip()`, `map()`, `filter()`,
+  `reversed()` or a generator expression; `next(it, default)` where the default's type and the
+  items' join to no type; and an iterator class without `__iter__` where CPython 3.13 calls
+  `iter()` of the iterator again: in a comprehension and in `str.join()`
 - iterating over an object, or `x in o`, by its `__getitem__` alone (CPython's old sequence
   protocol), and `reversed()` of an object
 - reflected operator methods (`__radd__` & co), which CPython calls when the left operand's class

@@ -54,12 +54,18 @@ from src.pystachy_compiler.builtins import (
     gen_key_check as builtins_key_check,
     gen_key_minmax as builtins_key_minmax,
     gen_key_minmax2 as builtins_key_minmax2,
+    gen_key_minmax_next as builtins_key_minmax_next,
+    gen_iter_object as builtins_iter_object,
     gen_key_sort as builtins_key_sort,
     gen_keys_of as builtins_keys_of,
     gen_mapgen as builtins_mapgen,
     gen_modattr as builtins_modattr,
     gen_parse_expr as builtins_parse_expr,
     gen_print_ as builtins_print_,
+    gen_next_ as builtins_next_,
+    gen_iter_ as builtins_iter_,
+    gen_iter_obj as builtins_iter_obj,
+    gen_walk as builtins_walk,
     gen_pwrite as builtins_pwrite,
     gen_reduce as builtins_reduce,
     gen_reduce_item as builtins_reduce_item,
@@ -178,6 +184,7 @@ from src.pystachy_compiler.declarations import (
     gen_generic_base as declarations_generic_base,
     gen_getfield as declarations_getfield,
     gen_guess as declarations_guess,
+    gen_guess_iter as declarations_guess_iter,
     gen_guess_args as declarations_guess_args,
     gen_has_path as declarations_has_path,
     gen_imported_ref as declarations_imported_ref,
@@ -310,6 +317,8 @@ from src.pystachy_compiler.expressions import (
     gen_compare as expressions_compare,
     gen_inherit_cmp as expressions_inherit_cmp,
     gen_inherit_contains as expressions_inherit_contains,
+    gen_member_item as expressions_member_item,
+    gen_iter_in as expressions_iter_in,
     gen_concat as expressions_concat,
     gen_cond as expressions_cond,
     gen_conversion as expressions_conversion,
@@ -348,6 +357,9 @@ from src.pystachy_compiler.expressions import (
     gen_ntup as expressions_ntup,
     gen_numkey as expressions_numkey,
     gen_obj_iter as expressions_obj_iter,
+    gen_obj_iterator as expressions_obj_iterator,
+    gen_is_iterator as expressions_is_iterator,
+    gen_next_type as expressions_next_type,
     gen_optbound as expressions_optbound,
     gen_optcmp as expressions_optcmp,
     gen_optint as expressions_optint,
@@ -413,6 +425,7 @@ from src.pystachy_compiler.ir import (
     Reduce,
     SeqStart,
     SetArg,
+    StopCatch,
     Val,
     Values,
 )
@@ -511,6 +524,12 @@ from src.pystachy_compiler.statements import (
     gen_reopt as statements_reopt,
     gen_scan_imports as statements_scan_imports,
     gen_seq_start as statements_seq_start,
+    gen_seq_item as statements_seq_item,
+    gen_stop_catch as statements_stop_catch,
+    gen_next_in as statements_next_in,
+    gen_stop_landing as statements_stop_landing,
+    gen_stop_classes as statements_stop_classes,
+    gen_drain as statements_drain,
     gen_stmt as statements_stmt,
     gen_stmts as statements_stmts,
     gen_unhashable as statements_unhashable,
@@ -538,6 +557,7 @@ from src.pystachy_compiler.variables import (
     gen_ahead as variables_ahead,
     gen_applies as variables_applies,
     gen_assign as variables_assign,
+    gen_unpack_next as variables_unpack_next,
     gen_assigned_to as variables_assigned_to,
     gen_calls_open as variables_calls_open,
     gen_cellvars as variables_cellvars,
@@ -1128,6 +1148,9 @@ class Gen:
     def guess(self, e: Node, f: FnInfo) -> str:
         return declarations_guess(self, e, f)
 
+    def guess_iter(self, a: Node, f: FnInfo) -> str:
+        return declarations_guess_iter(self, a, f)
+
     def field(self, o: Val, name: str, store: bool=False) -> Val:
         return declarations_field(self, o, name, store)
 
@@ -1340,6 +1363,9 @@ class Gen:
 
     def assign(self, t: Node, v: Val) -> None:
         return variables_assign(self, t, v)
+
+    def unpack_next(self, t: Node, it: Val) -> None:
+        return variables_unpack_next(self, t, it)
 
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
@@ -1764,6 +1790,24 @@ class Gen:
     def seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         return statements_seq_start(self, s, mode, made)
 
+    def seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
+        return statements_seq_item(self, s, j, mode)
+
+    def stop_catch(self) -> StopCatch:
+        return statements_stop_catch(self)
+
+    def next_in(self, it: Val, c: StopCatch) -> Val:
+        return statements_next_in(self, it, c)
+
+    def stop_landing(self, c: StopCatch, stop: str) -> None:
+        return statements_stop_landing(self, c, stop)
+
+    def stop_classes(self) -> str:
+        return statements_stop_classes(self)
+
+    def drain(self, it: Val) -> Val:
+        return statements_drain(self, it)
+
     def narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
         return expressions_narrows(self, n, truth, out)
 
@@ -1932,6 +1976,15 @@ class Gen:
     def obj_iter(self, v: Val, none: str, missing: str) -> Val:
         return expressions_obj_iter(self, v, none, missing)
 
+    def obj_iterator(self, v: Val, none: str, missing: str) -> Val:
+        return expressions_obj_iterator(self, v, none, missing)
+
+    def is_iterator(self, t: str) -> bool:
+        return expressions_is_iterator(self, t)
+
+    def next_type(self, t: str) -> str:
+        return expressions_next_type(self, t)
+
     def iter_ret(self, e: Node) -> Val:
         return expressions_iter_ret(self, e)
 
@@ -1964,6 +2017,12 @@ class Gen:
 
     def inherit_contains(self, op: str, a: Val, b: Val) -> Val:
         return expressions_inherit_contains(self, op, a, b)
+
+    def member_item(self, item: Val, a: Val, found: str, ph: Ins) -> None:
+        return expressions_member_item(self, item, a, found, ph)
+
+    def iter_in(self, op: str, a: Val, it: Val) -> Val:
+        return expressions_iter_in(self, op, a, it)
 
     def concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
         return expressions_concrete_cmp(self, op, a, b)
@@ -2196,6 +2255,12 @@ class Gen:
     def key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
         return builtins_key_minmax2(self, vals, key, name)
 
+    def key_minmax_next(self, o: Val, key: Val, name: str) -> Val:
+        return builtins_key_minmax_next(self, o, key, name)
+
+    def iter_object(self, t: str) -> bool:
+        return builtins_iter_object(self, t)
+
     def anyall(self, v: Val, name: str) -> Val:
         return builtins_anyall(self, v, name)
 
@@ -2234,6 +2299,18 @@ class Gen:
 
     def print_(self, args: list[Node]) -> Val:
         return builtins_print_(self, args)
+
+    def next_(self, args: list[Node], want: str) -> Val:
+        return builtins_next_(self, args, want)
+
+    def iter_(self, args: list[Node]) -> Val:
+        return builtins_iter_(self, args)
+
+    def iter_obj(self, name: str, vals: list[Val]) -> Val:
+        return builtins_iter_obj(self, name, vals)
+
+    def walk(self, name: str, args: list[Node]) -> Val:
+        return builtins_walk(self, name, args)
 
     def pwrite(self, fd: str, fv: str, s: str, fo: Val) -> None:
         return builtins_pwrite(self, fd, fv, s, fo)

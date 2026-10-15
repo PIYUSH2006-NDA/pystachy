@@ -11,6 +11,7 @@ from src.pystachy_compiler.specs import (
     DEFAULTS,
     ERRNO,
     FLOATINFO,
+    ITERS,
     METHODS,
     MODATTRS,
     MODFUNCS,
@@ -108,6 +109,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         o = self.expr(args[0], "")
         r = self.rt(name[2:], "i64" if name.endswith("enter") else "void", [f"ptr {o.v}"])
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
+    if name.startswith("__pys_dict_") or name.startswith("__pys_set_"):
+        return self.walk(name, args)
     if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii":
         # compiler-written calls (f"{x!r}", dataclass __repr__): always the builtin
         name = name[6:]
@@ -123,6 +126,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
         if v.t == "str":
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        if self.iter_object(v.t):
+            v = self.as_list(v, "tuple")  # (the items of its iterator object)
         if not is_list(v.t):
             self.err(f"tuple() of {typestr(v.t)} is not supported: use a list, string or tuple")
         if unopt(elem(v.t)) not in ["int", "float", "bool", "str"]:
@@ -135,6 +140,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     # builtins and module functions ("os.system"); most are one call listed in CALLS
     if name == "print":
         return self.print_(args)
+    if name == "next":
+        return self.next_(args, want)
+    if name == "iter":
+        return self.iter_(args)
     if name == "open":
         return self.open_(args)
     if name == "set" or name == "frozenset":
@@ -283,8 +292,18 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             # any(f) reads one line: lines are never empty
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
             return self.num_cmp('!=', Val(self.mload('int', first), "int"), Val('0', "int"))
+        kv = [kvals[j] for j in range(len(kws)) if kws[j].s == "key" and kvals[j].t != "None"]
+        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max"):
+            # an object whose __iter__ returns an iterator object: its items as they come, as
+            # CPython takes them (any() and all() stop at the deciding one)
+            if len(kv) > 0 and name != "sum":
+                self.key_check(kv[0], f"{name}()")
+                return self.key_minmax_next(v0, kv[0], name)
+            item = mk("name", "__item", self.line, [])
+            g = mk("listcomp", "gen", self.line, [item, item, self.vnode(v0)])
+            return self.listcomp(g, "", name) if name == "any" or name == "all" else self.reduce(name, [g], "")
         vals = [self.as_list(v0, name)]
-        fresh = fresh or is_set(v0.t)  # (the list of a set's elements is a new one)
+        fresh = fresh or is_set(v0.t) or self.iter_object(v0.t)  # (the list of a set's elements, or an iterator's items, is a new one)
         if v0.t == "tuple[]" and is_list(w):
             vals[0] = Val(vals[0].v, w)  # (list(()) has no item to type: it is the list wanted)
         self.close_temp(args[0], v0)
@@ -314,6 +333,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.key_check(keyv, f"{name}()")
     if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
         self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
+    if name == "sum" and len(vals) == 2 and self.iter_object(vals[0].t) and (vals[1].t == "int" or vals[1].t == "float"):
+        # (an iterator object's items, added as they come)
+        item = mk("name", "__item", self.line, [])
+        return self.reduce(name, [mk("listcomp", "gen", self.line, [item, item, self.vnode(vals[0])]), self.vnode(vals[1])], vals[1].t)
     if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
         vals[0] = self.as_list(vals[0], name)  # (sum(o, start) iterates o once start is evaluated)
     if name == "round" and len(vals) == 2 and vals[1].t == "None":
@@ -643,6 +666,45 @@ def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
         bk = Val(self.select(c, self.coerce(kb, kt), self.coerce(bk, kt)), kt)
     return best
 
+def gen_key_minmax_next(self, o: Val, key: Val, name: str) -> Val:
+    # min(o, key=...) and max(...) of an object whose __iter__ returns an iterator object: each
+    # item from __next__, its key computed and compared as it comes (key_minmax)
+    it = self.obj_iterator(o, "TypeError: 'NoneType' object is not iterable", f"'{tname(o.t)}' object is not iterable")
+    c = self.stop_catch()
+    first = self.alloca("bool", "")
+    self.mstore('bool', 'true', first)
+    lc = self.label()
+    le = self.label()
+    self.fn.loops.append(Loop("while", lc, lc, lc, le))
+    self.place(lc)
+    item = self.next_in(it, c)
+    self.place(self.label())
+    k = self.call_key(key, item)
+    if "?" in k.t or k.t == "None":
+        self.err(f"comparing the keys of {name}() is not supported: its key function returns {typestr(k.t)}")
+    best = self.alloca(item.t, "")
+    bk = self.alloca(k.t, "")
+    take = self.label()
+    test = self.label()
+    self.cbr(self.mload('bool', first), take, test)
+    self.place(test)
+    c2 = self.cmp2(">" if name == "max" else "<", k, Val(self.mload(k.t, bk), k.t))
+    self.cbr(self.truth(c2), take, lc)
+    self.place(take)
+    self.mstore(item.t, item.v, best)
+    self.mstore(k.t, k.v, bk)
+    self.mstore('bool', 'false', first)
+    self.br(lc)
+    self.stop_landing(c, le)
+    self.place(le)
+    self.guard(self.mload('bool', first), f"ValueError: {name}() iterable argument is empty")
+    return Val(self.mload(item.t, best), item.t)
+
+def gen_iter_object(self, t: str) -> bool:
+    # is t a class whose __iter__ returns an iterator object (obj_iterator), not iter(xs) of a
+    # list xs (iter_ret)
+    return t in self.classes and t not in self.nts and "__iter__" in self.classes[t].methods and not self.classes[t].methods["__iter__"].iters
+
 def gen_anyall(self, v: Val, name: str) -> Val:
     # any(xs) / all(xs) by each item's truth, stopping at the first item that decides
     res = self.alloca("bool", "")
@@ -894,11 +956,14 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         self.notnone(v, "TypeError: 'NoneType' object is not iterable")
         v = self.ntup(v, True)
     if v.t in self.classes:
-        items = self.obj_iter(v, "TypeError: can only join an iterable" if name == "join" else "TypeError: 'NoneType' object is not iterable",
-                              "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")
-        if (name == "list" or name == "sorted" or name == "extend") and "__len__" in self.classes[v.t].methods:
+        items = self.obj_iterator(v, "TypeError: can only join an iterable" if name == "join" else "TypeError: 'NoneType' object is not iterable",
+                                  "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")
+        if (name == "list" or name == "sorted" or name == "extend" or name == "tuple") and "__len__" in self.classes[v.t].methods:
             self.objlen(v)  # (a length hint: CPython's list() calls __len__ once __iter__ has run)
-        return items
+        if name == "join" and not is_list(items.t):
+            # (str.join() makes a list of the iterator's items, which calls iter() of it again)
+            items = self.obj_iterator(items, "", f"'{tname(items.t)}' object is not iterable")
+        return items if is_list(items.t) else self.drain(items)
     if is_dict(v.t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]]))
     if is_set(v.t):
@@ -935,6 +1000,161 @@ def gen_reverse_val(self, r: Val, name: str) -> str:
 
 def gen_parse_expr(self, text: str) -> Node:
     return Parser(Lexer(text, self.line).run()).test()
+
+def gen_next_(self, args: list[Node], want: str) -> Val:
+    # next(it) of an iterator object: it.__next__() (of a file: its next line); next(it,
+    # default): the default where that raises StopIteration (a file has no line left), the
+    # call's type being both's (T | None for a None default). Both arguments are evaluated
+    # first, as CPython's are
+    for a in args:
+        if a.kind == "kw":
+            self.err("next() takes no keyword arguments")
+    if len(args) == 0 or len(args) > 2:
+        self.err(f"next expected {'at least 1 argument' if len(args) == 0 else 'at most 2 arguments'}, got {len(args)}")
+    it = self.expr(args[0], "")
+    if it.t != "None" and it.t != "file" and not self.is_iterator(it.t):
+        self.err(f"'{tname(it.t)}' object is not an iterator")
+    nt = self.classes[it.t].methods["__next__"].ret if self.is_iterator(it.t) else "str" if it.t == "file" else ""
+    dv = self.expr(args[1], want if want != "" else nt) if len(args) == 2 else Val("", "")
+    if it.t == "None":
+        self.raise_("TypeError", self.sconst("'NoneType' object is not an iterator"))
+        return Val("null", "None")
+    if it.t == "file":
+        line = Val(self.rt("pys_file_readline", "ptr", [f"ptr {it.v}"]), "str")
+        end = self.num_cmp('==', Val(self.mload('int', line.v), "int"), Val('0', "int")).v
+        if len(args) == 1:
+            stop = self.label()
+            more = self.label()
+            self.cbr(end, stop, more)
+            self.place(stop)
+            self.raise_("StopIteration", self.sconst(""))
+            self.place(more)
+            return line
+        t = "str" if dv.t == "str" else self.join("str", dv.t)
+        if t == "" or "?" in t:
+            self.err(f"next() of a file with a default of {typestr(dv.t)} is not supported (each call has one type)")
+        return Val(self.select(end, self.coerce(dv, t), self.coerce(line, t)), t)
+    self.notnone(it, "TypeError: 'NoneType' object is not an iterator")
+    if len(args) == 1:
+        return self.protocol(it, "__next__", [])
+    c = self.stop_catch()
+    v = self.next_in(it, c)
+    t = v.t if v.t == dv.t else self.join(v.t, dv.t)
+    if t == "" or "?" in t:
+        self.err(f"next() of {short(it.t)}, whose __next__ returns {typestr(v.t)}, with a default of {typestr(dv.t)} is not supported (each call has one type)")
+    self.place(self.label())
+    v = self.coerce(v, t)
+    e1 = self.cur
+    done = self.label()
+    self.br(done)
+    stop = self.label()
+    self.stop_landing(c, stop)
+    self.place(stop)
+    d = self.coerce(dv, t)
+    e2 = self.cur
+    self.br(done)
+    self.place(done)
+    if t == "None":
+        return Val("null", "None")
+    ph = Ins("phi", t, "")
+    self.incoming(ph, v.v, e1)
+    self.incoming(ph, d.v, e2)
+    return Val(self.phi(ph), t)
+
+def gen_iter_(self, args: list[Node]) -> Val:
+    # iter(o): the iterator object of an object's __iter__ (obj_iterator), a file itself, or an
+    # object of the iterator class of a builtin container (lib/_pystachy_iterators.py), which
+    # steps through it as CPython's does: a list's or a list of a tuple's items by index, a
+    # str's characters, a range's numbers, a dict's keys, values or items and a set's elements
+    # by entry (failing where the dict or set changes size)
+    for a in args:
+        if a.kind == "kw":
+            self.err("iter() takes no keyword arguments")
+    if len(args) == 2:
+        self.err("iter(callable, sentinel) is not supported")
+    if len(args) != 1:
+        self.err(f"iter expected {'at least 1 argument' if len(args) == 0 else 'at most 2 arguments'}, got {len(args)}")
+    a = args[0]
+    if a.kind == "call" and a.kids[0].kind == "name" and a.kids[0].s == "range" and not self.bound("range"):
+        vs = self.range_args(a.kids[1:])
+        if vs[2].startswith("%") or int(vs[2]) == 0:
+            self.guard(self.num_cmp('==', Val(vs[2], "int"), Val('0', "int")).v, "ValueError: range() arg 3 must not be zero")
+        n = Val(self.rt("pys_range_len", "i64", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "int")
+        return self.iter_obj("range_iterator", [Val(vs[0], "int"), Val(vs[2], "int"), n])
+    if a.kind == "call" and len(a.kids) == 1 and a.kids[0].kind == "attr" and (a.kids[0].s == "keys" or a.kids[0].s == "values" or a.kids[0].s == "items"):
+        m = a.kids[0].s
+        o = self.expr(a.kids[0].kids[0], "")
+        if is_dict(unopt(o.t)):
+            # (the view's iterator, which walks the dict: not a list of its keys)
+            o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
+            return self.iter_obj("dict_keyiterator" if m == "keys" else "dict_valueiterator" if m == "values" else "dict_itemiterator", [o])
+        v = self.method(o, m, [])
+    else:
+        v = self.expr(a, "")
+    if v.t == "None":
+        self.raise_("TypeError", self.sconst("'NoneType' object is not iterable"))
+        return Val("null", "None")
+    v = self.unwrap(v, "TypeError: 'NoneType' object is not iterable")
+    if v.t == "file":
+        # (a file is its own iterator, once it is found open)
+        c = self.rt("pys_file_closed", "i64", [f"ptr {v.v}"])
+        self.guard(self.num_cmp('!=', Val(c, "int"), Val('0', "int")).v, "ValueError: I/O operation on closed file.")
+        return v
+    if v.t in self.nts:
+        self.notnone(v, "TypeError: 'NoneType' object is not iterable")
+        v = self.ntup(v, True)  # (the tuple of its fields)
+    if v.t in self.classes:
+        it = self.obj_iterator(v, "TypeError: 'NoneType' object is not iterable", f"'{tname(v.t)}' object is not iterable")
+        return self.iter_obj("list_iterator", [it]) if is_list(it.t) else it
+    if is_list(v.t):
+        return self.iter_obj("list_iterator", [v])
+    if v.t == "str":
+        return self.iter_obj("str_ascii_iterator", [v])
+    if is_tuple(v.t) or is_vtuple(v.t):
+        return self.iter_obj("tuple_iterator", [self.as_list(v, "iter")])
+    if is_dict(v.t):
+        return self.iter_obj("dict_keyiterator", [v])
+    if is_set(v.t):
+        return self.iter_obj("set_iterator", [v])
+    self.err(f"'{tname(v.t)}' object is not iterable" if not is_kw(v.t) else "iter() of **kwargs is not supported: iterate over list(kwargs)")
+    return v
+
+def gen_iter_obj(self, name: str, vals: list[Val]) -> Val:
+    # a new object of the iterator class name of lib/_pystachy_iterators.py, made of vals
+    c = ITERS + "$" + name
+    if c not in self.classes:
+        self.err(f"internal error: iter() needs lib/{ITERS}.py (not loaded for this program)")
+    args = [self.vnode(v) for v in vals]
+    if c in self.tmpl:
+        made = [Val("", c)]
+        self.call_fn(self.classes[c].methods["__init__"], made, args)
+        return made[0]
+    o = self.new_obj(c)
+    self.call_fn(self.classes[c].methods["__init__"], [o], args, direct=True)
+    return o
+
+def gen_walk(self, name: str, args: list[Node]) -> Val:
+    # the compiler primitives lib/_pystachy_iterators.py calls: the runtime's walk of a dict's
+    # entries or a set's slots, which for_seq makes. __pys_dict_next(d, at, used, count) and
+    # __pys_set_next(s, at, used): the next entry (slot) from at, -1 at the end;
+    # __pys_dict_key(d, j), __pys_dict_val(d, j), __pys_set_key(s, j): what it holds
+    vals = [self.expr(a, "") for a in args]
+    if len(vals) == 0 or (not is_dict(vals[0].t) and not is_set(vals[0].t)) or (name.startswith("__pys_dict_") != is_dict(vals[0].t)):
+        self.err(f"name '{name}' is not defined")
+    o = vals[0]
+    ns = [f"i64 {self.coerce(self.as_int(x), 'int').v}" for x in vals[1:]]
+    if name == "__pys_dict_next" and len(ns) == 3:
+        return Val(self.rt("pys_dict_next", "i64", [f"ptr {o.v}"] + ns), "int")
+    if name == "__pys_set_next" and len(ns) == 2:
+        return Val(self.rt("pys_set_next", "i64", [f"ptr {o.v}"] + ns), "int")
+    if name == "__pys_dict_key" and len(ns) == 1:
+        return self.from_slot(self.rt("pys_dict_key", "i64", [f"ptr {o.v}"] + ns), targs(o.t)[0])
+    if name == "__pys_dict_val" and len(ns) == 1:
+        return self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {o.v}"] + ns), targs(o.t)[1])
+    if name == "__pys_set_key" and len(ns) == 1:
+        return self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {o.v}"] + ns), selem(o.t))
+    self.err(f"name '{name}' is not defined")
+    return o
 
 def gen_print_(self, args: list[Node]) -> Val:
     # every argument is evaluated in the order written, then each is converted as it is

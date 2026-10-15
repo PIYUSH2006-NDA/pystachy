@@ -73,6 +73,32 @@ These expressions are compiled for their consumer rather than creating a general
 Some consumers materialize input before processing it; see the
 [evaluation-order differences](compatibility.md#containers-and-evaluation-order).
 
+## Iterators
+
+`iter(x)` returns an iterator object that shares its position with every use, as CPython's:
+
+```python
+it = iter(lines)
+header = next(it)
+for line in it:  # the lines after the header
+    print(line)
+```
+
+`iter()` accepts lists, strings, homogeneous tuples, dictionaries and their `keys()`,
+`values()` and `items()`, sets, `range(...)`, files and objects with `__iter__`. A file is its
+own iterator. A builtin container's iterator is an object of a class in
+[`lib/_pystachy_iterators.py`](../../lib/_pystachy_iterators.py): it reads a list's current
+length at each step, fails if a dictionary or set changes size, and stays exhausted once
+`StopIteration` is raised. `next(it)` calls `it.__next__()` (a file's next line);
+`next(it, default)` returns the default instead of raising `StopIteration`, and has the type
+of both, such as `T | None` for a `None` default. `iter(callable, sentinel)` and `iter()` of
+`enumerate()`, `zip()`, `map()`, `filter()`, `reversed()` or a generator expression are
+unsupported.
+
+An iterator's type is its class: a class whose `__init__` calls `iter()` is a class template,
+and functions that take iterators are templates (unannotated parameters). `Iterator[T]` does
+not annotate a variable, field or ordinary parameter.
+
 ## Object protocols
 
 Object operations use the following methods. In supported ordinary hierarchies, instance-method
@@ -101,12 +127,22 @@ For `o[k] += value`, both indexing and assignment methods are used.
 Membership uses `__contains__`, taking its result's truth; without it, membership searches
 the supported iterator.
 
-A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and returns
-`iter(xs)` for a list, tuple, string or another object with the same supported protocol.
-It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
-`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
-Generator implementations, general `__next__` iterator classes, and direct calls of
-`o.__iter__()` are unsupported.
+An `__iter__` returns an iterator object: its own object or another class's object with a
+`__next__` method, whose return type gives the items. Its return annotation may be omitted
+(the returns decide it), name the class (`-> "C"`, `-> Self`) or be `Iterator[T]`. Loops,
+comprehensions, unpacking, `x in o`, `math.dist()` and the consumers above call `__next__`
+until it raises `StopIteration` or a subclass, also from a nested `next()`; any other
+exception propagates.
+`__iter__` runs once before the loop, and `__next__` once per item. A comprehension also calls
+the iterator's own `__iter__`, as CPython 3.13 does. `any()`, `all()`, `sum()`, `min()`,
+`max()` and `in` take items as they come; `list()`, `tuple()`, `sorted()`, `str.join()` and
+`set()` take them all first. `list()`, `tuple()`, `sorted()` and `list.extend()` call the
+iterable's `__len__`, if present, as a length hint.
+
+An `__iter__` annotated `-> Iterator[T]` or `-> Iterable[T]` whose returns are all `iter(xs)`
+of a list, tuple, string or object with such an `__iter__` keeps a faster form: a loop
+steps through that list directly. Calling it as `o.__iter__()` is unsupported. Generator
+implementations are unsupported.
 
 A missing protocol method produces a compilation error using CPython's message.
 An object that is `None` when the operation executes raises the corresponding runtime error.

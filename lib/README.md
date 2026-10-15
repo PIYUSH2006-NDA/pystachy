@@ -78,6 +78,10 @@ to the compiled paths listed here and in the compatibility reference.
 `curses/__init__.py` is a Pystachy stand-in for the package that normally imports
 `_curses`; it does not provide terminal control.
 
+`_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers
+(`list_iterator`, `dict_keyiterator`, ...). The compiler loads it for a program that calls
+`iter()`; programs do not import it. See [iterators](../docs/language/semantics.md#iterators).
+
 ## Examples and measurements
 
 | Example | Library use |

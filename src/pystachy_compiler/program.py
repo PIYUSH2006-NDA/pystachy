@@ -12,6 +12,7 @@ from src.pystachy_compiler.specs import (
     EXCEPTIONS,
     INERT,
     INERT_DECOS,
+    ITERS,
     MODATTRS,
     PURE,
     PYBUILTINS,
@@ -167,8 +168,9 @@ def gen_init_template(self, st: Node) -> bool:
     return False
 
 def gen_makes_tmpl(self, n: Node) -> bool:
-    # does n call a class template, making an object of one of its specializations?
-    if n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s in self.tmpl:
+    # does n call a class template, making an object of one of its specializations? iter(x)
+    # makes one of lib's iterator classes (see guess_iter)
+    if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.tmpl or (n.kids[0].s == "iter" and len(n.kids) == 2 and ITERS + "$list_iterator" in self.classes)):
         return True
     for k in n.kids:
         if self.makes_tmpl(k):
@@ -746,7 +748,9 @@ def gen_program(self, mods: list[Mod]) -> str:
     self.compiling = True
     self.modlevel = True
     for i in range(len(mods)):
-        self.function(self.inits[mods[i].name], tops[i])
+        if mods[i].name != ITERS:
+            # (lib's module of iter()'s classes runs no code: nothing imports it, see Loader.program)
+            self.function(self.inits[mods[i].name], tops[i])
         self.inited[mods[i].name] = True
     self.modlevel = False
     # the functions and methods of imported modules are compiled only if the program calls

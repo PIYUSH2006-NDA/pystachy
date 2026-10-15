@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.analysis import collect, deleted, only_none, stack_aliases, stack_kept
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Val
+from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Loop, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     CHECKED,
@@ -1591,9 +1591,17 @@ def gen_protocol(self, o: Val, m: str, args: list[Val]) -> Val:
     return self.call_fn(f, [o] + args, [])
 
 def gen_obj_iter(self, v: Val, none: str, missing: str) -> Val:
-    # what iterating over object v steps through: the list its __iter__ returns the iterator of
-    # (see iter_ret). v None raises none ("Kind: text"); missing is the error where v's class
-    # does not define __iter__ (CPython iterates by __getitem__ then, which is not supported)
+    # what iterating over object v gives at once (list(), sorted(), str.join(), ...): the list
+    # its __iter__ returns the iterator of (see iter_ret), or a new list of the items its
+    # iterator object's __next__ gives (obj_iterator)
+    it = self.obj_iterator(v, none, missing)
+    return it if is_list(it.t) else self.drain(it)
+
+def gen_obj_iterator(self, v: Val, none: str, missing: str) -> Val:
+    # iter(v) of object v: the list its __iter__ returns the iterator of (see iter_ret), or the
+    # iterator object __iter__ returns, an object of a class with __next__ (is_iterator). v
+    # None raises none ("Kind: text"); missing is the error where v's class does not define
+    # __iter__ (CPython iterates by __getitem__ then, which is not supported)
     ms = self.classes[v.t].methods
     if "__iter__" not in ms and "__getitem__" in ms:
         self.err(f"iterating over {short(v.t)} by its __getitem__ is not supported (CPython calls __getitem__(0), __getitem__(1), ... until IndexError): define __iter__")
@@ -1602,13 +1610,31 @@ def gen_obj_iter(self, v: Val, none: str, missing: str) -> Val:
     f = ms["__iter__"]
     if f.bad != "":
         self.err(f.bad)  # (an imported module's generator __iter__: its own error, not its type's)
-    if not f.iters and f.ret in self.classes and "__next__" in self.classes[f.ret].methods:
-        # (CPython's iterator protocol, which calls __next__ until StopIteration)
-        self.err(f"an iterator class is not supported: {short(v.t)}.__iter__ returns a {short(f.ret)}, whose __next__ CPython would call until it raises StopIteration; return iter(xs) of a list xs of the items (-> Iterator[T])")
-    if not f.iters:
-        self.err(f"iter() returned non-iterator of type '{tname(f.ret)}': {short(v.t)}.__iter__ must return an iterator, as iter(xs) of a list xs makes one (-> Iterator[T])")
     self.notnone(v, none)
-    return self.protocol(v, "__iter__", [])
+    it = self.protocol(v, "__iter__", [])
+    if f.iters:
+        return it
+    if not self.is_iterator(it.t):
+        self.err(f"iter() returned non-iterator of type '{tname(it.t)}': {short(v.t)}.__iter__ must return an iterator, an object whose class defines __next__, or iter(xs) of a list xs (-> Iterator[T])")
+    self.notnone(it, "TypeError: iter() returned non-iterator of type 'NoneType'")
+    self.nn[it.v] = True
+    return it
+
+def gen_is_iterator(self, t: str) -> bool:
+    # is t an iterator: a class (not a NamedTuple) whose __next__ gives the items
+    return t in self.classes and t not in self.nts and "__next__" in self.classes[t].methods
+
+def gen_next_type(self, t: str) -> str:
+    # the type of the items of an object of class t: what its __next__ returns, or else its
+    # __iter__'s iterator's (the list's items, see iter_ret); "" where that is not known
+    ms = self.classes[t].methods if t in self.classes and t not in self.nts else {}
+    m = "__next__" if "__next__" in ms else "__iter__"
+    if m not in ms or ms[m].bad != "":
+        return ""
+    r = self.instance(ms[m], [t], []).ret if ms[m].generic and ms[m].ret == "" else ms[m].ret
+    if m == "__next__" or r == "" or r == t:
+        return r
+    return elem(r) if ms[m].iters else self.next_type(r)
 
 def gen_iter_ret(self, e: Node) -> Val:
     # return iter(x) in an __iter__ that returns an Iterator[T]: the list[T] that iterator steps
@@ -1617,6 +1643,10 @@ def gen_iter_ret(self, e: Node) -> Val:
     if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "iter" or self.bound("iter") or len(e.kids) != 2 or e.kids[1].kind == "kw":
         self.err(f"{short(self.curfn.cls)}.__iter__ must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
     v = self.iterable(self.consume(e.kids[1], self.ret))
+    if self.is_iterator(v.t):
+        # (the iterator object of another object's __iter__, whose items its __next__ gives as
+        # the loop asks for them: not a list of them)
+        self.err(f"iter() of an object whose __iter__ returns a {short(v.t)} in {short(self.curfn.cls)}.__iter__ -> Iterator[T] is not supported: leave out the return annotation, or annotate -> {short(v.t)}")
     if is_tuple(v.t) and v.t != "tuple[]":
         v = self.as_list(v, "iter")  # (of the items, which share one type)
     last = self.blk.code[-1] if len(self.blk.code) > 0 else Ins("", "", "")
@@ -1659,7 +1689,10 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
     self.lcsoft.append(resultsoft)
     pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
-    self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
+    # (a comprehension the program writes, not one the compiler makes of a call, iterates
+    # iter() of its iterable's iterator, as CPython 3.13's does: see for_)
+    own = not (n.kids[1].kind == "name" and (n.kids[1].s.startswith("__item") or n.kids[1].s == "__pys_item"))
+    self.for_(mk("for", "comp" if own else "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
     self.narrowed = pre
     et = self.lct.pop()
     self.lcs.pop()
@@ -2016,6 +2049,59 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
     self.raise_("TypeError", self.sconst(f"'{op}' not supported between instances of '{tname(a.t)}' and '{tname(b.t)}'"))
     return Val("false", "bool")
 
+def gen_member_item(self, item: Val, a: Val, found: str, ph: Ins) -> None:
+    # CPython's test of one item in x in s: item is x or item == x, going to found (ph true)
+    # if so, else on in the block placed next
+    if not self.comparable(item.t, a.t):
+        # item == x of types whose values are never equal: CPython still calls the
+        # item's __eq__(x), or where the item's class has none (a builtin type's
+        # declines) x's __eq__(item); with neither, they are not equal
+        c = self.foreign_eq(item, a)
+        if c.t != "":
+            nx = self.label()
+            self.incoming(ph, "true", self.cur)
+            self.cbr(c.v, found, nx)
+            self.place(nx)
+        return
+    u = unopt(item.t)
+    if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
+        # (an object, list, dict, set or tuple, also one that may be None, is found
+        # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
+        # with xs = [nan]; a number has no identity here, see the deviation about NaN,
+        # and a str's is its value)
+        nx = self.label()
+        self.incoming(ph, "true", self.cur)
+        self.cbr(self.ptr_cmp('==', item, a).v, found, nx)
+        self.place(nx)
+    c = self.cmp2("==", item, a)
+    nx = self.label()
+    self.incoming(ph, "true", self.cur)
+    self.cbr(c.v, found, nx)
+    self.place(nx)
+
+def gen_iter_in(self, op: str, a: Val, it: Val) -> Val:
+    # x in o of an object whose __iter__ returns iterator object it: its items, from __next__,
+    # each tested as a tuple's are (member_item), until the first that matches; the rest stay
+    # in the iterator
+    found = self.label()
+    ph = Ins("phi", "bool", "")
+    c = self.stop_catch()
+    lc = self.label()
+    none = self.label()
+    self.fn.loops.append(Loop("while", lc, lc, lc, none))
+    self.place(lc)
+    item = self.next_in(it, c)
+    self.place(self.label())
+    self.member_item(item, a, found, ph)
+    self.br(lc)
+    self.stop_landing(c, none)
+    self.place(none)
+    self.incoming(ph, "false", self.cur)
+    self.br(found)
+    self.place(found)
+    r = self.phi(ph)
+    return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
+
 def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
     # Membership chooses __contains__ before the iterator fallback on the concrete class.
     # A subclass can add __contains__ even when its base already supplies __iter__.
@@ -2037,8 +2123,8 @@ def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
             hit = self.truth(self.call_fn(ci.methods["__contains__"], [obj, a], [], direct=True))
             result = Val(hit if op == "in" else self.scalar('xor', [Val(hit, 'bool'), Val('true', 'bool')]), "bool")
         elif "__iter__" in ci.methods or "__getitem__" in ci.methods:
-            items = self.obj_iter(obj, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{short(ci.name)}' is not iterable")
-            result = self.cmp2(op, a, items)
+            items = self.obj_iterator(obj, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{short(ci.name)}' is not iterable")
+            result = self.cmp2(op, a, items) if is_list(items.t) else self.iter_in(op, a, items)
         else:
             self.raise_("TypeError", self.sconst(f"argument of type '{short(ci.name)}' is not iterable"))
         if not self.term:
@@ -2412,7 +2498,9 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         # x in o: o.__contains__(x), true as its result is; else x is among what o's __iter__
         # steps through
         if "__contains__" not in self.classes[b.t].methods:
-            b = self.obj_iter(b, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{tname(b.t)}' is not iterable")
+            b = self.obj_iterator(b, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{tname(b.t)}' is not iterable")
+            if not is_list(b.t):
+                return self.iter_in(op, a, b)
         else:
             self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
             r = self.truth(self.protocol(b, "__contains__", [a]))
@@ -2444,33 +2532,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         lend = self.label()
         ph = Ins("phi", "bool", "")
         for i in range(len(targs(b.t))):
-            item = self.tget(b, i)
-            if not self.comparable(item.t, a.t):
-                # item == x of types whose values are never equal: CPython still calls the
-                # item's __eq__(x), or where the item's class has none (a builtin type's
-                # declines) x's __eq__(item); with neither, they are not equal
-                c = self.foreign_eq(item, a)
-                if c.t != "":
-                    nx = self.label()
-                    self.incoming(ph, "true", self.cur)
-                    self.cbr(c.v, lend, nx)
-                    self.place(nx)
-                continue
-            u = unopt(item.t)
-            if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
-                # (an object, list, dict, set or tuple, also one that may be None, is found
-                # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
-                # with xs = [nan]; a number has no identity here, see the deviation about NaN,
-                # and a str's is its value)
-                nx = self.label()
-                self.incoming(ph, "true", self.cur)
-                self.cbr(self.ptr_cmp('==', item, a).v, lend, nx)
-                self.place(nx)
-            c = self.cmp2("==", item, a)
-            nx = self.label()
-            self.incoming(ph, "true", self.cur)
-            self.cbr(c.v, lend, nx)
-            self.place(nx)
+            self.member_item(self.tget(b, i), a, lend, ph)
         self.incoming(ph, "false", self.cur)
         self.br(lend)
         self.place(lend)

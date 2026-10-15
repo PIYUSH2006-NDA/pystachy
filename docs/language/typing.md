@@ -32,8 +32,8 @@ optional elements copies its slots rather than reinterpreting numeric bits as po
 
 Runtime-length tuples currently do not support slicing, concatenation, repetition,
 membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
-from the fixed shape used by `*args`; arbitrary iterators and generators are not yet
-accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
+from the fixed shape used by `*args`; `tuple()` accepts the objects of iterator classes,
+but not generators. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
