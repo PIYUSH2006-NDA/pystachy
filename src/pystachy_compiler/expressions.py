@@ -1217,7 +1217,7 @@ def gen_numkey(self, v: Val, t: str) -> list[str]:
 
 def gen_tuple_(self, vals: list[Val]) -> Val:
     t = self.ctype("tuple", [v.t for v in vals])
-    p = self.rt("pys_alloc", "ptr", [f"i64 {8 * len(vals)}"])
+    p = self.alloc_fixed(t).v
     for i in range(len(vals)):
         s = self.to_slot(vals[i])
         q = self.ins(f"getelementptr i64, ptr {p}, i64 {i}")
@@ -1324,7 +1324,7 @@ def gen_keep_stack(self, n: Node) -> None:
         self.emit(f"store ptr {h}, ptr {self.lreg[nm]}")  # (the copy another local's statement made)
         self.br(ldone)
         self.place(lnew)
-        cp = self.rt("pys_alloc", "ptr", [f"i64 {8 * len(targs(t))}"])
+        cp = self.alloc_fixed(t).v
         for j in range(len(targs(t))):
             wd = self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {v}, i64 {j}')}")
             self.emit(f"store i64 {wd}, ptr {self.ins(f'getelementptr i64, ptr {cp}, i64 {j}')}")

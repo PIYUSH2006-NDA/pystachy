@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
 from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, LLNOTRAW, RUNTIME
-from src.pystachy_compiler.utils import is_opt, is_union, rawfx, umembers
+from src.pystachy_compiler.utils import is_opt, is_tuple, is_union, rawfx, targs, umembers
 
 
 class EffectSummaries:
@@ -135,6 +135,13 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                 self.bad_ir(fn, b, "a phi after other ops")
             if i.op == "rt" and i.s not in self.rtfns:
                 self.bad_ir(fn, b, f"no RUNTIME entry for {i.s}" if i.s not in RUNTIME else f"{i.s}, which runtime() did not declare")
+            if i.op == "alloc.fixed":
+                if len(i.a) != 0 or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, "alloc.fixed needs no operands or extra metadata")
+                if i.t not in self.classes and not (is_tuple(i.t) and i.t.endswith("]") and i.t.count("[") == i.t.count("]") and "" not in targs(i.t) and "..." not in targs(i.t)):
+                    self.bad_ir(fn, b, "alloc.fixed needs a declared class or fixed tuple type")
+                if "alloc" not in self.rtfns:
+                    self.bad_ir(fn, b, "alloc.fixed needs the alloc runtime declaration")
             if i.op == "num.cast" or i.op == "num.cmp":
                 if len(i.a) != (1 if i.op == "num.cast" else 2) or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
@@ -205,7 +212,7 @@ def gen_nums(self, i: Ins) -> int:
         return 4
     if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1

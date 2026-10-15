@@ -199,6 +199,7 @@ from src.pystachy_compiler.declarations import (
 )
 from src.pystachy_compiler.emission import (
     gen_add as emission_add,
+    gen_alloc_fixed as emission_alloc_fixed,
     gen_alloca as emission_alloca,
     gen_boxes as emission_boxes,
     gen_br as emission_br,
@@ -825,6 +826,9 @@ class Gen:
 
     def rt(self, name: str, ret: str, args: list[str]) -> str:
         return emission_rt(self, name, ret, args)
+
+    def alloc_fixed(self, t: str) -> Val:
+        return emission_alloc_fixed(self, t)
 
     def runtime(self, name: str) -> str:
         return emission_runtime(self, name)

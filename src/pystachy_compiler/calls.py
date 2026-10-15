@@ -724,8 +724,7 @@ def gen_asdict(self, o: Val, args: list[Node]) -> Val:
 def gen_new_obj(self, c: str) -> Val:
     # a new object of class c, which its __init__ initializes: it holds its class-body defaults
     # (but where @dataclass wrote __init__, which assigns every field itself)
-    size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
-    o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
+    o = self.alloc_fixed(c)
     self.nn[o.v] = True
     if self.classes[c].tag > 0:
         self.emit(f"store i64 {self.classes[c].tag}, ptr {o.v}")

@@ -228,6 +228,13 @@ def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
     self.put(i, 1)
     return f"%t{i.r[0]}"
 
+def gen_alloc_fixed(self, t: str) -> Val:
+    # A zeroed, GC-scanned class or fixed tuple: only lowering chooses its byte size.
+    self.runtime("pys_alloc")
+    i = Ins("alloc.fixed", t, "")
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", t)
+
 def gen_runtime(self, name: str) -> str:
     # declare runtime function name (its LLVM symbol) from its RUNTIME entry; its key
     if name not in RTSYM:
