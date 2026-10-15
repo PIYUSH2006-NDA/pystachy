@@ -1426,6 +1426,8 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
     # o[i], where o is the value of n.kids[0] and n.kids[1] the index
     t = unopt(o.t)
     sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
+    if t in ["fn[b:list]", "fn[b:dict]", "fn[b:tuple]", "fn[b:set]", "fn[b:frozenset]"]:
+        self.err(f"{t[5:-1]}[...] as a value is not supported (type aliases are not supported; write the type directly in an annotation)")
     if is_kw(t) and n.kids[1].kind == "str":
         # kwargs["name"]: the keyword argument name, or CPython's KeyError where the call passed none
         names = kw_names(t)
@@ -2141,6 +2143,8 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         return self.arith(op, b, a)
     if op == "+" and is_list(a.t) and is_list(b.t):
         self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
+    if op == "|" and is_dict(a.t) and is_dict(b.t):
+        self.err("dict | dict is not supported; copy the first dict and use update()")
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)
         self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
