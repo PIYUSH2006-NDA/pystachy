@@ -1,0 +1,6 @@
+[Link([...])] [Link([...])] [Link([...])]
+{'back': Link({...})} {'back': Link({...})} {'back': Link({...})}
+[Link({'back': Link({...})})] [Link({'back': Link({...})})] [Link({'back': Link({...})})]
+repr failed
+{'back': Link({...})} {'back': Link({...})} {'back': Link({...})}
+[exit 0]

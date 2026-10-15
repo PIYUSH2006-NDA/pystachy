@@ -109,7 +109,7 @@ def gen_load_name(self, name: str) -> Val:
         r = self.ins(f"load {lt(t)}, ptr {self.lreg[name]}")
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
-        if name in self.narrowed and (is_opt(t) or is_union(t)) and t != NONEVAR:
+        if name in self.narrowed and (is_opt(t) or is_union(t) or t in self.classes) and t != NONEVAR:
             return self.narrow_val(Val(r, t), self.narrowed[name])  # known not to be None here, or a member
         return Val(r, t)
     self.read_ahead(name)
@@ -1233,7 +1233,7 @@ def gen_declare(self, name: str, t: str) -> None:
     if old != t:
         self.err(f"'{name}' was declared as {old}, not {t}")
 
-def gen_store_name(self, name: str, v: Val) -> None:
+def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
     if name in self.noneglobals and name not in self.ltype:
         if v.t != "None":
             self.err(f"'{name}' is None in its module's code: giving it a {v.t} elsewhere (a function or another module) is not supported")
@@ -1267,6 +1267,16 @@ def gen_store_name(self, name: str, v: Val) -> None:
             if self.branch > 0:
                 self.err(f"'{name}' is None here, and giving it a {v.t if '?' not in v.t else v.t[: v.t.find('[')]} inside an if branch or a loop is not supported")
             self.nonevars[name] = self.line
+        if retype and name in self.ltype and name not in self.nonevars:
+            old = self.ltype[name]
+            # A None/empty binding still needs the existing inference machinery.
+            # Compatible stores retain their slot, including optional boxing and
+            # class upcasts. Only a concrete incompatible type starts a new one.
+            if old != NONEVAR and "?" not in old and v.t != "" and v.t != "None" and "?" not in v.t and not self.widens(v.t, old) and not self.converts(v.t, old):
+                self.alloca(v.t, name)
+                if name in self.narrowed:
+                    del self.narrowed[name]
+                self.lkk.pop(name, "")
         if name not in self.ltype and v.t == "None":
             # first None: T | None, typed by the first store of another value, or by a read
             # that needs the type before it (see none_read)
@@ -1300,6 +1310,8 @@ def gen_target_type(self, n: Node, base: bool = False) -> str:
     # chain of attributes and subscripts on one (g.groups["a"], d["x"]["y"]), whose base
     # name is only read, so in a function it can be a module-level variable
     if n.kind == "name":
+        if base and n.s in self.narrowed and self.narrowable(n.s):
+            return self.narrowed[n.s]
         if base and n.s not in self.ltype and (n.s not in self.assigned or n.s in self.gdecl):
             return self.gtypes.get(n.s, "")
         return self.ltype.get(n.s, self.gtypes.get(n.s, "") if self.is_global(n.s) else "")

@@ -1,6 +1,6 @@
 """Conversions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.utils import is_union
+from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Ins, Val
 from src.pystachy_compiler.names import short
@@ -96,6 +96,10 @@ def gen_isref(self, t: str) -> bool:
 
 def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
     # v as a value of type t; what names v for the error when v may be None and t may not
+    if self.term and v.v == "undef":
+        # Numeric union dispatch can prove that every tag raises. Its placeholder
+        # never reaches the annotated return or assignment, so needs no conversion.
+        return Val("undef", t)
     if v.t == t:
         return v
     if is_vtuple(unopt(t)) and is_tuple(v.t):
@@ -145,7 +149,13 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
 
 def gen_desc(self, t: str, use: str) -> str:
     if is_union(unopt(t)):
-        self.err("closed union operations require narrowing with isinstance() first")
+        if not ((use == "repr" and self.value_union(t)) or (use == "==" and self.ueq_type(t))):
+            self.err("closed union operations require narrowing with isinstance() first")
+        members = umembers(unopt(t))
+        d = "U" + str(len(members)) + ":"
+        for m in members:
+            d += str(self.utag(m)) + ":" + self.desc(m, use)
+        return ("?" if is_opt(t) else "") + d
     # type descriptor for the runtime's generic repr (use "repr"), equality ("==") or ordering
     # ("<", ">", ...; a list or tuple compares its items with == first)
     if t == "int":

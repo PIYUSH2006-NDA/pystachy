@@ -63,8 +63,8 @@ from src.pystachy_compiler.utils import (
 def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
     # the locals that test n narrows when its value is truth, as mypy narrows them, and the type
     # each then holds: an optional one is not None (x, x is not None, x != None, isinstance(x,
-    # T)), a union holds a value of the types isinstance(x, T) names, or of the others; and
-    # not/and/or of those
+    # T)), a union holds a value of the types isinstance(x, T) names, or of the others; an
+    # ordinary class local is a tested subclass; and not/and/or of those
     if not self.anyopt:
         return
     k = n.kind
@@ -88,14 +88,18 @@ def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
             nt = self.isinst_narrow(t, n.kids[2], truth)
             if nt != "":
                 out[nm] = nt
+        elif truth and t in self.classes and self.classes[t].tag > 0 and n.kids[2].kind == "name" and n.kids[2].s in self.classes and self.derives(n.kids[2].s, t):
+            # The runtime class check proved this pointer has the derived layout. Keep
+            # the declared storage type, and refine only reads on this control-flow path.
+            out[nm] = n.kids[2].s
         elif self.isinst(t, n.kids[2]) == (-2 if truth else -3):
             out[nm] = unopt(t)
 
 def gen_narrowable(self, name: str) -> bool:
-    # a local (or parameter) of an optional type, or a union: a global or a field may change in a
-    # call, and so may a variable that a closure assigns (nonlocal)
+    # a local (or parameter) of an optional type, union, or ordinary class: a global or field
+    # may change in a call, and so may a variable that a closure assigns (nonlocal)
     t = self.ltype.get(name, "")
-    return (is_opt(t) or is_union(t)) and not self.is_global(name) and name not in self.nlw
+    return (is_opt(t) or is_union(t) or (t in self.classes and self.classes[t].tag > 0)) and not self.is_global(name) and name not in self.nlw
 
 def gen_narrow_by(self, test: Node, truth: bool) -> dict[str, str]:
     # narrowed becomes a copy narrowed by test being truth; the state before is returned
@@ -256,7 +260,7 @@ def gen_static_type(self, n: Node, typed: bool = False) -> str:
             # loop's later passes, unless None is all that its function assigns it)
             body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
             return "None" if only_none(body, n.s) else ""
-        return self.narrowed[n.s] if n.s in self.narrowed and (is_opt(t) or is_union(t)) and t != NONEVAR else t
+        return self.narrowed[n.s] if n.s in self.narrowed and (is_opt(t) or is_union(t) or t in self.classes) and t != NONEVAR else t
     if self.is_global(n.s) and n.s in self.gtypes and n.s not in self.gflag:
         return self.gtypes[n.s]
     return ""
@@ -407,7 +411,7 @@ def gen_cond(self, n: Node) -> str:
 
 def gen_truth(self, v: Val) -> str:
     if is_union(unopt(v.t)):
-        self.err("truth testing a closed union requires narrowing with isinstance() first")
+        return self.uop(v, "truth").v
     t = v.t
     if t == "bool":
         return v.v
@@ -525,6 +529,12 @@ def gen_expr(self, n: Node, want: str) -> Val:
         self.ltype[n.s] = t0 if t0 != "" else want
     if is_opt(want) and k != "ifexp" and k != "boolop":
         want = unopt(want)  # (what types an empty display is the type a value would hold)
+    if is_union(want) and (k == "list" or k == "listcomp" or k == "dict"):
+        # A fresh display can use its one declared container member's element
+        # storage. Existing mutable containers are never widened or copied.
+        candidates = [m for m in umembers(want) if is_dict(m)] if k == "dict" else [m for m in umembers(want) if is_list(m)]
+        if len(candidates) == 1:
+            want = candidates[0]
     if k == "name":
         if "?" not in want and same_kind(want, self.ltype.get(n.s, "")) and self.unfilled(n.s):
             self.refine(n.s, want)  # an empty container that nothing fills takes the type expected here
@@ -1113,6 +1123,11 @@ def gen_format_(self, v: Val, spec: Node) -> Val:
         return self.call_fn(self.classes[v.t].methods["__format__"], [v, sv], [])
     if empty:
         return self.to_str(v)
+    if is_union(unopt(v.t)):
+        # Both value and spec run once, before the selected native member formats
+        # or raises. A nonempty spec is legal for some members and not for others.
+        sv = self.coerce(self.expr(spec, "str"), "str", "format()'s spec")
+        return Val(self.rt("pys_format", "ptr", ["i64 " + self.to_slot(v), f"ptr {self.sconst(self.desc(v.t, 'repr'))}", f"ptr {sv.v}"]), "str")
     if v.t == "None":
         if spec.kind == "str":
             self.err("unsupported format string passed to NoneType.__format__")
@@ -1724,6 +1739,8 @@ def gen_unary(self, n: Node) -> Val:
     if op == "-" and (e.kind == "int" or e.kind == "float"):
         return self.expr(mk(e.kind, "-" + e.s, e.line, []), "")
     v = self.expr(e, "")
+    if is_union(unopt(v.t)):
+        return self.unumeric(op, v, Val("", ""), "", True)
     if is_sopt(v.t):
         v = self.unwrap(v, f"TypeError: bad operand type for unary {op}: 'NoneType'")
     v = self.as_int(v)
@@ -2072,7 +2089,7 @@ def gen_eqcall(self, f: FnInfo, iseq: bool, a: Val, b: Val) -> Val:
 
 def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     if is_union(unopt(a.t)) or is_union(unopt(b.t)):
-        self.err("closed union arithmetic requires narrowing with isinstance() first" + self.unarrowed(a if is_union(unopt(a.t)) else b))
+        return self.unumeric(op, a, b, shown, False)
     du = self.dunder(op, a, b, shown)
     if du.t != "":
         return du
@@ -2214,7 +2231,7 @@ def gen_exc_id(self, v: Val) -> Val:
 def gen_exc_eq(self, t: str, what: str = "") -> None:
     # == compares exceptions (of type t, or inside t) by identity: not where an exception
     # class defines __eq__ or __ne__, which CPython calls for one that an exception may be
-    if "E" in self.desc(t, "repr"):
+    if not self.ueq_type(t) and "E" in self.desc(t, "repr"):
         for c in self.classes.values():
             if c.exc != "" and ("__eq__" in c.methods or "__ne__" in c.methods):
                 m = "__eq__" if "__eq__" in c.methods else "__ne__"
@@ -2232,7 +2249,10 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     if (op == "in" or op == "not in") and b.t in self.classes and self.classes[b.t].tag != 0:
         return self.inherit_contains(op, a, b)
     if (is_union(unopt(a.t)) or is_union(unopt(b.t))) and a.t != "None" and b.t != "None":
-        self.err("comparing closed union values requires narrowing with isinstance() first")
+        if (op == "==" or op == "!=") and self.ueq_type(a.t) and self.ueq_type(b.t):
+            return self.uequal(op, a, b)
+        if not ((op == "in" or op == "not in") and (is_tuple(b.t) or (is_list(b.t) and is_union(unopt(elem(b.t))) and self.ueq_type(elem(b.t))))):
+            self.err("comparing closed union values requires narrowing with isinstance() first")
     if (op == "in" or op == "not in") and is_kw(b.t):
         b = self.kw_list(b)  # (x in kwargs: among the names)
     if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and is_fn(b.t):
@@ -2402,6 +2422,8 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 a = Val(nk[0], unopt(elem(b.t)))
                 ok = nk[1]
             et = a.t if is_opt(a.t) and unopt(a.t) == elem(b.t) else elem(b.t)  # (None is in no list[T])
+            if is_union(unopt(elem(b.t))) and self.ueq_type(elem(b.t)):
+                et = self.union_type([elem(b.t), a.t])
             if a.t == "None" and elem(b.t) not in self.classes and self.optional(elem(b.t)) != "" and not self.isnum(elem(b.t)):
                 et = self.optional(elem(b.t))
             s = self.to_slot(self.coerce(a, et))
@@ -2548,6 +2570,8 @@ def gen_optcmp(self, op: str, a: Val, b: Val) -> Val:
 
 def gen_comparable(self, t: str, u: str) -> bool:
     # can t == u be true at all? (otherwise CPython just answers False)
+    if is_union(unopt(t)) or is_union(unopt(u)):
+        return self.ueq_type(self.union_type([t, u]))
     if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
         return True
     return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))

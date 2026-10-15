@@ -1,0 +1,26 @@
+default hot
+default cold
+hh
+finally
+argument 1
+h
+finally
+argument -1
+caught hot
+finally
+ccc
+finally
+argument 1
+c
+finally
+argument -1
+caught cold
+finally
+none
+finally
+none
+finally
+none
+finally
+counts 4 3 3
+[exit 0]
