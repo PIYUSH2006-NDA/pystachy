@@ -13,7 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_STEPS = {"tests-cpython", "tests-native", "tests-opt-off", "runtime-cache",
-               "python-free", "ubsan", "gc-stress"}
+               "python-free", "ubsan", "gc-jit", "gc-aot"}
 
 
 def parse_groups(text):
@@ -93,6 +93,15 @@ def validate_report(report, group, expected):
             raise ValueError(f"{label}: failed checks")
         if "failures" in step and step["failures"] != []:
             raise ValueError(f"{label}: nonempty failures")
+        if step["name"] == "gc-self":
+            if (step.get("ir_identical") is not True or
+                    integer(step.get("compiler_interval"), f"{label}.compiler_interval", 1) != 5000):
+                raise ValueError(f"{label}: missing GC-stressed IR identity or wrong interval")
+        if step["name"] in {"gc-jit", "gc-aot"}:
+            if (step.get("modes") != [step["name"][3:]] or
+                    integer(step.get("tests_compiler_interval"), f"{label}.tests_compiler_interval", 1) != 1000 or
+                    integer(step.get("tests_interval"), f"{label}.tests_interval", 1) != 1):
+                raise ValueError(f"{label}: wrong GC stress mode or intervals")
         if step["name"] in SUITE_STEPS:
             expected_checks = integer(step.get("expected"), f"{label}.expected", 1)
             if integer(step.get("passed"), f"{label}.passed") != expected_checks:

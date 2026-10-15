@@ -26,6 +26,10 @@ def report(group, steps):
             step.update(ir_identical=True, ir_sha256="b" * 64)
         if name in merge.SUITE_STEPS:
             step.update(passed=10, failed=0, expected=10, failures=[])
+        if name == "gc-self":
+            step.update(compiler_interval=5000, ir_identical=True)
+        if name in ("gc-jit", "gc-aot"):
+            step.update(tests_compiler_interval=1000, tests_interval=1, modes=[name.removeprefix("gc-")])
         checks.append(step)
     return {"project": "Pystachy", "group": group, "result": "pass",
             "summary": {"steps": len(steps), "passed": len(steps), "failed": 0, "seconds": 6.0},
@@ -36,10 +40,13 @@ def report(group, steps):
 
 
 class ContractTests(unittest.TestCase):
-    def test_real_plan_requires_both_native_suites(self):
+    def test_real_plan_requires_native_suites_and_every_gc_job(self):
         groups = merge.load_groups()
         self.assertEqual(groups["native"], ["bootstrap", "tests-native"])
         self.assertEqual(groups["opt-off"], ["bootstrap", "tests-opt-off"])
+        self.assertNotIn("gc-stress", groups)  # Compatibility alias must not duplicate CI work.
+        for group in ("gc-self", "gc-jit", "gc-aot"):
+            self.assertEqual(groups[group], ["bootstrap", group])
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
             for group, steps in groups.items():
@@ -50,9 +57,45 @@ class ContractTests(unittest.TestCase):
                 path.write_text(json.dumps(report(group, steps)))
             result = merge.merge_reports(directory, groups, COMMIT)
             self.assertEqual([step["name"] for step in result["steps"]], groups["all"])
-            (directory / "verification-opt-off" / "verification.json").unlink()
-            with self.assertRaisesRegex(ValueError, "missing report groups.*opt-off"):
-                merge.merge_reports(directory, groups, COMMIT)
+            for group in ("opt-off", "gc-self", "gc-jit", "gc-aot"):
+                path = directory / f"verification-{group}" / "verification.json"
+                original = path.read_text()
+                path.unlink()
+                with self.subTest(missing=group), self.assertRaisesRegex(ValueError, f"missing report groups.*{group}"):
+                    merge.merge_reports(directory, groups, COMMIT)
+                path.write_text(original)
+
+    def test_gc_reports_require_original_stress_mode_ir_and_complete_counts(self):
+        groups = merge.load_groups()
+        mutations = {
+            "gc-self": [lambda step: step.update(compiler_interval=5001),
+                        lambda step: step.pop("compiler_interval"),
+                        lambda step: step.update(ir_identical=False),
+                        lambda step: step.pop("ir_identical")],
+            "gc-jit": [lambda step: step.update(tests_compiler_interval=1001),
+                       lambda step: step.update(tests_interval=2),
+                       lambda step: step.pop("tests_interval"),
+                       lambda step: step.update(modes=["aot"]),
+                       lambda step: step.update(modes=["jit", "aot"]),
+                       lambda step: step.pop("modes"),
+                       lambda step: step.update(passed=9),
+                       lambda step: step.pop("expected")],
+            "gc-aot": [lambda step: step.update(tests_compiler_interval=1001),
+                       lambda step: step.update(tests_interval=2),
+                       lambda step: step.pop("tests_compiler_interval"),
+                       lambda step: step.update(modes=["jit"]),
+                       lambda step: step.update(modes=[]),
+                       lambda step: step.update(failed=1),
+                       lambda step: step.pop("passed")],
+        }
+        for group, changes in mutations.items():
+            valid = report(group, groups[group])
+            merge.validate_report(valid, group, groups[group])
+            for index, mutate in enumerate(changes):
+                data = copy.deepcopy(valid)
+                mutate(data["steps"][-1])
+                with self.subTest(group=group, mutation=index), self.assertRaises(ValueError):
+                    merge.validate_report(data, group, groups[group])
 
     def test_missing_duplicate_or_unknown_checks_cannot_weaken_the_gate(self):
         contracts = [CONTRACT.replace("contracts bootstrap check-ir", "contracts bootstrap"),

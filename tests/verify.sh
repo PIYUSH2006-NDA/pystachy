@@ -25,9 +25,9 @@
 #   runtime-table  tools/check_runtime.py: the compiler's RUNTIME table agrees with runtime.c and
 #                  runtime.py (types, coverage, and the effects their call graphs show), and no
 #                  function of runtime.py reaches itself through runtime.c
-#   gc-stress      PYSTACHY_GC_STRESS: the native compiler collecting every 5000 allocations reproduces
-#                  the IR, and every test passes JIT and AOT with a collection at every allocation of the
-#                  program (PYSTACHY_GC_STRESS_PROGRAM=1), compiled by the compiler collecting every 1000
+#   gc-self        the native compiler collecting every 5000 allocations reproduces the IR
+#   gc-jit/gc-aot  every test passes in each mode with a collection at every program allocation
+#                  (PYSTACHY_GC_STRESS_PROGRAM=1), compiled by the compiler collecting every 1000
 #   benchmarks     bench/*.py print exactly what CPython prints, JIT and AOT; timings recorded
 #   rtcheck        tools/rtcheck.py: runtime.py, run by CPython, gives what CPython's str methods and
 #                  math functions give on random inputs
@@ -77,22 +77,25 @@ ROOT=$(pwd)
 # --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
 plan() {
   case $1 in
-    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-stress benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
+    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-self gc-jit gc-aot benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
     hosted) echo 'bootstrap tests-cpython' ;;
     native) echo 'bootstrap tests-native' ;;
     opt-off) echo 'bootstrap tests-opt-off' ;;
     python-free) echo 'bootstrap python-free' ;;
     ubsan) echo 'bootstrap ubsan' ;;
-    gc-stress) echo 'bootstrap gc-stress' ;;
+    gc-self) echo 'bootstrap gc-self' ;;
+    gc-jit) echo 'bootstrap gc-jit' ;;
+    gc-aot) echo 'bootstrap gc-aot' ;;
+    gc-stress) echo 'bootstrap gc-self gc-jit gc-aot' ;; # local compatibility alias
     contracts) echo 'bootstrap runtime-cache check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code' ;;
     benchmarks) echo 'bootstrap benchmarks scaling' ;;
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
 }
-[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|opt-off|python-free|ubsan|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|opt-off|python-free|ubsan|gc-self|gc-jit|gc-aot|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
 GROUP=${1:-all}
 if [ "$GROUP" = --list ]; then
-  for g in all hosted native opt-off python-free ubsan gc-stress contracts benchmarks; do
+  for g in all hosted native opt-off python-free ubsan gc-self gc-jit gc-aot contracts benchmarks; do
     printf '%s %s\n' "$g" "$(plan "$g")"
   done
   exit 0
@@ -185,7 +188,8 @@ x=""
   "$(lines "$V/stage1.ll")" "$(sha "$V/stage1.ll")" "$(wc -c < "$V/pystachy2" | tr -d ' ')" "$(secs "$t0" "$t1")" "$(secs "$t2" "$t3")")
 step bootstrap $r "$s" "$L" "$x"
 
-# gc-stress's self-compile runs beside the test suite. Bound it separately from the CI job,
+# Self-compilation has its own CI runner; all/local runs can overlap earlier checks.
+# Bound it separately from the CI job,
 # leaving time to write/upload a failed report. timeout forwards TERM to its process group,
 # including the compiler, so cancellation cannot leave the background self-compile running.
 gcpid=
@@ -197,7 +201,7 @@ cancel_gc() {
   exit 130
 }
 trap cancel_gc INT TERM
-if want gc-stress && [ -x "$V/pystachy2" ]; then
+if want gc-self && [ -x "$V/pystachy2" ]; then
   # At 1000, self-compilation spent 23 minutes in 15,543 full-heap collections.
   # 5000 still exercises thousands of collections; the test suite keeps its stronger intervals.
   echo 'gc-self: starting (10-minute limit; build/verify/gc-self.log)'
@@ -332,18 +336,10 @@ $PY tools/check_runtime.py > "$L" 2>&1 && r=pass
 step runtime-table $r "$s" "$L" "$(sed -n 's/^\([0-9]*\) RUNTIME entries, \([0-9]*\) exception classes: .*$/, "entries": \1, "exception_classes": \2/p' "$L")"
 fi
 
-# ---- gc-stress: collections far more often than the collector would run them
-if want gc-stress; then
-L=$V/gc-stress.log; s=$(now); r=fail
+# ---- gc-self: fixed-point identity under compiler GC stress
+if want gc-self; then
+L=$V/gc-self-check.log; s=$(now); r=fail
 {
-  # Run the suite before waiting, so the isolated CI group overlaps it with self-compilation.
-  # The latter writes IR only; it neither reads nor rebuilds the suite's runtime cache.
-  suite_ok=0; suite_started=$(now)
-  PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" > "$V/gc-stress-tests.log" 2>&1 && suite_ok=1
-  suite_seconds=$(secs "$suite_started" "$(now)")
-  echo "-- tests, collecting at every allocation"; cat "$V/gc-stress-tests.log"
-  echo "gc-tests: finished after ${suite_seconds}s"
-  # The self-compile started after bootstrap; its full-heap scans dominate with the growing IR.
   self_ok=0; self_status=127
   if [ -n "$gcpid" ]; then
     echo '-- waiting for bounded GC self-compile (exit 124 means timeout)'
@@ -356,11 +352,22 @@ L=$V/gc-stress.log; s=$(now); r=fail
   echo "gc-self: exit $self_status"
   [ "$self_ok" = 1 ] &&
     cmp "$V/stage1.ll" "$V/stage-gc.ll" && echo "the compiler collecting every 5000 allocations emits the stage1 IR" &&
-    [ "$suite_ok" = 1 ] && r=pass
+    r=pass
 } > "$L" 2>&1
-x=$(tests $ALL "$V/gc-stress-tests.log" 2>> "$L") || r=fail
-step gc-stress $r "$s" "$L" ", \"compiler_interval\": 5000, \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"tests_seconds\": $suite_seconds, \"modes\": [\"jit\", \"aot\"], \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")$x"
+step gc-self $r "$s" "$L" ", \"compiler_interval\": 5000, \"ir_identical\": $(same "$V/stage1.ll" "$V/stage-gc.ll")"
 fi
+
+# ---- GC-stressed suite: full corpus in both modes, on independent CI runners
+# Each mode also repeats rejection and syntax checks. No case selection or sampling.
+for mode in jit aot; do
+  if want gc-$mode; then
+    L=$V/gc-$mode.log; s=$(now); r=fail
+    PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" "$mode" > "$L" 2>&1
+    suite_status=$?
+    x=$(tests "$(checks "$mode")" "$L" 2>> "$L") && [ "$suite_status" = 0 ] && r=pass
+    step gc-$mode $r "$s" "$L" ", \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"$mode\"]$x"
+  fi
+done
 
 # ---- benchmarks: same output as CPython, JIT and AOT
 if want benchmarks; then

@@ -20,11 +20,14 @@ class GCVerificationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in ("tests", "src", "lib", "ryu", "bin"):
+        for name in ("tests", "tests/deviations", "tests/errors", "src", "lib", "ryu", "bin"):
             (self.root / name).mkdir()
         shutil.copy(ROOT / "tests/verify.sh", self.root / "tests/verify.sh")
-        for name in ("pystachy.py", "runtime.py", "runtime.c", "tests/example.py"):
+        for name in ("pystachy.py", "runtime.py", "runtime.c", "tests/example.py",
+                     "tests/syntax_example.py", "tests/deviations/example.py"):
             (self.root / name).write_text("# fixture\n")
+        (self.root / "tests/errors/example.py").write_text("# error: mock rejection\n")
+        (self.root / "tests/errors/syntax_example.py").write_text("# error: syntax_example.py: mock syntax\n")
         compiler = self.root / "bin/compiler"
         compiler.write_text(f"#!{sys.executable}\n" + '''import os
 from pathlib import Path
@@ -68,11 +71,18 @@ else:
         suite.write_text('''#!/bin/sh
 [ "$PYSTACHY_GC_STRESS" = 1000 ] || exit 9
 [ "$PYSTACHY_GC_STRESS_PROGRAM" = 1 ] || exit 9
-if [ "$VERIFY_MOCK_MODE" = suite-failure ]; then
-  echo '0 passed, 2 failed'
+case "$2" in jit|aot) ;; *) echo "invalid mode: $2"; exit 9 ;; esac
+echo "suite mode: $2"
+# Three program/deviation executions, two rejections and two syntax checks per mode.
+if [ "$VERIFY_MOCK_MODE" = "suite-$2-failure" ]; then
+  echo '6 passed, 1 failed'
   exit 1
 fi
-echo '2 passed, 0 failed'
+if [ "$VERIFY_MOCK_MODE" = short-suite ]; then
+  echo '6 passed, 0 failed'
+  exit 0
+fi
+echo '7 passed, 0 failed'
 ''')
         suite.chmod(0o755)
         timeout = self.root / "bin/timeout"
@@ -86,44 +96,88 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
         self.env = {**os.environ, "PY": str(compiler),
                     "PATH": str(self.root / "bin") + os.pathsep + os.environ["PATH"]}
 
-    def run_group(self, mode):
-        result = subprocess.run(["sh", "tests/verify.sh", "gc-stress"], cwd=self.root,
+    def run_group(self, group, mode="pass"):
+        result = subprocess.run(["sh", "tests/verify.sh", group], cwd=self.root,
                                 env={**self.env, "VERIFY_MOCK_MODE": mode},
                                 text=True, capture_output=True, timeout=15)
         report = json.loads((self.root / "build/verification.json").read_text())
-        log = (self.root / "build/verify/gc-stress.log").read_text()
-        return result, report, log
+        logs = {step["name"]: (self.root / step["log"]).read_text() for step in report["steps"]}
+        return result, report, logs
 
-    def test_success_preserves_counts_ir_and_gc_diagnostics(self):
-        result, report, log = self.run_group("pass")
+    def test_self_compile_preserves_ir_stress_and_gc_diagnostics(self):
+        result, report, logs = self.run_group("gc-self")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(report["result"], "pass")
+        self.assertEqual([step["name"] for step in report["steps"]], ["bootstrap", "gc-self"])
         step = report["steps"][-1]
-        self.assertEqual((step["passed"], step["failed"], step["expected"]), (2, 0, 2))
         self.assertTrue(step["ir_identical"])
-        self.assertEqual((step["compiler_interval"], step["tests_compiler_interval"],
-                          step["tests_interval"]), (5000, 1000, 1))
-        self.assertGreaterEqual(step["tests_seconds"], 0)
-        self.assertLessEqual(step["tests_seconds"], step["seconds"])
-        for text in ("gc-self: started", "limit 10m", "gc-self: finished after", "gc statistics",
-                     "gc-self: exit 0", "gc-tests: finished after"):
-            self.assertIn(text, log)
+        self.assertEqual(step["compiler_interval"], 5000)
+        self.assertNotIn("expected", step)
+        for text in ("gc-self: started", "limit 10m", "gc-self: finished after", "gc statistics"):
+            self.assertIn(text, logs["gc-self"])
 
-    def test_failure_timeout_mismatch_and_failed_suite_cannot_pass(self):
-        for mode, text in (("failure", "gc-self: exit 7"), ("timeout", "gc-self: exit 124"),
-                           ("timeout-kill", "gc-self: exit 137"),
-                           ("mismatch", "differ"), ("suite-failure", "0 passed, 2 failed")):
+    def test_each_suite_runs_all_checks_in_its_mode_at_original_stress(self):
+        for mode in ("jit", "aot"):
+            group = f"gc-{mode}"
+            with self.subTest(group=group):
+                result, report, logs = self.run_group(group)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(report["result"], "pass")
+                self.assertEqual([step["name"] for step in report["steps"]], ["bootstrap", group])
+                step = report["steps"][-1]
+                self.assertEqual((step["passed"], step["failed"], step["expected"]), (7, 0, 7))
+                self.assertEqual(step["modes"], [mode])
+                self.assertEqual((step["tests_compiler_interval"], step["tests_interval"]), (1000, 1))
+                self.assertIn(f"suite mode: {mode}", logs[group])
+                self.assertFalse((self.root / "gc-child.pid").exists())
+
+    def test_local_gc_stress_alias_runs_self_and_both_modes(self):
+        result, report, logs = self.run_group("gc-stress")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(report["result"], "pass")
+        self.assertEqual([step["name"] for step in report["steps"]],
+                         ["bootstrap", "gc-self", "gc-jit", "gc-aot"])
+        self.assertIn("gc statistics", logs["gc-self"])
+        for mode in ("jit", "aot"):
+            step = next(step for step in report["steps"] if step["name"] == f"gc-{mode}")
+            self.assertEqual((step["passed"], step["expected"]), (7, 7))
+            self.assertEqual(step["modes"], [mode])
+            self.assertIn(f"suite mode: {mode}", logs[f"gc-{mode}"])
+
+    def test_failure_timeout_and_mismatched_ir_cannot_pass(self):
+        for mode, text in (("failure", "mock compiler failed"),
+                           ("timeout", "sending signal TERM"),
+                           ("timeout-kill", "sending signal KILL"),
+                           ("mismatch", "differ")):
             with self.subTest(mode=mode):
-                result, report, log = self.run_group(mode)
+                result, report, logs = self.run_group("gc-self", mode)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report["result"], "fail")
                 self.assertEqual(report["steps"][-1]["result"], "fail")
-                self.assertIn(text, log)
-                if mode.startswith("timeout"):
-                    self.assertIn("sending signal TERM", log)
+                self.assertIn(text, logs["gc-self"])
+
+    def test_failed_and_incomplete_suites_cannot_pass(self):
+        for mode in ("jit", "aot"):
+            for failure in (f"suite-{mode}-failure", "short-suite"):
+                with self.subTest(mode=mode, failure=failure):
+                    result, report, _ = self.run_group(f"gc-{mode}", failure)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(report["result"], "fail")
+                    self.assertEqual(report["steps"][-1]["result"], "fail")
+
+    def test_local_alias_reports_failure_and_still_runs_remaining_modes(self):
+        for failure in ("failure", "suite-jit-failure", "suite-aot-failure"):
+            with self.subTest(failure=failure):
+                result, report, logs = self.run_group("gc-stress", failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(report["result"], "fail")
+                self.assertEqual([step["name"] for step in report["steps"]],
+                                 ["bootstrap", "gc-self", "gc-jit", "gc-aot"])
+                self.assertIn("suite mode: jit", logs["gc-jit"])
+                self.assertIn("suite mode: aot", logs["gc-aot"])
 
     def test_cancellation_terminates_the_background_compiler(self):
-        process = subprocess.Popen(["sh", "tests/verify.sh", "gc-stress"], cwd=self.root,
+        process = subprocess.Popen(["sh", "tests/verify.sh", "gc-self"], cwd=self.root,
                                    env={**self.env, "VERIFY_MOCK_MODE": "signal"},
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    start_new_session=True)
