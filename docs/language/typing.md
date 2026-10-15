@@ -218,13 +218,25 @@ calls. Copy their value to an ordinary local before testing it. The copy remains
 valid when the original storage is changed because the tagged box is immutable.
 Container types stay invariant: `list[int]` cannot become `list[int | str]`.
 
-Narrow before arithmetic, truth testing, comparison, formatting or other operations
-that require a concrete member. Generic container equality and printing of union
-items are not implemented. No union is inferred from unrelated assignments or
-return values; annotate it explicitly. Container members, arbitrary `Any`,
-recursive JSON types, runtime compilation and speculative type assumptions are out
-of scope. Boxing may allocate; this feature expands supported programs and makes
-no performance claim.
+Truth tests, `bool()`, `str()`, `repr()`, printing, plain f-strings and `==`/`!=`
+operate on scalar unions without narrowing. Lists, dictionaries and tuples containing
+union values support printing and equality; lists also support membership, `count`,
+`index` and `remove`. Search queries may name another scalar type: `True` and `1.0`
+find an integer `1`. Numeric equality uses the existing exact int/float comparison,
+including integers above the exact range of a float. `None` equals only `None`.
+
+These operations select the existing native operation by the tag. A concrete value
+keeps its native representation until it enters a union; widening a union reuses
+its box. A concrete equality/search operand may allocate a temporary box. The boxes
+do not create Python numeric object identity: the existing [NaN identity
+deviation](compatibility.md#deviations-from-cpython) also applies to union payloads.
+
+Narrow before arithmetic, ordering, member methods and format specifications that
+require a concrete member. No union is inferred from unrelated assignments or
+return values; annotate it explicitly. Container members, arbitrary `Any`, recursive
+JSON types, runtime compilation and speculative type assumptions are out of scope.
+Boxing may allocate; this feature expands supported programs and makes no performance
+claim.
 
 ## Native reference unions
 

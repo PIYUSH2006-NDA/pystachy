@@ -1,0 +1,15 @@
+False
+['left', 'right']
+text
+7
+0
+['false', 'fallback', 'true', 'and']
+text 'text' False
+['str', 'repr', 'bool']
+query failed
+['before', 'fail']
+query failed
+['receiver', 'fail']
+query failed
+['fail']
+[exit 0]

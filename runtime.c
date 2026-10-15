@@ -956,7 +956,8 @@ I pys_ceil(double d) { return pys_f2i(ceil(d)); }
    i int, f float, b bool, s str, L<e> list, D<k><v> dict, T<n><e...> tuple, V<e> counted tuple, S<e> set, F<e>
    frozenset, O<id> object of class number id: the program defines pys_obj_eq/cmp/repr, which dispatch on it. The id
    has three digits or more (O007, O1234): a letter or the end of the descriptor follows it;
-   ?<e> None (null) or a value of <e>; E an exception (an Exc) */
+   ?<e> None (null) or a value of <e>; E an exception (an Exc);
+   U<n>:<tag>:<e>... a tagged scalar union, n program-wide tags and their member descriptors */
 I pys_obj_eq(I c, I a, I b);
 I pys_obj_cmp(I c, I op, I a, I b);
 Str *pys_obj_repr(I c, I a, I b);
@@ -988,13 +989,27 @@ void *pys_ubox(I tag, I v) { I *p = pys_alloc(16); p[0] = tag; p[1] = v; return 
 void *pys_ubox_opt(I tag, void *p, I deref) { return p ? pys_ubox(tag, deref ? *(I *)p : (I)p) : NULL; }
 
 static I unbox(I v, const char *d) { return *d == 'i' || *d == 'f' || *d == 'b' ? *(I *)v : v; }   /* the value of a ?d */
+static I unum(const char **d) {   /* a count or tag terminated by ':' (compiler-generated descriptors) */
+  I n = 0;
+  while (**d >= '0' && **d <= '9') { n = n * 10 + **d - '0'; (*d)++; }
+  (*d)++;
+  return n;
+}
 static const char *skip(const char *d) {
   char c = *d++;
   if (c == 'O') { d += 3; while (*d >= '0' && *d <= '9') d++; return d; }
   if (c == 'L' || c == 'V' || c == '?' || c == 'S' || c == 'F') return skip(d);
   if (c == 'D') return skip(skip(d));
   if (c == 'T') for (int n = *d++ - '0'; n > 0; n--) d = skip(d);
+  if (c == 'U') for (I n = unum(&d); n > 0; n--) { unum(&d); d = skip(d); }
   return d;
+}
+static const char *umember(I *v, const char *d) {
+  I *box = (I *)*v, tag = box[0];
+  *v = box[1];
+  d++;
+  for (I n = unum(&d); n > 0; n--) { if (unum(&d) == tag) return d; d = skip(d); }
+  __builtin_unreachable();   /* the compiler's descriptor covers every possible tag */
 }
 static double dbl(I v) { double x; memcpy(&x, &v, 8); return x; }
 static int printable(I c);
@@ -1025,6 +1040,7 @@ static void repr_str(Buf *b, Str *s) {
 }
 static const char *repr(Buf *b, I v, const char *d) {
   switch (*d++) {
+  case 'U': { const char *end = skip(d - 1), *member = umember(&v, d - 1); repr(b, v, member); return end; }
   case 'i': { char t[32]; put(b, t, snprintf(t, 32, "%lld", (long long)v)); return d; }
   case 'f': { Str *s = pys_str_float(dbl(v)); put(b, s->s, s->len); return d; }
   case 'b': put(b, v ? "True" : "False", v ? 4 : 5); return d;
@@ -1092,6 +1108,15 @@ static int eqitem(I a, I b, const char *d) {
 static int eqv(I a, I b, const char *d) {
   EQ_PROBE();
   switch (*d) {
+  case 'U': {
+    const char *x = umember(&a, d), *y = umember(&b, d);
+    if (*x == *y) return eqv(a, b, x);
+    int nx = *x == 'i' || *x == 'b', ny = *y == 'i' || *y == 'b';
+    if (nx && ny) return a == b;
+    if (nx && *y == 'f') return pys_cmp_if(a, dbl(b)) == 0;
+    if (*x == 'f' && ny) return pys_cmp_if(b, dbl(a)) == 0;
+    return 0;
+  }
   case 'f': return dbl(a) == dbl(b);
   case 's': return a && b ? pys_str_eq((Str *)a, (Str *)b) : a == b;   /* (None in a looked-up key, see hval) */
   case 'L': {   /* an __eq__ may change either list: as CPython's list_richcompare, re-read both

@@ -25,7 +25,8 @@ In these cases a program can compile but behave differently from CPython.
   fractional power (CPython returns a complex).
 
 - Floats are unboxed, so a NaN has no identity: `nan in [nan]` is `False`, and lists or
-  tuples holding the same NaN object compare, and sort, as if they held different ones. The
+  tuples holding the same NaN object compare, and sort, as if they held different ones.
+  Scalar union boxes retain this rule; a shared box does not give its NaN payload identity. The
   sum of an empty `list[float]` is `0.0` (`sum(xs, 1)`: `1.0`), and its `math.prod()` is
   `1.0`, where CPython returns the int start.
 

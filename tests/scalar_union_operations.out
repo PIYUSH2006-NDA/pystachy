@@ -1,0 +1,233 @@
+False True None None None None
+false
+False True False False False False
+false
+True False True True True True
+true
+False True 0 0 0 0
+false
+True False -7 -7 -7 -7
+true
+False True 0.0 0.0 0.0 0.0
+false
+False True -0.0 -0.0 -0.0 -0.0
+false
+True False 2.5 2.5 2.5 2.5
+true
+False True  ''  ''
+false
+True False hello 'hello' hello 'hello'
+true
+True False a'
+"\é 'a\'\n"\\é' a'
+"\é 'a\'\n"\\é'
+true
+[None, False, True, 0, -7, 0.0, -0.0, 2.5, '', 'hello', 'a\'\n"\\é']
+{'empty': None, 'number': -7, 'text': 'hello'}
+(None, -7, 'hello')
+True False
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+True False
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+True False
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+True False
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+False True
+True False False True True False
+False True False True True True
+True False
+True False
+False True
+7 
+next None
+4 None
+[exit 0]

@@ -412,7 +412,7 @@ def gen_cond(self, n: Node) -> str:
 
 def gen_truth(self, v: Val) -> str:
     if is_union(unopt(v.t)):
-        self.err("truth testing a closed union requires narrowing with isinstance() first")
+        return self.uop(v, "truth").v
     t = v.t
     if t == "bool":
         return v.v
@@ -2237,7 +2237,10 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     if (op == "in" or op == "not in") and b.t in self.classes and self.classes[b.t].tag != 0:
         return self.inherit_contains(op, a, b)
     if (is_union(unopt(a.t)) or is_union(unopt(b.t))) and a.t != "None" and b.t != "None":
-        self.err("comparing closed union values requires narrowing with isinstance() first")
+        if (op == "==" or op == "!=") and (self.scalar_union(a.t) or self.scalar_union(b.t)):
+            return self.uequal(op, a, b)
+        if not ((op == "in" or op == "not in") and (is_tuple(b.t) or (is_list(b.t) and self.scalar_union(elem(b.t))))):
+            self.err("comparing closed union values requires narrowing with isinstance() first")
     if (op == "in" or op == "not in") and is_kw(b.t):
         b = self.kw_list(b)  # (x in kwargs: among the names)
     if (op == "==" or op == "!=" or op == "is" or op == "is not") and is_callable(unopt(a.t)) and is_fn(b.t):
@@ -2407,6 +2410,8 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 a = Val(nk[0], unopt(elem(b.t)))
                 ok = nk[1]
             et = a.t if is_opt(a.t) and unopt(a.t) == elem(b.t) else elem(b.t)  # (None is in no list[T])
+            if self.scalar_union(elem(b.t)):
+                et = self.union_type([elem(b.t), a.t])
             if a.t == "None" and elem(b.t) not in self.classes and self.optional(elem(b.t)) != "" and not self.isnum(elem(b.t)):
                 et = self.optional(elem(b.t))
             s = self.to_slot(self.coerce(a, et))
@@ -2553,6 +2558,8 @@ def gen_optcmp(self, op: str, a: Val, b: Val) -> Val:
 
 def gen_comparable(self, t: str, u: str) -> bool:
     # can t == u be true at all? (otherwise CPython just answers False)
+    if self.scalar_union(t) or self.scalar_union(u):
+        return self.scalar_union(self.union_type([t, u]))
     if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
         return True
     return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))
