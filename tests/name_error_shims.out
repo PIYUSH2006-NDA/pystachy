@@ -1,0 +1,6 @@
+mods: init mods
+mods.shapes: init mods.shapes
+x 1.5 3 42 1 input
+('ValueError',) 7! utf-8 ascii
+é!
+[exit 0]

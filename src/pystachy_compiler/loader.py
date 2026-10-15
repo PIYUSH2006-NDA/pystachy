@@ -4,6 +4,7 @@ import os
 from src.pystachy_compiler.analysis import (
     accel_try,
     binds,
+    bound_in,
     builtin_has,
     builtin_import,
     builtin_module,
@@ -744,7 +745,7 @@ class Loader:
                 self.docsetm.append(m)
                 continue
             run: list[Node] = []
-            if self.static_if(m, st, scope, run) or self.optional(m, st, run, False):
+            if self.static_if(m, st, scope, run) or self.optional(m, st, run, False) or (blk is m.body and self.unbound_try(m, st, i, run)):
                 b = mk("block", "", st.line, run)
                 self.simplify(m, b, scope)
                 out.extend(b.kids)
@@ -988,6 +989,50 @@ class Loader:
         out.extend(b.kids)
         return True
 
+    def unbound_try(self, m: Mod, st: Node, i: int, out: list[Node]) -> bool:
+        # try: <a read of a name that nothing has bound and that is no builtin of CPython 3.13> /
+        # except NameError: (Python 2's basestring, Windows' WindowsError), statement i of module
+        # m's code, decided at compile time: the try's first statement is that read, or assigns
+        # it or a tuple or list of names among which it is, so it raises NameError before anything
+        # else runs; the first handler that catches it runs (unless it names it: as e), and
+        # nothing else of the try does. Appends what runs to out; False if st is no such try
+        if st.kind != "try" or st.s != "" or self.incls or len(st.kids[0].kids) == 0:
+            return False
+        first = st.kids[0].kids[0]
+        e = first.kids[-1] if first.kind == "assign" or first.kind == "expr" else first
+        names = [e] if e.kind == "name" else e.kids if e.kind == "tuple" or e.kind == "list" else e.kids[:0]
+        bound: dict[str, bool] = {}
+        binds(m.body.kids[:i], bound, True)  # (what may have bound it by then, also a function's global statement or :=)
+        for x in m.body.kids[:i]:
+            bound_in(x, bound)
+        for d in m.body.kids:
+            for f in [d] if d.kind == "def" else d.kids[0].kids if d.kind == "class" else d.kids[:0]:
+                if f.kind == "def":
+                    global_assigns(f.kids[2].kids, bound, True)
+        unbound = False
+        for x in names:
+            if x.kind != "name":
+                return False
+            unbound = unbound or not (x.s in PYBUILTINS or x.s in MODNAMES or x.s.startswith("__") or x.s in bound or "*" in bound)
+        if not unbound:
+            return False
+        for h in st.kids[1:]:
+            if h.kind == "block" and h.s == "finally":
+                return False
+        for h in st.kids[1:]:
+            catch = False
+            for x in (h.kids[0].kids if h.kids[0].kind == "tuple" else [h.kids[0]]) if h.kind == "except" else h.kids[:0]:
+                if x.kind == "omit" or (x.kind == "name" and x.s in ["NameError", "Exception", "BaseException"] and x.s not in m.rebound):
+                    catch = True
+                elif x.kind != "name" or x.s not in PYBUILTINS or x.s in m.rebound:
+                    return False  # (a class that may be NameError's)
+            if catch and h.s != "":
+                return False
+            if catch:
+                out.extend(h.kids[1].kids)
+                return True
+        return False
+
     def binds_name(self, m: Mod, p: str, x: str) -> int:
         # has module p's code bound x itself when a from-import in module m takes x from it: 2 surely,
         # 1 maybe (in a branch, by a function's global statement or a star import, ...), 0 not. A
@@ -1051,7 +1096,7 @@ class Loader:
             if top:
                 self.pos = i
             run: list[Node] = []
-            if self.static_if(t, body[i], {}, run) or self.optional(t, body[i], run, True):
+            if self.static_if(t, body[i], {}, run) or self.optional(t, body[i], run, True) or (top and self.unbound_try(t, body[i], i, run)):
                 self.folded(t, run, kept, sure, False)
             else:
                 kept.append(body[i])

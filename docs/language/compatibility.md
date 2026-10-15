@@ -238,7 +238,8 @@ supported alternatives.
 - a read of a name that nothing binds, and an attribute, operation or format spec that the static
   types rule out (`unicode`, `obj.missing`, `1 + "a"`, `f"{obj:>6}"` of an object without
   `__format__`), where CPython raises `NameError`, `AttributeError` or `TypeError` as it runs, also
-  in a `try` whose clause catches it (a feature test such as `try: unicode / except NameError:`)
+  in a `try` whose clause catches it, but for a module-level feature test such as
+  `try: unicode / except NameError:`, which is [decided at compile time](modules.md#compile-time-branches)
 - a function, class, method or import name bound twice, or a name that is both a variable and a
   function, class or import, also in a function: a parameter or local that an import in it binds
   too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,

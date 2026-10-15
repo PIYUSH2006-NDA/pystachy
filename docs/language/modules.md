@@ -74,6 +74,7 @@ Pystachy resolves these guards while compiling:
 | Module-level `TYPE_CHECKING = False` followed by `if TYPE_CHECKING:` | Drops the body when that is the name's only binding; other assignments, deletion, imports, star imports or `global` declarations disable this rule. |
 | Windows tests of `sys.platform` or tests of `os.name` | Resolves them for POSIX. `sys.platform` tests support `==`, `!=`, `startswith()` (including tuple prefixes), and membership in a tuple or list of Windows names. |
 | Version tests: `sys.version_info`, a slice, an item or an attribute of it compared with a literal int, str or tuple of those | Resolves them for CPython 3.13.16, as in `if sys.version_info < (3,):`. |
+| A module-level `try:` whose first statement reads or assigns a name (or a tuple of names) that nothing has bound yet and that is no builtin, with a handler that catches `NameError` without naming it | Runs that handler instead of the `try`, as CPython does: shims such as `try: unicode` / `except NameError: unicode = str`. |
 
 These tests work inside `not`, `and` and `or`, while preserving the other operands' evaluation
 order. For example, `effect()` still runs in `if effect() and os.name == "nt":`.
