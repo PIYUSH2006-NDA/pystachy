@@ -1621,8 +1621,8 @@ class Gen:
     def exc_brepr(self, o: Val) -> Val:
         return exceptions_exc_brepr(self, o)
 
-    def super_call(self, sc: Node, m: str, args: list[Node], based: bool=False) -> Val:
-        return exceptions_super_call(self, sc, m, args, based)
+    def super_call(self, sc: Node, m: str, args: list[Node], based: bool=False, read: bool=False) -> Val:
+        return exceptions_super_call(self, sc, m, args, based, read)
 
     def exc_helpers(self, c: str) -> None:
         return exceptions_exc_helpers(self, c)
