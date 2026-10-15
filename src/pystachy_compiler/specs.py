@@ -424,6 +424,7 @@ IROPS: dict[str, str] = {
     "list.load": "rL", "list.len": "rL",
     "slot.pack": "", "slot.unpack": "",
     "num.cast": "", "num.cmp": "",
+    "empty.kind": "wD",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }

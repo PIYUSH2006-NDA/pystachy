@@ -143,6 +143,8 @@ class Ins:
         # opaque slot (s: member type, r: address then payload). Narrowing proves those reads safe.
         # num.cast promotes one numeric operand; num.cmp records the source comparison
         # in s and compares two operands of the same native numeric type.
+        # empty.kind fixes a fresh dict/set result's key layout, using its typed
+        # operand or the deferred type hole k; it never retypes a filled container.
         # text immediate: for "raw", one line of LLVM text; a slot's name; an rt op's RUNTIME key; the
         # symbol a call calls; the module an init runs; a check's message "Kind: text"; the
         # exception a raise raises; ovf's operator + - *

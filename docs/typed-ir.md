@@ -123,6 +123,7 @@ The exact operation table is `IROPS`; its current groups are:
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
+| Fresh empty result layout | `empty.kind` (typed dict/set key kind, or a deferred result hole) |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp` |
 | Calls | `rt`, `call`, `icall`, `init` |

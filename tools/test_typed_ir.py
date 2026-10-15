@@ -76,6 +76,48 @@ class TypedIRTests(unittest.TestCase):
                     self.assertEqual(g.nums(i), 1)
                     self.assertEqual(g.opfx(i, {}), 0)
 
+    def test_empty_result_layout_keeps_heap_write_effect(self):
+        for t in ("dict[str,int]", "set[tuple[str,int]]"):
+            i = Ins("empty.kind", "", "")
+            i.a = [Val("%a0", t)]
+            i.r = [1]
+            g = Gen()
+            g.verify(function_with(i), False)
+            self.assertEqual(g.opfx(i, {}), FXBIT["wD"])
+            g.holes.append(t)
+            i.k = 1
+            i.a[0].t = "dict[?,?]" if t.startswith("dict[") else "set[?]"
+            g.verify(function_with(i), False)
+
+    def test_empty_result_layout_rejects_bad_operands_and_holes(self):
+        for t in ("list[int]", "int", "opt[dict[str,int]]", "dict[?,?]"):
+            i = Ins("empty.kind", "", "")
+            i.a = [Val("%a0", t)]
+            i.r = [1]
+            self.assert_bad(i)
+        for field, value in (("a", []), ("a", [Val("%a0", "dict[str,int]")] * 2),
+                             ("r", []), ("r", [1, 2]), ("k", -1), ("k", 1),
+                             ("t", "dict[str,int]"), ("s", "raw"), ("x", "str"),
+                             ("b", ["entry"])):
+            i = Ins("empty.kind", "", "")
+            i.a = [Val("%a0", "dict[str,int]")]
+            i.r = [1]
+            setattr(i, field, value)
+            self.assert_bad(i)
+
+    def test_empty_result_layout_rejects_invalid_resolved_holes(self):
+        for t in ("int", "list[int]", "set[str]", "dict[?,int]"):
+            i = Ins("empty.kind", "", "")
+            i.a = [Val("%a0", "dict[?,?]")]
+            i.r = [1]
+            i.k = 1
+            g = Gen()
+            g.holes.append(t)
+            error = StringIO()
+            with redirect_stderr(error), self.assertRaises(SystemExit):
+                g.verify(function_with(i), False)
+            self.assertIn("concrete hole", error.getvalue())
+
     def test_requires_one_operand_and_one_result(self):
         for op in ("slot.pack", "slot.unpack"):
             for operands in ([], [Val("%a0", "float"), Val("%a1", "float")]):

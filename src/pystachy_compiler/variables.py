@@ -975,7 +975,9 @@ def gen_retval(self, e: Node, want: str) -> Val:
         v = self.read(e)
         self.allowq = False
         return v
-    return self.expr(e, want)
+    # A direct forwarding call keeps its fresh empty result open until this
+    # template's caller supplies a type. Argument evaluation keeps normal contexts.
+    return self.expr(e, "?" if e.kind == "call" and (want == "" or "?" in want) else want)
 
 def gen_adopt(self, t: str) -> None:
     # the template's function being compiled, which returned an empty container without a
@@ -997,6 +999,20 @@ def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
     # context expects, else list[int] or dict[int, int] (as sum() of an empty list is the int 0),
     # which a type error further on in this function then explains (guessed). A new dict is made
     # by each call, so it gets the key kind of its type here (a dict's second word)
+    if want == "?":
+        # retval's direct forwarding call: keep the result open, and let a later
+        # concrete return fix this call's key layout without changing its callee.
+        self.qret[self.curfn.ll] = self.qret.get(self.curfn.ll, "")
+        if is_dict(v.t) or is_set(v.t):
+            i = Ins("empty.kind", "", "")
+            i.a = [v]
+            i.k = len(self.holes)
+            self.holes.append("")
+            if self.curfn.ll not in self.qholes:
+                self.qholes[self.curfn.ll] = []
+            self.qholes[self.curfn.ll].append(i.k)
+            self.put(i, 1)
+        return v
     if is_union(unopt(want)):
         candidates = [m for m in umembers(unopt(want)) if same_kind(m, v.t)]
         if len(candidates) == 1:
@@ -1005,7 +1021,10 @@ def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
     if t != want:
         self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'set[T]' if is_set(t) else 'dict[K, V]'} = {short(f.name)}()"
     if is_dict(t) or is_set(t):
-        self.emit(f"store i64 {self.key_kind(targs(t)[0] if is_dict(t) else selem(t))}, ptr {self.ins(f'getelementptr i64, ptr {v.v}, i64 1')}")
+        self.key_kind(targs(t)[0] if is_dict(t) else selem(t))
+        i = Ins("empty.kind", "", "")
+        i.a = [Val(v.v, t)]
+        self.put(i, 1)
     return Val(v.v, t)
 
 def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:

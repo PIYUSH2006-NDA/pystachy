@@ -752,7 +752,7 @@ class Gen:
         # the locals it returns so, space-separated, by its LLVM name, and the functions whose
         # return type of that kind a call has used, so that it can no longer change (see adopt)
         self.qret: dict[str, str] = {}
-        self.qholes: dict[str, list[int]] = {}  # direct empty returns' allocation holes, typed by adopt
+        self.qholes: dict[str, list[int]] = {}  # direct/forwarded empty returns' layout holes, typed by adopt
         self.qused: dict[str, bool] = {}
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
