@@ -906,7 +906,9 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
         for j in range(np):
             if vals[j].t in self.classes and vals[j].v in self.nn and self.dispatches(f, f.params[j]):
                 nnp.append(f.params[j])
-        f = self.instance(f, [v.t for v in vals], nnp)
+        # A direct return-call keeps the open-result marker for an empty callee,
+        # while forwarding the caller's separate fresh-display context.
+        f = self.instance(f, [v.t for v in vals], nnp, self.curfn.rctx if want == "?" else want)
     c = Ins("call", f.ret, f.ll)
     c.a = [v for v in vals if v.t != "None"]  # (an argument that is None is not passed)
     if f.noret:

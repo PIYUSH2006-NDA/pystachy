@@ -416,11 +416,24 @@ An empty list, dict or set returned by a template can get its type from a later 
 or from its caller's annotation, argument type or other expected context. If none supplies a
 type, the fallback is `list[int]`, `dict[int, int]` or `set[int]`. A resulting type error identifies the
 guess; annotate the receiving value to provide the intended type.
-This also applies to direct `return []`, `return {}` and `return set()` results; callers with
-different expected container types can share the same empty-result specialization.
+This also applies to direct `return []`, `return {}` and `return set()` results. Direct list
+and dict empties can share an open-result specialization across caller container types.
 Direct forwarding wrappers (`return empty(n)`) retain that result context, including through
-multiple wrappers. Nested tuple results and forwarding through local assignments retain
-their existing inference rules; annotate their containers or the producing function.
+multiple wrappers. A caller can also type fresh displays nested in a returned tuple, or a
+fresh nonempty display whose statically known item types require an explicit union:
+
+```python
+def pair(a, b):
+    return [a, b]
+
+values: list[int | float] = pair(1, 2.5)
+```
+
+Such contextual results specialize for both argument types and result context; scalar values
+retain their original types. Stored mutable containers are never widened. Homogeneous
+nonempty results and forwarding through local assignments retain their existing inference
+rules. Calls nested inside displays (`return [empty(n)]`) still infer their own result;
+annotate the producing function when those rules need more information.
 A union context supplies a list or dict result's type when exactly one member has the same
 container kind; ambiguous contexts retain the fallback above.
 

@@ -2081,8 +2081,8 @@ class Gen:
     def fn_sig(self, t: str) -> list[str]:
         return templates_fn_sig(self, t)
 
-    def instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
-        return templates_instance(self, f, ts, nnp)
+    def instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "") -> FnInfo:
+        return templates_instance(self, f, ts, nnp, want)
 
     def dotted(self, n: Node) -> str:
         return builtins_dotted(self, n)
