@@ -34,6 +34,7 @@ SDIST_DIR = "pyperformance-1.14.0/pyperformance/data-files/benchmarks/"
 # CPython), and of a --smoke run (correctness only). bench/pyperformance/NAME.py's main
 # reads them; each starts with the number of loops.
 BENCHMARKS = {
+    "barnes_hut": (["1"], ["1", "5", "50"]),
     "chaos": (["5"], ["1", "200"]),
     "deltablue": (["100"], ["1", "20"]),
     "fannkuch": (["1"], ["1", "7"]),
@@ -56,6 +57,7 @@ BENCHMARKS = {
 
 # SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not.
 UPSTREAM = {
+    "barnes_hut": "802a1c170b82a5d82ea69b7a893f09d4b50b4f232e20a8e1c1bb8b2c04e6af1d",
     "bpe_tokeniser": "c7255345499e118181785370b0996e8cc1056491b9678b3fbeb02421e3f9b2df",
     "chaos": "5d20fd29c8ea89e0ebe4040ae4c05f26f1a620cd2a7fc654d9d7f8cb205651ac",
     "comprehensions": "6047efc06287a24a646f00fc8a8d47429f7cdeab3e942230e13cf6d7cefa6343",
@@ -91,6 +93,7 @@ UPSTREAM = {
 # --census: the statements that stand in for each upstream main, calling what its pyperf
 # runner would time with the default arguments.
 CENSUS_CALLS = {
+    "barnes_hut": "bench_quadtree_nbody(1, DEFAULT_PARTICLES, DEFAULT_ITERATIONS, DEFAULT_THETA)",
     "bpe_tokeniser": "bench_bpe_tokeniser(1)",
     "chaos": "main(None, None)",
     "comprehensions": "bench_comprehensions(1)",

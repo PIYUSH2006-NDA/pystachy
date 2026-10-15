@@ -1,6 +1,6 @@
 # pyperformance benchmarks
 
-These are 18 of the 30 benchmarks tried from [pyperformance](https://github.com/python/pyperformance)
+These are 19 of the 31 benchmarks tried from [pyperformance](https://github.com/python/pyperformance)
 1.14.0, adapted so that Pystachy compiles them. CPython runs the same adapted files, so each
 comparison runs identical source in CPython, the JIT and AOT. The adaptations and smaller
 inputs change the work, so these results are not comparable with published pyperformance numbers.
@@ -39,6 +39,7 @@ upstream file with only pyperf's runner replaced, reporting the first compiler e
 
 | Benchmark | Upstream SHA-256 | Status |
 |---|---|---|
+| `barnes_hut` | `802a1c170b82a5d82ea69b7a893f09d4b50b4f232e20a8e1c1bb8b2c04e6af1d` | ported |
 | `bpe_tokeniser` | `c7255345499e118181785370b0996e8cc1056491b9678b3fbeb02421e3f9b2df` | blocked |
 | `chaos` | `5d20fd29c8ea89e0ebe4040ae4c05f26f1a620cd2a7fc654d9d7f8cb205651ac` | ported |
 | `comprehensions` | `6047efc06287a24a646f00fc8a8d47429f7cdeab3e942230e13cf6d7cefa6343` | blocked |
@@ -91,6 +92,7 @@ Each edit is marked `# Pystachy port:` in the source. Every port has these chang
 
 | Benchmark | Other adaptations |
 |---|---|
+| `barnes_hut` | Integer zeros that become floats are float literals. Constructors, the particle list and the child nodes are annotated. |
 | `chaos` | A Park–Miller generator replaces `random.seed()` and `randrange()`, so the points differ from upstream. `GVector` has float parameters and defaults; `__rmul__ = __mul__` becomes a method; fields are annotated; loops replace two-clause comprehensions; `length` starts as `0.0`; `x` and `y` are converted to int in one assignment each; an impossible `type()` message is a literal; `main()` runs one game. |
 | `deltablue` | `OrderedCollection(list)` uses become annotated lists. `super(C, self).__init__()` calls of `object` are commented out, and `Strength` replaces `self.__class__`. `Constraint` declares the methods its subclasses define. `Variable.value` is `int \| float`, and other fields, parameters and recursive methods are annotated. |
 | `fannkuch` | The reversing slice assignment uses a slice, `reverse()` and concatenation. |
@@ -114,9 +116,9 @@ Results within a benchmark are checked against CPython, not against upstream pyp
 
 ## Blocked
 
-`--census` reports these first errors at the base revision. Each upstream file has only
-pyperf's import and runner replaced with a direct call of the benchmark. The second column
-lists the main blockers found by reading the upstream code; there may be others.
+`--census` reports these first errors with the compiler of main `bdc20a2`. Each upstream file
+has only pyperf's import and runner replaced with a direct call of the benchmark. The last column
+lists further blockers found by reading the upstream code; there may be others.
 
 | Benchmark | First compiler error | Other blockers |
 |---|---|---|
@@ -137,6 +139,7 @@ The ported benchmarks' upstream files stop at these first errors before adaptati
 
 | Benchmark | First compiler error of the upstream file |
 |---|---|
+| `barnes_hut` | `bm_barnes_hut.py:281: error: expected int, got float` |
 | `chaos` | `bm_chaos.py:7: error: module 'random' is not supported` |
 | `deltablue` | `bm_deltablue.py:26: error: unsupported base class: single inheritance requires a previously declared ordinary class or a supported exception class` |
 | `fannkuch` | `bm_fannkuch.py:34: error: assignment to a slice is not supported` |
