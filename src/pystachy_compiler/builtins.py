@@ -507,7 +507,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "list" and is_dict(t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(t)[0]]))
     elif name == "range" or name == "enumerate" or name == "zip" or name == "reversed":
-        self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod() or str.join()")
+        self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), tuple(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod() or str.join()")
     if name in self.gtypes or name in self.ltype:
         self.err(f"'{name}' is not callable")
     if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:

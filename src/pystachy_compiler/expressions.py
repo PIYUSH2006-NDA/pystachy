@@ -791,7 +791,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
+            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), tuple(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
         return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []
