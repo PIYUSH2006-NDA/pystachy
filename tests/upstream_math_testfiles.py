@@ -19,8 +19,6 @@
 # its tests that skip the others are kept, and skip none here.
 # EXCLUDED upstream cases:
 # - test_testfile's SKIP_ON_TIGER (OS X 10.4 only)
-# - test_mtestfile's 154 gamma and lgamma cases (math.gamma() and math.lgamma() are not
-#   supported), skipped as they are read
 import math
 
 
@@ -199,6 +197,10 @@ def call(fn: str, x: float) -> float:
         return math.exp(x)
     if fn == 'expm1':
         return math.expm1(x)
+    if fn == 'gamma':
+        return math.gamma(x)
+    if fn == 'lgamma':
+        return math.lgamma(x)
     if fn == 'log':
         return math.log(x)
     if fn == 'log10':
@@ -290,8 +292,6 @@ def test_mtestfile() -> None:
     failures: list[str] = []
     checked = 0
     for id, fn, arg, expected, flags in parse_mtestfile(MTESTFILE):
-        if fn in ('gamma', 'lgamma'):
-            continue  # math.gamma() and math.lgamma() are not supported
         # func = getattr(math, fn)
 
         expected_exc = ''

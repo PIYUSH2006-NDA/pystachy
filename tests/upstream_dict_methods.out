@@ -1,5 +1,10 @@
 dict() {}
 dict() is not {} True
+a | b {0: 0, 1: 1, 2: 2, 3: 3}
+c {0: 0, 1: 1, 2: 2, 3: 3}
+b | a {1: 1, 2: 1, 3: 3, 0: 0}
+c {1: 1, 2: 1, 3: 3, 0: 0}
+c {0: 0, 1: 1, 2: 2, 3: 3}
 not {} True
 bool({1: 2}) True
 bool({}) False
@@ -69,6 +74,31 @@ d.get('a') 1
 d.get('a', 3) 1
 d['key'][0] 3
 len(d['key']) 2
+popitem -1 1 ('0', 0) ('0', 0)
+popitem -1 2 ('0', 0) ('0', 0)
+popitem -1 4 ('0', 0) ('0', 0)
+popitem -1 8 ('0', 0) ('0', 0)
+popitem -1 16 ('0', 0) ('0', 0)
+popitem -1 32 ('0', 0) ('0', 0)
+popitem -1 64 ('0', 0) ('0', 0)
+popitem -1 128 ('0', 0) ('0', 0)
+popitem -1 256 ('0', 0) ('0', 0)
+popitem -1 512 ('0', 0) ('0', 0)
+popitem -1 1024 ('0', 0) ('0', 0)
+popitem -1 2048 ('0', 0) ('0', 0)
+popitem 1 1 ('0', 0) ('0', 0)
+popitem 1 2 ('0', 0) ('0', 0)
+popitem 1 4 ('0', 0) ('0', 0)
+popitem 1 8 ('0', 0) ('0', 0)
+popitem 1 16 ('0', 0) ('0', 0)
+popitem 1 32 ('0', 0) ('0', 0)
+popitem 1 64 ('0', 0) ('0', 0)
+popitem 1 128 ('0', 0) ('0', 0)
+popitem 1 256 ('0', 0) ('0', 0)
+popitem 1 512 ('0', 0) ('0', 0)
+popitem 1 1024 ('0', 0) ('0', 0)
+popitem 1 2048 ('0', 0) ('0', 0)
+KeyError 'popitem(): dictionary is empty'
 d.pop('ghi'): KeyError 'ghi'
 d.pop(k) 'def'
 len(d) 0

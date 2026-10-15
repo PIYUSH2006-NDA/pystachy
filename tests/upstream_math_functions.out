@@ -248,4 +248,50 @@ math.inf inf
 exp(-1000000000) 0.0
 exp(1000000000) OverflowError
 sqrt(-1.0) ValueError
+ValueError tolerances must be non-negative
+ValueError tolerances must be non-negative
+2.0 and 2.0 should be close! True
+1e+199 and 1e+199 should be close! True
+1.123e-300 and 1.123e-300 should be close! True
+0.0 and -0.0 should be close! True
+12345 and 12345.0 should be close! True
+345678 and 345678 should be close! True
+100000000.0 and 100000001.0 should be close! True
+-1e-08 and -1.000000009e-08 should be close! True
+1.12345678 and 1.12345679 should be close! True
+100000000.0 and 100000001.0 should not be close! False
+-1e-08 and -1.000000009e-08 should not be close! False
+1.12345678 and 1.12345679 should not be close! False
+1e-09 and 0.0 should not be close! False
+-1e-09 and 0.0 should not be close! False
+-1e-150 and 0.0 should not be close! False
+1e-09 and 0.0 should be close! True
+-1e-09 and 0.0 should be close! True
+-1e-150 and 0.0 should be close! True
+inf and inf should be close! True
+inf and inf should be close! True
+-inf and -inf should be close! True
+-inf and -inf should be close! True
+nan and nan should not be close! False
+nan and 1e-100 should not be close! False
+1e-100 and nan should not be close! False
+inf and nan should not be close! False
+nan and inf should not be close! False
+inf and -inf should not be close! False
+inf and 1.0 should not be close! False
+1.0 and inf should not be close! False
+inf and 1e+308 should not be close! False
+1e+308 and inf should not be close! False
+1.0 and 1.0 should be close! True
+-3.4 and -3.4 should be close! True
+-1e-300 and -1e-300 should be close! True
+1.0 and 1.000000000000001 should not be close! False
+0.99999999999999 and 1.0 should not be close! False
+1e+200 and 9.99999999999999e+199 should not be close! False
+9 and 10 should be close! True
+10 and 9 should be close! True
+100000001 and 100000000 should be close! True
+123456789 and 123456788 should be close! True
+100000001 and 100000000 should not be close! False
+123456789 and 123456788 should not be close! False
 [exit 0]

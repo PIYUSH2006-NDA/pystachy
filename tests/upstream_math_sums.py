@@ -6,14 +6,17 @@
 # a == b, assertTrue(x) prints x and asserts it, assertAlmostEqual(a, b) prints a and asserts
 # round(abs(a - b), 7) == 0, assertRaises a try statement that prints the exception, and a loop
 # over many values asserts each and prints how many it checked. float.fromhex() is not supported
-# (float.hex() is): fromhex() is tests/upstream_math_float_ops.py's. math.isclose() is not
-# supported: isclose() is CPython's math_isclose_impl() with the default tolerances. random's
+# (float.hex() is): fromhex() is tests/upstream_math_float_ops.py's. random's
 # uniform() and random() draw from a fixed linear congruential sequence (no random module),
 # itertools.product(values, repeat=3) is product3(), and a tuple of i items is a list of them (a
 # tuple's length is part of its type). A name that a later loop binds to a value of another type
 # is renamed (iterable to floats, p and q to p3 and q3, p1 and q1, p2 and q2), range(...) bound
 # to a name is list(range(...)), and type(x) == int is isinstance(x, int). _naive_prod() of
 # floats is given start=1.0: start *= elem would rebind the int start to a float (#248).
+# testHypot's hypot(*args[:i]) and hypot(*([fourthmax]*n)) are written out for each i and n (a
+# tuple is not sliced, and a list is not unpacked into a call, here); its n goes up to 9 (a
+# tuple holds at most 9 items). test_prod's prod([[1], [2], [3]], start=[]) has a typed empty
+# list as its start.
 # testHypotAccuracy computes each expected z as float((Decimal(x)**2 + Decimal(y)**2).sqrt())
 # at 500 digits; decimal is not available, so each z here is that value, computed so under
 # CPython 3.13.16 and written as its float.hex().
@@ -32,22 +35,18 @@
 #   [1, 2.0, 3, 4, 5, 6]): a list's items have one type (#9), and prod() of such a tuple is
 #   rejected ("needs items of a single type"); Fraction and Decimal items; BadMultiply
 #   (__rmul__ is not called, #113); prod(iter(...)) (iter() is supported as __iter__'s return
-#   only); the TypeErrors of prod(42), of strs, bytes, bytearrays, lists and dicts as items and
-#   starts (compile-time errors, "unsupported call math.prod(float)", as #277's); the odd cases'
-#   starts 'ab', [1, 2] and {2: 3} (rejected at compile time, "unsupported call
-#   math.prod(list[int],str)"; bug, NEW); and the big integers: range(1, 10000),
+#   only); the TypeErrors of prod(42), prod(['a', 'b', 'c']), prod([[1], [2], [3]]) and
+#   prod([{2:3}]) (an int start times a str, list or dict) and of bytes and bytearrays
+#   (compile-time errors, "unsupported call math.prod(float)", as #277's); and the big
+#   integers: range(1, 10000),
 #   range(-10000, -1) and range(-1000, 1000) are range(1, 21), range(-20, -1) and range(-20, 20)
 #   here (ints are 64-bit), and so is type(prod(range(1, 10000)))'s range
-# - testHypot's calls of other than two arguments: hypot(*args[:i]) but for i == 2,
-#   hypot(True, False, True, True, True), hypot(-10.5), hypot(), hypot(-0.0),
-#   hypot(1.5, 1.5, 0.5) == hypot(1.5, 0.5, 1.5), hypot(INF), hypot(NAN) (twice), the scaling
-#   loop's hypot(*([fourthmax]*n)) but for n == 2, and hypot(*([1.0]*18), 'spam'): rejected at
-#   compile time, "unsupported call math.hypot(float)" (bug, NEW; see
-#   tests/upstream_math_integer.py); FloatLike, Decimal and Fraction arguments; hypot(x=1) (a
-#   compile-time error, worded "keyword argument 'x' of math.hypot() is not supported" where
-#   CPython says "math.hypot() takes no keyword arguments", as #277's);
-#   int_too_big_for_float (ints are 64-bit here); math.gamma(3.5) in args is its value,
-#   3.323350970447842 (math.gamma() is not supported)
+# - testHypot's scaling loop's hypot(*([fourthmax]*n)) for n from 10 to 31, and
+#   hypot(*([1.0]*18), 'spam') (a compile-time error, as hypot(1.1, 'string', 2.2) is, worded
+#   "unsupported call math.hypot(float,str,float)"); FloatLike, Decimal and Fraction
+#   arguments; hypot(x=1) (a compile-time error, worded "keyword argument 'x' of math.hypot()
+#   is not supported" where CPython says "math.hypot() takes no keyword arguments", as #277's);
+#   int_too_big_for_float (ints are 64-bit here)
 # - testDist's dist(iter(...), iter(...)) (iter() is supported as __iter__'s return only),
 #   FloatLike, Decimal and Fraction items, the tuple subclass T, the TypeErrors of keyword,
 #   missing, extra, scalar, str and non-number arguments (compile-time errors, worded
@@ -90,20 +89,6 @@ def fromhex(s: str) -> float:
     m = int(s, 16)
     assert int(float(m)) == m, s  # exact
     return sign * math.ldexp(float(m), exp)
-
-
-def isclose(a: float, b: float) -> bool:
-    # math.isclose(a, b), rel_tol=1e-09, abs_tol=0.0: CPython's math_isclose_impl()
-    rel_tol = 1e-09
-    abs_tol = 0.0
-    if a == b:
-        return True
-    if math.isinf(a) or math.isinf(b):
-        return False
-    diff = math.fabs(b - a)
-    return (((diff <= math.fabs(rel_tol * b)) or
-             (diff <= math.fabs(rel_tol * a))) or
-            (diff <= abs_tol))
 
 
 def random(state: list[int]) -> float:
@@ -267,6 +252,27 @@ def test_prod() -> None:
     check("isinstance(prod(range(1, 10000), start=1.0), float)",
           isinstance(prod(range(1, 10000), start=1.0), float), True)
 
+    try:
+        prod(['a', 'b', 'c'], start='')
+        assert False, "prod(['a', 'b', 'c'], start='')"
+    except TypeError as e:
+        print("prod(['a', 'b', 'c'], start='')", "TypeError", e)
+    try:
+        prod([[1], [2], [3]], start=empty)
+        assert False, "prod([[1], [2], [3]], start=[])"
+    except TypeError as e:
+        print("prod([[1], [2], [3]], start=[])", "TypeError", e)
+    try:
+        prod([{2:3}]*2, start={2:3})
+        assert False, "prod([{2:3}]*2, start={2:3})"
+    except TypeError as e:
+        print("prod([{2:3}]*2, start={2:3})", "TypeError", e)
+
+    # Some odd cases
+    check("prod([2, 3], start='ab')", prod([2, 3], start='ab'), 'abababababab')
+    check("prod([2, 3], start=[1, 2])", prod([2, 3], start=[1, 2]), [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2])
+    check("prod([], start={2: 3})", prod(empty, start={2: 3}), {2:3})
+
 
 HYPOT_ACCURACY = [
     # (hx, hy, the float.hex() of float((Decimal(x)**2 + Decimal(y)**2).sqrt()))
@@ -313,23 +319,36 @@ def testHypot() -> None:
 
     # Test different numbers of arguments (from zero to five)
     # against a straightforward pure python implementation
-    args = [math.e, math.pi, math.sqrt(2.0), 3.323350970447842, math.sin(2.1)]
-    i = 2
-    assertAlmostEqual("hypot(*args[:2])",
-        hypot(args[0], args[1]),
-        math.sqrt(sum(s**2 for s in args[:i]))
-    )
+    args = [math.e, math.pi, math.sqrt(2.0), math.gamma(3.5), math.sin(2.1)]
+    hypots = [hypot(), hypot(args[0]), hypot(args[0], args[1]), hypot(args[0], args[1], args[2]),
+              hypot(args[0], args[1], args[2], args[3]), hypot(args[0], args[1], args[2], args[3], args[4])]
+    for i in range(len(args)+1):
+        assertAlmostEqual("hypot(*args[:%d])" % i,
+            hypots[i],
+            math.sqrt(sum(s**2 for s in args[:i]))
+        )
 
     # Test allowable types (those with __float__)
     check("hypot(12.0, 5.0)", hypot(12.0, 5.0), 13.0)
     check("hypot(12, 5)", hypot(12, 5), 13)
     check("hypot(0.75, -1)", hypot(0.75, -1), 1.25)
     check("hypot(-1, 0.75)", hypot(-1, 0.75), 1.25)
+    check("hypot(True, False, True, True, True)", hypot(True, False, True, True, True), 2.0)
 
     # Test corner cases
     check("hypot(0.0, 0.0)", hypot(0.0, 0.0), 0.0)     # Max input is zero
+    check("hypot(-10.5)", hypot(-10.5), 10.5)       # Negative input
+    check("hypot()", hypot(), 0.0)             # Negative input
+    check("copysign(1.0, hypot(-0.0))", 1.0,
+        math.copysign(1.0, hypot(-0.0))        # Convert negative zero to positive zero
+    )
+    check("hypot(1.5, 1.5, 0.5)",                          # Handling of moving max to the end
+        hypot(1.5, 1.5, 0.5),
+        hypot(1.5, 0.5, 1.5),
+    )
 
     # Any infinity gives positive infinity.
+    check("hypot(INF)", hypot(INF), INF)
     check("hypot(0, INF)", hypot(0, INF), INF)
     check("hypot(10, INF)", hypot(10, INF), INF)
     check("hypot(-10, INF)", hypot(-10, INF), INF)
@@ -342,16 +361,22 @@ def testHypot() -> None:
     check("hypot(10, -INF)", hypot(10, -INF), INF)
 
     # If no infinity, any NaN gives a NaN.
+    check_true("isnan(hypot(NAN))", math.isnan(hypot(NAN)))
     check_true("isnan(hypot(0, NAN))", math.isnan(hypot(0, NAN)))
     check_true("isnan(hypot(NAN, 10))", math.isnan(hypot(NAN, 10)))
     check_true("isnan(hypot(10, NAN))", math.isnan(hypot(10, NAN)))
     check_true("isnan(hypot(NAN, NAN))", math.isnan(hypot(NAN, NAN)))
+    check_true("isnan(hypot(NAN))", math.isnan(hypot(NAN)))
 
     # Verify scaling for extremely large values
     fourthmax = FLOAT_MAX / 4.0
-    n = 2
-    check_true("isclose(hypot(*([fourthmax]*2)), fourthmax * sqrt(2))",
-               isclose(hypot(fourthmax, fourthmax), fourthmax * math.sqrt(n)))
+    f = fourthmax
+    scaled = [hypot(), hypot(f), hypot(f, f), hypot(f, f, f), hypot(f, f, f, f), hypot(f, f, f, f, f),
+              hypot(f, f, f, f, f, f), hypot(f, f, f, f, f, f, f), hypot(f, f, f, f, f, f, f, f),
+              hypot(*((f,) * 9))]
+    for n in range(10):
+        check_true("isclose(hypot(*([fourthmax]*%d)), fourthmax * sqrt(%d))" % (n, n),
+                   math.isclose(scaled[n], fourthmax * math.sqrt(n)))
 
     # Verify scaling for extremely small values
     for exp in range(32):
@@ -469,9 +494,9 @@ def testDist() -> None:
         p = [fourthmax] * n
         q = [0.0] * n
         check_true("isclose(dist(p, q), fourthmax * sqrt(%d))" % n,
-                   isclose(dist(p, q), fourthmax * math.sqrt(n)))
+                   math.isclose(dist(p, q), fourthmax * math.sqrt(n)))
         check_true("isclose(dist(q, p), fourthmax * sqrt(%d))" % n,
-                   isclose(dist(q, p), fourthmax * math.sqrt(n)))
+                   math.isclose(dist(q, p), fourthmax * math.sqrt(n)))
 
     # Verify scaling for extremely small values
     for exp in range(32):
