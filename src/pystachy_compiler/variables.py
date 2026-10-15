@@ -39,6 +39,7 @@ from src.pystachy_compiler.utils import (
     is_opt,
     is_set,
     is_tuple,
+    is_vtuple,
     key_problem,
     lt,
     same_kind,
@@ -436,7 +437,7 @@ def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
                 elif t.kind == "tuple" or t.kind == "list":
                     for i in range(len(t.kids)):
                         if t.kids[i].kind == "name" and t.kids[i].s == name:
-                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids)
+                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
                             # (after a starred target, the item counted from the end)
                             after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
                             at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
@@ -621,7 +622,7 @@ def gen_unpacked(self, st: Node, name: str) -> str:
     s = 0
     while s < len(t0.kids) and t0.kids[s].kind != "starred":
         s += 1
-    if (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t0.kids) and s == len(t0.kids):
+    if (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t0.kids) and s == len(t0.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0:
         e = e.kids[i]  # (each item is assigned on its own, see stmt)
         return self.dry(e) if self.typed_now(e) and not self.calls_open(e, {}) else ""
     if not self.typed_now(e) or self.calls_open(e, {}):
@@ -1463,6 +1464,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.err(f"'{o.t}' does not support item assignment")
     elif k == "tuple" and is_opt(v.t):
         self.assign(t, self.unwrap(v, "TypeError: cannot unpack non-iterable NoneType object"))
+    elif k == "tuple" and is_vtuple(v.t):
+        self.assign(t, Val(self.rt("pys_vtuple_list", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]])))  # (its items, as a list's)
     elif k == "tuple" and (is_list(v.t) or v.t == "str"):
         # a, b = xs: the length is checked when it runs, as CPython does. CPython takes every
         # item before it stores the first, so where a store may change the list (xs[1], xs[0] =

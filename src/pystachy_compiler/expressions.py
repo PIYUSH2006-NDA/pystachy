@@ -702,6 +702,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             self.err(f"'{o.t}' cannot be sliced")
         fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
         return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]), o.t)
+    if (k == "list" or k == "tuple") and len([x for x in n.kids if x.kind == "starred"]) > 0:
+        return self.star_display(n, want)  # ([a, *xs], (a, *xs))
     if k == "list":
         et = elem(want) if is_list(want) and "?" not in want else ""
         soft = n is self.soft  # (an operand of ==: as its items are, see compare)

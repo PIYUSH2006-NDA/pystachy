@@ -446,7 +446,7 @@ def gen_stmt(self, n: Node) -> None:
             self.assign(t0, self.read(val))
             self.allowq = False
             self.twin(t0.s, val.s)
-        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids) and not starred_target(t0):
+        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids) and not starred_target(t0) and len([x for x in val.kids if x.kind == "starred"]) == 0:
             vs: list[Val] = []
             for i in range(len(val.kids)):
                 vs.append(self.expr(val.kids[i], self.target_type(t0.kids[i])))

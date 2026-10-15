@@ -60,6 +60,10 @@ comprehensions; and tuple concatenation or repetition by a constant. Set and fro
 operations support union, intersection, difference, symmetric difference, subset ordering
 and in-place forms.
 
+A starred item in a list or tuple display, `[a, *xs, *range(n)]`, takes the iterable's items
+where it stands. A tuple display whose starred items are tuples is a tuple of their items;
+with another iterable, it is a runtime-length tuple.
+
 An assignment expression, `x := v`, assigns `v` to `x` as `x = v` would, in the function or
 module code around it, also from a comprehension or generator expression (PEP 572); its value is
 `v`. Tests such as `if (m := pattern.match(s)) is not None:` narrow `x` as a test of the name
@@ -75,7 +79,8 @@ Comparisons with `None` are supported where the static types permit them.
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
 `filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`, `all`,
-`math.fsum`, `math.prod`, `str.join` and `list.extend`.
+`math.fsum`, `math.prod`, `str.join` and `list.extend`, the value of an assignment to a
+starred target, or a `*` item of a list or tuple display.
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.

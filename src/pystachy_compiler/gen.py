@@ -135,6 +135,8 @@ from src.pystachy_compiler.containers import (
     gen_siter as containers_siter,
     gen_smethod as containers_smethod,
     gen_stake as containers_stake,
+    gen_star_display as containers_star_display,
+    gen_star_items as containers_star_items,
     gen_store_elem as containers_store_elem,
     gen_store_key as containers_store_key,
     gen_supdate as containers_supdate,
@@ -2258,6 +2260,12 @@ class Gen:
 
     def set_display(self, n: Node, want: str, folded: bool, returnctx: bool = False, resultsoft: bool = False) -> Val:
         return containers_set_display(self, n, want, folded, returnctx, resultsoft)
+
+    def star_items(self, x: Node) -> Val:
+        return containers_star_items(self, x)
+
+    def star_display(self, n: Node, want: str) -> Val:
+        return containers_star_display(self, n, want)
 
     def iter_elem(self, t: str) -> str:
         return containers_iter_elem(self, t)
