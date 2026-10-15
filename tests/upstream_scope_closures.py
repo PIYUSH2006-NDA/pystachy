@@ -27,8 +27,7 @@
 # - testLocalsFunction, testLocalsClass, testLocalsClass_WithTrace, testClassNamespaceOverridesClosure,
 #   testInteractionWithTraceFunc: locals(), sys.settrace() and classes inside functions
 # - testEvalExecFreeVars, testEvalFreeVars: eval() and exec()
-# - testListCompLocalVars: a read of an unbound global (a compile-time error here) and a
-#   comprehension with two for clauses
+# - testListCompLocalVars: a read of an unbound global (a compile-time error here)
 # - test_multiple_nesting: a class inside a method (and name mangling of its parameter)
 
 
