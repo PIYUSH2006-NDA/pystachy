@@ -467,8 +467,9 @@ supported alternatives.
   by a function's or method's parameters and return (in `__init__` or a special method that is
   no template, a field, a variable's annotation, or as a value), but a generic class's that its
   objects bind, a `TypeVarTuple` but unpacked (`*Ts`) in `tuple[...]`, `Callable[[...], R]` and
-  `*args`, a generic class whose `Generic[...]` is not its one base, `class C[T]` (PEP 695), a type
-  variable of a generic class that neither arguments nor context bind,
+  `*args`, a generic class whose `Generic[...]` is not its one base, a PEP 695 generic class
+  with a base or with a `ParamSpec` (`**P`) or more than one `TypeVarTuple` among its type
+  parameters, a type variable of a generic class that neither arguments nor context bind,
   `C[X]` for a class with a `TypeVarTuple` or unannotated or variadic `__init__` parameter, a `TypeVar`'s constraints and a bound other than a string, a bare
   `Final` but in an assignment (in a class body, of a constant), an `@overload` stub that the `def`
   implementing it does not follow in its block past other `def`s only (in an imported module, one
@@ -477,6 +478,11 @@ supported alternatives.
   default other than a constant
 - typing's names in a function's local variable annotations that are not imported (CPython never
   evaluates those)
+- a type alias used other than by annotations (`print(Row)`, `Row()`, `del Row`, `Row.__value__`,
+  `isinstance(x, Num)`), but an alias of `int`, `float`, `str` or `bool`; a recursive type alias;
+  a `type` statement other than at a module's top level, or for a name that another statement
+  binds too; a generic `type` statement's alias named without its type arguments, and type
+  arguments for a type alias with a `TypeVarTuple` or `ParamSpec` parameter
 
 ### Exceptions and exception classes
 

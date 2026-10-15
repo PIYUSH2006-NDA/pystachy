@@ -19,7 +19,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
-| Generics | Function templates and `Generic` classes with inferred or explicit type arguments |
+| Generics | Function templates and `Generic` or PEP 695 (`class Box[T]`) classes with inferred or explicit type arguments; module-level type aliases |
 
 Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
 have a restricted set of types: integers, strings and supported tuples (whose items may
@@ -32,6 +32,8 @@ Explicit closed scalar unions such as `int | str`, bounded native reference unio
 and optional unions are supported. Dynamic `Any` values are not.
 Generic classes can infer type arguments from construction or name them explicitly with
 `Box[int]` annotations and constructor subscriptions; variadic generic classes remain inferred.
+Module-level type aliases (`Row = list[str]`, `type Pair[T] = tuple[T, T]`) name types in
+annotations.
 
 See the [type reference](language/typing.md#supported-types) for exact forms, conversions and constraints.
 
@@ -118,7 +120,8 @@ Ordinary classes support single inheritance, inherited fields and constructors, 
 overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
 class's override. Constructors in these hierarchies need annotated parameters; inheritance
 involving class templates, dataclasses, NamedTuples or builtin types is unsupported. Exception
-classes retain their separate inheritance rules, and `Generic[...]` declares a generic class.
+classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
+parameters (`class Box[T]`) declare a generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.
 
