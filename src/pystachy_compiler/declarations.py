@@ -904,12 +904,20 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
     # subclass without its own __slots__, or with an unslotted base, has a dict.
     if ci.base in self.classes:
         ci.slots = list(self.classes[ci.base].slots)
+    slots_declared = False
     for st in ci.node.kids[0].kids:
         if st.kind not in ["assign", "annassign"] or st.kids[0].kind != "name" or st.kids[0].s != "__slots__":
             continue
         self.line = st.line
+        if slots_declared:
+            why = "multiple __slots__ declarations are not supported; use one literal declaration"
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+        slots_declared = True
         slot_node = st.kids[-1]
         names = [slot_node] if slot_node.kind == "str" else slot_node.kids if slot_node.kind in ["tuple", "list"] else []
+        own_slots: list[str] = []
         why = ""
         if slot_node.kind not in ["str", "tuple", "list"] or (st.kind == "annassign" and len(st.kids) != 3):
             why = "__slots__ needs a literal string, tuple or list of strings"
@@ -920,6 +928,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
                 why = f"__slots__ entry '{n.s}' is not supported"
             else:
                 ci.slots.append(n.s)
+                own_slots.append(n.s)
         if why != "":
             if ci.mod == "":
                 self.err(why)
@@ -930,7 +939,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         for d in ci.node.kids[0].kids:
             name = d.s if d.kind == "def" else d.kids[0].s if d.kind in ["assign", "annassign"] and d.kids[0].kind == "name" and (d.kind == "assign" or len(d.kids) == 3) else ""
             if name in ci.slots:
-                why = f"'{name}' in __slots__ conflicts with class variable or method"
+                why = f"'{name}' in __slots__ conflicts with class variable or method" if name in own_slots else f"shadowing inherited slot '{name}' with a class variable or method is not supported"
                 if ci.mod == "":
                     self.err(why)
                 ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"

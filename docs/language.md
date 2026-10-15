@@ -104,7 +104,8 @@ Literal `__slots__` strings, tuples and lists restrict instance field writes whe
 base also declares slots. A subclass without slots, or with an unslotted base, may add
 fields. Dynamic slots, private slot names, `__dict__` and `__weakref__` slots are
 unsupported, as is reading or changing `__slots__` at runtime. Slot violations are
-compile errors rather than catchable exceptions.
+compile errors rather than catchable exceptions. Repeated slot declarations and
+class variables or methods shadowing inherited slots are also unsupported.
 
 Ordinary classes support single inheritance, inherited fields and constructors, instance-method
 overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
