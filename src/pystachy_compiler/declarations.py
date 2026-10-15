@@ -1429,6 +1429,12 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     r = ""
     bad = ""
     if name == "__slots__" and name not in ci.fpos:
+        if ci.exc != "":
+            # Exceptions use their runtime class identity rather than ordinary
+            # object tags. Do not silently read the static base's metadata.
+            for sub in self.classes.values():
+                if sub.name != ci.name and self.derives(sub.name, ci.name) and name in sub.fdefault and self.default_home(sub, name) is not self.default_home(ci, name):
+                    self.err(f"reading __slots__ through exception base {short(ci.name)} is not supported when a subclass overrides it; read it through the concrete class")
         r = self.ins(f"load {lt(p.t)}, ptr {p.v}")
         if ci.tag != 0:
             tag = self.ins(f"load i64, ptr {self.fgep(o, ci.fpos[' class'])}")

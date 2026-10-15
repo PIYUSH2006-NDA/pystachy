@@ -66,3 +66,36 @@ show(Base())
 show(Child())
 show(Open())
 print(Child.__slots__, Open.__slots__)
+
+
+class BaseError(Exception):
+    __slots__ = ("message",)
+
+
+class ChildError(BaseError):
+    __slots__ = ("detail",)
+
+
+class LeafError(ChildError):
+    pass
+
+
+# Concrete exception metadata and unmodified inherited metadata remain readable.
+print(BaseError.__slots__, ChildError().__slots__, LeafError().__slots__)
+print(ChildError.__slots__ is LeafError().__slots__)
+
+
+class SharedError(Exception):
+    __slots__ = ("value",)
+
+
+class InheritedError(SharedError):
+    pass
+
+
+def shared(error: SharedError) -> None:
+    print(error.__slots__)
+
+
+shared(SharedError())
+shared(InheritedError())

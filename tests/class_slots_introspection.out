@@ -9,4 +9,8 @@ True True
 ('b',)
 ('a',)
 ('b',) ('a',)
+('message',) ('detail',) ('detail',)
+True
+('value',)
+('value',)
 [exit 0]
