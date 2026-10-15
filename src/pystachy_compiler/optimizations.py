@@ -277,6 +277,10 @@ def gen_canon(self, vs: Values, v: str) -> str:
             r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
         elif i.op == "num.cast" or i.op == "num.cmp":
             r = self.same(vs, v, f"{i.op} {i.t} {i.s} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
+        elif i.op == "mem.load":
+            x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)
+            if x != "":
+                r = self.canon(vs, x)
         elif i.op == "union.payload":
             # A union box's tag and payload are immutable. Retain the equivalence of
             # repeated narrowed reads that the former raw GEP/load exposed to dictfuse.
@@ -349,6 +353,14 @@ def gen_reaching(self, vs: Values, a: str, j: int, x: int) -> str:
             if steps > REACH:
                 return ""
             i = code[y]
+            if i.op == "mem.load" or i.op == "mem.store":
+                p = i.a[0].v
+                q = self.addr(vs, p)
+                if q == a:
+                    return i.a[1].v if i.op == "mem.store" else f"%t{i.r[0]}"
+                if i.op == "mem.store" and heap and not p.startswith("@") and "." not in p and not self.disjoint(vs, a, q):
+                    return ""
+                continue
             if i.op == "tuple.load" or i.op == "tuple.store":
                 p = f"%t{i.r[0]}"
                 q = self.addr(vs, p)

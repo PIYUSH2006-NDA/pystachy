@@ -125,15 +125,15 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             self.nonevars[f.params[i]] = 0
             continue
         self.fn.ps.append(i)
-        self.emit(f"store {lt(t)} %a{i}, ptr {self.alloca(t, f.params[i])}")
+        self.mem_store(Val(self.alloca(t, f.params[i]), "*" + t), Val(f"%a{i}", t))
         if f.params[i] in self.lflag:
-            self.emit(f"store i1 true, ptr {self.lflag[f.params[i]]}")  # (a parameter that del unbinds)
+            self.mem_store(Val(self.lflag[f.params[i]], "*bool"), Val("true", "bool"))  # (a parameter that del unbinds)
     if f.clo >= 0:
         # a closure: the variables it takes are the cells its env holds
         c = self.closures[f.clo]
         for cv in c.nlw:
             self.nlw[cv] = True
-        env = self.ins(f"load ptr, ptr {self.lreg['.env']}")
+        env = self.mem_load(Val(self.lreg['.env'], "*env")).v
         for i in range(len(c.caps)):
             if c.ctypes[i] == "None":
                 self.nonevars[c.caps[i]] = 0  # (a parameter whose argument is None: it reads as None)
@@ -151,11 +151,11 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
         self.global_var(done, "i1")
         l1 = self.label()
         l2 = self.label()
-        self.cbr(self.ins(f"load i1, ptr {done}"), l1, l2)
+        self.cbr(self.mem_load(Val(done, "*bool")).v, l1, l2)
         self.place(l1)
         self.ret_(Val("null", "None"))
         self.place(l2)
-        self.emit(f"store i1 true, ptr {done}")
+        self.mem_store(Val(done, "*bool"), Val("true", "bool"))
         # A retry after a failed initialization creates a fresh module in CPython. Its import
         # aliases start unbound too, even if the failed attempt had reached their imports.
         flags: dict[str, bool] = {}
@@ -168,7 +168,7 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             elif n.kind != "def" and n.kind != "lambda":
                 pending.extend(n.kids)
         for imported_name in flags:
-            self.emit(f"store i1 false, ptr {self.imp_flag(imported_name, True)}")
+            self.mem_store(Val(self.imp_flag(imported_name, True), "*bool"), Val("false", "bool"))
     hm = ""
     mark = Val("", "")
     slot = ""
@@ -206,7 +206,7 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             self.ret_(Val("null", "None"))
         self.handler = ""
         e = self.landing(hm, slot, mark)
-        self.emit(f"store i1 false, ptr {f.ll}.done")
+        self.mem_store(Val(f"{f.ll}.done", "*bool"), Val("false", "bool"))
         self.throw(e)
     if not self.term:
         if f.ret == "None" or (f.infer and f.ret in self.classes) or is_opt(f.ret):
