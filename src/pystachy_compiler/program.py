@@ -677,7 +677,9 @@ def gen_program(self, mods: list[Mod]) -> str:
         tops.append(top)
     for ci in self.classes.values():
         self.inherit(ci)
-    for ci in self.classes.values():
+    for ci in [x for x in self.classes.values()]:
+        # (a dataclass's field annotated C[X] makes that specialization of generic class C here,
+        # which specialize declares itself)
         self.selfcls = ci.name
         self.declare_fields(ci)
         self.selfcls = ""
