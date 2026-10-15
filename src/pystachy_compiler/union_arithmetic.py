@@ -46,9 +46,9 @@ def gen_unumeric_case(self, op: str, a: Val, b: Val, shown: str, unary: bool) ->
         elif member == "None":
             self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), hit, miss)
         else:
-            self.cbr(self.utest(v.v, [member], False), hit, miss)
+            self.cbr(self.utest(v, [member], False), hit, miss)
         self.place(hit)
-        value = Val("null", "None") if member == "None" else self.uget(v.v, member) if is_union(unopt(v.t)) else self.deref(v)
+        value = Val("null", "None") if member == "None" else self.uget(Val(v.v, unopt(v.t)), member) if is_union(unopt(v.t)) else self.deref(v)
         result = self.unumeric_case(op, value if left or unary else a, b if left or unary else value, shown, unary)
         if not self.term:
             results.append(result)

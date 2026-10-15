@@ -2256,10 +2256,10 @@ class Gen:
     def ubox(self, v: Val, m: str) -> str:
         return unions_ubox(self, v, m)
 
-    def uget(self, u: str, m: str) -> Val:
+    def uget(self, u: Val, m: str) -> Val:
         return unions_uget(self, u, m)
 
-    def utest(self, u: str, ms: list[str], may_none: bool) -> str:
+    def utest(self, u: Val, ms: list[str], may_none: bool) -> str:
         return unions_utest(self, u, ms, may_none)
 
     def to_union(self, v: Val, t: str, what: str) -> Val:

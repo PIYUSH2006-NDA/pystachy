@@ -55,7 +55,7 @@ def gen_uop(self, v: Val, op: str) -> Val:
             arm = self.label()
             self.cbr(self.ins(f"icmp eq i64 {tag}, {self.utag(members[i])}"), arm, nxt)
             self.place(arm)
-        item = self.uget(v.v, members[i])
+        item = self.uget(Val(v.v, unopt(v.t)), members[i])
         result = Val(self.truth(item), "bool") if op == "truth" else self.to_str(item)
         self.incoming(ph, result.v, self.cur)
         self.br(end)
@@ -136,11 +136,14 @@ def gen_ubox(self, v: Val, m: str) -> str:
         return b
     return self.ins(f"select i1 {self.ins(f'icmp eq ptr {v.v}, null')}, ptr null, ptr {b}")
 
-def gen_uget(self, u: str, m: str) -> Val:
+def gen_uget(self, u: Val, m: str) -> Val:
     # the value a union's box u holds, known to be of member type m
-    return self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {u}, i64 1')}"), m)
+    i = Ins("union.payload", "%slot", m)
+    i.a = [u]
+    self.put(i, 2)
+    return self.from_slot(f"%t{i.r[1]}", m)
 
-def gen_utest(self, u: str, ms: list[str], may_none: bool) -> str:
+def gen_utest(self, u: Val, ms: list[str], may_none: bool) -> str:
     # i1: does the union's box u (null where it is None, if may_none) hold a value of one of types ms
     if len(ms) == 0:
         return "false"
@@ -148,9 +151,12 @@ def gen_utest(self, u: str, ms: list[str], may_none: bool) -> str:
     lload = self.label() if may_none else ""
     lend = self.label() if may_none else ""
     if may_none:
-        self.cbr(self.ins(f"icmp eq ptr {u}, null"), lend, lload)
+        self.cbr(self.ins(f"icmp eq ptr {u.v}, null"), lend, lload)
         self.place(lload)
-    tag = self.ins(f"load i64, ptr {u}")
+    i = Ins("union.tag", "int", "")
+    i.a = [Val(u.v, unopt(u.t))]  # (the existing guard, or narrowing, excludes None)
+    self.put(i, 1)
+    tag = f"%t{i.r[0]}"
     r = ""
     for m in ms:
         x = self.ins(f"icmp eq i64 {tag}, {self.utag(m)}")
@@ -207,14 +213,14 @@ def gen_narrow_val(self, v: Val, nt: str) -> Val:
         return Val(v.v, nt)  # (the same box)
     m = unopt(nt)
     if m not in self.classes and not is_opt(nt):
-        return self.uget(v.v, m)
+        return self.uget(Val(v.v, unopt(v.t)), m)
     # a class's object, or a value that may be None: null stays None
     l0 = self.cur
     lget = self.label()
     lend = self.label()
     self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), lend, lget)
     self.place(lget)
-    x = self.coerce(self.uget(v.v, m), nt)
+    x = self.coerce(self.uget(Val(v.v, unopt(v.t)), m), nt)
     l1 = self.cur
     self.br(lend)
     self.place(lend)
@@ -258,17 +264,17 @@ def gen_uisinst(self, v: Val, c: Node) -> str:
         if k == 1 or k == -2:
             ms.append(m)
     may_none = (is_opt(v.t) or self.optional(unopt(v.t)) == unopt(v.t)) and v.v not in self.nn
-    r = self.utest(v.v, ms, may_none)
+    r = self.utest(v, ms, may_none)
     if may_none and self.isinst("None", c) == 1:
         r = self.ins(f"or i1 {r}, {self.ins(f'icmp eq ptr {v.v}, null')}")
     for m in dynamic:
         hit = self.label()
         end = self.label()
-        test = self.utest(v.v, [m], may_none)
+        test = self.utest(v, [m], may_none)
         before = self.cur
         self.cbr(test, hit, end)
         self.place(hit)
-        match = self.obj_isinst(self.uget(v.v, m), c)
+        match = self.obj_isinst(self.uget(Val(v.v, unopt(v.t)), m), c)
         result = self.ins(f"or i1 {r}, {match.v}")
         after = self.cur
         self.br(end)
@@ -311,7 +317,7 @@ def gen_umethod(self, o: Val, m: str, args: list[Node]) -> Val:
             self.br(hit)
         self.place(hit)
         self.narrowed = dict(narrow)
-        result = self.method(self.uget(o.v, members[i]), m, bound)
+        result = self.method(self.uget(Val(o.v, unopt(o.t)), members[i]), m, bound)
         if len(results) > 0 and result.t != results[0].t:
             self.err("reference union methods must have identical return types")
         if not self.term:

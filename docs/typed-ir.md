@@ -123,6 +123,7 @@ The exact operation table is `IROPS`; its current groups are:
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
+| Closed union reads | `union.tag`, `union.payload` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -142,6 +143,16 @@ LLVM text in the shared container/optional/union conversion helpers, preserving 
 existing representation and allocation behavior. The verifier checks their operand,
 result and metadata contracts; it does not prove that a payload was read with its original
 type. Container typing and union narrowing still establish that frontend contract.
+
+`union.tag` reads a nonoptional closed union's integer tag. `union.payload` records the
+declared member type and reads its opaque `%slot`; `slot.unpack` then recovers the native
+value. The existing frontend guards still prove that the box is non-null and holds that
+member. The verifier checks operation shape and declared membership, not guard dominance.
+These operations preserve the previous LLVM loads and conservative `rL rD rO` effects.
+Canonicalization retains the equivalence of repeated reads of the same immutable union
+payload, so narrowing a dictionary key still permits the existing lookup fusion. This
+extends the representation of existing scalar unions, without adding language support
+or runtime specialization.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per
