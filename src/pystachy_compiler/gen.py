@@ -1242,8 +1242,8 @@ class Gen:
     def declare(self, name: str, t: str) -> None:
         return variables_declare(self, name, t)
 
-    def store_name(self, name: str, v: Val) -> None:
-        return variables_store_name(self, name, v)
+    def store_name(self, name: str, v: Val, retype: bool = False) -> None:
+        return variables_store_name(self, name, v, retype)
 
     def assigned_to(self, v: Val, t: str, name: str) -> str:
         return variables_assigned_to(self, v, t, name)
