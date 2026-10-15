@@ -132,9 +132,12 @@ def gen_to_union(self, v: Val, t: str, what: str) -> Val:
 
 def gen_narrow_val(self, v: Val, nt: str) -> Val:
     # v, a local's value of its own type, as of the type nt a test or an assignment narrowed it
-    # to (see narrows): an optional's value, a union's member, or a union of fewer members
+    # to (see narrows): an optional's value, a union's member, a union of fewer members,
+    # or an ordinary class pointer whose runtime class test proved a derived layout
     if nt == v.t:
         return v
+    if v.t in self.classes and nt in self.classes and self.derives(nt, v.t):
+        return Val(v.v, nt)
     if not is_union(unopt(v.t)):
         return self.deref(v)  # (an optional known not to be None)
     if nt == "None":

@@ -448,7 +448,7 @@ def gen_alloca(self, t: str, name: str) -> str:
         # a variable a closure takes: its cell, which the function allocated as it began
         self.ltype[name] = t
         self.lreg[name] = self.cells[name]
-        self.anyopt = self.anyopt or is_opt(t) or is_union(t)
+        self.anyopt = self.anyopt or is_opt(t) or is_union(t) or t in self.classes
         if name in self.uflags:
             self.n += 1
             self.lflag[name] = f"%{name}.def.{self.n}"
@@ -459,7 +459,7 @@ def gen_alloca(self, t: str, name: str) -> str:
         return self.cells[name]
     self.n += 1
     r = f"%{name or 'h'}.{self.n}"
-    self.anyopt = self.anyopt or is_opt(t) or is_union(t)
+    self.anyopt = self.anyopt or is_opt(t) or is_union(t) or t in self.classes
     i = Ins("slot", t, name)
     i.r = [self.n]
     self.fn.slots.append(i)

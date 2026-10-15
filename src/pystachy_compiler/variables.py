@@ -109,7 +109,7 @@ def gen_load_name(self, name: str) -> Val:
         r = self.ins(f"load {lt(t)}, ptr {self.lreg[name]}")
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
-        if name in self.narrowed and (is_opt(t) or is_union(t)) and t != NONEVAR:
+        if name in self.narrowed and (is_opt(t) or is_union(t) or t in self.classes) and t != NONEVAR:
             return self.narrow_val(Val(r, t), self.narrowed[name])  # known not to be None here, or a member
         return Val(r, t)
     self.read_ahead(name)
@@ -1310,6 +1310,8 @@ def gen_target_type(self, n: Node, base: bool = False) -> str:
     # chain of attributes and subscripts on one (g.groups["a"], d["x"]["y"]), whose base
     # name is only read, so in a function it can be a module-level variable
     if n.kind == "name":
+        if base and n.s in self.narrowed and self.narrowable(n.s):
+            return self.narrowed[n.s]
         if base and n.s not in self.ltype and (n.s not in self.assigned or n.s in self.gdecl):
             return self.gtypes.get(n.s, "")
         return self.ltype.get(n.s, self.gtypes.get(n.s, "") if self.is_global(n.s) else "")
