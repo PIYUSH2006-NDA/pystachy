@@ -15,6 +15,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B]`, runtime-length `tuple[T, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
 | Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
+| Mixed container unions | Scalar members plus explicit `list[T]` / `dict[K, V]` members, with narrowing |
 | Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |

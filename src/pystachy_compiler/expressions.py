@@ -530,6 +530,12 @@ def gen_expr(self, n: Node, want: str) -> Val:
         self.ltype[n.s] = t0 if t0 != "" else want
     if is_opt(want) and k != "ifexp" and k != "boolop":
         want = unopt(want)  # (what types an empty display is the type a value would hold)
+    if is_union(want) and (k == "list" or k == "listcomp" or k == "dict"):
+        # A fresh display can use its one declared container member's element
+        # storage. Existing mutable containers are never widened or copied.
+        candidates = [m for m in umembers(want) if is_dict(m)] if k == "dict" else [m for m in umembers(want) if is_list(m)]
+        if len(candidates) == 1:
+            want = candidates[0]
     if k == "name":
         if "?" not in want and same_kind(want, self.ltype.get(n.s, "")) and self.unfilled(n.s):
             self.refine(n.s, want)  # an empty container that nothing fills takes the type expected here

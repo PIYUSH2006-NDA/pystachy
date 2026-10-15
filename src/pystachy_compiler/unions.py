@@ -1,9 +1,9 @@
-"""Explicit closed scalar and native reference unions."""
+"""Explicit closed scalar, container and native reference unions."""
 from __future__ import annotations
 from src.pystachy_compiler.ir import Ins, Val
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.specs import NONEVAR, OPTTYPES
-from src.pystachy_compiler.utils import is_opt, is_sopt, is_union, typestr, umembers, unopt
+from src.pystachy_compiler.utils import is_dict, is_list, is_opt, is_sopt, is_union, typestr, umembers, unopt
 
 def gen_uboxes(self, a: str, b: str) -> bool:
     # is a value of type a one of union type b (or b | None) once boxed: a member's (one that
@@ -66,7 +66,9 @@ def gen_umember_problem(self, t: str) -> str:
         return ""
     if t == "file" or (t in self.classes and self.classes[t].exc == ""):
         return ""
-    return f"{typestr(t)} in a closed union is not supported (use int, float, bool or str, or native class/file references)"
+    if is_list(t) or is_dict(t):
+        return ""
+    return f"{typestr(t)} in a closed union is not supported (use scalar, list/dict or native class/file types)"
 
 def gen_union_type(self, ts: list[str]) -> str:
     # the type of a value of one of types ts (None among them: T | None): the type, for one, else
@@ -94,7 +96,7 @@ def gen_union_type(self, ts: list[str]) -> str:
     refs = [m for m in ms if m == "file" or m in self.classes]
     if len(refs) > 0:
         if len(refs) != len(ms):
-            return "!reference unions cannot mix native references with scalar members"
+            return "!reference unions cannot mix native references with scalar or container members"
         if len(ms) > 4:
             return "!reference unions support at most four members"
         for a in refs:
@@ -266,7 +268,7 @@ def gen_umethod(self, o: Val, m: str, args: list[Node]) -> Val:
     # Resolve the receiver before evaluating arguments. Each expression is then
     # evaluated once; only the selected native member performs its call/defaults.
     if not self.reference_union(o.t):
-        self.err("closed scalar union method calls require narrowing with isinstance() first")
+        self.err("closed union method calls require narrowing with isinstance() first")
     members = umembers(unopt(o.t))
     for member in members:
         if member in self.classes and m not in self.classes[member].methods:
