@@ -872,6 +872,8 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None) -> Val:
     if not self.iterator_call(n):
         return self.expr(n, want)
     if n.kids[0].s == "range":
+        # The runtime backing is pointer-free: keep list[int] regardless of want.
+        # Optional/union item storage needs a fresh scanned allocation, never retyping.
         vs = self.range_args(n.kids[1:])
         r = Val(self.rt("pys_range_list", "ptr", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "list[int]")
         self.iterarg(arg)

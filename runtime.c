@@ -1744,6 +1744,8 @@ List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once 
   uint64_t n = (uint64_t)pys_range_len(a, b, s);
   if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
   if (n > INT64_MAX >> 4) pys_fail("MemoryError");
+  /* Compiler contract: this result stays list[int]. Reboxing to optional/union
+     items requires a fresh scanned array; it must never retype this backing in place. */
   List *l = list_new((I)n, 1);   /* range items are always unboxed ints; the header still holds a pointer */
   for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
   l->len = (I)n; return l;
