@@ -198,19 +198,28 @@ def gen_want_params(self, c: str, want: str) -> list[str]:
     return out
 
 def gen_generic_hint(self, e: Node, t: str) -> str:
-    # Infer a nonempty argument's own type before using the class context. Empty
-    # displays, or heterogeneous displays with an explicit union, need its hint.
+    # Infer a nonempty argument's own type before using the class context. A
+    # display's first non-None item types the later ones, including empty displays.
+    # Only an empty first item (or explicit heterogeneous union) needs the hint.
     pending = [e]
     while len(pending) > 0:
         n = pending.pop()
         if n.kind in ["list", "dict"] and nones(n):
             return t
-        if "union[" in t and n.kind in ["list", "dict", "set"]:
+        if n.kind in ["list", "dict", "set"]:
             parts = [n.kids[j] for j in range(1, len(n.kids), 2)] if n.kind == "dict" else n.kids
-            kinds = [self.probe_type(x) or x.kind for x in parts]
-            if len(kinds) > 1 and any([kind != kinds[0] for kind in kinds]):
-                return t
-        pending.extend(n.kids)
+            if "union[" in t:
+                kinds = [self.probe_type(x) or x.kind for x in parts]
+                if len(kinds) > 1 and any([kind != kinds[0] for kind in kinds]):
+                    return t
+            if n.kind == "dict":
+                pending.extend(n.kids[:1])  # (the first key also fixes its type)
+            for x in parts:
+                if x.kind != "None":
+                    pending.append(x)
+                    break
+        else:
+            pending.extend(n.kids)
     return ""
 
 def gen_generic_ann(self, c: str, a: Node) -> str:

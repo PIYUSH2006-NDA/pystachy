@@ -118,3 +118,11 @@ def module_value(p: ModuleBox[int]) -> int:
 
 
 print(alias_value(Pair("a", 2)), module_value(ModuleBox(3)))
+
+# Once a display has an item type, its later empty members use that inferred type.
+nested = [[1], []]
+print(Box[list[float]]([[1], []]), Box[list[float]](nested))
+print(Box[list[int]]([[], [1]]), Box[list[int]]([[], []]))
+mapping = [{"a": [1], "b": []}]
+print(Box[dict[str, list[float]]]([{"a": [1], "b": []}]), Box[dict[str, list[float]]](mapping))
+print(Box[dict[str, list[int]]]([{"a": [], "b": [1]}]))
