@@ -62,7 +62,8 @@ Comparisons with `None` are supported where the static types permit them.
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
 `filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`, `all`,
-`math.fsum`, `math.prod`, `str.join` and `list.extend`.
+`math.fsum`, `math.prod`, `str.join` and `list.extend`, and those that give key/value pairs of
+`dict`.
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.
