@@ -1,0 +1,12 @@
+float:3.5 ['left', 'right']
+unsupported operand type(s) for +: 'NoneType' and 'int' ['left', 'right']
+right ['left', 'right']
+left ['left']
+float:12.5 float:2.5
+float:3.5
+int:105 float:100.5
+unsupported operand type(s) for +: 'int' and 'NoneType'
+unsupported operand type(s) for +: 'float' and 'NoneType'
+unsupported operand type(s) for +: 'int' and 'NoneType'
+bad operand type for unary -: 'NoneType'
+[exit 0]

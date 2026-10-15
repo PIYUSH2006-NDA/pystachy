@@ -192,6 +192,27 @@ class TypedIRTests(unittest.TestCase):
         self.assertNotEqual(guard.b[0], block.label)
         self.assertIn("icmp eq ptr %a0, null", g.fn.blocks[0].code[-2].s)
 
+    def test_merged_union_operations_keep_typed_payload_operands(self):
+        root = Path(__file__).resolve().parent.parent / "tests"
+        lower = Gen.lower
+        for name in ("mixed_union_format.py", "scalar_union_arithmetic.py",
+                     "reference_union_calls.py", "reference_union_inheritance.py"):
+            captured = []
+
+            def capture(g, fn, captured=captured):
+                g.verify(fn, False)
+                captured.extend(i for b in fn.blocks for i in b.code
+                                if i.op == "union.payload")
+                lower(g, fn)
+
+            with self.subTest(source=name), patch.object(Gen, "lower", capture):
+                Gen().program(Loader([]).program(name, (root / name).read_text()))
+                self.assertTrue(captured)
+                for i in captured:
+                    self.assertIsInstance(i.a[0], Val)
+                    self.assertTrue(i.a[0].t.startswith("union["))
+                    self.assertIn(i.s, umembers(i.a[0].t))
+
     def test_source_builds_declared_union_reads(self):
         source = (Path(__file__).resolve().parent.parent / "tests" /
                   "scalar_union_optional_narrowing.py").read_text()

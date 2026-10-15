@@ -1,0 +1,38 @@
+False True None None None None None
+no
+False True 0 0 0 0 0
+no
+True False 7 7 7 7 7
+yes
+False True  ''  '' 
+no
+True False a'
+"\é 'a\'\n"\\é' a'
+"\é 'a\'\n"\\é' a'
+"\é
+yes
+True False [1, 2] [1, 2] [1, 2] [1, 2] [1, 2]
+yes
+True False ['one', 'two'] ['one', 'two'] ['one', 'two'] ['one', 'two'] ['one', 'two']
+yes
+True False {'first': 3} {'first': 3} {'first': 3} {'first': 3} {'first': 3}
+yes
+True False {4: 'four'} {4: 'four'} {4: 'four'} {4: 'four'} {4: 'four'}
+yes
+False True [] [] [] [] []
+no
+False True [] [] [] [] []
+no
+False True {} {} {} {} {}
+no
+False True {} {} {} {} {}
+no
+[None, 0, 7, '', 'a\'\n"\\é', [], [], {}, {}] {'saved': []} ([], [])
+True False
+False []
+True [1, 'x', None] [1, 'x', None] [1, 'x', None]
+True {'count': 2, 'names': ['A', 'B'], 'missing': None} {'count': 2, 'names': ['A', 'B'], 'missing': None} {'count': 2, 'names': ['A', 'B'], 'missing': None}
+False None None None
+True ['kept-0', 'kept-1', 'kept-2'] ['kept-0', 'kept-1', 'kept-2']
+True ['kept-0', 'kept-1', 'kept-2', 'changed']
+[exit 0]

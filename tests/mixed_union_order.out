@@ -1,0 +1,5 @@
+IndexError
+KeyError
+3
+['list', 'index', 'dict', 'number']
+[exit 0]

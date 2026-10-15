@@ -1,0 +1,11 @@
+kind request
+args [agent,3,true,null,1.5]
+options {retries:2,enabled:false,token:null}
+id 17
+error null
+True
+[agent,3,true,null,1.5,changed]
+[literal,2,null] {literal:true,count:2}
+[] {} [0,1,2]
+['retained0', 'retained1', 'retained2', 'retained3']
+[exit 0]
