@@ -1,5 +1,6 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+import os
 from src.pystachy_compiler.union_arithmetic import (
     gen_unumeric as union_arithmetic_unumeric,
     gen_unumeric_case as union_arithmetic_unumeric_case,
@@ -694,6 +695,7 @@ class Gen:
         self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
         self.csymline: dict[str, int] = {}  # and the line that declared it
         self.extvars: dict[str, int] = {}  # pystachy ext: the main module's variables, and the line that binds each
+        self.unicode_audit = os.getenv("PYSTACHY_UNICODE_AUDIT", "") == "1"
         self.rtmode = False  # compiling runtime.py: its pys_* functions join runtime.c's under their C names (see runtime_ir)
         self.rtdefs: dict[str, FnInfo] = {}  # runtime mode: the pys_* functions this module defines, by C name
         self.rtcache = False  # runtime mode, for the driver's runtime cache: PYSTACHY_IRFX is the program's

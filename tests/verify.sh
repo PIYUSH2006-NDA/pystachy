@@ -62,6 +62,8 @@
 #   jit-dead-code  tools/jitprobe.py: unused functions never reach lli, and a small helper reaches it
 #                  inlined (not with PYSTACHY_JIT_INLINE=0); live code and runtime callbacks still
 #                  execute as in CPython, with both compilers
+#   unicode-audit  tools/unicode_audit.py: optional byte-boundary checks in JIT/AOT, cache
+#                  reuse, ASCII/Unicode controls and GC-stress exception paths, both compilers
 #   scaling        tools/scaling.py --check: both compilers compile its generated programs (500 and 1000
 #                  functions, globals, classes, modules, chained imports, breaks, elifs, ...), and the
 #                  lines the CPython-hosted compiler executes, and the items its builtin calls copy or
@@ -77,13 +79,13 @@ ROOT=$(pwd)
 # --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
 plan() {
   case $1 in
-    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-stress benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
+    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-stress benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit scaling' ;;
     hosted) echo 'bootstrap tests-cpython' ;;
     native) echo 'bootstrap tests-native tests-opt-off' ;;
     python-free) echo 'bootstrap python-free' ;;
     ubsan) echo 'bootstrap ubsan' ;;
     gc-stress) echo 'bootstrap gc-stress' ;;
-    contracts) echo 'bootstrap runtime-cache check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code' ;;
+    contracts) echo 'bootstrap runtime-cache check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit' ;;
     benchmarks) echo 'bootstrap benchmarks scaling' ;;
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
@@ -114,7 +116,7 @@ export PYSTACHY_HOME="$ROOT"
 # The steps set the knobs they test themselves: one left in the caller's environment would weaken a
 # step (PYSTACHY_GC=off: gc-stress collects nothing) or fail it falsely (PYSTACHY_OPT=-all), so they
 # are dropped, and the report lists them (PYSTACHY_LLVM and PYSTACHY_JOBS are kept)
-ign=$(env | sed -nE 's/^(PYSTACHY_(PATH|CFLAGS|GC|GC_STRESS|GC_STRESS_PROGRAM|IRCHECK|IRFX|OPT|JIT_INLINE|ARGV0))=.*$/\1/p' | sort -u)
+ign=$(env | sed -nE 's/^(PYSTACHY_(PATH|CFLAGS|GC|GC_STRESS|GC_STRESS_PROGRAM|IRCHECK|IRFX|OPT|JIT_INLINE|UNICODE_AUDIT|ARGV0))=.*$/\1/p' | sort -u)
 for e in $ign; do echo "verify: ignoring $e=$(printenv "$e")"; unset "$e"; done
 LLVM=${PYSTACHY_LLVM:+${PYSTACHY_LLVM%/}/}
 
@@ -451,6 +453,13 @@ if want jit-dead-code; then
 L=$V/jit-dead-code.log; s=$(now); r=fail
 $PY tools/jitprobe.py -c "hosted=$PY -m pystachy" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
 step jit-dead-code $r "$s" "$L" ', "unused_functions": 35, "compilers": ["CPython-hosted", "stage2"]'
+fi
+
+# ---- Unicode audit: opt-in checks persist in AOT and do not affect runtime-cache semantics
+if want unicode-audit; then
+L=$V/unicode-audit.log; s=$(now); r=fail
+$PY tools/unicode_audit.py -c "hosted=$PY -m pystachy" -c "native=$V/pystachy2" > "$L" 2>&1 && r=pass
+step unicode-audit $r "$s" "$L" ', "compilers": ["CPython-hosted", "stage2"]'
 fi
 
 # ---- scaling: compile time grows linearly with generated programs (counts need Python 3.12+)
