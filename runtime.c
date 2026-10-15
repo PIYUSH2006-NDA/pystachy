@@ -551,6 +551,7 @@ I pys_str_contains(Str *h, Str *n);
 I pys_str_startswith(Str *s, Str *p, I st, I en);
 I pys_str_endswith(Str *s, Str *p, I st, I en);
 Str *pys_str_replace(Str *s, Str *a, Str *b);
+Str *pys_str_replace_count(Str *s, Str *a, Str *b, I count);
 Str *pys_str_strip(Str *s, Str *cs);
 Str *pys_str_lstrip(Str *s, Str *cs);
 Str *pys_str_rstrip(Str *s, Str *cs);
@@ -1312,6 +1313,14 @@ I pys_vtuple_get(VTuple *t, I index) {
   if (!t) pys_fail("TypeError: 'NoneType' object is not subscriptable");
   return t->a[idx(index, t->len, "IndexError: tuple index out of range")];
 }
+static int eqitem(I a, I b, const char *d);
+I pys_vtuple_index(VTuple *t, I v, Str *d, I st, I en) {   /* tuple.index(v, start, stop), as tuple_index_impl */
+  if (st < 0 && (st += t->len) < 0) st = 0;
+  if (en < 0) en += t->len;
+  for (I j = st; j < en && j < t->len; j++) if (eqitem(t->a[j], v, d->s)) return j;
+  pys_fail("ValueError: tuple.index(x): x not in tuple");
+}
+I pys_vtuple_count(VTuple *t, I v, Str *d) { I c = 0; for (I i = 0; i < t->len; i++) c += eqitem(t->a[i], v, d->s); return c; }
 
 /* ---------- lists ---------- */
 static I empty_list[1];                /* valid even for zero-byte copies; distinct from sort's sentinel */
@@ -1887,7 +1896,7 @@ LOOKUP I pys_dict_get(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? 
 static void dset(Dict *d, I k, uint64_t h, I v) {   /* d[k] = v, k's hash h */
   I f = -1, i = dfind(d, k, h, &f);
   if (i >= 0) { d->vals[d->idx[i] - 1] = v; return; }
-  if (d->n >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
+  if (d->n >= d->size * 2 / 3 || d->hs[d->n]) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full (or the rest spent: popitem): insertion_resize */
   d->keys[d->n] = k; d->vals[d->n] = v; d->hs[d->n] = h; d->idx[f] = (int32_t)++d->n; d->len++;
 }
 LOOKUP void pys_dict_set(Dict *d, I k, I v) { dset(d, k, hsh(d, k), v); }
@@ -1900,6 +1909,27 @@ static I dpop(Dict *d, I k, I dflt, int has) {
 }
 I pys_dict_pop(Dict *d, I k) { return dpop(d, k, 0, 0); }
 I pys_dict_pop_default(Dict *d, I k, I dflt) { return dpop(d, k, dflt, 1); }
+/* d.popitem(), as CPython 3.13's dict_popitem: the last entry goes, with the holes after it, and
+   the next insertion takes its place (dk_nentries). CPython does not count those entries as free
+   again (dk_usable): the table is full as many insertions before as it was. Unused entries keep a
+   hash of 0, so popitem marks that many at the end of the hash array (where insertions get last),
+   and dset rebuilds the table at the first marked entry, as CPython would at that point */
+void **pys_dict_popitem(Dict *d) {
+  if (!d->len) pys_fail("KeyError: 'popitem(): dictionary is empty'");
+  I e = d->n - 1, lo = d->n, hi = d->size * 2 / 3;
+  while (!d->hs[e]) e--;
+  while (lo < hi) { I m = lo + (hi - lo) / 2; if (d->hs[m]) hi = m; else lo = m + 1; }   /* the first marked entry */
+  uint64_t h = d->hs[e];
+  for (uint64_t m = d->size * 2 - 1, i = h & m, p = h;; p >>= 5, i = (i * 5 + p + 1) & m) {   /* lookdict_index */
+    DICT_PROBE();
+    if (d->idx[i] == e + 1) { d->idx[i] = -1; break; }
+  }
+  I *t = pys_alloc(16); t[0] = d->keys[e]; t[1] = d->vals[e];
+  d->keys[e] = d->vals[e] = 0; d->hs[e] = 0;
+  for (I j = lo - (d->n - e); j < lo; j++) d->hs[j] = 1;
+  d->n = e; d->len--;
+  return (void **)t;
+}
 /* d.get(k) and d.pop(k, None) of int, float and bool values: the value's box, or dflt (None or a box) */
 LOOKUP I pys_dict_getbox(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : (I)pys_box(d->vals[e]); }
 LOOKUP I pys_dict_popbox(Dict *d, I k, I dflt) { return entry(d, k) < 0 ? dflt : (I)pys_box(dpop(d, k, 0, 0)); }
@@ -1940,10 +1970,10 @@ List *pys_dict_items(Dict *d) {
    sparse (8 slots, or more items than USABLE_FRACTION(size / 2)) and otherwise inserts the items
    into a table sized for them (estimate_log2_keysize); dict.copy() clones a table with at most a
    third of holes, and otherwise merges the same way */
-static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
+static void retable(Dict *r, Dict *d) {              /* r := d's table, holes (and popitem's marks) included */
   I u = d->size * 2 / 3;
   r->keys = keymem(r->kind, u); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
-  memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
+  memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, (d->n < u && d->hs[u - 1] ? u : d->n) * 8);
   memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
 }
 static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }

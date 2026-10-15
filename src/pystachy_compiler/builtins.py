@@ -37,6 +37,7 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
+    key_problem,
     kw_names,
     lt,
     nones as only_nones,
@@ -141,7 +142,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
         self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
-    if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
+    if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod" or name == "dict"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
     if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
         # format(v, spec): what the f-string field {v:spec} gives, v.__format__(spec)
@@ -267,6 +268,11 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     # range(), zip(), ... is made, before the function iterates it (as CPython calls it)
     kws = [a for a in args if a.kind == "kw" and (a.s == "key" or a.s == "reverse") and (name == "sorted" or name == "min" or name == "max")]
     kvals: list[Val] = []
+    if name == "dict" and npos == 1 and (self.iterator_call(args[0]) or args[0].kind == "listcomp" or args[0].kind == "list"):
+        # dict(zip(ks, vs)), dict(enumerate(xs)), dict((k, v) for ...), dict([(k, v), ...]): a new
+        # dict of the pairs (taken at once, as list() takes them)
+        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want else ""
+        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft))
     if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
         # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
@@ -501,6 +507,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "pow" and len(vals) == 3 and self.as_int(v).t == "int":
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
+    elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
+        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
     elif name == "dict" and is_dict(t):
         # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c)
         return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"]), t)
@@ -1041,6 +1049,12 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         return Val("null", "None")
     if is_dict(o.t) and m == "update":
         return self.update(o, args)
+    if (is_tuple(o.t) or is_vtuple(o.t)) and (m == "index" or m == "count"):
+        tm = self.tmethod(o, m, args)
+        if tm.t != "":
+            return tm
+    if o.t == "str" and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
+        args = args[:2] + [args[2].kids[0]]  # (count may be given by name, as of Python 3.13)
     for a in args:
         if a.kind == "kw":
             self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")
@@ -1067,6 +1081,9 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if is_list(o.t):
         base = "list"
         T = elem(o.t)
+    elif is_vtuple(o.t):
+        base = "vtuple"
+        T = targs(o.t)[0]
     elif is_dict(o.t):
         base = "dict"
         kv = targs(o.t)
@@ -1091,6 +1108,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and not optget:
         self.err(f"dict.get(key{', None' if len(args) == 2 else ''}) needs values that can be None ({OPTTYPES}), not {typestr(V)}: give another default")
     spec = METHODS[key]
+    if key == "str.replace" and len(args) == 3:
+        spec = "str:str,str,int"  # (replace(old, new, count): pys_str_replace_count)
     c = spec.find(":")
     av = [f"{lt(o.t)} {o.v}"]
     nones: list[str] = []  # optional str arguments: None raises (nmsg) once all are evaluated
@@ -1147,7 +1166,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     pending.extend(query.kids)
                 if not contextual:
                     want_arg = ""
-            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove"] and i == 0)
+            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
             self.stkkey = self.nokey
             if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
@@ -1185,7 +1204,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
             elif key == "dict.get" and i == 1 and self.optdefault(v, V) != V:
                 pt = self.optdefault(v, V)  # d.get(k, default) with a default that may be None: V | None
                 optget = True
-            if base == "list" and p == "*T" and self.isnum(v.t) and self.isnum(unopt(T)) and v.t != unopt(T) and (m == "index" or m == "count" or m == "remove"):
+            if (base == "list" or base == "vtuple") and p == "*T" and self.isnum(v.t) and self.isnum(unopt(T)) and v.t != unopt(T) and (m == "index" or m == "count" or m == "remove"):
                 numx = v
                 nk = self.numkey(v, unopt(T))
                 v = Val(nk[0], unopt(T))
@@ -1199,7 +1218,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 nones.append(v.v)
                 nmsg.append(self.none_arg(m, i + 1))
                 v = Val(v.v, pt)
-            elif (is_opt(v.t) or v.t == "None") and slot and p == "*T" and (unopt(v.t) == T or (v.t == "None" and T not in self.classes)) and base == "list" and m != "append" and m != "insert" and self.optional(T) != "" and not self.isnum(T):
+            elif (is_opt(v.t) or v.t == "None") and slot and p == "*T" and (unopt(v.t) == T or (v.t == "None" and T not in self.classes)) and (base == "list" or base == "vtuple") and m != "append" and m != "insert" and self.optional(T) != "" and not self.isnum(T):
                 pt = self.optional(T)  # xs.index(None): found where xs holds None, as == finds it
                 dt = pt
             v = self.coerce(v, pt, f"argument {i + 1} of {tname(o.t)}.{m}()" if is_opt(v.t) else "")
@@ -1210,8 +1229,6 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
             self.err(f"missing argument for {m}()")
         i += 1
     if i < len(args):
-        if base == "str" and m == "replace" and len(args) == 3:
-            self.err("str.replace() with a count is not supported (only replace(old, new) is)")
         self.err(f"too many arguments for {m}()")
     for j in range(len(nones)):
         self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
@@ -1222,7 +1239,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     rtype = self.subst(r[1:] if slot else r, T, K, V, o.t)
     if optget:
         rtype = self.optional(V)
-    fn = f"pys_{base}_{m}"
+    fn = "pys_str_replace_count" if key == "str.replace" and len(args) == 3 else f"pys_{base}_{m}"
     if first:
         fn = "pys_str_split_first"
         rtype = "str"
@@ -1230,7 +1247,12 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         fn = "pys_dict_getbox"  # (the value's box: an int | None)
     if numok != "true" and m == "remove":
         self.guard(self.scalar('xor', [Val(numok, 'bool'), Val('true', 'bool')]), "ValueError: list.remove(x): x not in list")
-    if numx.t != "" and m == "index":
+    if numx.t != "" and m == "index" and base == "vtuple":
+        if numok != "true":
+            # (an item can equal x only where x is a number of the items' type: CPython's
+            # ValueError is the same for every x)
+            self.guard(self.scalar('xor', [Val(numok, 'bool'), Val('true', 'bool')]), "ValueError: tuple.index(x): x not in tuple")
+    elif numx.t != "" and m == "index":
         fn = "pys_list_index_as"  # (its ValueError names x, not the item)
         av = av + ["i64 " + self.to_slot(Val(numok, "bool")), "i64 " + self.to_slot(numx), f"ptr {self.sconst(self.desc(numx.t, '=='))}"]
     if bk.t != "":
@@ -1276,5 +1298,98 @@ def gen_update(self, o: Val, args: list[Node]) -> Val:
     if kw.t != "":
         self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
     return Val("null", "None")
+
+def gen_dict_pairs(self, v: Val) -> Val:
+    # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
+    # PyDict_MergeFromSeq2 inserts them
+    et = elem(v.t) if is_list(v.t) else ""
+    if is_tuple(et) and len(targs(et)) != 2:
+        self.err(f"dictionary update sequence element #0 has length {len(targs(et))}; 2 is required (dict() of a {typestr(v.t)})")
+    if not is_tuple(et):
+        self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
+    kv = targs(et)
+    if key_problem(kv[0]) != "":
+        self.err(key_problem(kv[0]))
+    d = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"])
+    self.rt("pys_dict_update_pairs", "void", [f"ptr {d}", f"ptr {v.v}"])
+    return Val(d, self.ctype("dict", kv))
+
+def gen_tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
+    # t.index(x, start, stop) and t.count(x) of a tuple of fixed shape, as CPython's
+    # tuple_index_impl and tuple_count: each item in turn (of index()'s span, from start
+    # and stop as they clamp to the tuple) is compared as x in t compares it (titem_eq);
+    # index() stops at the first that is x or equals it. The arguments are evaluated first.
+    # Of a runtime-length tuple, Val("", "") once the arguments are checked: bmethod calls
+    # runtime.c's pys_vtuple_index or pys_vtuple_count, as it calls list's
+    for a in args:
+        if a.kind == "kw":
+            self.err(f"tuple.{m}() takes no keyword arguments")
+    if m == "count" and len(args) != 1:
+        self.err(f"tuple.count() takes exactly one argument ({len(args)} given)")
+    if m == "index" and (len(args) == 0 or len(args) > 3):
+        self.err(f"index expected at {'least 1 argument' if len(args) == 0 else 'most 3 arguments'}, got {len(args)}")
+    if is_vtuple(o.t):
+        return Val("", "")
+    x = self.expr(args[0], "", resultsoft=True)
+    if "?" in x.t:
+        self.err(f"cannot infer the type of the argument of tuple.{m}(): give it a type")
+    bounds: list[Val] = []
+    for j in range(1, len(args)):
+        bounds.append(self.coerce(self.as_int(self.expr(args[j], "int")), "int", f"argument {j + 1} of tuple.index()"))
+    n = len(targs(o.t))
+    if m == "count":
+        ctr = self.alloca("int", "")
+        self.mstore('int', '0', ctr)
+        for i in range(n):
+            hit = self.label()
+            if self.titem_eq(self.tget(o, i), x, hit, None, ""):
+                nx = self.label()
+                self.br(nx)
+                self.place(hit)
+                self.mstore('int', self.scalar('add', [Val(self.mload('int', ctr), 'int'), Val('1', 'int')]), ctr)
+                self.br(nx)
+                self.place(nx)
+        return Val(self.mload('int', ctr), "int")
+    # start and stop: constants are clamped here, others where the method runs (st <= i < en)
+    st = Val("0", "int")
+    en = Val(str(n), "int")
+    if len(bounds) > 0:
+        st = bounds[0]
+        if st.v.lstrip("-").isdigit():
+            st = Val(str(max(int(st.v) + n, 0) if int(st.v) < 0 else int(st.v)), "int")
+        else:
+            neg = self.num_cmp('<', st, Val('0', "int")).v
+            sum_ = Val(self.scalar('add', [st, Val(str(n), 'int')]), "int")
+            low = Val(self.select(self.num_cmp('<', sum_, Val('0', "int")).v, Val("0", "int"), sum_), "int")
+            st = Val(self.select(neg, low, st), "int")
+    if len(bounds) > 1:
+        en = bounds[1]
+        if en.v.lstrip("-").isdigit():
+            en = Val(str(int(en.v) + n if int(en.v) < 0 else int(en.v)), "int")
+        else:
+            neg = self.num_cmp('<', en, Val('0', "int")).v
+            en = Val(self.select(neg, Val(self.scalar('add', [en, Val(str(n), 'int')]), "int"), en), "int")
+    lend = self.label()
+    ph = Ins("phi", "int", "")
+    known = st.v.lstrip("-").isdigit() and en.v.lstrip("-").isdigit()
+    for i in range(n):
+        if known and not int(st.v) <= i < int(en.v):
+            continue
+        skip = ""
+        if not known:
+            inr = self.scalar('and', [self.num_cmp('<=', st, Val(str(i), "int")), self.num_cmp('<', Val(str(i), "int"), en)])
+            test = self.label()
+            skip = self.label()
+            self.cbr(inr, test, skip)
+            self.place(test)
+        self.titem_eq(self.tget(o, i), x, lend, ph, str(i))
+        if skip != "":
+            self.br(skip)
+            self.place(skip)
+    self.raise_("ValueError", self.sconst("tuple.index(x): x not in tuple"))
+    self.place(lend)
+    if len(ph.a) == 0:
+        return Val("0", "int")  # (not reached: no item can equal x)
+    return Val(self.phi(ph), "int")
 
 # ---- sets: runtime.c's, which make them as CPython's setobject.c does

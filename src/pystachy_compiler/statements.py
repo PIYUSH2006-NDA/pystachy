@@ -974,6 +974,16 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
         else:
             self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"])
         return cur
+    if is_dict(unopt(cur.t)) and op == "|":
+        # d |= x: d.update(x) (dict_ior), of a dict of d's type or a list of key/value pairs
+        if is_opt(cur.t):
+            # (None |= x: CPython's TypeError, once x is evaluated; x None is update()'s)
+            b = self.expr(rhs, self.ctype("list", [self.ctype("tuple", targs(unopt(cur.t)))]) if rhs.kind == "list" or rhs.kind == "listcomp" else unopt(cur.t))
+            self.none_operands(op, cur, b, "|=", False)
+            cur = Val(cur.v, unopt(cur.t))
+            rhs = self.vnode(b)
+        self.update(cur, [rhs])
+        return cur
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:
         b = self.expr(rhs, "")
@@ -999,9 +1009,10 @@ def gen_none_operand(self, op: str, a: Val, b: Val) -> None:
     self.raise_("TypeError", self.select(self.isnull(b), Val(m1, "str"), Val(m2, "str")))
     self.place(lok)
 
-def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
+def gen_none_operands(self, op: str, a: Val, b: Val, shown: str, right: bool = True) -> None:
     # a op b with an optional operand that is None: CPython's TypeError, which names the other
-    # operand's run-time type, or for str + None and list + None its own message
+    # operand's run-time type, or for str + None and list + None its own message (not right:
+    # only a is tested, as b None is what the operation itself raises for)
     sh = shown if shown != "" else "** or pow()" if op == "**" else op
     x = unopt(a.t)
     y = unopt(b.t)
@@ -1016,7 +1027,7 @@ def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
         self.place(lerr)
         self.raise_("TypeError", self.select(self.ptr_cmp('==', b, Val('null', 'None')).v, Val(m1, "str"), Val(m2, "str")) if is_opt(b.t) else m2)
         self.place(lok)
-    if is_opt(b.t):
+    if is_opt(b.t) and right:
         msg = f"unsupported operand type(s) for {sh}: '{tname(x)}' and 'NoneType'"
         if op == "+" and x == y and (x == "str" or is_list(x)):
             msg = "'NoneType' object is not iterable" if sh == "+=" and is_list(x) else f'can only concatenate {tname(x)} (not "NoneType") to {tname(x)}'

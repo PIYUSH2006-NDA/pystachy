@@ -405,13 +405,14 @@ METHODS: dict[str, str] = {
     "list.copy": "S:", "list.clear": "None:",
     "dict.get": "*V:*K,*V=0", "dict.pop": "*V:*K", "dict.setdefault": "*V:*K,*V", "dict.keys": "list[K]:",
     "dict.values": "list[V]:", "dict.items": "list[tuple[K,V]]:", "dict.clear": "None:", "dict.copy": "S:",
+    "dict.popitem": "tuple[K,V]:", "vtuple.index": "int:*T,#,int=0,int=9223372036854775807", "vtuple.count": "int:*T,#",
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
 # Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
 # These are conservative: even a byte-correct delimiter search is a porting audit hit.
-UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace "
+UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace replace_count "
                             "upper lower swapcase capitalize title casefold isdigit isalpha isalnum "
                             "isupper islower istitle isdecimal isnumeric expandtabs").split()
 
@@ -498,6 +499,7 @@ RUNTIME: dict[str, str] = {
     # homogeneous runtime-length tuples (immutable copied slots)
     "vtuple.new": "%ptr:list[T]|R A rL|", "vtuple.from": "%ptr:%ptr,int|R A|",
     "vtuple.get": "int:%ptr,int|R|", "vtuple.list": "list[T]:%ptr|R A|", "vtuple.box": "%ptr:%ptr|R A|",
+    "vtuple.index": "int:%ptr,*T,#,int,int|R rL rD U?|", "vtuple.count": "int:%ptr,*T,#|rL rD U?|",
     # lists
     "list.new": "list[T]:int|A|", "list.get": "*T:S,int|R rL|", "list.set": "None:S,int,*T|R rL wL|",
     "list.append": "None:S,*T|A rL wL|", "list.pop": "*T:S,int|R rL wL|", "list.del": "None:S,int|R rL wL|",
@@ -518,6 +520,7 @@ RUNTIME: dict[str, str] = {
     "dict.new": "dict[K,V]:int,int|A|", "dict.has": "bool:S,*K|rD|", "dict.getitem": "*V:S,*K|R A I rD|",
     "dict.get": "*V:S,*K,*V|rD|", "dict.set": "None:S,*K,*V|A rD wD|", "dict.pop": "*V:S,*K|R A I rD wD|",
     "dict.pop_default": "*V:S,*K,*V|R A I rD wD|", "dict.setdefault": "*V:S,*K,*V|A rD wD|", "dict.clear": "None:S|wD|",
+    "dict.popitem": "tuple[K,V]:S|R A rD wD|",
     "dict.getbox": "*V:S,*K,*V|A rD|", "dict.popbox": "*V:S,*K,*V|R A I rD wD|",
     "dict.copy": "S:S|A rD|", "dict.from": "S:S|A rD|", "dict.keys": "list[K]:S|A rD|", "dict.values": "list[V]:S|A rD|",
     "dict.items": "list[tuple[K,V]]:S|A rD|", "dict.end": "int:S|rD|", "dict.next": "int:S,int,int,int|R rD|",
@@ -549,7 +552,7 @@ RUNTIME: dict[str, str] = {
     "str.lstrip": "str:S,str|A|", "str.rstrip": "str:S,str|A|", "str.startswith": "bool:S,str,int,int|R|",
     "str.endswith": "bool:S,str,int,int|R|", "str.find": "int:S,str,int,int|R|", "str.rfind": "int:S,str,int,int|R|",
     "str.count": "int:S,str,int,int|R|", "str.index": "int:S,str,int,int|R|", "str.rindex": "int:S,str,int,int|R|",
-    "str.replace": "str:S,str,str|R A|", "str.upper": "str:S|A|", "str.lower": "str:S|A|", "str.swapcase": "str:S|A|",
+    "str.replace": "str:S,str,str|R A|", "str.replace_count": "str:S,str,str,int|R A|", "str.upper": "str:S|A|", "str.lower": "str:S|A|", "str.swapcase": "str:S|A|",
     "str.capitalize": "str:S|A|", "str.title": "str:S|A|", "str.casefold": "str:S|A|", "str.isdigit": "bool:S||",
     "str.isalpha": "bool:S||", "str.isalnum": "bool:S||", "str.isspace": "bool:S||", "str.isupper": "bool:S||",
     "str.islower": "bool:S||", "str.istitle": "bool:S||", "str.isascii": "bool:S||", "str.isdecimal": "bool:S||",

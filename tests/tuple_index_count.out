@@ -1,0 +1,46 @@
+1 0 0 0 2 4 5 6
+2 1 1 1 1 0 0
+3 3 2 4 1
+(0, 1) 0
+(1, 3) tuple.index(x): x not in tuple
+(4, 2) tuple.index(x): x not in tuple
+(3, -3) 3
+(-1, 7) tuple.index(x): x not in tuple
+(5, 9223372036854775807) tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+6
+4 4 1 1
+3
+3 3 1 0
+ValueError tuple.index(x): x not in tuple
+eq 1; 1
+eq 1; eq 3; 1
+eq 1; eq 3; eq 3; eq 4; 2
+eq 1; eq 3; eq 4; 2
+eq 3; eq 3; ValueError tuple.index(x): x not in tuple
+0 2 1
+0 2 2 0 1
+ValueError tuple.index(x): x not in tuple
+1 3 3 2 0 5
+2 2 2 1 0
+(0, 1) tuple.index(x): x not in tuple
+(2, 3) tuple.index(x): x not in tuple
+(-3, -1) tuple.index(x): x not in tuple
+(6, 2) tuple.index(x): x not in tuple
+(-100, 100) 1
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+5
+1 1 2 0 0
+ValueError tuple.index(x): x not in tuple
+ValueError tuple.index(x): x not in tuple
+2 5 2 0
+1 2 2 3
+ValueError tuple.index(x): x not in tuple
+arg t; arg x; arg start; arg stop; 2
+arg x; 1
+[exit 0]

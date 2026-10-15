@@ -572,6 +572,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
+    if k == "binop" and n.s == "|" and n.kids[0].kind == "dict" and len(n.kids[0].kids) == 0 and not is_dict(unopt(want)):
+        # {} | d: the empty display takes d's type (it has nothing to evaluate first)
+        b = self.expr(n.kids[1], "", resultsoft=resultsoft)
+        return self.arith(n.s, self.expr(n.kids[0], unopt(b.t) if is_dict(unopt(b.t)) else ""), b)
     if k == "binop":
         a = self.expr(n.kids[0], want, resultsoft=resultsoft)
         return self.arith(n.s, a, self.expr(n.kids[1], a.t, resultsoft=resultsoft))
@@ -2205,7 +2209,12 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     if op == "+" and is_list(a.t) and is_list(b.t):
         self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
     if op == "|" and is_dict(a.t) and is_dict(b.t):
-        self.err("dict | dict is not supported; copy the first dict and use update()")
+        # a | b: a copy of a, updated with b (dict_or: PyDict_Copy, then dict_update_arg)
+        if b.t != a.t:
+            self.err(f"unsupported operand types for {shown if shown != '' else op}: {typestr(a.t)} and {typestr(b.t)} (a dict holds keys and values of one type each)")
+        r = self.rt("pys_dict_copy", "ptr", [f"ptr {a.v}"])
+        self.rt("pys_dict_update", "void", [f"ptr {r}", f"ptr {b.v}"])
+        return Val(r, a.t)
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)
         self.err('% formatting with a format string computed at run time is not supported (only a string literal: "%d" % x)')
@@ -2302,6 +2311,41 @@ def gen_exc_eq(self, t: str, what: str = "") -> None:
                 m = "__eq__" if "__eq__" in c.methods else "__ne__"
                 what = what if what != "" else "between exceptions" if t == "exc" else f"between values of type {typestr(t)}"
                 self.err(f"== {what} is not supported where an exception class defines {m} ({short(c.name)} does): compare objects of the class itself, or use 'is'")
+
+def gen_titem_eq(self, item: Val, a: Val, hit: str, ph: Ins | None, value: str) -> bool:
+    # whether tuple item is x, or item == x, as CPython's PyObject_RichCompareBool(item, x, Py_EQ)
+    # tests it for in, index() and count(): a branch to hit (where phi ph, if any, takes value)
+    # where it is, and on in a new block where it is not; False if no branch can reach hit
+    if not self.comparable(item.t, a.t):
+        # item == x of types whose values are never equal: CPython still calls the
+        # item's __eq__(x), or where the item's class has none (a builtin type's
+        # declines) x's __eq__(item); with neither, they are not equal
+        c = self.foreign_eq(item, a)
+        if c.t != "":
+            nx = self.label()
+            if ph is not None:
+                self.incoming(ph, value, self.cur)
+            self.cbr(c.v, hit, nx)
+            self.place(nx)
+        return c.t != ""
+    u = unopt(item.t)
+    if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
+        # (an object, list, dict, set or tuple, also one that may be None, is found
+        # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
+        # with xs = [nan]; a number has no identity here, see the deviation about NaN,
+        # and a str's is its value)
+        nx = self.label()
+        if ph is not None:
+            self.incoming(ph, value, self.cur)
+        self.cbr(self.ptr_cmp('==', item, a).v, hit, nx)
+        self.place(nx)
+    c = self.cmp2("==", item, a)
+    nx = self.label()
+    if ph is not None:
+        self.incoming(ph, value, self.cur)
+    self.cbr(c.v, hit, nx)
+    self.place(nx)
+    return True
 
 def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     if op in ["==", "!=", "<", "<=", ">", ">="]:
@@ -2444,33 +2488,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         lend = self.label()
         ph = Ins("phi", "bool", "")
         for i in range(len(targs(b.t))):
-            item = self.tget(b, i)
-            if not self.comparable(item.t, a.t):
-                # item == x of types whose values are never equal: CPython still calls the
-                # item's __eq__(x), or where the item's class has none (a builtin type's
-                # declines) x's __eq__(item); with neither, they are not equal
-                c = self.foreign_eq(item, a)
-                if c.t != "":
-                    nx = self.label()
-                    self.incoming(ph, "true", self.cur)
-                    self.cbr(c.v, lend, nx)
-                    self.place(nx)
-                continue
-            u = unopt(item.t)
-            if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
-                # (an object, list, dict, set or tuple, also one that may be None, is found
-                # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
-                # with xs = [nan]; a number has no identity here, see the deviation about NaN,
-                # and a str's is its value)
-                nx = self.label()
-                self.incoming(ph, "true", self.cur)
-                self.cbr(self.ptr_cmp('==', item, a).v, lend, nx)
-                self.place(nx)
-            c = self.cmp2("==", item, a)
-            nx = self.label()
-            self.incoming(ph, "true", self.cur)
-            self.cbr(c.v, lend, nx)
-            self.place(nx)
+            self.titem_eq(self.tget(b, i), a, lend, ph, "true")
         self.incoming(ph, "false", self.cur)
         self.br(lend)
         self.place(lend)

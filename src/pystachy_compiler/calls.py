@@ -578,11 +578,13 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
             self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
         if m not in ci.methods and m in ci.ftypes:
             return self.obj_call(self.getfield(o, self.field(o, m), m), args, want, resultsoft)  # (o.f(args) of a field f)
-        if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
+        if m not in ci.methods and not ((m == "_replace" or m == "_asdict" or m == "index" or m == "count") and o.t in self.nts):
             self.err(f"'{shown(o.t)}' object has no method '{m}'")  # (a specialization's is its class's)
         self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
         if m == "_asdict" and m not in ci.methods:
             return self.asdict(o, args)
+        if (m == "index" or m == "count") and m not in ci.methods:
+            return self.tmethod(self.ntup(o, True), m, args)  # (tuple's, of its fields)
         if m not in ci.methods:
             return self.replace(o, args)
         if ci.methods[m].iters:
