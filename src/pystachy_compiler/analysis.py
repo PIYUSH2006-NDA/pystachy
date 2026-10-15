@@ -1,7 +1,7 @@
 """Analysis component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODULES, NOREF, TYPING
+from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, TYPING
 from src.pystachy_compiler.syntax import Node, mentions, mk, names_in
 from src.pystachy_compiler.utils import int_fits
 
@@ -88,8 +88,9 @@ def builtin_module(path: str) -> bool:
 
 def known_path(p: str) -> bool:
     # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
-    # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
-    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "sys.float_info" or p == "os.fspath" or p == "os.path.normcase" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    # function builtin() handles itself (MODFUNCS), or sys.float_info (whose attributes are
+    # modattr() values)
+    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):

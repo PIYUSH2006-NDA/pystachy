@@ -900,6 +900,336 @@ I pys_m_isfinite(double x) { return isfinite(x); }
 I pys_m_isinf(double x) { return isinf(x); }
 I pys_m_isnan(double x) { return isnan(x); }
 I pys_m_trunc(double x) { return pys_f2i(trunc(x)); }
+/* Portions derived from CPython's Modules/mathmodule.c: Copyright (c) 2001-2024 Python Software
+   Foundation; All Rights Reserved; used under the PSF License Agreement (see THIRD_PARTY_NOTICES). */
+I pys_m_isclose(double a, double b, double rel_tol, double abs_tol) {   /* CPython's math_isclose_impl */
+  if (rel_tol < 0.0 || abs_tol < 0.0) pys_fail("ValueError: tolerances must be non-negative");
+  if (a == b) return 1;            /* (two infinities of the same sign) */
+  if (isinf(a) || isinf(b)) return 0;
+  double diff = fabs(b - a);
+  return diff <= fabs(rel_tol * b) || diff <= fabs(rel_tol * a) || diff <= abs_tol;
+}
+/* math.gamma and math.lgamma are CPython 3.13.16's m_tgamma and m_lgamma (Modules/mathmodule.c),
+   which do not use libm's tgamma and lgamma: their Lanczos approximation, reflection formula and
+   special cases, with their comments, so that every result is CPython's to the last bit. The
+   edits: Py_ macros are C99's, the asserts are dropped, and errno is a parameter (CPython clears
+   errno, calls the function and raises as is_error() says; the libm calls here set errno only
+   where the function sets it too), which pys_m_gamma and pys_m_lgamma test as math_1a does, and
+   each function body starts with #pragma clang fp contract(off): no multiply-add is fused */
+static const double pi = 3.141592653589793238462643383279502884197;
+static const double logpi = 1.144729885849400174143427351353058711647;
+
+static double
+m_sinpi(double x)
+{
+#pragma clang fp contract(off)
+    double y, r;
+    int n;
+    /* this function should only ever be called for finite arguments */
+    y = fmod(fabs(x), 2.0);
+    n = (int)round(2.0*y);
+    switch (n) {
+    case 0:
+        r = sin(pi*y);
+        break;
+    case 1:
+        r = cos(pi*(y-0.5));
+        break;
+    case 2:
+        /* N.B. -sin(pi*(y-1.0)) is *not* equivalent: it would give
+           -0.0 instead of 0.0 when y == 1.0. */
+        r = sin(pi*(1.0-y));
+        break;
+    case 3:
+        r = -cos(pi*(y-1.5));
+        break;
+    case 4:
+        r = sin(pi*(y-2.0));
+        break;
+    default:
+        __builtin_unreachable();
+    }
+    return copysign(1.0, x)*r;
+}
+
+/* Implementation of the real gamma function.  Kept here to work around
+   issues (see e.g. gh-70309) with quality of libm's tgamma/lgamma implementations
+   on various platforms (Windows, MacOS).  In extensive but non-exhaustive
+   random tests, this function proved accurate to within <= 10 ulps across the
+   entire float domain.  Note that accuracy may depend on the quality of the
+   system math functions, the pow function in particular.  Special cases
+   follow C99 annex F.  The parameters and method are tailored to platforms
+   whose double format is the IEEE 754 binary64 format.
+
+   Method: for x > 0.0 we use the Lanczos approximation with parameters N=13
+   and g=6.024680040776729583740234375; these parameters are amongst those
+   used by the Boost library.  Following Boost (again), we re-express the
+   Lanczos sum as a rational function, and compute it that way.  The
+   coefficients below were computed independently using MPFR, and have been
+   double-checked against the coefficients in the Boost source code.
+
+   For x < 0.0 we use the reflection formula.
+
+   There's one minor tweak that deserves explanation: Lanczos' formula for
+   Gamma(x) involves computing pow(x+g-0.5, x-0.5) / exp(x+g-0.5).  For many x
+   values, x+g-0.5 can be represented exactly.  However, in cases where it
+   can't be represented exactly the small error in x+g-0.5 can be magnified
+   significantly by the pow and exp calls, especially for large x.  A cheap
+   correction is to multiply by (1 + e*g/(x+g-0.5)), where e is the error
+   involved in the computation of x+g-0.5 (that is, e = computed value of
+   x+g-0.5 - exact value of x+g-0.5).  Here's the proof:
+
+   Correction factor
+   -----------------
+   Write x+g-0.5 = y-e, where y is exactly representable as an IEEE 754
+   double, and e is tiny.  Then:
+
+     pow(x+g-0.5,x-0.5)/exp(x+g-0.5) = pow(y-e, x-0.5)/exp(y-e)
+     = pow(y, x-0.5)/exp(y) * C,
+
+   where the correction_factor C is given by
+
+     C = pow(1-e/y, x-0.5) * exp(e)
+
+   Since e is tiny, pow(1-e/y, x-0.5) ~ 1-(x-0.5)*e/y, and exp(x) ~ 1+e, so:
+
+     C ~ (1-(x-0.5)*e/y) * (1+e) ~ 1 + e*(y-(x-0.5))/y
+
+   But y-(x-0.5) = g+e, and g+e ~ g.  So we get C ~ 1 + e*g/y, and
+
+     pow(x+g-0.5,x-0.5)/exp(x+g-0.5) ~ pow(y, x-0.5)/exp(y) * (1 + e*g/y),
+
+   Note that for accuracy, when computing r*C it's better to do
+
+     r + e*g/y*r;
+
+   than
+
+     r * (1 + e*g/y);
+
+   since the addition in the latter throws away most of the bits of
+   information in e*g/y.
+*/
+
+#define LANCZOS_N 13
+static const double lanczos_g = 6.024680040776729583740234375;
+static const double lanczos_g_minus_half = 5.524680040776729583740234375;
+static const double lanczos_num_coeffs[LANCZOS_N] = {
+    23531376880.410759688572007674451636754734846804940,
+    42919803642.649098768957899047001988850926355848959,
+    35711959237.355668049440185451547166705960488635843,
+    17921034426.037209699919755754458931112671403265390,
+    6039542586.3520280050642916443072979210699388420708,
+    1439720407.3117216736632230727949123939715485786772,
+    248874557.86205415651146038641322942321632125127801,
+    31426415.585400194380614231628318205362874684987640,
+    2876370.6289353724412254090516208496135991145378768,
+    186056.26539522349504029498971604569928220784236328,
+    8071.6720023658162106380029022722506138218516325024,
+    210.82427775157934587250973392071336271166969580291,
+    2.5066282746310002701649081771338373386264310793408
+};
+
+/* denominator is x*(x+1)*...*(x+LANCZOS_N-2) */
+static const double lanczos_den_coeffs[LANCZOS_N] = {
+    0.0, 39916800.0, 120543840.0, 150917976.0, 105258076.0, 45995730.0,
+    13339535.0, 2637558.0, 357423.0, 32670.0, 1925.0, 66.0, 1.0};
+
+/* gamma values for small positive integers, 1 though NGAMMA_INTEGRAL */
+#define NGAMMA_INTEGRAL 23
+static const double gamma_integral[NGAMMA_INTEGRAL] = {
+    1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0, 5040.0, 40320.0, 362880.0,
+    3628800.0, 39916800.0, 479001600.0, 6227020800.0, 87178291200.0,
+    1307674368000.0, 20922789888000.0, 355687428096000.0,
+    6402373705728000.0, 121645100408832000.0, 2432902008176640000.0,
+    51090942171709440000.0, 1124000727777607680000.0,
+};
+
+/* Lanczos' sum L_g(x), for positive x */
+
+static double
+lanczos_sum(double x)
+{
+#pragma clang fp contract(off)
+    double num = 0.0, den = 0.0;
+    int i;
+    /* evaluate the rational function lanczos_sum(x).  For large
+       x, the obvious algorithm risks overflow, so we instead
+       rescale the denominator and numerator of the rational
+       function by x**(1-LANCZOS_N) and treat this as a
+       rational function in 1/x.  This also reduces the error for
+       larger x values.  The choice of cutoff point (5.0 below) is
+       somewhat arbitrary; in tests, smaller cutoff values than
+       this resulted in lower accuracy. */
+    if (x < 5.0) {
+        for (i = LANCZOS_N; --i >= 0; ) {
+            num = num * x + lanczos_num_coeffs[i];
+            den = den * x + lanczos_den_coeffs[i];
+        }
+    }
+    else {
+        for (i = 0; i < LANCZOS_N; i++) {
+            num = num / x + lanczos_num_coeffs[i];
+            den = den / x + lanczos_den_coeffs[i];
+        }
+    }
+    return num/den;
+}
+
+
+static double
+m_tgamma(double x, int *err)
+{
+#pragma clang fp contract(off)
+    double absx, r, y, z, sqrtpow;
+
+    /* special cases */
+    if (!isfinite(x)) {
+        if (isnan(x) || x > 0.0)
+            return x;  /* tgamma(nan) = nan, tgamma(inf) = inf */
+        else {
+            *err = EDOM;
+            return NAN;  /* tgamma(-inf) = nan, invalid */
+        }
+    }
+    if (x == 0.0) {
+        *err = EDOM;
+        /* tgamma(+-0.0) = +-inf, divide-by-zero */
+        return copysign(INFINITY, x);
+    }
+
+    /* integer arguments */
+    if (x == floor(x)) {
+        if (x < 0.0) {
+            *err = EDOM;  /* tgamma(n) = nan, invalid for */
+            return NAN; /* negative integers n */
+        }
+        if (x <= NGAMMA_INTEGRAL)
+            return gamma_integral[(int)x - 1];
+    }
+    absx = fabs(x);
+
+    /* tiny arguments:  tgamma(x) ~ 1/x for x near 0 */
+    if (absx < 1e-20) {
+        r = 1.0/x;
+        if (isinf(r))
+            *err = ERANGE;
+        return r;
+    }
+
+    /* large arguments: assuming IEEE 754 doubles, tgamma(x) overflows for
+       x > 200, and underflows to +-0.0 for x < -200, not a negative
+       integer. */
+    if (absx > 200.0) {
+        if (x < 0.0) {
+            return 0.0/m_sinpi(x);
+        }
+        else {
+            *err = ERANGE;
+            return HUGE_VAL;
+        }
+    }
+
+    y = absx + lanczos_g_minus_half;
+    /* compute error in sum */
+    if (absx > lanczos_g_minus_half) {
+        /* note: the correction can be foiled by an optimizing
+           compiler that (incorrectly) thinks that an expression like
+           a + b - a - b can be optimized to 0.0.  This shouldn't
+           happen in a standards-conforming compiler. */
+        double q = y - absx;
+        z = q - lanczos_g_minus_half;
+    }
+    else {
+        double q = y - lanczos_g_minus_half;
+        z = q - absx;
+    }
+    z = z * lanczos_g / y;
+    if (x < 0.0) {
+        r = -pi / m_sinpi(absx) / absx * exp(y) / lanczos_sum(absx);
+        r -= z * r;
+        if (absx < 140.0) {
+            r /= pow(y, absx - 0.5);
+        }
+        else {
+            sqrtpow = pow(y, absx / 2.0 - 0.25);
+            r /= sqrtpow;
+            r /= sqrtpow;
+        }
+    }
+    else {
+        r = lanczos_sum(absx) / exp(y);
+        r += z * r;
+        if (absx < 140.0) {
+            r *= pow(y, absx - 0.5);
+        }
+        else {
+            sqrtpow = pow(y, absx / 2.0 - 0.25);
+            r *= sqrtpow;
+            r *= sqrtpow;
+        }
+    }
+    if (isinf(r))
+        *err = ERANGE;
+    return r;
+}
+
+/*
+   lgamma:  natural log of the absolute value of the Gamma function.
+   For large arguments, Lanczos' formula works extremely well here.
+*/
+
+static double
+m_lgamma(double x, int *err)
+{
+#pragma clang fp contract(off)
+    double r;
+    double absx;
+
+    /* special cases */
+    if (!isfinite(x)) {
+        if (isnan(x))
+            return x;  /* lgamma(nan) = nan */
+        else
+            return HUGE_VAL; /* lgamma(+-inf) = +inf */
+    }
+
+    /* integer arguments */
+    if (x == floor(x) && x <= 2.0) {
+        if (x <= 0.0) {
+            *err = EDOM;  /* lgamma(n) = inf, divide-by-zero for */
+            return HUGE_VAL; /* integers n <= 0 */
+        }
+        else {
+            return 0.0; /* lgamma(1) = lgamma(2) = 0.0 */
+        }
+    }
+
+    absx = fabs(x);
+    /* tiny arguments: lgamma(x) ~ -log(fabs(x)) for small x */
+    if (absx < 1e-20)
+        return -log(absx);
+
+    /* Lanczos' formula.  We could save a fraction of a ulp in accuracy by
+       having a second set of numerator coefficients for lanczos_sum that
+       absorbed the exp(-lanczos_g) term, and throwing out the lanczos_g
+       subtraction below; it's probably not worth it. */
+    r = log(lanczos_sum(absx)) - lanczos_g;
+    r += (absx - 0.5) * (log(absx + lanczos_g - 0.5) - 1);
+    if (x < 0.0)
+        /* Use reflection formula to get value for negative x. */
+        r = logpi - log(fabs(m_sinpi(absx))) - log(absx) - r;
+    if (isinf(r))
+        *err = ERANGE;
+    return r;
+}
+static double merrno(double r, int e) {   /* math_1a's is_error(): ERANGE below 1.5 is an underflow, no error */
+  if (e == EDOM) pys_fail("ValueError: math domain error");
+  if (e == ERANGE && fabs(r) >= 1.5) pys_fail("OverflowError: math range error");
+  return r;
+}
+double pys_m_gamma(double x) { int e = 0; double r = m_tgamma(x, &e); return merrno(r, e); }
+double pys_m_lgamma(double x) { int e = 0; double r = m_lgamma(x, &e); return merrno(r, e); }
 /* math.gcd, lcm, isqrt, factorial, comb, perm, fsum and prod are in runtime.py */
 I pys_m_gcd(I a, I b);
 I pys_m_lcm(I a, I b);
@@ -1747,6 +2077,15 @@ double pys_m_dist(List *p, List *q) {   /* math.dist: hypot's vnorm of the diffe
   for (I i = 0; i < p->len; i++) {
     v[i] = fabs(dbl(p->a[i]) - dbl(q->a[i])); nan |= isnan(v[i]);
     if (v[i] > max) max = v[i];   /* a NaN is never the max */
+  }
+  if (isinf(max)) return max;
+  return nan ? NAN : vnorm(v, p->len, max);
+}
+double pys_m_hypot_list(List *p) {   /* math.hypot of other than two coordinates (math_hypot): vnorm of a list of floats */
+  double b[16], *v = p->len > 16 ? pys_alloc_atomic(p->len * 8) : b, max = 0.0; int nan = 0;
+  for (I i = 0; i < p->len; i++) {
+    v[i] = fabs(dbl(p->a[i])); nan |= isnan(v[i]);
+    if (v[i] > max) max = v[i];
   }
   if (isinf(max)) return max;
   return nan ? NAN : vnorm(v, p->len, max);

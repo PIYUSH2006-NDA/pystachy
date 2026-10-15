@@ -47,6 +47,8 @@ from src.pystachy_compiler.builtins import (
     gen_bmethod as builtins_bmethod,
     gen_tmethod as builtins_tmethod,
     gen_dict_pairs as builtins_dict_pairs,
+    gen_isclose as builtins_isclose,
+    gen_prod_seq as builtins_prod_seq,
     gen_builtin as builtins_builtin,
     gen_call_key as builtins_call_key,
     gen_consume as builtins_consume,
@@ -2255,6 +2257,12 @@ class Gen:
 
     def dict_pairs(self, v: Val) -> Val:
         return builtins_dict_pairs(self, v)
+
+    def isclose(self, args: list[Node]) -> Val:
+        return builtins_isclose(self, args)
+
+    def prod_seq(self, xs: Val, s: Val) -> Val:
+        return builtins_prod_seq(self, xs, s)
 
     def set_display(self, n: Node, want: str, folded: bool, returnctx: bool = False, resultsoft: bool = False) -> Val:
         return containers_set_display(self, n, want, folded, returnctx, resultsoft)

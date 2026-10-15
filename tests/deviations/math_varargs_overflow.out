@@ -1,0 +1,5 @@
+2 0
+OverflowError: integer result does not fit in 64 bits
+OverflowError: integer result does not fit in 64 bits
+OverflowError: integer result does not fit in 64 bits
+[exit 1]

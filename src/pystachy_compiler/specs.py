@@ -135,7 +135,7 @@ for _k in ("EPERM ENOENT ESRCH EINTR EIO ENXIO E2BIG ENOEXEC EBADF ECHILD EAGAIN
            "ECANCELED EOWNERDEAD ENOTRECOVERABLE").split():
     ERRNO[_k] = True
 # math functions raise CPython's domain and range errors (runtime.c, pys_m_*)
-for _k in "sqrt sin cos tan asin acos atan sinh cosh tanh exp log log2 log10 fabs log1p expm1 exp2 cbrt degrees radians asinh acosh atanh erf erfc ulp".split():
+for _k in "sqrt sin cos tan asin acos atan sinh cosh tanh exp log log2 log10 fabs log1p expm1 exp2 cbrt degrees radians asinh acosh atanh erf erfc ulp gamma lgamma".split():
     CALLS[f"math.{_k}(float)"] = f"pys_m_{_k}:float"
 for _k in "pow atan2 hypot fmod copysign nextafter remainder".split():
     CALLS[f"math.{_k}(float,float)"] = f"pys_m_{_k}:float"
@@ -149,7 +149,7 @@ MODFUNCS: dict[str, bool] = {}
 for _k in CALLS:
     if "." in _k[: _k.find("(")]:
         MODFUNCS[_k[: _k.find("(")]] = True
-for _k in "os.path.join os.path.normcase os.fspath sys.exit math.fsum math.prod".split():
+for _k in "os.path.join os.path.normcase os.fspath sys.exit math.fsum math.prod math.isclose".split():
     MODFUNCS[_k] = True
 # the modules a program may import; their functions and attributes are the CALLS entries and modattr()
 MODULES: dict[str, bool] = {}
@@ -585,7 +585,8 @@ RUNTIME: dict[str, str] = {
     "m.nextafter": "float:float,float||", "m.ulp": "float:float||", "m.remainder": "float:float,float|R|",
     "m.fma": "float:float,float,float|R|", "m.fsum": "float:list[float]|R A rL|", "m.prod_int": "int:list[T],int|R rL|",
     "m.prod_float": "float:list[float],float|rL|", "m.floats": "list[float]:list[T]|A rL|",
-    "m.dist": "float:list[float],list[float]|R A rL|",
+    "m.dist": "float:list[float],list[float]|R A rL|", "m.hypot_list": "float:list[float]|A rL|",
+    "m.isclose": "bool:float,float,float,float|R|", "m.gamma": "float:float|R|", "m.lgamma": "float:float|R|",
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "eq.pair": "bool:*T,*T,%ptr,%ptr|rL rD U|",  # conservative: dict lookup's call graph reaches user equality

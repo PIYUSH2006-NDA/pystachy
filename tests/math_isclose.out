@@ -1,0 +1,32 @@
+1.0 1.0 True True True True True True True
+1.0 1.000000001 False False True False False True True
+1.0 1.000000002 False False True False False True True
+100000000.0 100000001.0 False False True False False True True
+100000000.0 100000000.1 True True True True False True True
+0.0 1e-10 False False False True False True True
+0.0 0.0 True True True True True True True
+-0.0 0.0 True True True True True True True
+inf inf True True True True True True True
+-inf -inf True True True True True True True
+inf -inf False False False False False False False
+inf 1e+308 False False False False False False False
+nan nan False False False False False False False
+nan 1.0 False False False False False False False
+1e-300 2e-300 False False True True False True True
+-1.0 1.0 False False False False False True True
+5e-324 0.0 False False False True False True True
+1.7976931348623157e+308 inf False False False False False False False
+True True True True True
+True True True
+False True False
+ValueError tolerances must be non-negative
+ValueError tolerances must be non-negative
+ValueError tolerances must be non-negative
+True
+False True
+TypeError must be real number, not NoneType
+True
+eval a; eval b; eval abs; eval rel; True
+eval b; eval a; True
+eval a; eval b; eval rel; ValueError tolerances must be non-negative
+[exit 0]

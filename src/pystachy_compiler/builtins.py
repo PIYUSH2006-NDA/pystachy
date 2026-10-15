@@ -242,6 +242,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if len(args) == 0:
             self.err("int() missing string argument")
         args = args + base
+    if name == "math.isclose":
+        return self.isclose(args)
     if name == "math.prod":
         # prod(iterable, /, *, start=1): start is sum()'s second argument
         npos = len([a for a in args if a.kind != "kw"])
@@ -369,6 +371,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
                 self.err(f"unsupported call {name}({','.join([typestr(v.t) for v in vals])})")
             self.err(f"argument {i + 1} of {name}() may be None ({typestr(vals[i].t)}); test it with 'is not None' first")
     key = f"{name}({','.join([v.t for v in vals])})"
+    asked = key  # (math's calls convert their arguments below; a rejection names them as given)
     if self.rtmode and name.startswith("_rt."):
         return self.primitive(name[4:], vals)
     if key in DEFAULTS:
@@ -401,8 +404,39 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             return self.as_int(vals[0])
         nd = self.coerce(self.as_int(vals[1]), "int")
         return Val(self.rt("pys_round_int", "i64", [f"i64 {self.as_int(vals[0]).v}", f"i64 {nd.v}"]), "int")
+    if name == "math.perm" and (len(vals) == 1 or (len(vals) == 2 and vals[1].t == "None")) and (vals[0].t == "int" or vals[0].t == "bool"):
+        # perm(n) and perm(n, None) are factorial(n), as math_perm_impl makes them
+        return Val(self.rt("pys_m_factorial", "i64", [f"i64 {self.as_int(vals[0]).v}"]), "int")
+    if (name == "math.gcd" or name == "math.lcm") and len(vals) != 2 and all(v.t == "int" or v.t == "bool" for v in vals):
+        # gcd() and lcm() of other than two ints (math_gcd, math_lcm): 0 and 1 of none, |x| of one,
+        # and else the first two's, then that and the third's, ... (lcm's stays 0 once it is 0)
+        if len(vals) == 0:
+            return Val("0" if name == "math.gcd" else "1", "int")
+        acc = self.as_int(vals[0])
+        if len(vals) == 1:
+            neg = self.num_cmp('<', acc, Val('0', "int")).v
+            return Val(self.select(neg, Val(self.iop("-", "0", acc.v), "int"), acc), "int")
+        for v in vals[1:]:
+            acc = Val(self.rt("pys_m_gcd" if name == "math.gcd" else "pys_m_lcm", "i64", [f"i64 {acc.v}", f"i64 {self.as_int(v).v}"]), "int")
+        return acc
+    if name == "math.hypot" and len(vals) != 2 and all(self.isnum(v.t) for v in vals):
+        # hypot() of other than two coordinates (math_hypot): 0.0 of none, |x| of one, and else
+        # the norm of them all, which math.dist's (vnorm) is
+        if len(vals) == 0:
+            return Val(fbits("0.0"), "float")
+        if len(vals) == 1:
+            return Val(self.rt("fabs", "double", [f"double {self.as_float(vals[0]).v}"]), "float")
+        xs = self.rt("pys_list_new", "ptr", [f"i64 {len(vals)}"])
+        for v in vals:
+            self.rt("pys_list_append", "void", [f"ptr {xs}", "i64 " + self.to_slot(self.as_float(v))])
+        return Val(self.rt("pys_m_hypot_list", "double", [f"ptr {xs}"]), "float")
+    if name == "math.prod" and len(vals) == 2 and is_list(vals[0].t) and (vals[1].t == "str" or is_list(vals[1].t) or is_dict(vals[1].t) or is_set(vals[1].t)):
+        return self.prod_seq(vals[0], vals[1])
     if key not in CALLS and name == "math.ldexp" and len(vals) == 2:
         vals = [self.as_float(self.as_int(vals[0])), self.as_int(vals[1])]
+        key = f"{name}({','.join([v.t for v in vals])})"
+    if key not in CALLS and name.startswith("math.") and f"{name}({','.join(['int' if v.t == 'bool' else v.t for v in vals])})" in CALLS:
+        vals = [self.as_int(v) for v in vals]  # (a bool where an int is taken: comb(True, False))
         key = f"{name}({','.join([v.t for v in vals])})"
     if key not in CALLS and (name == "math.fsum" or name == "math.prod" or name == "math.dist"):
         # CPython makes a float of each int item (in a product, of each item and the start once
@@ -526,7 +560,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(NONEARG[name].replace("NoneType", tname(t)))
     if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
         self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
-    self.err(f"unsupported call {key}")
+    self.err(f"unsupported call {asked if name.startswith('math.') else key}")
     return v
 
 def gen_vnode(self, v: Val) -> Node:
@@ -1298,6 +1332,69 @@ def gen_update(self, o: Val, args: list[Node]) -> Val:
     if kw.t != "":
         self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
     return Val("null", "None")
+
+def gen_isclose(self, args: list[Node]) -> Val:
+    # math.isclose(a, b, *, rel_tol=1e-09, abs_tol=0.0): the arguments evaluated in the order
+    # written, then each made a float in the order of the parameters (an int or a bool), as the
+    # call's argument parsing makes them, then math_isclose_impl (runtime.c)
+    names = ["a", "b", "rel_tol", "abs_tol"]
+    given: dict[str, Val] = {}
+    npos = len([a for a in args if a.kind != "kw"])
+    if npos > 2:
+        self.err(f"isclose() takes exactly 2 positional arguments ({npos} given)")
+    for a in args:
+        if a.kind == "starred" or a.kind == "dstar":
+            self.err("math.isclose() with * or ** arguments is not supported")
+        nm = a.s if a.kind == "kw" else names[len(given)]
+        if nm not in names:
+            self.err(f"isclose() got an unexpected keyword argument '{nm}'")
+        if nm in given:
+            self.err(f"argument for isclose() given by name ('{nm}') and position ({names.index(nm) + 1})")
+        given[nm] = self.expr(a.kids[0] if a.kind == "kw" else a, "float")
+    for j in range(2):
+        if names[j] not in given:
+            self.err(f"isclose() missing required argument '{names[j]}' (pos {j + 1})")
+    fs: list[str] = []
+    for nm in names:
+        v = given[nm] if nm in given else Val(fbits("1e-09") if nm == "rel_tol" else fbits("0.0"), "float")
+        if is_opt(v.t) and self.isnum(unopt(v.t)):
+            v = self.unwrap(v, "TypeError: must be real number, not NoneType")
+        if not self.isnum(v.t):
+            self.err(f"must be real number, not {tname(v.t)} (argument '{nm}' of math.isclose())")
+        fs.append(f"double {self.as_float(v).v}")
+    return self.rres(self.rt("pys_m_isclose", "i64", fs), "bool")
+
+def gen_prod_seq(self, xs: Val, s: Val) -> Val:
+    # math.prod(xs, start=s) of a str, list, dict or set s, as math_prod_impl multiplies:
+    # s * x, then that * the next x, ... (PyNumber_Multiply), each a new str or list (repeated, or
+    # emptied by an x < 1, after which it stays empty). For no item the result is s itself, and a
+    # start that the items cannot multiply raises CPython's TypeError at the first
+    et = elem(xs.t)
+    seq = s.t == "str" or is_list(s.t)
+    if is_opt(et) or "?" in et or (seq and is_union(et)):
+        self.err(f"math.prod() of a {typestr(xs.t)} with a {typestr(s.t)} start is not supported")
+    if not seq or (et != "int" and et != "bool"):
+        bad = f"can't multiply sequence by non-int of type '{tname(et)}'" if seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(et)}'"
+        self.guard(self.num_cmp('!=', Val(self.mload('int', xs.v), "int"), Val('0', "int")).v, "TypeError: " + bad)
+        return s
+    acc = self.alloca(s.t, "")
+    self.mstore(s.t, s.v, acc)
+    ctr = self.alloca("int", "")
+    self.mstore('int', '0', ctr)
+    lc = self.label()
+    lb = self.label()
+    le = self.label()
+    self.br(lc)
+    self.place(lc)
+    i = self.mload('int', ctr)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', xs.v), "int")).v, lb, le)
+    self.place(lb)
+    item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
+    self.mstore(s.t, self.arith("*", Val(self.mload(s.t, acc), s.t), item).v, acc)
+    self.mstore('int', self.scalar('add', [Val(i, 'int'), Val('1', 'int')]), ctr)
+    self.br(lc)
+    self.place(le)
+    return Val(self.mload(s.t, acc), s.t)
 
 def gen_dict_pairs(self, v: Val) -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
