@@ -275,6 +275,7 @@ from src.pystachy_compiler.exceptions import (
     gen_unshadow as exceptions_unshadow,
 )
 from src.pystachy_compiler.expressions import (
+    gen_list_hint_type as expressions_list_hint_type,
     gen_argtype as expressions_argtype,
     gen_arith as expressions_arith,
     gen_boolop as expressions_boolop,
@@ -1749,6 +1750,9 @@ class Gen:
 
     def expr(self, n: Node, want: str) -> Val:
         return expressions_expr(self, n, want)
+
+    def list_hint_type(self, a: str, b: str) -> str:
+        return expressions_list_hint_type(self, a, b)
 
     def class_attr(self, cn: Node, a: str) -> Val:
         return expressions_class_attr(self, cn, a)
