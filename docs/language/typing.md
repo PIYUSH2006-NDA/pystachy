@@ -418,6 +418,8 @@ type, the fallback is `list[int]`, `dict[int, int]` or `set[int]`. A resulting t
 guess; annotate the receiving value to provide the intended type.
 This also applies to direct `return []`, `return {}` and `return set()` results; callers with
 different expected container types can share the same empty-result specialization.
+A union context supplies a list or dict result's type when exactly one member has the same
+container kind; ambiguous contexts retain the fallback above.
 
 ## Class templates and generic classes
 

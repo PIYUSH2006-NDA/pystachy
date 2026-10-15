@@ -1,6 +1,6 @@
 """Variables component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.utils import is_union
+from src.pystachy_compiler.utils import is_union, umembers
 import os
 from src.pystachy_compiler.analysis import (
     aliases,
@@ -997,6 +997,10 @@ def gen_typed_empty(self, v: Val, want: str, f: FnInfo) -> Val:
     # context expects, else list[int] or dict[int, int] (as sum() of an empty list is the int 0),
     # which a type error further on in this function then explains (guessed). A new dict is made
     # by each call, so it gets the key kind of its type here (a dict's second word)
+    if is_union(unopt(want)):
+        candidates = [m for m in umembers(unopt(want)) if same_kind(m, v.t)]
+        if len(candidates) == 1:
+            want = candidates[0]  # a fresh empty result has one compatible container layout
     t = want if same_kind(want, v.t) and "?" not in want else "list[int]" if is_list(v.t) else "set[int]" if is_set(v.t) else "dict[int,int]"
     if t != want:
         self.guessed[self.curfn.ll] = f"{short(f.name)}() at line {self.line} returns an empty {tname(t)} taken as {typestr(t)}: give it a type first, as in v: {'list[T]' if is_list(t) else 'set[T]' if is_set(t) else 'dict[K, V]'} = {short(f.name)}()"
