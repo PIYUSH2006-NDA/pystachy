@@ -281,6 +281,9 @@ def gen_canon(self, vs: Values, v: str) -> str:
             x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)
             if x != "":
                 r = self.canon(vs, x)
+        elif i.op == "field.addr":
+            # Keep the canonical address used by raw GEPs and inheritance-aware disjoint().
+            r = self.same(vs, v, f"getelementptr %C.{i.a[0].t}, ptr {self.canon(vs, i.a[0].v)}, i32 0, i32 {i.k}")
         elif i.op == "union.payload":
             # A union box's tag and payload are immutable. Retain the equivalence of
             # repeated narrowed reads that the former raw GEP/load exposed to dictfuse.

@@ -179,7 +179,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
                     self.place(arm)
                 hy = self.has(ci.name, attr)
                 if attr in ci.fflag and attr not in ci.fdefault and attr not in ci.methods:
-                    value = self.ins(f"load i1, ptr {self.fgep(Val(hv.v, ci.name), ci.fflag[attr])}")
+                    value = self.mem_load(Val(self.fgep(Val(hv.v, ci.name), ci.fflag[attr]), "*bool")).v
                 else:
                     value = "false" if hy == 0 else "true"
                 self.incoming(ph, value, self.cur)
@@ -196,7 +196,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             l2 = self.label()
             self.cbr("true" if hv.v in self.nn else self.ins(f"icmp ne ptr {hv.v}, null"), l1, l2)
             self.place(l1)
-            fv = self.ins(f"load i1, ptr {self.fgep(hv, self.classes[hv.t].fflag[args[1].s])}")
+            fv = self.mem_load(Val(self.fgep(hv, self.classes[hv.t].fflag[args[1].s]), "*bool")).v
             e1 = self.cur
             self.br(l2)
             self.place(l2)

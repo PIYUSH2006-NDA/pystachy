@@ -150,6 +150,17 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                     self.bad_ir(fn, b, "alloc.fixed needs a declared class or fixed tuple type")
                 if "alloc" not in self.rtfns:
                     self.bad_ir(fn, b, "alloc.fixed needs the alloc runtime declaration")
+            if i.op == "field.addr":
+                if len(i.a) != 1 or i.s != "" or i.x != "" or len(i.b) != 0:
+                    self.bad_ir(fn, b, "field.addr needs one object and no extra metadata")
+                if i.a[0].t not in self.classes:
+                    self.bad_ir(fn, b, "field.addr needs a declared class layout")
+                ci = self.classes[i.a[0].t]
+                if i.k < 0 or (i.k >= len(ci.fields) and i.k not in ci.fflag.values()):
+                    self.bad_ir(fn, b, "field.addr needs a declared field or assignment flag index")
+                t = ci.ftypes[ci.fields[i.k]] if i.k < len(ci.fields) else "bool"
+                if i.t != "*" + t:
+                    self.bad_ir(fn, b, "field.addr result must address the declared member type")
             if i.op == "tuple.load" or i.op == "tuple.store":
                 if len(i.a) != (1 if i.op == "tuple.load" else 2) or i.x != "" or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
@@ -225,6 +236,8 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
 
 def gen_nums(self, i: Ins) -> int:
     # how many numbers op i defines (%tN): what its lowering prints
+    if i.op == "field.addr":
+        return 1
     if i.op == "ovf":
         return 3
     if i.op == "list.load":

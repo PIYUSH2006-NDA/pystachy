@@ -125,6 +125,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Native memory access | `mem.load`, `mem.store` |
 | Fixed-layout allocation | `alloc.fixed` |
 | Fixed tuple slots | `tuple.load`, `tuple.store` |
+| Object layout addresses | `field.addr` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp` |
@@ -170,6 +171,14 @@ packing and unpacking remain separate typed operations. These instructions repla
 LLVM in fixed tuple reads and heap/stack construction, preserving the existing layout,
 conservative memory effects and dictionary-key canonicalization. Variable-length tuple
 reads, tuple traversal and stack-to-heap copies keep their existing paths.
+
+`field.addr` retains a declared class layout, member index and typed address result.
+It addresses both fields and assignment flags, including flags inherited inside a
+derived layout. The verifier checks the class, index and declared member type.
+Field reads and writes use `mem.load`/`mem.store`; existing frontend null and
+assignment guards still establish when those accesses are safe. LLVM lowering
+alone emits the class GEP. Address canonicalization keeps its existing spelling
+and inheritance-aware alias rules; memory effects and emitted LLVM are unchanged.
 
 `slot.pack` preserves a native value's bits in an opaque `%slot` (eight bytes), and
 `slot.unpack` recovers the declared native type. Their operands retain that type through
