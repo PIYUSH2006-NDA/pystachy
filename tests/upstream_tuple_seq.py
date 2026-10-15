@@ -1,6 +1,6 @@
 # Adapted from CPython 3.13.16 Lib/test/test_tuple.py, class TupleTest: test_truth, test_len,
 # test_iadd, test_repr and test_lexicographic_ordering; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
-# runs: test_truth, test_getitem, test_contains, test_contains_fake, test_contains_order,
+# runs: test_truth, test_getitem, test_getslice, test_contains, test_contains_fake, test_contains_order,
 # test_len, test_minmax, test_add, test_mul, test_iadd, test_repeat and test_cmp (with
 # _assert_cmp); commit cbc944f4bc59639a444dd971c737788ba2283a91. test.support's ALWAYS_EQ and
 # NEVER_EQ are written out, and test_contains_order's classes are at the module's top level.
@@ -16,7 +16,7 @@
 # - test_getitem's IndexErrors (u[-len(u)-1], u[len(u)], ()[0], ()[-1], a[-3], a[3]): a constant
 #   tuple index out of range is a compile-time error here, with CPython's message
 #   (tests/errors/upstream_tuple_index_*.py); u.__getitem__(slice(0,10,0)) and u.__getitem__()
-#   (__getitem__ of a tuple, slices of a tuple and slice() are not supported)
+#   (__getitem__ of a tuple and slice() are not supported)
 # - test_getitem_error (t['a']: a compile-time error worded "tuple index must be an integer
 #   constant" where CPython says "tuple indices must be integers or slices, not str")
 # - test_constructors (TupleTest's and CommonTest's), test_keyword_args, test_tupleresizebug and
@@ -32,7 +32,8 @@
 #   special methods are not supported)
 # - test_contains' u.__contains__() and test_getitem's u.__getitem__() (TypeError; tuple's
 #   special methods are not supported), test_subscript (a.__getitem__(), slice objects)
-# - test_getslice (slicing a tuple is not supported), test_count and test_index (tuple.count()
+# - test_getslice's extended slices (slice steps are not supported) and its extreme cases with
+#   long ints (-pow(2,128) and pow(2,145) overflow); test_count and test_index (tuple.count()
 #   and tuple.index() are not supported)
 # - test_repeat's id(s) == id(s*1) (id() is not supported); test_bigrepeat (it runs only where
 #   sys.maxsize <= 2**31 - 1)
@@ -93,6 +94,18 @@ def seq_test_getitem() -> None:
     check("a[1]", a[1], 11)
     check("a[-2]", a[-2], 10)
     check("a[-1]", a[-1], 11)
+
+
+def seq_test_getslice() -> None:
+    u = (0, 1, 2, 3, 4)  # self.type2test(l), l = [0, 1, 2, 3, 4]
+    check("u[0:0]", u[0:0], ())
+    check("u[1:2]", u[1:2], (1,))
+    check("u[-2:-1]", u[-2:-1], (3,))
+    check("u[-1000:1000]", u[-1000:1000], u)
+    check("u[1000:-1000]", u[1000:-1000], ())
+    check("u[:]", u[:], u)
+    check("u[1:None]", u[1:None], (1, 2, 3, 4))
+    check("u[None:3]", u[None:3], (0, 1, 2))
 
 
 def seq_test_contains() -> None:
@@ -292,6 +305,7 @@ def test_repr() -> None:
 
 test_truth()
 seq_test_getitem()
+seq_test_getslice()
 seq_test_contains()
 seq_test_contains_fake()
 seq_test_contains_order()

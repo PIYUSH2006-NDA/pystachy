@@ -371,6 +371,7 @@ from src.pystachy_compiler.expressions import (
     gen_tstore as expressions_tstore,
     gen_truth as expressions_truth,
     gen_tuple_ as expressions_tuple_,
+    gen_tuple_slice as expressions_tuple_slice,
     gen_tuple_order as expressions_tuple_order,
     gen_unary as expressions_unary,
 )
@@ -1886,6 +1887,9 @@ class Gen:
 
     def tuple_(self, vals: list[Val]) -> Val:
         return expressions_tuple_(self, vals)
+
+    def tuple_slice(self, n: Node, o: Val) -> Val:
+        return expressions_tuple_slice(self, n, o)
 
     def stack_tuple(self, vals: list[Val]) -> Val:
         return expressions_stack_tuple(self, vals)

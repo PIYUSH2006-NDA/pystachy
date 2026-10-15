@@ -654,6 +654,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         if len(n.kids) == 4:
             self.err("slice steps are not supported")
         o = self.expr(n.kids[0], "")
+        if is_tuple(unopt(o.t)) or unopt(o.t) in self.nts:
+            return self.tuple_slice(n, o)
         bnd: list[str] = []
         for x in n.kids[1:]:
             if x.kind == "omit":
@@ -1480,6 +1482,29 @@ def gen_index(self, n: Node) -> Val:
         self.close_temp(f.kids[0], o)
         return self.subscript(n, r)
     return self.subscript(n, self.expr(c, ""))
+
+def gen_tuple_slice(self, n: Node, o: Val) -> Val:
+    # o[i:j], where o is the value of n.kids[0], a tuple of fixed shape or a NamedTuple: the
+    # tuple of the items that bounds known at compile time select (as slice.indices() does)
+    t = unopt(o.t)
+    ts = targs(t) if is_tuple(t) else self.classes[t].fields
+    bnd: list[int] = []
+    for x in n.kids[1:]:
+        v = Val("", "None") if x.kind == "omit" else self.expr(x, "int")
+        if v.t == "bool" and (v.v == "true" or v.v == "false"):
+            v = Val("1" if v.v == "true" else "0", "int")
+        if v.t != "None" and (v.t != "int" or v.v.startswith("%")):
+            self.err("a tuple's slice bounds must be integer constants (its items' types are known at compile time)")
+        bnd.append(int(v.v) if v.t == "int" else len(ts) if len(bnd) == 1 else 0)
+    for i in range(2):
+        if bnd[i] < 0:
+            bnd[i] = max(bnd[i] + len(ts), 0)
+        bnd[i] = min(bnd[i], len(ts))
+    if t in self.nts:
+        self.notnone(o, "TypeError: 'NoneType' object is not subscriptable")
+        return self.tuple_([self.getfield(o, self.field(o, ts[j]), ts[j]) for j in range(bnd[0], bnd[1])])
+    o = self.unwrap(o, "TypeError: 'NoneType' object is not subscriptable")
+    return self.tuple_([self.tget(o, j) for j in range(bnd[0], bnd[1])])
 
 def gen_subscript(self, n: Node, o: Val) -> Val:
     # o[i], where o is the value of n.kids[0] and n.kids[1] the index
