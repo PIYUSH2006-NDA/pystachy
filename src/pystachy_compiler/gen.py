@@ -160,6 +160,12 @@ from src.pystachy_compiler.conversions import (
 )
 from src.pystachy_compiler.declarations import (
     gen_add_field as declarations_add_field,
+    gen_alias_ann as declarations_alias_ann,
+    gen_alias_kept as declarations_alias_kept,
+    gen_alias_params as declarations_alias_params,
+    gen_alias_tvars as declarations_alias_tvars,
+    gen_alias_value as declarations_alias_value,
+    gen_alias_variadic as declarations_alias_variadic,
     gen_ann as declarations_ann,
     gen_ann_base as declarations_ann_base,
     gen_ann_items as declarations_ann_items,
@@ -199,6 +205,7 @@ from src.pystachy_compiler.declarations import (
     gen_shadowed as declarations_shadowed,
     gen_stub as declarations_stub,
     gen_subst as declarations_subst,
+    gen_subst_ann as declarations_subst_ann,
     gen_synth as declarations_synth,
     gen_tvar as declarations_tvar,
     gen_typeof as declarations_typeof,
@@ -208,6 +215,8 @@ from src.pystachy_compiler.declarations import (
     gen_typing_forms as declarations_typing_forms,
     gen_typing_name as declarations_typing_name,
     gen_typing_ref as declarations_typing_ref,
+    gen_unalias as declarations_unalias,
+    gen_unalias_all as declarations_unalias_all,
     gen_union_members as declarations_union_members,
     gen_unpack_ann as declarations_unpack_ann,
     gen_vtype as declarations_vtype,
@@ -795,6 +804,10 @@ class Gen:
         # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
         # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
+        # the type aliases, by qualified name: the statement that binds each (Mod.taliases), and
+        # those whose annotation alias_ann is making the type of
+        self.taliases: dict[str, Node] = {}
+        self.resolving: list[str] = []
 
     # ---- emission helpers
     def err(self, msg: str) -> None:
@@ -1038,6 +1051,33 @@ class Gen:
 
     def class_params(self, st: Node) -> str:
         return declarations_class_params(self, st)
+
+    def alias_value(self, name: str) -> Node:
+        return declarations_alias_value(self, name)
+
+    def alias_params(self, name: str) -> list[str]:
+        return declarations_alias_params(self, name)
+
+    def alias_tvars(self, a: Node, out: list[str], seen: list[str]) -> None:
+        return declarations_alias_tvars(self, a, out, seen)
+
+    def alias_variadic(self, name: str) -> bool:
+        return declarations_alias_variadic(self, name)
+
+    def alias_kept(self, name: str) -> bool:
+        return declarations_alias_kept(self, name)
+
+    def unalias(self, a: Node, seen: list[str]) -> Node:
+        return declarations_unalias(self, a, seen)
+
+    def subst_ann(self, n: Node, tps: list[str], args: list[Node]) -> Node:
+        return declarations_subst_ann(self, n, tps, args)
+
+    def alias_ann(self, n: Node) -> str:
+        return declarations_alias_ann(self, n)
+
+    def unalias_all(self, n: Node) -> None:
+        return declarations_unalias_all(self, n)
 
     def ann_problem(self, n: Node, ret: bool) -> str:
         return declarations_ann_problem(self, n, ret)

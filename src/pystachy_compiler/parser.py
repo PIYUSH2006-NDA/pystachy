@@ -28,6 +28,7 @@ class Parser:
         self.loops = 0  # loops around the statement being parsed, in its function or class
         self.infn = False  # inside a def
         self.nest = 0  # the parser's own recursion: nested expressions and elif branches
+        self.blocks = 0  # the blocks around the statement being parsed (0: a module's top level)
         self.extra = 0  # CPython's parser's levels other than those: in brackets, blocks and operators
         self.xstar = -1  # the loops around the except* block the statement is in (-1: none)
         self.errs: list[str] = ["", "", ""]  # see later()
@@ -191,6 +192,7 @@ class Parser:
         line = self.line()
         body: list[Node] = []
         self.extra += 7  # (6 or 7 in CPython's parser)
+        self.blocks += 1
         if self.eat("nl"):
             self.expect("indent")
             while not self.eat("dedent"):
@@ -198,6 +200,7 @@ class Parser:
                     self.stmt(body)
         else:
             self.simple(body)
+        self.blocks -= 1
         self.extra -= 7
         return mk("block", "", line, body)
 
@@ -642,18 +645,23 @@ class Parser:
         if not future and not (self.p == 0 and self.docstring()):
             self.early = False
         if k == "id" and self.toks[self.p].text == "type" and self.ahead() == "id" and (self.toks[self.p + 2].kind == "=" or self.toks[self.p + 2].kind == "["):
-            # type X[T] = value (PEP 695): s is X
+            # type X[T] = value (PEP 695): s is X; at a module's top level, its kid is a
+            # "typeparams" node (s: the type parameters; kids: the value, then their kinds as a
+            # class's), which the loader makes a type alias (Loader.bindings)
             self.p += 1
             name = self.expect("id").text
             tps: list[str] = []
+            tpk: list[str] = []
             if self.peek() == "[":
-                self.typeparams(tps, line, [])
+                self.typeparams(tps, line, tpk)
             self.expect("=")
             v = self.test()
             self.scoped(v, "a type alias")
             self.dropped(line, v)
             self.no_debug(name, line)
-            return mk("typealias", name, line, [])
+            if self.blocks > 0:
+                return mk("typealias", name, line, [])
+            return mk("typealias", name, line, [mk("typeparams", " ".join(tps), line, [v] + [mk("str", x, line, []) for x in tpk])])
         if k == "pass" or k == "break" or k == "continue":
             if k != "pass" and self.loops == self.xstar:
                 self.later(2, "'break', 'continue' and 'return' cannot appear in an except* block", line)

@@ -1,0 +1,14 @@
+3 3
+['x', 'x'] None
+5 a.b.c 
+(0.5, 1.5)
+3.0 6 empty int 7 str 'é'
+4 root -
+Placed(at=3, value=2.5, label='?') Placed(at=1, value=2, label='ü')
+pos name-or-score name-or-score True True
+42 24 5 1000.0 False
+5
+2 ['z', 'w'] 0
+[6, 3]
+2 3
+[exit 0]

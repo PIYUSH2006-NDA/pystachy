@@ -420,7 +420,7 @@ def top_bindings(body: list[Node]) -> dict[str, int]:
     count: dict[str, int] = {}
     for st in body:
         names: dict[str, bool] = {}
-        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass" or st.kind == "typealias":
             names[st.s] = True
         elif st.kind != "import":
             collect([st], names)

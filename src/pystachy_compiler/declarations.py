@@ -118,6 +118,8 @@ def gen_ann(self, n: Node) -> str:
             return "str"  # (a str's UTF-8 bytes, NULs and all, for a C function that takes their length too)
         if is_excname(s):
             return "exc"  # (a builtin exception class: any exception, not only those of the class)
+        if s in self.taliases:
+            return self.alias_ann(n)
         t = self.typing_name(s)
         if t == "TextIO" or t == "Self" or t.startswith("!"):
             return "file" if t == "TextIO" else self.self_type() if t == "Self" else t
@@ -144,6 +146,8 @@ def gen_ann(self, n: Node) -> str:
             if t.startswith("!"):
                 return t
         return self.union_type(ts)  # A | B
+    elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s in self.taliases:
+        return self.alias_ann(n)
     elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s in self.tparams:
         return self.generic_ann(n.kids[0].s, n.kids[1])
     elif k == "index" and (n.kids[0].kind == "name" or n.kids[0].kind == "attr"):
@@ -350,6 +354,117 @@ def gen_class_params(self, st: Node) -> str:
         if kinds[i] == "*":
             self.tvtuples[names[i]] = True
     return ""
+
+def gen_alias_value(self, name: str) -> Node:
+    # the value of type alias name: a type statement's, or that an assignment binds
+    st = self.taliases[name]
+    return st.kids[0].kids[0] if st.kind == "typealias" else st.kids[1]
+
+def gen_alias_params(self, name: str) -> list[str]:
+    # the type parameters of type alias name: a type statement's, or else the TypeVars its value
+    # names, in order, which a subscript binds as typing's does (Pair = tuple[T, T]: Pair[int])
+    st = self.taliases[name]
+    if st.kind == "typealias":
+        return st.kids[0].s.split()
+    out: list[str] = []
+    self.alias_tvars(st.kids[1], out, [name])
+    return out
+
+def gen_alias_variadic(self, name: str) -> bool:
+    # is a type parameter of type alias name a TypeVarTuple or a ParamSpec (a type statement's
+    # kinds are Parser.typeparams')
+    st = self.taliases[name]
+    if st.kind == "typealias":
+        return len([x for x in st.kids[0].kids[1:] if x.s != ""]) > 0
+    return len([x for x in self.alias_params(name) if x in self.tvtuples]) > 0
+
+def gen_alias_tvars(self, a: Node, out: list[str], seen: list[str]) -> None:
+    # (alias_params) the TypeVars annotation a names, also through the aliases it names whole
+    if a.kind == "name" and a.s in self.typevars and a.s not in out:
+        out.append(a.s)
+    if a.kind == "name" and a.s in self.taliases and a.s not in seen and self.taliases[a.s].kind == "assign":
+        self.alias_tvars(self.taliases[a.s].kids[1], out, seen + [a.s])
+    if a.kind == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.taliases:
+        self.alias_tvars(a.kids[1], out, seen)  # (its type arguments, not its own parameters)
+        return
+    for k in a.kids:
+        self.alias_tvars(k, out, seen)
+
+def gen_alias_kept(self, name: str) -> bool:
+    # does the assignment that binds type alias name stay in the module's code: Pos = int binds
+    # a class, which can be called (Pos("3")), as does an alias of such an alias; the other
+    # values can only be named by annotations
+    st = self.taliases[name]
+    v = st.kids[1] if st.kind == "assign" else st
+    if v.kind == "name" and v.s in self.taliases:
+        return self.alias_kept(v.s)
+    return v.kind == "name" and v.s in ["int", "float", "str", "bool"]
+
+def gen_unalias(self, a: Node, seen: list[str]) -> Node:
+    # annotation a with each type alias that it names replaced by the alias's value, where a
+    # generic alias's type arguments replace its type parameters; what cannot be replaced (a
+    # recursive alias, seen: those being replaced; a generic alias without the type arguments
+    # it needs) is left for alias_ann's error
+    k = a.kind
+    if k == "noann":
+        return a  # (a generic def's, which types nothing)
+    if k == "name" and a.s in self.taliases and a.s not in seen and (self.taliases[a.s].kind == "assign" or self.taliases[a.s].kids[0].s == ""):
+        return self.unalias(clone(self.alias_value(a.s)), seen + [a.s])
+    if k == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.taliases and a.kids[0].s not in seen:
+        name = a.kids[0].s
+        tps = self.alias_params(name)
+        xs = a.kids[1].kids if a.kids[1].kind == "tuple" else [a.kids[1]]
+        if len(tps) == 0 or len(xs) != len(tps) or self.alias_variadic(name):
+            return a
+        # (the type arguments replace the type parameters first: in type Pair[Row] = ..., Row is
+        # the parameter, not the module's alias Row)
+        v = self.subst_ann(clone(self.alias_value(name)), tps, [self.unalias(x, seen) for x in xs])
+        return self.unalias(v, seen + [name])
+    for i in range(len(a.kids)):
+        a.kids[i] = self.unalias(a.kids[i], seen)
+    return a
+
+def gen_subst_ann(self, n: Node, tps: list[str], args: list[Node]) -> Node:
+    # annotation n (a copy) with type parameters tps replaced by annotations args
+    if n.kind == "name" and n.s in tps:
+        return clone(args[tps.index(n.s)])
+    for i in range(len(n.kids)):
+        n.kids[i] = self.subst_ann(n.kids[i], tps, args)
+    return n
+
+def gen_alias_ann(self, n: Node) -> str:
+    # the type that annotation n, type alias X or X[...], denotes, or "!" and why not
+    name = n.s if n.kind == "name" else n.kids[0].s
+    tps = self.alias_params(name)
+    xs = (n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]) if n.kind == "index" else []
+    if name in self.resolving:
+        return f"!recursive type aliases are not supported: '{short(name)}' refers to itself"
+    if n.kind == "index" and self.alias_variadic(name):
+        return f"!type alias '{short(name)}' with a TypeVarTuple (*Ts) or ParamSpec (**P) parameter is not supported with type arguments: write its value out"
+    if n.kind == "index" and len(tps) == 0:
+        return f"!type alias '{short(name)}' is not generic: it takes no type arguments"
+    if n.kind == "index" and len(xs) != len(tps):
+        return f"!type alias '{short(name)}' takes {len(tps)} type argument{'s' if len(tps) != 1 else ''} ({', '.join([short(x) for x in tps])}), not {len(xs)}"
+    if n.kind == "name" and len(tps) > 0 and self.taliases[name].kind == "typealias":
+        return f"!generic type alias '{short(name)}' needs its type arguments here ({short(name)}[{', '.join([short(x) for x in tps])}])"
+    self.resolving.append(name)
+    t = self.ann(self.unalias(clone(n), []))
+    self.resolving.pop()
+    if t.startswith("!") and not t.startswith("!type alias") and not t.startswith("!recursive type aliases") and not t.startswith("!generic type alias"):
+        return f"!type alias '{short(name)}': {t[1:]}"
+    return t
+
+def gen_unalias_all(self, n: Node) -> None:
+    # replace the type aliases that the annotations in code n name (unalias): its defs'
+    # parameters and returns and its annotated assignments, at any depth
+    if n.kind == "def":
+        for p in n.kids[0].kids:
+            p.kids[0] = self.unalias(p.kids[0], [])
+        n.kids[1] = self.unalias(n.kids[1], [])
+    elif n.kind == "annassign":
+        n.kids[1] = self.unalias(n.kids[1], [])
+    for k in n.kids:
+        self.unalias_all(k)
 
 def gen_class_tvars(self, cls: str) -> list[str]:
     # the type variables of generic class cls, or of the one it specializes ([] for another class)

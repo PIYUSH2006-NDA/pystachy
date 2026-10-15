@@ -545,6 +545,8 @@ def gen_program(self, mods: list[Mod]) -> str:
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        for q in m.taliases:
+            self.taliases[q] = m.taliases[q]
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
@@ -561,6 +563,14 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])
+            elif st.kind == "typealias" and st.s in self.taliases:
+                m.body.kids[i] = mk("pass", "", st.line, [])  # (a type alias, which only annotations name)
+            elif st.kind == "assign" and st.kids[0].kind == "name" and st.kids[0].s in self.taliases and self.taliases[st.kids[0].s] is st and not self.alias_kept(st.kids[0].s):
+                m.body.kids[i] = mk("pass", "", st.line, [])
+    if len(self.taliases) > 0:
+        # an annotation that names a type alias is its value (unalias)
+        for m in mods:
+            self.unalias_all(m.body)
     class_counts: dict[str, int] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:

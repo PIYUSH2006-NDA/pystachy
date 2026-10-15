@@ -350,7 +350,7 @@ UNSUPPORTED: dict[str, str] = {
     "async": "'async' statements are not supported",
     "asynccomp": "asynchronous comprehensions are not supported",
     "sliceitem": "a slice inside a tuple subscript (x[a:b, c]) is not supported", "match": "'match' statements are not supported",
-    "typealias": "'type' statements are not supported",
+    "typealias": "'type' statements are only supported at a module's top level, for a name that no other statement binds",
 }
 # decorators that an imported module may apply to a def ("f") or a class ("c") Pystachy leaves
 # uncompiled until the program uses it: applying them when the module's code runs calls no code

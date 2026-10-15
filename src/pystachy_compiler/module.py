@@ -11,9 +11,13 @@ class Mod:
         self.q: str = name.replace(".", "$") + "$" if name != "" else ""  # prefix of its qualified names
         self.body = mk("block", "", 1, [])
         # what each module-level name binds: "f" a def, "c" a class, "v" a variable, "m:<module>"
-        # a user module, "a:<qualified name>" another module's def or class, "b:<path>" a
-        # builtin module or one of its attributes
+        # a user module, "a:<qualified name>" another module's def or class, "t:<qualified
+        # name>" a type alias or TypeVar (its own or another module's), "b:<path>" a builtin
+        # module or one of its attributes
         self.kinds: dict[str, str] = {}
+        # its type aliases, by qualified name: the statement that binds each, a top-level type
+        # statement or name = <a type> (Loader.type_value)
+        self.taliases: dict[str, Node] = {}
         self.fnglobal: dict[str, bool] = {}  # the names a function's global statement binds
         self.fnonly: dict[str, bool] = {}  # those its top-level code does not
         self.rebound: dict[str, bool] = {}  # the names it binds other than as os, sys, TYPE_CHECKING (rebound())
