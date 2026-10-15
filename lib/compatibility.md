@@ -125,7 +125,8 @@ does not change the predicates.
 
 ## Collections
 
-The shipped module provides `deque` only. It supports both ends, optional `maxlen`,
+The shipped module provides `deque`, and binds `abc` to the builtin `collections.abc`
+as CPython's binds it to `_collections_abc`. `deque` supports both ends, optional `maxlen`,
 extension, rotation, insertion/removal, indexing, containment/search, copies,
 comparisons and repetition. The item type comes from a supported iterable argument,
 an annotation (`q: deque[int] = deque()`), or an explicit constructor

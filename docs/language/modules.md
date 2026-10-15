@@ -54,6 +54,8 @@ by that code. The runtime binding check still applies.
 
 `import pkg.util as u` binds `u` to `pkg.util`, as CPython does. Usually this is the submodule;
 it can instead be a value the package binds after importing that submodule.
+`import collections.abc` binds `collections` to the `lib/` package and runs its code, although
+`collections.abc` itself is builtin; the package binds `abc` to that module, as CPython's does.
 
 ## Compile-time branches
 

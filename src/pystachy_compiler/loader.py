@@ -5,7 +5,9 @@ from src.pystachy_compiler.analysis import (
     accel_try,
     binds,
     builtin_has,
+    builtin_import,
     builtin_module,
+    builtin_of,
     calls,
     catches_import,
     collect,
@@ -205,8 +207,10 @@ class Loader:
             p = a.kids[1].s
             if st.s.startswith("from."):
                 p = self.relative(m, st.s, p, st.line)
-            elif builtin_module(p) or p == "typing_extensions":
+            elif builtin_import(st, a) or p == "typing_extensions":
                 continue
+            elif builtin_module(p):
+                p = a.kids[0].s  # (import collections.abc: the package collections)
             if p not in self.mods:
                 return False
             if st.s.startswith("from") and a.s != "*":
@@ -653,9 +657,9 @@ class Loader:
 
     def bpath(self, e: Node) -> str:
         # what a name or an attribute chain on one names in a builtin module ("collections.abc.Mapping"), or ""
-        if e.kind == "name":
-            k = self.kind_of(e)
-            return k[2:] if k.startswith("b:") else ""
+        k = self.kind_of(e)
+        if k.startswith("b:") or e.kind == "name":
+            return k[2:] if k.startswith("b:") else ""  # (also a user module's attribute: collections.abc)
         p = self.bpath(e.kids[0]) if e.kind == "attr" else ""
         return p + "." + e.s if p != "" else ""
 
@@ -829,10 +833,13 @@ class Loader:
             for a in x.kids:
                 p = a.kids[1].s if not x.s.startswith("from.") else self.relative(m, x.s, a.kids[1].s, x.line)
                 i = 0
-                while i >= 0 and bad == "" and not builtin_module(p) and (len(ok) == 0 or x.s == ""):
-                    # each package on the way, then the module (once for a from-import)
+                while i >= 0 and bad == "" and not builtin_import(x, a) and (len(ok) == 0 or x.s == ""):
+                    # each package on the way, then the module (once for a from-import), up to a
+                    # builtin submodule (import collections.abc)
                     i = p.find(".", i + 1)
                     q = p[:i] if i >= 0 else p
+                    if builtin_module(q):
+                        break
                     f = self.init_fails(q) if self.modpath(q) != "" else "ModuleNotFoundError"
                     if f != "":
                         bad = q
@@ -1436,7 +1443,7 @@ class Loader:
         flags: list[str] = []
         checks: list[str] = []  # each from-imported alias must exist in its source module too
         for a in st.kids if infn else st.kids[:0]:
-            if a.s in self.fgl.get(self.curdef, {}) and (st.s.startswith("from.") or not builtin_module(a.kids[1].s) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
+            if a.s in self.fgl.get(self.curdef, {}) and (not builtin_import(st, a) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
                 # (CPython binds the module's global, which then names one module or another; but
                 # for a builtin module that the module's code has bound it to already)
                 out.append(mk("badimport", f"an import of '{a.s}' in a function that declares it global is not supported", line, []))
@@ -1453,6 +1460,10 @@ class Loader:
                 a.kids[0].s = "typing" + a.kids[0].s[17:]
             if st.s.startswith("from."):
                 path = self.relative(m, st.s, path, line)
+            elif builtin_module(path) and not builtin_import(st, a):
+                # import collections.abc binds the package collections, a Python module whose code
+                # runs; it binds abc itself, as CPython's does
+                path = a.kids[0].s
             elif builtin_module(path):
                 if not infn and m.kinds.get(a.s, "") == "v":
                     fail(f"'{a.s}' is bound both as a variable and as a function, class or import (not supported)", line)
@@ -1673,7 +1684,7 @@ class Loader:
         elif k.startswith("b:"):
             p = k[2:]
             self.bind(m, name, k, infn, line)
-            keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", p[: p.find(".")] if "." in p else p, line, [])]))
+            keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
         elif k != "v":
             self.bind(m, name, k, infn, line)
         else:

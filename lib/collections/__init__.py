@@ -10,6 +10,9 @@ from typing import Generic, Iterable, Iterator, Self, TypeVar
 
 __all__ = ["deque"]
 
+# CPython's binds abc = _collections_abc, the module collections.abc; Pystachy's is builtin
+import collections.abc as abc
+
 _T = TypeVar("_T")
 
 

@@ -86,6 +86,19 @@ def builtin_module(path: str) -> bool:
     return path in MODULES or root in MODULES or path == "collections.abc"
 
 
+def builtin_import(st: Node, a: Node) -> bool:
+    # does alias a of import statement st bind a builtin module or a name of one: import os.path
+    # binds os, a builtin module, but import collections.abc the Python package collections
+    return not st.s.startswith("from.") and builtin_module(a.kids[0].s if st.s == "" else a.kids[1].s)
+
+
+def builtin_of(path: str) -> str:
+    # the builtin module that path, a builtin module or a name of one, is in
+    if path == "collections.abc" or path.startswith("collections.abc."):
+        return "collections.abc"
+    return path[: path.find(".")] if "." in path else path
+
+
 def known_path(p: str) -> bool:
     # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
     # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
@@ -194,7 +207,7 @@ def special_import(st: Node, a: Node) -> bool:
     # an import the loader recognizes where the name it binds is read: of a builtin module (import
     # os, import os.path as p), or from typing import TYPE_CHECKING
     if st.s == "":
-        return builtin_module(a.kids[1].s)
+        return builtin_import(st, a)
     return st.s == "from" and (a.kids[0].s == "typing.TYPE_CHECKING" or a.kids[0].s == "typing_extensions.TYPE_CHECKING")
 
 
@@ -232,7 +245,7 @@ def builtin_try(st: Node) -> bool:
     # ImportError: TYPE_CHECKING = False), whose except clauses never run (Loader.optional())
     for x in st.kids[0].kids if accel_try(st) else st.kids[:0]:
         for a in x.kids if x.kind == "import" else x.kids[:0]:
-            if x.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+            if x.s.startswith("from.") or not (builtin_import(x, a) or a.kids[1].s == "typing_extensions"):
                 return False
     return accel_try(st)
 
@@ -872,7 +885,7 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
                 out[nm] = True
     for a in n.kids if n.kind == "import" else n.kids[:0]:
         sure[a.s] = True
-        if n.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
             user[a.s] = True
     if n.kind == "if":
         import_reads(n.kids[0], sure, out, user)
