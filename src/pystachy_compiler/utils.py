@@ -425,6 +425,18 @@ def nonetest(n: Node) -> int:
     return 0 if n.kids[1].kind == "None" else 1 if n.kids[0].kind == "None" else -1
 
 
+def empty_result_type(t: str, want: str) -> str:
+    # A fresh empty result has one compatible layout, or the ordinary int default.
+    want = unopt(want)
+    if is_union(want):
+        candidates = [m for m in umembers(want) if same_kind(m, t)]
+        if len(candidates) == 1:
+            want = candidates[0]
+    if same_kind(want, t) and "?" not in want:
+        return want
+    return "list[int]" if is_list(t) else "set[int]" if is_set(t) else "dict[int,int]"
+
+
 def same_kind(a: str, b: str) -> bool:
     # are types a and b both lists, both dicts or both sets (a class may be named listing)
     return (is_list(a) and is_list(b)) or (is_dict(a) and is_dict(b)) or (is_set(a) and is_set(b) and is_fset(a) == is_fset(b))

@@ -780,7 +780,8 @@ class Gen:
         # return type of that kind a call has used, so that it can no longer change (see adopt)
         self.qret: dict[str, str] = {}
         self.qholes: dict[str, list[int]] = {}  # direct/forwarded empty returns' layout holes, typed by adopt
-        self.qused: dict[str, bool] = {}
+        self.qused: dict[str, str] = {}  # layouts already consumed by recursive calls
+        self.qforward: dict[str, bool] = {}  # open returns include a forwarded empty result
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)

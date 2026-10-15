@@ -24,6 +24,7 @@ from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
     elem_problem,
+    empty_result_type,
     folds,
     is_const,
     is_dict,
@@ -545,6 +546,10 @@ def gen_stmt(self, n: Node) -> None:
     elif k == "return":
         if self.modlevel:
             self.err("'return' outside function")
+        if "?" in self.ret and self.qforward.get(self.curfn.ll, False) and len(n.kids) == 0:
+            # Forwarding used to choose a concrete empty-result default at the
+            # call. Preserve it when None needs a complete optional layout.
+            self.adopt(empty_result_type(self.ret, self.curfn.rctx))
         if self.ret == "":
             # the first return of a template's function with a value decides what the function
             # returns; a return of None before it is lowered from what that decided
@@ -553,6 +558,9 @@ def gen_stmt(self, n: Node) -> None:
                 # Compiling the expression may have recursively called this
                 # instance and fixed its old void ABI, including via another function.
                 self.err(f"cannot infer what {short(self.curfn.name)}() returns: recursion already used None; annotate its return type")
+            if "?" in v.t and self.qforward.get(self.curfn.ll, False) and self.returned_none():
+                self.adopt(empty_result_type(v.t, self.curfn.rctx))
+                v = Val(v.v, self.ret)
             if v.t != "None":
                 t = v.t
                 if self.optional(t) != t and self.optional(t) != "" and self.returned_none():
@@ -588,6 +596,8 @@ def gen_stmt(self, n: Node) -> None:
                 self.ret_(Val("null", "None"))
         else:
             v = self.iter_ret(n.kids[0]) if self.curfn.iters else self.retval(n.kids[0], self.ret)
+            if v.t == "None" and "?" in self.ret and self.qforward.get(self.curfn.ll, False):
+                self.adopt(empty_result_type(self.ret, self.curfn.rctx))
             if "?" in self.ret and "?" not in v.t and same_kind(v.t, self.ret):
                 self.adopt(v.t)  # (it returned an empty container without a type before)
             j = self.join(self.ret, v.t) if self.curfn.infer and v.t != self.ret else self.ret
