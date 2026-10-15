@@ -20,13 +20,13 @@ jobs:
   verification:
     name: verify (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    # Native checks take ~15 minutes; GC self-compilation has its own 30-minute bound.
-    # Leave room for bootstrap, runner variation and uploading failure diagnostics.
-    timeout-minutes: ${{ matrix.group == 'gc-stress' && 40 || matrix.group == 'native' && 25 || 15 }}
+    # Target <10 minutes of work per group; retain headroom for runner variation
+    # and failure diagnostics. GC self-compilation has its own 10-minute bound.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        group: [hosted, native, python-free, ubsan, gc-stress, contracts, benchmarks]
+        group: [hosted, native, opt-off, python-free, ubsan, gc-stress, contracts, benchmarks]
     env:
       PYSTACHY_LLVM: /usr/lib/llvm-18/bin
     steps:

@@ -141,12 +141,14 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Seven groups run in parallel, each with its own fixed-point bootstrap and 15-minute job limit:
+Eight groups run in parallel, each with its own fixed-point bootstrap. The target is under
+ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
 |---|---|
 | `hosted` | CPython-hosted differential suite. |
-| `native` | Native suite and optimization-off suite. |
+| `native` | Native differential suite. |
+| `opt-off` | Native suite with IR optimizations disabled. |
 | `python-free` | Rebuild and run with no Python on `PATH`. |
 | `ubsan` | Sanitized compiler/runtime and JIT/AOT suite. |
 | `gc-stress` | Collector-stressed self-compilation and suite, overlapped within the job. |
@@ -161,6 +163,14 @@ toolchains, and different bootstrap IR. Reports and logs are uploaded as workflo
 The combined report's duration is the longest group's verification work;
 `ci.runner_seconds` measures aggregate work. Queueing, setup and other steps add to elapsed
 workflow time. The 15-minute limit applies to each verification job.
+
+GC self-compilation collects every 5,000 allocations and has a separate ten-minute bound.
+At the former interval of 1,000, it spent 23 minutes on 15,543 full-heap collections;
+the wider interval still exercises thousands of collections without dominating CI.
+The GC test suite keeps its compiler interval of 1,000 and collects at **every program
+allocation**. Both self-compilation IR identity and full suite counts remain required.
+The log records self-compilation time; the report also records suite time separately.
+The final report job allows ten minutes for artifact downloads and validation.
 
 The [Lint workflow](../.github/workflows/lint.yml) runs alongside CI: lint, report-gate tests
 and recording checks use the pinned CPython and require no compiler bootstrap.
