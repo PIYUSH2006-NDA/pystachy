@@ -422,18 +422,40 @@ def gen_fn_sig(self, t: str) -> list[str]:
         return [f"!{name} has no return annotation, which the type variable it matches takes its type from"]
     return out
 
-def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
+def contextual_result(n: Node) -> bool:
+    # Only fresh return displays and direct forwarding calls can use a result
+    # hint. Nested functions have their own callers; ordinary stored returns
+    # keep one argument-specialized function. A top-level empty list/dict keeps
+    # its existing open-result specialization shared between caller layouts.
+    if n.kind == "return" and len(n.kids) > 0:
+        e = n.kids[0]
+        return e.kind in ["tuple", "call"] or (e.kind in ["list", "dict", "set"] and len(e.kids) > 0)
+    for k in n.kids:
+        if k.kind not in ["def", "class", "subclass", "lambda"] and contextual_result(k):
+            return True
+    return False
+
+def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "") -> FnInfo:
     # the function template f compiles to for arguments of types ts, compiled when first
     # needed, in the middle of the function that calls it: its first return statement
     # decides what it returns; nnp: the parameters whose objects are known not to be None
-    size = len(ts) + len(nnp)
+    # Only container contexts can type fresh displays. Include the full context
+    # in the key and budgets: two callers may require different native storage.
+    want = want if f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want) and contextual_result(f.orig.kids[2] if f.pending else f.node.kids[2]) else ""
+    key = ",".join(ts) + (" " + ",".join(nnp) if len(nnp) > 0 else "")
+    if key in f.insts and f.insts[key].ll in self.building:
+        # Recursion into the active argument specialization must retain its
+        # inference cycle, including the diagnostic for an open empty result.
+        want = ""
+    size = len(ts) + len(nnp) + len(want)
     for t in ts:
         size += len(t)
     for p in nnp:
         size += len(p)
     if size > TEMPLATE_BYTES:
         self.err(f"{short(f.name)}() template signature exceeds {TEMPLATE_BYTES} bytes; annotate its parameters")
-    key = ",".join(ts) + (" " + ",".join(nnp) if len(nnp) > 0 else "")
+    if want != "":
+        key += " -> " + want
     if key in f.insts:
         g = f.insts[key]
         if g.ret == "":
@@ -478,6 +500,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
     g.mod = f.mod
     g.ret = f.ret
     g.infer = f.ret == ""
+    g.rctx = want
     g.inst = True
     g.npos = f.npos
     g.posonly = f.posonly

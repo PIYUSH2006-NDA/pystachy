@@ -959,6 +959,19 @@ def gen_retval(self, e: Node, want: str) -> Val:
     # infers it). A template's function returns an empty container that nothing fills (see
     # unfilled) as it is, and each call gives it the type its context expects (typed_empty),
     # unless a use further on (in a loop, a call or another return) gives it a type (adopt)
+    if self.curfn.rctx != "" and (want == "" or "?" in want):
+        # Use a caller's context only where a fresh display needs it. Existing
+        # values keep their inferred types; no mutable container is widened.
+        kind = self.empty_of(e)
+        t = unopt(self.curfn.rctx)
+        if is_union(t):
+            matches = [m for m in umembers(t) if m.startswith((kind if kind != "" else e.kind) + "[")]
+            t = matches[0] if len(matches) == 1 else ""
+        if e.kind in ["list", "dict", "set", "tuple"] or kind != "":
+            if t.startswith((kind if kind != "" else e.kind) + "["):
+                hint = self.generic_hint(e, t) if kind == "" else t
+                if hint != "":
+                    want = hint
     q = self.qret.get(self.curfn.ll, "")
     kind = self.empty_of(e) if want == "" or "?" in want else ""
     if kind != "":
