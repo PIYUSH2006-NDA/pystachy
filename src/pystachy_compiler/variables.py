@@ -307,7 +307,9 @@ def gen_new_closure(self, n: Node, key: str) -> Closure:
     if f.kwarg >= 0:
         f.kwarg += 1
     c = Closure(f, name, qual)
-    c.t = f"fn[c:{idx}:{qual}@{where(n.line)}]"  # (where it is defined, which messages show)
+    # Keep the location's numeric ID in the type: paths can contain type delimiters
+    # (including brackets and commas). fn_shown resolves it only for diagnostics.
+    c.t = f"fn[c:{idx}:{qual}@{n.line}]"
     self.closures.append(c)
     self.clokeys[key] = idx
     # the variables it takes: those of the function around it (its cells), and those that function

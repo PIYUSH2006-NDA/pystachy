@@ -572,6 +572,10 @@ def gen_stmt(self, n: Node) -> None:
             # the first return of a template's function with a value decides what the function
             # returns; a return of None before it is lowered from what that decided
             v = self.retval(n.kids[0], "") if len(n.kids) > 0 else Val("null", "None")
+            if self.curfn.ret == "None" and v.t != "None":
+                # Compiling the expression may have recursively called this
+                # instance and fixed its old void ABI, including via another function.
+                self.err(f"cannot infer what {short(self.curfn.name)}() returns: recursion already used None; annotate its return type")
             if v.t != "None":
                 t = v.t
                 if self.optional(t) != t and self.optional(t) != "" and self.returned_none():
