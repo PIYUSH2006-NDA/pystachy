@@ -95,6 +95,7 @@ class FnInfo:
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.synthetic = False  # a dataclass's method that the compiler writes (Gen.synth), not the program
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
+        self.prop = False  # a read-only @property: an attribute read calls this instance method
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
         self.orig = node  # and then its immutable def before cls was renamed (shared by inherited methods)
         self.pending = False  # inherited class method: node shares orig's body until materialize()

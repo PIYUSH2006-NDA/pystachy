@@ -95,6 +95,10 @@ In these cases a program can compile but behave differently from CPython.
 
 ### Functions and object identity
 
+- Private class names are not mangled: `__field` and `__method` retain their literal names.
+  A subclass can therefore collide with a base's private fields or replace its private
+  methods. Use distinct names across the hierarchy until name mangling is supported.
+
 - Runtime-length tuples use a different layout from fixed-shape tuples. Converting a
   fixed-shape tuple to `tuple[T, ...]`, or boxing its scalar elements for an optional-element
   annotation, creates a new tuple. Values compare equally, but identity across such a
