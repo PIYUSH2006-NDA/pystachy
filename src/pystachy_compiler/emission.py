@@ -307,7 +307,7 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
     if name == "wrap_add" or name == "wrap_sub" or name == "wrap_mul":
         return Val(self.ins(f"{name[5:]} i64 {a[0]}, {a[1]}"), "int")
     if name == "udiv" or name == "urem":
-        self.guard(self.ins(f"icmp eq i64 {a[1]}, 0"), "ZeroDivisionError: integer division or modulo by zero")
+        self.guard(self.num_cmp('==', Val(a[1], "int"), Val('0', "int")).v, "ZeroDivisionError: integer division or modulo by zero")
         return Val(self.ins(f"{name} i64 {a[0]}, {a[1]}"), "int")
     if name == "mul_ovf":
         return Val(self.checked("*", a[0], a[1])[1], "bool")
@@ -322,18 +322,19 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
         # same(a, i, b, j, n): within both, and n >= 0
         n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
         n1 = self.ins(f"load i64, ptr {a[2]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
-        for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n0}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n0}, {a[1]}')}",
-                  f"icmp ugt i64 {a[3]}, {n1}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n1}, {a[3]}')}"]:
-            self.guard(self.ins(x), "IndexError: compare out of range")
+        for p, lhs, rhs in [("<", a[4], "0"), (">", a[1], n0), (">", a[4], self.ins(f"sub i64 {n0}, {a[1]}")),
+                            (">", a[3], n1), (">", a[4], self.ins(f"sub i64 {n1}, {a[3]}"))]:
+            x = self.num_cmp(p, Val(lhs, "int"), Val(rhs, "int")) if p == "<" else self.int_ucmp(p, Val(lhs, "int"), Val(rhs, "int"))
+            self.guard(x.v, "IndexError: compare out of range")
         p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
         p1 = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
         return Val(self.ins(f"icmp eq i32 {self.rt('memcmp', 'i32', [f'ptr {p0}', f'ptr {p1}', f'i64 {a[4]}'])}, 0"), "bool")
     if name == "find_byte":
         # find_byte(s, c, st, en): 0 <= st <= en <= len(s)
         n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
-        for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
-            self.guard(self.ins(x), "IndexError: search out of range")
-        self.guard(self.ins(f"icmp ugt i64 {a[1]}, 255"), "ValueError: byte must be in range(0, 256)")
+        for lhs, rhs in [(a[3], n0), (a[2], a[3])]:
+            self.guard(self.int_ucmp(">", Val(lhs, "int"), Val(rhs, "int")).v, "IndexError: search out of range")
+        self.guard(self.int_ucmp('>', Val(a[1], "int"), Val('255', "int")).v, "ValueError: byte must be in range(0, 256)")
         p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
         f = self.rt("memchr", "ptr", [f"ptr {p0}", f"i32 {self.ins(f'trunc i64 {a[1]} to i32')}", f"i64 {self.ins(f'sub i64 {a[3]}, {a[2]}')}"])
         d = self.ins(f"sub i64 {self.ins(f'ptrtoint ptr {f} to i64')}, {self.ins(f'ptrtoint ptr {a[0]} to i64')}")
@@ -341,8 +342,8 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
     if name == "find_sub":
         # find_sub(h, n, st, en): 0 <= st <= en <= len(h)
         n0 = self.ins(f"load i64, ptr {a[0]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
-        for x in [f"icmp ugt i64 {a[3]}, {n0}", f"icmp ugt i64 {a[2]}, {a[3]}"]:
-            self.guard(self.ins(x), "IndexError: search out of range")
+        for lhs, rhs in [(a[3], n0), (a[2], a[3])]:
+            self.guard(self.int_ucmp(">", Val(lhs, "int"), Val(rhs, "int")).v, "IndexError: search out of range")
         p0 = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[2]}, 16')}")
         p1 = self.ins(f"getelementptr i8, ptr {a[1]}, i64 16")
         m = self.ins(f"load i64, ptr {a[1]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
@@ -352,7 +353,7 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
     if name == "str_new":
         # a size the allocator cannot serve (negative, or past 2**63 with the header and NUL)
         # is CPython's MemoryError, as in runtime.c
-        self.guard(self.ins(f"icmp ugt i64 {a[0]}, 9223372036854775790"), "MemoryError: ")
+        self.guard(self.int_ucmp('>', Val(a[0], "int"), Val('9223372036854775790', "int")).v, "MemoryError: ")
         r = self.rt("pys_alloc_atomic", "ptr", [f"i64 {self.ins(f'add nuw nsw i64 {a[0]}, 17')}"])  # zeroed: dict_hash and NUL
         self.emit(f"store i64 {a[0]}, ptr {r}, !tbaa !{TBAA_LEN}")
         return Val(r, "str")
@@ -361,18 +362,19 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
     if name == "copy":
         # copy(dst, at, src, lo, n): dst[at:at + n] = src[lo:lo + n], within both
         m = self.ins(f"load i64, ptr {a[2]}, !tbaa !{TBAA_LEN}, !range !{STRLEN_RANGE}")
-        for x in [f"icmp slt i64 {a[4]}, 0", f"icmp ugt i64 {a[1]}, {n}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {n}, {a[1]}')}",
-                  f"icmp ugt i64 {a[3]}, {m}", f"icmp ugt i64 {a[4]}, {self.ins(f'sub i64 {m}, {a[3]}')}"]:
-            self.guard(self.ins(x), "IndexError: copy out of range")
+        for p, lhs, rhs in [("<", a[4], "0"), (">", a[1], n), (">", a[4], self.ins(f"sub i64 {n}, {a[1]}")),
+                            (">", a[3], m), (">", a[4], self.ins(f"sub i64 {m}, {a[3]}"))]:
+            x = self.num_cmp(p, Val(lhs, "int"), Val(rhs, "int")) if p == "<" else self.int_ucmp(p, Val(lhs, "int"), Val(rhs, "int"))
+            self.guard(x.v, "IndexError: copy out of range")
         dst = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
         src = self.ins(f"getelementptr i8, ptr {a[2]}, i64 {self.ins(f'add i64 {a[3]}, 16')}")
         self.rt("llvm.memmove.p0.p0.i64", "void", [f"ptr {dst}", f"ptr {src}", f"i64 {a[4]}", "i1 false"])
         return Val("null", "None")
-    self.guard(self.ins(f"icmp uge i64 {a[1]}, {n}"), "IndexError: string index out of range")
+    self.guard(self.int_ucmp('>=', Val(a[1], "int"), Val(n, "int")).v, "IndexError: string index out of range")
     p = self.ins(f"getelementptr i8, ptr {a[0]}, i64 {self.ins(f'add i64 {a[1]}, 16')}")
     if name == "byte":
         return Val(self.ins(f"zext i8 {self.ins(f'load i8, ptr {p}, !tbaa !{TBAA_BYTES}')} to i64"), "int")
-    self.guard(self.ins(f"icmp ugt i64 {a[2]}, 255"), "ValueError: byte must be in range(0, 256)")
+    self.guard(self.int_ucmp('>', Val(a[2], "int"), Val('255', "int")).v, "ValueError: byte must be in range(0, 256)")
     self.emit(f"store i8 {self.ins(f'trunc i64 {a[2]} to i8')}, ptr {p}, !tbaa !{TBAA_BYTES}")
     return Val("null", "None")
 

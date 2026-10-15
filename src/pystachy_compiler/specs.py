@@ -70,9 +70,6 @@ for _k in "neg pos invert".split():
 UNCALLED: dict[str, str] = {"__new__": "to make each object of the class", "__getattribute__": "to read each attribute",
                             "__getattr__": "for each attribute it does not find", "__setattr__": "to assign each attribute",
                             "__delattr__": "to delete each attribute"}
-# a comparison from pys_cmp_if's result R (-1, 0, 1, or 2 when a NaN makes it unordered)
-MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<": "icmp eq i64 R, -1", "<=": "icmp sle i64 R, 0",
-                          ">": "icmp eq i64 R, 1", ">=": "icmp ule i64 R, 1"}
 REFL: dict[str, str] = {"<": ">", "<=": ">=", ">": "<", ">=": "<="}  # a < b may run b.__gt__(a)
 ORDOP: dict[str, int] = {"<": 0, "<=": 1, ">": 2, ">=": 3}  # op codes shared with runtime.c
 DUNDER: dict[str, str] = {"+": "__add__", "-": "__sub__", "*": "__mul__", "/": "__truediv__", "//": "__floordiv__", "%": "__mod__",
@@ -428,7 +425,7 @@ IROPS: dict[str, str] = {
     "tuple.load": "rL rD rO", "tuple.store": "wL wD wO",
     "field.addr": "",
     "slot.pack": "", "slot.unpack": "",
-    "num.cast": "", "num.cmp": "",
+    "num.cast": "", "num.cmp": "", "int.ucmp": "",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }

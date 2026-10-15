@@ -147,6 +147,7 @@ class Ins:
         # in s and compares two operands of the same native numeric type.
         # mem.load/store transfer native values through an address of type *<native>.
         # Their effects retain local/global/field/unknown address classification.
+        # int.ucmp retains unsigned order semantics for native int bounds checks.
         # alloc.fixed keeps the class or fixed tuple type; lowering computes its byte size.
         # tuple.load/store use a fixed tuple operand, k: item index, s: native item type.
         # They transfer an opaque slot; r holds its address, then the loaded slot if any.
@@ -265,7 +266,7 @@ class Values:
                 i = code[x]
                 if i.op == "raw" and i.k > 0:
                     self.at[i.k] = j * self.stride + x
-                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mem.load" or i.op == "field.addr") and len(i.r) == 1:
+                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "mem.load" or i.op == "field.addr" or i.op == "int.ucmp") and len(i.r) == 1:
                     self.at[i.r[0]] = j * self.stride + x
                 elif i.op == "union.payload" and len(i.r) == 2:
                     self.at[i.r[1]] = j * self.stride + x

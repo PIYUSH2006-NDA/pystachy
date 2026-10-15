@@ -701,7 +701,7 @@ def gen_stmt(self, n: Node) -> None:
             if not self.open_call(it.kids[0]):
                 # (a file's __enter__ raises if it is closed)
                 c = self.rt("pys_file_closed", "i64", [f"ptr {v.v}"])
-                self.guard(self.ins(f"icmp ne i64 {c}, 0"), "ValueError: I/O operation on closed file.")
+                self.guard(self.num_cmp('!=', Val(c, "int"), Val('0', "int")).v, "ValueError: I/O operation on closed file.")
             if self.eh:
                 self.rt("pys_unwind_file", "void", [f"ptr {v.v}"])
             if len(it.kids) == 2:
@@ -988,7 +988,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
 
 def gen_objlen(self, v: Val) -> Val:
     r = self.as_int(self.call_fn(self.classes[v.t].methods["__len__"], [v], []))
-    self.guard(self.ins(f"icmp slt i64 {r.v}, 0"), "ValueError: __len__() should return >= 0")
+    self.guard(self.num_cmp('<', Val(r.v, "int"), Val('0', "int")).v, "ValueError: __len__() should return >= 0")
     return r
 
 def gen_none_operand(self, op: str, a: Val, b: Val) -> None:
@@ -1186,7 +1186,7 @@ def gen_range_args(self, args: list[Node]) -> list[str]:
 
 def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None = None) -> None:
     if step.startswith("%") or int(step) == 0:
-        self.guard(self.ins(f"icmp eq i64 {step}, 0"), "ValueError: range() arg 3 must not be zero")
+        self.guard(self.num_cmp('==', Val(step, "int"), Val('0', "int")).v, "ValueError: range() arg 3 must not be zero")
     self.iterarg(arg)
     self.hide(hide)
     after = self.forget(body, tgt)
@@ -1203,11 +1203,11 @@ def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[
     self.place(lc)
     i = self.ins(f"load i64, ptr {ctr}")
     if not step.startswith("%"):
-        c = self.ins(f"icmp {'slt' if int(step) > 0 else 'sgt'} i64 {i}, {stop}")
+        c = self.num_cmp('<' if int(step) > 0 else '>', Val(i, "int"), Val(stop, "int")).v
     else:
-        up = self.ins(f"icmp slt i64 {i}, {stop}")
-        dn = self.ins(f"icmp sgt i64 {i}, {stop}")
-        pos = self.ins(f"icmp sgt i64 {step}, 0")
+        up = self.num_cmp('<', Val(i, "int"), Val(stop, "int")).v
+        dn = self.num_cmp('>', Val(i, "int"), Val(stop, "int")).v
+        pos = self.num_cmp('>', Val(step, "int"), Val('0', "int")).v
         c = self.select(pos, Val(up, "bool"), Val(dn, "bool"))
     self.cbr(c, lb, le)
     self.place(lb)
@@ -1247,7 +1247,7 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     self.fn.loops.append(lp)
     self.place(lc)
     c = self.ins(f"load i64, ptr {ctr}")
-    self.cbr(self.ins(f"icmp ne i64 {c}, 0"), lb, le)
+    self.cbr(self.num_cmp('!=', Val(c, "int"), Val('0', "int")).v, lb, le)
     self.place(lb)
     k = self.ins(f"sub i64 {c}, 1")
     self.emit(f"store i64 {k}, ptr {ctr}")
@@ -1293,13 +1293,13 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         s = seqs[k]
         if s.t == "file":
             j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
-            ok = self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {j}')}, 0")
+            ok = self.num_cmp('!=', Val(self.ins(f'load i64, ptr {j}'), "int"), Val('0', "int")).v
             nx = ""
         elif is_set(s.t):
             # the slot of the next element, as CPython's set iterator finds it
             j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.ins(f'load i64, ptr {st[k]}')}", f"i64 {used[k]}"])
             nx = self.ins(f"add i64 {j}, 1")
-            ok = self.ins(f"icmp sge i64 {j}, 0")
+            ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
         elif is_dict(s.t):
             p = self.ins(f"load i64, ptr {st[k]}")
             if mode == "reversed":
@@ -1308,14 +1308,14 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
             else:
                 j = self.rt("pys_dict_next", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
                 nx = self.ins(f"add i64 {j}, 1")
-            ok = self.ins(f"icmp sge i64 {j}, 0")
+            ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
         elif mode == "reversed":
             j = self.ins(f"sub i64 {self.ins(f'sub i64 {st[k]}, 1')}, {i}")
             # 0 <= j < the current length, as CPython's reversed iterator checks
-            ok = self.ins(f"icmp ult i64 {j}, {self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k]}")
+            ok = self.int_ucmp('<', Val(j, "int"), Val(self.ins(f'load i64, ptr {s.v}') if is_list(s.t) else st[k], "int")).v
         else:
             j = i
-            ok = self.ins(f"icmp slt i64 {i}, {self.ins(f'load i64, ptr {s.v}') if not is_tuple(s.t) else st[k]}")
+            ok = self.num_cmp('<', Val(i, "int"), Val(self.ins(f'load i64, ptr {s.v}') if not is_tuple(s.t) else st[k], "int")).v
         go = self.label()
         self.cbr(ok, go, le)
         self.place(go)
