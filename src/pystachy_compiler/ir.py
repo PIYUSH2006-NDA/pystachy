@@ -141,6 +141,8 @@ class Ins:
         # the opaque eight-byte container payload. Only LLVM lowering chooses its bitcast.
         # union.tag reads a nonoptional union's tag; union.payload reads its member's
         # opaque slot (s: member type, r: address then payload). Narrowing proves those reads safe.
+        # num.cast promotes one numeric operand; num.cmp records the source comparison
+        # in s and compares two operands of the same native numeric type.
         # text immediate: for "raw", one line of LLVM text; a slot's name; an rt op's RUNTIME key; the
         # symbol a call calls; the module an init runs; a check's message "Kind: text"; the
         # exception a raise raises; ovf's operator + - *
@@ -256,7 +258,7 @@ class Values:
                 i = code[x]
                 if i.op == "raw" and i.k > 0:
                     self.at[i.k] = j * self.stride + x
-                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack") and len(i.r) == 1:
+                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "num.cast" or i.op == "num.cmp") and len(i.r) == 1:
                     self.at[i.r[0]] = j * self.stride + x
                 elif i.op == "union.payload" and len(i.r) == 2:
                     self.at[i.r[1]] = j * self.stride + x

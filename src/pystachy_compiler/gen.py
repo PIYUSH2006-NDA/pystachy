@@ -116,6 +116,8 @@ from src.pystachy_compiler.containers import (
     gen_to_str as containers_to_str,
 )
 from src.pystachy_compiler.conversions import (
+    gen_num_cast as conversions_num_cast,
+    gen_num_cmp as conversions_num_cmp,
     gen_as_float as conversions_as_float,
     gen_as_int as conversions_as_int,
     gen_coerce as conversions_coerce,
@@ -873,6 +875,12 @@ class Gen:
 
     def as_float(self, v: Val) -> Val:
         return conversions_as_float(self, v)
+
+    def num_cast(self, v: Val, t: str) -> Val:
+        return conversions_num_cast(self, v, t)
+
+    def num_cmp(self, op: str, a: Val, b: Val) -> Val:
+        return conversions_num_cmp(self, op, a, b)
 
     def floats(self, v: Val) -> Val:
         return conversions_floats(self, v)

@@ -1,4 +1,4 @@
-"""Typed slot conversions and union reads keep native types until LLVM lowering.
+"""Typed operations keep native types until LLVM lowering.
 
 Run with python3 -m unittest discover -s tools -p test_typed_ir.py.
 """
@@ -38,6 +38,20 @@ def union_op(op, union_type="union[int,str]"):
             "" if op == "union.tag" else "str")
     i.a = [Val("%a0", union_type)]
     i.r = [1] if op == "union.tag" else [1, 2]
+    return i
+
+
+def cast_op(source="bool", target="float"):
+    i = Ins("num.cast", target, "")
+    i.a = [Val("%a0", source)]
+    i.r = [1]
+    return i
+
+
+def compare_op(t="int", predicate="=="):
+    i = Ins("num.cmp", "bool", predicate)
+    i.a = [Val("%a0", t), Val("%a1", t)]
+    i.r = [1]
     return i
 
 
@@ -211,6 +225,81 @@ class TypedIRTests(unittest.TestCase):
             self.assertTrue(i.a[0].t.startswith("union["))
             if i.op == "union.payload":
                 self.assertIn(i.s, umembers(i.a[0].t))
+
+    def test_numeric_operations_are_typed_and_pure(self):
+        ops = [cast_op("bool", "int"), cast_op("bool", "float"), cast_op("int", "float")]
+        ops.extend(compare_op(t, p) for t in ("int", "float")
+                   for p in ("==", "!=", "<", "<=", ">", ">="))
+        for i in ops:
+            with self.subTest(op=i.op, type=i.t, predicate=i.s):
+                g = Gen()
+                g.verify(function_with(i), False)
+                self.assertEqual(g.nums(i), 1)
+                self.assertEqual(g.opfx(i, {}), 0)
+
+    def test_numeric_casts_reject_other_type_pairs(self):
+        for source, target in (("bool", "bool"), ("int", "int"), ("float", "float"),
+                               ("int", "bool"), ("float", "int"), ("str", "float"),
+                               ("", "float"), ("bool", ""), ("%slot", "int"),
+                               ("opt[int]", "float"), ("bool", "%double")):
+            with self.subTest(source=source, target=target):
+                self.assert_bad(cast_op(source, target))
+
+    def test_numeric_comparisons_reject_wrong_types_and_predicates(self):
+        for t in ("", "bool", "str", "%slot", "opt[float]", "union[int,float]"):
+            with self.subTest(type=t):
+                self.assert_bad(compare_op(t))
+        for second in ("float", "bool", "", "%slot"):
+            with self.subTest(second=second):
+                i = compare_op()
+                i.a[1].t = second
+                self.assert_bad(i)
+        for predicate in ("", "is", "===", "olt"):
+            with self.subTest(predicate=predicate):
+                self.assert_bad(compare_op(predicate=predicate))
+        i = compare_op()
+        i.t = "int"
+        self.assert_bad(i)
+
+    def test_numeric_operation_shapes_and_metadata(self):
+        for make in (cast_op, compare_op):
+            for field, value in (("x", "int"), ("k", 1), ("b", ["entry"]),
+                                 ("r", []), ("r", [1, 2]), ("a", [])):
+                i = make()
+                with self.subTest(op=i.op, field=field, value=value):
+                    setattr(i, field, value)
+                    self.assert_bad(i)
+            i = make()
+            i.a = i.a + [Val("%extra", i.a[0].t)]
+            self.assert_bad(i)
+        i = cast_op()
+        i.s = "sitofp"
+        self.assert_bad(i)
+        i = compare_op()
+        i.a = i.a[:1]
+        self.assert_bad(i)
+
+    def test_source_builds_numeric_ops_and_retains_exact_mixed_comparison(self):
+        source = (Path(__file__).resolve().parent.parent / "tests" / "typed_ir_numeric.py").read_text()
+        captured = []
+        lower = Gen.lower
+
+        def capture(g, fn):
+            g.verify(fn, False)
+            captured.extend(i for b in fn.blocks for i in b.code
+                            if i.op in ("num.cast", "num.cmp", "rt"))
+            lower(g, fn)
+
+        with patch.object(Gen, "lower", capture):
+            g = Gen()
+            g.program(Loader([]).program("typed_ir_numeric.py", source))
+        casts = {(i.a[0].t, i.t) for i in captured if i.op == "num.cast"}
+        self.assertEqual(casts, {("bool", "int"), ("bool", "float"), ("int", "float")})
+        comparisons = {(i.a[0].t, i.s) for i in captured if i.op == "num.cmp"}
+        self.assertTrue({(t, p) for t in ("int", "float")
+                         for p in ("==", "!=", "<", "<=", ">", ">=")}.issubset(comparisons))
+        self.assertTrue(any(i.op == "rt" and i.s == "cmp_if" for i in captured))
+        self.assertTrue({"bool", "int"}.issubset(g.funcs["real"].insts))
 
 
 if __name__ == "__main__":

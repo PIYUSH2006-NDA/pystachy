@@ -8,7 +8,6 @@ from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     CHECKED,
     DUNDER,
-    FCMP,
     FOPS,
     FRT,
     HASATTR,
@@ -417,9 +416,9 @@ def gen_truth(self, v: Val) -> str:
     if is_kw(t):
         return "true" if len(kw_names(t)) > 0 else "false"  # (**kwargs: true where a keyword argument was given)
     if t == "int":
-        return self.ins(f"icmp ne i64 {v.v}, 0")
+        return self.num_cmp("!=", v, Val("0", "int")).v
     if t == "float":
-        return self.ins(f"fcmp une double {v.v}, 0.0")
+        return self.num_cmp("!=", v, Val("0.0", "float")).v
     if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
         return self.ins(f"icmp ne i64 {self.ins(f'load i64, ptr {v.v}')}, 0")
     if t == "None":
@@ -2424,13 +2423,13 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         return self.optcmp(op, a, b)
     if self.isnum(a.t) and self.isnum(b.t):
         if a.t != "float" and b.t != "float":
-            return Val(self.ins(f"icmp {ICMP[op]} i64 {self.as_int(a).v}, {self.as_int(b).v}"), "bool")
+            return self.num_cmp(op, self.as_int(a), self.as_int(b))
         if a.t == "float" and b.t == "float":
-            return Val(self.ins(f"fcmp {FCMP[op]} double {a.v}, {b.v}"), "bool")
+            return self.num_cmp(op, a, b)
         # int against float: exact, as CPython compares them (double rounding would not be)
         iv = self.as_int(b if a.t == "float" else a)
         if not iv.v.startswith("%") and -9007199254740992 <= int(iv.v) <= 9007199254740992:
-            return Val(self.ins(f"fcmp {FCMP[op]} double {self.as_float(a).v}, {self.as_float(b).v}"), "bool")
+            return self.num_cmp(op, self.as_float(a), self.as_float(b))
         fv = a if a.t == "float" else b
         r = self.rt("pys_cmp_if", "i64", [f"i64 {iv.v}", f"double {fv.v}"])
         if a.t == "float":

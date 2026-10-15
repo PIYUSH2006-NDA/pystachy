@@ -45,7 +45,7 @@ def gen_from_slot(self, s: str, t: str) -> Val:
 
 def gen_rarg(self, v: Val) -> str:
     if v.t == "bool":
-        return "i64 " + self.ins(f"zext i1 {v.v} to i64")
+        return "i64 " + self.as_int(v).v
     return f"{lt(v.t)} {v.v}"
 
 def gen_rres(self, r: str, t: str) -> Val:
@@ -57,15 +57,27 @@ def gen_rres(self, r: str, t: str) -> Val:
 
 def gen_as_int(self, v: Val) -> Val:
     if v.t == "bool":
-        return Val(self.ins(f"zext i1 {v.v} to i64"), "int")
+        return self.num_cast(v, "int")
     return v
 
 def gen_as_float(self, v: Val) -> Val:
-    if v.t == "int":
-        return Val(self.ins(f"sitofp i64 {v.v} to double"), "float")
-    if v.t == "bool":
-        return Val(self.ins(f"uitofp i1 {v.v} to double"), "float")
+    if v.t == "int" or v.t == "bool":
+        return self.num_cast(v, "float")
     return v
+
+def gen_num_cast(self, v: Val, t: str) -> Val:
+    # Numeric promotion, unlike slot.pack's bit-preserving representation conversion.
+    i = Ins("num.cast", t, "")
+    i.a = [v]
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", t)
+
+def gen_num_cmp(self, op: str, a: Val, b: Val) -> Val:
+    # The frontend normalizes bools and handles exact mixed int/float comparisons first.
+    i = Ins("num.cmp", "bool", op)
+    i.a = [a, b]
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", "bool")
 
 def gen_floats(self, v: Val) -> Val:
     # a number, or a list of numbers, as float(s)
