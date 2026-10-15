@@ -15,6 +15,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
+| `A \| B` | Explicit closed unions of `int`, `float`, `bool` and `str` |
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
 
@@ -40,7 +41,8 @@ nested tuples of these. Floats, objects and frozensets cannot be keys or set ele
 
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
-General unions such as `int | str`, and a dynamic `Any` type, are unsupported.
+Explicit closed scalar unions such as `int | str` are supported, including `None`.
+General object unions and a dynamic `Any` type are unsupported.
 `None` alone can annotate a return, but cannot be a container's entire element type.
 
 `List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `Callable`, `TextIO`
@@ -159,6 +161,42 @@ An optional dict lookup key equal to `None` is absent: membership is false, `get
 `KeyError: None`. Stores require a nonoptional key. A bool can look up or delete its equal
 integer key, but cannot be inserted into a dict of integer keys, since its printed value
 would differ from the integer.
+
+## Closed scalar unions
+
+Explicit `A | B` and `Union[A, B]` annotations may combine `int`, `float`, `bool`
+and `str`, optionally including `None`. Nested and repeated members normalize to
+one type. These annotations are supported by default in both AOT and JIT modes.
+They may appear in arguments, returns, local variables, fields and container values:
+
+```python
+def config_value(value: int | str | None) -> str:
+    if value is None:
+        return "missing"
+    if isinstance(value, str):
+        return value.upper()
+    return str(value + 1)
+```
+
+A union stores an immutable tagged box; `None` is a null pointer. `isinstance()`
+checks the tag and narrows a local or parameter in either branch, including through
+assertions and exiting guards. `bool` remains a separate member and is an instance
+of `int`, as in Python: test `bool` first if the following integer branch needs one
+concrete type. Assignment updates the known type, and control-flow joins retain it
+only when every incoming path agrees.
+
+Globals, fields and cells assigned by a `nonlocal` closure are not narrowed across
+calls. Copy their value to an ordinary local before testing it. The copy remains
+valid when the original storage is changed because the tagged box is immutable.
+Container types stay invariant: `list[int]` cannot become `list[int | str]`.
+
+Narrow before arithmetic, truth testing, comparison, formatting or other operations
+that require a concrete member. Generic container equality and printing of union
+items are not implemented. No union is inferred from unrelated assignments or
+return values; annotate it explicitly. Class/container members, arbitrary `Any`,
+recursive JSON types, runtime compilation and speculative type assumptions are out
+of scope. Boxing may allocate; this feature expands supported programs and makes
+no performance claim.
 
 ## Function and method templates
 
