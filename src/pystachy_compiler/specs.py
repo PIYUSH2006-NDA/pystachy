@@ -409,6 +409,12 @@ METHODS: dict[str, str] = {
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
+# Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
+# These are conservative: even a byte-correct delimiter search is a porting audit hit.
+UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace "
+                            "upper lower swapcase capitalize title casefold isdigit isalpha isalnum "
+                            "isupper islower istitle isdecimal isnumeric expandtabs").split()
+
 # the methods of frozenset (those that change nothing) and of set, which Gen.smethod compiles
 FSETMETHODS: list[str] = "copy difference intersection isdisjoint issubset issuperset symmetric_difference union".split()
 SETMETHODS: list[str] = FSETMETHODS + "add clear difference_update discard intersection_update pop remove symmetric_difference_update update".split()
@@ -532,6 +538,7 @@ RUNTIME: dict[str, str] = {
     "set.isdisjoint": "bool:S,S|rD|", "set.isdisjoint_list": "bool:S,list[T]|rL rD|", "set.next": "int:S,int,int|R rD|",
     "set.key": "*T:S,int|rD|", "set.list": "list[T]:S|A rD|",
     # strings
+    "str.audit": "None:str,str|R|",
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
