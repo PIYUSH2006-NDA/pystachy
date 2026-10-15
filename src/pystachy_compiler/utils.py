@@ -1,7 +1,7 @@
 """Utils component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 import os
-from src.pystachy_compiler.diagnostics import fail
+from src.pystachy_compiler.diagnostics import fail, where
 from src.pystachy_compiler.ir import FnInfo
 from src.pystachy_compiler.llvm_abi import llvm_decl
 from src.pystachy_compiler.names import short
@@ -401,7 +401,7 @@ def fn_shown(t: str) -> str:
         return f"<built-in method {k[2 : k.find(':', 2)]} of {tname(k[k.find(':', 2) + 1 :])} object>"
     if k.startswith("c:"):
         q = k[k.find(":", 2) + 1 :]
-        return f"<function {q[: q.find('@')]} ({q[q.find('@') + 1 :]})>"
+        return f"<function {q[: q.find('@')]} ({where(int(q[q.find('@') + 1 :]))})>"
     return f"<built-in function {k[2:]}>" if k.startswith("b:") else f"<function {short(k[2:])}>"
 
 
