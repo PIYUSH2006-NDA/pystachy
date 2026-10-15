@@ -364,7 +364,8 @@ supported alternatives.
   operand's `__eq__`, and between values of other types that cannot be equal (`1 == "1"`, or an
   `int | None` and a `str | None`, which CPython finds equal only when both are `None`)
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
-  calls is annotated to take another class, which CPython calls anyway
+  calls is annotated to take another class than the objects' class or one of its bases, which
+  CPython calls anyway
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
