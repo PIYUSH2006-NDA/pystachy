@@ -231,7 +231,17 @@ its box. A concrete equality/search operand may allocate a temporary box. The bo
 do not create Python numeric object identity: the existing [NaN identity
 deviation](compatibility.md#deviations-from-cpython) also applies to union payloads.
 
-Narrow before arithmetic, ordering, member methods and format specifications that
+Numeric unions of `int`, `float` and `bool`, optionally including `None`, support
+`+`, `-`, `*`, `/`, `//`, `%` and unary `+` or `-` without narrowing. Tag dispatch
+reuses the native typed operations and their checked 64-bit integer, division and
+exception behavior. Each operand evaluates once, left to right, before dispatch;
+`None` raises `TypeError`. Results remain `int` or `float` according to the actual
+operands; when both are possible the result is `int | float`, including when all
+current calls happen to pass integers. Declare that result bound explicitly in
+returns and mutable storage. Power, bitwise operations, and unions containing
+strings or other nonnumeric members still require narrowing.
+
+Narrow before other arithmetic, ordering, member methods and format specifications that
 require a concrete member. No union is inferred from unrelated assignments or
 return values; annotate it explicitly. Container members, arbitrary `Any`, recursive
 JSON types, runtime compilation and speculative type assumptions are out of scope.

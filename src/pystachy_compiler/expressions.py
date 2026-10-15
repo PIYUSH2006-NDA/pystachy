@@ -1729,6 +1729,8 @@ def gen_unary(self, n: Node) -> Val:
     if op == "-" and (e.kind == "int" or e.kind == "float"):
         return self.expr(mk(e.kind, "-" + e.s, e.line, []), "")
     v = self.expr(e, "")
+    if is_union(unopt(v.t)):
+        return self.unumeric(op, v, Val("", ""), "", True)
     if is_sopt(v.t):
         v = self.unwrap(v, f"TypeError: bad operand type for unary {op}: 'NoneType'")
     v = self.as_int(v)
@@ -2077,7 +2079,7 @@ def gen_eqcall(self, f: FnInfo, iseq: bool, a: Val, b: Val) -> Val:
 
 def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     if is_union(unopt(a.t)) or is_union(unopt(b.t)):
-        self.err("closed union arithmetic requires narrowing with isinstance() first" + self.unarrowed(a if is_union(unopt(a.t)) else b))
+        return self.unumeric(op, a, b, shown, False)
     du = self.dunder(op, a, b, shown)
     if du.t != "":
         return du
