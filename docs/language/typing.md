@@ -359,8 +359,9 @@ A module-level function with an unannotated parameter is a template, compiled on
 each argument type combination that calls it. Annotated parameters keep their declared
 types; the first value-returning statement determines an inferred return type.
 An ordinary function without arguments, or method with only its receiver, uses the same
-inference when it has no return annotation and returns a value. Recursive calls before
-that type is known require an explicit return annotation.
+inference when it has no return annotation and returns a value. Existing recursive
+functions returning only `None` retain that contract. A recursive call before a value
+return type is known requires an explicit return annotation.
 Unsupported code becomes an error when that specialization needs it; syntax errors are
 checked regardless of use.
 

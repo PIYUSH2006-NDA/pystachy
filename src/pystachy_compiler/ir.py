@@ -73,6 +73,7 @@ class FnInfo:
         # templates: a module-level function with an unannotated parameter, compiled per call for
         # the argument types (ptypes "" where unannotated) into the functions in insts
         self.generic = False
+        self.void_default = False  # newly inferred zero-argument signature: recursion may retain its old None contract
         self.insts: dict[str, FnInfo] = {}
         self.dtypes: list[str] = []  # the type of each default value evaluated at def time
         self.bad = ""  # why a template cannot be compiled (it is an error only if a call needs it)

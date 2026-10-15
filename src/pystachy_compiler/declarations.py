@@ -692,6 +692,7 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         # No argument needs to provide a type: use the existing one-signature
         # specialization to infer an ordinary no-argument function or method.
         # Initializers and other implicit special methods keep their contracts.
+        f.void_default = not f.generic
         f.generic = True
     marks = d.kids[0].s.split(",")
     bad = ""
