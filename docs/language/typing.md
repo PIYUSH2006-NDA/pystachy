@@ -67,7 +67,10 @@ tests of these annotations are decided using the compiled type.
 ## Annotations
 
 A function whose parameters are annotated uses those types. A missing return annotation
-means `-> None`, unless the function is a template. There is no implicit `int` to `float`
+means `-> None`, unless the function is a template. Ordinary functions taking no arguments
+(methods taking only `self` or `cls`) also infer their return type when they return a value;
+constructors and implicit special methods still require return annotations for values.
+There is no implicit `int` to `float`
 conversion in an assignment, argument or return: write `1.0`, or convert explicitly.
 Arithmetic and numeric list searches may mix integers and floats.
 
@@ -77,8 +80,10 @@ annotation is evaluated; use `"Node"` for a forward reference or
 `from __future__ import annotations` to defer evaluation.
 
 Evaluated annotations may name classes, supported typing forms, builtin generics, unions,
-and type variables. A variable may be used as the whole annotation; unsupported aliases
-are rejected where used. Generic class subscriptions such as `Box[int]` are supported
+and type variables. Aliases of supported classes can name those classes; other aliases are
+not supported. Parameterized aliases such as `Row = list[str]` are rejected at their
+definition, even when unused; value aliases such as `Pos = int` fail when used as annotations.
+Generic class subscriptions such as `Box[int]` are supported
 when they use the standard `typing.Generic` hook. Calls, other operators, custom class
 subscripting, and expressions that could execute user code are rejected. `os.PathLike` and the supported
 `collections.abc` names are exceptions to the restriction on builtin module attributes.
@@ -355,6 +360,10 @@ boxing and dispatch have costs, so no performance improvement is claimed.
 A module-level function with an unannotated parameter is a template, compiled once for
 each argument type combination that calls it. Annotated parameters keep their declared
 types; the first value-returning statement determines an inferred return type.
+An ordinary function without arguments, or method with only its receiver, uses the same
+inference when it has no return annotation and returns a value. Existing recursive
+functions returning only `None` retain that contract. A recursive call before a value
+return type is known requires an explicit return annotation.
 Unsupported code becomes an error when that specialization needs it; syntax errors are
 checked regardless of use.
 
@@ -491,8 +500,8 @@ Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
 `Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
 dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
-no type variable. Repeated bindings must join to a supported common type; integer and bool
-bindings can join to `int`. Callable matching uses annotated positional parameters and
+no type variable. Repeated bindings must preserve the values' types: mixed `int` and `bool`
+constructor arguments do not implicitly join to `int`. Callable matching uses annotated positional parameters and
 returns, or an existing `Callable` signature.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
@@ -513,6 +522,17 @@ empty displays use contextual types where their contents do not already determin
 Heterogeneous displays with known item types can use an explicit union context. Opaque
 calls and operations infer normally; their syntax alone does not request a union layout.
 A variable that neither arguments nor context bind is an error.
+
+When ordinary argument matching cannot bind the type variables consistently,
+fitting named union or optional parameter types resolve the conflict:
+`Pair[int | float](1, 2.5)`, `Pair[int | None](1, None)` and
+`p: Pair[int | float] = Pair(1, 2.5)` bind both parameters annotated `T` to
+their named type. Existing conversions preserve each value's representation,
+including integer precision, and handle defaults and unpacked arguments too.
+Consistent bindings still infer first: `Box[int | str]("x")` stores a concrete
+`str`. A container member must fit exactly: `list[int]` cannot become
+`list[int | float]` through a union annotation. This does not add automatic union
+inference or container covariance.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
 methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class
@@ -549,9 +569,16 @@ iteration variable. Nonconstant defaults are evaluated when the closure is defin
 
 Function decorators run when their `def` executes: expressions from top to bottom, then
 defaults, then decorator calls from bottom to top. The function name binds the final result.
-Methods support the dedicated decorators `@staticmethod`, `@classmethod` and recognized
-`@overload` stubs. Other method decorators, including `@property`, `@final` and `@override`,
+Methods support the dedicated decorators `@staticmethod`, `@classmethod`, read-only
+`@property` and recognized `@overload` stubs. Other method decorators, including `@final` and `@override`,
 are unsupported when the class is used.
+
+A property getter takes only `self` and needs a return annotation. Reading `obj.value`
+calls the getter each time; inherited getters, property overrides and `super().value`
+use the ordinary method dispatch. A callable-valued property can be called as `obj.value(args)`.
+Assignment, setters/deleters, property objects read through the class, and replacing a
+property with a field or method are unsupported. `hasattr(obj, "value")` on a property
+is rejected because it must run the getter; read it in `try/except AttributeError` instead.
 
 ## Fields, dataclasses and NamedTuples
 
