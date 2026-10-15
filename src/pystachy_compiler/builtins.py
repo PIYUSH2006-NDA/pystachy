@@ -430,6 +430,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             # (tagged as the primitives' loads are, and bounded: LLVM then sees that index
             # arithmetic on lengths cannot overflow)
             return Val(self.mload('int', v.v, 'length.range'), "int")
+        if t == "str" and self.unicode_audit:
+            self.rt("pys_str_audit", "void", [f"ptr {v.v}", f"ptr {self.sconst('len(str)')}"])
         if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
             return Val(self.mload('int', v.v), "int")
         if is_tuple(t):

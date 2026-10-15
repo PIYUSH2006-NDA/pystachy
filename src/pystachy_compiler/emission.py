@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, unionnames
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, Data, Frame, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, RTL, RTSYM
+from src.pystachy_compiler.specs import CHECKED, RTL, RTSYM, UNICODE_AUDIT
 from src.pystachy_compiler.utils import (
     RtFn,
     is_opt,
@@ -206,6 +206,8 @@ def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
     # ret, with args "<LLVM type> <value>", which must be what its RUNTIME entry says. (In
     # runtime mode, a function that runtime.py defines is called the same way: it is defined,
     # not declared, with RUNTIME's types, which Gen.function checks.)
+    if self.unicode_audit and not self.rtmode and name.startswith("pys_str_") and name[8:] in UNICODE_AUDIT:
+        self.rt("pys_str_audit", "void", [args[0], f"ptr {self.sconst('str.' + name[8:])}"])
     if self.rtmode and "@" + name == self.curfn.ll:
         self.err(f"{name}() implements an operation that it uses: write it without that operation")
     k = self.runtime(name)
