@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
-from src.pystachy_compiler.ir import FnInfo, Ins, Val
+from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.syntax import Node, mk
@@ -24,7 +24,6 @@ from src.pystachy_compiler.utils import (
     is_union,
     kw_names,
     kw_types,
-    lt,
     nonetest,
     pure_arg,
     takes_self,
@@ -54,7 +53,7 @@ def gen_call(self, n: Node, want: str, typeargs: str = "") -> Val:
         self.read_ahead(f.s)
         if (f.chk or self.foreign(f.s)) and f.s in self.gflag:
             # a call that may run before the def or class statement
-            bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{f.s}.def')}, true")
+            bad = self.scalar('xor', [Val(self.mload('bool', f'@g.{f.s}.def'), 'bool'), Val('true', 'bool')])
             self.guard(bad, self.unbound(f.s))
         if f.s in self.funcs:
             return self.call_fn(self.funcs[f.s], [], args, want)
@@ -294,11 +293,13 @@ def gen_to_callable(self, v: Val, t: str) -> Val:
         g = f"@cvo.{code[4:]}"
         if g not in self.cvos:
             self.cvos[g] = True
-            self.consts.append(f"{g} = private constant {{ptr, ptr}} {{ptr {code}, ptr null}}")
+            d = Data("callable", g)
+            d.refs = [code, "null"]
+            self.consts.append(d)
         return Val(g, t)
     o = self.rt("pys_alloc", "ptr", ["i64 16"])
-    self.emit(f"store ptr {code}, ptr {o}")
-    self.emit(f"store ptr {v.v}, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o}, i64 1')}")
+    self.mstore('%ptr', code, o)
+    self.mstore('%ptr', v.v, self.maddr('%ptr', f'{o}', '1', True))
     self.nn[o] = True
     return Val(o, t)
 
@@ -448,8 +449,8 @@ def gen_call_callable(self, o: Val, args: list[Node]) -> Val:
     for j in range(len(args)):
         vals.append(self.coerce(self.expr(args[j], ts[j + 1]), ts[j + 1], f"argument {j + 1} of a {typestr(ct)}"))
     o = self.unwrap(o, "TypeError: 'NoneType' object is not callable")
-    code = self.ins(f"load ptr, ptr {o.v}")
-    env = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o.v}, i64 1')}")
+    code = self.mload('%ptr', o.v)
+    env = self.mload('%ptr', self.maddr('%ptr', f'{o.v}', '1', True))
     c = Ins("icall", ts[0], "")
     c.a = [Val(code, "env"), Val(env, "env")] + vals
     if ts[0] == "None":
@@ -537,7 +538,7 @@ def gen_open_(self, args: list[Node]) -> Val:
             v = Val(v.v, "str")
         vals[nm] = self.coerce(v, want).v
     for j in range(len(nones)):
-        self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
     return Val(self.rt("pys_open", "ptr", [f"ptr {vals['file']}", f"ptr {vals['mode']}", f"ptr {vals['encoding']}", f"ptr {vals['newline']}",
                                            f"i64 {vals['buffering']}"]), "file")
 
@@ -729,11 +730,10 @@ def gen_asdict(self, o: Val, args: list[Node]) -> Val:
 def gen_new_obj(self, c: str) -> Val:
     # a new object of class c, which its __init__ initializes: it holds its class-body defaults
     # (but where @dataclass wrote __init__, which assigns every field itself)
-    size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
-    o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
+    o = self.alloc_fixed(c)
     self.nn[o.v] = True
     if self.classes[c].tag > 0:
-        self.emit(f"store i64 {self.classes[c].tag}, ptr {o.v}")
+        self.mstore('int', f'{self.classes[c].tag}', o.v)
     if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
         line = self.line
         self.class_defaults(o)
@@ -769,7 +769,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         if a.kind != "kw":
             pos += 1
     self.notnone(o, none if none != "" else f"AttributeError: 'NoneType' object has no attribute '{f.name}'")
-    tag = self.ins(f"load i64, ptr {o.v}")
+    tag = self.mload('int', o.v)
     end = self.label()
     vals: list[Val] = []
     edges: list[str] = []
@@ -779,7 +779,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {c.tag}"), arm, nxt)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
             self.place(arm)
         self.narrowed = dict(narrow)
         v = self.call_fn(c.methods[f.name], [Val(o.v, c.name)] + pre[1:], bound, want, direct=True)
@@ -881,11 +881,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             elif df.dglob[j].startswith("&"):
                 # a closure's default: in its env (pre[0]), evaluated where it was defined
                 t = t if t != "" else df.dtypes[j]
-                da = self.ins(f"getelementptr inbounds i64, ptr {pre[0].v}, i64 {df.dglob[j][1:]}")
-                vals[j] = Val(self.ins(f"load {lt(t)}, ptr {da}"), t)
+                da = self.maddr('int', pre[0].v, f'{df.dglob[j][1:]}', True)
+                vals[j] = Val(self.mload(t, da), t)
             elif df.dglob[j] != "":
                 t = t if t != "" else df.dtypes[j]
-                vals[j] = Val(self.ins(f"load {lt(t)}, ptr {df.dglob[j]}"), t)
+                vals[j] = Val(self.mload(t, df.dglob[j]), t)
             else:
                 vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
     self.line = line
