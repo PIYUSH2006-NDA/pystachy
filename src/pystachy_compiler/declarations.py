@@ -18,6 +18,7 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     PATHLIKE,
     PYBUILTINS,
+    SPECIAL,
     STUB,
     TYPEVAR,
     TYPE_SIZE,
@@ -808,6 +809,15 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.ret = ""  # (-> Box: decided by its first return, as an unannotated one is)
     elif d.kids[1].kind != "noann":
         f.ret = self.typeof(d.kids[1])
+    elif cls != "" and d.s == "__len__" and has_value_return(d.kids[2]):
+        # bool is also a legal length; infer it so an explicit obj.__len__()
+        # keeps returning bool while len(obj) converts it to int.
+        f.generic = True
+        f.ret = ""
+    elif cls != "" and d.s in ["__str__", "__repr__", "__bool__"] and has_value_return(d.kids[2]):
+        # These implicit operations have a fixed result contract even without an
+        # annotation; checking the body still rejects a wrong value.
+        f.ret = SPECIAL[d.s][SPECIAL[d.s].find(":") + 1 :]
     elif f.generic and init:
         f.ret = "None"  # (a class template's __init__: what CPython lets it return)
     elif f.generic:
