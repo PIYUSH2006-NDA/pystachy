@@ -72,6 +72,7 @@ Pystachy resolves these guards while compiling:
 | Module-level `if False:` or `if 0:` | Drops the body outside functions and classes. |
 | Module-level `TYPE_CHECKING = False` followed by `if TYPE_CHECKING:` | Drops the body when that is the name's only binding; other assignments, deletion, imports, star imports or `global` declarations disable this rule. |
 | Windows tests of `sys.platform` or tests of `os.name` | Resolves them for POSIX. `sys.platform` tests support `==`, `!=`, `startswith()` (including tuple prefixes), and membership in a tuple or list of Windows names. |
+| Version tests: `sys.version_info`, a slice, an item or an attribute of it compared with a literal int, str or tuple of those | Resolves them for CPython 3.13.16, as in `if sys.version_info < (3,):`. |
 
 These tests work inside `not`, `and` and `or`, while preserving the other operands' evaluation
 order. For example, `effect()` still runs in `if effect() and os.name == "nt":`.
@@ -213,6 +214,7 @@ Unsupported operations include dict union (`a | b`), dict displays with `**`,
 | Module | Supported surface |
 |---|---|
 | `sys` | `argv`, `exit`, `stdin`, `stdout`, `stderr`, `maxsize`, `platform`, `setrecursionlimit`, `getrecursionlimit`; the streams are files. |
+| `sys.version_info` | CPython 3.13.16's, a tuple of its items, and `major`, `minor`, `micro`, `releaselevel`, `serial` read as `sys.version_info.major` and the like; `str()` shows the tuple. |
 | `sys.float_info` | `max`, `max_exp`, `max_10_exp`, `min`, `min_exp`, `min_10_exp`, `dig`, `mant_dig`, `epsilon`, `radix`, `rounds`, matching CPython for IEEE 754 doubles. `sys.float_info` itself is not a value. |
 | `os` | `system`, `execv`, `getpid`, `getenv`, `remove`, `rmdir`, `fspath`; `name`, `sep`, `curdir`, `pardir`, `extsep`, `pathsep`, `linesep`, `devnull`. |
 | `os.path` | `exists`, `realpath`, `join`, `normcase`, `getsize`, `getmtime`, `getctime`. |

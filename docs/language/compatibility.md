@@ -201,6 +201,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 
+- `sys.version_info` is a tuple of its items, CPython 3.13.16's: comparisons, indexing,
+  slicing and unpacking work as on CPython's, and its attributes are read as
+  `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`.
+
 - A global (a function or class included) that its module's code has not bound when it is
   read (assigned in a branch that did not run, or read while the module is still being
   imported: a circular import) raises `AttributeError: module 'm' has no attribute 'x'`, read

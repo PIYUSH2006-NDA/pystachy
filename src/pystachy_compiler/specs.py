@@ -175,6 +175,12 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
 for _k in FLOATINFO:
     MODATTRS[_k] = True
+# sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which
+# tests/record.sh records with): its items, a value (a tuple) and attributes known at compile time
+VERSIONINFO: dict[str, str] = {"sys.version_info.major": "3", "sys.version_info.minor": "13", "sys.version_info.micro": "16",
+                               "sys.version_info.releaselevel": "'final'", "sys.version_info.serial": "0"}
+for _k in VERSIONINFO:
+    MODATTRS[_k] = True
 TYPING: dict[str, bool] = {}
 for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Iterable Iterator Sequence Mapping Final ClassVar NamedTuple "
            "TypeVar Generic cast IO BinaryIO AnyStr Literal Protocol TYPE_CHECKING overload NoReturn Never Self TypeAlias ParamSpec "

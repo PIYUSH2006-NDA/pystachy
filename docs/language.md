@@ -182,9 +182,9 @@ restrictions.
 
 ### Decided at compile time, as CPython decides it at import time
 
-Imported modules' `__main__` guards, `TYPE_CHECKING` branches and recognized platform tests
-are resolved at compile time. Unused functions can contain unsupported features, but syntax
-checks still apply to their source.
+Imported modules' `__main__` guards, `TYPE_CHECKING` branches and recognized platform and
+`sys.version_info` tests are resolved at compile time. Unused functions can contain unsupported
+features, but syntax checks still apply to their source.
 
 ### Optional imports
 

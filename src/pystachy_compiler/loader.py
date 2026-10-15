@@ -1315,7 +1315,9 @@ class Loader:
     def decide(self, m: Mod, e: Node, scope: dict[str, bool], pre: list[Node]) -> int:
         # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
         # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), also of a
-        # tuple of such prefixes, os.name == "nt", sys.platform in ("win32", ...)), TYPE_CHECKING, an
+        # tuple of such prefixes, os.name == "nt", sys.platform in ("win32", ...)), the version
+        # (a comparison of sys.version_info, a slice, an item or an attribute of it with a
+        # literal: version_cmp()), TYPE_CHECKING, an
         # imported module's __name__ == "__main__" or, in module code outside class bodies, False and
         # 0 (false), also under not/and/or: 1 or 0, after appending to pre what still runs for the
         # other operands, in CPython's order ("if x: pass" for an operand x that is evaluated and
@@ -1375,7 +1377,76 @@ class Loader:
                     if x.kind != "str" or x.s not in "win win32 cygwin msys emscripten wasi java".split():
                         return -1
                 return 0
+        if e.kind == "cmp" and e.s in ["<", "<=", ">", ">=", "==", "!="] and (self.version(m, e.kids[0], scope, True) != [] or self.version(m, e.kids[1], scope, True) != []):
+            return self.version_cmp(e.s, self.version(m, e.kids[0], scope, False), self.version(m, e.kids[1], scope, False))
         return -1
+
+    def version(self, m: Mod, e: Node, scope: dict[str, bool], own: bool) -> list[str]:
+        # the constant that e is, if it is sys.version_info, a slice, an item or an attribute of it
+        # (also, unless own, a literal int or str, or a tuple of those): its items, ints in decimal
+        # and strs after a "'", after a "(" for a tuple; [] for anything else
+        v = ["(", "3", "13", "16", "'final", "0"]  # (specs.VERSIONINFO)
+        if self.is_version(m, e, scope):
+            return v
+        b = e.kids[0] if e.kind == "attr" or e.kind == "index" or e.kind == "slice" else e
+        if self.is_version(m, b, scope):
+            fields = ["major", "minor", "micro", "releaselevel", "serial"]
+            if e.kind == "attr" and e.s in fields:
+                return [v[fields.index(e.s) + 1]]
+            if e.kind == "attr":
+                return []
+            ix = [self.version(m, x, scope, False) if x.kind != "omit" else ["?"] for x in e.kids[1:]]
+            for bd in ix:
+                if len(bd) != 1 or bd[0].startswith("'"):
+                    return []  # (a bound that is no int literal)
+            if e.kind == "index" and -5 <= int(ix[0][0]) < 5:
+                i = int(ix[0][0])
+                return [v[i + 1 if i >= 0 else i + 6]]
+            if e.kind == "index":
+                return []
+            if len(ix) == 2:
+                return ["("] + v[1:][int(ix[0][0]) if ix[0][0] != "?" else 0 : int(ix[1][0]) if ix[1][0] != "?" else 5]
+            return []
+        if own:
+            return []
+        if e.kind == "int" and e.s.isdigit():
+            return [str(int(e.s))]
+        if e.kind == "unary" and e.s == "-" and e.kids[0].kind == "int" and e.kids[0].s.isdigit():
+            return [str(-int(e.kids[0].s))]
+        if e.kind == "str":
+            return ["'" + e.s]
+        if e.kind != "tuple":
+            return []
+        out = ["("]
+        for x in e.kids:
+            item = self.version(m, x, scope, False)
+            if len(item) != 1:
+                return []
+            out.append(item[0])
+        return out
+
+    def is_version(self, m: Mod, e: Node, scope: dict[str, bool]) -> bool:
+        # is e sys.version_info, where sys is the builtin module (special())
+        return e.kind == "attr" and e.s == "version_info" and e.kids[0].kind == "name" and self.special(m, e.kids[0].s, scope) == "sys"
+
+    def version_cmp(self, op: str, a: list[str], b: list[str]) -> int:
+        # a op b, of two of version()'s constants: 1 or 0, as Python compares two tuples or two
+        # items; -1 where they are not both (or a comparison would raise TypeError, as of an int
+        # and a str), which is decided where it runs
+        if len(a) == 0 or len(b) == 0 or (a[0] == "(") != (b[0] == "("):
+            return -1
+        x = a[1:] if a[0] == "(" else a
+        y = b[1:] if b[0] == "(" else b
+        i = 0
+        while i < len(x) and i < len(y) and x[i] == y[i]:
+            i += 1
+        c = len(x) - len(y)
+        if i < len(x) and i < len(y):
+            if x[i].startswith("'") != y[i].startswith("'"):
+                return -1 if op != "==" and op != "!=" else 1 if op == "!=" else 0
+            c = (1 if x[i] > y[i] else -1) if x[i].startswith("'") else int(x[i]) - int(y[i])
+        r = c < 0 if op == "<" else c <= 0 if op == "<=" else c > 0 if op == ">" else c >= 0 if op == ">=" else c == 0 if op == "==" else c != 0
+        return 1 if r else 0
 
     def special(self, m: Mod, name: str, scope: dict[str, bool]) -> str:
         # what name is in module m's code, where scope (the names of the function or class the code

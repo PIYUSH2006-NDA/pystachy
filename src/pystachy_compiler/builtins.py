@@ -21,6 +21,7 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     OSCONST,
     PYBUILTINS,
+    VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
@@ -86,6 +87,13 @@ def gen_modattr(self, path: str) -> Val:
         return Val(fbits(c), "float") if "e" in c else Val(c, "int")
     if path == "sys.float_info":
         self.err("sys.float_info cannot be used as a value (read its attributes: sys.float_info.max, sys.float_info.epsilon, ...)")
+    if path in VERSIONINFO:
+        c = VERSIONINFO[path]
+        return Val(self.sconst(c[1:-1]), "str") if c.startswith("'") else Val(c, "int")
+    if path == "sys.version_info":
+        # (a tuple of its items: comparisons, indexing and slicing work as on CPython's, but str()
+        # and repr() show a tuple, not sys.version_info(major=3, ...))
+        return self.tuple_([self.modattr("sys.version_info." + x) for x in "major minor micro releaselevel serial".split()])
     if path == "sys.platform":
         return Val(self.rt("pys_platform", "ptr", []), "str")
     if path.startswith("errno.") and path[6:] in ERRNO:
