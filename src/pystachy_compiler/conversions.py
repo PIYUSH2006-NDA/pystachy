@@ -139,7 +139,7 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
 
 def gen_desc(self, t: str, use: str) -> str:
     if is_union(unopt(t)):
-        if not ((use == "repr" and self.value_union(t)) or (use == "==" and self.scalar_union(t))):
+        if not ((use == "repr" and self.value_union(t)) or (use == "==" and self.ueq_type(t))):
             self.err("closed union operations require narrowing with isinstance() first")
         members = umembers(unopt(t))
         d = "U" + str(len(members)) + ":"

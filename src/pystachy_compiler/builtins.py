@@ -1,6 +1,6 @@
 """Builtins component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.utils import is_union
+from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.ir import Ins, IterArg, Loop, Reduce, Val
 from src.pystachy_compiler.lexer import Lexer
 from src.pystachy_compiler.names import short
@@ -41,6 +41,7 @@ from src.pystachy_compiler.utils import (
     is_vtuple,
     kw_names,
     lt,
+    nones as only_nones,
     rtt,
     selem,
     targs,
@@ -1118,7 +1119,29 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         elif i < len(args):
             if key == "dict.get" and i == 0 and self.lookup_key(args[0]):
                 self.stkkey = args[0]  # (memo.get((i, j), -1))
-            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], pt)
+            want_arg = pt
+            if base == "list" and p == "*T" and is_union(unopt(T)) and self.ueq_type(T) and m in ["index", "count", "remove"] and args[i].kind in ["list", "dict", "listcomp"]:
+                # A search needle is not stored in the list. Infer a fresh display's
+                # own layout before comparing it, rather than forcing list[float]
+                # into a list[int] member. Empty/None-only displays still need context.
+                pending = [args[i]]
+                contextual = False
+                nested_union = any(["union[" in member for member in umembers(unopt(T))])
+                while len(pending) > 0:
+                    query = pending.pop()
+                    if query.kind in ["list", "dict"] and only_nones(query):
+                        contextual = True
+                    if nested_union and query.kind in ["list", "dict"]:
+                        parts = query.kids[1::2] if query.kind == "dict" else query.kids
+                        kinds = [self.probe_type(part) or part.kind for part in parts]
+                        # Heterogeneous displays still use explicitly declared element
+                        # unions; this change does not infer new union element types.
+                        if len(kinds) > 1 and any([kind != kinds[0] for kind in kinds]):
+                            contextual = True
+                    pending.extend(query.kids)
+                if not contextual:
+                    want_arg = ""
+            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg)
             self.stkkey = self.nokey
             if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
@@ -1161,7 +1184,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 nk = self.numkey(v, unopt(T))
                 v = Val(nk[0], unopt(T))
                 numok = nk[1]
-            if base == "list" and p == "*T" and self.scalar_union(T) and (m == "index" or m == "count" or m == "remove"):
+            if base == "list" and p == "*T" and is_union(unopt(T)) and self.ueq_type(T) and (m == "index" or m == "count" or m == "remove"):
                 pt = self.union_type([T, v.t])
                 dt = pt
             if is_opt(v.t) and unopt(v.t) == pt and dflt == "null":

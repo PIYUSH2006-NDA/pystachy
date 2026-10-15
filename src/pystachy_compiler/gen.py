@@ -5,6 +5,7 @@ from src.pystachy_compiler.union_arithmetic import (
     gen_unumeric_case as union_arithmetic_unumeric_case,
 )
 from src.pystachy_compiler.unions import (
+    gen_ueq_type as unions_ueq_type,
     gen_scalar_union as unions_scalar_union,
     gen_value_union as unions_value_union,
     gen_uop as unions_uop,
@@ -2212,6 +2213,9 @@ class Gen:
 
     def repr(self, v: Val) -> Val:
         return containers_repr(self, v)
+
+    def ueq_type(self, t: str) -> bool:
+        return unions_ueq_type(self, t)
 
     def scalar_union(self, t: str) -> bool:
         return unions_scalar_union(self, t)

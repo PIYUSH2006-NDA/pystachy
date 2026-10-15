@@ -295,8 +295,20 @@ container representation guards. `format()` accepts an empty specification for
 containers; a nonempty one raises the selected container's `TypeError`. A string
 member uses string formatting, and a numeric member uses numeric formatting.
 
-Narrow before container methods, indexing, equality or searching. This increment
-does not enable generic mixed-container comparison or method dispatch.
+Equality and list membership, `count`, `index` and `remove` also work for finite
+builtin value trees: scalars, lists, dictionaries and nested tuples. Each operand
+retains its own descriptor, so `[1]` can equal `[1.0]` without interpreting integer
+storage as floats. Separately boxing one container preserves its identity, including
+when it is searched for inside another container; scalar boxes still do not create
+numeric object identity. Fresh homogeneous search needles infer their own storage
+type; heterogeneous displays still use explicitly declared element unions. Empty
+or `None`-only displays retain context from an unambiguous declared member.
+
+Dictionary equality keeps hashed lookup for matching key layouts. Different key
+layouts compare keys pairwise, which can take quadratic time; ordinary string-keyed
+JSON-shaped dictionaries use hashed lookup. User objects, files, functions and sets
+inside mixed-value equality remain unsupported. Narrow before ordering, container
+methods on a union receiver or indexing; there is no generic method dispatch.
 
 ## Native reference unions
 
