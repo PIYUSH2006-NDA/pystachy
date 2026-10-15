@@ -426,6 +426,11 @@ or from its caller's annotation, argument type or other expected context. If non
 type, the fallback is `list[int]` or `dict[int, int]`. A resulting type error identifies the
 guess; annotate the receiving value to provide the intended type.
 
+For mixed scalar list literals, an error names a supported union annotation, such as
+`xs: list[int | float] = [1, 2.5]`. Rows can use unions within tuple fields:
+`rows: list[tuple[str, int | float]] = [("a", 1), ("b", 2.5)]`.
+The annotation preserves the individual values' types; it does not convert integers to floats.
+
 ## Class templates and generic classes
 
 A class specializes when its `__init__` has an unannotated parameter, variadic parameters,
