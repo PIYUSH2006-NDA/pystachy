@@ -20,7 +20,8 @@ jobs:
   verification:
     name: verify (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # GC stresses the compiler and the full corpus concurrently; keep all checks.
+    timeout-minutes: ${{ matrix.group == 'gc-stress' && 25 || 15 }}
     strategy:
       fail-fast: false
       matrix:

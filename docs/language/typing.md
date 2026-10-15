@@ -15,7 +15,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
-| `A \| B` | Explicit closed unions of `int`, `float`, `bool` and `str` |
+| `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
 
@@ -42,7 +42,7 @@ nested tuples of these. Floats, objects and frozensets cannot be keys or set ele
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
 Explicit closed scalar unions such as `int | str` are supported, including `None`.
-General object unions and a dynamic `Any` type are unsupported.
+Bounded native reference unions are also supported; a dynamic `Any` type is unsupported.
 `None` alone can annotate a return, but cannot be a container's entire element type.
 
 `List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `Callable`, `TextIO`
@@ -193,10 +193,49 @@ Container types stay invariant: `list[int]` cannot become `list[int | str]`.
 Narrow before arithmetic, truth testing, comparison, formatting or other operations
 that require a concrete member. Generic container equality and printing of union
 items are not implemented. No union is inferred from unrelated assignments or
-return values; annotate it explicitly. Class/container members, arbitrary `Any`,
+return values; annotate it explicitly. Container members, arbitrary `Any`,
 recursive JSON types, runtime compilation and speculative type assumptions are out
 of scope. Boxing may allocate; this feature expands supported programs and makes
 no performance claim.
+
+## Native reference unions
+
+Explicit unions can also hold up to four native class or `TextIO` types. This lets an
+ordinary AOT/JIT-compiled function accept either a file or `io.StringIO`, or objects
+from unrelated classes that implement the same method:
+
+```python
+from io import StringIO
+from typing import TextIO
+
+def read_character(stream: TextIO | StringIO) -> str:
+    return stream.read(1)
+```
+
+Arguments, returns, fields, locals, list elements and dict values may use these
+unions. A tagged box retains the original object or file pointer: passing through
+storage preserves object identity, mutation and file position. The box and referenced
+object remain reachable through normal GC roots. As with other Pystachy class types,
+a union containing a class permits `None`; method calls on it raise `AttributeError`
+before evaluating their arguments.
+
+Method calls dispatch on the union member and use ordinary native class dispatch
+within that member's family. Every member must declare the requested method, and
+all implementations must return the same static type. Positional and keyword
+arguments run once; each selected method uses its own defaults. A subclass may be
+stored under one base member, but a union cannot contain overlapping class families
+such as `Base | Child`. `isinstance()` checks the actual subclass; narrowing to a
+whole declared member is supported, while narrowing a base member to a subclass is
+not yet implemented.
+
+Reference unions cannot mix with scalar members or exception types. Container
+members, callable fields, bound-method extraction and unpacked method arguments
+are unsupported. Use a typed local for an empty-container argument that needs an
+expected type. Narrow a local to a member before field access, identity/equality
+comparison, truth testing or formatting. Containers remain invariant, and no union
+is inferred from unrelated assignments. This adds deterministic native execution,
+without profiles, an interpreter, runtime compilation or speculative assumptions;
+boxing and dispatch have costs, so no performance improvement is claimed.
 
 ## Function and method templates
 
