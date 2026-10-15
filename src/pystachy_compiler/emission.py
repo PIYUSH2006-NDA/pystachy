@@ -230,6 +230,8 @@ def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
 
 def gen_alloc_fixed(self, t: str) -> Val:
     # A zeroed, GC-scanned class or fixed tuple: only lowering chooses its byte size.
+    if self.rtmode and self.curfn.ll == "@pys_alloc":
+        self.err("pys_alloc() implements an operation that it uses: write it without that operation")
     self.runtime("pys_alloc")
     i = Ins("alloc.fixed", t, "")
     self.put(i, 1)

@@ -343,6 +343,16 @@ class TypedIRTests(unittest.TestCase):
                 self.assertEqual(g.opfx(i, {}), FXBIT["A"])
                 self.assertEqual(g.opfx(i, {}), g.rtfns["alloc"].fx)
 
+    def test_fixed_allocation_retains_runtime_self_recursion_guard(self):
+        g = Gen()
+        g.rtmode = True
+        g.curfn.ll = "@pys_alloc"
+        error = StringIO()
+        with redirect_stderr(error), self.assertRaises(SystemExit):
+            g.alloc_fixed("tuple[int]")
+        self.assertIn("pys_alloc() implements an operation that it uses", error.getvalue())
+        self.assertEqual(g.fn.blocks[0].code, [])
+
     def test_fixed_allocation_rejects_non_layout_types_and_extra_metadata(self):
         for t in ("", "Box", "int", "str", "list[int]", "vtuple[int]", "%ptr",
                   "opt[tuple[int]]", "union[int,str]", "tuple[int", "tuple[int]]",
