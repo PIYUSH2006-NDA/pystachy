@@ -11,12 +11,13 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.pystachy_compiler import diagnostics
 from src.pystachy_compiler.gen import Gen
 from src.pystachy_compiler.ir import FnInfo, IFn, Ins, Val
 from src.pystachy_compiler.loader import Loader
 from src.pystachy_compiler.specs import FXBIT
 from src.pystachy_compiler.syntax import Node
-from src.pystachy_compiler.utils import umembers
+from src.pystachy_compiler.utils import targs, typestr, umembers
 
 
 def slot_op(op, native_type="float"):
@@ -53,6 +54,46 @@ def compare_op(t="int", predicate="=="):
     i.a = [Val("%a0", t), Val("%a1", t)]
     i.r = [1]
     return i
+
+
+class ClosurePathTests(unittest.TestCase):
+    def test_paths_do_not_change_tuple_layouts_or_closure_types(self):
+        fixture = Path(__file__).resolve().parent.parent / "tests/paths]/closure_path_fixture.py"
+        source = fixture.read_text() + "\nprint(checks(1))\n"
+        expected_ir = None
+        for directory in ("ordinary", "x]y", "c[d", "a],b[c", "[id]", "a,b",
+                          "a%5Bb", "a?b", "a|b", "é[%,]"):
+            path = directory + "/closures.py"
+            with self.subTest(path=path), patch.object(diagnostics, "SRC", path), \
+                    patch.object(diagnostics, "FILES", []):
+                g = Gen()
+                ir = g.program(Loader([]).program(path, source))
+                if expected_ir is None:
+                    expected_ir = ir
+                self.assertEqual(ir, expected_ir)
+                for closure in g.closures:
+                    self.assertNotIn(directory, closure.t)
+                    self.assertTrue(closure.t.rsplit("@", 1)[1][:-1].isdigit())
+                    self.assertIn(path + ":", typestr(closure.t))
+                    self.assertEqual(targs(g.ctype("tuple", [closure.t, "int"])),
+                                     [closure.t, "int"])
+
+    def test_imported_closure_diagnostic_resolves_original_path(self):
+        path = "a],b[c/é%module.py"
+        with patch.object(diagnostics, "FILES", ["main.py", path]):
+            self.assertEqual(typestr("fn[c:0:outer.<locals>.g@10000002]"),
+                             "<function outer.<locals>.g (" + path + ":2)>")
+
+    def test_tuple_round_trip_check_is_always_on(self):
+        error = StringIO()
+        g = Gen()
+        g.line = 12
+        with patch.object(diagnostics, "SRC", "guard.py"), redirect_stderr(error), \
+                self.assertRaises(SystemExit) as raised:
+            g.ctype("tuple", ["fn[c:0:g@bad]path:2]", "int"])
+        self.assertEqual(raised.exception.code, 1)
+        self.assertEqual(error.getvalue(),
+                         "guard.py:12: error: internal error: tuple item types do not round-trip\n")
 
 
 class TypedIRTests(unittest.TestCase):
