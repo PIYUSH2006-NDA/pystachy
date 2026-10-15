@@ -204,7 +204,7 @@ provide selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile`.
 An imported module name does not imply every CPython API is available.
 
 The shipped libraries include unchanged upstream modules, localized ports such as
-`fnmatch`, `textwrap` and `difflib`, and implementations such as `functools.cache` /
+`fnmatch`, `textwrap`, `difflib` and `random`, and implementations such as `functools.cache` /
 `lru_cache`, `io.StringIO` and `csv`. Each has its own supported operations and deviations.
 
 Use the [builtin API reference](language/modules.md#builtins) and

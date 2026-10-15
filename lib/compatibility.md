@@ -340,6 +340,36 @@ variants, `covariance`, `correlation`, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
 iterators, properties or other features beyond the port's compiled paths.
 
+## Random
+
+`Random` objects and the module's functions, which share a hidden instance, give
+CPython's values for int, bool and float seeds: `seed`, `random`, `getrandbits`,
+`getstate`/`setstate`, `randrange`, `randint`, `choice`, `shuffle`, `sample`
+(including `counts=`), `choices` (weights or cumulative weights) and the `uniform`,
+`triangular`, `normalvariate`, `gauss`, `lognormvariate`, `expovariate`,
+`vonmisesvariate`, `gammavariate`, `betavariate`, `paretovariate`, `weibullvariate`
+and `binomialvariate` distributions. `_pyrandom` is the Mersenne Twister of
+`_random.Random` in the subset, which CPython builds in, so no `_random.py` can
+replace it. `binomialvariate` uses a port of CPython's `math.lgamma` algorithm,
+as Pystachy's `math` has none.
+
+- `seed()`, `seed(None)` and `Random()` use the time, process id and monotonic
+  clock, CPython's fallback when it cannot read `os.urandom()`.
+- A float seeds with its hash, as in CPython; a NaN's hash is 0 rather than
+  CPython's object-dependent value.
+- `getrandbits(k)` takes at most 63 bits and raises `OverflowError` for more,
+  before drawing. Ranges whose width leaves 64 bits raise `OverflowError`.
+- Populations are lists, strings and runtime-length tuples; a `range` is not a
+  value, so pass `list(range(n))`. Strings are sequences of bytes past ASCII.
+  Weights and counts share one numeric type.
+- `randrange` and `randint` take ints or bools, and `triangular` floats: with int
+  bounds, its `low == high` case would return an int.
+
+Seeds of `str`, `bytes` or `bytearray` (SHA-512 into a long integer), `randbytes`,
+`SystemRandom`, subclasses of `Random` (its `__init_subclass__` chooses how they
+draw integers) and pickling are unsupported. An integer passed as `choices`'
+weights is a compile error rather than CPython's hint to pass `k=`.
+
 ## Urllib.parse
 
 String APIs include `quote`, `quote_plus`, `unquote`, `unquote_plus`, `parse_qs`,

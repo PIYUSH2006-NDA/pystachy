@@ -31,10 +31,12 @@ observable contract.
 | `html.entities` | `Lib/html/entities.py` | `d9c65fb2828dbc1f3e399058a341d51e9375ec5bca95a8e92599c41bd5b78bde` |
 | `keyword` | `Lib/keyword.py` | `18c2be738c04ad20ad375f6a71db34b3823c7f40b0340f5294d0e89f3c9b093b` |
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
+| `random` | `Lib/random.py` | `fb2625eb54412c880e8f1af449785a74e125556159fc7997814e51dd054cc5da` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
-weighted means. `urllib.parse` includes codec logic corresponding to CPython's
+weighted means, and `random` ports its `m_lgamma`, `lanczos_sum` and `m_sinpi`
+for `binomialvariate`. `urllib.parse` includes codec logic corresponding to CPython's
 `unicodeobject.c`, `stringlib/codecs.h` and `codecs.c`, plus bracketed-host and
 NFKC-delimiter validation. These modules keep CPython-only paths available when
 CPython runs the source.
@@ -48,6 +50,7 @@ CPython runs the source.
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
 | `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction and comparison-key fallbacks |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
+| `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
 generates `re/_unicode.py` from CPython's Unicode functions, including group-name
@@ -77,6 +80,7 @@ Historical upstream-suite checks recorded with the ports:
 | `html` | `test_html` | Both tests passed |
 | `keyword` | `test_keyword` | All 11 tests passed |
 | `shlex` | `test_shlex` | 43 of 44 passed; punctuation field is writable |
+| `random` | `test_random` | 106 passed, two memory-limited skips; with `_pyrandom`, 96: nine need over 63 bits, one pickles `_random.Random` |
 
 These counts describe specific recorded checks of the adapted source under
 CPython, not the number of APIs or upstream tests executed by the compiled
@@ -90,6 +94,14 @@ queue operations, callback mutation and bounded repetition. Shlex's differential
 upstream selection retains its three split/join table methods; HTML retains both
 upstream methods, and keyword retains nine methods while excluding dynamic `exec`.
 Test headers record source-test hashes and exclusions.
+
+`tools/random_check.py` runs the adapted `lib/random.py` on CPython, with the C `_random`
+and with `_pyrandom` in its place, and compares the values of every supported method with
+CPython's `random` for 1,352 int, bool and float seeds. It also compares `_pyrandom`'s float
+hash with `hash()` and the `lgamma` port with `math.lgamma()`. Its `--upstream DIR` option
+runs the pinned `test_random` (SHA-256
+`04ffe61561421e6cf3b85edcea3ebaca995e6a5def1267cf3562acbb3b9b1337`) and its `randv*.pck`
+files from DIR on both generators, as recorded above.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of

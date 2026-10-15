@@ -128,7 +128,7 @@ closures, decorators and limited generic typing. Unannotated functions can be sp
 for their argument types.
 
 Some standard-library modules compile unchanged. Others, including `fnmatch`, `textwrap`,
-`difflib` and `statistics`, use localized adaptations marked `# Pystachy port:`.
+`difflib`, `statistics` and `random`, use localized adaptations marked `# Pystachy port:`.
 The adapted code remains valid Python and can be diffed against upstream.
 The library also includes `re` and `functools.cache` / `lru_cache` implementations in the
 typed subset. See [library coverage and port notes](lib/README.md) for each module's scope.
