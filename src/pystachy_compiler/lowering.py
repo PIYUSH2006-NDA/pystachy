@@ -38,6 +38,12 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     elif op == "alloc.fixed":
         size = str(8 * len(targs(i.t))) if is_tuple(i.t) else f"ptrtoint (ptr getelementptr (%C.{i.t}, ptr null, i32 1) to i64)"
         o.append(f"  %t{i.r[0]} = call ptr @{self.rtfns['alloc'].sym}(i64 {size})")
+    elif op == "tuple.load" or op == "tuple.store":
+        o.append(f"  %t{i.r[0]} = getelementptr i64, ptr {i.a[0].v}, i64 {i.k}")
+        if op == "tuple.load":
+            o.append(f"  %t{i.r[1]} = load i64, ptr %t{i.r[0]}")
+        else:
+            o.append(f"  store i64 {i.a[1].v}, ptr %t{i.r[0]}")
     elif op == "slot.pack":
         v = i.a[0]
         c = f"bitcast double {v.v} to i64" if v.t == "float" else f"zext i1 {v.v} to i64" if v.t == "bool" else f"bitcast i64 {v.v} to i64" if v.t == "int" else f"ptrtoint ptr {v.v} to i64"

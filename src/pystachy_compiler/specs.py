@@ -423,6 +423,7 @@ IROPS: dict[str, str] = {
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
     "list.load": "rL", "list.len": "rL",
     "alloc.fixed": "A",
+    "tuple.load": "rL rD rO", "tuple.store": "wL wD wO",
     "slot.pack": "", "slot.unpack": "",
     "num.cast": "", "num.cmp": "",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",

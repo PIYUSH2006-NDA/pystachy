@@ -123,6 +123,7 @@ The exact operation table is `IROPS`; its current groups are:
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
 | Fixed-layout allocation | `alloc.fixed` |
+| Fixed tuple slots | `tuple.load`, `tuple.store` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp` |
@@ -145,6 +146,14 @@ initialization, field and tuple stores, stack tuple promotion, and the runtime A
 retain their existing behavior. The verifier checks the layout type, one result,
 runtime declaration and absence of unused operands or metadata. Variable-sized
 allocations and closure/cell layouts still use runtime calls.
+
+`tuple.load` and `tuple.store` retain a fixed tuple's type, constant item index and
+declared item type while transferring an opaque `%slot`. The verifier checks that the
+index selects that member and that load results and store operands are slots. Native
+packing and unpacking remain separate typed operations. These instructions replace raw
+LLVM in fixed tuple reads and heap/stack construction, preserving the existing layout,
+conservative memory effects and dictionary-key canonicalization. Variable-length tuple
+reads, tuple traversal and stack-to-heap copies keep their existing paths.
 
 `slot.pack` preserves a native value's bits in an opaque `%slot` (eight bytes), and
 `slot.unpack` recovers the declared native type. Their operands retain that type through

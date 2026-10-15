@@ -142,6 +142,17 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                     self.bad_ir(fn, b, "alloc.fixed needs a declared class or fixed tuple type")
                 if "alloc" not in self.rtfns:
                     self.bad_ir(fn, b, "alloc.fixed needs the alloc runtime declaration")
+            if i.op == "tuple.load" or i.op == "tuple.store":
+                if len(i.a) != (1 if i.op == "tuple.load" else 2) or i.x != "" or len(i.b) != 0:
+                    self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
+                t = i.a[0].t
+                ts = targs(t) if is_tuple(t) and t.endswith("]") and t.count("[") == t.count("]") else []
+                if "" in ts or "..." in ts or i.k < 0 or i.k >= len(ts):
+                    self.bad_ir(fn, b, f"{i.op} needs a fixed tuple and an in-range item index")
+                if i.s != ts[i.k] or i.s.startswith("%") or i.s.startswith("*") or i.s == "#" or (i.s in ["T", "K", "V", "S"] and i.s not in self.classes):
+                    self.bad_ir(fn, b, f"{i.op} needs the declared native item type")
+                if (i.op == "tuple.load" and i.t != "%slot") or (i.op == "tuple.store" and (i.t != "" or i.a[1].t != "%slot")):
+                    self.bad_ir(fn, b, f"{i.op} needs an opaque item slot")
             if i.op == "num.cast" or i.op == "num.cmp":
                 if len(i.a) != (1 if i.op == "num.cast" else 2) or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
@@ -210,9 +221,9 @@ def gen_nums(self, i: Ins) -> int:
         return 3
     if i.op == "list.load":
         return 4
-    if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload":
+    if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload" or i.op == "tuple.load":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed" or i.op == "tuple.store":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1

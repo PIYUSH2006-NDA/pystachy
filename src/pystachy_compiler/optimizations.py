@@ -281,6 +281,14 @@ def gen_canon(self, vs: Values, v: str) -> str:
             # A union box's tag and payload are immutable. Retain the equivalence of
             # repeated narrowed reads that the former raw GEP/load exposed to dictfuse.
             r = self.same(vs, v, f"union.payload {i.s} {self.canon(vs, i.a[0].v)}")
+        elif i.op == "tuple.load" or i.op == "tuple.store":
+            if v == f"%t{i.r[0]}":
+                # Retain address equivalence with the tuple paths still represented as raw GEPs.
+                r = self.same(vs, v, f"getelementptr i64, ptr {self.canon(vs, i.a[0].v)}, i64 {i.k}")
+            else:
+                x = self.reaching(vs, self.addr(vs, f"%t{i.r[0]}"), w // vs.stride, w % vs.stride)
+                if x != "":
+                    r = self.canon(vs, x)
         else:
             s = i.s[i.s.find(" = ") + 3 :]
             if s.startswith("load "):
@@ -341,6 +349,14 @@ def gen_reaching(self, vs: Values, a: str, j: int, x: int) -> str:
             if steps > REACH:
                 return ""
             i = code[y]
+            if i.op == "tuple.load" or i.op == "tuple.store":
+                p = f"%t{i.r[0]}"
+                q = self.addr(vs, p)
+                if q == a:
+                    return i.a[1].v if i.op == "tuple.store" else f"%t{i.r[1]}"
+                if i.op == "tuple.store" and heap and not self.disjoint(vs, a, q):
+                    return ""
+                continue
             if i.op != "raw":
                 if not slot and self.opfx(i, vs.fn.fa) & stop != 0:
                     return ""

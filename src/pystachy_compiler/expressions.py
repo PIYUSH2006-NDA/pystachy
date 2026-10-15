@@ -1220,8 +1220,7 @@ def gen_tuple_(self, vals: list[Val]) -> Val:
     p = self.alloc_fixed(t).v
     for i in range(len(vals)):
         s = self.to_slot(vals[i])
-        q = self.ins(f"getelementptr i64, ptr {p}, i64 {i}")
-        self.emit(f"store i64 {s}, ptr {q}")
+        self.tstore(Val(p, t), i, s)
     return Val(p, t)
 
 def gen_stack_tuple(self, vals: list[Val]) -> Val:
@@ -1236,8 +1235,7 @@ def gen_stack_tuple(self, vals: list[Val]) -> Val:
     p = f"%stk.{self.n}"
     for j in range(len(vals)):
         s = self.to_slot(vals[j])
-        q = self.ins(f"getelementptr i64, ptr {p}, i64 {j}")
-        self.emit(f"store i64 {s}, ptr {q}")
+        self.tstore(Val(p, t), j, s)
     return Val(p, t)
 
 def gen_stack_ok(self, f: FnInfo) -> bool:
@@ -1403,8 +1401,17 @@ def gen_probe_type(self, n: Node) -> str:
     return t
 
 def gen_tget(self, v: Val, i: int) -> Val:
-    p = self.ins(f"getelementptr i64, ptr {v.v}, i64 {i}")
-    return self.from_slot(self.ins(f"load i64, ptr {p}"), targs(v.t)[i])
+    item = Ins("tuple.load", "%slot", targs(v.t)[i])
+    item.k = i
+    item.a = [v]
+    self.put(item, 2)
+    return self.from_slot(f"%t{item.r[1]}", item.s)
+
+def gen_tstore(self, v: Val, index: int, slot: str) -> None:
+    item = Ins("tuple.store", "", targs(v.t)[index])
+    item.k = index
+    item.a = [v, Val(slot, "%slot")]
+    self.put(item, 1)
 
 def gen_index(self, n: Node) -> Val:
     c = n.kids[0]
