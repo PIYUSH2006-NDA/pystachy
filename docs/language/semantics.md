@@ -49,10 +49,18 @@ indices, and string/list slices without a step. Integer `//` and `%` floor as in
 true division is correctly rounded, and int/float comparisons are exact within the
 supported types.
 
-Container expressions include list, dict, set and tuple displays; list and set
+Container expressions include list, dict, set and tuple displays; list, set and dict
 comprehensions; and tuple concatenation or repetition by a constant. Set and frozenset
 operations support union, intersection, difference, symmetric difference, subset ordering
 and in-place forms.
+
+A comprehension or generator expression may have several `for` and `if` clauses. As in
+CPython, its first iterable is evaluated once in the enclosing scope; each later iterable and
+condition is evaluated for every item of the clauses before it, and the clauses' variables
+belong to the comprehension. A dict comprehension evaluates each key before its value; a
+repeated key keeps its first position and takes the last value. A clause that reads a variable
+which only its own or a later `for` clause binds is rejected (CPython raises
+`UnboundLocalError`).
 
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.

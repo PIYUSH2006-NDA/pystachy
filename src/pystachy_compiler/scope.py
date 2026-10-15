@@ -512,7 +512,7 @@ class Symtable:
                 ls.flags[p.s] = SYMPARAM
             self.expr(e.kids[1])
             self.pop()
-        elif k == "listcomp" or k == "nestedcomp" or k == "asynccomp":
+        elif k == "listcomp" or k == "asynccomp":
             self.comp(e, "gen" if e.s == "gen" else "list")
         elif k == "setcomp" or k == "dictcomp":
             self.comp(e.kids[0], k[:-4])

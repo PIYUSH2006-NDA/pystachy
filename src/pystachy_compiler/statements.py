@@ -36,6 +36,7 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
+    key_problem,
     meet,
     same_kind,
     selem,
@@ -715,6 +716,32 @@ def gen_stmt(self, n: Node) -> None:
         self.mstore('bool', 'true' if n.s == 'any' else 'false', self.lcs[-1])
         self.br(self.loops[-1].exit)
         self.place(go)
+    elif k == "compfor":
+        # a comprehension's later for clause (gen_listcomp): a loop whose target is the
+        # comprehension's; where any() or all() (s) has decided in it, the loop around it ends too
+        names: list[str] = []
+        names_in(n.kids[0], names)
+        self.for_(n, names)
+        if n.s != "" and not self.term:
+            go = self.label()
+            done = self.mload('bool', self.lcs[-1])
+            if n.s == "any":
+                self.cbr(done, self.loops[-1].exit, go)
+            else:
+                self.cbr(done, go, self.loops[-1].exit)
+            self.place(go)
+    elif k == "lcappend" and n.s == "dict":
+        # {k: v for ...}: the key, then the value (as CPython evaluates them since 3.8), stored as
+        # d[k] = v stores them; the first ones give the dict its type, unless one is expected
+        kv = targs(self.lct[-1]) if self.lct[-1] != "" else ["", ""]
+        kx = self.expr(n.kids[0].kids[0], kv[0], resultsoft=self.lcsoft[-1])
+        vx = self.expr(n.kids[0].kids[1], kv[1], resultsoft=self.lcsoft[-1])
+        if self.lct[-1] == "":
+            kv = [self.none_items(kx.t) if is_tuple(kx.t) else kx.t, vx.t]
+            if key_problem(kv[0]) != "":
+                self.err(key_problem(kv[0]))
+            self.lct[-1] = self.ctype("dict", kv)
+        self.rt("pys_dict_set", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_key(kx, kv[0])), "i64 " + self.to_slot(self.coerce(vx, kv[1]))])
     elif k == "lcappend":
         et = self.lct[-1]
         v = self.expr(n.kids[0], et, resultsoft=self.lcsoft[-1])

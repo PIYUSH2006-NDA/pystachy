@@ -265,7 +265,7 @@ def gen_generic_hint(self, e: Node, t: str) -> str:
                     break
         elif n.kind == "tuple":
             pending.extend(n.kids)  # (each field has its own expected type)
-        elif n.kind in ["listcomp", "setcomp", "binop"]:
+        elif n.kind in ["listcomp", "setcomp", "dictcomp", "binop"]:
             pending.append(n.kids[0])  # (result body, or the left operand that types the right)
         elif n.kind == "ifexp":
             st = self.static(n.kids[0])

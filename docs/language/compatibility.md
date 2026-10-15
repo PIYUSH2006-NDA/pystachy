@@ -246,6 +246,9 @@ supported alternatives.
   or a `type` statement is its local too, also where the name is a class's that the read uses
   (`C.m()`, `C.x`, `C.x = v`, `isinstance(o, C)`, `raise C(...)`)
 - a read of a function's local that only code dropped at compile time binds
+- in a comprehension, an iterable or condition that reads a variable which only its own or a
+  later `for` clause binds (`[a for x in xs for a in b for b in ys]`: CPython raises
+  `UnboundLocalError` once a clause runs it)
 - calling a builtin whose name the module also binds as a variable (`sum = 0` ... `sum(xs)`,
   which CPython would reject at run time)
 

@@ -23,7 +23,7 @@ from src.pystachy_compiler.diagnostics import MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
-from src.pystachy_compiler.syntax import Node, mk, name_targets, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, mk, name_targets
 from src.pystachy_compiler.utils import (
     elem,
     elem_problem,
@@ -1143,7 +1143,7 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
     if e.kind == "listcomp":
         # [x for t in it if c]: x and c read the variables in t too, which the items of it type
         names: list[str] = []
-        names_in(e.kids[1], names)
+        comp_names(e, names)
         inner = own + " " + " ".join(names)
         for i in range(len(e.kids)):
             if i != 1 and not self.typed_now(e.kids[i], own if i == 2 else inner):

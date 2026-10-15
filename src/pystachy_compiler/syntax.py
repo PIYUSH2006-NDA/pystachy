@@ -103,7 +103,7 @@ EXPRNAMES: dict[str, str] = {
 
 
 def expr_name(n: Node) -> str:
-    if n.kind == "listcomp" or n.kind == "nestedcomp" or n.kind == "asynccomp":
+    if n.kind == "listcomp" or n.kind == "asynccomp":
         return "generator expression" if n.s == "gen" else "list comprehension"
     return EXPRNAMES.get(n.kind, "expression")
 
@@ -151,6 +151,13 @@ def names_in(t: Node, out: list[str]) -> None:
     elif t.kind == "tuple" or t.kind == "list" or t.kind == "starred":
         for k in t.kids:
             names_in(k, out)
+
+def comp_names(c: Node, out: list[str]) -> None:
+    # the names comprehension c binds, its own variables: those of its for clauses' targets
+    names_in(c.kids[1], out)
+    for x in c.kids[3:]:
+        if x.kind == "compfor":
+            names_in(x.kids[0], out)
 
 def has_kind(n: Node, kind: str) -> bool:
     # does n hold a node of kind (outside the functions, classes and lambdas it defines)

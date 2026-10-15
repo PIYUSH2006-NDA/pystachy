@@ -48,7 +48,7 @@ from src.pystachy_compiler.specs import (
     PYBUILTINS,
     TYPING,
 )
-from src.pystachy_compiler.syntax import Node, has_kind, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
 
 
 class Loader:
@@ -558,7 +558,7 @@ class Loader:
             maybe = nm in env[1] or nm in env[3]
             if how >= 2 or (self.dm.kinds.get(nm, "") != "v" and self.dm.kinds.get(nm, "") != "f"):
                 fail(f"name '{nm}' {'may be unbound, which is not supported' if maybe else 'is not defined'} ({'import it from typing' if how >= 2 and nm in TYPING else what})", e.line)
-        for kid in e.kids[2:3] if k == "listcomp" or k == "nestedcomp" or k == "asynccomp" else [] if k == "lambda" else e.kids:
+        for kid in e.kids[2:3] if k == "listcomp" or k == "asynccomp" else [] if k == "lambda" else e.kids:
             self.reads(kid, env, what, how if how < 3 or k == "noann" else 2)
         why = self.type_error(e, env) if how > 0 else ""
         for t in tps:
@@ -1818,11 +1818,11 @@ class Loader:
                 inner[p.s] = True
             self.qexpr(m, n.kids[1], inner)
         elif k == "listcomp":
-            # [element for target in iterable if condition]: the target's names are the comprehension's
+            # [element for target in iterable if condition]: the targets' names are the comprehension's
             # (added to loc while the rest is qualified, not to a copy: loc has all of a function's locals)
             self.qexpr(m, n.kids[2], loc)
             names: list[str] = []
-            names_in(n.kids[1], names)
+            comp_names(n, names)
             added: list[str] = []
             for nm in names:
                 if nm not in loc:

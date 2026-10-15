@@ -287,7 +287,7 @@ list or dictionary, so identity, aliases and mutations are preserved. The collec
 traces the box and its container using existing allocation rules. Concrete values
 keep their ordinary native representation; boxing occurs at a union boundary.
 
-A fresh list/dict display or list comprehension uses the expected union's single
+A fresh list/dict display or list/dict comprehension uses the expected union's single
 matching container member, including empty displays. Existing mutable containers
 remain invariant: `list[int]` cannot become `list[int | str]`, even through a union.
 `isinstance(value, list)` cannot distinguish `list[int]` from `list[str]`; a union
