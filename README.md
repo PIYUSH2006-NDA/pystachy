@@ -155,6 +155,8 @@ algorithmic code; broad compatibility with arbitrary PyPI packages is still limi
   `bytes` are not. See the [class rules](docs/language/typing.md#single-inheritance).
 - Integers are checked 64-bit values; overflow raises `OverflowError`.
 - Strings store UTF-8 bytes, so indexing and length differ from CPython for non-ASCII text.
+  Use the opt-in [Unicode porting audit](docs/language/compatibility.md#text-and-file-positions)
+  to flag byte-oriented operations on non-ASCII input.
 - Many unsupported constructs produce compile-time diagnostics; this is not a complete
   compatibility check. Known semantic differences are listed in
   [deviations from CPython](docs/language.md#deviations-from-cpython).
