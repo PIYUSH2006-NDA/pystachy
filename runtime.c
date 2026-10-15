@@ -1004,12 +1004,15 @@ static const char *skip(const char *d) {
   if (c == 'U') for (I n = unum(&d); n > 0; n--) { unum(&d); d = skip(d); }
   return d;
 }
-static const char *umember(I *v, const char *d) {
-  I *box = (I *)*v, tag = box[0];
-  *v = box[1];
+static const char *utype(I tag, const char *d) {
   d++;
   for (I n = unum(&d); n > 0; n--) { if (unum(&d) == tag) return d; d = skip(d); }
   __builtin_unreachable();   /* the compiler's descriptor covers every possible tag */
+}
+static const char *umember(I *v, const char *d) {
+  I *box = (I *)*v, tag = box[0];
+  *v = box[1];
+  return utype(tag, d);
 }
 static double dbl(I v) { double x; memcpy(&x, &v, 8); return x; }
 static int printable(I c);
@@ -1095,11 +1098,13 @@ Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
 static I entry(Dict *d, I k);
 I pys_set_cmp(Set *a, Set *b, I op);
 static int eqv(I a, I b, const char *d);
+static int eqpair(I a, I b, const char *x, const char *y);
 /* Container items use identity before equality (PyObject_RichCompareBool). Keep this
    separate from direct comparison: equal unboxed float bits need not compare equal,
    and an optional scalar's box does not give that scalar Python object identity. */
 static int eqitem(I a, I b, const char *d) {
   char c = d[*d == '?'];
+  if (c == 'U') return eqpair(a, b, d, d);
   return (a == b && (c == 'L' || c == 'D' || c == 'T' || c == 'V' || c == 'S' || c == 'F')) || eqv(a, b, d);
 }
 #ifndef EQ_PROBE
@@ -1108,15 +1113,7 @@ static int eqitem(I a, I b, const char *d) {
 static int eqv(I a, I b, const char *d) {
   EQ_PROBE();
   switch (*d) {
-  case 'U': {
-    const char *x = umember(&a, d), *y = umember(&b, d);
-    if (*x == *y) return eqv(a, b, x);
-    int nx = *x == 'i' || *x == 'b', ny = *y == 'i' || *y == 'b';
-    if (nx && ny) return a == b;
-    if (nx && *y == 'f') return pys_cmp_if(a, dbl(b)) == 0;
-    if (*x == 'f' && ny) return pys_cmp_if(b, dbl(a)) == 0;
-    return 0;
-  }
+  case 'U': return eqpair(a, b, d, d);
   case 'f': return dbl(a) == dbl(b);
   case 's': return a && b ? pys_str_eq((Str *)a, (Str *)b) : a == b;   /* (None in a looked-up key, see hval) */
   case 'L': {   /* an __eq__ may change either list: as CPython's list_richcompare, re-read both
@@ -1156,6 +1153,75 @@ static int eqv(I a, I b, const char *d) {
   case 'E': return pys_exc_id((Exc *)a) == pys_exc_id((Exc *)b);
   }
   return a == b;
+}
+typedef struct { I value; const char *desc; } EqValue;
+static EqValue eqresolve(I v, const char *d) {
+  /* Each operand has its own layout: an optional number is a one-slot box,
+     a union is a tag/payload box, and a concrete container is its original pointer. */
+  while (*d == '?' || *d == 'U') {
+    if (*d == '?') { if (!v) return (EqValue){0, "n"}; v = unbox(v, ++d); }
+    else { I *box = (I *)v; d = utype(box[0], d); v = box[1]; }
+  }
+  return (EqValue){v, d};
+}
+static int same_desc(const char *x, const char *y) {
+  size_t n = (size_t)(skip(x) - x);
+  return n == (size_t)(skip(y) - y) && !memcmp(x, y, n);
+}
+static int eqpair(I a, I b, const char *x, const char *y) {
+  /* Only closed builtin value trees reach this path (the compiler rejects user
+     callbacks). Never decode b with x: equal Python types may have different
+     native element layouts, including nested unions and boxed optionals. */
+  EQ_PROBE();
+  EqValue ax = eqresolve(a, x), by = eqresolve(b, y);
+  a = ax.value; x = ax.desc; b = by.value; y = by.desc;
+  if (*x == 'n' || *y == 'n') return *x == *y;
+  int nx = *x == 'i' || *x == 'b', ny = *y == 'i' || *y == 'b';
+  if (nx && ny) return a == b;
+  if (nx && *y == 'f') return pys_cmp_if(a, dbl(b)) == 0;
+  if (*x == 'f' && ny) return pys_cmp_if(b, dbl(a)) == 0;
+  int tx = *x == 'T' || *x == 'V', ty = *y == 'T' || *y == 'V';
+  if (*x != *y && !(tx && ty)) return 0;
+  /* The original container's identity survives separate union boxes. Besides
+     matching Python, this keeps a shared DAG from expanding into its logical tree.
+     Scalar boxes deliberately confer no numeric identity (notably for NaNs). */
+  if (a == b && (*x == 'L' || *x == 'D' || tx)) return 1;
+  if (*x == 'f') return dbl(a) == dbl(b);
+  if (*x == 's') return a && b ? pys_str_eq((Str *)a, (Str *)b) : a == b;
+  if (*x == 'L') {
+    List *p = (List *)a, *q = (List *)b;
+    if (p->len != q->len) return 0;
+    for (I i = 0; i < p->len; i++) if (!eqpair(p->a[i], q->a[i], x + 1, y + 1)) return 0;
+    return 1;
+  }
+  if (*x == 'D') {
+    Dict *p = (Dict *)a, *q = (Dict *)b; const char *kx = x + 1, *ky = y + 1;
+    const char *vx = skip(kx), *vy = skip(ky);
+    if (p->len != q->len) return 0;
+    int lookup = same_desc(kx, ky) || ((*kx == 'i' || *kx == 'b') && (*ky == 'i' || *ky == 'b'));
+    for (I i = 0; i < p->n; i++) {
+      if (!p->hs[i]) continue;
+      I j = -1;
+      if (lookup) j = entry(q, p->keys[i]);
+      else for (I k = 0; k < q->n; k++) if (q->hs[k] && eqpair(p->keys[i], q->keys[k], kx, ky)) { j = k; break; }
+      if (j < 0 || !eqpair(p->vals[i], q->vals[j], vx, vy)) return 0;
+    }
+    return 1;
+  }
+  if (tx) {
+    if (!a || !b) return a == b;
+    I nx = *x == 'T' ? x[1] - '0' : ((VTuple *)a)->len, ny = *y == 'T' ? y[1] - '0' : ((VTuple *)b)->len;
+    if (nx != ny) return 0;
+    I *p = *x == 'T' ? (I *)a : ((VTuple *)a)->a, *q = *y == 'T' ? (I *)b : ((VTuple *)b)->a;
+    const char *ex = x + (*x == 'T' ? 2 : 1), *ey = y + (*y == 'T' ? 2 : 1);
+    for (I i = 0; i < nx; i++) {
+      if (!eqpair(p[i], q[i], ex, ey)) return 0;
+      if (*x == 'T') ex = skip(ex);
+      if (*y == 'T') ey = skip(ey);
+    }
+    return 1;
+  }
+  __builtin_unreachable();   /* the compiler permits only the builtin value descriptors above */
 }
 I pys_eq(I a, I b, Str *d) { return eqv(a, b, d->s); }
 /* a OP b for op 0..3 = < <= > >=, as CPython compares: sequences find the first pair of

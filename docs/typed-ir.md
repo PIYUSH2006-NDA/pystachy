@@ -88,9 +88,11 @@ type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
 Mixed scalar/list/dict unions store the original container pointer in that slot;
 unboxing never copies a container or changes its element storage type.
 Truth and string conversion select a typed member operation. Runtime `U` descriptors
-may describe mixed members for representation/formatting, but equality still
-accepts only scalar unions; a container's element layout must not be guessed from
-the first character of its descriptor.
+describe mixed members for representation/formatting and builtin-value equality.
+Equality resolves both operands' descriptors independently, including optional boxes
+and nested union payloads; it never guesses container element storage from the first
+descriptor character. Original container identity shortcuts shared descendants.
+User callbacks are excluded from this paired-descriptor equality path.
 Native reference unions keep the original object/file pointer in that payload;
 their method calls dispatch by member tag. Narrowing checks the tag before reading
 the concrete payload.

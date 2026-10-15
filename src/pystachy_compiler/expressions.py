@@ -2232,7 +2232,7 @@ def gen_exc_id(self, v: Val) -> Val:
 def gen_exc_eq(self, t: str, what: str = "") -> None:
     # == compares exceptions (of type t, or inside t) by identity: not where an exception
     # class defines __eq__ or __ne__, which CPython calls for one that an exception may be
-    if "E" in self.desc(t, "repr"):
+    if not self.ueq_type(t) and "E" in self.desc(t, "repr"):
         for c in self.classes.values():
             if c.exc != "" and ("__eq__" in c.methods or "__ne__" in c.methods):
                 m = "__eq__" if "__eq__" in c.methods else "__ne__"
@@ -2250,9 +2250,9 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     if (op == "in" or op == "not in") and b.t in self.classes and self.classes[b.t].tag != 0:
         return self.inherit_contains(op, a, b)
     if (is_union(unopt(a.t)) or is_union(unopt(b.t))) and a.t != "None" and b.t != "None":
-        if (op == "==" or op == "!=") and (self.scalar_union(a.t) or self.scalar_union(b.t)):
+        if (op == "==" or op == "!=") and self.ueq_type(a.t) and self.ueq_type(b.t):
             return self.uequal(op, a, b)
-        if not ((op == "in" or op == "not in") and (is_tuple(b.t) or (is_list(b.t) and self.scalar_union(elem(b.t))))):
+        if not ((op == "in" or op == "not in") and (is_tuple(b.t) or (is_list(b.t) and is_union(unopt(elem(b.t))) and self.ueq_type(elem(b.t))))):
             self.err("comparing closed union values requires narrowing with isinstance() first")
     if (op == "in" or op == "not in") and is_kw(b.t):
         b = self.kw_list(b)  # (x in kwargs: among the names)
@@ -2423,7 +2423,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 a = Val(nk[0], unopt(elem(b.t)))
                 ok = nk[1]
             et = a.t if is_opt(a.t) and unopt(a.t) == elem(b.t) else elem(b.t)  # (None is in no list[T])
-            if self.scalar_union(elem(b.t)):
+            if is_union(unopt(elem(b.t))) and self.ueq_type(elem(b.t)):
                 et = self.union_type([elem(b.t), a.t])
             if a.t == "None" and elem(b.t) not in self.classes and self.optional(elem(b.t)) != "" and not self.isnum(elem(b.t)):
                 et = self.optional(elem(b.t))
@@ -2571,8 +2571,8 @@ def gen_optcmp(self, op: str, a: Val, b: Val) -> Val:
 
 def gen_comparable(self, t: str, u: str) -> bool:
     # can t == u be true at all? (otherwise CPython just answers False)
-    if self.scalar_union(t) or self.scalar_union(u):
-        return self.scalar_union(self.union_type([t, u]))
+    if is_union(unopt(t)) or is_union(unopt(u)):
+        return self.ueq_type(self.union_type([t, u]))
     if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
         return True
     return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))

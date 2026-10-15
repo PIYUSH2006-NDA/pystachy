@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.ir import Ins, Val
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.specs import NONEVAR, OPTTYPES
-from src.pystachy_compiler.utils import is_dict, is_list, is_opt, is_sopt, is_union, typestr, umembers, unopt
+from src.pystachy_compiler.utils import is_dict, is_list, is_opt, is_sopt, is_tuple, is_union, is_vtuple, targs, typestr, umembers, unopt
 
 def gen_uboxes(self, a: str, b: str) -> bool:
     # is a value of type a one of union type b (or b | None) once boxed: a member's (one that
@@ -21,6 +21,18 @@ def gen_scalar_union(self, t: str) -> bool:
 
 def gen_value_union(self, t: str) -> bool:
     return is_union(unopt(t)) and all([m in ["int", "float", "bool", "str"] or is_list(m) or is_dict(m) for m in umembers(unopt(t))])
+
+def gen_ueq_type(self, t: str) -> bool:
+    # Finite builtin value trees: paired runtime descriptors handle their layouts,
+    # but no class callbacks, file handles, functions or sets cross this boundary.
+    t = unopt(t)
+    if t in ["None", "int", "float", "bool", "str"]:
+        return True
+    if is_union(t):
+        return all([self.ueq_type(m) for m in umembers(t)])
+    if is_list(t) or is_dict(t) or is_tuple(t) or is_vtuple(t):
+        return all([self.ueq_type(m) for m in targs(t)])
+    return False
 
 def gen_uop(self, v: Val, op: str) -> Val:
     # Truth and str select the existing native member operation. Evaluate v once,
@@ -56,8 +68,8 @@ def gen_uequal(self, op: str, a: Val, b: Val) -> Val:
     # Both operands are already evaluated. Boxes of a narrower union keep their
     # pointers and tags; a concrete scalar is boxed only at this dynamic boundary.
     t = self.union_type([a.t, b.t])
-    if t.startswith("!") or not self.scalar_union(t):
-        self.err("closed scalar union equality requires scalar operands")
+    if t.startswith("!") or not self.ueq_type(t):
+        self.err("closed union equality requires builtin scalar, list, dict or tuple values")
     a = self.coerce(a, t)
     b = self.coerce(b, t)
     r = self.rt("pys_eq", "i64", ["i64 " + self.to_slot(a), "i64 " + self.to_slot(b), f"ptr {self.sconst(self.desc(t, '=='))}"])
