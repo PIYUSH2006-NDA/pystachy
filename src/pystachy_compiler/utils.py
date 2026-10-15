@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from src.pystachy_compiler.diagnostics import fail, where
 from src.pystachy_compiler.ir import FnInfo
+from src.pystachy_compiler.llvm_abi import llvm_decl
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     CODECS,
@@ -14,8 +15,6 @@ from src.pystachy_compiler.specs import (
     INERT,
     METHODS,
     OPTS,
-    RAWR,
-    RAWW,
     RUNTIME,
     SETMETHODS,
     SPECIAL,
@@ -58,6 +57,10 @@ def lt(t: str) -> str:
         return "double"
     if t == "bool":
         return "i1"
+    if t == "%byte":
+        return "i8"
+    if t == "%i32":
+        return "i32"
     if t == "None":
         return "void"
     if t == "%slot":
@@ -125,7 +128,7 @@ def rt_subset(k: str, ts: list[str]) -> str:
 
 def runtime_decl(k: str) -> str:
     ps = rtsig(k)
-    return f"declare {rtll(ps[0])} @{rtsym(k)}({', '.join([rtll(p) for p in ps[1:]])})"
+    return llvm_decl(rtsym(k), [rtll(p) for p in ps])
 
 
 # every effect letter but N (it is no summary's): U's, and a summary not computed yet
@@ -162,22 +165,6 @@ def optimizations() -> dict[str, bool]:
     return on
 
 
-def rawfx(s: str, fa: dict[str, bool]) -> int:
-    # the effects (FX bits) of a raw op, whose LLVM text s loads, stores or computes: a load or a
-    # store of a slot (%name.N, an alloca, which is never address-taken) has none, of a global
-    # (@name) rG or wG, of an object's field or flag (an address in fa, IFn.fa) rO or wO; one
-    # through another address may read (RAWR) or write (RAWW) a list or a dict
-    st = s.startswith("store ")
-    if not st and not s.startswith("load ", s.find(" = ") + 3):
-        return 0
-    a = s.rfind(" ") + 1  # where the address is: the last word of "load T, ptr A" and "store T V, ptr A"
-    if s.startswith("@", a):
-        return FXBIT["wG"] if st else FXBIT["rG"]
-    if s.find(".", a) >= 0:
-        return 0  # (a temporary, %tN, has no dot)
-    if len(fa) > 0 and s[a:] in fa:
-        return FXBIT["wO"] if st else FXBIT["rO"]
-    return RAWW if st else RAWR
 
 
 class RtFn:
@@ -188,7 +175,6 @@ class RtFn:
         self.sym = rtsym(k)  # its LLVM symbol
         self.sig: list[str] = rtsig(k)  # its result and parameter types, as RUNTIME spells them
         self.ll: list[str] = [rtll(p) for p in self.sig]  # and as LLVM types
-        self.decl = runtime_decl(k)  # its declare line
         self.fx = fxmask(fx.replace("U?", ""))  # its effects (FX bits), but U?
         self.q = "U?" in fx  # whether it has U? (U when the descriptor of its # parameter holds a class)
 
@@ -630,17 +616,6 @@ def targs(t: str) -> list[str]:
     return out
 
 
-def llstr(s: str) -> str:
-    out: list[str] = []
-    for c in s:
-        o = ord(c)
-        if o < 32 or o > 126 or c == '"' or c == "\\":
-            out.append("\\" + HEX[o >> 4] + HEX[o & 15])
-        else:
-            out.append(c)
-    return "".join(out)
-
-
 def hpush(h: list[int], x: int) -> None:
     # h is a binary min-heap (heapq's layout)
     h.append(x)
@@ -730,11 +705,10 @@ def rename(n: Node, name: str, to: str) -> None:
 
 # ---------------------------------------------------------------- the IR
 # Gen builds one IFn per compiled function: blocks of instructions (Ins), each an op string
-# whose fields mean what the op says (docs/typed-ir.md 3.4). Until all of Gen builds ops, most
-# are "raw": one line of LLVM text. Once the whole program is built, lowering prints the LLVM
-# text of each IFn (lower).
+# whose fields mean what the op says (docs/typed-ir.md 3.4). Every instruction is typed.
+# Once the whole program is built, lowering prints the LLVM text of each IFn (lower).
 # The lists an op starts with: shared, and never changed (Gen.program checks it). An op that has
-# numbers, operands or labels gets lists of its own (most ops are raw and have none of them).
+# numbers, operands or labels gets lists of its own.
 
 
 def is_union(t: str) -> bool:
