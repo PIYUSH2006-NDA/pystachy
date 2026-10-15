@@ -141,7 +141,7 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Eight groups run in parallel, each with its own fixed-point bootstrap. The target is under
+Eleven groups run in parallel, each with its own fixed-point bootstrap. The target is under
 ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
@@ -151,7 +151,9 @@ ten minutes of work per group; the 15-minute job limit leaves room for runner va
 | `opt-off` | Native suite with IR optimizations disabled. |
 | `python-free` | Rebuild and run with no Python on `PATH`. |
 | `ubsan` | Sanitized compiler/runtime and JIT/AOT suite. |
-| `gc-stress` | Collector-stressed self-compilation and suite, overlapped within the job. |
+| `gc-self` | Collector-stressed self-compilation and identical-IR check. |
+| `gc-jit` | Full JIT suite with compiler and program GC stress. |
+| `gc-aot-0`, `gc-aot-1` | Two disjoint halves of the full AOT suite, with compiler and program GC stress. |
 | `contracts` | Runtime, IR, library and resource-bound checks. |
 | `benchmarks` | Benchmark correctness/timings and compiler scaling; extended correctness checks reuse the verified compiler. |
 
@@ -169,7 +171,12 @@ At the former interval of 1,000, it spent 23 minutes on 15,543 full-heap collect
 the wider interval still exercises thousands of collections without dominating CI.
 The GC test suite keeps its compiler interval of 1,000 and collects at **every program
 allocation**. Both self-compilation IR identity and full suite counts remain required.
-The log records self-compilation time; the report also records suite time separately.
+Self-compilation, JIT and both AOT halves use separate runners and report their own durations.
+The AOT halves alternate files in a fixed order; together they run the full corpus, including
+rejection and syntax checks. The final gate requires all four groups, both execution modes,
+the stress intervals, distinct AOT shard identities and complete counts for every job.
+`tests/verify.sh gc-stress` still runs all GC checks locally with one bootstrap; `gc-aot`
+runs both AOT halves.
 The final report job allows ten minutes for artifact downloads and validation.
 
 The [Lint workflow](../.github/workflows/lint.yml) runs alongside CI: lint, report-gate tests
