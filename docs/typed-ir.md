@@ -122,6 +122,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Purpose | Operations |
 |---|---|
 | Storage and LLVM text | `slot`, `raw` |
+| Container payload conversions | `slot.pack`, `slot.unpack` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -132,6 +133,15 @@ The exact operation table is `IROPS`; its current groups are:
 A `raw` operation is one LLVM instruction that loads, stores or computes. It cannot contain a
 call, phi or terminator: those must remain explicit so passes can reason about them.
 Entry slots lower to `alloca`; LLVM's `mem2reg` later builds SSA form.
+
+`slot.pack` preserves a native value's bits in an opaque `%slot` (eight bytes), and
+`slot.unpack` recovers the declared native type. Their operands retain that type through
+IR passes; only LLVM lowering chooses float bitcasts, boolean extension/truncation or
+pointer conversion. Integer slots need no instruction. These pure operations replace
+LLVM text in the shared container/optional/union conversion helpers, preserving the
+existing representation and allocation behavior. The verifier checks their operand,
+result and metadata contracts; it does not prove that a payload was read with its original
+type. Container typing and union narrowing still establish that frontend contract.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

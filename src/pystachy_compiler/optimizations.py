@@ -273,6 +273,8 @@ def gen_canon(self, vs: Values, v: str) -> str:
         if i.op == "rt":
             if self.rtfns[i.s].fx & ~FXBIT["R"] == 0 and not self.rtfns[i.s].q:
                 r = self.same(vs, v, f"rt {i.s} {', '.join([self.canon(vs, a.v) for a in i.a])}")
+        elif i.op == "slot.pack" or i.op == "slot.unpack":
+            r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
         else:
             s = i.s[i.s.find(" = ") + 3 :]
             if s.startswith("load "):

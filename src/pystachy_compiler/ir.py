@@ -137,6 +137,8 @@ class Ins:
     def __init__(self, op: str, t: str, s: str):
         self.op = op  # a key of IROPS
         self.t = t  # its result type ("" if it defines no value; an rt op's as RUNTIME spells it), a slot's type
+        # slot.pack/unpack keep the native type in the operand/result and use %slot for
+        # the opaque eight-byte container payload. Only LLVM lowering chooses its bitcast.
         # text immediate: for "raw", one line of LLVM text; a slot's name; an rt op's RUNTIME key; the
         # symbol a call calls; the module an init runs; a check's message "Kind: text"; the
         # exception a raise raises; ovf's operator + - *
@@ -252,7 +254,7 @@ class Values:
                 i = code[x]
                 if i.op == "raw" and i.k > 0:
                     self.at[i.k] = j * self.stride + x
-                elif i.op == "rt" and len(i.r) == 1:
+                elif (i.op == "rt" or i.op == "slot.pack" or i.op == "slot.unpack") and len(i.r) == 1:
                     self.at[i.r[0]] = j * self.stride + x
 
 
