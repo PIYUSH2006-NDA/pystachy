@@ -890,7 +890,7 @@ def gen_exc_brepr(self, o: Val) -> Val:
     a = self.getfield(o, self.field(o, " args"), " args")
     return Val(self.rt("pys_exc_brepr", "ptr", [f"ptr {o.v}", f"ptr {a.v}"]), "str")
 
-def gen_super_call(self, sc: Node, m: str, args: list[Node], based: bool = False) -> Val:
+def gen_super_call(self, sc: Node, m: str, args: list[Node], based: bool = False, read: bool = False) -> Val:
     # super().m(args) in a method of an exception class (based: Base.m(self, args), for its
     # base): the base's method m, or what BaseException's __init__ (keep the args), __str__ and
     # __repr__ do
@@ -913,12 +913,21 @@ def gen_super_call(self, sc: Node, m: str, args: list[Node], based: bool = False
     b = self.classes[start].base
     if b in self.classes and m in self.classes[b].methods:
         bm = self.classes[b].methods[m]
+        if bm.prop:
+            if based:
+                self.err(f"{short(b)}.{m} is a property: read it on an instance")
+            value = self.call_fn(bm, [me], [], direct=True)
+            return value if read else self.obj_call(value, args, "")
+        if read:
+            self.err("reading super() attributes is only supported for properties")
         if bm.deco != "" and not based:
             # a static or class method of the base gets no object (Base.m(self, ...) passes
             # self as its first argument), and a class method's cls would be the object's class
             self.cls_bound(bm, cls, True)
             return self.call_fn(bm, [], args, direct=True)
         return self.call_fn(bm, [me], args, direct=True)
+    if read:
+        self.err(f"super() has no supported property '{m}' in the base of {short(cls)}")
     if ordinary:
         if m == "__init__" and b == "":
             if len(args) != 0:
