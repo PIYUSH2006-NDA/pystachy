@@ -111,7 +111,8 @@ of `__slots__` is unsupported, as are base-typed reads when subclasses use diffe
 metadata types, or when an exception subclass overrides the metadata (read through
 the concrete class instead). Slot violations are compile
 errors rather than catchable exceptions. Repeated slot declarations and
-class variables or methods shadowing inherited slots are also unsupported.
+class variables or methods shadowing inherited slots are also unsupported, as are
+new slots shadowing inherited methods, properties or class variables.
 
 Ordinary classes support single inheritance, inherited fields and constructors, instance-method
 overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
