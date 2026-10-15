@@ -28,7 +28,7 @@ from src.pystachy_compiler.specs import (
     exc_derives,
     is_excname,
 )
-from src.pystachy_compiler.syntax import Node, has_kind, mentions, mk
+from src.pystachy_compiler.syntax import Node, has_kind, has_value_return, mentions, mk
 from src.pystachy_compiler.utils import (
     clone,
     elem,
@@ -64,7 +64,12 @@ def gen_ctype(self, base: str, ts: list[str]) -> str:
         size += len(t)
         if size > TYPE_SIZE:
             self.err(f"type representation exceeds {TYPE_SIZE} bytes; simplify the type or annotate template parameters")
-    return base + "[" + ",".join(ts) + "]"
+    t = base + "[" + ",".join(ts) + "]"
+    # Allocation and slot accesses derive a tuple's layout from its type string.
+    # Reject a broken serialization before either can use a different item count.
+    if base == "tuple" and targs(t) != ts:
+        self.err("internal error: tuple item types do not round-trip")
+    return t
 
 def gen_none_items(self, t: str) -> str:
     # A tuple key with str | None in place of each None item.
@@ -652,8 +657,15 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         stub = stub or self.imported(x.s) == "typing.overload"
     if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and (deco == "staticmethod" or deco == "classmethod"):
         f.deco = deco  # (a method that takes no self, or its class as cls)
+    f.prop = cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and deco == "property"
+    if f.prop:
+        for st in self.classes[cls].node.kids[0].kids:
+            if st is d:
+                break
+            if st.s == "property" or ((st.kind == "assign" or st.kind == "annassign") and st.kids[0].kind == "name" and st.kids[0].s == "property"):
+                self.err("unsupported decorator @property: the name is shadowed in the class body")
     deco = short(deco)
-    if deco != "" and f.deco == "" and not self.lib and not f.extern and not f.pyexport:
+    if deco != "" and f.deco == "" and not f.prop and not self.lib and not f.extern and not f.pyexport:
         # (CPython applies a decorator when the def runs, called or not: see decorators())
         if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
             self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -688,6 +700,12 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.generic = True  # (-> Box: what it returns is one of the class's specializations)
     if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
         f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
+    if d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and len(ps) == (1 if cls != "" and f.deco != "staticmethod" else 0) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
+        # No argument needs to provide a type: use the existing one-signature
+        # specialization to infer an ordinary no-argument function or method.
+        # Initializers and other implicit special methods keep their contracts.
+        f.void_default = not f.generic
+        f.generic = True
     marks = d.kids[0].s.split(",")
     bad = ""
     f.npos = -1
@@ -738,6 +756,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         elif p.kids[0].kind == "noann":
             if not f.generic and p not in held:
                 # A generic class's TypeVar annotation is restored on its specializations.
+                if cls != "" and d.s == "__exit__":
+                    self.err("unannotated __exit__() is not supported; user-defined context managers cannot be used in 'with' (files only)")
                 self.err(f"parameter '{p.s}' of '{d.s}' needs a type annotation")
             f.ptypes.append("")
         elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):
@@ -762,11 +782,18 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
     if f.vararg >= 0:
         f.npos = f.vararg
-    if len(d.kids) > 3 and f.deco == "" and not f.extern and not f.pyexport:
+    if len(d.kids) > 3 and f.deco == "" and not f.prop and not f.extern and not f.pyexport:
         bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
         bad = STUB.replace("NAME", short(d.s)) if stub else bad
     if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
         bad = f"@{f.deco} on the special method {d.s} is not supported"
+    if f.prop:
+        if len(ps) != 1 or ps[0].kind != "param":
+            bad = f"property {d.s} must take only self"
+        elif d.s.startswith("__") and d.s.endswith("__"):
+            bad = f"@property on the special method {d.s} is not supported"
+        elif d.kids[1].kind == "noann" and d not in held:
+            bad = f"property {d.s} needs a return annotation"
     if not inherited and f.deco == "classmethod" and bad == "" and ps[0].kind == "param":
         # its cls parameter names the class in its body: cls(...) makes one, cls.x reads a
         # class attribute, cls.m(...) calls a static or class method
@@ -887,6 +914,8 @@ def gen_init_after(self, ci: ClassInfo, name: str) -> bool:
     return False
 
 def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
+    if name in ci.methods and ci.methods[name].prop:
+        self.err(f"field '{name}' of '{short(ci.name)}' conflicts with read-only property '{name}'")
     if name not in ci.ftypes:
         self.exc_attr(ci, name)
     if name in ci.ftypes:
@@ -1266,12 +1295,16 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
     me = f.params[0] if takes_self(f) else ""
     if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s == me:
         ci = self.classes[f.cls]
+        if e.s in ci.methods and ci.methods[e.s].prop:
+            return ci.methods[e.s].ret
         if e.s not in ci.ftypes and e.s in ci.methods and ci.methods[e.s].deco == "":
             return f"fn[m:{f.cls}.{e.s}]"  # (self.m: the method bound to the object)
         return ci.ftypes.get(e.s, "")
     if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
         ms = self.classes[f.cls].methods
         m = e.kids[0].s
+        if m in ms and ms[m].prop:
+            return targs(ms[m].ret)[0] if is_callable(ms[m].ret) else ""
         return "" if m not in ms else ms[m].ret if ms[m].bad == "" else "!" + ms[m].bad
     if k == "call" and e.kids[0].kind == "name" and e.kids[0].s == me:
         ms = self.classes[f.cls].methods  # self(...): self.__call__(...)
@@ -1391,6 +1424,8 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
             self.err(f"{tname(t)}.{name} is a method: call it, {name}(...) (methods are not values)")
         self.err(f"type {typestr(o.t)} has no attribute '{name}'")
     ci = self.classes[o.t]
+    if name in ci.methods and ci.methods[name].prop:
+        self.err(f"property '{name}' of '{short(o.t)}' is read-only")
     if store and ci.slotlimit and name not in ci.slots:
         self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:

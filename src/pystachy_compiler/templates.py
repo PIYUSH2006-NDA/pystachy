@@ -400,7 +400,13 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
     if key in f.insts:
         g = f.insts[key]
         if g.ret == "":
-            self.err(f"cannot infer what {short(f.name)}() returns: it calls itself before a return statement does; annotate its return type")
+            if f.void_default:
+                # These signatures previously returned None. Keep recursive void
+                # programs valid, but fix their consumed ABI before emitting a call.
+                # The first-return path refuses any later non-None inference.
+                g.ret = "None"
+            else:
+                self.err(f"cannot infer what {short(f.name)}() returns: it calls itself before a return statement does; annotate its return type")
         if g.ll in self.building:
             self.retseen[g.ll] = True  # (a return of None can no longer make it T | None)
         return g
@@ -422,6 +428,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
     self.materialize(f)  # (an inherited class method's own body)
     g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, f.cls)
     g.deco = f.deco
+    g.prop = f.prop
     g.clsuse = f.clsuse
     g.orig = f.orig
     g.iters = f.iters
