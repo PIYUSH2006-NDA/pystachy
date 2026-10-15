@@ -95,7 +95,7 @@ EXPRNAMES: dict[str, str] = {
     "attr": "attribute", "index": "subscript", "slice": "subscript", "starred": "starred", "name": "name", "list": "list",
     "tuple": "tuple", "lambda": "lambda", "call": "function call", "binop": "expression", "unary": "expression",
     "boolop": "expression", "yield": "yield expression", "await": "await expression", "setcomp": "set comprehension",
-    "dictcomp": "dict comprehension", "dict": "dict literal", "dstar": "dict literal", "set": "set display",
+    "dictcomp": "dict comprehension", "dict": "dict literal", "dictstar": "dict literal", "set": "set display",
     "fstr": "f-string expression", "str": "literal", "int": "literal", "float": "literal", "complex": "literal",
     "bytes": "literal", "None": "None", "True": "True", "False": "False", "ellipsis": "ellipsis", "cmp": "comparison",
     "ifexp": "conditional expression", "walrus": "named expression",
