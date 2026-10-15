@@ -70,9 +70,6 @@ for _k in "neg pos invert".split():
 UNCALLED: dict[str, str] = {"__new__": "to make each object of the class", "__getattribute__": "to read each attribute",
                             "__getattr__": "for each attribute it does not find", "__setattr__": "to assign each attribute",
                             "__delattr__": "to delete each attribute"}
-# a comparison from pys_cmp_if's result R (-1, 0, 1, or 2 when a NaN makes it unordered)
-MIXCMP: dict[str, str] = {"==": "icmp eq i64 R, 0", "!=": "icmp ne i64 R, 0", "<": "icmp eq i64 R, -1", "<=": "icmp sle i64 R, 0",
-                          ">": "icmp eq i64 R, 1", ">=": "icmp ule i64 R, 1"}
 REFL: dict[str, str] = {"<": ">", "<=": ">=", ">": "<", ">=": "<="}  # a < b may run b.__gt__(a)
 ORDOP: dict[str, int] = {"<": 0, "<=": 1, ">": 2, ">=": 3}  # op codes shared with runtime.c
 DUNDER: dict[str, str] = {"+": "__add__", "-": "__sub__", "*": "__mul__", "/": "__truediv__", "//": "__floordiv__", "%": "__mod__",
@@ -412,26 +409,33 @@ METHODS: dict[str, str] = {
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
+# Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
+# These are conservative: even a byte-correct delimiter search is a porting audit hit.
+UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace "
+                            "upper lower swapcase capitalize title casefold isdigit isalpha isalnum "
+                            "isupper islower istitle isdecimal isnumeric expandtabs").split()
+
 # the methods of frozenset (those that change nothing) and of set, which Gen.smethod compiles
 FSETMETHODS: list[str] = "copy difference intersection isdisjoint issubset issuperset symmetric_difference union".split()
 SETMETHODS: list[str] = FSETMETHODS + "add clear difference_update discard intersection_update pop remove symmetric_difference_update update".split()
 # the IR's ops (Ins.op) and their effects (docs/typed-ir.md 3.4 and 3.7, and FX below): T ends
 # a block; an rt op has its runtime function's effects (RUNTIME), a call or an init its callee's
-# summary (IFn.fx); a raw op is LLVM text that loads, stores or computes (never a call), whose
-# letters its text gives (rawfx)
+# summary (IFn.fx). Every instruction has typed operands; there is no text escape hatch.
 IROPS: dict[str, str] = {
-    "raw": "*", "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
+    "slot": "", "rt": "*", "call": "*", "icall": "*", "init": "*", "br": "T", "cbr": "T", "check": "T R",
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
     "list.load": "rL", "list.len": "rL",
+    "alloc.fixed": "A",
+    "mem.load": "*", "mem.store": "*",
+    "mach.load": "*", "mach.store": "*", "mach.addr": "",
+    "tuple.load": "rL rD rO", "tuple.store": "wL wD wO",
+    "field.addr": "",
     "slot.pack": "", "slot.unpack": "",
-    "num.cast": "", "num.cmp": "",
+    "scalar.bin": "", "scalar.cast": "", "scalar.cmp": "",
+    "num.cast": "", "num.cmp": "", "int.ucmp": "", "ptr.cmp": "",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
-# the LLVM instructions a raw op may not be: the ones that end a block, and phi and call (ops of their own)
-LLNOTRAW: dict[str, bool] = {}
-for _k in "ret br switch indirectbr invoke callbr resume catchswitch catchret cleanupret unreachable phi call tail musttail notail".split():
-    LLNOTRAW[_k] = True
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -534,6 +538,7 @@ RUNTIME: dict[str, str] = {
     "set.isdisjoint": "bool:S,S|rD|", "set.isdisjoint_list": "bool:S,list[T]|rL rD|", "set.next": "int:S,int,int|R rD|",
     "set.key": "*T:S,int|rD|", "set.list": "list[T]:S|A rD|",
     # strings
+    "str.audit": "None:str,str|R|",
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
@@ -620,7 +625,7 @@ for _k in RUNTIME:
 
 
 FXALL = (1 << len(FX)) - 1 - FXBIT["N"]
-# what a raw op that loads or stores through an address other than a slot's, a global's or a
+# what a memory op that loads or stores through an address other than a slot's, a global's or a
 # field's may read or write: a list's or a dict's header or items (or a tuple's items, which need
 # no letter); and an object's fields, for an address the IR does not show to be a field's
 RAWR = FXBIT["rL"] | FXBIT["rD"] | FXBIT["rO"]

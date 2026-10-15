@@ -1,8 +1,22 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+import os
+from src.pystachy_compiler.lowering import gen_lower_scalar as scalar_ir_lower_scalar
+from src.pystachy_compiler.scalar_ir import (
+    gen_scalar as scalar_ir_scalar,
+    gen_scalar_cast as scalar_ir_scalar_cast,
+    gen_scalar_cmp as scalar_ir_scalar_cmp,
+
+    gen_verify_scalar as scalar_ir_verify_scalar,
+)
 from src.pystachy_compiler.union_arithmetic import (
     gen_unumeric as union_arithmetic_unumeric,
     gen_unumeric_case as union_arithmetic_unumeric_case,
+)
+from src.pystachy_compiler.memory_ir import (
+    gen_mload as memory_ir_mload,
+    gen_mstore as memory_ir_mstore,
+    gen_maddr as memory_ir_maddr,
 )
 from src.pystachy_compiler.unions import (
     gen_ueq_type as unions_ueq_type,
@@ -129,6 +143,8 @@ from src.pystachy_compiler.containers import (
 from src.pystachy_compiler.conversions import (
     gen_num_cast as conversions_num_cast,
     gen_num_cmp as conversions_num_cmp,
+    gen_int_ucmp as conversions_int_ucmp,
+    gen_ptr_cmp as conversions_ptr_cmp,
     gen_as_float as conversions_as_float,
     gen_as_int as conversions_as_int,
     gen_coerce as conversions_coerce,
@@ -199,6 +215,7 @@ from src.pystachy_compiler.declarations import (
 )
 from src.pystachy_compiler.emission import (
     gen_add as emission_add,
+    gen_alloc_fixed as emission_alloc_fixed,
     gen_alloca as emission_alloca,
     gen_boxes as emission_boxes,
     gen_br as emission_br,
@@ -208,15 +225,15 @@ from src.pystachy_compiler.emission import (
     gen_convert_in as emission_convert_in,
     gen_converts as emission_converts,
     gen_deref as emission_deref,
-    gen_emit as emission_emit,
     gen_err as emission_err,
     gen_guard as emission_guard,
     gen_hole as emission_hole,
     gen_incoming as emission_incoming,
-    gen_ins as emission_ins,
     gen_iop as emission_iop,
     gen_jump as emission_jump,
     gen_label as emission_label,
+    gen_mem_load as emission_mem_load,
+    gen_mem_store as emission_mem_store,
     gen_notnone as emission_notnone,
     gen_phi as emission_phi,
     gen_place as emission_place,
@@ -275,6 +292,7 @@ from src.pystachy_compiler.exceptions import (
     gen_unshadow as exceptions_unshadow,
 )
 from src.pystachy_compiler.expressions import (
+    gen_list_hint_type as expressions_list_hint_type,
     gen_argtype as expressions_argtype,
     gen_arith as expressions_arith,
     gen_boolop as expressions_boolop,
@@ -349,6 +367,7 @@ from src.pystachy_compiler.expressions import (
     gen_static_type as expressions_static_type,
     gen_subscript as expressions_subscript,
     gen_tget as expressions_tget,
+    gen_tstore as expressions_tstore,
     gen_truth as expressions_truth,
     gen_tuple_ as expressions_tuple_,
     gen_tuple_order as expressions_tuple_order,
@@ -371,19 +390,18 @@ from src.pystachy_compiler.flow import (
     gen_user_call as flow_user_call,
 )
 from src.pystachy_compiler.functions import (
-    gen_cextern as functions_cextern,
     gen_enter as functions_enter,
     gen_extern_args as functions_extern_args,
     gen_externtype as functions_externtype,
     gen_function as functions_function,
     gen_materialize as functions_materialize,
-    gen_pyext as functions_pyext,
     gen_untold as functions_untold,
 )
 from src.pystachy_compiler.ir import (
     Blk,
     ClassInfo,
     Closure,
+    Data,
     Exit,
     FnInfo,
     Frame,
@@ -410,6 +428,13 @@ from src.pystachy_compiler.lowering import (
     gen_invoke as lowering_invoke,
     gen_lower as lowering_lower,
     gen_lower_ins as lowering_lower_ins,
+)
+from src.pystachy_compiler.lower_module import (
+    gen_cextern as lower_module_cextern,
+    gen_dispatch as lower_module_dispatch,
+    gen_extern_decl as lower_module_extern_decl,
+    gen_lower_module as lower_module_lower_module,
+    gen_pyext as lower_module_pyext,
 )
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.optimizations import (
@@ -458,7 +483,6 @@ from src.pystachy_compiler.statements import (
     gen_default_problem as statements_default_problem,
     gen_del_name as statements_del_name,
     gen_dflt_fn as statements_dflt_fn,
-    gen_dispatch as statements_dispatch,
     gen_early_default as statements_early_default,
     gen_for_ as statements_for_,
     gen_for_range as statements_for_range,
@@ -494,6 +518,7 @@ from src.pystachy_compiler.statements import (
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.templates import (
     gen_bind as templates_bind,
+    gen_constructor_unions as templates_constructor_unions,
     gen_fn_sig as templates_fn_sig,
     gen_instance as templates_instance,
     gen_generic_ann as templates_generic_ann,
@@ -593,16 +618,16 @@ class Gen:
         self.fglobals: dict[str, bool] = {}
         self.mvars: dict[str, bool] = {}  # module-level variables, also those functions assign
         self.gtypes: dict[str, str] = {}
-        self.globs: list[str] = []
+        self.globs: list[Val] = []
         self.gcroots: list[str] = []
-        self.consts: list[str] = []
+        self.consts: list[Data] = []
         self.strs: dict[str, str] = {}
         self.strvals: list[str] = []  # the text of each @s.N
         self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)
         # the runtime functions declared, by RUNTIME key, in the order of their first use (which
         # the program's declare lines keep)
         self.rtfns: dict[str, RtFn] = {}
-        self.opfxs: dict[str, int] = {}  # the effects of each op of IROPS but raw, rt, call and init
+        self.opfxs: dict[str, int] = {}  # the effects of each op of IROPS with fixed effects
         for op in IROPS:
             self.opfxs[op] = fxmask(IROPS[op].replace("T", "").replace("*", ""))
         self.out: list[str] = []
@@ -694,6 +719,7 @@ class Gen:
         self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
         self.csymline: dict[str, int] = {}  # and the line that declared it
         self.extvars: dict[str, int] = {}  # pystachy ext: the main module's variables, and the line that binds each
+        self.unicode_audit = os.getenv("PYSTACHY_UNICODE_AUDIT", "") == "1"
         self.rtmode = False  # compiling runtime.py: its pys_* functions join runtime.c's under their C names (see runtime_ir)
         self.rtdefs: dict[str, FnInfo] = {}  # runtime mode: the pys_* functions this module defines, by C name
         self.rtcache = False  # runtime mode, for the driver's runtime cache: PYSTACHY_IRFX is the program's
@@ -782,8 +808,6 @@ class Gen:
     def label(self) -> str:
         return emission_label(self)
 
-    def emit(self, s: str) -> None:
-        return emission_emit(self, s)
 
     def add(self, i: Ins) -> None:
         return emission_add(self, i)
@@ -791,8 +815,36 @@ class Gen:
     def put(self, i: Ins, k: int) -> None:
         return emission_put(self, i, k)
 
-    def ins(self, s: str) -> str:
-        return emission_ins(self, s)
+
+    def scalar(self, op: str, args: list[Val], flags: str = "") -> str:
+        return scalar_ir_scalar(self, op, args, flags)
+
+    def scalar_cast(self, op: str, a: Val, t: str) -> str:
+        return scalar_ir_scalar_cast(self, op, a, t)
+
+    def scalar_cmp(self, predicate: str, a: Val, b: Val) -> str:
+        return scalar_ir_scalar_cmp(self, predicate, a, b)
+
+    def lower_scalar(self, i: Ins) -> None:
+        return scalar_ir_lower_scalar(self, i)
+
+    def verify_scalar(self, fn: IFn, b: Blk, i: Ins) -> None:
+        return scalar_ir_verify_scalar(self, fn, b, i)
+
+    def mload(self, t: str, p: str, metadata: str = "") -> str:
+        return memory_ir_mload(self, t, p, metadata)
+
+    def mstore(self, t: str, v: str, p: str, metadata: str = "") -> None:
+        memory_ir_mstore(self, t, v, p, metadata)
+
+    def maddr(self, t: str, p: str, index: str, inbounds: bool = False) -> str:
+        return memory_ir_maddr(self, t, p, index, inbounds)
+
+    def mem_load(self, a: Val) -> Val:
+        return emission_mem_load(self, a)
+
+    def mem_store(self, a: Val, v: Val) -> None:
+        return emission_mem_store(self, a, v)
 
     def place(self, l: str) -> None:
         return emission_place(self, l)
@@ -826,6 +878,9 @@ class Gen:
 
     def rt(self, name: str, ret: str, args: list[str]) -> str:
         return emission_rt(self, name, ret, args)
+
+    def alloc_fixed(self, t: str) -> Val:
+        return emission_alloc_fixed(self, t)
 
     def runtime(self, name: str) -> str:
         return emission_runtime(self, name)
@@ -898,6 +953,12 @@ class Gen:
 
     def num_cmp(self, op: str, a: Val, b: Val) -> Val:
         return conversions_num_cmp(self, op, a, b)
+
+    def int_ucmp(self, op: str, a: Val, b: Val) -> Val:
+        return conversions_int_ucmp(self, op, a, b)
+
+    def ptr_cmp(self, op: str, a: Val, b: Val) -> Val:
+        return conversions_ptr_cmp(self, op, a, b)
 
     def floats(self, v: Val) -> Val:
         return conversions_floats(self, v)
@@ -1293,13 +1354,19 @@ class Gen:
         return functions_externtype(self, a, t, what, f)
 
     def cextern(self, f: FnInfo) -> None:
-        return functions_cextern(self, f)
+        return lower_module_cextern(self, f)
 
     def pyext(self) -> list[str]:
-        return functions_pyext(self)
+        return lower_module_pyext(self)
 
     def untold(self, f: FnInfo, ts: list[str], how: str) -> None:
         return functions_untold(self, f, ts, how)
+
+    def extern_decl(self, f: FnInfo) -> None:
+        return lower_module_extern_decl(self, f)
+
+    def lower_module(self) -> str:
+        return lower_module_lower_module(self)
 
     def lower(self, fn: IFn) -> None:
         return lowering_lower(self, fn)
@@ -1473,7 +1540,7 @@ class Gen:
         return statements_obj_helpers(self, c)
 
     def dispatch(self, op: str) -> None:
-        return statements_dispatch(self, op)
+        return lower_module_dispatch(self, op)
 
     def check_special(self, f: FnInfo) -> None:
         return statements_check_special(self, f)
@@ -1751,6 +1818,9 @@ class Gen:
     def expr(self, n: Node, want: str) -> Val:
         return expressions_expr(self, n, want)
 
+    def list_hint_type(self, a: str, b: str) -> str:
+        return expressions_list_hint_type(self, a, b)
+
     def class_attr(self, cn: Node, a: str) -> Val:
         return expressions_class_attr(self, cn, a)
 
@@ -1837,6 +1907,9 @@ class Gen:
 
     def tget(self, v: Val, i: int) -> Val:
         return expressions_tget(self, v, i)
+
+    def tstore(self, v: Val, index: int, slot: str) -> None:
+        expressions_tstore(self, v, index, slot)
 
     def index(self, n: Node) -> Val:
         return expressions_index(self, n)
@@ -1928,11 +2001,11 @@ class Gen:
     def foreign_eq(self, a: Val, b: Val) -> Val:
         return expressions_foreign_eq(self, a, b)
 
-    def call(self, n: Node, want: str) -> Val:
-        return calls_call(self, n, want)
+    def call(self, n: Node, want: str, typeargs: str="") -> Val:
+        return calls_call(self, n, want, typeargs)
 
-    def star_call(self, n: Node, want: str) -> Val:
-        return calls_star_call(self, n, want)
+    def star_call(self, n: Node, want: str, typeargs: str="") -> Val:
+        return calls_star_call(self, n, want, typeargs)
 
     def static_callee(self, f: Node) -> bool:
         return calls_static_callee(self, f)
@@ -2027,8 +2100,8 @@ class Gen:
     def pcoerce(self, v: Val, t: str, f: FnInfo, j: int) -> Val:
         return calls_pcoerce(self, v, t, f, j)
 
-    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False) -> Val:
-        return calls_call_fn(self, f, pre, args, want, none, cache, direct)
+    def call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str='', none: str='', cache: Val | None=None, direct: bool=False, typeargs: str='') -> Val:
+        return calls_call_fn(self, f, pre, args, want, none, cache, direct, typeargs)
 
     def virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: str, none: str) -> Val:
         return calls_virtual_call(self, f, pre, args, want, none)
@@ -2059,6 +2132,9 @@ class Gen:
 
     def want_tvars(self, c: str, want: str) -> dict[str, str]:
         return templates_want_tvars(self, c, want)
+
+    def constructor_unions(self, c: str, ts: list[str]) -> list[str]:
+        return templates_constructor_unions(self, c, ts)
 
     def want_params(self, c: str, want: str) -> list[str]:
         return templates_want_params(self, c, want)
