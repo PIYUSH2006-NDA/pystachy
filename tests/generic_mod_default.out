@@ -1,0 +1,4 @@
+mods: init mods
+mods.shapes: init mods.shapes
+['b', 'a'] [3, 2, 1] []
+[exit 0]

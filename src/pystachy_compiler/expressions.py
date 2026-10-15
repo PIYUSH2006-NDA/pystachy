@@ -329,6 +329,9 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return 1
     if c.s == "list" or c.s == "dict" or c.s == "tuple" or c.s == "set" or c.s == "frozenset":
         return 1 if t.startswith(c.s + "[") else 0
+    if c.s == "type" and t.startswith("fn[b:"):
+        # a builtin's value: one of CPython's builtin classes (int, list, ...) is a type
+        return 1 if t[5:-1] in "bool bytearray bytes classmethod complex dict enumerate filter float frozenset int list map memoryview object property range reversed set slice staticmethod str super tuple type zip".split() else 0
     if c.s in "bytes bytearray memoryview complex range slice type".split():
         return 0
     return -1

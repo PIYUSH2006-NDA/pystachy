@@ -1,0 +1,10 @@
+Table({'a': 1, 'b': 2}) Table({'c': 3.5}) Table({'a': 1, 'b': 2, 'z': 26}) Table({}) Table({7: 'seven'}) Table({'x': 1, 'y': 2}) Table({'p': 1})
+Bag(['x', 'y', 'z']) Bag(['x', 'y', 'z']) Bag(['a', 'b']) Bag([1.5, 2.5])
+Bag(['x', 'y', 'z', 'w'])
+0 ['item'] (1, 'one') 0 0.0
+KeyError 'missing'
+[1, 2] s
+{'a': [1], 'b': [2]} 7 {1: 0, 2: 7}
+4 ABC [1, 3]
+<class 'int'> <class 'list'> <class 'dict'> <class 'str'> function function function None
+[exit 0]

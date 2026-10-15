@@ -976,7 +976,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
         return cur
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:
-        b = self.expr(rhs, "")
+        b = self.expr(rhs, cur.t)  # (as for cur op rhs: c += Counter() types the empty Counter)
         self.none_operand(op + "=", cur, b)
         return self.call_fn(self.classes[cur.t].methods[im], [cur, b], [])
     return self.arith(op, cur, self.expr(rhs, cur.t), op + "=")

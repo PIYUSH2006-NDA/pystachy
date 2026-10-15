@@ -631,6 +631,11 @@ def gen_program(self, mods: list[Mod]) -> str:
             self.line = ci.node.line
             self.err("inheritance with generic class templates is not supported: annotate __init__ parameters")
     for m in mods:
+        # (made now: a specialization that a declaration's annotation names may compile a
+        # method whose call needs a default's type, which its module's frame gives, see modtype)
+        self.inits[m.name] = FnInfo("<module>", "@init." + m.name if m.name != "" else "@main.init", m.body, "")
+        self.inits[m.name].mod = m.name
+    for m in mods:
         top: list[Node] = []
         for st in m.body.kids:
             self.line = st.line
@@ -740,8 +745,6 @@ def gen_program(self, mods: list[Mod]) -> str:
                 elif k == "True" or k == "False":
                     self.declare(st.kids[0].s, "bool")
     for m in mods:
-        self.inits[m.name] = FnInfo("<module>", "@init." + m.name if m.name != "" else "@main.init", m.body, "")
-        self.inits[m.name].mod = m.name
         self.mfile[m.name] = m.path[2:] if m.path.startswith("./") else m.path
     self.compiling = True
     self.modlevel = True

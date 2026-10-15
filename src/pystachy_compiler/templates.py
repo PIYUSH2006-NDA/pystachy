@@ -150,6 +150,7 @@ def gen_bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, st
     tv: dict[str, str] = {}
     init = [d for d in self.classes[c].node.kids[0].kids if d.kind == "def" and d.s == "__init__"][0]
     ps = init.kids[0].kids
+    later: list[int] = []
     for i in range(1, min(len(ps), len(ts) + 1)):
         a = ps[i].kids[0]
         if not self.names_tv(a, tvs):
@@ -160,14 +161,32 @@ def gen_bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, st
         elif ps[i].kind == "dstarparam":
             why = self.match_items([a] * len(kw_types(t)), kw_types(t), tv, tvs)
         else:
-            why = self.match(a, t, tv, tvs)
+            trial = dict(tv)
+            why = self.match(a, t, trial, tvs)
+            if why == "":
+                tv = trial
+            elif t.startswith("fn[") and self.fn_sig(t)[0].startswith("!"):
+                # a lambda, a builtin such as int or list, or an unannotated def, whose signature
+                # binds nothing: decided once the other arguments have bound theirs
+                later.append(i)
+                why = ""
         if why != "":
             self.err(f"{short(c)}() cannot bind its type variables from the argument for '{ps[i].s}', a {typestr(t)}: {why}")
+    for i in later:
+        # (where the other arguments or the context bind the Callable's type variables, its value
+        # becomes that Callable where __init__ stores it)
+        a = ps[i].kids[0]
+        if len([x for x in tvs if x not in tv and x not in given and self.names_tv(a, [x])]) > 0:
+            ints = ", ".join(["int" for y in tvs])
+            # (a private class, such as functools' cache wrapper, is not one a program names)
+            hint = "" if short(c).startswith("_") else f"; or name them where the object goes (q: {short(c)}[{ints}] = {short(c)}(...)) or in the call ({short(c)}[{ints}](...))"
+            self.err(f"{short(c)}() cannot bind its type variables from the argument for '{ps[i].s}', a {typestr(ts[i - 1])}: {self.match(a, ts[i - 1], dict(tv), tvs)}{hint}")
     for x in tvs:
         if x not in tv and x in given:
             tv[x] = given[x]
         if x not in tv:
-            self.err(f"{short(c)}() does not bind its type variable '{short(x)}': no argument's type gives it; name it where the object goes (q: {short(c)}[int] = {short(c)}(...), a field or a parameter annotated so) or in the call ({short(c)}[int](...))")
+            ints = ", ".join(["int" for y in tvs])  # (C[int, int] of a class with two)
+            self.err(f"{short(c)}() does not bind its type variable '{short(x)}': no argument's type gives it; name it where the object goes (q: {short(c)}[{ints}] = {short(c)}(...), a field or a parameter annotated so) or in the call ({short(c)}[{ints}](...))")
     return tv
 
 def gen_want_tvars(self, c: str, want: str) -> dict[str, str]:
@@ -310,14 +329,25 @@ def gen_named_params(self, c: str, init: Node) -> list[str]:
         a = p.kids[0]
         if p.kind != "param" or a.kind == "noann":
             self.err(f"{short(c)}[...] needs each parameter of {short(c)}.__init__ annotated, and no *args or **kwargs: '{p.s}' is not")
-        if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") and self.ann_base(a.kids[0]) in ("iterable", "iterator"):
-            t = self.ann(a.kids[1])
-            out.append(t if t.startswith("!") else self.ctype("list", [t]))
-        else:
-            out.append(self.ann(a))
+        out.append(self.named_param(a))
         if out[-1].startswith("!"):
             self.err(f"{short(c)}[...]: the annotation of {short(c)}.__init__'s parameter '{p.s}': {out[-1][1:]}")
     return out
+
+def gen_named_param(self, a: Node) -> str:
+    # (see named_params) the type of a parameter annotated a; of a union that is no type here,
+    # such as Iterable[tuple[K, V]] | dict[K, V] (see match), its first member's that is one
+    if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") and self.ann_base(a.kids[0]) in ("iterable", "iterator"):
+        t = self.ann(a.kids[1])
+        return t if t.startswith("!") else self.ctype("list", [t])
+    t = self.ann(a)
+    u = self.parse_expr(a.s) if a.kind == "str" else a
+    if t.startswith("!") and u.kind == "binop" and u.s == "|":
+        for m in self.union_members(u, []):
+            mt = self.named_param(m) if m.kind != "None" else "!"
+            if not mt.startswith("!"):
+                return mt
+    return t
 
 
 def gen_match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
@@ -345,12 +375,38 @@ def gen_match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
         ms = [a.kids[1], mk("None", "", a.line, [])]
     if len(ms) == 2 and (ms[0].kind == "None" or ms[1].kind == "None"):
         return "" if t == "None" else self.match(ms[0] if ms[1].kind == "None" else ms[1], unopt(t), tv, tvs)  # (T | None)
+    if len(ms) > 0:
+        # A | B: the first member that mentions type variables and fits binds them, an
+        # Iterable[...] after the others, as Iterable[tuple[K, V]] | dict[K, V] takes a list of
+        # pairs or a dict; else a member that mentions none (which the code that uses the value
+        # checks)
+        none = len([m for m in ms if m.kind == "None"]) > 0
+        if t == "None" and none:
+            return ""
+        its = [m for m in ms if m.kind == "index" and (m.kids[0].kind == "name" or m.kids[0].kind == "attr") and self.ann_base(m.kids[0]) in ("iterable", "iterator")]
+        why = ""
+        for m in [m for m in ms if m not in its] + its:
+            if m.kind != "None" and self.names_tv(m, tvs):
+                trial = dict(tv)
+                w = self.match(m, unopt(t) if none else t, trial, tvs)
+                if w == "":
+                    for x in trial:
+                        tv[x] = trial[x]
+                    return ""
+                why = w if why == "" else why
+        return "" if len([m for m in ms if m.kind != "None" and not self.names_tv(m, tvs)]) > 0 else why
     base = self.ann_base(a.kids[0]) if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") else ""
     xs = (a.kids[1].kids if a.kids[1].kind == "tuple" else [a.kids[1]]) if a.kind == "index" else []
+    gc = a.kids[0].s if a.kind == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.tparams else ""
+    if gc != "" and t in self.classes and self.classes[t].origin == gc and len([x for x in self.tparams[gc] if x in self.tvtuples]) == 0:
+        return self.match_items(xs, [self.classes[t].tvars[x] for x in self.tparams[gc]], tv, tvs)  # (C[K, V] of a C object)
     if (base == "iterable" or base == "iterator") and len(xs) == 1:
         if t == "tuple[]":
             return ""  # (no items bind T; the context can still give it)
         et = self.iter_elem(t)
+        meths = self.classes[t].methods if t in self.classes else {}
+        if et == "" and "__iter__" in meths and meths["__iter__"].iters and is_list(meths["__iter__"].ret):
+            et = elem(meths["__iter__"].ret)  # (an object's: the items its __iter__ steps through)
         return self.match(xs[0], et, tv, tvs) if et != "" else "it has no supported iterable item type"
     if base == "list" and is_list(t) and len(xs) == 1:
         return self.match(xs[0], elem(t), tv, tvs)
@@ -367,7 +423,7 @@ def gen_match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
             return sig[0][1:]
         why = self.match_items(xs[0].kids, sig[1:], tv, tvs)
         return why if why != "" else self.match(xs[1], sig[0], tv, tvs)
-    return "it does not fit the parameter's annotation (or that annotation's type variables are not supported there: they are in T, list[T], dict[K, V], set[T], tuple[T, *Ts], T | None, Iterable[T] and Callable[[T, *Ts], R])"
+    return "it does not fit the parameter's annotation (or that annotation's type variables are not supported there: they are in T, list[T], dict[K, V], set[T], tuple[T, *Ts], T | None, Iterable[T], Callable[[T, *Ts], R], a generic class's C[T] and unions of these)"
 
 def gen_match_items(self, xs: list[Node], ts: list[str], tv: dict[str, str], tvs: list[str]) -> str:
     # (see match) values of types ts for the items of tuple[...] or the parameters of
