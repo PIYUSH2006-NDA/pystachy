@@ -423,6 +423,7 @@ IROPS: dict[str, str] = {
     "ret": "T", "ret.none": "T", "raise": "T R N", "unreachable": "T", "phi": "", "select": "", "ovf": "",
     "list.load": "rL", "list.len": "rL",
     "slot.pack": "", "slot.unpack": "",
+    "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
 # the LLVM instructions a raw op may not be: the ones that end a block, and phi and call (ops of their own)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
 from src.pystachy_compiler.specs import FX, FXALL, FXBIT, IROPS, LLNOTRAW, RUNTIME
-from src.pystachy_compiler.utils import rawfx
+from src.pystachy_compiler.utils import is_opt, is_union, rawfx, umembers
 
 
 class EffectSummaries:
@@ -142,6 +142,19 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                 slot = i.t if i.op == "slot.pack" else i.a[0].t
                 if slot != "%slot" or t == "" or t.startswith("%") or t.startswith("*") or t == "#" or (t in ["T", "K", "V", "S"] and t not in self.classes):
                     self.bad_ir(fn, b, f"{i.op} needs a native value type and a %slot")
+            if i.op == "union.tag" or i.op == "union.payload":
+                if len(i.a) != 1 or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, f"{i.op} needs one union operand and no extra metadata")
+                u = i.a[0].t
+                ms = umembers(u) if is_union(u) and u.endswith("]") else []
+                if len(ms) < 2:
+                    self.bad_ir(fn, b, f"{i.op} needs a nonoptional closed union")
+                for j in range(len(ms)):
+                    m = ms[j]
+                    if m == "" or m == "None" or is_opt(m) or is_union(m) or m.count("[") != m.count("]") or m in ms[:j] or m.startswith("%") or m.startswith("*") or m == "#" or (m in ["T", "K", "V", "S"] and m not in self.classes):
+                        self.bad_ir(fn, b, f"{i.op} needs distinct nonoptional union members")
+                if (i.op == "union.tag" and (i.t != "int" or i.s != "")) or (i.op == "union.payload" and (i.t != "%slot" or i.s not in ms)):
+                    self.bad_ir(fn, b, f"{i.op} has an invalid result type or member")
             n = self.nums(i)
             if len(i.r) != n:
                 self.bad_ir(fn, b, f"{i.op} {i.s} with {len(i.r)} numbers, where its lowering prints {n}")
@@ -181,9 +194,9 @@ def gen_nums(self, i: Ins) -> int:
         return 3
     if i.op == "list.load":
         return 4
-    if i.op == "landing" or i.op == "exc.match":
+    if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1

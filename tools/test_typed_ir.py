@@ -1,4 +1,4 @@
-"""Typed container-slot conversions keep native types until LLVM lowering.
+"""Typed slot conversions and union reads keep native types until LLVM lowering.
 
 Run with python3 -m unittest discover -s tools -p test_typed_ir.py.
 """
@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.pystachy_compiler.gen import Gen
 from src.pystachy_compiler.ir import FnInfo, IFn, Ins, Val
 from src.pystachy_compiler.loader import Loader
+from src.pystachy_compiler.specs import FXBIT
 from src.pystachy_compiler.syntax import Node
+from src.pystachy_compiler.utils import umembers
 
 
 def slot_op(op, native_type="float"):
@@ -31,7 +33,15 @@ def function_with(i):
     return fn
 
 
-class TypedSlotTests(unittest.TestCase):
+def union_op(op, union_type="union[int,str]"):
+    i = Ins(op, "int" if op == "union.tag" else "%slot",
+            "" if op == "union.tag" else "str")
+    i.a = [Val("%a0", union_type)]
+    i.r = [1] if op == "union.tag" else [1, 2]
+    return i
+
+
+class TypedIRTests(unittest.TestCase):
     def assert_bad(self, i):
         error = StringIO()
         with redirect_stderr(error), self.assertRaises(SystemExit) as raised:
@@ -122,6 +132,85 @@ class TypedSlotTests(unittest.TestCase):
             self.assertNotIn("int", types)
         for i in captured:
             self.assertEqual((i.s, i.x, i.k, i.b), ("", "", 0, []))
+
+    def test_union_reads_keep_conservative_load_effects(self):
+        for t in ("union[int,str]", "union[bool,float,int,str]"):
+            for op in ("union.tag", "union.payload"):
+                with self.subTest(type=t, op=op):
+                    i = union_op(op, t)
+                    g = Gen()
+                    g.verify(function_with(i), False)
+                    self.assertEqual(g.nums(i), 1 if op == "union.tag" else 2)
+                    self.assertEqual(g.opfx(i, {}), FXBIT["rL"] | FXBIT["rD"] | FXBIT["rO"])
+
+    def test_union_reads_require_closed_nonoptional_operands(self):
+        for t in ("", "int", "%slot", "opt[union[int,str]]", "union[]", "union[int]",
+                  "union[int,str", "union[int,str]]", "union[int,]", "union[,str]",
+                  "union[int,int]", "union[int,None]", "union[int,opt[str]]",
+                  "union[int,union[bool,str]]", "union[int,%slot]", "union[int,*T]"):
+            for op in ("union.tag", "union.payload"):
+                with self.subTest(type=t, op=op):
+                    self.assert_bad(union_op(op, t))
+
+    def test_union_read_shapes_and_metadata(self):
+        for op in ("union.tag", "union.payload"):
+            for operands in ([], [Val("%a0", "union[int,str]")] * 2):
+                with self.subTest(op=op, operands=len(operands)):
+                    i = union_op(op)
+                    i.a = operands
+                    self.assert_bad(i)
+            for results in ([], [1, 2] if op == "union.tag" else [1]):
+                with self.subTest(op=op, results=results):
+                    i = union_op(op)
+                    i.r = results
+                    self.assert_bad(i)
+            for field, value in (("x", "int"), ("k", 1), ("b", ["entry"]),
+                                 ("t", "%slot" if op == "union.tag" else "int")):
+                with self.subTest(op=op, field=field):
+                    i = union_op(op)
+                    setattr(i, field, value)
+                    self.assert_bad(i)
+        for member in ("", "float", "opt[str]", "%slot"):
+            with self.subTest(member=member):
+                i = union_op("union.payload")
+                i.s = member
+                self.assert_bad(i)
+        i = union_op("union.tag")
+        i.s = "str"
+        self.assert_bad(i)
+
+    def test_optional_union_tag_stays_after_its_null_guard(self):
+        g = Gen()
+        g.utest(Val("%a0", "opt[union[int,str]]"), ["str"], True)
+        tags = [(b, i) for b in g.fn.blocks for i in b.code if i.op == "union.tag"]
+        self.assertEqual(len(tags), 1)
+        block, i = tags[0]
+        self.assertEqual(i.a[0].t, "union[int,str]")
+        guard = g.fn.blocks[0].code[-1]
+        self.assertEqual(guard.op, "cbr")
+        self.assertEqual(guard.b[1], block.label)
+        self.assertNotEqual(guard.b[0], block.label)
+        self.assertIn("icmp eq ptr %a0, null", g.fn.blocks[0].code[-2].s)
+
+    def test_source_builds_declared_union_reads(self):
+        source = (Path(__file__).resolve().parent.parent / "tests" /
+                  "scalar_union_optional_narrowing.py").read_text()
+        captured = []
+        lower = Gen.lower
+
+        def capture(g, fn):
+            g.verify(fn, False)
+            captured.extend(i for b in fn.blocks for i in b.code
+                            if i.op in ("union.tag", "union.payload"))
+            lower(g, fn)
+
+        with patch.object(Gen, "lower", capture):
+            Gen().program(Loader([]).program("scalar_union_optional_narrowing.py", source))
+        self.assertEqual({i.op for i in captured}, {"union.tag", "union.payload"})
+        for i in captured:
+            self.assertTrue(i.a[0].t.startswith("union["))
+            if i.op == "union.payload":
+                self.assertIn(i.s, umembers(i.a[0].t))
 
 
 if __name__ == "__main__":

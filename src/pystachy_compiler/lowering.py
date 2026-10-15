@@ -43,6 +43,11 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         v = i.a[0]
         c = f"bitcast i64 {v.v} to double" if i.t == "float" else f"trunc i64 {v.v} to i1" if i.t == "bool" else f"bitcast i64 {v.v} to i64" if i.t == "int" else f"inttoptr i64 {v.v} to ptr"
         o.append(f"  %t{i.r[0]} = {c}")
+    elif op == "union.tag":
+        o.append(f"  %t{i.r[0]} = load i64, ptr {i.a[0].v}")
+    elif op == "union.payload":
+        o.append(f"  %t{i.r[0]} = getelementptr i64, ptr {i.a[0].v}, i64 1")
+        o.append(f"  %t{i.r[1]} = load i64, ptr %t{i.r[0]}")
     elif op == "br":
         o.append(f"  br label %{i.b[0]}")
     elif op == "cbr":
