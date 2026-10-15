@@ -134,7 +134,7 @@ def gen_ubox(self, v: Val, m: str) -> str:
     b = self.rt("pys_ubox", "ptr", [f"i64 {self.utag(m)}", "i64 " + self.to_slot(Val(v.v, m))])
     if m not in self.classes or v.v in self.nn:
         return b
-    return self.ins(f"select i1 {self.ptr_cmp('==', v, Val('null', 'None')).v}, ptr null, ptr {b}")
+    return self.select(self.ptr_cmp('==', v, Val('null', 'None')).v, Val('null', '%ptr'), Val(b, '%ptr'))
 
 def gen_uget(self, u: Val, m: str) -> Val:
     # the value a union's box u holds, known to be of member type m
@@ -160,7 +160,7 @@ def gen_utest(self, u: Val, ms: list[str], may_none: bool) -> str:
     r = ""
     for m in ms:
         x = self.num_cmp('==', Val(tag, "int"), Val(str(self.utag(m)), "int")).v
-        r = x if r == "" else self.ins(f"or i1 {r}, {x}")
+        r = x if r == "" else self.scalar('or', [Val(r, 'bool'), Val(x, 'bool')])
     if not may_none:
         return r
     l1 = self.cur
@@ -266,7 +266,7 @@ def gen_uisinst(self, v: Val, c: Node) -> str:
     may_none = (is_opt(v.t) or self.optional(unopt(v.t)) == unopt(v.t)) and v.v not in self.nn
     r = self.utest(v, ms, may_none)
     if may_none and self.isinst("None", c) == 1:
-        r = self.ins(f"or i1 {r}, {self.ptr_cmp('==', v, Val('null', 'None')).v}")
+        r = self.scalar('or', [Val(r, 'bool'), Val(self.ptr_cmp('==', v, Val('null', 'None')).v, 'bool')])
     for m in dynamic:
         hit = self.label()
         end = self.label()
@@ -275,7 +275,7 @@ def gen_uisinst(self, v: Val, c: Node) -> str:
         self.cbr(test, hit, end)
         self.place(hit)
         match = self.obj_isinst(self.uget(Val(v.v, unopt(v.t)), m), c)
-        result = self.ins(f"or i1 {r}, {match.v}")
+        result = self.scalar('or', [Val(r, 'bool'), Val(match.v, 'bool')])
         after = self.cur
         self.br(end)
         self.place(end)

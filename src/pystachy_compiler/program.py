@@ -4,7 +4,7 @@ import os
 import sys
 from src.pystachy_compiler.analysis import all_imports, collect, module_ints, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
-from src.pystachy_compiler.ir import ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
+from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
@@ -476,7 +476,7 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
     if k == "name":
         if (e.chk or self.foreign(e.s)) and e.s in self.gflag:
             self.flagged[e.s] = True
-            self.guard(self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{e.s}.def')}, true"), self.unbound(e.s))
+            self.guard(self.scalar('xor', [Val(self.ins(f'load i1, ptr @g.{e.s}.def'), 'bool'), Val('true', 'bool')]), self.unbound(e.s))
         t = self.gtypes.get(e.s, "")
         if use == 3 and (e.s in self.funcs or e.s in self.hooks or ("$" not in e.s and (e.s in local or (e.s in PYBUILTINS and e.s not in PURE)))):
             return f"it passes {short(e.s)} to a function that may call it"

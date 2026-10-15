@@ -58,6 +58,10 @@ def lt(t: str) -> str:
         return "double"
     if t == "bool":
         return "i1"
+    if t == "%byte":
+        return "i8"
+    if t == "%i32":
+        return "i32"
     if t == "None":
         return "void"
     if t == "%slot":

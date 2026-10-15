@@ -135,6 +135,16 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                 self.bad_ir(fn, b, "a phi after other ops")
             if i.op == "rt" and i.s not in self.rtfns:
                 self.bad_ir(fn, b, f"no RUNTIME entry for {i.s}" if i.s not in RUNTIME else f"{i.s}, which runtime() did not declare")
+            if i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp":
+                self.verify_scalar(fn, b, i)
+            if i.op == "select":
+                if len(i.a) != 3 or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, "select needs three operands and no extra metadata")
+                t = i.t
+                if i.a[0].t != "bool" or i.a[1].t != t or i.a[2].t != t:
+                    self.bad_ir(fn, b, "select needs a bool condition and matching value and result types")
+                if t == "" or t == "None" or t.startswith("*") or t == "#" or (t.startswith("%") and t not in ["%ptr", "%byte", "%i32", "%slot"]) or (t in ["T", "K", "V", "S"] and t not in self.classes):
+                    self.bad_ir(fn, b, "select needs a native or machine scalar value type")
             if i.op == "mem.load" or i.op == "mem.store":
                 if len(i.a) != (1 if i.op == "mem.load" else 2) or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
@@ -249,6 +259,8 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                         self.bad_ir(fn, b, f"a phi from {l}, which does not branch there")
 
 def gen_nums(self, i: Ins) -> int:
+    if i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp":
+        return 1
     # how many numbers op i defines (%tN): what its lowering prints
     if i.op == "field.addr":
         return 1

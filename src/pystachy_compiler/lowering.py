@@ -35,6 +35,8 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     o = self.out
     if op == "raw":
         o.append("  " + i.s)
+    elif op == "scalar.bin" or op == "scalar.cast" or op == "scalar.cmp":
+        self.lower_scalar(i)
     elif op == "mem.load":
         o.append(f"  %t{i.r[0]} = load {'ptr' if i.t == 'None' else lt(i.t)}, ptr {i.a[0].v}")
     elif op == "mem.store":

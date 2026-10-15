@@ -53,7 +53,7 @@ def gen_set_display(self, n: Node, want: str, folded: bool) -> Val:
         l0 = self.cur
         lmake = self.label()
         ldone = self.label()
-        self.cbr(self.ins(f"icmp eq ptr {old}, null"), lmake, ldone)
+        self.cbr(self.scalar_cmp('eq', Val(old, '%ptr'), Val('null', '%ptr')), lmake, ldone)
         self.place(lmake)
     et = selem(want) if is_set(want) and "?" not in want else ""
     given = et != ""
