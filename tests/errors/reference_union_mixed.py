@@ -1,4 +1,4 @@
-# error: reference unions cannot mix native references with scalar members
+# error: reference unions cannot mix native references with scalar or container members
 class Stream:
     pass
 

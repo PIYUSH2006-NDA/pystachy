@@ -85,6 +85,8 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
 `union[int,str]`. A closed union is an immutable pointer to a program-wide
 type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
+Mixed scalar/list/dict unions store the original container pointer in that slot;
+unboxing never copies a container or changes its element storage type.
 Native reference unions keep the original object/file pointer in that payload;
 their method calls dispatch by member tag. Narrowing checks the tag before reading
 the concrete payload.
@@ -252,6 +254,14 @@ Explicit [closed scalar unions](language/typing.md#closed-scalar-unions) are sup
 [Bounded native reference unions](language/typing.md#native-reference-unions) also
 support explicitly declared class/file alternatives. General dynamic values remain
 outside the current language.
+
+Mixed scalar/list/dict unions permit finite, explicitly written nesting. Recursive
+JSON aliases remain a separate representation milestone: the parser currently
+discards PEP 695 alias bodies, and type operations compare expanded canonical
+strings. A recursive alias must retain its declaration and use a finite reference
+to its type graph, with cycle-safe equivalence and descriptor traversal. Repeated
+string expansion or a chosen maximum JSON depth would not provide recursive
+types. Mutable list/dict element types must remain invariant through that change.
 
 <a id="appendix-a-how-this-design-was-chosen"></a>
 <a id="appendix-b-prior-art-and-the-measurements-behind-the-exception-and-none-designs"></a>

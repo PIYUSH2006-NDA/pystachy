@@ -220,7 +220,7 @@ Container types stay invariant: `list[int]` cannot become `list[int | str]`.
 
 Truth tests, `bool()`, `str()`, `repr()`, printing, plain f-strings and `==`/`!=`
 operate on scalar unions without narrowing. Lists, dictionaries and tuples containing
-union values support printing and equality; lists also support membership, `count`,
+scalar-union values support printing and equality; lists also support membership, `count`,
 `index` and `remove`. Search queries may name another scalar type: `True` and `1.0`
 find an integer `1`. Numeric equality uses the existing exact int/float comparison,
 including integers above the exact range of a float. `None` equals only `None`.
@@ -243,10 +243,48 @@ strings or other nonnumeric members still require narrowing.
 
 Narrow before other arithmetic, ordering, member methods and format specifications that
 require a concrete member. No union is inferred from unrelated assignments or
-return values; annotate it explicitly. Container members, arbitrary `Any`, recursive
+return values; annotate it explicitly. Arbitrary `Any`, recursive
 JSON types, runtime compilation and speculative type assumptions are out of scope.
 Boxing may allocate; this feature expands supported programs and makes no performance
 claim.
+
+## Mixed scalar and container unions
+
+Explicit unions may also combine scalar types with `list[T]` and `dict[K, V]`,
+optionally including `None`. Their elements and values may themselves be unions:
+
+```python
+def count(value: int | str | list[int | str] | dict[str, int | str]) -> int:
+    if isinstance(value, list):
+        value.append("seen")
+        return len(value)
+    if isinstance(value, dict):
+        return len(value)
+    if isinstance(value, str):
+        return len(value)
+    return value
+
+print(count([1, "event"]))
+```
+
+The tagged box holds the original container pointer. Narrowing returns that same
+list or dictionary, so identity, aliases and mutations are preserved. The collector
+traces the box and its container using existing allocation rules. Concrete values
+keep their ordinary native representation; boxing occurs at a union boundary.
+
+A fresh list/dict display or list comprehension uses the expected union's single
+matching container member, including empty displays. Existing mutable containers
+remain invariant: `list[int]` cannot become `list[int | str]`, even through a union.
+`isinstance(value, list)` cannot distinguish `list[int]` from `list[str]`; a union
+containing both retains both members after that test and cannot be used as either
+concrete list type.
+
+This supports explicitly typed, finite-depth JSON-shaped data. Recursive aliases
+such as `type Value = None | int | str | list[Value] | dict[str, Value]` remain
+unsupported; this is not yet arbitrary-depth JSON or `Any`. Native class/file
+members retain the separate reference-union restrictions below. Narrow containers
+before using their operations; this representation increment does not add generic
+mixed-container comparison, formatting or method dispatch.
 
 ## Native reference unions
 
@@ -278,8 +316,8 @@ such as `Base | Child`. `isinstance()` checks the actual subclass; narrowing to 
 whole declared member is supported, while narrowing a base member to a subclass is
 not yet implemented.
 
-Reference unions cannot mix with scalar members or exception types. Container
-members, callable fields, bound-method extraction and unpacked method arguments
+Reference unions cannot mix with scalar or container members or exception types.
+Callable fields, bound-method extraction and unpacked method arguments
 are unsupported. Use a typed local for an empty-container argument that needs an
 expected type. Narrow a local to a member before field access, identity/equality
 comparison, truth testing or formatting. Containers remain invariant, and no union
