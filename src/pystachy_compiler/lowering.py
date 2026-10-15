@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, FXBIT
+from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, ICMP
 from src.pystachy_compiler.utils import is_dict, lt, selem, takes_self, targs
 
 
@@ -45,6 +45,14 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         o.append(f"  %t{i.r[0]} = {c}")
     elif op == "union.tag":
         o.append(f"  %t{i.r[0]} = load i64, ptr {i.a[0].v}")
+    elif op == "num.cast":
+        v = i.a[0]
+        c = f"zext i1 {v.v} to i64" if i.t == "int" else f"uitofp i1 {v.v} to double" if v.t == "bool" else f"sitofp i64 {v.v} to double"
+        o.append(f"  %t{i.r[0]} = {c}")
+    elif op == "num.cmp":
+        v = i.a[0]
+        c = f"icmp {ICMP[i.s]} i64" if v.t == "int" else f"fcmp {FCMP[i.s]} double"
+        o.append(f"  %t{i.r[0]} = {c} {v.v}, {i.a[1].v}")
     elif op == "union.payload":
         o.append(f"  %t{i.r[0]} = getelementptr i64, ptr {i.a[0].v}, i64 1")
         o.append(f"  %t{i.r[1]} = load i64, ptr %t{i.r[0]}")

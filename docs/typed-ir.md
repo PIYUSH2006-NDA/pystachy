@@ -124,6 +124,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Storage and LLVM text | `slot`, `raw` |
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
+| Numeric promotion and comparison | `num.cast`, `num.cmp` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -153,6 +154,17 @@ Canonicalization retains the equivalence of repeated reads of the same immutable
 payload, so narrowing a dictionary key still permits the existing lookup fusion. This
 extends the representation of existing scalar unions, without adding language support
 or runtime specialization.
+
+`num.cast` represents numeric promotion: `bool` to `int` or `float`, and `int` to
+`float`. This changes the numeric representation, unlike bit-preserving `slot.pack`.
+`num.cmp` compares two `int` or two `float` operands using a source comparison operator
+and returns `bool`; floating `!=` remains true for NaN. The verifier checks the finite
+operand/result combinations. Both operations are pure and retain typed operands for
+canonicalization, including repeated numeric dictionary keys. Numeric truth and the
+shared promotion/comparison helpers use these operations, so numeric-union dispatch
+can reuse them without new IR or runtime machinery. Exact mixed integer/float comparison
+still uses its existing frontend/runtime path; float-to-int checks, overflow checks,
+arithmetic and other LLVM-text operations remain outside this increment.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

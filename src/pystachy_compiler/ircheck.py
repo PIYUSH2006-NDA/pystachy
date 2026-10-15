@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
-from src.pystachy_compiler.specs import FX, FXALL, FXBIT, IROPS, LLNOTRAW, RUNTIME
+from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, LLNOTRAW, RUNTIME
 from src.pystachy_compiler.utils import is_opt, is_union, rawfx, umembers
 
 
@@ -135,6 +135,15 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                 self.bad_ir(fn, b, "a phi after other ops")
             if i.op == "rt" and i.s not in self.rtfns:
                 self.bad_ir(fn, b, f"no RUNTIME entry for {i.s}" if i.s not in RUNTIME else f"{i.s}, which runtime() did not declare")
+            if i.op == "num.cast" or i.op == "num.cmp":
+                if len(i.a) != (1 if i.op == "num.cast" else 2) or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, f"{i.op} has invalid operands or extra metadata")
+                t = i.a[0].t
+                if i.op == "num.cast":
+                    if i.s != "" or not ((t == "bool" and (i.t == "int" or i.t == "float")) or (t == "int" and i.t == "float")):
+                        self.bad_ir(fn, b, "num.cast needs bool to int/float or int to float")
+                elif i.t != "bool" or i.s not in ICMP or (t != "int" and t != "float") or i.a[1].t != t:
+                    self.bad_ir(fn, b, "num.cmp needs a comparison of two ints or two floats, returning bool")
             if i.op == "slot.pack" or i.op == "slot.unpack":
                 if len(i.a) != 1 or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
                     self.bad_ir(fn, b, f"{i.op} needs one operand and no immediates or labels")
@@ -196,7 +205,7 @@ def gen_nums(self, i: Ins) -> int:
         return 4
     if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1
