@@ -366,6 +366,9 @@ supported alternatives.
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class, which CPython calls anyway
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
+- unpacking a value that is not iterable (`a, *b = 5`) or a tuple whose length does not fit the
+  targets (CPython raises `TypeError` or `ValueError` where it runs), and a starred target over
+  tuple items of types no one type holds, unless the target is annotated (`rest: list[int | str]`)
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.

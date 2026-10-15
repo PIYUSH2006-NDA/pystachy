@@ -723,7 +723,7 @@ def gen_fl_target(self, fl: Flow, t: Node) -> None:
         fl.put(t.s)
     elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me:
         fl.put("." + t.s)
-    elif t.kind == "tuple":
+    elif t.kind == "tuple" or t.kind == "starred":
         for k in t.kids:
             self.fl_target(fl, k)
     else:

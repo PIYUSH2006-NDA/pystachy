@@ -62,6 +62,8 @@ def as_target(n: Node) -> Node:
         n.kind = "tuple"
         for k in n.kids:
             as_target(k)
+    elif n.kind == "starred":
+        as_target(n.kids[0])  # (a, *[b, c] = ...)
     return n
 
 
@@ -88,6 +90,11 @@ def name_targets(t: Node) -> bool:
                 return False
         return True
     return t.kind == "name"
+
+
+def starred_target(t: Node) -> bool:
+    # is t a tuple or list target with a starred item (a, *b = ...)
+    return t.kind == "tuple" and len([k for k in t.kids if k.kind == "starred"]) > 0
 
 
 # CPython's name for an expression in its "cannot assign to" errors (_PyPegen_get_expr_name)

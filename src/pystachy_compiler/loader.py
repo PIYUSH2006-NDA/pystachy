@@ -1840,7 +1840,7 @@ class Loader:
     def qstore(self, m: Mod, t: Node, loc: dict[str, bool]) -> None:
         # an assignment target: a package's own name that an import of its submodule may rebind
         # (Mod.amb) cannot be assigned from another module, as which of the two it replaces is not known
-        if t.kind == "tuple" or t.kind == "list":
+        if t.kind == "tuple" or t.kind == "list" or t.kind == "starred":
             for x in t.kids:
                 self.qstore(m, x, loc)
             return

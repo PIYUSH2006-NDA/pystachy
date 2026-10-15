@@ -586,6 +586,7 @@ from src.pystachy_compiler.variables import (
     gen_rtype as variables_rtype,
     gen_scope_names as variables_scope_names,
     gen_sets as variables_sets,
+    gen_star_assign as variables_star_assign,
     gen_static_now as variables_static_now,
     gen_static_whole as variables_static_whole,
     gen_store_name as variables_store_name,
@@ -1340,6 +1341,9 @@ class Gen:
 
     def assign(self, t: Node, v: Val) -> None:
         return variables_assign(self, t, v)
+
+    def star_assign(self, t: Node, v: Val) -> None:
+        return variables_star_assign(self, t, v)
 
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)

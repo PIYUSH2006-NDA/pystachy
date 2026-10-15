@@ -19,7 +19,7 @@ from src.pystachy_compiler.specs import (
     TYPING,
     UNSUPPORTED,
 )
-from src.pystachy_compiler.syntax import Node, mk, names_in
+from src.pystachy_compiler.syntax import Node, mk, names_in, starred_target
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
@@ -446,7 +446,7 @@ def gen_stmt(self, n: Node) -> None:
             self.assign(t0, self.read(val))
             self.allowq = False
             self.twin(t0.s, val.s)
-        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids):
+        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids) and not starred_target(t0):
             vs: list[Val] = []
             for i in range(len(val.kids)):
                 vs.append(self.expr(val.kids[i], self.target_type(t0.kids[i])))
@@ -455,7 +455,10 @@ def gen_stmt(self, n: Node) -> None:
         else:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
-            v = self.expr(val, self.target_type(t0))
+            if len(n.kids) == 2 and starred_target(t0) and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
+                v = self.consume(val, "")  # (a, *b = range(n): UNPACK_EX takes every item first)
+            else:
+                v = self.expr(val, self.target_type(t0))
             if n.s == "local-retype":
                 self.store_name(t0.s, v, True)
             else:
@@ -1347,7 +1350,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
                 vals.append(self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[1]))
     if len(vals) == 1 and mode != "zip":
         self.assign(tgt, vals[0])
-    elif (tgt.kind == "tuple" or tgt.kind == "list") and len(tgt.kids) == len(vals):
+    elif (tgt.kind == "tuple" or tgt.kind == "list") and len(tgt.kids) == len(vals) and not starred_target(tgt):
         for k2 in range(len(vals)):
             self.assign(tgt.kids[k2], vals[k2])
     else:

@@ -1285,6 +1285,14 @@ void pys_unpack_check(I have, I want) {
   pys_fail(b);
 }
 
+/* a, *b, c = xs: the starred target takes the items the others leave, which may be none */
+void pys_unpack_ex_check(I have, I want) {
+  char b[128];
+  if (have >= want) return;
+  snprintf(b, 128, "ValueError: not enough values to unpack (expected at least %lld, got %lld)", (long long)want, (long long)have);
+  pys_fail(b);
+}
+
 /* Variable-length tuples own copied slots; later list mutation cannot change the
    tuple. Scanned allocation retains pointer-valued elements and optional boxes.
    The source remains live through the allocation because memcpy reads it after. */

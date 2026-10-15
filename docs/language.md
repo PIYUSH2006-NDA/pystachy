@@ -131,7 +131,8 @@ The usual assignments, `if`, `while`, `for`, loop `else`, `break`, `continue`,
 `return`, `assert`, `global` and `nonlocal` are supported. Loops can consume supported
 containers, ranges, files and iterator-like objects.
 
-Unpacking requires a fixed target shape. File context managers support `with open(...) as f:`;
+Unpacking takes a fixed target shape or one starred target, `first, *rest = xs`, whose name
+gets a new list of the remaining items. File context managers support `with open(...) as f:`;
 arbitrary context managers are not supported. Exceptions use the normal
 `try` / `except` / `else` / `finally` syntax.
 

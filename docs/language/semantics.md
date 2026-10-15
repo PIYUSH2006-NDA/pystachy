@@ -8,7 +8,7 @@ closures and class fields are described in [typing](typing.md); imports and buil
 
 | Category | Supported statements |
 |---|---|
-| Assignment | Simple, chained, annotated and augmented assignment; fixed-shape tuple/list unpacking and swaps |
+| Assignment | Simple, chained, annotated and augmented assignment; tuple/list unpacking, with one starred target or none, and swaps |
 | Control flow | `if` / `elif` / `else`, `while`, `for`, loop `else`, `break`, `continue`, `return` |
 | Scope and definitions | `global`, `nonlocal`, `def`, nested function definitions, lambdas, supported class definitions |
 | Runtime checks | `assert`, `raise`, `try` / `except` / `else` / `finally` |
@@ -19,6 +19,12 @@ closures and class fields are described in [typing](typing.md); imports and buil
 `+=` on a list extends it in place. Object in-place operators use `__iadd__` and the
 corresponding methods when supported. Deleting a variable makes later reads raise
 `NameError` or `UnboundLocalError`; deleting a global from a function is unsupported.
+
+A starred target, as in `head, *body, tail = xs`, gets a new list of the items the other targets
+leave. It takes what a `for` loop iterates, and `range()`, `enumerate()`, `zip()`, `map()`,
+`filter()` and generator expressions; every item is taken before the first target is assigned.
+Too few items raise CPython's `ValueError`. Of a tuple, the starred list holds its items'
+common type; items of types no one type holds need an annotation (`body: list[int | str]`).
 
 Loops can consume ranges, lists, strings, dictionaries, sets, files, homogeneous tuples and
 NamedTuples, supported objects, and dictionary `items()`, `keys()` and `values()`.

@@ -826,7 +826,7 @@ def gen_cvar_stores(self, ns: list[Node]) -> None:
         ts: list[Node] = n.kids[:-1] if n.kind == "assign" else [n.kids[0]] if (n.kind == "augassign" or n.kind == "annassign") and len(n.kids) > 0 else []
         while len(ts) > 0:
             t = ts.pop()
-            if t.kind == "tuple":
+            if t.kind == "tuple" or t.kind == "starred":
                 ts.extend(t.kids)
             elif t.kind == "attr" and t.kids[0].kind == "name" and t.kids[0].s in self.classes:
                 c = t.kids[0].s
