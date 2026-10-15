@@ -506,9 +506,13 @@ fitting named union or optional parameter types resolve the conflict:
 `p: Pair[int | float] = Pair(1, 2.5)` bind both parameters annotated `T` to
 their named type. Existing conversions preserve each value's representation,
 including integer precision, and handle defaults and unpacked arguments too.
-Consistent bindings still infer first: `Box[int | str]("x")` stores a concrete
-`str`. A container member must fit exactly: `list[int]` cannot become
-`list[int | float]` through a union annotation.
+An enclosing generic annotation requires its named storage even for homogeneous
+arguments: `p: Pair[int | float] = Pair(1, 2)` stores union-valued fields that can
+later accept a float. This also works for annotated parameters, returns and fields,
+including calls with explicit type arguments. A constructor subscription alone remains
+a hint: `Box[int | str]("x")` still stores a concrete `str`. Existing objects stay
+invariant, and container members must fit exactly: neither `Box[int]` nor `list[int]`
+can be reinterpreted with wider mutable contents.
 
 Without a named specialization or surrounding generic annotation, conflicting direct
 scalar `T` arguments can infer a closed union: `Pair(1, 2.5)` and `Pair(1, "x")`
@@ -517,8 +521,8 @@ and `None`, including existing scalar unions. Ordinary consistent inference stil
 Every constructor annotation that mentions a type variable must be a direct type
 variable; nested forms such as `list[T]`, variadic bindings, and non-scalar conflicts
 still need annotations. This does not add container covariance, mixed-display or
-function-return union inference. A homogeneous call may still need a union-valued
-argument to satisfy a wider generic destination annotation.
+function-return union inference. Nested generic parameter forms still require their
+arguments' container types to match; this does not infer wider mutable contents.
 
 `Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
 methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class
