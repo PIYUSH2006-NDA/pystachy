@@ -35,6 +35,14 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     o = self.out
     if op == "raw":
         o.append("  " + i.s)
+    elif op == "slot.pack":
+        v = i.a[0]
+        c = f"bitcast double {v.v} to i64" if v.t == "float" else f"zext i1 {v.v} to i64" if v.t == "bool" else f"bitcast i64 {v.v} to i64" if v.t == "int" else f"ptrtoint ptr {v.v} to i64"
+        o.append(f"  %t{i.r[0]} = {c}")
+    elif op == "slot.unpack":
+        v = i.a[0]
+        c = f"bitcast i64 {v.v} to double" if i.t == "float" else f"trunc i64 {v.v} to i1" if i.t == "bool" else f"bitcast i64 {v.v} to i64" if i.t == "int" else f"inttoptr i64 {v.v} to ptr"
+        o.append(f"  %t{i.r[0]} = {c}")
     elif op == "br":
         o.append(f"  br label %{i.b[0]}")
     elif op == "cbr":

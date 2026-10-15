@@ -49,4 +49,7 @@ jobs:
       - name: Compiler effect summary tests
         run: python3 -m unittest discover -s tools -p test_function_summaries.py
 
+      - name: Typed IR slot tests
+        run: python3 -m unittest discover -s tools -p test_typed_ir.py
+
       - run: make check-recordings

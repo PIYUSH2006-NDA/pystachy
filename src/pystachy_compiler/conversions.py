@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import Val
+from src.pystachy_compiler.ir import Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import DUNDER, NONEVAR, REFL
 from src.pystachy_compiler.utils import (
@@ -30,20 +30,18 @@ from src.pystachy_compiler.utils import (
 def gen_to_slot(self, v: Val) -> str:
     if v.t == "int":
         return v.v
-    if v.t == "float":
-        return self.ins(f"bitcast double {v.v} to i64")
-    if v.t == "bool":
-        return self.ins(f"zext i1 {v.v} to i64")
-    return self.ins(f"ptrtoint ptr {v.v} to i64")
+    i = Ins("slot.pack", "%slot", "")
+    i.a = [v]
+    self.put(i, 1)
+    return f"%t{i.r[0]}"
 
 def gen_from_slot(self, s: str, t: str) -> Val:
     if t == "int":
         return Val(s, t)
-    if t == "float":
-        return Val(self.ins(f"bitcast i64 {s} to double"), t)
-    if t == "bool":
-        return Val(self.ins(f"trunc i64 {s} to i1"), t)
-    return Val(self.ins(f"inttoptr i64 {s} to ptr"), t)
+    i = Ins("slot.unpack", t, "")
+    i.a = [Val(s, "%slot")]
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", t)
 
 def gen_rarg(self, v: Val) -> str:
     if v.t == "bool":

@@ -135,6 +135,13 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                 self.bad_ir(fn, b, "a phi after other ops")
             if i.op == "rt" and i.s not in self.rtfns:
                 self.bad_ir(fn, b, f"no RUNTIME entry for {i.s}" if i.s not in RUNTIME else f"{i.s}, which runtime() did not declare")
+            if i.op == "slot.pack" or i.op == "slot.unpack":
+                if len(i.a) != 1 or i.s != "" or i.x != "" or i.k != 0 or len(i.b) != 0:
+                    self.bad_ir(fn, b, f"{i.op} needs one operand and no immediates or labels")
+                t = i.a[0].t if i.op == "slot.pack" else i.t
+                slot = i.t if i.op == "slot.pack" else i.a[0].t
+                if slot != "%slot" or t == "" or t.startswith("%") or t.startswith("*") or t == "#" or (t in ["T", "K", "V", "S"] and t not in self.classes):
+                    self.bad_ir(fn, b, f"{i.op} needs a native value type and a %slot")
             n = self.nums(i)
             if len(i.r) != n:
                 self.bad_ir(fn, b, f"{i.op} {i.s} with {len(i.r)} numbers, where its lowering prints {n}")
@@ -176,7 +183,7 @@ def gen_nums(self, i: Ins) -> int:
         return 4
     if i.op == "landing" or i.op == "exc.match":
         return 2
-    if i.op == "phi" or i.op == "select" or i.op == "list.len":
+    if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1
