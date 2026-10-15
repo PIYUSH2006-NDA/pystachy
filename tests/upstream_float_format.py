@@ -13,8 +13,8 @@
 # string, FORMAT_TESTCASES. fmt % x, where fmt is a variable (a % format is a literal here), is
 # pct(fmt, x), which formats with the literal of each format the tests use; and its
 # map(str.strip, ...), which only consumers such as list() take here, is a comprehension.
-# test_matches_float_format's random.random() is a fixed linear congruential sequence (no random
-# module).
+# random is seeded, so that test_matches_float_format's random.random() draws the same values on
+# every run.
 # EXCLUDED upstream cases:
 # - test_inf_nan's TypeErrors (round(INF, 0.0), round(-INF, 1.0), round(NAN, "ceci n'est pas un
 #   integer"), round(-0.0, 1j)): compile-time errors here, worded "unsupported call
@@ -32,6 +32,7 @@
 #   float.fromhex() is not supported (float.hex() is; each of them needs fromhex())
 import math
 from math import isnan, copysign
+import random
 
 INF = float("inf")
 NAN = float("nan")
@@ -72,13 +73,7 @@ def assertFloatsAreIdentical(label: str, x: float, y: float) -> None:
     assert False, msg
 
 
-def random(state: list[int]) -> float:
-    # stands in for random.random(): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return state[0] / 2147483648
-
-
-RANDOM = [5]
+random.seed(5)
 
 
 # Lib/test/mathdata/formatfloat_testcases.txt, which test_format_testfile reads
@@ -796,7 +791,7 @@ def test_matches_float_format() -> None:
         n += 4
 
     for i in range(500):
-        x = random(RANDOM)
+        x = random.random()
         assert float(format(x, '.0f')) == round(x, 0), x
         assert float(format(x, '.1f')) == round(x, 1), x
         assert float(format(x, '.2f')) == round(x, 2), x

@@ -5,8 +5,8 @@
 # Each test method becomes a function of the same name; assertEqual(a, b) prints a and asserts
 # a == b, assertRaises a try statement; zip() is list()'s argument (a zip object is no value).
 # A variable has one type here, so test_zip's b is b2 and b3 where upstream rebinds it to a list
-# and a longer tuple. test_basic shuffles with random.shuffle(); here a fixed Fisher-Yates
-# shuffle driven by a linear congruential sequence stands in for it (no random module).
+# and a longer tuple. test_basic shuffles with random.shuffle(), seeded here so that the
+# shuffles are the same on every run.
 # test_inputtypes loops over the types to call; here each call is written out, and
 # dict.fromkeys(s) gets the annotation the subset needs.
 # EXCLUDED upstream cases:
@@ -19,6 +19,7 @@
 #   one argument (N given)" where CPython says "sorted expected 1 argument, got N" (bug: message
 #   wording; #277), and "keyword argument 'iterable' of sorted() is not supported"
 # - test_inputtypes' tuple(s) (tuple() of an iterable: not supported)
+import random
 from typing import Iterator
 
 
@@ -66,27 +67,19 @@ def test_zip_bad_iterable() -> None:
         assert False, "expected TypeError"
 
 
-def shuffle(x: list[int], state: list[int]) -> None:
-    # stands in for random.shuffle(x): Fisher-Yates over a fixed linear congruential sequence
-    for i in reversed(range(1, len(x))):
-        state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-        j = state[0] % (i + 1)
-        x[i], x[j] = x[j], x[i]
-
-
 def test_basic() -> None:
-    state = [7]
+    random.seed(7)
     data = list(range(100))
     copy = data[:]
-    shuffle(copy, state)
+    random.shuffle(copy)
     check("data == sorted(copy)", data == sorted(copy), True)
     check("data != copy", data != copy, True)
 
     data.reverse()
-    shuffle(copy, state)
+    random.shuffle(copy)
     check("data == sorted(copy, key=lambda x: -x)", data == sorted(copy, key=lambda x: -x), True)
     check("data != copy", data != copy, True)
-    shuffle(copy, state)
+    random.shuffle(copy)
     check("data == sorted(copy, reverse=True)", data == sorted(copy, reverse=True), True)
     check("data != copy", data != copy, True)
 
