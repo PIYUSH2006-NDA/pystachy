@@ -23,6 +23,7 @@ Run these from the repository root:
 | `make check-runtime` | Check runtime declarations, effects and source agreement. |
 | `make irsame REF=<commit>` | Compare IR, diagnostics and exit status with a reference compiler for a refactor. |
 | `make bench-extended-check` | Check the extended benchmark runner and CPython/JIT/AOT checksums; no timing thresholds. |
+| `make bench-pyperformance-check` | Check the pyperformance runner and the ported benchmarks' CPython/JIT/AOT output; no timing thresholds. |
 
 For a focused edit, select the affected cases:
 
