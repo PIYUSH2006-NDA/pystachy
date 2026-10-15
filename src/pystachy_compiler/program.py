@@ -131,6 +131,9 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             self.lazy[ci.methods[m].ll] = ci.methods[m]  # (compiled only if called: cls(...) may not fit this class)
         elif m not in ci.methods:
             ci.methods[m] = f
+        elif f.prop != ci.methods[m].prop:
+            self.line = ci.methods[m].node.line
+            self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
         elif ci.exc == "" and (f.deco != "" or ci.methods[m].deco != ""):
             self.line = ci.methods[m].node.line
             self.err(f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
@@ -216,7 +219,7 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            if len(b.kids) > 3 and ((not static and deco != "classmethod") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
+            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:
                 return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
@@ -358,7 +361,7 @@ def gen_raisers(self, e: Node, local: dict[str, str], run: bool) -> bool:
     n = len(e.kids)
     if k == "ifexp" or k == "boolop" or k == "cmp":
         n = 2 if k == "cmp" else 1  # (the operands that surely run)
-    elif k not in ["binop", "unary", "index", "slice", "call", "attr", "tuple", "list", "set", "dict", "starred", "dstar"]:
+    elif k not in ["binop", "unary", "index", "slice", "call", "attr", "tuple", "list", "set", "dict", "starred", "dstar", "dictstar"]:
         return False
     for x in e.kids[:n]:
         if not self.raisers(x.kids[0] if x.kind == "kw" else x, local, True):
@@ -505,7 +508,7 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
         return f"it calls {self.hooks[e.kids[0].s]}()"
     if k == "lambda" or k == "badattr":
         return e.s if k == "badattr" else "Pystachy does not check the default values of its lambda"
-    if k not in ["attr", "index", "slice", "binop", "unary", "cmp", "boolop", "ifexp", "fstr", "fmt", "tuple", "list", "set", "dict", "starred", "dstar"]:
+    if k not in ["attr", "index", "slice", "binop", "unary", "cmp", "boolop", "ifexp", "fstr", "fmt", "tuple", "list", "set", "dict", "starred", "dstar", "dictstar"]:
         return f"Pystachy does not check what {'a comprehension' if k.endswith('comp') else 'an assignment expression' if k == 'walrus' else 'a ' + k + ' expression'} there runs"
     for i in range(len(e.kids)):
         # (an operand or set item: 2; a truth test or an attribute's object: 1; the container
@@ -518,7 +521,7 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
             u = 3 if use == 3 else 1 if use == 0 else 2
         elif k == "tuple" or k == "list" or (k == "dict" and i % 2 == 1):
             u = use if use > 1 else 0
-        elif k == "starred" or k == "dstar":
+        elif k == "starred" or k == "dstar" or k == "dictstar":
             u = use if use > 2 else 2
         r = self.effect(e.kids[i], local, u)
         if r != "":
