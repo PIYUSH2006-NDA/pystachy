@@ -931,6 +931,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
                 why = f"__slots__ entry '{n.s}' is not supported"
             elif ci.base in self.classes and n.s in self.classes[ci.base].methods:
                 why = f"slot '{n.s}' shadows an inherited method or property: not supported"
+            elif ci.base in self.classes and n.s in self.classes[ci.base].fdefault:
+                why = f"slot '{n.s}' shadows an inherited class variable: not supported"
             else:
                 ci.slots.append(n.s)
                 own_slots.append(n.s)
