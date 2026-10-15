@@ -434,6 +434,7 @@ retain their original types. Stored mutable containers are never widened. Homoge
 nonempty results and forwarding through local assignments retain their existing inference
 rules. Calls nested inside displays (`return [empty(n)]`) still infer their own result;
 annotate the producing function when those rules need more information.
+User method calls, bound method values and callable fields retain the same expected result context.
 A union context supplies a list or dict result's type when exactly one member has the same
 container kind; ambiguous contexts retain the fallback above.
 

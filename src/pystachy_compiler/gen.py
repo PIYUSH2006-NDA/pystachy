@@ -1988,8 +1988,8 @@ class Gen:
     def open_(self, args: list[Node]) -> Val:
         return calls_open_(self, args)
 
-    def method(self, o: Val, m: str, args: list[Node]) -> Val:
-        return calls_method(self, o, m, args)
+    def method(self, o: Val, m: str, args: list[Node], want: str='') -> Val:
+        return calls_method(self, o, m, args, want)
 
     def unbound_call(self, tn: str, m: str, args: list[Node]) -> Val:
         return calls_unbound_call(self, tn, m, args)
