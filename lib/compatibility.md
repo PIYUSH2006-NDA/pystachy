@@ -127,9 +127,10 @@ does not change the predicates.
 
 The shipped module provides `deque` only. It supports both ends, optional `maxlen`,
 extension, rotation, insertion/removal, indexing, containment/search, copies,
-comparisons and repetition. Compiled construction needs a typed list, including
-an explicitly typed empty list; materialize other supported iterables with `list()`.
-Named generic subscriptions such as `deque[int]` remain unsupported.
+comparisons and repetition. The item type comes from a supported iterable argument,
+an annotation (`q: deque[int] = deque()`), or an explicit constructor
+(`deque[int]()`). Parameters, returns and fields can name `deque[T]`. The compiled
+item type is fixed, and may be an explicitly supported union such as `int | str`.
 
 Iteration is a snapshot, and `maxlen` is writable. Rich comparisons also use
 snapshots when item comparison callbacks mutate a queue. Searches (`count`,

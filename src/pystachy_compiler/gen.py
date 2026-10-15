@@ -496,6 +496,11 @@ from src.pystachy_compiler.templates import (
     gen_bind as templates_bind,
     gen_fn_sig as templates_fn_sig,
     gen_instance as templates_instance,
+    gen_generic_ann as templates_generic_ann,
+    gen_generic_hint as templates_generic_hint,
+    gen_named_params as templates_named_params,
+    gen_want_params as templates_want_params,
+    gen_want_tvars as templates_want_tvars,
     gen_match as templates_match,
     gen_match_items as templates_match_items,
     gen_names_tv as templates_names_tv,
@@ -2042,14 +2047,29 @@ class Gen:
     def tests(self, ns: list[Node], p: str) -> bool:
         return calls_tests(self, ns, p)
 
-    def specialize(self, c: str, ts: list[str]) -> str:
-        return templates_specialize(self, c, ts)
+    def specialize(self, c: str, ts: list[str], given: dict[str, str], named: bool) -> str:
+        return templates_specialize(self, c, ts, given, named)
 
     def names_tv(self, a: Node, tvs: list[str]) -> bool:
         return templates_names_tv(self, a, tvs)
 
-    def bind(self, c: str, ts: list[str]) -> dict[str, str]:
-        return templates_bind(self, c, ts)
+    def bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, str]:
+        return templates_bind(self, c, ts, given)
+
+    def want_tvars(self, c: str, want: str) -> dict[str, str]:
+        return templates_want_tvars(self, c, want)
+
+    def want_params(self, c: str, want: str) -> list[str]:
+        return templates_want_params(self, c, want)
+
+    def generic_hint(self, e: Node, t: str) -> str:
+        return templates_generic_hint(self, e, t)
+
+    def generic_ann(self, c: str, a: Node) -> str:
+        return templates_generic_ann(self, c, a)
+
+    def named_params(self, c: str, init: Node) -> list[str]:
+        return templates_named_params(self, c, init)
 
     def match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
         return templates_match(self, a, t, tv, tvs)

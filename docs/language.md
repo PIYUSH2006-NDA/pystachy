@@ -19,7 +19,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
-| Generics | Function templates and constructor-inferred `Generic` classes using `TypeVar` / `TypeVarTuple` |
+| Generics | Function templates and `Generic` classes with inferred or explicit type arguments |
 
 Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
 have a restricted set of types: integers, strings and supported tuples (whose items may
@@ -28,8 +28,8 @@ Tuples have a fixed shape, with at most nine items and constant indices.
 
 Explicit closed scalar unions such as `int | str`, bounded native reference unions,
 and optional unions are supported. Dynamic `Any` values are not.
-Generic class support is limited: construction infers type arguments, but explicit
-`Box[int]` annotations and subscriptions are not yet supported.
+Generic classes can infer type arguments from construction or name them explicitly with
+`Box[int]` annotations and constructor subscriptions; variadic generic classes remain inferred.
 
 See the [type reference](language/typing.md#supported-types) for exact forms, conversions and constraints.
 

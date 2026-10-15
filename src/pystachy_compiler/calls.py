@@ -42,6 +42,12 @@ def gen_call(self, n: Node, want: str) -> Val:
         self.err(f.s)
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
         return self.star_call(n, want)
+    if f.kind == "index" and f.kids[0].kind == "name" and f.kids[0].s in self.tparams and f.kids[0].s not in self.ltype:
+        self.modchk(f.kids[0])
+        sc = self.generic_ann(f.kids[0].s, f.kids[1])
+        if sc.startswith("!"):
+            self.err(sc[1:])
+        return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), sc)
     if f.kind == "name":
         self.modchk(f)
     if f.kind == "name" and f.s not in self.ltype:
@@ -63,7 +69,7 @@ def gen_call(self, n: Node, want: str) -> Val:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])
                 made = [Val("", f.s)]
-                self.call_fn(self.classes[f.s].methods["__init__"], made, args)
+                self.call_fn(self.classes[f.s].methods["__init__"], made, args, want)
                 return made[0]
             o = self.new_obj(f.s)
             self.call_fn(self.classes[f.s].methods["__init__"], [o], args, direct=True)
@@ -810,6 +816,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     line = self.line
     np = len(f.params)
     vals: list[Val] = []
+    hint = self.want_params(f.cls, want) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))
     pos = len(pre)
@@ -838,7 +845,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             e = a.kids[0]
         else:
             pos += 1
-        vals[j] = self.pcoerce(self.expr(e, f.ptypes[j]), f.ptypes[j], f, j)
+        vals[j] = self.pcoerce(self.expr(e, f.ptypes[j] if f.ptypes[j] != "" or j >= len(hint) else self.generic_hint(e, hint[j])), f.ptypes[j], f, j)
         if j in f.pats:
             vals[j] = self.pat_arg(vals[j], f.pats[j])
     if f.vararg >= 0:
@@ -890,7 +897,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tmpl:
         # C(args) of a class template C: its arguments' types decide the specialization the
         # object belongs to (see specialize), whose __init__ initializes it
-        sc = self.specialize(f.cls, [v.t for v in vals[1:]])
+        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
         f = self.classes[sc].methods["__init__"]

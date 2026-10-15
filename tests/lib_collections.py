@@ -2,27 +2,17 @@
 # Cases after CPython's Lib/test/test_deque.py.
 from collections import deque
 
-
-# Typed empty list arguments preserve the constructor-inferred item type without compiler changes.
-def empty_ints() -> list[int]:
-    return []
-
-
-def empty_strings() -> list[str]:
-    return []
-
-
 d = deque([1, 2, 3])
 d.append(4)
 d.appendleft(0)
 print(d, len(d), d[0], d[-1], d.pop(), d.popleft(), d)
-q = deque(empty_ints())
+q: deque[int] = deque()
 for i in range(10):
     q.append(i)
     if i % 3 == 0:
         q.popleft()
 print(q, list(q), [x * 2 for x in q], sum(q), 5 in q, 0 in q)
-w = deque(list("abc"), maxlen=3)
+w = deque("abc", maxlen=3)
 w.append("d")
 print(w, w.maxlen, deque([1.5], maxlen=2))
 r = deque([1, 2, 3, 4, 5])
@@ -36,7 +26,7 @@ r.insert(1, 9)
 r.remove(3)
 r[0] = 7
 del r[1]
-print(r, bool(r), bool(deque(empty_ints())))
+print(r, bool(r), bool(deque[int]()))
 e = deque([1, 2])
 e.extend(e)
 e.extendleft([7, 8])
@@ -49,7 +39,7 @@ for args in [(-1,)]:
         deque([1], -1)
     except ValueError as ex:
         print("ValueError:", ex)
-z = deque(empty_strings())
+z: deque[str] = deque()
 try:
     z.pop()
 except IndexError as ex:
@@ -70,26 +60,26 @@ try:
     deque([1, 2], maxlen=2).insert(0, 5)
 except IndexError as ex:
     print("IndexError:", ex)
-m = deque([0], maxlen=3)
+m: deque[int] = deque([0], maxlen=3)
 for i in range(1, 8):
     m.append(i)
     m.appendleft(-i)
-print(m, deque([1, 2, 3], maxlen=5) * 3, deque(empty_ints(), maxlen=0), deque(list(range(4)), 0))
+print(m, deque([1, 2, 3], maxlen=5) * 3, deque[int]([], maxlen=0), deque(list(range(4)), 0))
 
 
-# Constructor-inferred deques in fields, a parameter and a return
+# a deque in a field, a parameter and a return, typed deque[T]
 class Window:
     def __init__(self, size: int) -> None:
-        self.recent = deque(empty_strings(), size)
-        self.seen = deque(empty_ints())
+        self.recent: deque[str] = deque(maxlen=size)
+        self.seen: deque[int] = deque()
 
     def add(self, word: str) -> None:
         self.recent.append(word)
         self.seen.appendleft(len(word))
 
 
-def drain(q: deque) -> deque:
-    out = deque(empty_ints())
+def drain(q: deque[int]) -> deque[int]:
+    out: deque[int] = deque()
     while q:
         out.appendleft(q.popleft())
     return out
@@ -105,7 +95,7 @@ s1 = deque(list(range(100)))
 for i in range(100000):
     s1.append(s1.popleft())
 print(s1[0], s1[-1], len(s1))
-s2 = deque(empty_ints())
+s2: deque[int] = deque()
 for i in range(10000):
     s2.appendleft(i)
 total = 0

@@ -1,0 +1,12 @@
+deque(['a', 'b', 'c']) deque([1, 2, 3]) deque(['a', 'b'])
+[1, 2, 3]
+deque([7]) deque(['x'])
+deque([9]) 12
+deque(['a', 2]) True True 1
+a 2 False
+items 3
+bound 2
+deque([3], maxlen=2)
+items -1
+ValueError items
+[exit 0]

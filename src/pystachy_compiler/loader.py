@@ -320,6 +320,8 @@ class Loader:
                 aliases.append(st)
             elif k == "def" or k == "class" or k == "subclass":
                 m.kinds[st.s] = "f" if k == "def" else "c"
+                if k == "subclass" and len(st.kids) == 2 and "__class_getitem__" not in top_bindings(st.kids[0].kids[0].kids):
+                    m.cbases[st.s] = st.kids[1]
                 for d in [st] if k == "def" else st.kids[0].kids if k == "class" else st.kids[0].kids[0].kids:
                     if d.kind == "def":
                         ga: dict[str, bool] = {}
@@ -611,12 +613,43 @@ class Loader:
             return e.s != "|" or b.kind not in ANNKINDS[:5] or e.kids[1].kind not in ANNKINDS[:5]
         if k == "unary":
             return e.s != "-" or (b.kind != "int" and b.kind != "float")  # (Literal[-1])
+        if k == "index" and (self.kind_of(b) == "c" or self.kind_of(b).startswith("a:")) and self.generic_class(b):
+            return False
         if k == "index" and (b.kind not in ANNKINDS[:2] or self.kind_of(b) == "f" or self.kind_of(b) == "c" or self.kind_of(b).startswith("a:")):
             return True
         p = self.bpath(e) if k == "attr" else ""
         if p != "" and not p.startswith("typing.") and p != "os.PathLike" and p != "collections.abc" and not (p.startswith("collections.abc.") and p[16:] in ABCS):
             return True  # (a builtin module may lack the attribute)
         return k not in ANNKINDS or (self.kind_of(b) == "v" and not (top and k == "name") and not (k == "name" and self.typevar(e))) or (k == "index" and self.kind_of(b) == "" and b.s in PYBUILTINS and b.kind == "name" and b.s not in GENERICS)
+
+    def generic_class(self, b: Node) -> bool:
+        # is b (a name, an alias such as an imported class's, or a user module's attribute, that
+        # names a class) a class whose one base is typing.Generic[...]
+        m = self.dm
+        name = b.s
+        k = self.kind_of(b)
+        if k.startswith("a:"):
+            # (a:<module's prefix><name>: a def or class of that module)
+            name = k[2:]
+            for x in self.mods:
+                q = self.mods[x].q
+                if q != "" and k[2:].startswith(q) and "$" not in k[2 + len(q):]:
+                    m = self.mods[x]
+                    name = k[2 + len(q):]
+        elif b.kind == "attr":
+            k = self.kind_of(b.kids[0])
+            m = self.mods[k[2:]] if k.startswith("m:") and k[2:] in self.mods else self.dm
+        base = m.cbases.get(name, None)
+        if base is None or base.kind != "index":
+            return False
+        g = base.kids[0]
+        if g.kind == "name":
+            k = m.kinds.get(g.s, "")
+            return k == "b:typing.Generic" or k == "b:typing_extensions.Generic"
+        if g.kind == "attr" and g.s == "Generic" and g.kids[0].kind == "name":
+            k = m.kinds.get(g.kids[0].s, "")
+            return k == "b:typing" or k == "b:typing_extensions"
+        return False
 
     def bpath(self, e: Node) -> str:
         # what a name or an attribute chain on one names in a builtin module ("collections.abc.Mapping"), or ""
