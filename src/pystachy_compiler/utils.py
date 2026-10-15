@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from src.pystachy_compiler.diagnostics import fail, where
 from src.pystachy_compiler.ir import FnInfo
+from src.pystachy_compiler.llvm_abi import llvm_decl
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     CODECS,
@@ -129,7 +130,7 @@ def rt_subset(k: str, ts: list[str]) -> str:
 
 def runtime_decl(k: str) -> str:
     ps = rtsig(k)
-    return f"declare {rtll(ps[0])} @{rtsym(k)}({', '.join([rtll(p) for p in ps[1:]])})"
+    return llvm_decl(rtsym(k), [rtll(p) for p in ps])
 
 
 # every effect letter but N (it is no summary's): U's, and a summary not computed yet
@@ -192,7 +193,6 @@ class RtFn:
         self.sym = rtsym(k)  # its LLVM symbol
         self.sig: list[str] = rtsig(k)  # its result and parameter types, as RUNTIME spells them
         self.ll: list[str] = [rtll(p) for p in self.sig]  # and as LLVM types
-        self.decl = runtime_decl(k)  # its declare line
         self.fx = fxmask(fx.replace("U?", ""))  # its effects (FX bits), but U?
         self.q = "U?" in fx  # whether it has U? (U when the descriptor of its # parameter holds a class)
 
@@ -632,17 +632,6 @@ def targs(t: str) -> list[str]:
             start = i + 1
     out.append(t[start:-1])
     return out
-
-
-def llstr(s: str) -> str:
-    out: list[str] = []
-    for c in s:
-        o = ord(c)
-        if o < 32 or o > 126 or c == '"' or c == "\\":
-            out.append("\\" + HEX[o >> 4] + HEX[o & 15])
-        else:
-            out.append(c)
-    return "".join(out)
 
 
 def hpush(h: list[int], x: int) -> None:

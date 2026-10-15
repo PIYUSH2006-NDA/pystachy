@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
-from src.pystachy_compiler.ir import FnInfo, Ins, Val
+from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.syntax import Node, mk
@@ -294,7 +294,9 @@ def gen_to_callable(self, v: Val, t: str) -> Val:
         g = f"@cvo.{code[4:]}"
         if g not in self.cvos:
             self.cvos[g] = True
-            self.consts.append(f"{g} = private constant {{ptr, ptr}} {{ptr {code}, ptr null}}")
+            d = Data("callable", g)
+            d.refs = [code, "null"]
+            self.consts.append(d)
         return Val(g, t)
     o = self.rt("pys_alloc", "ptr", ["i64 16"])
     self.emit(f"store ptr {code}, ptr {o}")

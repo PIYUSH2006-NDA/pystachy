@@ -52,8 +52,8 @@ from src.pystachy_compiler.utils import (
 def gen_global_var(self, g: str, ty: str) -> None:
     # every module-level variable, visible or hidden, is defined here: the garbage
     # collector scans the pointer-typed ones, whose addresses @main hands to pys_init
-    self.globs.append(f"{g} = internal global {ty} zeroinitializer")
-    if ty == "ptr":
+    self.globs.append(Val(g, ty))
+    if lt(ty) == "ptr":
         self.gcroots.append(g)
 
 def gen_is_global(self, name: str) -> bool:
@@ -499,7 +499,7 @@ def gen_imp_flag(self, x: str, glob: bool) -> str:
     if glob:
         if x not in self.impg:
             self.impg[x] = True
-            self.global_var(f"@g.{x}.imp", "i1")
+            self.global_var(f"@g.{x}.imp", "bool")
         return f"@g.{x}.imp"
     if x not in self.iflag:
         self.n += 1
@@ -1218,9 +1218,9 @@ def gen_default_want(self, r: Node, m: str, args: list[Node], vt: str) -> str:
 
 def gen_new_global(self, name: str, t: str) -> None:
     self.gtypes[name] = t
-    self.global_var(f"@g.{name}", lt(t))
+    self.global_var(f"@g.{name}", t)
     if name in self.gflag:
-        self.global_var(f"@g.{name}.def", "i1")
+        self.global_var(f"@g.{name}.def", "bool")
 
 def gen_declare(self, name: str, t: str) -> None:
     if self.is_global(name):

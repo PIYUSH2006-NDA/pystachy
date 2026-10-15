@@ -224,3 +224,17 @@ def gen_eh_ir(self, fn: IFn) -> None:
     fn.pads = len(used) > 0
     if fn.pads:
         self.runtime("pys_personality")
+
+
+def gen_lower_scalar(self, i: Ins) -> None:
+    a = i.a[0]
+    if i.op == "scalar.bin":
+        s = i.s + (" " + i.x if i.x != "" else "") + " " + lt(a.t) + " " + a.v
+        if len(i.a) == 2:
+            s += ", " + i.a[1].v
+    elif i.op == "scalar.cast":
+        s = i.s + " " + lt(a.t) + " " + a.v + " to " + lt(i.t)
+    else:
+        s = ("fcmp" if a.t == "float" else "icmp") + " " + i.s + " " + lt(a.t) + " " + a.v + ", " + i.a[1].v
+    self.out.append(f"  %t{i.r[0]} = {s}")
+

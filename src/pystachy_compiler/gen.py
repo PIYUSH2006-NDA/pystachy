@@ -1,10 +1,11 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.lowering import gen_lower_scalar as scalar_ir_lower_scalar
 from src.pystachy_compiler.scalar_ir import (
     gen_scalar as scalar_ir_scalar,
     gen_scalar_cast as scalar_ir_scalar_cast,
     gen_scalar_cmp as scalar_ir_scalar_cmp,
-    gen_lower_scalar as scalar_ir_lower_scalar,
+
     gen_verify_scalar as scalar_ir_verify_scalar,
 )
 from src.pystachy_compiler.union_arithmetic import (
@@ -385,19 +386,18 @@ from src.pystachy_compiler.flow import (
     gen_user_call as flow_user_call,
 )
 from src.pystachy_compiler.functions import (
-    gen_cextern as functions_cextern,
     gen_enter as functions_enter,
     gen_extern_args as functions_extern_args,
     gen_externtype as functions_externtype,
     gen_function as functions_function,
     gen_materialize as functions_materialize,
-    gen_pyext as functions_pyext,
     gen_untold as functions_untold,
 )
 from src.pystachy_compiler.ir import (
     Blk,
     ClassInfo,
     Closure,
+    Data,
     Exit,
     FnInfo,
     Frame,
@@ -424,6 +424,13 @@ from src.pystachy_compiler.lowering import (
     gen_invoke as lowering_invoke,
     gen_lower as lowering_lower,
     gen_lower_ins as lowering_lower_ins,
+)
+from src.pystachy_compiler.lower_module import (
+    gen_cextern as lower_module_cextern,
+    gen_dispatch as lower_module_dispatch,
+    gen_extern_decl as lower_module_extern_decl,
+    gen_lower_module as lower_module_lower_module,
+    gen_pyext as lower_module_pyext,
 )
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.optimizations import (
@@ -472,7 +479,6 @@ from src.pystachy_compiler.statements import (
     gen_default_problem as statements_default_problem,
     gen_del_name as statements_del_name,
     gen_dflt_fn as statements_dflt_fn,
-    gen_dispatch as statements_dispatch,
     gen_early_default as statements_early_default,
     gen_for_ as statements_for_,
     gen_for_range as statements_for_range,
@@ -608,9 +614,9 @@ class Gen:
         self.fglobals: dict[str, bool] = {}
         self.mvars: dict[str, bool] = {}  # module-level variables, also those functions assign
         self.gtypes: dict[str, str] = {}
-        self.globs: list[str] = []
+        self.globs: list[Val] = []
         self.gcroots: list[str] = []
-        self.consts: list[str] = []
+        self.consts: list[Data] = []
         self.strs: dict[str, str] = {}
         self.strvals: list[str] = []  # the text of each @s.N
         self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)
@@ -1337,13 +1343,19 @@ class Gen:
         return functions_externtype(self, a, t, what, f)
 
     def cextern(self, f: FnInfo) -> None:
-        return functions_cextern(self, f)
+        return lower_module_cextern(self, f)
 
     def pyext(self) -> list[str]:
-        return functions_pyext(self)
+        return lower_module_pyext(self)
 
     def untold(self, f: FnInfo, ts: list[str], how: str) -> None:
         return functions_untold(self, f, ts, how)
+
+    def extern_decl(self, f: FnInfo) -> None:
+        return lower_module_extern_decl(self, f)
+
+    def lower_module(self) -> str:
+        return lower_module_lower_module(self)
 
     def lower(self, fn: IFn) -> None:
         return lowering_lower(self, fn)
@@ -1517,7 +1529,7 @@ class Gen:
         return statements_obj_helpers(self, c)
 
     def dispatch(self, op: str) -> None:
-        return statements_dispatch(self, op)
+        return lower_module_dispatch(self, op)
 
     def check_special(self, f: FnInfo) -> None:
         return statements_check_special(self, f)

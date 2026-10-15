@@ -60,6 +60,15 @@ representation of every operation. WebAssembly and dynamic `Any` values remain f
 `PYSTACHY_IRCHECK=1` verifies IR before the passes and after transformations. Function effect
 summaries remain available after the rest of the function's IR is released.
 
+Module declarations follow the same boundary. Globals retain native types in `Val`
+records; `Data` records retain string bytes, callable code/environment references and
+exception descriptor references. `lower_module.py` alone selects their LLVM layouts,
+GC root tables and entry points. It also owns native C ABI adapters, CPython extension
+wrappers and object dispatch tables; these backend stubs do not enter the optimization
+IR as opaque instructions. `llvm_abi.py` contains declaration and byte-escaping
+serializers shared with runtime ABI checks. The runtime signatures and concrete
+C layouts are unchanged.
+
 Static folding and template instantiation remain frontend responsibilities: an unselected
 static branch need not be type-checked. The [typing](language/typing.md) and
 [module](language/modules.md) references cover those semantics; the IR does not replace them.
