@@ -222,6 +222,8 @@ def gen_has(self, t: str, a: str) -> int:
         return -1 if r == 1 else 0  # (unless it is None)
     if t in self.classes:
         ci = self.classes[t]
+        if a in ci.methods and ci.methods[a].prop:
+            self.err(f"hasattr() of property '{a}' is not supported: read it in a try/except AttributeError block")
         if a in ci.fflag and t + "." + a not in self.cvars:
             return -2
         if a in ci.methods or a in ci.ftypes:
@@ -573,6 +575,8 @@ def gen_expr(self, n: Node, want: str) -> Val:
             self.modchk(n)
             return self.modattr(path)
         tc = n.kids[0]
+        if is_super(tc) and not self.bound("super"):
+            return self.super_call(tc, n.s, [], read=True)
         if n.s == "__name__" and tc.kind == "call" and len(tc.kids) == 2 and tc.kids[0].kind == "name" and tc.kids[0].s == "type" and not self.bound("type"):
             # type(e).__name__ of an exception: its class's name
             v = self.expr(tc.kids[1], "")
@@ -825,6 +829,8 @@ def gen_no_class_attr(self, c: str, a: str) -> None:
     if c in self.nts and a in ci.fields:
         self.err(f"reading a NamedTuple's field through its class ({short(c)}.{a}, a descriptor in CPython) is not supported")
     if a in ci.methods:
+        if ci.methods[a].prop:
+            self.err(f"{short(c)}.{a} is a property: read it on an instance")
         self.err(f"method '{short(c)}.{a}' cannot be used as a value (call it)")
     if a in ci.fields:
         self.err(f"type object '{short(c)}' has no attribute '{a}' (its objects have the field '{a}')")
@@ -851,6 +857,8 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str) -> Val:
     if m not in ci.methods:
         self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
     f = ci.methods[m]
+    if f.prop:
+        self.err(f"{short(cn.s)}.{m} is a property: read it on an instance")
     if f.bad == STUB.replace("NAME", m):
         self.err(f.bad)  # (an imported module's: CPython's stub raises NotImplementedError, however it is called)
     if f.deco == "":

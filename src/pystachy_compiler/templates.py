@@ -418,6 +418,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str]) -> FnInfo:
     self.materialize(f)  # (an inherited class method's own body)
     g = FnInfo(f.name, f"{f.ll}.{len(f.insts) + 1}", f.node, f.cls)
     g.deco = f.deco
+    g.prop = f.prop
     g.clsuse = f.clsuse
     g.orig = f.orig
     g.iters = f.iters

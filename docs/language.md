@@ -95,7 +95,7 @@ Lambdas, closures and decorators of functions are supported. Functions with `*ar
 `**kwargs` specialize for the call's argument shape; forwarding is more restricted than in
 fully dynamic Python.
 
-Classes support fields, methods, class attributes, `@staticmethod`, `@classmethod` and
+Classes support fields, methods, class attributes, read-only `@property`, `@staticmethod`, `@classmethod` and
 supported operator and container methods. Dataclasses support `kw_only=True` and
 `__post_init__`; options such as `frozen=True`, `order=True` and `dataclasses.field()` are
 not supported.
