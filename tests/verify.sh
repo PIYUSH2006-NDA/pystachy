@@ -26,7 +26,7 @@
 #                  runtime.py (types, coverage, and the effects their call graphs show), and no
 #                  function of runtime.py reaches itself through runtime.c
 #   gc-self        the native compiler collecting every 5000 allocations reproduces the IR
-#   gc-jit/gc-aot  every test passes in each mode with a collection at every program allocation
+#   gc-jit/gc-aot-* every test passes in each mode with a collection at every program allocation
 #                  (PYSTACHY_GC_STRESS_PROGRAM=1), compiled by the compiler collecting every 1000
 #   benchmarks     bench/*.py print exactly what CPython prints, JIT and AOT; timings recorded
 #   rtcheck        tools/rtcheck.py: runtime.py, run by CPython, gives what CPython's str methods and
@@ -77,7 +77,7 @@ ROOT=$(pwd)
 # --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
 plan() {
   case $1 in
-    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-self gc-jit gc-aot benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
+    all) echo 'bootstrap tests-cpython tests-native tests-opt-off runtime-cache python-free ubsan check-ir runtime-table gc-self gc-jit gc-aot-0 gc-aot-1 benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code scaling' ;;
     hosted) echo 'bootstrap tests-cpython' ;;
     native) echo 'bootstrap tests-native' ;;
     opt-off) echo 'bootstrap tests-opt-off' ;;
@@ -85,17 +85,19 @@ plan() {
     ubsan) echo 'bootstrap ubsan' ;;
     gc-self) echo 'bootstrap gc-self' ;;
     gc-jit) echo 'bootstrap gc-jit' ;;
-    gc-aot) echo 'bootstrap gc-aot' ;;
-    gc-stress) echo 'bootstrap gc-self gc-jit gc-aot' ;; # local compatibility alias
+    gc-aot-0) echo 'bootstrap gc-aot-0' ;;
+    gc-aot-1) echo 'bootstrap gc-aot-1' ;;
+    gc-aot) echo 'bootstrap gc-aot-0 gc-aot-1' ;; # local aliases are not CI groups
+    gc-stress) echo 'bootstrap gc-self gc-jit gc-aot-0 gc-aot-1' ;;
     contracts) echo 'bootstrap runtime-cache check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code' ;;
     benchmarks) echo 'bootstrap benchmarks scaling' ;;
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
 }
-[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|opt-off|python-free|ubsan|gc-self|gc-jit|gc-aot|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted|native|opt-off|python-free|ubsan|gc-self|gc-jit|gc-aot-0|gc-aot-1|gc-aot|gc-stress|contracts|benchmarks|--list]' >&2; exit 2; }
 GROUP=${1:-all}
 if [ "$GROUP" = --list ]; then
-  for g in all hosted native opt-off python-free ubsan gc-self gc-jit gc-aot contracts benchmarks; do
+  for g in all hosted native opt-off python-free ubsan gc-self gc-jit gc-aot-0 gc-aot-1 contracts benchmarks; do
     printf '%s %s\n' "$g" "$(plan "$g")"
   done
   exit 0
@@ -138,17 +140,27 @@ step() {
   printf '%-14s %s  %8ss  %s\n' "$1" "$2" "$t" "${4#"$ROOT"/}"
   [ "$2" = pass ] || { nfail=$((nfail + 1)); tail -15 "$4" | sed 's/^/    | /'; }
 }
-# checks MODES: the checks tests/run.sh makes of the whole suite in MODES, counted from the files as
+# checks MODES [FILE...]: checks tests/run.sh makes of these files (default: whole suite) in MODES,
+# counted from the files as
 # its loops make them: each program and each deviation once per mode, each rejection once, and one
 # "pystachy check" more of each syntax_*.py program and of each syntax_*.py rejection whose error is
 # in its own file
 checks() {
   c=0; m=0
   for x in $1; do m=$((m + 1)); done
-  for f in tests/*.py tests/deviations/*.py; do [ -f "$f" ] && c=$((c + m)); done
-  for f in tests/syntax_*.py tests/errors/*.py; do [ -f "$f" ] && c=$((c + 1)); done
-  for f in tests/errors/syntax_*.py; do
-    n=${f##*/}; [ -f "$f" ] && case $(head -1 "$f") in "# error: ${n%.py}.py:"*) c=$((c + 1)) ;; esac
+  shift
+  [ $# != 0 ] || set -- tests/*.py tests/deviations/*.py tests/errors/*.py
+  for f; do
+    [ -f "$f" ] || continue
+    case $f in
+      tests/errors/*) c=$((c + 1)) ;;
+      *) c=$((c + m)) ;;
+    esac
+    case $f in
+      tests/syntax_*.py) c=$((c + 1)) ;;
+      tests/errors/syntax_*.py)
+        n=${f##*/}; case $(head -1 "$f") in "# error: ${n%.py}.py:"*) c=$((c + 1)) ;; esac ;;
+    esac
   done
   echo $c
 }
@@ -358,14 +370,33 @@ step gc-self $r "$s" "$L" ", \"compiler_interval\": 5000, \"ir_identical\": $(sa
 fi
 
 # ---- GC-stressed suite: full corpus in both modes, on independent CI runners
-# Each mode also repeats rejection and syntax checks. No case selection or sampling.
-for mode in jit aot; do
-  if want gc-$mode; then
-    L=$V/gc-$mode.log; s=$(now); r=fail
-    PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" "$mode" > "$L" 2>&1
+# AOT alternates files between two disjoint shards. Pin glob ordering so their union is
+# exactly the full corpus on every runner; rejection/syntax checks still run in both modes.
+for gc_group in gc-jit gc-aot-0 gc-aot-1; do
+  if want "$gc_group"; then
+    L=$V/$gc_group.log; s=$(now); r=fail; mode=jit; shard_fields=""
+    set --
+    if [ "$gc_group" != gc-jit ]; then
+      mode=aot; shard=${gc_group##*-}
+      # Keep C ordering local to selection; programs retain their original locale.
+      (
+        export LC_ALL=C
+        case_index=0
+        for f in tests/*.py tests/deviations/*.py tests/errors/*.py; do
+          [ -f "$f" ] || continue
+          [ $((case_index % 2)) != "$shard" ] || printf '%s\n' "$f"
+          case_index=$((case_index + 1))
+        done
+      ) > "$V/$gc_group-cases.log"
+      while IFS= read -r f; do set -- "$@" "$f"; done < "$V/$gc_group-cases.log"
+      shard_fields=", \"shard_index\": $shard, \"shard_count\": 2"
+      # An empty shard must not silently invoke run.sh's whole-suite default.
+      [ $# != 0 ] || { echo 'empty GC AOT shard' > "$L"; step "$gc_group" fail "$s" "$L" ""; continue; }
+    fi
+    PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" "$mode" "$@" > "$L" 2>&1
     suite_status=$?
-    x=$(tests "$(checks "$mode")" "$L" 2>> "$L") && [ "$suite_status" = 0 ] && r=pass
-    step gc-$mode $r "$s" "$L" ", \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"$mode\"]$x"
+    x=$(tests "$(checks "$mode" "$@")" "$L" 2>> "$L") && [ "$suite_status" = 0 ] && r=pass
+    step "$gc_group" $r "$s" "$L" ", \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"$mode\"]$shard_fields$x"
   fi
 done
 

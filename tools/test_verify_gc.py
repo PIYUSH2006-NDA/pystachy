@@ -12,6 +12,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 TIMEOUT = shutil.which("timeout")
+CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/example.py",
+         "tests/errors/example.py", "tests/errors/syntax_example.py"]
+GC_STEPS = ["gc-self", "gc-jit", "gc-aot-0", "gc-aot-1"]
+SUITES = [("gc-jit", "jit", 7), ("gc-aot-0", "aot", 4), ("gc-aot-1", "aot", 3)]
 
 
 @unittest.skipUnless(TIMEOUT, "GNU timeout is required by verification")
@@ -71,18 +75,36 @@ else:
         suite.write_text('''#!/bin/sh
 [ "$PYSTACHY_GC_STRESS" = 1000 ] || exit 9
 [ "$PYSTACHY_GC_STRESS_PROGRAM" = 1 ] || exit 9
-case "$2" in jit|aot) ;; *) echo "invalid mode: $2"; exit 9 ;; esac
-echo "suite mode: $2"
-# Three program/deviation executions, two rejections and two syntax checks per mode.
-if [ "$VERIFY_MOCK_MODE" = "suite-$2-failure" ]; then
-  echo '6 passed, 1 failed'
+mode=$2; shift 2
+echo "suite mode: $mode"
+case "$mode" in
+  jit)
+    [ $# = 0 ] || exit 9
+    group=jit
+    set -- tests/example.py tests/syntax_example.py tests/deviations/example.py tests/errors/example.py tests/errors/syntax_example.py ;;
+  aot)
+    [ "$LC_ALL" = C.UTF-8 ] && [ $# -gt 0 ] || exit 9
+    case "$1" in tests/example.py) group=aot-0 ;; tests/syntax_example.py) group=aot-1 ;; *) exit 9 ;; esac ;;
+  *) echo "invalid mode: $mode"; exit 9 ;;
+esac
+checks=0
+for file; do
+  echo "selected: $file"
+  case "$file" in
+    tests/example.py|tests/deviations/example.py|tests/errors/example.py) checks=$((checks + 1)) ;;
+    tests/syntax_example.py|tests/errors/syntax_example.py) checks=$((checks + 2)) ;;
+    *) exit 9 ;;
+  esac
+done
+if [ "$VERIFY_MOCK_MODE" = "suite-$group-failure" ]; then
+  echo "$((checks - 1)) passed, 1 failed"
   exit 1
 fi
 if [ "$VERIFY_MOCK_MODE" = short-suite ]; then
-  echo '6 passed, 0 failed'
+  echo "$((checks - 1)) passed, 0 failed"
   exit 0
 fi
-echo '7 passed, 0 failed'
+echo "$checks passed, 0 failed"
 ''')
         suite.chmod(0o755)
         timeout = self.root / "bin/timeout"
@@ -93,7 +115,7 @@ limit = "0.2s" if os.environ["VERIFY_MOCK_MODE"].startswith("timeout") else "10s
 os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sys.argv[4:]])
 ''')
         timeout.chmod(0o755)
-        self.env = {**os.environ, "PY": str(compiler),
+        self.env = {**os.environ, "PY": str(compiler), "LC_ALL": "C.UTF-8",
                     "PATH": str(self.root / "bin") + os.pathsep + os.environ["PATH"]}
 
     def run_group(self, group, mode="pass"):
@@ -116,33 +138,48 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
         for text in ("gc-self: started", "limit 10m", "gc-self: finished after", "gc statistics"):
             self.assertIn(text, logs["gc-self"])
 
-    def test_each_suite_runs_all_checks_in_its_mode_at_original_stress(self):
-        for mode in ("jit", "aot"):
-            group = f"gc-{mode}"
+    def test_each_suite_runs_its_complete_selection_at_original_stress(self):
+        observed = {}
+        for group, mode, count in SUITES:
             with self.subTest(group=group):
                 result, report, logs = self.run_group(group)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(report["result"], "pass")
                 self.assertEqual([step["name"] for step in report["steps"]], ["bootstrap", group])
                 step = report["steps"][-1]
-                self.assertEqual((step["passed"], step["failed"], step["expected"]), (7, 0, 7))
+                self.assertEqual((step["passed"], step["failed"], step["expected"]), (count, 0, count))
                 self.assertEqual(step["modes"], [mode])
                 self.assertEqual((step["tests_compiler_interval"], step["tests_interval"]), (1000, 1))
                 self.assertIn(f"suite mode: {mode}", logs[group])
                 self.assertFalse((self.root / "gc-child.pid").exists())
+                observed[group] = [line.removeprefix("selected: ") for line in logs[group].splitlines()
+                                   if line.startswith("selected: ")]
+                if mode == "aot":
+                    index = int(group[-1])
+                    self.assertEqual((step["shard_index"], step["shard_count"]), (index, 2))
+                    self.assertEqual(observed[group], CASES[index::2])
+                else:
+                    self.assertNotIn("shard_index", step)
+                    self.assertEqual(observed[group], CASES)
+        self.assertFalse(set(observed["gc-aot-0"]) & set(observed["gc-aot-1"]))
+        self.assertCountEqual(observed["gc-aot-0"] + observed["gc-aot-1"], CASES)
 
-    def test_local_gc_stress_alias_runs_self_and_both_modes(self):
-        result, report, logs = self.run_group("gc-stress")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(report["result"], "pass")
-        self.assertEqual([step["name"] for step in report["steps"]],
-                         ["bootstrap", "gc-self", "gc-jit", "gc-aot"])
-        self.assertIn("gc statistics", logs["gc-self"])
-        for mode in ("jit", "aot"):
-            step = next(step for step in report["steps"] if step["name"] == f"gc-{mode}")
-            self.assertEqual((step["passed"], step["expected"]), (7, 7))
-            self.assertEqual(step["modes"], [mode])
-            self.assertIn(f"suite mode: {mode}", logs[f"gc-{mode}"])
+    def test_local_aliases_run_all_selected_gc_checks(self):
+        for group, expected in (("gc-stress", GC_STEPS), ("gc-aot", GC_STEPS[2:])):
+            with self.subTest(group=group):
+                result, report, logs = self.run_group(group)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(report["result"], "pass")
+                self.assertEqual([step["name"] for step in report["steps"]], ["bootstrap", *expected])
+                if group == "gc-stress":
+                    self.assertIn("gc statistics", logs["gc-self"])
+                for suite, mode, count in SUITES:
+                    if suite not in expected:
+                        continue
+                    step = next(step for step in report["steps"] if step["name"] == suite)
+                    self.assertEqual((step["passed"], step["expected"]), (count, count))
+                    self.assertEqual(step["modes"], [mode])
+                    self.assertIn(f"suite mode: {mode}", logs[suite])
 
     def test_failure_timeout_and_mismatched_ir_cannot_pass(self):
         for mode, text in (("failure", "mock compiler failed"),
@@ -157,24 +194,23 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
                 self.assertIn(text, logs["gc-self"])
 
     def test_failed_and_incomplete_suites_cannot_pass(self):
-        for mode in ("jit", "aot"):
-            for failure in (f"suite-{mode}-failure", "short-suite"):
-                with self.subTest(mode=mode, failure=failure):
-                    result, report, _ = self.run_group(f"gc-{mode}", failure)
+        for group, _, _ in SUITES:
+            for failure in (f"suite-{group.removeprefix('gc-')}-failure", "short-suite"):
+                with self.subTest(group=group, failure=failure):
+                    result, report, _ = self.run_group(group, failure)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(report["result"], "fail")
                     self.assertEqual(report["steps"][-1]["result"], "fail")
 
     def test_local_alias_reports_failure_and_still_runs_remaining_modes(self):
-        for failure in ("failure", "suite-jit-failure", "suite-aot-failure"):
+        for failure in ("failure", "suite-jit-failure", "suite-aot-0-failure", "suite-aot-1-failure"):
             with self.subTest(failure=failure):
                 result, report, logs = self.run_group("gc-stress", failure)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report["result"], "fail")
-                self.assertEqual([step["name"] for step in report["steps"]],
-                                 ["bootstrap", "gc-self", "gc-jit", "gc-aot"])
-                self.assertIn("suite mode: jit", logs["gc-jit"])
-                self.assertIn("suite mode: aot", logs["gc-aot"])
+                self.assertEqual([step["name"] for step in report["steps"]], ["bootstrap", *GC_STEPS])
+                for group, mode, _ in SUITES:
+                    self.assertIn(f"suite mode: {mode}", logs[group])
 
     def test_cancellation_terminates_the_background_compiler(self):
         process = subprocess.Popen(["sh", "tests/verify.sh", "gc-self"], cwd=self.root,
