@@ -51,7 +51,7 @@ def gen_subclass_problem(self, st: Node) -> str:
     # why class statement st, which names bases, cannot be compiled, or "": one ordinary
     # class declared before it, or one of the supported exception bases
     if st.kids[1].kind == "typeparams":
-        return "generic classes (class C[T]) are not supported: write class C(Generic[T]), with T = TypeVar(\"T\")"
+        return self.class_params(st)
     if st.kids[1].kind == "index" and self.imported_ref(st.kids[1].kids[0]) == "typing.Generic":
         return "a generic class's one base is Generic[...] of its TypeVars, and at most one TypeVarTuple, unpacked (Generic[T, *Ts]), each once" if len(st.kids) == 2 else "a generic class with another base than Generic[...] is not supported"
     if len(st.kids) > 2:
@@ -476,7 +476,8 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
         t = self.gtypes.get(e.s, "")
         if use == 3 and (e.s in self.funcs or e.s in self.hooks or ("$" not in e.s and (e.s in local or (e.s in PYBUILTINS and e.s not in PURE)))):
             return f"it passes {short(e.s)} to a function that may call it"
-        if use == 0 or "$" not in e.s or e.s in self.funcs or e.s in self.hooks or e.s in self.noneglobals or (t != "" and not self.objects(t, use)):
+        # (a generic class's type parameter, Class$$T, is typing's TypeVar: see Loader.qren)
+        if use == 0 or "$" not in e.s or "$$" in e.s or e.s in self.funcs or e.s in self.hooks or e.s in self.noneglobals or (t != "" and not self.objects(t, use)):
             return ""
         return f"'{short(e.s)}' may be an object of one of the program's classes, whose methods CPython calls then"
     if k == "attr" and e.kids[0].kind == "name" and (e.kids[0].s in self.hooks or ("$" not in e.kids[0].s and e.kids[0].s in local)):
@@ -554,6 +555,9 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif st.kind == "subclass" and len(st.kids) == 2 and len(self.generic_base(st.kids[1])) > 0:
                 m.body.kids[i] = st.kids[0]  # class C(Generic[T]): a class whose objects bind T (see bind)
                 self.tparams[st.s] = self.generic_base(st.kids[1])
+            elif st.kind == "subclass" and st.kids[1].kind == "typeparams" and self.class_params(st) == "":
+                m.body.kids[i] = st.kids[0]  # class C[T]: as class C(Generic[T]) (see class_params)
+                self.tparams[st.s] = st.kids[1].s.split()
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])

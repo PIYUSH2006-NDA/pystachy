@@ -131,12 +131,16 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
+        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
+        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
         self.fs = Mod("", "", "")
         self.fsure: dict[str, bool] = {}
         self.unsure: dict[str, dict[str, bool]] = {}  # what each def reads before an import of it surely ran (import_reads())
         self.lazyann = False  # the module deftime() walks imports annotations from __future__
+        self.tpnames: dict[str, bool] = {}  # the type parameters (def f[T], class C[T]) around what it reads
         self.called = 0  # and its code may have called a function by now (1), or imported a module (2)
         self.dm = Mod("", "", "")  # (that module)
         self.bdecos: dict[int, bool] = {}  # the decorators, by line, that surely name a builtin
@@ -320,7 +324,7 @@ class Loader:
                 aliases.append(st)
             elif k == "def" or k == "class" or k == "subclass":
                 m.kinds[st.s] = "f" if k == "def" else "c"
-                if k == "subclass" and len(st.kids) == 2 and "__class_getitem__" not in top_bindings(st.kids[0].kids[0].kids):
+                if k == "subclass" and (len(st.kids) == 2 or st.kids[1].kind == "typeparams") and "__class_getitem__" not in top_bindings(st.kids[0].kids[0].kids):
                     m.cbases[st.s] = st.kids[1]
                 for d in [st] if k == "def" else st.kids[0].kids if k == "class" else st.kids[0].kids[0].kids:
                     if d.kind == "def":
@@ -478,6 +482,10 @@ class Loader:
                 mark((st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split() + (["__annotations__"] if has_kind(c.kids[0], "annassign") else []), inner, {}, [])
                 tps: list[str] = []
                 mark((st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split(), env[2], {}, tps)
+                tpouter = self.tpnames
+                self.tpnames = dict(tpouter)
+                for t in (st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split():
+                    self.tpnames[t] = True
                 for b in st.kids[1:] if k == "subclass" else []:
                     # (where the class statement is, with its type parameters; in the main program
                     # too, where a base is an error later: CPython's comes first)
@@ -486,6 +494,7 @@ class Loader:
                     env[2].pop(t, False)
                 own = dict(inner)
                 self.deftime(m, c.kids[0].kids, [env[0], env[1], inner, own], st.s, [], True)
+                self.tpnames = tpouter
                 plain = top and cls == "" and k == "class" and len(st.kids) == 1 and "__class_getitem__" not in own
             elif k == "annassign":
                 self.ann(st.kids[1], env, "the class body" if cls != "" else "the annotated assignment")
@@ -554,18 +563,24 @@ class Loader:
         nm = e.s
         tps: list[str] = []
         mark(nm.split() if k == "noann" else [], env[2], {}, tps)  # (a generic def's type parameters: Parser.funcdef)
+        outer = self.tpnames
+        if k == "noann":
+            self.tpnames = dict(outer)
+            for t in nm.split():
+                self.tpnames[t] = True
         if k == "name" and "$" not in nm and nm not in env[0] and nm not in env[2] and nm not in PYBUILTINS and nm not in MODNAMES:
             maybe = nm in env[1] or nm in env[3]
             if how >= 2 or (self.dm.kinds.get(nm, "") != "v" and self.dm.kinds.get(nm, "") != "f"):
                 fail(f"name '{nm}' {'may be unbound, which is not supported' if maybe else 'is not defined'} ({'import it from typing' if how >= 2 and nm in TYPING else what})", e.line)
         for kid in e.kids[2:3] if k == "listcomp" or k == "nestedcomp" or k == "asynccomp" else [] if k == "lambda" else e.kids:
             self.reads(kid, env, what, how if how < 3 or k == "noann" else 2)
+        self.tpnames = outer
         why = self.type_error(e, env) if how > 0 else ""
         for t in tps:
             env[2].pop(t, False)
         if why != "":
             fail(f"{why} ({what})", e.line)
-        if how >= 2 and self.not_type(e, how == 3):
+        if how >= 2 and not (k == "name" and nm in self.tpnames) and self.not_type(e, how == 3):
             fail(f"an annotation that is not a type is not supported: only classes, typing's names, their subscripts and '|' of them ({what})", e.line)
         if how >= 2 and k == "attr":
             e.chk = True  # (an attribute a module lacks is CPython's AttributeError: qann)
@@ -640,6 +655,8 @@ class Loader:
             k = self.kind_of(b.kids[0])
             m = self.mods[k[2:]] if k.startswith("m:") and k[2:] in self.mods else self.dm
         base = m.cbases.get(name, None)
+        if base is not None and base.kind == "typeparams":
+            return True  # (class C[T])
         if base is None or base.kind != "index":
             return False
         g = base.kids[0]
@@ -1704,6 +1721,8 @@ class Loader:
     def qname(self, m: Mod, s: str, loc: dict[str, bool]) -> str:
         if s in loc or "$" in s:
             return s
+        if s in self.qren:
+            return self.qren[s]
         k = self.kind(m, s)
         if k == "f" or k == "c" or k == "v" or k.startswith("b:"):
             if m.name == "" and s in PYBUILTINS:
@@ -1989,14 +2008,19 @@ class Loader:
                     loc[st.s] = True
                 self.fkey = key
             elif k == "subclass":
-                # (a generic class's type parameters stay unqualified in its bases and body)
-                tps = dict(loc)
-                for nm in st.kids[1].s.split() if st.kids[1].kind == "typeparams" else []:
-                    tps[nm] = True
-                self.qstmts(m, [st.kids[0]], tps, cls)
+                # (a generic class's type parameters: in its bases, body and methods, names of
+                # their own, qren's)
+                outer = self.qren
+                self.qren = dict(outer)
+                params = st.kids[1].s.split() if st.kids[1].kind == "typeparams" else []
+                for nm in params:
+                    self.qren[nm] = self.qname(m, st.s, loc) + "$$" + nm
+                st.kids[1].s = " ".join([self.qren[nm] for nm in params]) if len(params) > 0 else st.kids[1].s
+                self.qstmts(m, [st.kids[0]], loc, cls)
                 st.s = st.kids[0].s
                 for kid in st.kids[1:]:
-                    self.qexpr(m, kid, tps)
+                    self.qexpr(m, kid, loc)
+                self.qren = outer
                 if cls:
                     loc[short(st.s)] = True
             elif k == "class":

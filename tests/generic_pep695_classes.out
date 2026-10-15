@@ -1,0 +1,13 @@
+3 2 [1, 2]
+['é'] None
+Pair('a', 1) Pair(1, 'a') Pair(1, 'x')
+abc 2.5 3 not an int
+4
+['a', 'b', 'c'] [1]
+(1, 'a', 2.5) 2 7.0
+[1, 3]
+1 2.5 True True
+a module-level T True True ü
+['1', '2'] 1.0
+n ['x', 'ÿ']
+[exit 0]

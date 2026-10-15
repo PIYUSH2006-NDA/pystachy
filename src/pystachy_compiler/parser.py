@@ -15,7 +15,6 @@ from src.pystachy_compiler.syntax import (
     expr_name,
     flat_del,
     has_kind,
-    mentions,
     mk,
     start,
 )
@@ -217,8 +216,11 @@ class Parser:
             bases: list[Node] = []
             tps: list[str] = []
             if self.peek() == "[":
-                self.typeparams(tps, line)
-                bases.append(mk("typeparams", " ".join(tps), line, []))  # class C[T]: a generic class
+                tpk: list[str] = []
+                self.typeparams(tps, line, tpk)
+                # class C[T, *Ts]: a generic class; a kid per type parameter tells its kind (s: "",
+                # "*" for a TypeVarTuple or "**" for a ParamSpec)
+                bases.append(mk("typeparams", " ".join(tps), line, [mk("str", x, line, []) for x in tpk]))
                 self.tparams[line] = " ".join(tps)
             if self.eat("("):
                 args = mk("call", "", line, [])
@@ -456,7 +458,7 @@ class Parser:
         name = self.expect("id").text
         tps: list[str] = []
         if self.peek() == "[":
-            self.typeparams(tps, line)
+            self.typeparams(tps, line, [])
             self.tparams[line] = " ".join(tps)
         if self.peek() != "(":
             self.fail("expected '('", self.line())
@@ -472,13 +474,25 @@ class Parser:
         # def f[T](x: T) -> T: what mentions a type parameter is left unannotated (a template); the
         # annotation is kept as the kid, s the type parameters, for Loader.deftime
         for p in params.kids:
-            if mentions(p.kids[0], tps):
+            if self.tp_mentions(p.kids[0], tps):
                 self.dropped(line, mk("annotation", "", line, [p.kids[0]]))
                 p.kids[0] = mk("noann", " ".join(tps), line, [p.kids[0]])
-        if mentions(ret, tps):
+        if self.tp_mentions(ret, tps):
             self.dropped(line, mk("annotation", "", line, [ret]))
             ret = mk("noann", " ".join(tps), line, [ret])
         return mk("def", name, line, [params, ret, self.scope(True)])
+
+    def tp_mentions(self, a: Node, tps: list[str]) -> bool:
+        # (funcdef) does annotation a mention one of type parameters tps, also in a string, a
+        # forward reference (-> "Box[U]"), as Loader.qann parses it
+        if a.kind == "str" and len(tps) > 0:
+            return self.tp_mentions(Parser(Lexer(a.s, a.line).run()).test(), tps)
+        if a.kind == "name":
+            return a.s in tps
+        for k in a.kids:
+            if self.tp_mentions(k, tps):
+                return True
+        return False
 
     def params(self, end: str, line: int) -> Node:
         # a def's parameters up to ')' or a lambda's up to ':' (without annotations). s is "<number
@@ -556,8 +570,9 @@ class Parser:
         params.s = f"{posonly},{kwonly}"
         return params
 
-    def typeparams(self, out: list[str], line: int) -> None:
-        # [T, U: bound, *Ts, **P, V = default] after the name of a def, a class or a type alias (on line)
+    def typeparams(self, out: list[str], line: int, kinds: list[str]) -> None:
+        # [T, U: bound, *Ts, **P, V = default] after the name of a def, a class or a type alias (on
+        # line): their names, and in kinds "", "*" or "**" for each
         if self.toks[self.p + 1].kind == "]":
             self.fail("Type parameter list cannot be empty", self.line())
         self.expect("[")
@@ -573,6 +588,7 @@ class Parser:
                 self.later(0, f"duplicate type parameter '{name}'", at)
             self.no_debug(name, at)
             out.append(name)
+            kinds.append("**" if kind == "ParamSpec" else "*" if kind == "TypeVarTuple" else "")
             if self.eat(":"):
                 b = self.test()
                 self.scoped(b, "a TypeVar constraint" if b.kind == "tuple" else "a TypeVar bound")
@@ -631,7 +647,7 @@ class Parser:
             name = self.expect("id").text
             tps: list[str] = []
             if self.peek() == "[":
-                self.typeparams(tps, line)
+                self.typeparams(tps, line, [])
             self.expect("=")
             v = self.test()
             self.scoped(v, "a type alias")

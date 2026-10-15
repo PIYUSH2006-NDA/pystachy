@@ -166,6 +166,7 @@ from src.pystachy_compiler.declarations import (
     gen_ann_problem as declarations_ann_problem,
     gen_boxto as declarations_boxto,
     gen_boxwider as declarations_boxwider,
+    gen_class_params as declarations_class_params,
     gen_class_tvars as declarations_class_tvars,
     gen_ctype as declarations_ctype,
     gen_dc_methods as declarations_dc_methods,
@@ -791,8 +792,8 @@ class Gen:
         self.cvars: dict[str, bool] = {}
         self.typevars: list[str] = []  # module globals bound to typing.TypeVar(...) or TypeVarTuple(...), which only annotations may name
         self.tvtuples: dict[str, bool] = {}  # those bound to a TypeVarTuple, which an annotation unpacks (*Ts)
-        # the generic classes (class C(Generic[T, *Ts])): their type variables, which the arguments
-        # of the call that makes an object bind (see bind)
+        # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
+        # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
 
     # ---- emission helpers
@@ -1034,6 +1035,9 @@ class Gen:
 
     def class_tvars(self, cls: str) -> list[str]:
         return declarations_class_tvars(self, cls)
+
+    def class_params(self, st: Node) -> str:
+        return declarations_class_params(self, st)
 
     def ann_problem(self, n: Node, ret: bool) -> str:
         return declarations_ann_problem(self, n, ret)

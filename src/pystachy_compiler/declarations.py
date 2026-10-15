@@ -332,6 +332,25 @@ def gen_typevar_in(self, anns: list[Node], skip: list[str]) -> str:
             return r
     return ""
 
+def gen_class_params(self, st: Node) -> str:
+    # class C[T, *Ts] (subclass node st, its type parameters its first base): why it cannot be a
+    # generic class as class C(Generic[T, *Ts]) is, or "" once its type parameters are type
+    # variables (TypeVar's or TypeVarTuple's, as typevar_def makes them)
+    tp = st.kids[1]
+    names = tp.s.split()  # (each a name of its own, see Loader.qren)
+    kinds = [x.s for x in tp.kids]
+    if len(st.kids) > 2:
+        return "a generic class (class C[T]) with a base class is not supported"
+    if "**" in kinds:
+        return f"ParamSpec type parameters (**{short(names[kinds.index('**')])}) are not supported"
+    if kinds.count("*") > 1:
+        return "a generic class with more than one TypeVarTuple type parameter (*Ts) is not supported"
+    for i in range(len(names)):
+        self.typevars.append(names[i])
+        if kinds[i] == "*":
+            self.tvtuples[names[i]] = True
+    return ""
+
 def gen_class_tvars(self, cls: str) -> list[str]:
     # the type variables of generic class cls, or of the one it specializes ([] for another class)
     if cls in self.tparams:
