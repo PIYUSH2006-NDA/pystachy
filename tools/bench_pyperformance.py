@@ -30,29 +30,29 @@ BENCH = ROOT / "bench" / "pyperformance"
 SDIST_SHA256 = "91f74393997b604375ad5b79bf569a24076d70181c076a53abad5383a238a8aa"
 SDIST_DIR = "pyperformance-1.14.0/pyperformance/data-files/benchmarks/"
 
-# The ported benchmarks: the arguments of a measured run (sized for about a second of
-# CPython), and of a --smoke run (correctness only). bench/pyperformance/NAME.py's main
-# reads them; each starts with the number of loops.
+# The ported benchmarks: the arguments of a measured run (sized for most of a second of
+# CPython 3.13 on an idle 2.1 GHz x86-64 core), and of a --smoke run (correctness only).
+# bench/pyperformance/NAME.py's main reads them; each starts with the number of loops.
 BENCHMARKS = {
     "barnes_hut": (["1"], ["1", "5", "50"]),
-    "chaos": (["5"], ["1", "200"]),
-    "deltablue": (["100"], ["1", "20"]),
-    "fannkuch": (["1"], ["1", "7"]),
-    "float": (["5"], ["1", "1000"]),
-    "go": (["2"], ["1"]),
-    "hexiom": (["50"], ["1"]),
-    "meteor_contest": (["3"], ["1"]),
-    "nbody": (["5"], ["1", "100"]),
-    "nqueens": (["5"], ["1", "6"]),
-    "raytrace": (["2"], ["1", "20", "20"]),
-    "regex_dna": (["2"], ["1", "1000"]),
-    "regex_effbot": (["10"], ["1"]),
-    "regex_v8": (["2"], ["1"]),
-    "richards": (["10"], ["1"]),
-    "richards_super": (["10"], ["1"]),
-    "scimark": (["1"], ["1"]),
-    "spectral_norm": (["5"], ["1"]),
-    "unpack_sequence": (["50000"], ["1"]),
+    "chaos": (["10"], ["1", "200"]),
+    "deltablue": (["200"], ["1", "20"]),
+    "fannkuch": (["2"], ["1", "7"]),
+    "float": (["10"], ["1", "1000"]),
+    "go": (["4"], ["1"]),
+    "hexiom": (["100"], ["1"]),
+    "meteor_contest": (["6"], ["1"]),
+    "nbody": (["10"], ["1", "100"]),
+    "nqueens": (["10"], ["1", "6"]),
+    "raytrace": (["4"], ["1", "20", "20"]),
+    "regex_dna": (["4"], ["1", "1000"]),
+    "regex_effbot": (["20"], ["1"]),
+    "regex_v8": (["4"], ["1"]),
+    "richards": (["20"], ["1"]),
+    "richards_super": (["20"], ["1"]),
+    "scimark": (["2"], ["1"]),
+    "spectral_norm": (["10"], ["1"]),
+    "unpack_sequence": (["100000"], ["1"]),
 }
 
 # SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not.
