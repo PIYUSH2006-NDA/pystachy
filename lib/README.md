@@ -92,6 +92,7 @@ to the compiled paths listed here and in the compatibility reference.
 | [Field selection](../examples/cut/README.md) | `getopt` |
 | [Message rendering](../examples/mailmerge/README.md) | `string.Template` |
 | [Latency reports](../examples/latency/README.md) | `statistics` |
+| [Monte Carlo estimates](../examples/montecarlo/README.md) | `random`, `statistics` |
 | [URL reports](../examples/urlstats/README.md) | `urllib.parse` |
 
 See [performance](../docs/performance.md) for the overall benchmark protocol and
