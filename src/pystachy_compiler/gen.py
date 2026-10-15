@@ -178,6 +178,7 @@ from src.pystachy_compiler.declarations import (
     gen_frozen as declarations_frozen,
     gen_frozen_store as declarations_frozen_store,
     gen_dc_field as declarations_dc_field,
+    gen_dc_fields as declarations_dc_fields,
     gen_dc_factory as declarations_dc_factory,
     gen_is_prop as declarations_is_prop,
     gen_prop_store as declarations_prop_store,
@@ -1127,6 +1128,9 @@ class Gen:
 
     def dc_field(self, ci: ClassInfo, st: Node) -> None:
         return declarations_dc_field(self, ci, st)
+
+    def dc_fields(self, ci: ClassInfo) -> list[str]:
+        return declarations_dc_fields(self, ci)
 
     def dc_factory(self, ci: ClassInfo, fl: str) -> None:
         return declarations_dc_factory(self, ci, fl)

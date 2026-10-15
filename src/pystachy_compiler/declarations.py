@@ -1180,19 +1180,20 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         # each field in turn: from its parameter (whose default_factory a call that leaves it
         # out calls: dglob "()"), else from its default_factory, or its default (CPython reads
         # it from the class); a field with neither stays unassigned
-        plain: dict[str, bool] = {}  # (a field without options)
+        plain: dict[str, bool] = {}  # (a NamedTuple's field, which has no options)
+        dfs = self.dc_fields(ci)
         for kw in [False, True]:
             if kw and len([x for x in ci.fields if x in ci.fopts and "kw_only" in ci.fopts[x]]) > 0:
                 f.npos = len(f.params)  # (self and the positional ones)
-            for fl in ci.fields:
+            for fl in dfs:
                 o = ci.fopts[fl] if fl in ci.fopts else plain
-                if "no-init" not in o and ("kw_only" in o) == kw and not fl.startswith(" "):  # (not its class tag)
+                if "no-init" not in o and ("kw_only" in o) == kw:
                     f.params.append(fl)
                     f.ptypes.append(ci.ftypes[fl])
                     f.defaults.append(ci.fdefault[fl] if fl in ci.fdefault else mk("None", "", d.line, []) if fl in ci.factory else noann)
                     f.dglob.append("()" if fl in ci.factory else "")
         cn = mk("name", ci.name, d.line, [])
-        for fl in [x for x in ci.fields if not x.startswith(" ")]:
+        for fl in dfs:
             o = ci.fopts[fl] if fl in ci.fopts else plain
             v = mk("name", fl, d.line, [])
             if fl in ci.factory and not (fl in b.factory and b.factory[fl] is ci.factory[fl]):
@@ -1244,6 +1245,11 @@ def gen_generic_base(self, n: Node) -> list[str]:
 def gen_nt_base(self, n: Node) -> bool:
     # does a class's base n name typing.NamedTuple
     return (n.kind == "name" and self.imported(n.s) == "typing.NamedTuple") or (n.kind == "attr" and self.typing_attr(n) == "NamedTuple")
+
+def gen_dc_fields(self, ci: ClassInfo) -> list[str]:
+    # the fields of dataclass (or NamedTuple) ci that @dataclass knows: those with options (not
+    # a base's other attributes, which its own __init__ assigns, nor the class tag)
+    return [x for x in ci.fields if x in ci.fopts or ci.name in self.nts]
 
 def gen_dc_field(self, ci: ClassInfo, st: Node) -> None:
     # x: T = field(...) in the body of dataclass ci: the field's options (ci.fopts) and its
@@ -1353,8 +1359,8 @@ def gen_dc_methods(self, ci: ClassInfo) -> None:
     for m in ci.methods:
         if ci.methods[m].cls == ci.name:
             own[m] = True
-    reprs = [x for x in ci.fields if not x.startswith(" ") and (x not in ci.fopts or "no-repr" not in ci.fopts[x])]
-    cmps = [x for x in ci.fields if not x.startswith(" ") and (x not in ci.fopts or "no-compare" not in ci.fopts[x])]
+    reprs = [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-repr" not in ci.fopts[x]]
+    cmps = [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-compare" not in ci.fopts[x]]
     if "no-repr" in ci.dcopts and "__repr__" in ci.methods and ci.methods["__repr__"].synthetic and "__repr__" not in own:
         self.line = line
         self.err(f"repr=False in a dataclass whose base's __repr__ is the one @dataclass writes is not supported (CPython's shows the object's class, {short(ci.name)})")

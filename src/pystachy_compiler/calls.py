@@ -748,8 +748,8 @@ def gen_dc_replace(self, args: list[Node]) -> Val:
             self.place(arm)
         x = Val(o.v, c.name)
         kws: list[Node] = []
-        for fl in c.fields:
-            if fl in c.fopts and "no-init" not in c.fopts[fl]:
+        for fl in self.dc_fields(c):
+            if "no-init" not in c.fopts[fl]:
                 v = given[fl] if fl in given else self.getfield(x, self.field(x, fl), fl)
                 kws.append(mk("kw", fl, self.line, [self.vnode(v)]))
         r = self.new_obj(c.name)
