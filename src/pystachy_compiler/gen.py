@@ -306,6 +306,7 @@ from src.pystachy_compiler.expressions import (
     gen_cmp_method as expressions_cmp_method,
     gen_concrete_cmp as expressions_concrete_cmp,
     gen_comparable as expressions_comparable,
+    gen_numeric_comparable as expressions_numeric_comparable,
     gen_compare as expressions_compare,
     gen_inherit_cmp as expressions_inherit_cmp,
     gen_inherit_contains as expressions_inherit_contains,
@@ -1999,6 +2000,9 @@ class Gen:
 
     def comparable(self, t: str, u: str) -> bool:
         return expressions_comparable(self, t, u)
+
+    def numeric_comparable(self, t: str, u: str) -> bool:
+        return expressions_numeric_comparable(self, t, u)
 
     def foreign_eq(self, a: Val, b: Val) -> Val:
         return expressions_foreign_eq(self, a, b)

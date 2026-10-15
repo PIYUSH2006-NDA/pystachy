@@ -694,7 +694,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
                 et = v.t
             jt = v.t if jt == "" else self.join(jt, v.t) or "-"  # (the items' types together)
             items.append(v)
-        if returnctx and given and len([v for v in items if not self.widens(v.t, et) and not self.boxes(v.t, et) and not (is_fn(v.t) and is_callable(unopt(et)))]) > 0:
+        if (returnctx or resultsoft) and given and len([v for v in items if not self.widens(v.t, et) and not self.boxes(v.t, et) and not (is_fn(v.t) and is_callable(unopt(et)))]) > 0:
             # A comparison's expected type is only a hint. Keep the display's
             # own inference if an item cannot enter that representation.
             given = False
@@ -750,10 +750,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             kj = a.t if kj == "" else self.join(kj, a.t) or "-"
             ks.append(a)
             vs.append(b)
-        if returnctx and kgiven and len([v for v in ks if not self.widens(v.t, kv[0]) and not self.boxes(v.t, kv[0])]) > 0:
+        if (returnctx or resultsoft) and kgiven and len([v for v in ks if not self.widens(v.t, kv[0]) and not self.boxes(v.t, kv[0])]) > 0:
             kgiven = False
             kv[0] = ks[0].t
-        if returnctx and given and len([v for v in vs if not self.widens(v.t, kv[1]) and not self.boxes(v.t, kv[1]) and not (is_fn(v.t) and is_callable(unopt(kv[1])))]) > 0:
+        if (returnctx or resultsoft) and given and len([v for v in vs if not self.widens(v.t, kv[1]) and not self.boxes(v.t, kv[1]) and not (is_fn(v.t) and is_callable(unopt(kv[1])))]) > 0:
             given = False
             kv[1] = ""
             for v in vs:
@@ -2481,6 +2481,11 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         if b.t == "str":
             r = self.rt("pys_str_contains", "i64", [f"ptr {b.v}", f"ptr {self.coerce(a, 'str').v}"])
         elif is_list(b.t):
+            if a.t != elem(b.t) and (is_list(a.t) or is_dict(a.t) or is_tuple(a.t)) and self.numeric_comparable(a.t, elem(b.t)):
+                # A read-only search can compare the two item layouts directly;
+                # coercing the needle would wrongly widen mutable containers.
+                r = self.rt("pys_list_find_pair", "i64", [f"ptr {b.v}", "i64 " + self.to_slot(a), f"ptr {self.sconst(self.desc(elem(b.t), '=='))}", f"ptr {self.sconst(self.desc(a.t, '=='))}"])
+                return self.num_cmp(">=" if op == "in" else "<", Val(r, "int"), Val("0", "int"))
             ok = "true"
             if self.isnum(a.t) and self.isnum(unopt(elem(b.t))) and a.t != unopt(elem(b.t)):
                 nk = self.numkey(a, unopt(elem(b.t)))  # (1 in [1.0]: the item that equals it)
@@ -2545,6 +2550,11 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         return self.tuple_order(op, a, b)  # (of different lengths, which no one tuple type holds)
     # T and T | None (also as items): None == None, None == x is False, and None < x raises
     ct = self.wider(a.t, b.t)
+    if eq and ct == "" and self.numeric_comparable(a.t, b.t):
+        # Equality reads each operand using its own descriptor, preserving exact
+        # numeric comparison without changing either container's stored type.
+        r = self.rt("pys_eq_pair", "i64", ["i64 " + self.to_slot(a), "i64 " + self.to_slot(b), f"ptr {self.sconst(self.desc(a.t, '=='))}", f"ptr {self.sconst(self.desc(b.t, '=='))}"])
+        return self.num_cmp("!=" if op == "==" else "==", Val(r, "int"), Val("0", "int"))
     if ct == "" and self.boxwider(a.t, b.t) != "":
         # a tuple with an int where the other's item may be None: compared as a new tuple of boxes
         ct = self.boxwider(a.t, b.t)
@@ -2639,11 +2649,24 @@ def gen_optcmp(self, op: str, a: Val, b: Val) -> Val:
     self.place(lend)
     return Val(self.phi(ph), "bool")
 
+def gen_numeric_comparable(self, t: str, u: str) -> bool:
+    # Matching builtin container trees may differ at numeric leaves. Keep
+    # optional/union widening and user comparison callbacks out of this path.
+    if t == u:
+        return self.ueq_type(t)
+    if self.isnum(t) and self.isnum(u):
+        return True
+    if (is_list(t) and is_list(u)) or (is_dict(t) and is_dict(u)) or (is_tuple(t) and is_tuple(u)):
+        a = targs(t)
+        b = targs(u)
+        return len(a) == len(b) and all([self.numeric_comparable(a[i], b[i]) for i in range(len(a))])
+    return False
+
 def gen_comparable(self, t: str, u: str) -> bool:
     # can t == u be true at all? (otherwise CPython just answers False)
     if is_union(unopt(t)) or is_union(unopt(u)):
         return self.ueq_type(self.union_type([t, u]))
-    if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "":
+    if t == u or (self.isnum(unopt(t)) and self.isnum(unopt(u))) or self.wider(t, u) != "" or self.numeric_comparable(t, u):
         return True
     return (t == "None" and (u in self.classes or is_opt(u))) or (u == "None" and (t in self.classes or is_opt(t)))
 

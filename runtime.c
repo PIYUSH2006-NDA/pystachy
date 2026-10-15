@@ -1232,6 +1232,7 @@ static int eqpair(I a, I b, const char *x, const char *y) {
   __builtin_unreachable();   /* the compiler permits only the builtin value descriptors above */
 }
 I pys_eq(I a, I b, Str *d) { return eqv(a, b, d->s); }
+I pys_eq_pair(I a, I b, Str *x, Str *y) { return eqpair(a, b, x->s, y->s); }
 /* a OP b for op 0..3 = < <= > >=, as CPython compares: sequences find the first pair of
    items that are not equal (identity, then ==) and apply OP to that pair only, else compare
    lengths; objects go through the program's rich comparison (reflection, TypeError) */
@@ -1384,6 +1385,10 @@ List *pys_list_mul(List *a, I n) {
   r->len = n > 0 ? m * n : 0; return r;
 }
 I pys_list_find(List *l, I v, Str *d) { for (I i = 0; i < l->len; i++) if (eqitem(l->a[i], v, d->s)) return i; return -1; }
+I pys_list_find_pair(List *l, I v, Str *d, Str *vd) {
+  for (I i = 0; i < l->len; i++) if (eqpair(l->a[i], v, d->s, vd->s)) return i;
+  return -1;
+}
 static I index_in(List *l, I v, const char *d, I st, I en) {   /* the first i in [st, en) where l[i] == v, or -1 */
   if (st < 0 && (st += l->len) < 0) st = 0;
   if (en < 0 && (en += l->len) < 0) en = 0;
