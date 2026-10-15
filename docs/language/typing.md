@@ -78,8 +78,9 @@ annotation is evaluated; use `"Node"` for a forward reference or
 
 Evaluated annotations may name classes, supported typing forms, builtin generics, unions,
 and type variables. A variable may be used as the whole annotation; unsupported aliases
-are rejected where used. Calls, other operators, user-defined class subscripting, and
-expressions that could execute user code are rejected. `os.PathLike` and the supported
+are rejected where used. Generic class subscriptions such as `Box[int]` are supported
+when they use the standard `typing.Generic` hook. Calls, other operators, custom class
+subscripting, and expressions that could execute user code are rejected. `os.PathLike` and the supported
 `collections.abc` names are exceptions to the restriction on builtin module attributes.
 
 `Final[T]` uses type `T` without enforcing immutability. `x: Final = value` infers the
@@ -455,7 +456,9 @@ print(Box(7).value)
 ```
 
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
-`tuple[A, *Ts]`, `T | None`, and `Callable[[A, *Ts], R]`. A direct `None` argument binds
+`tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
+`Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
+dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
 no type variable. Repeated bindings must join to a supported common type; integer and bool
 bindings can join to `int`. Callable matching uses annotated positional parameters and
 returns, or an existing `Callable` signature.
@@ -464,11 +467,23 @@ The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 `Callable[[*Ts], R]` and `*args: *Ts`. This supports the function wrappers used by
 [`functools`](../../lib/README.md#functools-pystachys-own).
 
-`Generic[...]` must be the class's only base. Every type variable must be bound by a
-constructor argument; `Box[int]()` and other explicit class subscriptions are unsupported.
-Use the bare class name or `Self` inside its methods and fields. PEP 695 class syntax
-(`class Box[T]`) is unsupported. A method's separate type variables make it a function
-template.
+`C[X, Y]` names a specialization for a generic class whose `__init__` annotates every
+parameter and has no `*args`, `**kwargs` or `TypeVarTuple`. It works in variable, field,
+parameter and return annotations, including nested types such as `list[C[int]]`, and in
+constructor calls such as `C[int]()`. The class statement must precede the annotation.
+
+Constructor arguments bind first; the named specialization or surrounding annotation fills
+variables the arguments leave unbound. Thus `q: Stack[int] = Stack()` and
+`Stack[int]([])` can type empty containers, while `Box[float](1)` still infers `Box[int]`.
+An enclosing annotation remains a contract and rejects a conflicting specialization.
+Nonempty homogeneous displays infer the same types as stored arguments; empty and nested
+empty displays, and heterogeneous displays with an explicit union, use contextual types.
+A variable that neither arguments nor context bind is an error.
+
+`Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
+methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class
+syntax (`class Box[T]`) is unsupported. A method's separate type variables make it a
+function template.
 
 Function and class specializations share a limit of 4,096 per compilation. Additional
 nesting and size limits are listed in [compatibility](compatibility.md#templates-and-empty-containers).

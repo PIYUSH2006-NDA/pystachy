@@ -24,7 +24,7 @@ Imports search builtin modules first, then the program's directory,
 | `heapq` | Adapted CPython | Heap operations, `nlargest`, `nsmallest`, `key=` | `merge` unavailable; non-list inputs are materialized |
 | `html`, `html.entities` | Adapted CPython | `escape`, `unescape`, HTML4 and HTML5 entity tables | No configurable integer digit limit |
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
-| `collections` | Subset implementation | Typed `deque`, both ends, bounded queues, searches and comparisons | Constructor needs a typed list; iteration is a snapshot |
+| `collections` | Subset implementation | Typed `deque`, both ends, bounded queues, searches and comparisons | Items share one type; iteration is a snapshot |
 | `shlex` | Adapted CPython | `split`, `quote`, `join`, lexer options and source stacking | Files are read eagerly; punctuation field is writable |
 | `io` | Subset implementation | `StringIO` and seek constants | Byte positions; eager line iteration |
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |
@@ -83,6 +83,7 @@ to the compiled paths listed here and in the compatibility reference.
 
 | Example | Library use |
 |---|---|
+| [Maze paths](../examples/mazepath/README.md) | `collections.deque` |
 | [Event routing](../examples/route/README.md) | `re`, `fnmatch`, `functools` |
 | [CSV reports](../examples/csvstat/README.md) | `csv` |
 | [Text and spelling comparisons](../examples/linediff/README.md), [suggestions](../examples/suggest/README.md) | `difflib` |

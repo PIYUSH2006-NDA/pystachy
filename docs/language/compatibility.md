@@ -443,8 +443,8 @@ supported alternatives.
   no template, a field, a variable's annotation, or as a value), but a generic class's that its
   objects bind, a `TypeVarTuple` but unpacked (`*Ts`) in `tuple[...]`, `Callable[[...], R]` and
   `*args`, a generic class whose `Generic[...]` is not its one base, `class C[T]` (PEP 695), a type
-  variable of a generic class that no argument of a call binds (`C[int]()`), `C[T]` in an
-  annotation, a `TypeVar`'s constraints and a bound other than a string, a bare
+  variable of a generic class that neither arguments nor context bind,
+  `C[X]` for a class with a `TypeVarTuple` or unannotated or variadic `__init__` parameter, a `TypeVar`'s constraints and a bound other than a string, a bare
   `Final` but in an assignment (in a class body, of a constant), an `@overload` stub that the `def`
   implementing it does not follow in its block past other `def`s only (in an imported module, one
   that no `def` of its name follows, also a method, is an error where it is called; also one after

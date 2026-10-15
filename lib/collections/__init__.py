@@ -2,11 +2,11 @@
 
 CPython's collections is Lib/collections/__init__.py over the C type _collections.deque
 (Modules/_collectionsmodule.c); this deque follows that C code's behaviour and messages. Its items
-have one type, T, which an explicitly typed list argument gives. Empty compiled deques need a
-list with an item annotation; runtime Generic aliases such as deque[int]() remain unsupported.
+have one type, T, bound by the iterable argument, an annotation such as deque[int], or an
+explicit constructor such as deque[int]().
 """
 
-from typing import Generic, Iterator, Self, TypeVar
+from typing import Generic, Iterable, Iterator, Self, TypeVar
 
 __all__ = ["deque"]
 
@@ -16,8 +16,7 @@ _T = TypeVar("_T")
 class deque(Generic[_T]):
     """A list-like sequence optimized for data accesses near its endpoints."""
 
-    # Pystachy port: bind T from a list argument; Generic[T] annotations/calls are not supported.
-    def __init__(self, iterable: list[_T] = (), maxlen: int | None = None) -> None:
+    def __init__(self, iterable: Iterable[_T] = (), maxlen: int | None = None) -> None:
         if maxlen is not None and maxlen < 0:
             raise ValueError("maxlen must be non-negative")
         self._state = 0  # endpoint mutations invalidate CPython's active comparisons

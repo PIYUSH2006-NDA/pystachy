@@ -139,6 +139,8 @@ def gen_ann(self, n: Node) -> str:
             if t.startswith("!"):
                 return t
         return self.union_type(ts)  # A | B
+    elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s in self.tparams:
+        return self.generic_ann(n.kids[0].s, n.kids[1])
     elif k == "index" and (n.kids[0].kind == "name" or n.kids[0].kind == "attr"):
         base = self.ann_base(n.kids[0])
         if base.startswith("!"):
@@ -1220,7 +1222,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             # a class template's object: of the specialization its arguments' types pick, once
             # code is being compiled (a specialization compiles its special methods)
             ts = self.guess_args(self.classes[c].methods["__init__"], e.kids[1:], f) if self.compiling else ["!"]
-            return self.specialize(c, ts) if "!" not in ts else ""
+            return self.specialize(c, ts, {}, False) if "!" not in ts else ""
         if c in self.classes or c in self.unsupported:
             return c if c in self.classes else "!" + self.unsupported[c]
         if c in self.funcs:

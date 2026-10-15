@@ -32,6 +32,7 @@ class Mod:
         self.at = 0  # (until done: the line of the top-level statement whose imports are being loaded)
         # the names only name = f(...) statements bind, with each f: a TypeVar if every f is typing's
         self.tvars: dict[str, list[Node]] = {}
+        self.cbases: dict[str, Node] = {}
 
 
 # Python's builtin names: in an imported module, a name it does not bind is one of these or an

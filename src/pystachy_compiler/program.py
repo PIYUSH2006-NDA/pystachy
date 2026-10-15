@@ -155,6 +155,8 @@ def gen_init_template(self, st: Node) -> bool:
         return False
     for d in st.kids[0].kids:
         if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
+            if st.s in self.tparams:
+                return True  # (its context can bind variables absent from __init__ parameters)
             ps = d.kids[0].kids
             for i in range(1, len(ps)):
                 if ps[i].kids[0].kind == "noann" or (ps[i].kind == "param" and self.tmpl_ann(ps[i].kids[0])):
@@ -189,6 +191,8 @@ def gen_tmpl_ann(self, a: Node) -> bool:
                 return True
             w = ""
         return False
+    if a.kind == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.tparams:
+        return self.tmpl_ann(a.kids[1])
     for k in a.kids:
         if self.tmpl_ann(k):
             return True
