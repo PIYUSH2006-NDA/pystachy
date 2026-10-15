@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
-from src.pystachy_compiler.ir import FnInfo, Ins, Val
+from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.syntax import Node, mk
@@ -24,7 +24,6 @@ from src.pystachy_compiler.utils import (
     is_union,
     kw_names,
     kw_types,
-    lt,
     nonetest,
     pure_arg,
     takes_self,
@@ -35,7 +34,7 @@ from src.pystachy_compiler.utils import (
 )
 
 
-def gen_call(self, n: Node, want: str) -> Val:
+def gen_call(self, n: Node, want: str, typeargs: str = "") -> Val:
     f = n.kids[0]
     args = n.kids[1:]
     if f.kind == "badattr":
@@ -45,16 +44,16 @@ def gen_call(self, n: Node, want: str) -> Val:
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
         if sc.startswith("!"):
             self.err(sc[1:])
-        return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), sc)
+        return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), want, sc)
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
-        return self.star_call(n, want)
+        return self.star_call(n, want, typeargs)
     if f.kind == "name":
         self.modchk(f)
     if f.kind == "name" and f.s not in self.ltype:
         self.read_ahead(f.s)
         if (f.chk or self.foreign(f.s)) and f.s in self.gflag:
             # a call that may run before the def or class statement
-            bad = self.ins(f"xor i1 {self.ins(f'load i1, ptr @g.{f.s}.def')}, true")
+            bad = self.scalar('xor', [Val(self.mload('bool', f'@g.{f.s}.def'), 'bool'), Val('true', 'bool')])
             self.guard(bad, self.unbound(f.s))
         if f.s in self.funcs:
             return self.call_fn(self.funcs[f.s], [], args, want)
@@ -69,7 +68,7 @@ def gen_call(self, n: Node, want: str) -> Val:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])
                 made = [Val("", f.s)]
-                self.call_fn(self.classes[f.s].methods["__init__"], made, args, want)
+                self.call_fn(self.classes[f.s].methods["__init__"], made, args, want, typeargs=typeargs)
                 return made[0]
             o = self.new_obj(f.s)
             self.call_fn(self.classes[f.s].methods["__init__"], [o], args, direct=True)
@@ -117,7 +116,7 @@ def gen_call(self, n: Node, want: str) -> Val:
         self.not_callable(f.s, self.ltype[f.s])
     return self.obj_call(self.expr(f, ""), args, want)
 
-def gen_star_call(self, n: Node, want: str) -> Val:
+def gen_star_call(self, n: Node, want: str, typeargs: str = "") -> Val:
     # f(a, *t, k=v): the items a star unpacks are positional arguments. CPython evaluates the
     # function (o.m binds o first), then the positional arguments in order, unpacking each star,
     # then the keyword ones; here each is evaluated so (but a constant or a name, which nothing
@@ -178,7 +177,7 @@ def gen_star_call(self, n: Node, want: str) -> Val:
     out = pos + kws
     if printing and len([a for a in out if a.kind == "starred"]) > 0:
         return self.print_star(n, out)
-    return self.call(mk("call", n.s, n.line, [f] + out), want)
+    return self.call(mk("call", n.s, n.line, [f] + out), want, typeargs)
 
 def gen_static_callee(self, f: Node) -> bool:
     # does evaluating callee f (or the object of o.m) read nothing a call's arguments may change:
@@ -294,11 +293,13 @@ def gen_to_callable(self, v: Val, t: str) -> Val:
         g = f"@cvo.{code[4:]}"
         if g not in self.cvos:
             self.cvos[g] = True
-            self.consts.append(f"{g} = private constant {{ptr, ptr}} {{ptr {code}, ptr null}}")
+            d = Data("callable", g)
+            d.refs = [code, "null"]
+            self.consts.append(d)
         return Val(g, t)
     o = self.rt("pys_alloc", "ptr", ["i64 16"])
-    self.emit(f"store ptr {code}, ptr {o}")
-    self.emit(f"store ptr {v.v}, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o}, i64 1')}")
+    self.mstore('%ptr', code, o)
+    self.mstore('%ptr', v.v, self.maddr('%ptr', f'{o}', '1', True))
     self.nn[o] = True
     return Val(o, t)
 
@@ -448,8 +449,8 @@ def gen_call_callable(self, o: Val, args: list[Node]) -> Val:
     for j in range(len(args)):
         vals.append(self.coerce(self.expr(args[j], ts[j + 1]), ts[j + 1], f"argument {j + 1} of a {typestr(ct)}"))
     o = self.unwrap(o, "TypeError: 'NoneType' object is not callable")
-    code = self.ins(f"load ptr, ptr {o.v}")
-    env = self.ins(f"load ptr, ptr {self.ins(f'getelementptr inbounds ptr, ptr {o.v}, i64 1')}")
+    code = self.mload('%ptr', o.v)
+    env = self.mload('%ptr', self.maddr('%ptr', f'{o.v}', '1', True))
     c = Ins("icall", ts[0], "")
     c.a = [Val(code, "env"), Val(env, "env")] + vals
     if ts[0] == "None":
@@ -537,7 +538,7 @@ def gen_open_(self, args: list[Node]) -> Val:
             v = Val(v.v, "str")
         vals[nm] = self.coerce(v, want).v
     for j in range(len(nones)):
-        self.guard(self.ins(f"icmp eq ptr {nones[j]}, null"), nmsg[j])
+        self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
     return Val(self.rt("pys_open", "ptr", [f"ptr {vals['file']}", f"ptr {vals['mode']}", f"ptr {vals['encoding']}", f"ptr {vals['newline']}",
                                            f"i64 {vals['buffering']}"]), "file")
 
@@ -729,11 +730,10 @@ def gen_asdict(self, o: Val, args: list[Node]) -> Val:
 def gen_new_obj(self, c: str) -> Val:
     # a new object of class c, which its __init__ initializes: it holds its class-body defaults
     # (but where @dataclass wrote __init__, which assigns every field itself)
-    size = f"ptrtoint (ptr getelementptr (%C.{c}, ptr null, i32 1) to i64)"
-    o = Val(self.rt("pys_alloc", "ptr", [f"i64 {size}"]), c)
+    o = self.alloc_fixed(c)
     self.nn[o.v] = True
     if self.classes[c].tag > 0:
-        self.emit(f"store i64 {self.classes[c].tag}, ptr {o.v}")
+        self.mstore('int', f'{self.classes[c].tag}', o.v)
     if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
         line = self.line
         self.class_defaults(o)
@@ -769,7 +769,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         if a.kind != "kw":
             pos += 1
     self.notnone(o, none if none != "" else f"AttributeError: 'NoneType' object has no attribute '{f.name}'")
-    tag = self.ins(f"load i64, ptr {o.v}")
+    tag = self.mload('int', o.v)
     end = self.label()
     vals: list[Val] = []
     edges: list[str] = []
@@ -779,7 +779,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.ins(f"icmp eq i64 {tag}, {c.tag}"), arm, nxt)
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
             self.place(arm)
         self.narrowed = dict(narrow)
         v = self.call_fn(c.methods[f.name], [Val(o.v, c.name)] + pre[1:], bound, want, direct=True)
@@ -803,7 +803,7 @@ def gen_virtual_call(self, f: FnInfo, pre: list[Val], args: list[Node], want: st
         self.unreachable()
     return Val("null", "None") if t == "None" else Val(self.phi(ph), t)
 
-def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "", cache: Val | None = None, direct: bool = False) -> Val:
+def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "", none: str = "", cache: Val | None = None, direct: bool = False, typeargs: str = "") -> Val:
     # f(pre + args); none: the error where pre[0], an object called (o(args)), is None
     if f.pyexport:
         self.err(f"{f.name}() is @export, so Pystachy code may not call it (under CPython each call goes through the export's checks and conversions): call a private function that both use")
@@ -821,7 +821,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     line = self.line
     np = len(f.params)
     vals: list[Val] = []
-    hint = self.want_params(f.cls, want) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
+    # A surrounding annotation is a storage contract; C[T](...) alone only hints
+    # at unbound or conflicting arguments. Keep both through unpacked calls.
+    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, want)) > 0
+    context = want if contract or typeargs == "" else typeargs
+    hint = self.want_params(f.cls, context) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))
     pos = len(pre)
@@ -877,11 +881,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             elif df.dglob[j].startswith("&"):
                 # a closure's default: in its env (pre[0]), evaluated where it was defined
                 t = t if t != "" else df.dtypes[j]
-                da = self.ins(f"getelementptr inbounds i64, ptr {pre[0].v}, i64 {df.dglob[j][1:]}")
-                vals[j] = Val(self.ins(f"load {lt(t)}, ptr {da}"), t)
+                da = self.maddr('int', pre[0].v, f'{df.dglob[j][1:]}', True)
+                vals[j] = Val(self.mload(t, da), t)
             elif df.dglob[j] != "":
                 t = t if t != "" else df.dtypes[j]
-                vals[j] = Val(self.ins(f"load {lt(t)}, ptr {df.dglob[j]}"), t)
+                vals[j] = Val(self.mload(t, df.dglob[j]), t)
             else:
                 vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
     self.line = line
@@ -911,13 +915,26 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                     break
             targets = [j for j in range(1, len(hint)) if is_union(unopt(hint[j])) or is_opt(hint[j])]
             fits = all([self.widens(vals[j].t, hint[j]) or (self.boxes(vals[j].t, hint[j]) and (not is_opt(vals[j].t) or self.optional(hint[j]) == hint[j])) for j in targets])
-            if conflict and fits:
-                # Resolve conflicting bindings with fitting named union/optional parameters.
-                # Preserve consistent inferred types (Box[int | str]("x") still stores str),
-                # and never reinterpret a mutable container as a wider member type.
+            if (conflict or contract) and fits:
+                # Check the complete candidate before changing any value. A nested
+                # invariant argument can still conflict; report its original types.
+                candidate: dict[str, str] = {}
+                for j in range(1, len(hint)):
+                    t = hint[j] if j in targets else vals[j].t
+                    if self.match(f.node.kids[0].kids[j].kids[0], t, candidate, self.tparams[f.cls]) != "":
+                        fits = False
+                        break
+            if (conflict or contract) and fits:
+                # A destination needs its named union storage even for homogeneous values.
+                # Explicit type arguments alone still preserve consistent inferred types;
+                # no existing mutable container is reinterpreted as a wider member type.
                 for j in targets:
                     vals[j] = self.pcoerce(vals[j], hint[j], f, j)
-        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, want), False)
+        elif f.cls in self.tparams:
+            union_args = self.constructor_unions(f.cls, [v.t for v in vals[1:]])
+            for j in range(len(union_args)):
+                vals[j + 1] = self.pcoerce(vals[j + 1], union_args[j], f, j + 1)
+        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False)
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
         f = self.classes[sc].methods["__init__"]
