@@ -33,7 +33,7 @@ Archive SHA-256: `ae0ef90b90f6af38b54f1fe6d58662ec33b3cb4b8391958a62416d65423172
 ## Adaptation record
 
 - Binary-search tables become lists; the grapheme file keeps the four tables used by the two exposed functions.
-- C-extension/per-terminal branches are omitted; dictionary membership replaces frozenset code-point membership.
+- C-extension/per-terminal branches are omitted; the virama code-point set concatenates its two range tables, where upstream unpacks them into a tuple display.
 - Upstream's `wcwidth` and `_wcmatch_version` cache decorators are retained. Only the cache
   on the unsupported `_wcversion_value` variable-length-tuple helper is omitted.
 - `_split_chars()` decodes UTF-8 sequences and bounds work by `n=`; the CPython branch preserves character-based input during differential recording.

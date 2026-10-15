@@ -50,29 +50,22 @@ __all__ = (
     "list_term_programs",
 )
 
-# Pystachy port: the three frozensets of code points are dicts that map each to True, filled by
-# loops: sets, a generator with two for clauses and a starred tuple display are M7 (#12).
-_REGIONAL_INDICATOR_SET: dict[int, bool] = {}
-for _cp in range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1):
-    _REGIONAL_INDICATOR_SET[_cp] = True
-_ISC_VIRAMA_SET: dict[int, bool] = {}
-for _lo, _hi in ISC_VIRAMA:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
-for _lo, _hi in ISC_INVISIBLE_STACKER:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
+_REGIONAL_INDICATOR_SET = frozenset(
+    range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1)
+)
+_ISC_VIRAMA_SET = frozenset(
+    # Pystachy port: the tables concatenated: a starred tuple display is M7 (#12)
+    cp for lo, hi in ISC_VIRAMA + ISC_INVISIBLE_STACKER
+    for cp in range(lo, hi + 1)
+)
 # pylint: disable=invalid-name
 _LATEST_VERSION = list_versions()[-1]
 # Pystachy port: list() of each table bisearch() reads, here and below: a tuple is indexed only by
 # constants (M1, #6, item 8).
 _CATEGORY_MC_TABLE = list(CATEGORY_MC[_LATEST_VERSION])
-_EMOJI_ZWJ_SET: dict[int, bool] = {}  # Pystachy port: a dict filled by loops, as above
-for _lo, _hi in EXTENDED_PICTOGRAPHIC:
-    for _cp in range(_lo, _hi + 1):
-        _EMOJI_ZWJ_SET[_cp] = True
-for _cp in _REGIONAL_INDICATOR_SET:
-    _EMOJI_ZWJ_SET[_cp] = True
+_EMOJI_ZWJ_SET = frozenset(
+    cp for lo, hi in EXTENDED_PICTOGRAPHIC for cp in range(lo, hi + 1)
+) | _REGIONAL_INDICATOR_SET
 _FITZPATRICK_RANGE = (0x1F3FB, 0x1F3FF)
 
 _ZERO_WIDTH_TABLE = list(ZERO_WIDTH[_LATEST_VERSION])  # Pystachy port: list()
