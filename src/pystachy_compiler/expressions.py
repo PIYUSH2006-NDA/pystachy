@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.analysis import collect, deleted, only_none, stack_aliases, stack_kept
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Val
+from src.pystachy_compiler.ir import ClassInfo, FmtArgs, FnInfo, Ins, IterArg, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     CHECKED,
@@ -30,6 +30,7 @@ from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
     fbits,
+    fmt_index,
     folds,
     int_fits,
     is_callable,
@@ -1047,6 +1048,287 @@ def gen_nonefmt(self, t: str) -> str:
 def gen_fmt_error(self, msg: str) -> Val:
     self.raise_("TypeError", self.sconst(msg))
     return Val(self.sconst(""), "str")
+
+def gen_str_format(self, fmt: str, m: str, args: list[Node]) -> Val:
+    # "...".format(args) or "...".format_map(mapping) of a literal format: the arguments are
+    # evaluated as a call evaluates them, then the format is read as CPython's str.format reads
+    # it (Objects/stringlib/unicode_format.h), each field formatted in turn as it comes; an error
+    # in the format, a missing argument or a bad conversion raises then, as CPython's does
+    fa = FmtArgs(f"str.{m}()")
+    if m == "format_map":
+        if len([a for a in args if a.kind == "kw" or a.kind == "dstar"]) > 0:
+            self.err("str.format_map() takes no keyword arguments")
+        if len([a for a in args if a.kind == "starred"]) > 0:
+            self.err("unpacking arguments into str.format_map() is not supported")
+        if len(args) != 1:
+            self.err(f"str.format_map() takes exactly one argument ({len(args)} given)")
+        fa.kd = self.expr(args[0], "")
+        fa.mapping = True
+    elif not self.format_args(fa, args):
+        return Val(self.sconst(""), "str")
+    r = self.str_fields(fmt, 2, fa)
+    return r if r.t != "" else Val(self.sconst(""), "str")
+
+def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
+    # str.format()'s arguments, evaluated into fa: the positional ones in order (* of a tuple
+    # gives its items; of a list, as the last, a copy of it), then the keywords (** of a function's
+    # **kwargs, of a dict display with str keys, or a copy of a dict[str, T]); False where a
+    # keyword given twice raises
+    line = self.line
+    for a in args:
+        if a.kind == "kw" or a.kind == "dstar":
+            continue
+        if fa.rest.t != "":
+            self.err(f"unpacking a list into the arguments of {fa.who} is supported only after the other positional arguments")
+        if a.kind != "starred":
+            fa.pos.append(self.expr(a, ""))
+            continue
+        v = self.ntup(self.expr(a.kids[0], ""))
+        self.line = a.line
+        v = self.unwrap(v, f"TypeError: {fa.who} argument after * must be an iterable, not NoneType")
+        if is_tuple(v.t):
+            for i in range(len(targs(v.t))):
+                fa.pos.append(self.tget(v, i))
+        elif is_list(v.t):
+            fa.rest = self.bmethod(v, "copy", [])
+        elif is_vtuple(v.t):
+            fa.rest = self.as_list(v, "format")
+        else:
+            self.err(f"unpacking a {typestr(v.t)} into the arguments of {fa.who} is not supported (a tuple's or a list's items are)")
+    for a in args:
+        if a.kind == "kw":
+            if not self.format_kw(fa, a.s, self.expr(a.kids[0], "")):
+                return False
+        elif a.kind == "dstar" and a.kids[0].kind == "dict" and len([i for i in range(0, len(a.kids[0].kids), 2) if a.kids[0].kids[i].kind != "str"]) == 0:
+            # (**{"k": v}: its items, a later key's value replacing an earlier one's, as in the dict)
+            d = a.kids[0]
+            names: list[str] = []
+            vals: list[Val] = []
+            for i in range(0, len(d.kids), 2):
+                v = self.expr(d.kids[i + 1], "")
+                if d.kids[i].s in names:
+                    vals[names.index(d.kids[i].s)] = v
+                else:
+                    names.append(d.kids[i].s)
+                    vals.append(v)
+            for j in range(len(names)):
+                if not self.format_kw(fa, names[j], vals[j]):
+                    return False
+        elif a.kind == "dstar":
+            v = self.expr(a.kids[0], "")
+            if is_kw(v.t):
+                names = kw_names(v.t)
+                for i in range(len(names)):
+                    if not self.format_kw(fa, names[i], self.tget(self.kw_tuple(v), i)):
+                        return False
+                continue
+            self.line = a.line
+            v = self.unwrap(v, f"TypeError: {fa.who} argument after ** must be a mapping, not NoneType")
+            if not is_dict(v.t) or targs(v.t)[0] != "str":
+                self.err(f"** of a {typestr(v.t)} into the arguments of {fa.who} is not supported (of a dict[str, T], a function's **kwargs or a dict display with str keys, it is)")
+            if fa.kd.t != "":
+                self.err(f"** of more than one dict into the arguments of {fa.who} is not supported")
+            fa.kd = self.bmethod(v, "copy", [])
+            for nm in fa.kwn:
+                self.format_dup(fa, nm)
+    self.line = line
+    return True
+
+def gen_format_kw(self, fa: FmtArgs, name: str, v: Val) -> bool:
+    # keyword argument name=v of str.format(): CPython's TypeError (False) where an earlier one
+    # has the name, and once it runs where the dict of a ** has it
+    if name in fa.kwn:
+        self.raise_("TypeError", self.sconst(f"{fa.who} got multiple values for keyword argument '{name}'"))
+        return False
+    if fa.kd.t != "":
+        self.format_dup(fa, name)
+    fa.kwn.append(name)
+    fa.kwv.append(v)
+    return True
+
+def gen_format_dup(self, fa: FmtArgs, name: str) -> None:
+    line = self.line
+    has = self.expr(mk("cmp", "in", line, [mk("str", name, line, []), self.vnode(fa.kd)]), "bool")
+    self.guard(has.v, f"TypeError: {fa.who} got multiple values for keyword argument '{name}'")
+
+def gen_fmt_raise(self, kind: str, msg: str) -> Val:
+    # raise kind(msg) (a KeyError's msg is the key, shown by its repr): Val("", "")
+    self.raise_(kind, self.repr(Val(self.sconst(msg), "str")).v if kind == "KeyError" else self.sconst(msg))
+    return Val("", "")
+
+def gen_str_fields(self, s: str, depth: int, fa: FmtArgs) -> Val:
+    # CPython's build_string: s formatted with fa's arguments, at nesting depth (2, then 1 in a
+    # field's spec), its text and each field in turn (str_field); Val("", "") where it raises
+    if depth <= 0:
+        return self.fmt_raise("ValueError", "Max string recursion exceeded")
+    parts: list[Val] = []
+    n = len(s)
+    i = 0
+    while i < n:
+        # the text up to a '{' or '}', which the same brace after it escapes (MarkupIterator_next)
+        start = i
+        c = ""
+        while i < n and c != "{" and c != "}":
+            c = s[i]
+            i += 1
+        brace = c == "{" or c == "}"
+        ln = i - start
+        if c == "}" and (i >= n or s[i] != "}"):
+            return self.fmt_raise("ValueError", "Single '}' encountered in format string")
+        if c == "{" and i >= n:
+            return self.fmt_raise("ValueError", "Single '{' encountered in format string")
+        if brace and s[i] == c:
+            i += 1
+            brace = False
+        elif brace:
+            ln -= 1
+        if ln > 0:
+            parts.append(Val(self.sconst(s[start : start + ln]), "str"))
+        if not brace:
+            continue
+        # the field's name, up to a '}', ':' or '!' (not within [...]), then its conversion and
+        # spec, whose braces nest (parse_field)
+        j = i
+        c = ""
+        while i < n and c != "}" and c != ":" and c != "!":
+            c = s[i]
+            i += 1
+            if c == "{":
+                return self.fmt_raise("ValueError", "unexpected '{' in field name")
+            if c == "[":
+                while i < n and s[i] != "]":
+                    i += 1
+        name = s[j : i - 1]
+        conv = ""
+        spec = ""
+        expand = False
+        if c == "!" or c == ":":
+            done = False
+            if c == "!":
+                if i >= n:
+                    return self.fmt_raise("ValueError", "end of string while looking for conversion specifier")
+                # (one character: str holds UTF-8 bytes)
+                k = i + 1
+                end = i + (1 if ord(s[i]) < 0xC0 else 2 if ord(s[i]) < 0xE0 else 3 if ord(s[i]) < 0xF0 else 4)
+                while k < n and k < end and ord(s[k]) >= 0x80 and ord(s[k]) < 0xC0:
+                    k += 1
+                conv = s[i:k]
+                i = k
+                if i < n:
+                    c = s[i]
+                    i += 1
+                    done = c == "}"
+                    if c != "}" and c != ":":
+                        return self.fmt_raise("ValueError", "expected ':' after conversion specifier")
+            if not done:
+                j = i
+                count = 1
+                while i < n and count > 0:
+                    c = s[i]
+                    i += 1
+                    if c == "{":
+                        expand = True
+                        count += 1
+                    elif c == "}":
+                        count -= 1
+                if count > 0:
+                    return self.fmt_raise("ValueError", "unmatched '{' in format spec")
+                spec = s[j : i - 1]
+        elif c != "}":
+            return self.fmt_raise("ValueError", "expected '}' before end of string")
+        r = self.str_field(name, conv, spec, expand, depth, fa)
+        if r.t == "":
+            return r
+        parts.append(r)
+    return self.concat(parts)
+
+def gen_str_field(self, name: str, conv: str, spec: str, expand: bool, depth: int, fa: FmtArgs) -> Val:
+    # CPython's output_markup: the object field name gives (its argument, then each .attr and
+    # [key] of it in turn), converted by conv, formatted by spec once the fields in spec are;
+    # Val("", "") where it raises
+    line = self.line
+    j = 0
+    while j < len(name) and name[j] != "." and name[j] != "[":
+        j += 1
+    first = name[:j]
+    idx = fmt_index(first)
+    if idx == -2:
+        return self.fmt_raise("ValueError", "Too many decimal digits in format string")
+    if first == "" or idx >= 0:
+        # ({} numbers the fields automatically, {0} manually, and a format cannot do both)
+        if fa.auto[0] == 0:
+            fa.auto[0] = 1 if first == "" else 2
+        if fa.auto[0] == 2 and first == "":
+            return self.fmt_raise("ValueError", "cannot switch from manual field specification to automatic field numbering")
+        if fa.auto[0] == 1 and first != "":
+            return self.fmt_raise("ValueError", "cannot switch from automatic field numbering to manual field specification")
+        if first == "":
+            idx = fa.auto[1]
+            fa.auto[1] += 1
+    v = self.format_arg(first, idx, fa)
+    k = j
+    while k < len(name) and v.t != "":
+        c = name[k]
+        k += 1
+        a = k
+        if c == ".":
+            while k < len(name) and name[k] != "." and name[k] != "[":
+                k += 1
+        elif c == "[":
+            while k < len(name) and name[k] != "]":
+                k += 1
+            if k >= len(name):
+                return self.fmt_raise("ValueError", "Missing ']' in format string")
+            k += 1
+        else:
+            return self.fmt_raise("ValueError", "Only '.' or '[' may follow ']' in format field specifier")
+        key = name[a:k] if c == "." else name[a : k - 1]
+        ki = fmt_index(key) if c == "[" else -1
+        if ki == -2:
+            return self.fmt_raise("ValueError", "Too many decimal digits in format string")
+        if key == "":
+            return self.fmt_raise("ValueError", "Empty attribute in format string")
+        # (an item's key is an int where it is digits, else a str)
+        x = mk("int", str(ki), line, []) if ki >= 0 else mk("str", key, line, [])
+        v = self.expr(mk("attr", key, line, [self.vnode(v)]) if c == "." else mk("index", "", line, [self.vnode(v), x]), "")
+    if v.t == "":
+        return v
+    if conv != "":
+        if conv != "r" and conv != "s" and conv != "a":
+            cp = ord(conv[0]) if len(conv) == 1 else ord(conv[0]) & (0x3F >> (len(conv) - 1))
+            for b in conv[1:]:
+                cp = cp * 64 + (ord(b) & 0x3F)
+            return self.fmt_raise("ValueError", f"Unknown conversion specifier {conv}" if cp > 32 and cp < 127 else f"Unknown conversion specifier \\x{cp:x}")
+        fn = "__pys_repr" if conv == "r" else "__pys_str" if conv == "s" else "__pys_ascii"
+        v = self.expr(mk("call", "", line, [mk("name", fn, line, []), self.vnode(v)]), "")
+    sp = mk("str", spec, line, [])
+    if expand:
+        sv = self.str_fields(spec, depth - 1, fa)
+        if sv.t == "":
+            return sv
+        sp = self.vnode(sv)
+    return self.format_(v, sp)
+
+def gen_format_arg(self, first: str, idx: int, fa: FmtArgs) -> Val:
+    # the argument a field names: positional argument idx, else keyword first; Val("", "") where
+    # there is none (CPython's IndexError or KeyError) or format_map() has no positional ones
+    line = self.line
+    if idx < 0:
+        if first in fa.kwn:
+            return fa.kwv[fa.kwn.index(first)]
+        if fa.kd.t != "":
+            return self.expr(mk("index", "", line, [self.vnode(fa.kd), mk("str", first, line, [])]), "")
+        return self.fmt_raise("KeyError", first)
+    if fa.mapping:
+        return self.fmt_raise("ValueError", "Format string contains positional fields")
+    if idx < len(fa.pos):
+        return fa.pos[idx]
+    msg = f"Replacement index {idx} out of range for positional args tuple"
+    if fa.rest.t == "":
+        return self.fmt_raise("IndexError", msg)
+    j = idx - len(fa.pos)
+    self.guard(self.num_cmp('<=', Val(self.mload('int', fa.rest.v), "int"), Val(str(j), "int")).v, "IndexError: " + msg)
+    return self.expr(mk("index", "", line, [self.vnode(fa.rest), mk("int", str(j), line, [])]), "")
 
 def gen_cat(self, a: Val, b: Val) -> Val:
     if a.v == self.sconst(""):

@@ -45,6 +45,7 @@ from src.pystachy_compiler.utils import (
     is_tuple,
     is_vtuple,
     key_problem,
+    literal_format,
     rename,
     selem,
     takes_self,
@@ -1275,7 +1276,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         return k
     if k == "True" or k == "False":
         return "bool"
-    if k == "fstr":
+    if k == "fstr" or (k == "call" and literal_format(e.kids[0])):
         return "str"
     if k == "unary" and e.s != "not":
         t = self.guess(e.kids[0], f)
@@ -1435,6 +1436,8 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         base = "list" if is_list(t) else "dict" if is_dict(t) else "int" if t == "bool" else t
         if base + "." + name in METHODS:
             self.err(f"{tname(t)}.{name} is a method: call it, {name}(...) (methods are not values)")
+        if t == "str" and (name == "format" or name == "format_map"):
+            self.err(f'str.{name} is a method: call it on a string literal, "...".{name}(...) (methods are not values; map() takes "...".{name})')
         self.err(f"type {typestr(o.t)} has no attribute '{name}'")
     ci = self.classes[o.t]
     if name in ci.methods and ci.methods[name].prop:

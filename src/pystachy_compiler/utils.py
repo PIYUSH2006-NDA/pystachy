@@ -235,6 +235,29 @@ def short_ascii(s: str) -> bool:
     return n <= 18
 
 
+def literal_format(e: Node) -> bool:
+    # "...".format or "...".format_map: a method of a literal format, compiled for the format's
+    # fields where it is called (Gen.str_format)
+    return e.kind == "attr" and (e.s == "format" or e.s == "format_map") and e.kids[0].kind == "str"
+
+
+def fmt_index(s: str) -> int:
+    # a str.format() field's argument number or item index, as CPython's get_integer reads it:
+    # -1 where s is empty or not all digits (a name or key), -2 where its digits so far exceed
+    # sys.maxsize (CPython's ValueError). Only ASCII digits: str holds UTF-8 bytes here
+    if s == "":
+        return -1
+    n = 0
+    for c in s:
+        if c < "0" or c > "9":
+            return -1
+        d = ord(c) - 48
+        if n > (9223372036854775807 - d) // 10:
+            return -2
+        n = n * 10 + d
+    return n
+
+
 def may_raise(e: Node) -> bool:
     # does expression e hold such an operation
     if raising(e):

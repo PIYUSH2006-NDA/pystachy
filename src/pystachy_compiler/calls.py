@@ -24,6 +24,7 @@ from src.pystachy_compiler.utils import (
     is_union,
     kw_names,
     kw_types,
+    literal_format,
     nonetest,
     pure_arg,
     takes_self,
@@ -39,6 +40,10 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
     args = n.kids[1:]
     if f.kind == "badattr":
         self.err(f.s)
+    if literal_format(f):
+        return self.str_format(f.kids[0].s, f.s, args)
+    if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0 and args[0].kind == "str":
+        return self.str_format(args[0].s, f.s, args[1:])  # (str.format("...", args))
     if f.kind == "index" and f.kids[0].kind == "name" and f.kids[0].s in self.tparams and f.kids[0].s not in self.ltype:
         self.modchk(f.kids[0])
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
@@ -543,7 +548,7 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
-    if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
+    if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and (has_method(o.t[5:-1], m) or (o.t == "fn[b:str]" and (m == "format" or m == "format_map"))):
         return self.unbound_call(o.t[5:-1], m, args)
     if is_kw(o.t):
         return self.kw_method(o, m, args)

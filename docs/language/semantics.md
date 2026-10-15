@@ -41,6 +41,15 @@ format-spec mini-language. `%` formatting requires a literal format string. It s
 `*` widths or precisions, or integer precisions. A variable format string such as
 `fmt % value` is rejected.
 
+`str.format()` and `str.format_map()` also require a literal format string, compiled like an
+f-string: automatic and manual numbering, keyword fields, `.attr` and `[key]` lookups, `!r`,
+`!s`, `!a` and nested fields in a spec. The arguments are evaluated first, then the fields are
+formatted left to right; a malformed format, mixed numbering, a missing argument or an unknown
+conversion raises CPython's error when that field is reached. `*` unpacks a tuple, or a list
+after the other positional arguments; `**` unpacks a function's `**kwargs`, a dict display with
+string keys or one `dict[str, T]`. `"...".format` can be `map()`'s function, but neither method
+is otherwise a value, and `fmt.format(value)` of a variable format string is rejected.
+
 ## Operators and containers
 
 Supported operations include arithmetic, bitwise operations, chained comparisons,

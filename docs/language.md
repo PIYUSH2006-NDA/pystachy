@@ -140,7 +140,7 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Feature | Scope |
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
-| Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
+| Text formatting | F-strings, and `%` formatting and `str.format()` of a literal format string |
 | Containers | List, dictionary, set and tuple displays; list and set comprehensions |
 | Indexing and slicing | Negative indices; string and list slices without a step |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |

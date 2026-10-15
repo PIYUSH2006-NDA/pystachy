@@ -65,6 +65,23 @@ class SeqStart:
         self.used: list[str] = []
 
 
+class FmtArgs:
+    # The arguments of a str.format() call with a constant format (Gen.str_format), evaluated:
+    # the positional ones (pos), then a list of those that a list's * gives at run time (rest),
+    # the keywords by name (kwn, kwv) and a dict that ** gives (kd); format_map()'s mapping is
+    # kd, with mapping set. auto: CPython's AutoNumber, its state (0 none yet, 1 automatic,
+    # 2 manual) and the next automatic index.
+    def __init__(self, who: str) -> None:
+        self.who = who
+        self.pos: list[Val] = []
+        self.rest = Val("", "")
+        self.kwn: list[str] = []
+        self.kwv: list[Val] = []
+        self.kd = Val("", "")
+        self.mapping = False
+        self.auto: list[int] = [0, 0]
+
+
 class FnInfo:
     def __init__(self, name: str, ll: str, node: Node, cls: str):
         self.name = name
