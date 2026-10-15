@@ -725,7 +725,6 @@ def gen_dc_replace(self, args: list[Node]) -> Val:
     if not self.is_dc(o.t) or o.t in self.nts:
         self.err(f"replace() should be called on dataclass instances, not {tname(o.t)}")
     ci = self.classes[o.t]
-    init = ci.methods["__init__"]
     given: dict[str, Val] = {}
     for a in args[1:]:
         if a.s in ci.fopts and "no-init" in ci.fopts[a.s]:
@@ -734,14 +733,39 @@ def gen_dc_replace(self, args: list[Node]) -> Val:
             self.err(f"{short(o.t)}.__init__() got an unexpected keyword argument '{a.s}'")
         given[a.s] = self.expr(a.kids[0], ci.ftypes[a.s])
     self.notnone(o, "TypeError: replace() should be called on dataclass instances")
-    kws: list[Node] = []
-    for fl in ci.fields:
-        if fl not in ci.fopts or "no-init" not in ci.fopts[fl]:
-            v = given[fl] if fl in given else self.getfield(o, self.field(o, fl), fl)
-            kws.append(mk("kw", fl, self.line, [self.vnode(v)]))
-    r = self.new_obj(o.t)
-    self.call_fn(init, [r], kws)
-    return r
+    # (an object of a subclass: the subclass's __init__, also given its own fields)
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
+    tag = self.mload('int', o.v) if len(cs) > 1 else ""
+    end = self.label() if len(cs) > 1 else ""
+    ph = Ins("phi", o.t, "")
+    r = o
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        x = Val(o.v, c.name)
+        kws: list[Node] = []
+        for fl in c.fields:
+            if fl in c.fopts and "no-init" not in c.fopts[fl]:
+                v = given[fl] if fl in given else self.getfield(x, self.field(x, fl), fl)
+                kws.append(mk("kw", fl, self.line, [self.vnode(v)]))
+        r = self.new_obj(c.name)
+        self.call_fn(c.methods["__init__"], [r], kws, direct=True)
+        if end != "" and not self.term:
+            self.incoming(ph, r.v, self.cur)
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    if end == "":
+        return r
+    self.place(end)
+    if len(ph.a) == 0:
+        self.unreachable()
+        return Val("null", o.t)
+    return Val(self.phi(ph), o.t)
 
 def gen_asdict(self, o: Val, args: list[Node]) -> Val:
     # p._asdict(): a dict from its fields' names to their values, which must then share one type

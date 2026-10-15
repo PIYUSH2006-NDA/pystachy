@@ -387,8 +387,9 @@ supported alternatives.
 
 ### Classes, dataclasses and NamedTuples
 
-- multiple inheritance; ordinary inheritance involving a class template, `Generic`, dataclass,
-  NamedTuple or builtin type; a decorated subclass; overriding a static or class method;
+- multiple inheritance; ordinary inheritance involving a class template, `Generic`, NamedTuple
+  or builtin type, or a dataclass and a class that is not one; a decorated subclass other than
+  a dataclass deriving from a dataclass; overriding a static or class method;
   calls whose possible instance-method overrides cannot accept the arguments or return a
   common supported type. See [single inheritance](typing.md#single-inheritance).
 - assigning an inherited class attribute through a subclass that does not declare its own
@@ -412,7 +413,8 @@ supported alternatives.
   `True` or `False` literals, `field(metadata=...)`, a `default_factory` that is not a function,
   a class or a lambda without parameters, `dataclasses.asdict()`, `astuple()`, `fields()` and
   `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
-  `except` clause, and `hash()` of a dataclass object
+  `except` clause, `hash()` of a dataclass object, a base dataclass's field declared again with
+  another type, and `repr=False` in a dataclass whose base has the `__repr__` `@dataclass` writes
 - a property's `@x.getter`, a setter or deleter of another name than its property, `property()`
   called as a function, assigning `super().x`, and `del` of an attribute that is not a property
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
@@ -424,8 +426,9 @@ supported alternatives.
   types, the functional `NamedTuple("P", [...])`, slicing a tuple, a NamedTuple or an object (whose
   `__getitem__` would take a slice object), a tuple `*` a number that is not a constant, and
   CPython's class-creation errors of a NamedTuple (a field after a default, an underscored field,
-  an overwritten `__init__`) and of a dataclass (a field without a default after one with it, a
-  mutable default, `order=True` without `eq`, a generated method the class defines)
+  an overwritten `__init__`) and of a dataclass (a field without a default after one with it,
+  also a base's, a mutable default, `order=True` without `eq`, a generated method the class
+  defines, a frozen dataclass deriving from one that is not, or the reverse)
 
 ### Optional values
 

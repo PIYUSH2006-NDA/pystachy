@@ -2005,6 +2005,8 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
             if op == "!=" and m not in ms and "__eq__" in ms:
                 m = "__eq__"
                 invert = True
+            if m in ms and ms[m].synthetic and self.is_dc(ms[m].cls) and lhs.t != rhs.t:
+                continue  # (what @dataclass writes returns NotImplemented for an object of another class)
             if m in ms:
                 if self.cmp_method(lhs.t, m, rhs.t) == "":
                     self.err(f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}")

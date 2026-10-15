@@ -58,11 +58,16 @@ def gen_subclass_problem(self, st: Node) -> str:
         return "multiple inheritance is not supported: a class may have only one base"
     if st.kids[1].kind == "name" and st.kids[1].s in self.classes and self.classes[st.kids[1].s].exc == "":
         base_ci = self.classes[st.kids[1].s]
-        if self.is_dc(base_ci.name) or base_ci.name in self.nts:
-            return "inheritance from a dataclass or NamedTuple is not supported"
+        dc = len(st.kids[0].kids) == 2 and self.imported(st.kids[0].kids[1].s) == "dataclasses.dataclass"
+        if base_ci.name in self.nts:
+            return "inheritance from a NamedTuple is not supported"
+        if self.is_dc(base_ci.name) and not dc:
+            return "inheritance from a dataclass is only supported by a @dataclass class"
         if base_ci.name in self.tparams or self.init_template(base_ci.node) or self.init_template(st.kids[0]):
             return "inheritance with generic class templates is not supported: annotate __init__ parameters"
-        if len(st.kids[0].kids) > 1:
+        if dc and not self.is_dc(base_ci.name):
+            return "a @dataclass class whose base is not a dataclass is not supported"
+        if len(st.kids[0].kids) > 1 and not dc:
             return "a class with inheritance and a decorator is not supported"
         return ""
     b = self.exc_base(st.kids[1])
@@ -165,6 +170,23 @@ def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
     if of != d.s and (of[of.rfind(".") + 1 :] != d.s or ci.base not in self.classes):
         self.err(f"@{of}.{acc} on method {d.s} is not supported: a property's {acc} takes its name ({of[of.rfind('.') + 1 :]}), and a base's property is named through the base class")
     return "." + acc
+
+def gen_dc_options(self, ci: ClassInfo) -> None:
+    # class ci's decorators: @dataclass, whose options (dc_args) it keeps, and no other
+    st = ci.node
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
+        self.err(dc_args(st.kids[1])[1:])
+    for o in dc_args(st.kids[1]).split() if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" else []:
+        ci.dcopts[o] = True
+    ci.kwonly = "kw_only" in ci.dcopts
+    if "order" in ci.dcopts and "no-eq" in ci.dcopts:
+        self.err("eq must be true if order is true")  # (CPython's ValueError where it creates the class)
+    if "frozen" in ci.dcopts:
+        self.hasfrozen = True
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
+        self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
+    if len(st.kids) > 2:
+        self.err(f"unsupported decorator @{st.kids[2].s}")
 
 def gen_derives(self, c: str, base: str) -> bool:
     # is c, a class of the program or a builtin exception class, base or derived from it
@@ -624,24 +646,19 @@ def gen_program(self, mods: list[Mod]) -> str:
                 ci.base = st.kids[1].s if st.kids[1].kind == "name" and st.kids[1].s in self.classes else self.exc_base(st.kids[1])
                 ci.exc = self.classes[ci.base].exc if ci.base in self.classes else ci.base
                 self.classes[st.s] = ci
+                if self.is_dc(st.s):
+                    # a dataclass deriving from another (subclass_problem): frozen as its base is
+                    self.dc_options(ci)
+                    if "frozen" in self.classes[ci.base].dcopts and "frozen" not in ci.dcopts:
+                        self.err("cannot inherit non-frozen dataclass from a frozen one")  # (CPython's TypeError where it creates the class)
+                    if "frozen" in ci.dcopts and "frozen" not in self.classes[ci.base].dcopts:
+                        self.err("cannot inherit frozen dataclass from a non-frozen one")
             elif st.kind == "class":
                 if st.s in self.classes:
                     self.err(f"redefinition of class '{st.s}' is not supported")
                 self.classes[st.s] = ClassInfo(st.s, st)
                 self.classes[st.s].mod = m.name
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
-                    self.err(dc_args(st.kids[1])[1:])
-                for o in dc_args(st.kids[1]).split() if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" else []:
-                    self.classes[st.s].dcopts[o] = True
-                self.classes[st.s].kwonly = "kw_only" in self.classes[st.s].dcopts
-                if "order" in self.classes[st.s].dcopts and "no-eq" in self.classes[st.s].dcopts:
-                    self.err("eq must be true if order is true")  # (CPython's ValueError where it creates the class)
-                if "frozen" in self.classes[st.s].dcopts:
-                    self.hasfrozen = True
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
-                    self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
-                if len(st.kids) > 2:
-                    self.err(f"unsupported decorator @{st.kids[2].s}")
+                self.dc_options(self.classes[st.s])
     # Only ordinary inheritance hierarchies need a runtime class tag. Keeping unrelated
     # classes unchanged preserves their compact layout, including dataclasses and tuples.
     for ci in self.classes.values():

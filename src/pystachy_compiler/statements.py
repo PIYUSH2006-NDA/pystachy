@@ -261,7 +261,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
         self.left_out(self.cnodes[ci.node.line], ci.bad)
         return
     bound: dict[str, bool] = {}
-    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann"  # (a dataclass's)
+    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann" and ci.methods["__init__"].cls == ci.name  # (a dataclass's)
     later = ""
     for st in ci.node.kids[0].kids:
         self.line = st.line
@@ -301,7 +301,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
     if syn:
         init = ci.methods["__init__"]
         for j in range(1, len(init.params)):
-            init.dglob[j] = ci.fglob.get(init.params[j], "") if init.dglob[j] != "()" else "()"
+            h = self.default_home(ci, init.params[j])  # (a base dataclass's field: the global of its class's default)
+            init.dglob[j] = h.fglob.get(init.params[j], "") if init.dglob[j] != "()" else "()"
     ci.bad = later if later != "" else ci.hook  # (an imported module's class: an error where the program uses it)
 
 def gen_no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> None:

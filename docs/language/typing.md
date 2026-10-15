@@ -694,8 +694,15 @@ Instance reads of class attributes honor subclass defaults and instance assignme
 attribute may be rebound through its defining class; assigning an inherited attribute through
 a subclass that has not declared its own default is unsupported.
 
-Multiple inheritance, builtin subclasses, dataclass and NamedTuple inheritance, decorated
-subclasses, field/method name collisions, and overriding static or class methods are
-unsupported. Inherited class methods
+A `@dataclass` class may derive from another dataclass. Its fields follow the base's, whose
+defaults, factories and options it keeps; a field it declares again, with the same type, keeps
+its place and has only the new default and options. The methods `@dataclass` writes replace
+inherited ones, and the comparisons it writes decline (return `NotImplemented` for) an object
+of another class, so `Base(1) == Derived(1)` is false. `replace()` of a base-typed object
+makes an object of its own class.
+
+Multiple inheritance, builtin subclasses, NamedTuple inheritance, inheritance between a
+dataclass and a class that is not one, other decorated subclasses, field/method name
+collisions, and overriding static or class methods are unsupported. Inherited class methods
 using `cls` retain restrictions on default values, imports and calls through a base-typed
 object. Exception classes follow the [exception rules](semantics.md#user-exception-classes).

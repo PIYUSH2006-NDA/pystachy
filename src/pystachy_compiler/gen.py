@@ -468,6 +468,7 @@ from src.pystachy_compiler.program import (
     gen_hook as program_hook,
     gen_inherit as program_inherit,
     gen_accessor as program_accessor,
+    gen_dc_options as program_dc_options,
     gen_init_template as program_init_template,
     gen_left_out as program_left_out,
     gen_makes_tmpl as program_makes_tmpl,
@@ -1459,6 +1460,9 @@ class Gen:
 
     def accessor(self, ci: ClassInfo, d: Node) -> str:
         return program_accessor(self, ci, d)
+
+    def dc_options(self, ci: ClassInfo) -> None:
+        return program_dc_options(self, ci)
 
     def derives(self, c: str, base: str) -> bool:
         return program_derives(self, c, base)

@@ -99,10 +99,10 @@ fully dynamic Python.
 
 Classes support fields, methods, class attributes, `@property` with `@x.setter` and
 `@x.deleter`, `@staticmethod`, `@classmethod` and supported operator and container methods.
-Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`
-and the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
-`kw_only`; `slots=True`, dataclass inheritance, `asdict()`, `astuple()` and `fields()` are not
-supported.
+Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`,
+the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
+`kw_only`, and inheritance from another dataclass; `slots=True`, `asdict()`, `astuple()` and
+`fields()` are not supported.
 
 Literal `__slots__` strings, tuples and lists restrict instance field writes when every
 base also declares slots. A subclass without slots, or with an unslotted base, may add
