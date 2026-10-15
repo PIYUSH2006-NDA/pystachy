@@ -1,5 +1,6 @@
 """Declarations component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.utils import is_union, umembers
 from src.pystachy_compiler.analysis import calls_init, local_names
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Val
@@ -41,6 +42,7 @@ from src.pystachy_compiler.utils import (
     is_set,
     is_sopt,
     is_tuple,
+    is_vtuple,
     key_problem,
     lt,
     rename,
@@ -131,6 +133,12 @@ def gen_ann(self, n: Node) -> str:
         return self.opt(self.ann(n.kids[0]), n.kids[0])
     elif k == "binop" and n.s == "|" and n.kids[0].kind == "None":
         return self.opt(self.ann(n.kids[1]), n.kids[1])  # None | T
+    elif k == "binop" and n.s == "|":
+        ts = [self.ann(x) for x in self.union_members(n, [])]
+        for t in ts:
+            if t.startswith("!"):
+                return t
+        return self.union_type(ts)  # A | B
     elif k == "index" and (n.kids[0].kind == "name" or n.kids[0].kind == "attr"):
         base = self.ann_base(n.kids[0])
         if base.startswith("!"):
@@ -149,6 +157,11 @@ def gen_ann(self, n: Node) -> str:
             return self.ctype("callable", cts)
         if base == "union" and len([x for x in a if self.pathlike(x)]) > 0:
             return self.path_union(a)
+        if base == "tuple" and len(a) == 2 and a[1].kind == "ellipsis":
+            t = self.ann(a[0])
+            if unopt(t) not in ["int", "float", "bool", "str"]:
+                return "!runtime-length tuple elements must be int, float, bool, str or their optional types"
+            return self.ctype("vtuple", [t])
         ts: list[str] = self.ann_items(a) if base == "tuple" else [self.ann(x) for x in a]
         for t in ts:
             if t.startswith("!"):
@@ -172,6 +185,7 @@ def gen_ann(self, n: Node) -> str:
                 return us[0]  # Union[T]
             if len(us) == 2 and (us[0] == "None" or us[1] == "None"):
                 return self.opt(us[0] if us[1] == "None" else us[1], [x for x in a if x.kind != "None"][0])  # Union[T, None]
+            return self.union_type(us)
     if self.typing_ref(n) == "Final":
         return "!a bare Final needs a value to give its type (x: Final = v, a constant in a class body); write Final[T]"
     if self.pathlike(n):
@@ -450,7 +464,10 @@ def gen_optional(self, t: str) -> str:
     # the type of a value that is a t or None, "" if there is none
     if t in self.classes or is_opt(t):
         return t
-    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_callable(t)) and "?" not in t:
+    if is_union(t):
+        # (a union that holds a class's objects may be None, as the class's objects may)
+        return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
+    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
 
@@ -560,6 +577,15 @@ def gen_widens(self, a: str, b: str) -> bool:
         return a == "None" or (not is_sopt(b) and self.widens(unopt(a), unopt(b)))  # (an int | None is a box)
     if b in self.classes:
         return a == "None" or (a in self.classes and self.derives(a, b))
+    if is_union(b):
+        # (its box: the tags are the program's, the same in every union)
+        if a == "None":
+            return self.optional(b) == b
+        return is_union(a) and len([m for m in umembers(a) if m not in umembers(b)]) == 0
+    if is_vtuple(a) and is_vtuple(b):
+        # Tuples are immutable: widening str to str | None changes no slot's
+        # representation. Numeric optional elements require actual boxes instead.
+        return self.widens(targs(a)[0], targs(b)[0])
     if not is_tuple(a) or not is_tuple(b) or len(targs(a)) != len(targs(b)):
         return False
     bs = targs(b)
@@ -1198,7 +1224,42 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if c in self.classes or c in self.unsupported:
             return c if c in self.classes else "!" + self.unsupported[c]
         if c in self.funcs:
-            return self.funcs[c].ret if self.funcs[c].bad == "" else "!" + self.funcs[c].bad
+            helper = self.funcs[c]
+            if helper.bad != "":
+                return "!" + helper.bad
+            if self.compiling and helper.generic and helper.ret == "" and helper.cls == "" and helper.clo < 0 and helper.vararg < 0 and helper.kwarg < 0 and not helper.extern and not helper.pyexport:
+                # A constructor field can keep the return type of an ordinary
+                # helper specialized for its known argument types. This compiles
+                # the existing template; it neither evaluates source nor guesses
+                # the return from one branch of the helper's body.
+                assigned: dict[str, bool] = {}
+                local_names(f.node.kids[2].kids, assigned)
+                args = e.kids[1:]
+                if c in f.params or c in assigned or len(args) > len(helper.params) or (helper.npos >= 0 and len(args) > helper.npos):
+                    return ""
+                ts: list[str] = []
+                for i in range(len(helper.params)):
+                    if i < len(args):
+                        arg = args[i]
+                        if arg.kind == "kw" or arg.kind == "starred" or arg.kind == "dstar":
+                            return ""
+                        t = "None" if arg.kind == "None" else self.guess(arg, f)
+                    elif helper.defaults[i].kind == "noann":
+                        return ""
+                    else:
+                        t = helper.dtypes[i]
+                        if t == "":
+                            t = "None" if helper.defaults[i].kind == "None" else self.guess(helper.defaults[i], FnInfo("", "", helper.node, ""))
+                    if t == "" or t.startswith("!"):
+                        return ""
+                    target = helper.ptypes[i]
+                    if target != "" and t != target:
+                        if not self.widens(t, target) and not (is_sopt(target) and t == unopt(target)):
+                            return ""
+                        t = target
+                    ts.append(t)
+                return self.instance(helper, ts, []).ret
+            return helper.ret
         if c == "str" or c == "int" or c == "float" or c == "bool":
             return c
         if c == "len" or c == "ord":
@@ -1322,7 +1383,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
         else:
             self.class_default(ci, name)
             r = self.select(own, fv, Val(self.ins(f"load {lt(p.t)}, ptr {ci.fglob[name]}"), p.t))
-            if is_opt(p.t):
+            if is_opt(p.t) or is_union(p.t):
                 self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
             return Val(r, p.t)
     if name in ci.fflag:
@@ -1355,7 +1416,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             self.guard(bad, f"AttributeError: '{tname(o.t)}' object has no attribute '{name}'")
     if r == "":
         r = self.ins(f"load {lt(p.t)}, ptr {p.v}")
-    if is_opt(p.t):
+    if is_opt(p.t) or is_union(p.t):
         self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
     return Val(r, p.t)
 

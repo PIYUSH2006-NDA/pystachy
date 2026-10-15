@@ -1,5 +1,6 @@
 """Statements component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.utils import is_union
 from src.pystachy_compiler.analysis import builtin_has
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, Val
@@ -33,6 +34,7 @@ from src.pystachy_compiler.utils import (
     is_set,
     is_sopt,
     is_tuple,
+    is_vtuple,
     lt,
     meet,
     same_kind,
@@ -349,7 +351,7 @@ def gen_while_(self, n: Node) -> None:
     # after the loop: what holds where its test is false (never for while True) and at each
     # break that leaves it here (a loop with an else block breaks past it)
     self.narrow_by(n.kids[0], False)
-    ends: list[dict[str, bool]] = []
+    ends: list[dict[str, str]] = []
     if n.kids[0].kind != "True":
         ends.append(self.narrowed)
     if n.kids[1].kids is not self.elsekids:
@@ -357,7 +359,7 @@ def gen_while_(self, n: Node) -> None:
     self.narrowed = meet(ends) if len(ends) > 0 else after
     self.place(l3)
 
-def gen_loop(self, body: list[Node], lp: Loop) -> list[dict[str, bool]]:
+def gen_loop(self, body: list[Node], lp: Loop) -> list[dict[str, str]]:
     # the body of loop lp: continue jumps to lp.step, break to lp.exit; what narrowed holds at
     # its breaks is returned (see while_)
     if body is self.elsekids:
@@ -492,7 +494,7 @@ def gen_stmt(self, n: Node) -> None:
         if len(n.kids) == 3:
             v = self.expr(n.kids[2], t)
             # (x: T | None = <a T> knows x holds a T, see narrowed)
-            self.assign(n.kids[0], v if n.kids[0].kind == "name" and is_opt(t) and self.widens(v.t, t) else self.coerce(v, t))
+            self.assign(n.kids[0], v if n.kids[0].kind == "name" and ((is_opt(t) and self.widens(v.t, t)) or (is_union(unopt(t)) and (self.widens(v.t, t) or self.boxes(v.t, t)))) else self.coerce(v, t))
     elif k == "augassign":
         self.augassign(n)
     elif k == "if":
@@ -526,11 +528,7 @@ def gen_stmt(self, n: Node) -> None:
         if ygo and not ngo:
             self.narrowed = yes
         elif ygo and ngo and len(yes) + len(self.narrowed) > 0:
-            no = self.narrowed
-            self.narrowed = {}
-            for both in yes:
-                if both in no:
-                    self.narrowed[both] = True
+            self.narrowed = meet([yes, self.narrowed])
     elif k == "while" and self.static(n.kids[0]) == 0:
         # a loop whose test is false from the start (while x: with x None): only its else block runs
         self.static_reads(n.kids[0])
@@ -827,7 +825,7 @@ def gen_del_name(self, n: Node) -> None:
     self.nonecmp = True  # (a local only None was assigned to may be deleted)
     self.read(n)  # del of a name that is not bound raises as its read does
     self.nonecmp = False
-    self.narrowed.pop(name, False)
+    self.narrowed.pop(name, "")
     if name in self.ltype and name in self.lflag:
         self.emit(f"store i1 false, ptr {self.lflag[name]}")
     elif name not in self.ltype and name in self.gflag:
@@ -1331,6 +1329,9 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         j = at[k]
         if is_list(s.t):
             vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
+        elif is_vtuple(s.t):
+            off = self.ins(f"add i64 {j}, 1")
+            vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {off}')}"), targs(s.t)[0]))
         elif is_tuple(s.t):
             vals.append(self.from_slot(self.ins(f"load i64, ptr {self.ins(f'getelementptr i64, ptr {s.v}, i64 {j}')}"), targs(s.t)[0]))
         elif s.t == "str":
@@ -1366,7 +1367,7 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
     # length, from which reversed() counts down
     if is_set(s.t) and mode == "reversed":
         self.err(f"'{tname(s.t)}' object is not reversible")
-    if not (s.t == "str" or is_list(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+    if not (s.t == "str" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
     if s.t == "file":
         made.st.append("")

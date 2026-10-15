@@ -1,0 +1,20 @@
+True False False
+False False
+False False
+base
+base False
+True True False
+True False
+True True
+child
+child True
+False False True
+True False
+False True
+other
+other
+False False False
+False True
+True True
+none
+[exit 0]

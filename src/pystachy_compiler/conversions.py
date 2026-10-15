@@ -1,5 +1,6 @@
 """Conversions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.utils import is_union
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Val
 from src.pystachy_compiler.names import short
@@ -16,6 +17,7 @@ from src.pystachy_compiler.utils import (
     is_set,
     is_sopt,
     is_tuple,
+    is_vtuple,
     lt,
     selem,
     targs,
@@ -86,6 +88,17 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
     # v as a value of type t; what names v for the error when v may be None and t may not
     if v.t == t:
         return v
+    if is_vtuple(unopt(t)) and is_tuple(v.t):
+        et = targs(unopt(t))[0]
+        vals = [self.coerce(self.tget(v, i), et) for i in range(len(targs(v.t)))]
+        raw = self.tuple_(vals)
+        return Val(self.rt("pys_vtuple_from", "ptr", [f"ptr {raw.v}", f"i64 {len(vals)}"]), t)
+    if is_vtuple(unopt(t)) and is_vtuple(v.t):
+        et = targs(unopt(t))[0]
+        if is_sopt(et) and targs(v.t)[0] == unopt(et):
+            # A fresh immutable tuple of boxes; an existing list or tuple's
+            # numeric storage must never be reinterpreted as pointer slots.
+            return Val(self.rt("pys_vtuple_box", "ptr", [f"ptr {v.v}"]), t)
     if v.t == "None" and t in self.classes:
         return Val("null", t)
     if v.t in self.classes and t in self.classes and self.derives(v.t, t):
@@ -96,6 +109,8 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
         self.err(f"expected an object of {short(t)}, got a builtin exception, which is not converted to a class of the program (catch it as one: except {short(t)} as e)")
     if self.widens(v.t, t):
         return Val(v.v, t)
+    if is_union(unopt(t)) and v.t != "None":
+        return self.to_union(v, t, what)
     if is_fn(v.t) and is_callable(unopt(t)):
         return Val(self.to_callable(v, unopt(t)).v, t)  # (a function where a Callable is expected)
     if is_sopt(t) and v.t == unopt(t):
@@ -119,6 +134,8 @@ def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
     return v
 
 def gen_desc(self, t: str, use: str) -> str:
+    if is_union(unopt(t)):
+        self.err("closed union operations require narrowing with isinstance() first")
     # type descriptor for the runtime's generic repr (use "repr"), equality ("==") or ordering
     # ("<", ">", ...; a list or tuple compares its items with == first)
     if t == "int":
@@ -136,6 +153,8 @@ def gen_desc(self, t: str, use: str) -> str:
     sub = use if use == "repr" or use == "==" else "== " + use
     if is_list(t):
         return "L" + self.desc(elem(t), sub)
+    if is_vtuple(t):
+        return "V" + self.desc(targs(t)[0], sub)
     if is_dict(t):
         a = targs(t)
         return "D" + self.desc(a[0], use) + self.desc(a[1], use if use == "repr" else "==")

@@ -82,7 +82,12 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 | `Try` | The source-level shape of a try statement; LLVM lowering uses block handler metadata |
 | `IFn` | Function signature, parameter indices, entry slots, blocks, loops, handlers and effect summary |
 
-Types are canonical strings, such as `list[int]`, `dict[str,int]` and `opt[str]`.
+Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
+`union[int,str]`. A closed union is an immutable pointer to a program-wide
+type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
+Native reference unions keep the original object/file pointer in that payload;
+their method calls dispatch by member tag. Narrowing checks the tag before reading
+the concrete payload.
 An `Ins` uses only the fields its operation needs:
 
 | Field | Meaning |
@@ -133,6 +138,15 @@ function, message and handler. The verifier checks these invariants and number b
 direct calls and module initializers use their callees' summaries. Summaries are computed
 to a fixed point over the compiled call graph. Indirect `Callable` calls conservatively have
 all summary effects, as do runtime operations that may invoke user methods for their type.
+
+The solver deduplicates direct call edges and propagates effects through a reverse-edge
+worklist. Each summary bit is added at most once per affected function, bounding propagation
+by the number of effect bits times the affected reverse edges. On a later analysis, changed
+local effects or dependencies invalidate their caller closure; resetting that closure also
+removes obsolete effects from cycles. Unaffected summaries are reused. These are compiler
+analysis facts for already compiled functions, not runtime type profiles or new language
+support. `tools/test_function_summaries.py` compares incremental updates against a full
+fixed-point oracle; `tests/summary_worklist.py` also executes the solver natively.
 
 | Letter | Meaning |
 |---|---|
@@ -234,7 +248,10 @@ possibilities, not supported modes.
 CPython extension modules **are supported** through `pystachy ext` and boundary wrappers.
 They do not implement the historical proposal to represent all compiled containers as
 CPython objects. See the [FFI guide](ffi.md) for the actual boundary contract and limitations.
-General unions and dynamic values also remain outside the current language.
+Explicit [closed scalar unions](language/typing.md#closed-scalar-unions) are supported.
+[Bounded native reference unions](language/typing.md#native-reference-unions) also
+support explicitly declared class/file alternatives. General dynamic values remain
+outside the current language.
 
 <a id="appendix-a-how-this-design-was-chosen"></a>
 <a id="appendix-b-prior-art-and-the-measurements-behind-the-exception-and-none-designs"></a>

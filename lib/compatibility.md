@@ -45,6 +45,30 @@ from CPython's accelerated modules:
 - For more than 2,500 items, `heapify` compares in a different order from `_heapq`'s
   cache-friendly loop, with the same result.
 
+## Html and HTMLParser
+
+`html.escape`, `html.unescape` and the HTML4/HTML5 entity mappings reuse the
+adaptations from draft #378. Numeric references are bounded before checked-int
+conversion and named references use the upstream HTML5 table.
+
+`html.parser.HTMLParser` retains CPython 3.13.16's incremental parser and uses
+ordinary single inheritance. Typed subclasses can override the start/end tag,
+data, comment, declaration, processing-instruction and reference callbacks.
+`feed`, `close`, `reset`, `getpos`, `get_starttag_text`, `convert_charrefs` and
+`scripting` are exercised by the probe tests, including RAWTEXT and RCDATA.
+Attribute records use `list[tuple[str, str | None]]`; missing values remain None.
+
+Native column offsets count UTF-8 bytes, and tag/attribute name case conversion
+uses ASCII-only `str.lower`. Unicode text and entity output remain supported,
+but these behaviors differ from CPython for non-ASCII columns and uppercase
+names. User subclass constructors and callback signatures need compatible
+annotations. Multiple inheritance and dynamic attributes remain unavailable.
+
+`_markupbase` is an internal implementation detail. Its abstract-construction
+guard is omitted and its field layout is declared in `__init__`. Its legacy SGML
+helpers remain in the source but are outside the compiled surface tested here.
+See [the probe record](../docs/html-parser-probe.md) for provenance and commands.
+
 ## Difflib
 
 `SequenceMatcher` accepts strings or lists of strings, including `isjunk` and
@@ -190,12 +214,14 @@ lazy and possessive), groups and backreferences, lookarounds, conditionals,
 atomic groups, scoped flags, escapes and Unicode character classes/case folding.
 The module and `Pattern` expose matching, searching, splitting, substitution,
 escaping and cache purging. `Match` supports group queries (up to five groups
-per `group` call), indexing, dictionaries, positions, spans and expansion.
+per `group` call), runtime-length `groups(default=None)` tuples, indexing,
+dictionaries, positions, spans and expansion.
 
 - Matches decode code points, but positions (`pos`, `endpos`, group spans and
   pattern-error positions) are byte indices.
-- `findall` with two or more groups raises `NotImplementedError`;
-  `Match.groups` and `Match.regs` are unsupported variable-length tuples.
+- `findall` with two or more groups still raises `NotImplementedError`; its
+  ported result contract remains `list[str]`. `Match.regs` remains unsupported
+  because its runtime-length tuple contains tuple elements.
 - `split` returns `list[str]` and raises `NotImplementedError` if an unmatched
   capturing group would add `None`.
 - `finditer` eagerly returns a list of matches.
@@ -347,3 +373,4 @@ CPython error for `None`.
 - `urlencode` needs a mapping or sequence; `doseq` sequences must be homogeneous.
   Sets use Pystachy's iteration order. `allow_fragments` must be a bool.
 - Deprecated splitting functions, `to_bytes` and `Quoter` are unsupported.
+

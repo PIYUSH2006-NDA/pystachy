@@ -11,18 +11,38 @@ unsupported forms, see [compatibility](compatibility.md).
 | `float`, `bool`, `str` | Double-precision floats; strings hold UTF-8 with byte-based indexing |
 | `list[T]`, `dict[K, V]` | One static element type, or one key and value type |
 | `set[T]`, `frozenset[T]` | Elements must use the supported dict key types |
-| `tuple[A, B, ...]` | Fixed shape, up to nine items; indexing requires an integer constant |
+| `tuple[A, B]` | Fixed shape, up to nine items; indexing requires an integer constant |
+| `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
+| `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
+
+`tuple(xs)` copies a supported homogeneous list or a string into an immutable
+runtime-length tuple; later list mutation does not change it. String conversion follows
+the existing UTF-8 byte iteration rules ([compatibility](compatibility.md)). `tuple(t)` returns an
+existing tuple unchanged unless an annotation requests a representation conversion
+([identity limitations](compatibility.md#functions-and-object-identity)). A fixed tuple literal can initialize `tuple[T, ...]`,
+including `()`. Supported operations are `len`, truth tests, integer indexing,
+iteration (also `enumerate`, `zip`, and `reversed`), `list(t)`, representation and
+same-element-type equality and ordering. Bounds errors raise `IndexError` at runtime.
+Optional scalar elements use boxes when needed; widening an immutable tuple to
+optional elements copies its slots rather than reinterpreting numeric bits as pointers.
+
+Runtime-length tuples currently do not support slicing, concatenation, repetition,
+membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
+from the fixed shape used by `*args`; arbitrary iterators and generators are not yet
+accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
+without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
 nested tuples of these. Floats, objects and frozensets cannot be keys or set elements.
 
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
-General unions such as `int | str`, and a dynamic `Any` type, are unsupported.
+Explicit closed scalar unions such as `int | str` are supported, including `None`.
+Bounded native reference unions are also supported; a dynamic `Any` type is unsupported.
 `None` alone can annotate a return, but cannot be a container's entire element type.
 
 `List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `Callable`, `TextIO`
@@ -169,6 +189,81 @@ An optional dict lookup key equal to `None` is absent: membership is false, `get
 `KeyError: None`. Stores require a nonoptional key. A bool can look up or delete its equal
 integer key, but cannot be inserted into a dict of integer keys, since its printed value
 would differ from the integer.
+
+## Closed scalar unions
+
+Explicit `A | B` and `Union[A, B]` annotations may combine `int`, `float`, `bool`
+and `str`, optionally including `None`. Nested and repeated members normalize to
+one type. These annotations are supported by default in both AOT and JIT modes.
+They may appear in arguments, returns, local variables, fields and container values:
+
+```python
+def config_value(value: int | str | None) -> str:
+    if value is None:
+        return "missing"
+    if isinstance(value, str):
+        return value.upper()
+    return str(value + 1)
+```
+
+A union stores an immutable tagged box; `None` is a null pointer. `isinstance()`
+checks the tag and narrows a local or parameter in either branch, including through
+assertions and exiting guards. `bool` remains a separate member and is an instance
+of `int`, as in Python: test `bool` first if the following integer branch needs one
+concrete type. Assignment updates the known type, and control-flow joins retain it
+only when every incoming path agrees.
+
+Globals, fields and cells assigned by a `nonlocal` closure are not narrowed across
+calls. Copy their value to an ordinary local before testing it. The copy remains
+valid when the original storage is changed because the tagged box is immutable.
+Container types stay invariant: `list[int]` cannot become `list[int | str]`.
+
+Narrow before arithmetic, truth testing, comparison, formatting or other operations
+that require a concrete member. Generic container equality and printing of union
+items are not implemented. No union is inferred from unrelated assignments or
+return values; annotate it explicitly. Container members, arbitrary `Any`,
+recursive JSON types, runtime compilation and speculative type assumptions are out
+of scope. Boxing may allocate; this feature expands supported programs and makes
+no performance claim.
+
+## Native reference unions
+
+Explicit unions can also hold up to four native class or `TextIO` types. This lets an
+ordinary AOT/JIT-compiled function accept either a file or `io.StringIO`, or objects
+from unrelated classes that implement the same method:
+
+```python
+from io import StringIO
+from typing import TextIO
+
+def read_character(stream: TextIO | StringIO) -> str:
+    return stream.read(1)
+```
+
+Arguments, returns, fields, locals, list elements and dict values may use these
+unions. A tagged box retains the original object or file pointer: passing through
+storage preserves object identity, mutation and file position. The box and referenced
+object remain reachable through normal GC roots. As with other Pystachy class types,
+a union containing a class permits `None`; method calls on it raise `AttributeError`
+before evaluating their arguments.
+
+Method calls dispatch on the union member and use ordinary native class dispatch
+within that member's family. Every member must declare the requested method, and
+all implementations must return the same static type. Positional and keyword
+arguments run once; each selected method uses its own defaults. A subclass may be
+stored under one base member, but a union cannot contain overlapping class families
+such as `Base | Child`. `isinstance()` checks the actual subclass; narrowing to a
+whole declared member is supported, while narrowing a base member to a subclass is
+not yet implemented.
+
+Reference unions cannot mix with scalar members or exception types. Container
+members, callable fields, bound-method extraction and unpacked method arguments
+are unsupported. Use a typed local for an empty-container argument that needs an
+expected type. Narrow a local to a member before field access, identity/equality
+comparison, truth testing or formatting. Containers remain invariant, and no union
+is inferred from unrelated assignments. This adds deterministic native execution,
+without profiles, an interpreter, runtime compilation or speculative assumptions;
+boxing and dispatch have costs, so no performance improvement is claimed.
 
 ## Function and method templates
 
@@ -329,8 +424,12 @@ are unsupported when the class is used.
 
 Fields come from class-body annotations or assignments to `self` in `__init__`. Their types
 can be inferred from parameters, literals, constructors, declared function or method results,
-function values, and supported container displays and operations. A template function's
-inferred result is unavailable at field declaration time; annotate that field explicitly.
+function values, and supported container displays and operations. When specializing a class
+template, a field can also use an ordinary generic function's inferred return type if its
+positional arguments and omitted defaults have known types. This uses normal function
+specialization and does not execute the helper or its defaults during inference. Keyword or
+unpacked arguments, local call targets, and helpers whose return is needed before class
+specialization still require an explicit field annotation.
 
 A class-body default is a class attribute, read by instances until they assign their own
 value. Later changes to the class attribute affect those instances. Unannotated class-body
