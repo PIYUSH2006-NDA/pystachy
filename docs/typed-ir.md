@@ -25,8 +25,10 @@ implemented. Optional values, closures and constructor-inferred class templates 
 implemented; their language rules belong in the [language guide](language.md).
 
 The separation is partial. `Gen` still resolves, types, folds and specializes code while
-building IR. Most loads, stores and arithmetic are `raw` instructions containing LLVM text.
-The IR therefore supports the current LLVM backend, but is not yet a backend-neutral
+building IR. Native variable and class-field accesses and numeric/reference comparisons
+are explicit typed operations. Arithmetic, some internal memory accesses and backend
+helper templates still contain raw LLVM text. The IR supports the current LLVM backend,
+but is not yet a backend-neutral
 representation of every operation. WebAssembly and dynamic `Any` values remain future work.
 
 <a id="4-passes"></a>
@@ -129,6 +131,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Container payload conversions | `slot.pack`, `slot.unpack` |
 | Closed union reads | `union.tag`, `union.payload` |
 | Numeric promotion and comparison | `num.cast`, `num.cmp`, `int.ucmp` |
+| Native reference identity and null tests | `ptr.cmp` |
 | Calls | `rt`, `call`, `icall`, `init` |
 | Ordinary control flow | `br`, `cbr`, `ret`, `ret.none`, `unreachable` |
 | Value joins and checked arithmetic | `phi`, `select`, `ovf` |
@@ -216,6 +219,12 @@ integer bits; a negative index still fails an unsigned length check. Runtime str
 primitives and the exact mixed integer/float result tests share these typed operations.
 Both lower to the existing LLVM predicates. Dictionary lookup fusion reads membership
 conditions from typed operands, preserving its branch facts and mutation barriers.
+
+`ptr.cmp` retains the native reference operands of identity and null tests, including
+boxed optional scalars, optional unions, classes and callables. It permits only `==`
+and `!=`, returns `bool` and has no effects. The verifier rejects native scalars and
+runtime pseudo-types; lowering selects the existing pointer equality predicate.
+Internal closure code/environment pointers and runtime interior pointers remain raw.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

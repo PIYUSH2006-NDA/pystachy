@@ -87,6 +87,13 @@ def gen_int_ucmp(self, op: str, a: Val, b: Val) -> Val:
     self.put(i, 1)
     return Val(f"%t{i.r[0]}", "bool")
 
+def gen_ptr_cmp(self, op: str, a: Val, b: Val) -> Val:
+    # Native reference identity/null tests, including boxed optional scalars.
+    i = Ins("ptr.cmp", "bool", op)
+    i.a = [a, b]
+    self.put(i, 1)
+    return Val(f"%t{i.r[0]}", "bool")
+
 def gen_floats(self, v: Val) -> Val:
     # a number, or a list of numbers, as float(s)
     if v.t == "list[int]" or v.t == "list[bool]":

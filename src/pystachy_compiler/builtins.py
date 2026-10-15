@@ -166,7 +166,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             done = self.label()
             ph = Ins("phi", "bool", "")
             self.incoming(ph, "true" if self.has("None", attr) == 1 else "false", start)
-            self.cbr("true" if hv.v in self.nn else self.ins(f"icmp ne ptr {hv.v}, null"), present, done)
+            self.cbr("true" if hv.v in self.nn else self.ptr_cmp('!=', hv, Val('null', 'None')).v, present, done)
             self.place(present)
             tag = self.ins(f"load i64, ptr {hv.v}")
             cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, hv.t)]
@@ -194,7 +194,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             e0 = self.cur
             l1 = self.label()
             l2 = self.label()
-            self.cbr("true" if hv.v in self.nn else self.ins(f"icmp ne ptr {hv.v}, null"), l1, l2)
+            self.cbr("true" if hv.v in self.nn else self.ptr_cmp('!=', hv, Val('null', 'None')).v, l1, l2)
             self.place(l1)
             fv = self.mem_load(Val(self.fgep(hv, self.classes[hv.t].fflag[args[1].s]), "*bool")).v
             e1 = self.cur
@@ -205,7 +205,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             self.incoming(ph, fv, e1)
             return Val(self.phi(ph), "bool")
         if hy < 0:
-            return Val(self.ins(f"icmp ne ptr {hv.v}, null"), "bool")
+            return self.ptr_cmp('!=', hv, Val('null', 'None'))
         return Val("true" if hy == 1 else "false", "bool")
     if name == "isinstance" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw":
         # decided by the static types, or by whether it is None (an optional value, an object)
@@ -217,7 +217,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str) -> Val:
             return Val(self.uisinst(v, args[1]), "bool")
         known = self.isinst(v.t, args[1])
         if known < -1:
-            return Val(self.ins(f"icmp {'ne' if known == -2 else 'eq'} ptr {v.v}, null"), "bool")
+            return self.ptr_cmp('!=' if known == -2 else '==', v, Val('null', 'None'))
         if known < 0:
             if v.t in self.classes and self.classes[v.t].tag > 0:
                 return self.obj_isinst(v, args[1])

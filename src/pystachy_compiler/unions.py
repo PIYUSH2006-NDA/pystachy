@@ -45,7 +45,7 @@ def gen_uop(self, v: Val, op: str) -> Val:
     if is_opt(v.t):
         arm = self.label()
         self.incoming(ph, "false" if op == "truth" else self.sconst("None"), self.cur)
-        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), end, arm)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, arm)
         self.place(arm)
     tag = self.ins(f"load i64, ptr {v.v}")
     members = umembers(unopt(v.t))
@@ -134,7 +134,7 @@ def gen_ubox(self, v: Val, m: str) -> str:
     b = self.rt("pys_ubox", "ptr", [f"i64 {self.utag(m)}", "i64 " + self.to_slot(Val(v.v, m))])
     if m not in self.classes or v.v in self.nn:
         return b
-    return self.ins(f"select i1 {self.ins(f'icmp eq ptr {v.v}, null')}, ptr null, ptr {b}")
+    return self.ins(f"select i1 {self.ptr_cmp('==', v, Val('null', 'None')).v}, ptr null, ptr {b}")
 
 def gen_uget(self, u: Val, m: str) -> Val:
     # the value a union's box u holds, known to be of member type m
@@ -151,7 +151,7 @@ def gen_utest(self, u: Val, ms: list[str], may_none: bool) -> str:
     lload = self.label() if may_none else ""
     lend = self.label() if may_none else ""
     if may_none:
-        self.cbr(self.ins(f"icmp eq ptr {u.v}, null"), lend, lload)
+        self.cbr(self.ptr_cmp('==', u, Val('null', 'None')).v, lend, lload)
         self.place(lload)
     i = Ins("union.tag", "int", "")
     i.a = [Val(u.v, unopt(u.t))]  # (the existing guard, or narrowing, excludes None)
@@ -218,7 +218,7 @@ def gen_narrow_val(self, v: Val, nt: str) -> Val:
     l0 = self.cur
     lget = self.label()
     lend = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), lend, lget)
+    self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, lend, lget)
     self.place(lget)
     x = self.coerce(self.uget(Val(v.v, unopt(v.t)), m), nt)
     l1 = self.cur
@@ -266,7 +266,7 @@ def gen_uisinst(self, v: Val, c: Node) -> str:
     may_none = (is_opt(v.t) or self.optional(unopt(v.t)) == unopt(v.t)) and v.v not in self.nn
     r = self.utest(v, ms, may_none)
     if may_none and self.isinst("None", c) == 1:
-        r = self.ins(f"or i1 {r}, {self.ins(f'icmp eq ptr {v.v}, null')}")
+        r = self.ins(f"or i1 {r}, {self.ptr_cmp('==', v, Val('null', 'None')).v}")
     for m in dynamic:
         hit = self.label()
         end = self.label()
@@ -294,7 +294,7 @@ def gen_umethod(self, o: Val, m: str, args: list[Node]) -> Val:
     for member in members:
         if member in self.classes and m not in self.classes[member].methods:
             self.err(f"reference union member {typestr(member)} must declare method {m}() (callable fields are not supported)")
-    self.guard(self.ins(f"icmp eq ptr {o.v}, null"), f"AttributeError: 'NoneType' object has no attribute '{m}'")
+    self.guard(self.ptr_cmp('==', o, Val('null', 'None')).v, f"AttributeError: 'NoneType' object has no attribute '{m}'")
     bound: list[Node] = []
     for a in args:
         if a.kind == "starred" or a.kind == "dstar":

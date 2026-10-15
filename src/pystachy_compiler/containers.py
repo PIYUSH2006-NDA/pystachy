@@ -427,7 +427,7 @@ def gen_affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
     for i in range(len(targs(tup.t))):
         item = self.tget(tup, i)
         if is_opt(item.t):
-            self.guard(self.ins(f"icmp eq ptr {item.v}, null"), f"TypeError: tuple for {m} must only contain str, not NoneType")
+            self.guard(self.ptr_cmp('==', item, Val('null', 'None')).v, f"TypeError: tuple for {m} must only contain str, not NoneType")
         c = self.rres(self.rt(f"pys_str_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
         nx = self.label()
         self.incoming(ph, "true", self.cur)
@@ -501,12 +501,12 @@ def gen_nonekey(self, k: Val, none: str, fn: str, av: list[str]) -> str:
     if not is_opt(k.t):
         return self.rt(fn, "i64", av)
     if none == "":
-        self.guard(self.ins(f"icmp eq ptr {k.v}, null"), "KeyError: None")
+        self.guard(self.ptr_cmp('==', k, Val('null', 'None')).v, "KeyError: None")
         return self.rt(fn, "i64", self.keyed(k, av))
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {k.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('==', k, Val('null', 'None')).v, l1, l2)
     self.place(l2)
     r = self.rt(fn, "i64", self.keyed(k, av))
     e2 = self.cur
@@ -555,7 +555,7 @@ def gen_to_str(self, v: Val) -> Val:
     if t in self.classes:
         return self.obj_str(v, "__str__")
     if t == "opt[str]":
-        return Val(self.select(self.ins(f"icmp eq ptr {v.v}, null"), Val(self.sconst("None"), "str"), Val(v.v, "str")), "str")
+        return Val(self.select(self.ptr_cmp('==', v, Val('null', 'None')).v, Val(self.sconst("None"), "str"), Val(v.v, "str")), "str")
     if t == "exc":
         return Val(self.rt("pys_exc_str", "ptr", [f"ptr {v.v}"]), "str")
     return self.repr(v)
@@ -572,7 +572,7 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
         start = self.cur
         ph = Ins("phi", "str", "")
         self.incoming(ph, self.sconst("None"), start)
-        self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), end, nonnull)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, nonnull)
         self.place(nonnull)
         tag = self.ins(f"load i64, ptr {v.v}")
         narrow = dict(self.narrowed)
@@ -613,7 +613,7 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {v.v}, null"), l1, l2)
+    self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, l1, l2)
     self.place(l1)
     self.br(l3)
     self.place(l2)

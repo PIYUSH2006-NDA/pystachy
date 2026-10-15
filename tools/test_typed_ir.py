@@ -264,7 +264,10 @@ class TypedIRTests(unittest.TestCase):
         self.assertEqual(guard.op, "cbr")
         self.assertEqual(guard.b[1], block.label)
         self.assertNotEqual(guard.b[0], block.label)
-        self.assertIn("icmp eq ptr %a0, null", g.fn.blocks[0].code[-2].s)
+        null_test = g.fn.blocks[0].code[-2]
+        self.assertEqual((null_test.op, null_test.s), ("ptr.cmp", "=="))
+        self.assertEqual([(a.v, a.t) for a in null_test.a],
+                         [("%a0", "opt[union[int,str]]"), ("null", "None")])
 
     def test_merged_union_operations_keep_typed_payload_operands(self):
         root = Path(__file__).resolve().parent.parent / "tests"

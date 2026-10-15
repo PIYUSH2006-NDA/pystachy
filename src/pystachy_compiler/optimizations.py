@@ -282,7 +282,7 @@ def gen_canon(self, vs: Values, v: str) -> str:
                 r = self.same(vs, v, f"rt {i.s} {', '.join([self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "slot.pack" or i.op == "slot.unpack":
             r = self.same(vs, v, f"{i.op} {i.t} {i.a[0].t} {self.canon(vs, i.a[0].v)}")
-        elif i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp":
+        elif i.op == "num.cast" or i.op == "num.cmp" or i.op == "int.ucmp" or i.op == "ptr.cmp":
             r = self.same(vs, v, f"{i.op} {i.t} {i.s} {', '.join([a.t + ' ' + self.canon(vs, a.v) for a in i.a])}")
         elif i.op == "mem.load":
             x = self.reaching(vs, self.addr(vs, i.a[0].v), w // vs.stride, w % vs.stride)

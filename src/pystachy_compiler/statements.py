@@ -908,7 +908,7 @@ def gen_augassign(self, n: Node) -> None:
                 self.rt("pys_dict_entry_set", "void", [f"ptr {o.v}", f"i64 {e}", "i64 " + self.to_slot(r)])
                 return
             if is_opt(kx.t):
-                self.guard(self.ins(f"icmp eq ptr {kx.v}, null"), "KeyError: None")
+                self.guard(self.ptr_cmp('==', kx, Val('null', 'None')).v, "KeyError: None")
                 if is_sopt(kx.t):
                     key = self.to_slot(self.deref(kx))  # (an int key is the int its box holds)
             cur = self.from_slot(self.rt("pys_dict_getitem", "i64", [f"ptr {o.v}", f"i64 {key}"]), kv[1])
@@ -997,7 +997,7 @@ def gen_none_operand(self, op: str, a: Val, b: Val) -> None:
         return
     lerr = self.label()
     lok = self.label()
-    self.cbr(self.ins(f"icmp eq ptr {a.v}, null"), lerr, lok)
+    self.cbr(self.ptr_cmp('==', a, Val('null', 'None')).v, lerr, lok)
     self.place(lerr)
     m1 = self.sconst(f"unsupported operand type(s) for {op}: 'NoneType' and 'NoneType'")
     m2 = self.sconst(f"unsupported operand type(s) for {op}: 'NoneType' and '{tname(unopt(b.t))}'")
@@ -1017,9 +1017,9 @@ def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
             m2 = self.sconst("can't multiply sequence by non-int of type 'NoneType'")
         lerr = self.label()
         lok = self.label()
-        self.cbr(self.ins(f"icmp eq ptr {a.v}, null"), lerr, lok)
+        self.cbr(self.ptr_cmp('==', a, Val('null', 'None')).v, lerr, lok)
         self.place(lerr)
-        self.raise_("TypeError", self.select(self.ins(f"icmp eq ptr {b.v}, null"), Val(m1, "str"), Val(m2, "str")) if is_opt(b.t) else m2)
+        self.raise_("TypeError", self.select(self.ptr_cmp('==', b, Val('null', 'None')).v, Val(m1, "str"), Val(m2, "str")) if is_opt(b.t) else m2)
         self.place(lok)
     if is_opt(b.t):
         msg = f"unsupported operand type(s) for {sh}: '{tname(x)}' and 'NoneType'"
@@ -1027,7 +1027,7 @@ def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
             msg = "'NoneType' object is not iterable" if sh == "+=" and is_list(x) else f'can only concatenate {tname(x)} (not "NoneType") to {tname(x)}'
         elif op == "*" and (x == "str" or is_list(x)):
             msg = "can't multiply sequence by non-int of type 'NoneType'"
-        self.guard(self.ins(f"icmp eq ptr {b.v}, null"), "TypeError: " + msg)
+        self.guard(self.ptr_cmp('==', b, Val('null', 'None')).v, "TypeError: " + msg)
 
 def gen_hide(self, names: list[str]) -> None:
     # comprehension variables shadow outer names once the iterable has been evaluated

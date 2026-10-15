@@ -425,7 +425,7 @@ IROPS: dict[str, str] = {
     "tuple.load": "rL rD rO", "tuple.store": "wL wD wO",
     "field.addr": "",
     "slot.pack": "", "slot.unpack": "",
-    "num.cast": "", "num.cmp": "", "int.ucmp": "",
+    "num.cast": "", "num.cmp": "", "int.ucmp": "", "ptr.cmp": "",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
 }
