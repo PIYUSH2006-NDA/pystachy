@@ -75,10 +75,11 @@ typedef struct Exc Exc;                                /* a raised exception (se
    page map (48-bit addresses, 4 KiB pages) sends each of its pages to that header, so "is
    this word a pointer into the heap, and into which object" is a range check, two loads and
    a multiply by the reciprocal of the slot size: O(1), interior pointers included.
-   Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and arrays, dict
-   value arrays, the key arrays of dicts and sets of strs and tuples); pys_alloc_atomic returns
+   Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and general backing
+   arrays, dict value arrays, the key arrays of dicts and sets of strs and tuples); pys_alloc_atomic returns
    memory that is never scanned (strings, Buf data, dict hash and index arrays, set hash arrays,
-   the key arrays of dicts and sets of ints, the merge buffers of sorts of ints and floats),
+   range-list arrays, the key arrays of dicts and sets of ints, the merge buffers of sorts of
+   ints and floats),
    since none of it can hold a pointer. Each (class, kind) has a free list. Memory is
    handed out zeroed: the sweep zeroes dead slots, so allocation pops a slot and clears its
    link word (inlined into callers for the classes up to 136 bytes). A chunk's never-used
@@ -1310,10 +1311,12 @@ static I empty_list[1];                /* valid even for zero-byte copies; disti
 static void empty(List *l) {           /* detach an empty list's historical storage without allocating */
   if (l->cap) { l->cap = 0; l->a = empty_list; }   /* cap 0 during sort: preserve its mutation marker */
 }
-List *pys_list_new(I cap) {
+static List *list_new(I cap, int atomic) {
   List *l = pys_alloc(sizeof(List));
-  l->cap = cap > 4 ? cap : 4; l->a = pys_alloc(l->cap * 8); return l;
+  l->cap = cap > 4 ? cap : 4;
+  l->a = atomic ? pys_alloc_atomic(l->cap * 8) : pys_alloc(l->cap * 8); return l;
 }
+List *pys_list_new(I cap) { return list_new(cap, 0); }
 List *pys_vtuple_list(VTuple *t) {
   if (!t) pys_fail("TypeError: 'NoneType' object is not iterable");
   List *l = pys_list_new(t->len);
@@ -1746,7 +1749,9 @@ List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once 
   uint64_t n = (uint64_t)pys_range_len(a, b, s);
   if (n > INT64_MAX) pys_fail("OverflowError: Python int too large to convert to C ssize_t");
   if (n > INT64_MAX >> 4) pys_fail("MemoryError");
-  List *l = pys_list_new((I)n);
+  /* Compiler contract: this result stays list[int]. Reboxing to optional/union
+     items requires a fresh scanned array; it must never retype this backing in place. */
+  List *l = list_new((I)n, 1);   /* range items are always unboxed ints; the header still holds a pointer */
   for (uint64_t i = 0; i < n; i++) l->a[i] = (I)((uint64_t)a + i * (uint64_t)s);   /* wraps to the item */
   l->len = (I)n; return l;
 }

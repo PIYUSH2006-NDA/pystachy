@@ -755,7 +755,8 @@ class Gen:
         # return type of that kind a call has used, so that it can no longer change (see adopt)
         self.qret: dict[str, str] = {}
         self.qholes: dict[str, list[int]] = {}  # direct/forwarded empty returns' layout holes, typed by adopt
-        self.qused: dict[str, bool] = {}
+        self.qused: dict[str, str] = {}  # layouts already consumed by recursive calls
+        self.qforward: dict[str, bool] = {}  # open returns include a forwarded empty result
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)
@@ -1624,8 +1625,8 @@ class Gen:
     def exc_brepr(self, o: Val) -> Val:
         return exceptions_exc_brepr(self, o)
 
-    def super_call(self, sc: Node, m: str, args: list[Node], based: bool=False) -> Val:
-        return exceptions_super_call(self, sc, m, args, based)
+    def super_call(self, sc: Node, m: str, args: list[Node], based: bool=False, read: bool=False) -> Val:
+        return exceptions_super_call(self, sc, m, args, based, read)
 
     def exc_helpers(self, c: str) -> None:
         return exceptions_exc_helpers(self, c)

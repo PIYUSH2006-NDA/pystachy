@@ -24,7 +24,9 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
 have a restricted set of types: integers, strings and supported tuples (whose items may
 include booleans).
-Tuples have a fixed shape, with at most nine items and constant indices.
+Fixed-shape tuples have at most nine items and require constant indices. Runtime-length
+`tuple[T, ...]` values support integer indexing checked at runtime; their elements must be
+`int`, `float`, `bool`, `str`, or one of these with `None`.
 
 Explicit closed scalar unions such as `int | str`, bounded native reference unions,
 and optional unions are supported. Dynamic `Any` values are not.
@@ -58,9 +60,10 @@ The main rules are:
 - Mutable containers are invariant: a `list[int]` cannot become a `list[int | None]`.
 - Empty lists and dictionaries need an annotation or a use that determines their type.
 - A function whose parameters are all annotated uses those types; if its return annotation is omitted,
-  it returns `None`. Give value-returning functions an explicit return type.
-- An unannotated module-level function or method is specialized for the argument types of each
-  call. Its supported branches and return values must have consistent types.
+  it returns `None`. Ordinary functions without arguments and methods with only `self` or `cls`
+  can infer a value return; constructors and implicit special methods keep their declared contracts.
+- A module-level function or ordinary method with an unannotated parameter is specialized for
+  each call's argument types. Its supported branches and returns must have consistent types.
 - An unannotated constructor can specialize its class from the fields it initializes.
   Objects of different specializations cannot share one variable or container.
 
@@ -93,7 +96,7 @@ Lambdas, closures and decorators of functions are supported. Functions with `*ar
 `**kwargs` specialize for the call's argument shape; forwarding is more restricted than in
 fully dynamic Python.
 
-Classes support fields, methods, class attributes, `@staticmethod`, `@classmethod` and
+Classes support fields, methods, class attributes, read-only `@property`, `@staticmethod`, `@classmethod` and
 supported operator and container methods. Dataclasses support `kw_only=True` and
 `__post_init__`; options such as `frozen=True`, `order=True` and `dataclasses.field()` are
 not supported.
