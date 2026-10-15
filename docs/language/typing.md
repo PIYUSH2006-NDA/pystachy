@@ -465,7 +465,14 @@ across base and derived views of the same receiver.
 subclass inherits that method. `super(C, self)` may name that class or one of its ancestors;
 `Base.method(obj, ...)` explicitly selects the named base's implementation. These forms keep
 the concrete receiver for further method calls. Runtime `isinstance(obj, Derived)` checks the
-hierarchy, but does not narrow a base-typed value to expose derived-only fields.
+hierarchy and narrows a base-typed local or parameter on the matching path, exposing derived
+fields and methods. This also works after `assert isinstance(obj, Derived)` and a guard such
+as `if not isinstance(obj, Derived): return`. The reference and its native representation stay
+unchanged; calls still select the actual subclass's override. Reassignment and control-flow
+joins discard refinements that no longer hold. Globals, fields and locals assigned by a
+`nonlocal` closure are not refined; copy a reference to a stable local and test that local.
+Only a single named derived class refines a base type; tuple/union tests and exception-class
+narrowing retain their existing restrictions.
 
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through

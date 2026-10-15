@@ -64,8 +64,8 @@ from src.pystachy_compiler.utils import (
 def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
     # the locals that test n narrows when its value is truth, as mypy narrows them, and the type
     # each then holds: an optional one is not None (x, x is not None, x != None, isinstance(x,
-    # T)), a union holds a value of the types isinstance(x, T) names, or of the others; and
-    # not/and/or of those
+    # T)), a union holds a value of the types isinstance(x, T) names, or of the others; an
+    # ordinary class local is a tested subclass; and not/and/or of those
     if not self.anyopt:
         return
     k = n.kind
@@ -89,14 +89,18 @@ def gen_narrows(self, n: Node, truth: bool, out: dict[str, str]) -> None:
             nt = self.isinst_narrow(t, n.kids[2], truth)
             if nt != "":
                 out[nm] = nt
+        elif truth and t in self.classes and self.classes[t].tag > 0 and n.kids[2].kind == "name" and n.kids[2].s in self.classes and self.derives(n.kids[2].s, t):
+            # The runtime class check proved this pointer has the derived layout. Keep
+            # the declared storage type, and refine only reads on this control-flow path.
+            out[nm] = n.kids[2].s
         elif self.isinst(t, n.kids[2]) == (-2 if truth else -3):
             out[nm] = unopt(t)
 
 def gen_narrowable(self, name: str) -> bool:
-    # a local (or parameter) of an optional type, or a union: a global or a field may change in a
-    # call, and so may a variable that a closure assigns (nonlocal)
+    # a local (or parameter) of an optional type, union, or ordinary class: a global or field
+    # may change in a call, and so may a variable that a closure assigns (nonlocal)
     t = self.ltype.get(name, "")
-    return (is_opt(t) or is_union(t)) and not self.is_global(name) and name not in self.nlw
+    return (is_opt(t) or is_union(t) or (t in self.classes and self.classes[t].tag > 0)) and not self.is_global(name) and name not in self.nlw
 
 def gen_narrow_by(self, test: Node, truth: bool) -> dict[str, str]:
     # narrowed becomes a copy narrowed by test being truth; the state before is returned
@@ -257,7 +261,7 @@ def gen_static_type(self, n: Node, typed: bool = False) -> str:
             # loop's later passes, unless None is all that its function assigns it)
             body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
             return "None" if only_none(body, n.s) else ""
-        return self.narrowed[n.s] if n.s in self.narrowed and (is_opt(t) or is_union(t)) and t != NONEVAR else t
+        return self.narrowed[n.s] if n.s in self.narrowed and (is_opt(t) or is_union(t) or t in self.classes) and t != NONEVAR else t
     if self.is_global(n.s) and n.s in self.gtypes and n.s not in self.gflag:
         return self.gtypes[n.s]
     return ""

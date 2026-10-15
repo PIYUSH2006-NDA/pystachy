@@ -643,10 +643,10 @@ class Gen:
         # may hold a value of another type: its first binding (none_ends), once compiled the line
         # that gives it that value (see assign, static_type)
         self.nonevars: dict[str, int] = {}
-        # optional and union locals: the narrower type a read has at this point (see narrows)
+        # optional, union and class locals: the narrower type a read has here (see narrows)
         self.narrowed: dict[str, str] = {}
         self.nonecmp = False  # the read being compiled is compared with None (see none_type)
-        self.anyopt = False  # an optional or union local exists: narrows has something to look for
+        self.anyopt = False  # an optional, union or class local exists: narrows has work to do
         self.building: dict[str, bool] = {}  # the functions being compiled
         self.wide: dict[str, bool] = {}  # optional values read from a global or a field (function + register), which no test narrows
         self.soft = Node("", "", 0)  # a display compared with a value: what it holds widens the type expected of it (see wider)
