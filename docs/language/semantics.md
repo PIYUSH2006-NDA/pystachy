@@ -36,10 +36,12 @@ Strings support raw and triple-quoted literals, implicit concatenation and escap
 than `\N{...}`.
 
 F-strings support `!r`, `!s`, `!a`, debug `=`, nested format specifications and the
-format-spec mini-language. `%` formatting requires a literal format string. It supports
-`s r a d i u x X o e E f F g G c`, flags, widths and precisions, but not named substitutions,
-`*` widths or precisions, or integer precisions. A variable format string such as
-`fmt % value` is rejected.
+format-spec mini-language. Replacement fields follow Python 3.12's grammar (PEP 701): they may
+reuse the f-string's quote, nest f-strings, and hold backslashes, newlines and comments.
+
+`%` formatting requires a literal format string. It supports `s r a d i u x X o e E f F g G c`,
+flags, widths and precisions, but not named substitutions, `*` widths or precisions, or integer
+precisions. A variable format string such as `fmt % value` is rejected.
 
 ## Operators and containers
 

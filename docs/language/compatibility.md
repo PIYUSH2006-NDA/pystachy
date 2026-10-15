@@ -543,8 +543,7 @@ supported alternatives.
 
 ### Source text
 
-- f-strings that reuse their own quote inside a field (PEP 701), `\N{...}` escapes, non-ASCII
-  identifiers and tabs in indentation
+- `\N{...}` escapes (in f-strings too), non-ASCII identifiers and tabs in indentation
 - a source file whose coding declaration names an encoding other than UTF-8, Latin-1 and ASCII
 - source nested more than 5,000 levels deep (expressions, statements and `elif` branches; a `**`
   or `lambda` counts twice), and source whose nesting would overflow CPython's parser stack of
