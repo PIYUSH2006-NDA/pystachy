@@ -1,5 +1,9 @@
 """Gen component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.union_arithmetic import (
+    gen_unumeric as union_arithmetic_unumeric,
+    gen_unumeric_case as union_arithmetic_unumeric_case,
+)
 from src.pystachy_compiler.unions import (
     gen_scalar_union as unions_scalar_union,
     gen_uop as unions_uop,
@@ -2216,6 +2220,12 @@ class Gen:
 
     def uequal(self, op: str, a: Val, b: Val) -> Val:
         return unions_uequal(self, op, a, b)
+
+    def unumeric(self, op: str, a: Val, b: Val, shown: str, unary: bool) -> Val:
+        return union_arithmetic_unumeric(self, op, a, b, shown, unary)
+
+    def unumeric_case(self, op: str, a: Val, b: Val, shown: str, unary: bool) -> Val:
+        return union_arithmetic_unumeric_case(self, op, a, b, shown, unary)
 
     def reference_union(self, t: str) -> bool:
         return unions_reference_union(self, t)

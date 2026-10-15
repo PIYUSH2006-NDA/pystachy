@@ -86,6 +86,10 @@ def gen_isref(self, t: str) -> bool:
 
 def gen_coerce(self, v: Val, t: str, what: str = "") -> Val:
     # v as a value of type t; what names v for the error when v may be None and t may not
+    if self.term and v.v == "undef":
+        # Numeric union dispatch can prove that every tag raises. Its placeholder
+        # never reaches the annotated return or assignment, so needs no conversion.
+        return Val("undef", t)
     if v.t == t:
         return v
     if is_vtuple(unopt(t)) and is_tuple(v.t):

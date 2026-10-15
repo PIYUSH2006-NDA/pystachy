@@ -1,0 +1,403 @@
++
+int:14
+int:5
+int:7
+float:10.5
+float:7.0
+int:8
+int:7
+type unsupported operand type(s) for +: 'int' and 'NoneType'
+int:5
+int:-4
+int:-2
+float:1.5
+float:-2.0
+int:-1
+int:-2
+type unsupported operand type(s) for +: 'int' and 'NoneType'
+int:7
+int:-2
+int:0
+float:3.5
+float:0.0
+int:1
+int:0
+type unsupported operand type(s) for +: 'int' and 'NoneType'
+float:10.5
+float:1.5
+float:3.5
+float:7.0
+float:3.5
+float:4.5
+float:3.5
+type unsupported operand type(s) for +: 'float' and 'NoneType'
+float:7.0
+float:-2.0
+float:0.0
+float:3.5
+float:-0.0
+float:1.0
+float:0.0
+type unsupported operand type(s) for +: 'float' and 'NoneType'
+int:8
+int:-1
+int:1
+float:4.5
+float:1.0
+int:2
+int:1
+type unsupported operand type(s) for +: 'bool' and 'NoneType'
+int:7
+int:-2
+int:0
+float:3.5
+float:0.0
+int:1
+int:0
+type unsupported operand type(s) for +: 'bool' and 'NoneType'
+type unsupported operand type(s) for +: 'NoneType' and 'int'
+type unsupported operand type(s) for +: 'NoneType' and 'int'
+type unsupported operand type(s) for +: 'NoneType' and 'int'
+type unsupported operand type(s) for +: 'NoneType' and 'float'
+type unsupported operand type(s) for +: 'NoneType' and 'float'
+type unsupported operand type(s) for +: 'NoneType' and 'bool'
+type unsupported operand type(s) for +: 'NoneType' and 'bool'
+type unsupported operand type(s) for +: 'NoneType' and 'NoneType'
+-
+int:0
+int:9
+int:7
+float:3.5
+float:7.0
+int:6
+int:7
+type unsupported operand type(s) for -: 'int' and 'NoneType'
+int:-9
+int:0
+int:-2
+float:-5.5
+float:-2.0
+int:-3
+int:-2
+type unsupported operand type(s) for -: 'int' and 'NoneType'
+int:-7
+int:2
+int:0
+float:-3.5
+float:0.0
+int:-1
+int:0
+type unsupported operand type(s) for -: 'int' and 'NoneType'
+float:-3.5
+float:5.5
+float:3.5
+float:0.0
+float:3.5
+float:2.5
+float:3.5
+type unsupported operand type(s) for -: 'float' and 'NoneType'
+float:-7.0
+float:2.0
+float:-0.0
+float:-3.5
+float:0.0
+float:-1.0
+float:-0.0
+type unsupported operand type(s) for -: 'float' and 'NoneType'
+int:-6
+int:3
+int:1
+float:-2.5
+float:1.0
+int:0
+int:1
+type unsupported operand type(s) for -: 'bool' and 'NoneType'
+int:-7
+int:2
+int:0
+float:-3.5
+float:0.0
+int:-1
+int:0
+type unsupported operand type(s) for -: 'bool' and 'NoneType'
+type unsupported operand type(s) for -: 'NoneType' and 'int'
+type unsupported operand type(s) for -: 'NoneType' and 'int'
+type unsupported operand type(s) for -: 'NoneType' and 'int'
+type unsupported operand type(s) for -: 'NoneType' and 'float'
+type unsupported operand type(s) for -: 'NoneType' and 'float'
+type unsupported operand type(s) for -: 'NoneType' and 'bool'
+type unsupported operand type(s) for -: 'NoneType' and 'bool'
+type unsupported operand type(s) for -: 'NoneType' and 'NoneType'
+*
+int:49
+int:-14
+int:0
+float:24.5
+float:-0.0
+int:7
+int:0
+type unsupported operand type(s) for *: 'int' and 'NoneType'
+int:-14
+int:4
+int:0
+float:-7.0
+float:0.0
+int:-2
+int:0
+type unsupported operand type(s) for *: 'int' and 'NoneType'
+int:0
+int:0
+int:0
+float:0.0
+float:-0.0
+int:0
+int:0
+type unsupported operand type(s) for *: 'int' and 'NoneType'
+float:24.5
+float:-7.0
+float:0.0
+float:12.25
+float:-0.0
+float:3.5
+float:0.0
+type unsupported operand type(s) for *: 'float' and 'NoneType'
+float:-0.0
+float:0.0
+float:-0.0
+float:-0.0
+float:0.0
+float:-0.0
+float:-0.0
+type unsupported operand type(s) for *: 'float' and 'NoneType'
+int:7
+int:-2
+int:0
+float:3.5
+float:-0.0
+int:1
+int:0
+type unsupported operand type(s) for *: 'bool' and 'NoneType'
+int:0
+int:0
+int:0
+float:0.0
+float:-0.0
+int:0
+int:0
+type unsupported operand type(s) for *: 'bool' and 'NoneType'
+type unsupported operand type(s) for *: 'NoneType' and 'int'
+type unsupported operand type(s) for *: 'NoneType' and 'int'
+type unsupported operand type(s) for *: 'NoneType' and 'int'
+type unsupported operand type(s) for *: 'NoneType' and 'float'
+type unsupported operand type(s) for *: 'NoneType' and 'float'
+type unsupported operand type(s) for *: 'NoneType' and 'bool'
+type unsupported operand type(s) for *: 'NoneType' and 'bool'
+type unsupported operand type(s) for *: 'NoneType' and 'NoneType'
+/
+float:1.0
+float:-3.5
+zero
+float:2.0
+zero
+float:7.0
+zero
+type unsupported operand type(s) for /: 'int' and 'NoneType'
+float:-0.2857142857142857
+float:1.0
+zero
+float:-0.5714285714285714
+zero
+float:-2.0
+zero
+type unsupported operand type(s) for /: 'int' and 'NoneType'
+float:0.0
+float:-0.0
+zero
+float:0.0
+zero
+float:0.0
+zero
+type unsupported operand type(s) for /: 'int' and 'NoneType'
+float:0.5
+float:-1.75
+zero
+float:1.0
+zero
+float:3.5
+zero
+type unsupported operand type(s) for /: 'float' and 'NoneType'
+float:-0.0
+float:0.0
+zero
+float:-0.0
+zero
+float:-0.0
+zero
+type unsupported operand type(s) for /: 'float' and 'NoneType'
+float:0.14285714285714285
+float:-0.5
+zero
+float:0.2857142857142857
+zero
+float:1.0
+zero
+type unsupported operand type(s) for /: 'bool' and 'NoneType'
+float:0.0
+float:-0.0
+zero
+float:0.0
+zero
+float:0.0
+zero
+type unsupported operand type(s) for /: 'bool' and 'NoneType'
+type unsupported operand type(s) for /: 'NoneType' and 'int'
+type unsupported operand type(s) for /: 'NoneType' and 'int'
+type unsupported operand type(s) for /: 'NoneType' and 'int'
+type unsupported operand type(s) for /: 'NoneType' and 'float'
+type unsupported operand type(s) for /: 'NoneType' and 'float'
+type unsupported operand type(s) for /: 'NoneType' and 'bool'
+type unsupported operand type(s) for /: 'NoneType' and 'bool'
+type unsupported operand type(s) for /: 'NoneType' and 'NoneType'
+//
+int:1
+int:-4
+zero
+float:2.0
+zero
+int:7
+zero
+type unsupported operand type(s) for //: 'int' and 'NoneType'
+int:-1
+int:1
+zero
+float:-1.0
+zero
+int:-2
+zero
+type unsupported operand type(s) for //: 'int' and 'NoneType'
+int:0
+int:0
+zero
+float:0.0
+zero
+int:0
+zero
+type unsupported operand type(s) for //: 'int' and 'NoneType'
+float:0.0
+float:-2.0
+zero
+float:1.0
+zero
+float:3.0
+zero
+type unsupported operand type(s) for //: 'float' and 'NoneType'
+float:-0.0
+float:0.0
+zero
+float:-0.0
+zero
+float:-0.0
+zero
+type unsupported operand type(s) for //: 'float' and 'NoneType'
+int:0
+int:-1
+zero
+float:0.0
+zero
+int:1
+zero
+type unsupported operand type(s) for //: 'bool' and 'NoneType'
+int:0
+int:0
+zero
+float:0.0
+zero
+int:0
+zero
+type unsupported operand type(s) for //: 'bool' and 'NoneType'
+type unsupported operand type(s) for //: 'NoneType' and 'int'
+type unsupported operand type(s) for //: 'NoneType' and 'int'
+type unsupported operand type(s) for //: 'NoneType' and 'int'
+type unsupported operand type(s) for //: 'NoneType' and 'float'
+type unsupported operand type(s) for //: 'NoneType' and 'float'
+type unsupported operand type(s) for //: 'NoneType' and 'bool'
+type unsupported operand type(s) for //: 'NoneType' and 'bool'
+type unsupported operand type(s) for //: 'NoneType' and 'NoneType'
+%
+int:0
+int:-1
+zero
+float:0.0
+zero
+int:0
+zero
+type unsupported operand type(s) for %: 'int' and 'NoneType'
+int:5
+int:0
+zero
+float:1.5
+zero
+int:0
+zero
+type unsupported operand type(s) for %: 'int' and 'NoneType'
+int:0
+int:0
+zero
+float:0.0
+zero
+int:0
+zero
+type unsupported operand type(s) for %: 'int' and 'NoneType'
+float:3.5
+float:-0.5
+zero
+float:0.0
+zero
+float:0.5
+zero
+type unsupported operand type(s) for %: 'float' and 'NoneType'
+float:0.0
+float:-0.0
+zero
+float:0.0
+zero
+float:0.0
+zero
+type unsupported operand type(s) for %: 'float' and 'NoneType'
+int:1
+int:-1
+zero
+float:1.0
+zero
+int:0
+zero
+type unsupported operand type(s) for %: 'bool' and 'NoneType'
+int:0
+int:0
+zero
+float:0.0
+zero
+int:0
+zero
+type unsupported operand type(s) for %: 'bool' and 'NoneType'
+type unsupported operand type(s) for %: 'NoneType' and 'int'
+type unsupported operand type(s) for %: 'NoneType' and 'int'
+type unsupported operand type(s) for %: 'NoneType' and 'int'
+type unsupported operand type(s) for %: 'NoneType' and 'float'
+type unsupported operand type(s) for %: 'NoneType' and 'float'
+type unsupported operand type(s) for %: 'NoneType' and 'bool'
+type unsupported operand type(s) for %: 'NoneType' and 'bool'
+type unsupported operand type(s) for %: 'NoneType' and 'NoneType'
+int:7,int:-7
+int:-2,int:2
+int:0,int:0
+float:3.5,float:-3.5
+float:-0.0,float:0.0
+int:1,int:-1
+int:0,int:0
+bad operand type for unary +: 'NoneType'
+int:9007199254740993 float:3.5
+1.5 0.5
+float:3.5
+unsupported operand type(s) for +: 'NoneType' and 'float'
+[exit 0]
