@@ -77,8 +77,10 @@ annotation is evaluated; use `"Node"` for a forward reference or
 `from __future__ import annotations` to defer evaluation.
 
 Evaluated annotations may name classes, supported typing forms, builtin generics, unions,
-and type variables. A variable may be used as the whole annotation; unsupported aliases
-are rejected where used. Generic class subscriptions such as `Box[int]` are supported
+and type variables. Aliases of supported classes can name those classes; other aliases are
+not supported. Parameterized aliases such as `Row = list[str]` are rejected at their
+definition, even when unused; value aliases such as `Pos = int` fail when used as annotations.
+Generic class subscriptions such as `Box[int]` are supported
 when they use the standard `typing.Generic` hook. Calls, other operators, custom class
 subscripting, and expressions that could execute user code are rejected. `os.PathLike` and the supported
 `collections.abc` names are exceptions to the restriction on builtin module attributes.
@@ -459,8 +461,8 @@ Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
 `Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
 dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
-no type variable. Repeated bindings must join to a supported common type; integer and bool
-bindings can join to `int`. Callable matching uses annotated positional parameters and
+no type variable. Repeated bindings must preserve the values' types: mixed `int` and `bool`
+constructor arguments do not implicitly join to `int`. Callable matching uses annotated positional parameters and
 returns, or an existing `Callable` signature.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
