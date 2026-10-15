@@ -162,3 +162,16 @@ def has_kind(n: Node, kind: str) -> bool:
         if has_kind(k, kind):
             return True
     return False
+
+
+def has_value_return(n: Node) -> bool:
+    # Explicit None and bare returns keep ordinary void functions eager. Nested
+    # functions' returns do not determine the enclosing function's signature.
+    if n.kind == "return":
+        return len(n.kids) > 0 and n.kids[0].kind != "None"
+    if n.kind in ["def", "class", "subclass", "lambda"]:
+        return False
+    for k in n.kids:
+        if has_value_return(k):
+            return True
+    return False
