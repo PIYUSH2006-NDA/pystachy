@@ -537,9 +537,16 @@ iteration variable. Nonconstant defaults are evaluated when the closure is defin
 
 Function decorators run when their `def` executes: expressions from top to bottom, then
 defaults, then decorator calls from bottom to top. The function name binds the final result.
-Methods support the dedicated decorators `@staticmethod`, `@classmethod` and recognized
-`@overload` stubs. Other method decorators, including `@property`, `@final` and `@override`,
+Methods support the dedicated decorators `@staticmethod`, `@classmethod`, read-only
+`@property` and recognized `@overload` stubs. Other method decorators, including `@final` and `@override`,
 are unsupported when the class is used.
+
+A property getter takes only `self` and needs a return annotation. Reading `obj.value`
+calls the getter each time; inherited getters, property overrides and `super().value`
+use the ordinary method dispatch. A callable-valued property can be called as `obj.value(args)`.
+Assignment, setters/deleters, property objects read through the class, and replacing a
+property with a field or method are unsupported. `hasattr(obj, "value")` on a property
+is rejected because it must run the getter; read it in `try/except AttributeError` instead.
 
 ## Fields, dataclasses and NamedTuples
 

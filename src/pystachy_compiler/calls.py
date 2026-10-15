@@ -586,6 +586,8 @@ def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
             return self.replace(o, args)
         if ci.methods[m].iters:
             self.err(f"calling {short(o.t)}.__iter__() is not supported (its iterator is the list it steps through here): iterate over the object")
+        if ci.methods[m].prop:
+            return self.obj_call(self.call_fn(ci.methods[m], [o], []), args, "")
         self.cls_bound(ci.methods[m], o.t, True)
         return self.call_fn(ci.methods[m], [o] if ci.methods[m].deco == "" else [], args)  # (a static or class method gets no o)
     return self.bmethod(o, m, args)
@@ -675,6 +677,9 @@ def gen_method_value(self, o: Val, name: str) -> Val:
         if name in ci.ftypes or name not in ci.methods:
             return Val("", "")
         f = ci.methods[name]
+        if f.prop:
+            self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
+            return self.call_fn(f, [o], [])
         if f.deco != "":
             self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
         if f.iters:

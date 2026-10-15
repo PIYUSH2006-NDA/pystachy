@@ -131,6 +131,9 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             self.lazy[ci.methods[m].ll] = ci.methods[m]  # (compiled only if called: cls(...) may not fit this class)
         elif m not in ci.methods:
             ci.methods[m] = f
+        elif f.prop != ci.methods[m].prop:
+            self.line = ci.methods[m].node.line
+            self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
         elif ci.exc == "" and (f.deco != "" or ci.methods[m].deco != ""):
             self.line = ci.methods[m].node.line
             self.err(f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
@@ -216,7 +219,7 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            if len(b.kids) > 3 and ((not static and deco != "classmethod") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
+            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:
                 return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
