@@ -929,6 +929,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
                 why = "__slots__ needs literal attribute names"
             elif n.s in ["__dict__", "__weakref__"] or (n.s.startswith("__") and not n.s.endswith("__")):
                 why = f"__slots__ entry '{n.s}' is not supported"
+            elif ci.base in self.classes and n.s in self.classes[ci.base].methods:
+                why = f"slot '{n.s}' shadows an inherited method or property: not supported"
             else:
                 ci.slots.append(n.s)
                 own_slots.append(n.s)
