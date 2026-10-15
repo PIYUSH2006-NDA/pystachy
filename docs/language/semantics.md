@@ -45,7 +45,8 @@ format-spec mini-language. `%` formatting requires a literal format string. It s
 
 Supported operations include arithmetic, bitwise operations, chained comparisons,
 `in` / `not in`, boolean operations returning operands, conditional expressions, negative
-indices, and string/list slices without a step. Integer `//` and `%` floor as in Python;
+indices, string, list and tuple slices with optional steps, and assignment to and deletion
+of list slices. Integer `//` and `%` floor as in Python;
 true division is correctly rounded, and int/float comparisons are exact within the
 supported types.
 

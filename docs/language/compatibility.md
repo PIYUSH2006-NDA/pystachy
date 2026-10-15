@@ -33,9 +33,11 @@ In these cases a program can compile but behave differently from CPython.
 ### Text and file positions
 
 - `str` is a byte string holding UTF-8: `len`, indexing, slicing, iteration, `find`/`index`
-  and `write()`'s result (but a Latin-1 file's) count bytes, case mapping and the `is*()`
-  tests but `isspace()` know only ASCII, `replace("", s)`'s gaps are bytes, and `chr(i)` for
-  `i < 256` is that byte (above, its UTF-8; `"%c" % i` is the character's UTF-8 for every `i`).
+  and `write()`'s result (but a Latin-1 file's) count bytes (a slice's step selects bytes too:
+  `s[::-1]` of non-ASCII text reverses its bytes, as `"".join(reversed(s))` does), case
+  mapping and the `is*()` tests but `isspace()` know only ASCII, `replace("", s)`'s gaps are
+  bytes, and `chr(i)` for `i < 256` is that byte (above, its UTF-8; `"%c" % i` is the
+  character's UTF-8 for every `i`).
   ASCII behaves exactly like CPython; escapes such as `\xe9` and `€` produce UTF-8, and
   format widths, `center`/`ljust`/`rjust`/`zfill`, `repr()`'s escapes, `read(n)` and
   `ord()` count characters, as `strip()` (also of given characters), `split()`,
@@ -366,6 +368,11 @@ supported alternatives.
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class, which CPython calls anyway
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
+- slicing a fixed-shape tuple or NamedTuple by bounds or a step that are not integer constants,
+  unless its items have one type a `tuple[T, ...]` can hold (the result is then one); assigning
+  to or deleting a slice of anything but a list (CPython raises `TypeError` for a `str` or a
+  tuple, and a dict takes the slice object as a key); and assigning to a list slice a value that
+  is not iterable, or whose items are not the list's item type (as for `list.extend()`)
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
@@ -415,10 +422,11 @@ supported alternatives.
 - a NamedTuple without fields, assigned a field outside its `__init__`, whose class defines
   `__getitem__` or `__iter__`, compared or added through its own operator method with another type,
   given to `hasattr()` of a name it does not define, `_make()`, `_asdict()` of fields of different
-  types, the functional `NamedTuple("P", [...])`, slicing a tuple, a NamedTuple or an object (whose
-  `__getitem__` would take a slice object), a tuple `*` a number that is not a constant, and
-  CPython's class-creation errors of a NamedTuple (a field after a default, an underscored field,
-  an overwritten `__init__`) and of a dataclass (a field without a default after one with it)
+  types, the functional `NamedTuple("P", [...])`, slicing an object (whose `__getitem__`,
+  `__setitem__` or `__delitem__` would take a slice object), a tuple `*` a number that is not a
+  constant, and CPython's class-creation errors of a NamedTuple (a field after a default, an
+  underscored field, an overwritten `__init__`) and of a dataclass (a field without a default
+  after one with it)
 
 ### Optional values
 

@@ -67,8 +67,9 @@ that assumption.
 List headers remain scanned so their backing arrays stay reachable. `list(range(...))`
 initially uses pointer-free backing because every element is an unboxed integer, including
 for an empty range's minimum-capacity buffer. The list layout and mutation interface are
-unchanged. Generic growth, copies and slices still allocate scanned backing; preserving
-element kinds through those operations is a separate follow-up.
+unchanged. Generic growth, copies and slices (stepped too) still allocate scanned backing;
+preserving element kinds through those operations is a separate follow-up. Slice assignment
+and deletion move items within a list's backing, which keeps its kind unless the list grows.
 
 ## Build and cache
 

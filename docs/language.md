@@ -142,7 +142,7 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
 | Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
 | Containers | List, dictionary, set and tuple displays; list and set comprehensions |
-| Indexing and slicing | Negative indices; string and list slices without a step |
+| Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
 | Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join` |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
@@ -217,7 +217,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
 `bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
-dynamic attribute access, stepped slices and unrestricted argument expansion.
+dynamic attribute access, slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.
 An unsupported feature that the program needs produces a compile-time error.
