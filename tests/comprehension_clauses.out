@@ -48,7 +48,7 @@ True
 [1, 2, 1] [1, 2, 1, 2, 1]
 RuntimeError dictionary changed size during iteration
 IndexError list index out of range
-[1, 2, 3, 4, 6, 9] []
+[1, 2, 3, 4, 6, 9] [] [101, 202, 312, 3]
 ['two', 'three', 'one', 'two', 'three']
 True
 True
@@ -58,4 +58,6 @@ True
 [1, 2, 3] ['a', 'b']
 [[1, 2, 3], [2, 4, 6]] [2, 2, 4, 6] {0, 1, 2, 3}
 3
+[(1, 0), (2, 0), (2, 1)] 5 global y
+{'a': 1, 'b': 1} 5 global y
 [exit 0]

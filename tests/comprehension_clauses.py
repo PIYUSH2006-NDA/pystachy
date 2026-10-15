@@ -111,6 +111,20 @@ def products(*args: int) -> list[int]:
     return [a * b for a in args for b in args if a <= b]
 
 
+def cells(n: int) -> list[int]:
+    count = 0
+
+    def bump() -> int:
+        nonlocal count
+        count += 1
+        return count
+
+    def grid() -> list[int]:
+        return [i * 10 + j + bump() * 100 for i in range(n) for j in range(n) if i < j]
+
+    return grid() + [count]
+
+
 def files() -> None:
     p = "comprehension_clauses_" + str(os.getpid()) + ".txt"
     with open(p, "w") as w:
@@ -160,7 +174,7 @@ scope()
 early()
 consumers()
 mutation()
-print(products(1, 2, 3), products())
+print(products(1, 2, 3), products(), cells(3))
 files()
 g = Grid([[1, 0], [0, 2], [3, 4]])
 print(g.cells(), g.where(), g.total())
@@ -170,3 +184,7 @@ print(flat([[1, 2], [3]]), flat([["a"], ["b"]]))
 table = [[r * c for c in range(1, 4)] for r in range(1, 3)]
 print(table, [v for row in table for v in row if v % 2 == 0], {v % 4 for row in table for v in row})
 print(max(len(w) for line in ["a bc", "def g"] for w in line.split()))
+y = "global y"
+x = 5
+print([(x, y) for x in range(3) for y in range(x)], x, y)
+print({y: x for x in range(2) for y in "ab"}, x, y)
