@@ -1273,7 +1273,8 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
             # class upcasts. Only a concrete incompatible type starts a new one.
             if old != NONEVAR and "?" not in old and v.t != "" and v.t != "None" and "?" not in v.t and not self.widens(v.t, old) and not self.converts(v.t, old):
                 self.alloca(v.t, name)
-                self.narrowed.pop(name, False)
+                if name in self.narrowed:
+                    del self.narrowed[name]
                 self.lkk.pop(name, "")
         if name not in self.ltype and v.t == "None":
             # first None: T | None, typed by the first store of another value, or by a read
