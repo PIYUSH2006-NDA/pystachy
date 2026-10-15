@@ -330,6 +330,8 @@ class ClassInfo:
         self.fpos: dict[str, int] = {}  # field -> its index in fields (and in the struct)
         self.ftypes: dict[str, str] = {}
         self.fdefault: dict[str, Node] = {}
+        self.slots: list[str] = []  # literal __slots__, including inherited slots
+        self.slotlimit = False  # every ordinary base and this class omit an instance dict
         self.fglob: dict[str, str] = {}
         self.fflag: dict[str, int] = {}  # field -> index of its "is assigned" flag in the struct
         self.methods: dict[str, FnInfo] = {}

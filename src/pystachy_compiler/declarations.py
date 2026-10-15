@@ -900,6 +900,40 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
+    # Keep slots as layout metadata rather than an instance field. A
+    # subclass without its own __slots__, or with an unslotted base, has a dict.
+    if ci.base in self.classes:
+        ci.slots = list(self.classes[ci.base].slots)
+    for st in ci.node.kids[0].kids:
+        if st.kind not in ["assign", "annassign"] or st.kids[0].kind != "name" or st.kids[0].s != "__slots__":
+            continue
+        self.line = st.line
+        slot_node = st.kids[-1]
+        names = [slot_node] if slot_node.kind == "str" else slot_node.kids if slot_node.kind in ["tuple", "list"] else []
+        why = ""
+        if slot_node.kind not in ["str", "tuple", "list"] or (st.kind == "annassign" and len(st.kids) != 3):
+            why = "__slots__ needs a literal string, tuple or list of strings"
+        for n in names:
+            if n.kind != "str" or n.s == "" or not (n.s[0].isalpha() or n.s[0] == "_") or not n.s.replace("_", "a").isalnum():
+                why = "__slots__ needs literal attribute names"
+            elif n.s in ["__dict__", "__weakref__"] or (n.s.startswith("__") and not n.s.endswith("__")):
+                why = f"__slots__ entry '{n.s}' is not supported"
+            else:
+                ci.slots.append(n.s)
+        if why != "":
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+        ci.slotlimit = ci.exc == "" and (ci.base not in self.classes or self.classes[ci.base].slotlimit)
+        # A slot's descriptor cannot coexist with a class variable or method of
+        # that name. Reject shadowing inherited descriptors too.
+        for d in ci.node.kids[0].kids:
+            name = d.s if d.kind == "def" else d.kids[0].s if d.kind in ["assign", "annassign"] and d.kids[0].kind == "name" and (d.kind == "assign" or len(d.kids) == 3) else ""
+            if name in ci.slots:
+                why = f"'{name}' in __slots__ conflicts with class variable or method"
+                if ci.mod == "":
+                    self.err(why)
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
     if ci.base in self.classes:
         # an exception class's objects begin with its base's fields (and their flags, see fl_fields)
         b = self.classes[ci.base]
@@ -917,6 +951,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
     for st in ci.node.kids[0].kids:
         self.line = st.line
+        if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
+            continue
         if st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
             # (a class attribute of the base bound again, with the same type: as x = v is)
             b = self.classes[ci.base]
@@ -1329,6 +1365,8 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
             self.err(f"{tname(t)}.{name} is a method: call it, {name}(...) (methods are not values)")
         self.err(f"type {typestr(o.t)} has no attribute '{name}'")
     ci = self.classes[o.t]
+    if store and ci.slotlimit and name not in ci.slots:
+        self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:
         if name in ci.methods:
             self.err(f"{o.t}.{name} is a method: call it, {name}(...) (methods are not values)")
@@ -1423,9 +1461,11 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
     return Val(r, p.t)
 
 def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
+    ci = self.classes[o.t]
+    if ci.slotlimit and name not in ci.slots:
+        self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     what = f"the value assigned to field '{name}' ({typestr(p.t)})" if is_opt(v.t) else ""
     self.emit(f"store {lt(p.t)} {self.coerce(v, p.t, what).v}, ptr {p.v}")
-    ci = self.classes[o.t]
     if name in ci.fflag:
         self.emit(f"store i1 true, ptr {self.fgep(o, ci.fflag[name])}")
 

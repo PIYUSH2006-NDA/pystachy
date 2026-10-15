@@ -274,7 +274,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
     # (A class whose only problem is ci.hook still compiles here: CPython runs its body.)
     ci.bad = "" if ci.bad == ci.hook else ci.bad
     for st in ci.node.kids[0].kids if ci.mod != "" and ci.bad == "" else []:
-        if st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name":
+        if st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name" and st.kids[0].s != "__slots__":
             why = self.default_problem(st.kids[2], ci.ftypes[st.kids[0].s])
             if why != "":
                 ci.bad = f"class {shown(ci.name)} is not supported: {why}"
@@ -287,6 +287,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
     later = ""
     for st in ci.node.kids[0].kids:
         self.line = st.line
+        if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
+            continue
         if st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name":
             fl = st.kids[0].s
             self.no_class_names(st.kids[2], bound, ci)

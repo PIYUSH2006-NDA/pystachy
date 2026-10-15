@@ -57,6 +57,8 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
     s = ClassInfo(name, t.node)
     s.mod = t.mod
     s.origin = c
+    s.slots = t.slots
+    s.slotlimit = t.slotlimit
     s.fields = [x for x in t.fields]  # (its class attributes, which its specializations share)
     for x in t.fields:
         s.fpos[x] = t.fpos[x]
