@@ -199,3 +199,56 @@ print("{:.1f}|{:.2f}".format(*fs), "{}".format(sum(x for x in fs)), "{0[0]:>4}{0
 opt: str | None = "x"
 none: int | None = None
 print("{}".format(opt), "{!r}".format(None), "{:>3}".format(True), "{}|{!s}|{!r}".format(none, none, none))
+
+
+# a field's lookups run in turn once its argument is found, before its conversion, the fields
+# in its spec and its __format__; format_map() reads the mapping as each field needs it, while
+# ** gives the call a copy of the dict
+class Box:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    @property
+    def inner(self) -> "Box":
+        print("  inner of", self.name)
+        return Box(self.name + ">")
+
+    def __getitem__(self, k: str) -> "Box":
+        print("  getitem", self.name, repr(k))
+        return Box(self.name + "[" + k + "]")
+
+    def __format__(self, spec: str) -> str:
+        print("  Box.__format__", self.name, repr(spec))
+        return self.name
+
+    def __repr__(self) -> str:
+        print("  Box.__repr__", self.name)
+        return "Box(" + self.name + ")"
+
+
+class Upper:
+    def __getitem__(self, k: str) -> str:
+        print("  Upper[", k, "]")
+        return k.upper()
+
+
+class Add:
+    def __init__(self, s: str) -> None:
+        self.s = s
+
+    def __format__(self, spec: str) -> str:
+        if self.s == "a":
+            adds["b"] = Add("added")
+        return self.s
+
+
+adds: dict[str, Add] = {}
+adds["a"] = Add("a")
+print("{0.inner[k].inner!r:>{1}} {0[x]:{2}}".format(Box("b"), width(3), "s"))
+print("{a}{b}{a}".format_map(Upper()))
+print("{a}{b}".format_map(adds))
+del adds["b"]
+try:
+    print("{a}{b}".format(**adds))
+except KeyError as e:
+    print("KeyError", e, len(adds))

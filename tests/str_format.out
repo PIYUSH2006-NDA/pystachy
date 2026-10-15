@@ -87,4 +87,18 @@ kjp
 IndexError Replacement index 1 out of range for positional args tuple
 1.5|2.25 3.75  1.52.25 |
 x None   1 None|None|None
+  width 3
+  inner of b
+  getitem b> 'k'
+  inner of b>[k]
+  Box.__repr__ b>[k]>
+  getitem b 'x'
+  Box.__format__ b[x] 's'
+Box(b>[k]>) b[x]
+  Upper[ a ]
+  Upper[ b ]
+  Upper[ a ]
+ABA
+aadded
+KeyError 'b' 2
 [exit 0]
