@@ -132,8 +132,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
     if name.startswith("__pys_dict_") or name.startswith("__pys_set_"):
         return self.walk(name, args)
-    if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii":
-        # compiler-written calls (f"{x!r}", dataclass __repr__): always the builtin
+    if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii" or name == "__pys_hash":
+        # compiler-written calls (f"{x!r}", dataclass __repr__, hash_helper): always the builtin
         name = name[6:]
     if name.startswith("builtins."):
         name = name[9:]
@@ -196,6 +196,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"{name}() is supported as the argument of list(), tuple() (with scalar or optional scalar items), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), and as the value assigned to a list slice, which take its items at once; elsewhere use a list comprehension")
     if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod" or name == "dict"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
+    if name == "hash":
+        if len(args) != 1 or args[0].kind == "kw":
+            self.err(f"hash() takes exactly one argument ({len(args)} given)")
+        return self.hash_value(self.expr(args[0], ""))
     if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
         # format(v, spec): what the f-string field {v:spec} gives, v.__format__(spec)
         return self.format_(self.expr(args[0], ""), args[1] if len(args) == 2 else mk("str", "", self.line, []))
@@ -637,8 +641,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
         return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
     elif name == "dict" and is_dict(t):
-        # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c)
-        return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"]), t)
+        # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c),
+        # comparing keys hashed by their class (key_fx)
+        return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"], self.key_fx(targs(t)[0])), t)
     elif name == "list" and is_dict(t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(t)[0]]))
     elif name == "range" or name == "enumerate" or name == "zip" or name == "reversed":
@@ -1454,7 +1459,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         vt = self.optdefault(d, kv[1])  # (d.pop(k, None): V | None)
         dv = self.to_slot(self.coerce(d, vt))
         fn = "pys_dict_popbox" if is_sopt(vt) and not is_sopt(kv[1]) else "pys_dict_pop_default"  # (an int's box)
-        return self.from_slot(self.nonekey(kx, dv, fn, [f"ptr {o.v}", f"i64 {k}", f"i64 {dv}"]), vt)
+        return self.from_slot(self.nonekey(kx, dv, fn, [f"ptr {o.v}", f"i64 {k}", f"i64 {dv}"], self.key_fx(kv[0])), vt)
     base = o.t
     T = ""
     K = ""
@@ -1643,10 +1648,11 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         av = av + ["i64 " + self.to_slot(Val(numok, "bool")), "i64 " + self.to_slot(numx), f"ptr {self.sconst(self.desc(numx.t, '=='))}"]
     if bk.t != "":
         self.bool_find(o.v, bk, av[1][4:])
+    x = self.key_fx(K) if base == "dict" else ""  # (Ins.x of a lookup: U? where the keys are objects)
     if kx.t != "":
-        res = self.nonekey(kx, av[2][4:] if m == "get" else "", fn, av)
+        res = self.nonekey(kx, av[2][4:] if m == "get" else "", fn, av, x)
     else:
-        res = self.rt(fn, "i64" if slot else rtt(rtype), av)
+        res = self.rt(fn, "i64" if slot else rtt(rtype), av, x)
     if numok != "true" and m == "count":
         res = self.select(numok, Val(res, "int"), Val("0", "int"))
     if slot:
@@ -1680,7 +1686,7 @@ def gen_update(self, o: Val, args: list[Node]) -> Val:
     if x.t != "" and x.t != o.t and x.t != pairs:
         self.err(f"dict.update() of a {typestr(o.t)} takes a dict of its type, a {typestr(pairs)} or keyword arguments, not {typestr(x.t)}")
     if x.t != "":
-        self.rt("pys_dict_update" if x.t == o.t else "pys_dict_update_pairs", "void", [f"ptr {o.v}", f"ptr {x.v}"])
+        self.rt("pys_dict_update" if x.t == o.t else "pys_dict_update_pairs", "void", [f"ptr {o.v}", f"ptr {x.v}"], self.key_fx(kv[0]))
     if kw.t != "":
         self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
     return Val("null", "None")

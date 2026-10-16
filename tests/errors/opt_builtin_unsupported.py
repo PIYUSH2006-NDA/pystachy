@@ -1,6 +1,6 @@
-# error: unsupported call hash(str | None)
+# error: unsupported call id(str | None)
 def get() -> str | None:
     return None
 
 
-print(hash(get()) == hash(None))  # (hash() is not supported for a str either)
+print(id(get()) == id(None))  # (id() is not supported for a str either)

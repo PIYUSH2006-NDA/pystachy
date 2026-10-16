@@ -36,7 +36,6 @@ from src.pystachy_compiler.syntax import Node, has_kind, has_value_return, menti
 from src.pystachy_compiler.utils import (
     clone,
     elem,
-    elem_problem,
     is_callable,
     is_const,
     is_dict,
@@ -47,7 +46,6 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
-    key_problem,
     kw_names,
     kw_types,
     literal_format,
@@ -84,17 +82,18 @@ def gen_none_items(self, t: str) -> str:
     return self.ctype("tuple", [self.none_items(x) for x in targs(t)]) if is_tuple(t) else t
 
 def gen_subst(self, t: str, T: str, K: str, V: str, S: str) -> str:
-    # Instantiate a builtin method's type without allocating an oversized replacement.
+    # Instantiate a builtin method's type without allocating an oversized replacement: its K and
+    # V become the key and value types at once (a key type may name a class Val)
     if t == "T":
         return T
     if t == "S":
         return S
-    if len(t) + t.count("K") * (len(K) - 1) > TYPE_SIZE:
+    if len(t) + t.count("K") * (len(K) - 1) + t.count("V") * (len(V) - 1) > TYPE_SIZE:
         self.err(f"type representation exceeds {TYPE_SIZE} bytes; simplify the type or annotate template parameters")
-    t = t.replace("K", K)
-    if len(t) + t.count("V") * (len(V) - 1) > TYPE_SIZE:
-        self.err(f"type representation exceeds {TYPE_SIZE} bytes; simplify the type or annotate template parameters")
-    return t.replace("V", V)
+    out = ""
+    for c in t:
+        out += K if c == "K" else V if c == "V" else c
+    return out
 
 def gen_typeof(self, n: Node) -> str:
     t = self.ann(n)
@@ -186,9 +185,9 @@ def gen_ann(self, n: Node) -> str:
         if base == "list" and len(ts) == 1:
             return self.ctype("list", [ts[0]])
         if base == "dict" and len(ts) == 2:
-            return self.ctype("dict", ts) if key_problem(ts[0]) == "" else "!" + key_problem(ts[0])
+            return self.ctype("dict", ts) if self.key_problem(ts[0]) == "" else "!" + self.key_problem(ts[0])
         if (base == "set" or base == "frozenset") and len(ts) == 1:
-            return self.ctype(base, ts) if elem_problem(ts[0]) == "" else "!" + elem_problem(ts[0])
+            return self.ctype(base, ts) if self.elem_problem(ts[0]) == "" else "!" + self.elem_problem(ts[0])
         if base == "tuple" and (len(ts) > 0 or n.kids[1].kind == "tuple" or n.kids[1].kind == "starred"):
             return self.ctype("tuple", ts)  # (tuple[()] is the empty tuple's, as tuple[*Ts] of no types is)
         if base == "optional" and len(ts) == 1:
@@ -945,6 +944,11 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
                 p.kids[0] = mk("noann", "", d.line, [])
         if self.typevar_in([d.kids[1]], tvs) != "":
             d.kids[1] = mk("noann", "", d.line, [])
+    for i in range(len(ps)):
+        # x: object, as in __eq__(self, other: object): a template's parameter, which each call
+        # types (any argument: isinstance() narrows it), where a template may be
+        if ps[i].kind == "param" and ps[i].kids[0].kind == "name" and ps[i].kids[0].s == "object" and not (cls != "" and i == 0 and f.deco != "staticmethod") and (cls == "" or template_ok(d.s)):
+            ps[i].kids[0] = mk("noann", "", d.line, [])
     tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: {d.s}() is not a template (another method whose parameters mention a TypeVar is, compiled for each call's argument types)"
     if tv != "" and cls != "" and not template_ok(d.s) and not self.lib:
         self.err(tvbad)
@@ -2010,7 +2014,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         vt = self.guess(e.kids[1], f)
         if kt.startswith("!") or vt.startswith("!"):
             return kt if kt.startswith("!") else vt
-        return self.ctype("dict", [kt, vt]) if kt != "" and vt != "" and key_problem(kt) == "" else ""
+        return self.ctype("dict", [kt, vt]) if kt != "" and vt != "" and self.key_problem(kt) == "" else ""
     if k == "call" and e.kids[0].kind == "name" and (e.kids[0].s == "list" or e.kids[0].s == "sorted") and len(e.kids) == 2 and not self.bound(e.kids[0].s):
         # list(range(n)), list(xs), sorted(xs): a list of the items
         arg = e.kids[1]

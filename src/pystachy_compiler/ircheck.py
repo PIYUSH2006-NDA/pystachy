@@ -334,9 +334,12 @@ def gen_opfx(self, i: Ins, fa: dict[str, bool]) -> int:
     if i.op == "icall":
         return FXALL  # (a Callable's code: any function of its type)
     if i.op == "rt":
-        # (an exception, E, may be an object of an exception class, whose __str__ and __repr__ run)
+        # (an exception, E, may be an object of an exception class, whose __str__ and __repr__ run;
+        # a key hashed by its class, H, runs __hash__ and __eq__, and one hashed by identity, P,
+        # its __repr__ where a KeyError names it)
         f = self.rtfns[i.s]
-        return FXALL if f.q and ("O" in i.x or ("E" in i.x and len(self.xcls) > 0)) else f.fx
+        u = "O" in i.x or "H" in i.x or ("P" in i.x and f.fx & FXBIT["R"] != 0) or ("E" in i.x and len(self.xcls) > 0)
+        return FXALL if f.q and u else f.fx
     if i.op == "mem.load" or i.op == "mem.store" or i.op == "mach.load" or i.op == "mach.store":
         st = i.op == "mem.store" or i.op == "mach.store"
         a = i.a[0].v

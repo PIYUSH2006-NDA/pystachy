@@ -937,13 +937,18 @@ def gen_program(self, mods: list[Mod]) -> str:
             hpush(self.wake, i)
     done: dict[str, bool] = {}
     helped: dict[str, bool] = {}
+    hashed: dict[str, bool] = {}
     xmade: dict[str, bool] = {}
     while True:
-        before = len(done) + len(helped) + len(xmade)
+        before = len(done) + len(helped) + len(hashed) + len(xmade)
         for c in [x for x in self.ocls]:
             if c not in helped:
                 helped[c] = True
                 self.obj_helpers(c)
+        for c in [x for x in self.hcls]:
+            if c not in hashed:
+                hashed[c] = True
+                self.hash_helper(c)
         for c in [x for x in self.xcls]:
             if c not in xmade:
                 xmade[c] = True
@@ -961,7 +966,7 @@ def gen_program(self, mods: list[Mod]) -> str:
                     self.function(lz[i], lz[i].node.kids[2].kids)
         for i in later:
             hpush(self.wake, i)
-        if len(done) + len(helped) + len(xmade) == before:
+        if len(done) + len(helped) + len(hashed) + len(xmade) == before:
             break
     for nm in self.flagged:
         if nm not in self.gtypes and nm not in self.funcs and nm not in self.classes:

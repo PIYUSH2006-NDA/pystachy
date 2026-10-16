@@ -1,0 +1,21 @@
+KeyError
+Exc
+Exc
+hashed1.hash_count == 1 True
+hashed2.hash_count == 1 True
+eq_count == 1 True
+hashed1.hash_count == 1 True
+hashed2.hash_count == 1 True
+eq_count == 1 True
+Exc
+d == {key2: 2} True
+Exc
+d[x2] = 2: CustomException
+z = d[x2]: CustomException
+x2 in d: CustomException
+d.get(x2): CustomException
+d.setdefault(x2, 42): CustomException
+d.pop(x2): CustomException
+d.update({x2: 2}): CustomException
+6
+[exit 0]

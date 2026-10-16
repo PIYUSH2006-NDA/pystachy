@@ -46,7 +46,6 @@ from src.pystachy_compiler.utils import (
     is_super,
     is_tuple,
     is_vtuple,
-    key_problem,
     kw_names,
     kw_types,
     lt,
@@ -819,11 +818,11 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         if kv[0] == "" or kv[1] == "":
             self.err(f"cannot infer the type of {'an empty dict' if len(ks) == 0 else 'a dict of None values'}; add a type annotation (d: dict[K, V] = {{}}, or -> dict[K, V] on a function returning the dict)")
         vs = [self.coerce(x, kv[1]) for x in vs]
-        if key_problem(kv[0]) != "":
-            self.err(key_problem(kv[0]))
+        if self.key_problem(kv[0]) != "":
+            self.err(self.key_problem(kv[0]))
         r = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", f"i64 {len(ks)}"])
         for i in range(len(ks)):
-            self.rt("pys_dict_set", "void", [f"ptr {r}", "i64 " + self.to_slot(ks[i]), "i64 " + self.to_slot(vs[i])])
+            self.rt("pys_dict_set", "void", [f"ptr {r}", "i64 " + self.to_slot(ks[i]), "i64 " + self.to_slot(vs[i])], self.key_fx(kv[0]))
         return Val(r, self.ctype("dict", kv))
     if k == "tuple":
         ws = targs(want) if is_tuple(want) else []
@@ -2107,7 +2106,7 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         if bool_for_int(kval.t, kv[0]):
             key = self.to_slot(kx)
             return self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {o.v}", f"i64 {self.bool_find(o.v, kval, key)}"]), kv[1])
-        return self.from_slot(self.nonekey(kx, "", "pys_dict_getitem", [f"ptr {o.v}", f"i64 {self.to_slot(kx)}"]), kv[1])
+        return self.from_slot(self.nonekey(kx, "", "pys_dict_getitem", [f"ptr {o.v}", f"i64 {self.to_slot(kx)}"], self.key_fx(kv[0])), kv[1])
     if is_tuple(t) or t in self.nts:
         ts = targs(t) if is_tuple(t) else self.classes[t].fields  # (a NamedTuple's fields)
         c = self.const_of(n.kids[1], {}, True) if self.lit_context() else None
@@ -3214,8 +3213,8 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
     if (op == "in" or op == "not in") and b.t == "str":
         a = self.unwrap(a, "TypeError: 'in <string>' requires string as left operand, not NoneType")
-    if (op == "in" or op == "not in") and a.t == "None" and (is_dict(b.t) or is_set(b.t) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
-        return Val("false" if op == "in" else "true", "bool")  # None is no key of a dict (no element of a set), and no number
+    if (op == "in" or op == "not in") and a.t == "None" and ((is_dict(b.t) and targs(b.t)[0] not in self.classes) or (is_set(b.t) and selem(b.t) not in self.classes) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
+        return Val("false" if op == "in" else "true", "bool")  # None is no key of a dict (no element of a set) but an object's, and no number
     kt = targs(b.t)[0] if is_dict(b.t) else selem(b.t) if is_set(b.t) else ""
     if (op == "in" or op == "not in") and is_opt(a.t) and ((kt != "" and (unopt(a.t) == kt or (is_sopt(a.t) and bool_for_int(unopt(a.t), kt)))) or (is_sopt(a.t) and is_list(b.t) and (unopt(a.t) == elem(b.t) or self.isnum(elem(b.t))))):
         # None is no key of the dict (and no int of a list[int])
@@ -3273,10 +3272,10 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
                 r = self.select(ok, Val(r, "int"), Val("0", "int"))
         elif is_dict(b.t):
             s = self.to_slot(self.dkey(a, targs(b.t)[0]))
-            r = self.rt("pys_dict_has", "i64", [f"ptr {b.v}", f"i64 {s}"])
+            r = self.rt("pys_dict_has", "i64", [f"ptr {b.v}", f"i64 {s}"], self.key_fx(targs(b.t)[0]))
         elif is_set(b.t):
             s = self.to_slot(self.dkey(a, selem(b.t)))
-            r = self.rt("pys_set_has", "i64", [f"ptr {b.v}", f"i64 {s}"])
+            r = self.rt("pys_set_has", "i64", [f"ptr {b.v}", f"i64 {s}"], self.key_fx(selem(b.t)))
         else:
             self.err(f"'in' is not supported for {b.t}")
         return self.num_cmp('!=' if op == 'in' else '==', Val(r, "int"), Val('0', "int"))
@@ -3306,7 +3305,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         # subsets and equality (a set equals a frozenset of its elements)
         if self.wider(selem(a.t), selem(b.t)) == "":
             self.err(f"cannot compare {typestr(a.t)} {op} {typestr(b.t)}")
-        r = self.rt("pys_set_cmp", "i64", [f"ptr {a.v}", f"ptr {b.v}", f"i64 {ORDOP[op] if op in ORDOP else 4 if op == '==' else 5}"])
+        r = self.rt("pys_set_cmp", "i64", [f"ptr {a.v}", f"ptr {b.v}", f"i64 {ORDOP[op] if op in ORDOP else 4 if op == '==' else 5}"], self.key_fx(selem(a.t)) + self.key_fx(selem(b.t)))
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int"))
     eq = op == "==" or op == "!="
     if eq and (a.t == "None") != (b.t == "None") and self.isnum(a.t if b.t == "None" else b.t):

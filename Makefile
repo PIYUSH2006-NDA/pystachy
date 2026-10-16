@@ -69,7 +69,7 @@ bench-pyperformance-check: $(BENCH_COMPILER)
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
 # (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those). It also
-# checks that the collector scans no key table of ints, and those of strs and tuples
+# checks that the collector scans no key table of ints, and those of strs, tuples and objects
 LLVMBIN = $(if $(PYSTACHY_LLVM),"$(PYSTACHY_LLVM)/")
 dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	mkdir -p build
@@ -90,7 +90,8 @@ listprobe: tools/listprobe.c runtime.c runtime.py pystachy
 	build/listprobe
 	PYSTACHY_GC_STRESS=1 build/listprobe
 
-# Shared container DAGs compare without expanding into their logical trees.
+# Shared container DAGs compare without expanding into their logical trees; dicts and sets of objects
+# compare without hashing them again, and those hashed by identity without the program's __eq__.
 eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	mkdir -p build
 	./pystachy rt runtime.py -o build/eqprobe-rt.ll

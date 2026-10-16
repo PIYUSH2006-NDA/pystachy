@@ -185,11 +185,13 @@ determine whether a particular call compiles.
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
 | Iterators | `iter` (one argument), `next` (with or without a default) |
-| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods |
+| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |
 
-`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). General `hash()` and
-`type()` calls are unsupported; `type(e).__name__` is supported for an exception `e`.
+`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). General `type()`
+calls are unsupported; `type(e).__name__` is supported for an exception `e`. `hash()` takes the
+values that can be [dict keys](typing.md#supported-types), floats too, and raises CPython's
+`TypeError` for a list, dict, set or unhashable object.
 
 `print()` accepts `sep`, `end`, `file` and `flush`. Its `file` may be a file or an object with
 `write()`, such as `io.StringIO`; it receives one call for each piece, as in CPython.
