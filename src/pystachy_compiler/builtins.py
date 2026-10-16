@@ -42,6 +42,7 @@ from src.pystachy_compiler.utils import (
     lt,
     nones as only_nones,
     rtt,
+    runtime_format,
     selem,
     targs,
     tname,
@@ -1044,6 +1045,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         return Val("null", "None")
     if is_dict(o.t) and m == "update":
         return self.update(o, args)
+    if o.t == "str" and (m == "format" or m == "format_map"):
+        self.err(runtime_format(m))
     for a in args:
         if a.kind == "kw":
             self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")
@@ -1081,8 +1084,6 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     key = base + "." + m
     if key not in METHODS and o.t == "exc":
         self.err(f"BaseException.{m}() is not supported (of a builtin exception, str(e), repr(e) and formatting are)")
-    if key == "str.format" or key == "str.format_map":
-        self.err(f'str.{m}() of a format string computed at run time is not supported (only of a string literal, "{{}}".{m}(...), or of a module global that one assignment binds to one)')
     if key not in METHODS:
         self.err(f"'{o.t}' has no method '{m}'")
     if key == "dict.get" and (len(args) == 0 or len(args) > 2):

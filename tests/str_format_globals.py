@@ -1,6 +1,7 @@
 # str.format() of a module global that a single assignment binds to a string literal: the
 # literal's fields, once the name is read (a read before the assignment raises NameError, as in
-# CPython), also through a from-import, an annotated assignment and another module's attribute
+# CPython), also through a from-import, an annotated assignment, another module's attribute and
+# str.format(FMT, ...), and a class attribute's type inferred from it
 import mods.fmtconstants as fc
 from mods.fmtconstants import ROW, ROW as R2, TITLE
 
@@ -32,3 +33,12 @@ try:
 except IndexError as e:
     print("IndexError:", e)
 print(list(map(LINE.format, ["a", "b"], [1, 2])))
+print(str.format(LINE, "k", 1), str.format(ROW, *("f", 11)), str.format_map(TITLE, {"title": "m"}))
+
+
+class Defaults:
+    head = TITLE.format(title="class")
+    line = str.format(LINE, "c", "v")
+
+
+print(Defaults.head, Defaults.line)

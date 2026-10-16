@@ -51,6 +51,7 @@ from src.pystachy_compiler.utils import (
     nones,
     nonetest,
     plain_args,
+    runtime_format,
     same_kind,
     selem,
     targs,
@@ -2539,7 +2540,7 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         self.err("dict | dict is not supported; copy the first dict and use update()")
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)
-        self.err('% formatting with a format string computed at run time is not supported (only of a string literal, "%d" % x, or of a module global that one assignment binds to one)')
+        self.err(runtime_format("%"))
     # CPython's TypeError, at compile time
     an = tname(a.t)
     bn = tname(b.t)

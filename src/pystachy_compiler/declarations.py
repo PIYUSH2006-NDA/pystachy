@@ -1278,6 +1278,14 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         return "bool"
     if k == "fstr" or (k == "call" and literal_format(e.kids[0])):
         return "str"
+    if (k == "call" and e.kids[0].kind == "attr" and (e.kids[0].s == "format" or e.kids[0].s == "format_map")) or (k == "binop" and e.s == "%"):
+        # ("...".format(...), FMT.format(...), str.format(FMT, ...) and FMT % x of a module's
+        # FMT = "...")
+        o = e.kids[0].kids[0] if k == "call" else e.kids[0]
+        if k == "call" and o.kind == "name" and o.s == "str" and not self.bound("str") and len(e.kids) > 1:
+            o = e.kids[1]
+        if o.kind == "str" or (o.kind == "name" and o.s in self.strglobals and o.s not in f.params):
+            return "str"
     if k == "unary" and e.s != "not":
         t = self.guess(e.kids[0], f)
         # (-True is -1, as unary() computes it; -o is what o.__neg__ returns, unknown as for o + o)

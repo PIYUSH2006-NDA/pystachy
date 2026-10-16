@@ -10,4 +10,6 @@ ab    |   7 c     |   8 d     |   9 <3>
 e     |  10 == z ==
 IndexError: Replacement index 1 out of range for positional args tuple
 ['a: 1', 'b: 2']
+k: 1 f     |  11 == m ==
+== class == c: 'v'
 [exit 0]

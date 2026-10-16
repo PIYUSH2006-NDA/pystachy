@@ -27,6 +27,7 @@ from src.pystachy_compiler.utils import (
     literal_format,
     nonetest,
     pure_arg,
+    runtime_format,
     takes_self,
     targs,
     tname,
@@ -43,8 +44,12 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
     f = self.format_of(f)
     if literal_format(f):
         return self.str_format(f.kids[0].s, f.s, args)
-    if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0 and args[0].kind == "str":
-        return self.str_format(args[0].s, f.s, args[1:])  # (str.format("...", args))
+    if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0:
+        fmt = self.const_str(args[0])
+        if fmt.kind == "str":
+            return self.str_format(fmt.s, f.s, args[1:])  # (str.format("...", args), also of a module's FMT)
+        if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+            self.err(runtime_format(f.s))
     if f.kind == "index" and f.kids[0].kind == "name" and f.kids[0].s in self.tparams and f.kids[0].s not in self.ltype:
         self.modchk(f.kids[0])
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
@@ -135,6 +140,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
         receiver = self.expr(f.kids[0], "")
         if self.reference_union(receiver.t):
             self.err("reference union methods do not support unpacked arguments")
+        if receiver.t == "str" and (f.s == "format" or f.s == "format_map"):
+            self.err(runtime_format(f.s))
         f = mk("attr", f.s, f.line, [self.vnode(receiver)])
     elif f.kind != "attr" and f.kind != "val" and not self.static_callee(f):
         f = self.vnode(self.expr(f, ""))
@@ -681,6 +688,8 @@ def gen_method_value(self, o: Val, name: str) -> Val:
     t = unopt(o.t)
     if (t == "fn[b:str]" or t == "fn[b:list]" or t == "fn[b:dict]") and has_method(t[5:-1], name):
         return Val("null", f"fn[u:{t[5:-1]}.{name}]")  # (str.lower: the method, which takes the str first)
+    if t == "fn[b:str]" and (name == "format" or name == "format_map"):
+        self.err(f'str.{name} as a value is not supported: call it, "...".{name}(...) or str.{name}("...", ...) of a string literal (map() takes "...".{name})')
     if t in self.classes:
         ci = self.classes[t]
         if name in ci.ftypes or name not in ci.methods:

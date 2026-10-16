@@ -241,6 +241,14 @@ def literal_format(e: Node) -> bool:
     return e.kind == "attr" and (e.s == "format" or e.s == "format_map") and e.kids[0].kind == "str"
 
 
+def runtime_format(m: str) -> str:
+    # the error for str.format() or str.format_map() (m), or % formatting (m "%"), of a format
+    # string that only run time knows
+    what = "% formatting with" if m == "%" else f"str.{m}() of"
+    how = '"%d" % x' if m == "%" else f'"{{}}".{m}(...)'
+    return f"{what} a format string computed at run time is not supported (only of a string literal, {how}, or of a module global that one module-level assignment binds to one, where nothing else in the program binds its name, not even as a local)"
+
+
 # Unicode 15.1's (CPython 3.13's) decimal digits: the first of each run of 0-9 (runtime.c's
 # decruns, with ASCII's)
 DECRUNS: list[int] = [0x30, 0x660, 0x6F0, 0x7C0, 0x966, 0x9E6, 0xA66, 0xAE6, 0xB66, 0xBE6, 0xC66, 0xCE6, 0xD66,

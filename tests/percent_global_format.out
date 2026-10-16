@@ -8,4 +8,5 @@ arg k
 arg v
 3 items k='v' ab    |   7 c     |   8
 TypeError: not enough arguments for format string
+2 items a/b
 [exit 0]
