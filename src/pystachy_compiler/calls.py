@@ -78,6 +78,19 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
             # a call that may run before the def or class statement
             bad = self.scalar('xor', [Val(self.mload('bool', f'@g.{f.s}.def'), 'bool'), Val('true', 'bool')])
             self.guard(bad, self.unbound(f.s))
+        if self.lib_fn(f, "functools$wraps"):
+            self.err("functools.wraps() is supported as the decorator of a def, @wraps(wrapped): call update_wrapper(wrapper, wrapped) to name another function")
+        if self.lib_fn(f, "functools$update_wrapper"):
+            # (CPython's update_wrapper() of a function: the compiler gives wrapper the names, as
+            # wrap_names says, and the call gives wrapper)
+            if len(args) == 0 or args[0].kind == "kw":
+                self.err("update_wrapper() missing 1 required positional argument: 'wrapper'" if len(args) == 0 or args[0].s != "wrapper" else "update_wrapper() of keyword argument wrapper is not supported")
+            if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+                self.err("update_wrapper() of unpacked arguments is not supported")
+            w = self.expr(args[0], "")
+            vals = [self.expr(a.kids[0] if a.kind == "kw" else a, "") for a in args[1:]]
+            self.wrap_names(w, args[1:], vals, "update_wrapper")
+            return w
         if f.s in self.funcs:
             return self.call_fn(self.funcs[f.s], [], args, want, resultsoft=resultsoft)
         if f.s in self.aliases and f.s not in self.gtypes:
@@ -574,6 +587,8 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
+    if o.t == "fn[b:bytes]" and m == "maketrans":
+        return self.bytes_method(o, m, args)  # (the static method, of the class)
     if o.t == "fn[b:bytes]" and m == "fromhex":
         # bytes.fromhex(s), the class method, of a str
         if len(args) != 1 or args[0].kind in ["kw", "starred", "dstar"]:

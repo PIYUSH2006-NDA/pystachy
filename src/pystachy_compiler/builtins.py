@@ -1237,6 +1237,79 @@ def gen_bytes_(self, args: list[Node]) -> Val:
         self.err(f"cannot convert '{tname(v.t)}' object to bytes")
     return Val(self.rt("pys_bytes_from_list", "ptr", [f"ptr {v.v}"]), "bytes")
 
+def bytes_like(t: str) -> bool:
+    # does an argument of type t give a bytes, or None, which then raises as it runs
+    return t == "bytes" or (is_opt(t) and unopt(t) == "bytes")
+
+def gen_bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
+    # bytes.maketrans(frm, to) (also of a bytes object o), o.translate(table, delete=b"") and
+    # o.hex(sep, bytes_per_sep=1), with their arguments by position and by name as CPython takes
+    # them, and its TypeErrors; an argument that may be None raises as it runs, once those after
+    # it are evaluated (pys_bytes_maketrans, pys_bytes_translate, pys_bytes_hex_sep)
+    if any(a.kind == "starred" or a.kind == "dstar" for a in args):
+        self.err(f"bytes.{m}() of unpacked arguments is not supported")
+    pos = [a for a in args if a.kind != "kw"]
+    if m == "maketrans":
+        if len(pos) < len(args):
+            self.err("bytes.maketrans() takes no keyword arguments")
+        if len(args) != 2:
+            self.err(f"maketrans expected 2 arguments, got {len(args)}")
+        vs = [self.expr(a, "bytes") for a in args]
+        for v in vs:
+            if not bytes_like(v.t):
+                self.err(f"a bytes-like object is required, not '{tname(v.t)}'")
+        vs = [self.unwrap(v, "TypeError: a bytes-like object is required, not 'NoneType'") for v in vs]
+        return Val(self.rt("pys_bytes_maketrans", "ptr", [f"ptr {vs[0].v}", f"ptr {vs[1].v}"]), "bytes")
+    if m == "translate":
+        if len(args) > 2:
+            self.err(f"translate() takes at most 2 arguments ({len(args)} given)")
+        for a in args:
+            if a.kind == "kw" and a.s != "delete":
+                self.err(f"translate() got an unexpected keyword argument '{a.s}'")
+        if len(pos) == 0:
+            self.err("translate() takes at least 1 positional argument (0 given)")
+        t = self.expr(pos[0], "bytes")  # (None, or a bytes | None that is: no table)
+        if t.t != "None" and not bytes_like(t.t):
+            self.err(f"a bytes-like object is required, not '{tname(t.t)}'")
+        d = Val("null", "bytes")  # (b"")
+        if len(args) == 2:
+            d = self.expr(args[1].kids[0] if args[1].kind == "kw" else args[1], "bytes")
+            if not bytes_like(d.t):
+                self.err(f"a bytes-like object is required, not '{tname(d.t)}'")
+            d = self.unwrap(d, "TypeError: a bytes-like object is required, not 'NoneType'")
+        return Val(self.rt("pys_bytes_translate", "ptr", [f"ptr {o.v}", f"ptr {'null' if t.t == 'None' else t.v}", f"ptr {d.v}"]), "bytes")
+    names = ["sep", "bytes_per_sep"]
+    if len(args) > 2:
+        self.err(f"hex() takes at most 2 arguments ({len(args)} given)")
+    given: list[int] = [-1, -1]  # (the index in args of each)
+    for i in range(len(args)):
+        a = args[i]
+        if a.kind == "kw" and a.s not in names:
+            self.err(f"hex() got an unexpected keyword argument '{a.s}'")
+        k = names.index(a.s) if a.kind == "kw" else i
+        if given[k] >= 0:
+            self.err(f"argument for hex() given by name ('{names[k]}') and position ({k + 1})")
+        given[k] = i
+    sep = Val("null", "str")  # (none: no separator)
+    chars = 0
+    if given[0] >= 0:
+        a = args[given[0]]
+        sep = self.expr(a.kids[0] if a.kind == "kw" else a, "")
+        st = unopt(sep.t) if is_opt(sep.t) else sep.t
+        if st != "str" and st != "bytes":
+            self.err(f"object of type '{tname(st)}' has no len()" if st in ["int", "float", "bool", "None"] else "sep must be str or bytes.")
+        chars = 1 if st == "str" else 0  # (a str's characters count, not its UTF-8 bytes)
+    per = Val("1", "int")
+    if given[1] >= 0:
+        a = args[given[1]]
+        per = self.expr(a.kids[0] if a.kind == "kw" else a, "int")
+        pt = unopt(per.t) if is_opt(per.t) else per.t
+        if pt != "int" and pt != "bool":
+            self.err(f"'{tname(pt)}' object cannot be interpreted as an integer")
+        per = self.as_int(self.unwrap(per, "TypeError: 'NoneType' object cannot be interpreted as an integer"))
+    sep = self.unwrap(sep, "TypeError: object of type 'NoneType' has no len()")
+    return Val(self.rt("pys_bytes_hex_sep", "ptr", [f"ptr {o.v}", f"ptr {sep.v}", f"i64 {chars}", f"i64 {per.v}"]), "str")
+
 def gen_reverse_arg(self, n: Node, name: str) -> str:
     return self.reverse_val(self.expr(n, "bool"), name)
 
@@ -1517,6 +1590,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         tm = self.tmethod(o, m, args)
         if tm.t != "":
             return tm
+    if o.t == "bytes" and (m == "maketrans" or m == "translate" or (m == "hex" and len(args) > 0)):
+        return self.bytes_method(o, m, args)
     if (o.t == "str" or o.t == "bytes") and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
         args = args[:2] + [args[2].kids[0]]  # (count may be given by name, as of Python 3.13)
     for a in args:

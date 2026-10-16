@@ -153,6 +153,7 @@ from src.pystachy_compiler.builtins import (
     gen_reduce_item as builtins_reduce_item,
     gen_reverse_arg as builtins_reverse_arg,
     gen_bytes_ as builtins_bytes_,
+    gen_bytes_method as builtins_bytes_method,
     gen_reverse_val as builtins_reverse_val,
     gen_stream_start as builtins_stream_start,
     gen_update as builtins_update,
@@ -725,6 +726,9 @@ from src.pystachy_compiler.variables import (
     gen_declare as variables_declare,
     gen_deco_callee as variables_deco_callee,
     gen_decorate as variables_decorate,
+    gen_fn_names as variables_fn_names,
+    gen_lib_fn as variables_lib_fn,
+    gen_wrap_names as variables_wrap_names,
     gen_default_want as variables_default_want,
     gen_dry as variables_dry,
     gen_early as variables_early,
@@ -900,6 +904,7 @@ class Gen:
         self.intglobals: dict[str, str] = {}  # single-binding module int literals, after normal read checks
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
         self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
+        self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
@@ -907,6 +912,7 @@ class Gen:
         self.late: dict[str, bool] = {}
         self.lib = False  # declaring an imported module's function: what it cannot compile is an error only where it is called
         self.ext = ""  # pystachy ext: the name of the CPython extension module the program becomes
+        self.libdir = ""  # the lib/ beside the compiler, the last directory of the module path (lib_fn)
         self.csyms: dict[str, str] = {}  # @ffi.extern: each C symbol's declare (one signature per program)
         self.csymline: dict[str, int] = {}  # and the line that declared it
         self.extvars: dict[str, int] = {}  # pystachy ext: the main module's variables, and the line that binds each
@@ -1664,6 +1670,15 @@ class Gen:
 
     def decorate(self, n: Node) -> Val:
         return variables_decorate(self, n)
+
+    def fn_names(self, t: str) -> list[str]:
+        return variables_fn_names(self, t)
+
+    def lib_fn(self, e: Node, qual: str) -> bool:
+        return variables_lib_fn(self, e, qual)
+
+    def wrap_names(self, v: Val, args: list[Node], vals: list[Val], what: str) -> None:
+        return variables_wrap_names(self, v, args, vals, what)
 
     def deco_callee(self, x: Node, mod: str) -> Node:
         return variables_deco_callee(self, x, mod)
@@ -2886,6 +2901,9 @@ class Gen:
 
     def reverse_arg(self, n: Node, name: str) -> str:
         return builtins_reverse_arg(self, n, name)
+
+    def bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        return builtins_bytes_method(self, o, m, args)
 
     def bytes_(self, args: list[Node]) -> Val:
         return builtins_bytes_(self, args)

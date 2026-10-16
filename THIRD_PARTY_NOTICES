@@ -103,8 +103,9 @@ copyright notice.
 lib/functools.py is Pystachy's own code for cache() and lru_cache(), which follows the C
 wrapper of CPython 3.13.16's Modules/_functoolsmodule.c (_lru_cache_wrapper) and keeps
 docstrings of Lib/functools.py (lib/README.md). Its reduce(), cmp_to_key() and partial adapt
-the Python fallbacks in Lib/functools.py. It is derived from Python and is used under the
-same license and copyright notice.
+the Python fallbacks in Lib/functools.py, and its update_wrapper(), wraps() and their
+constants are that file's, unchanged. It is derived from Python and is used under the same
+license and copyright notice.
 
 lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and

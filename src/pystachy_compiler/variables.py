@@ -21,7 +21,7 @@ from src.pystachy_compiler.analysis import (
     typed_default,
     walrus_values,
 )
-from src.pystachy_compiler.diagnostics import MODDUNDERS, where
+from src.pystachy_compiler.diagnostics import FILES, LINES, MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
@@ -33,6 +33,7 @@ from src.pystachy_compiler.utils import (
     empty_display,
     is_const,
     is_dict,
+    is_fn,
     is_fset,
     is_kw,
     is_list,
@@ -189,19 +190,120 @@ def gen_scope_names(self) -> dict[str, bool]:
 def gen_decorate(self, n: Node) -> Val:
     # def n with decorators: CPython evaluates the decorators, from the top (a call, @d(args), runs
     # then), makes the function (its defaults first), and calls each decorator, from the bottom,
-    # with what the one below gave; n's name binds the last result
+    # with what the one below gave; n's name binds the last result. @functools.wraps(wrapped, ...)
+    # evaluates its arguments, and its decorator gives the function the wrapped one's names
+    # (wrap_names), as CPython's update_wrapper() does
     callees: list[Node] = []
+    wraps: list[list[Val]] = []  # (of each decorator, @wraps(...)'s argument values, else none)
     decos = [x for x in n.kids[3:] if x.s != "async"]  # (from the bottom up, as the parser adds them)
     for i in range(len(decos) - 1, -1, -1):
         self.line = decos[i].line
         self.modchk(decos[i])  # (a name that an import in a try statement binds: Loader.qdeco)
         e = self.deco_callee(decos[i], self.curfn.mod)
-        callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
+        if len(decos[i].kids) > 0 and self.lib_fn(e.kids[0], "functools$wraps"):
+            vals: list[Val] = []
+            for a in e.kids[1:]:
+                if a.kind == "starred" or a.kind == "dstar":
+                    self.err("wraps() of unpacked arguments is not supported")
+                vals.append(self.expr(a.kids[0] if a.kind == "kw" else a, ""))
+            wraps.append(vals if len(vals) > 0 else [Val("", "")])
+            callees.append(e)
+        else:
+            wraps.append([])
+            callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
     v = self.closure(n)
     for j in range(len(callees) - 1, -1, -1):
         self.line = callees[j].line
-        v = self.call(mk("call", "", callees[j].line, [callees[j], self.vnode(v)]), "")
+        if len(wraps[j]) > 0:
+            self.wrap_names(v, callees[j].kids[1:], wraps[j] if wraps[j][0].t != "" else [], "wraps")
+        else:
+            v = self.call(mk("call", "", callees[j].line, [callees[j], self.vnode(v)]), "")
     return v
+
+def gen_lib_fn(self, e: Node, qual: str) -> bool:
+    # does e name lib/'s function qual (functools$wraps), not a local or the function of a module
+    # of the program's of that name
+    if e.kind != "name" or e.s != qual or e.s in self.ltype or e.s not in self.funcs or self.libdir == "":
+        return False
+    p = self.libdir + "/" + qual[: qual.find("$")] + ".py"
+    return FILES[self.funcs[e.s].node.line // LINES] == (p[2:] if p.startswith("./") else p)  # (as Loader records it)
+
+def gen_fn_names(self, t: str) -> list[str]:
+    # [__name__, __qualname__] of a value of type t, a function's, where its type tells them: []
+    # where it does not (a Callable value; a method of a class that others derive from, whose
+    # __qualname__ the object's class decides)
+    if not is_fn(t):
+        return []
+    fk = t[5:-1]
+    if t.startswith("fn[u:"):
+        return [fk[fk.find(".") + 1 :], fk]
+    if t.startswith("fn[m:"):
+        mn = fk[fk.rfind(".") + 1 :]
+        cn = fk[: fk.rfind(".")]
+        if self.classes[cn].tag > 0:
+            return []
+        return [mn, short(self.classes[cn].methods[mn].cls) + "." + mn]
+    if t.startswith("fn[d:"):
+        mn = fk[: fk.find(":")]
+        return [mn, tname(fk[fk.find(":") + 1 :]) + "." + mn]
+    if t.startswith("fn[c:"):
+        clo = self.closures[int(fk[: fk.find(":")])]
+        if clo.wunknown != "":
+            return []
+        return [clo.wname, clo.wqual] if clo.wname != "" else [clo.name, clo.qual]
+    nm = short(fk) if t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]
+    return [nm, nm]
+
+def gen_wrap_names(self, v: Val, args: list[Node], vals: list[Val], what: str) -> None:
+    # functools.wraps(wrapped, assigned, updated) of function v, or update_wrapper(v, wrapped,
+    # assigned, updated) (what: its name), args those arguments after v and vals their values,
+    # evaluated: v's __name__ and __qualname__ are wrapped's, those of them that assigned names
+    # (a tuple or list of str constants, or a module's tuple of them, as WRAPPER_ASSIGNMENTS:
+    # module_strs), as CPython's update_wrapper() sets them. Pystachy's functions have none of the
+    # other attributes, and a wrapped object without the two leaves v's own, as CPython's
+    # getattr() raises AttributeError for them there
+    names = ["wrapped", "assigned", "updated"]
+    given: list[int] = [-1, -1, -1]  # (the index in args of each)
+    off = 1 if what == "update_wrapper" else 0  # (its wrapper, which args leaves out)
+    npos = len([a for a in args if a.kind != "kw"])
+    if npos > 3:
+        self.err(f"{what}() takes from {1 + off} to {3 + off} positional arguments but {npos + off} were given")
+    pos = 0
+    for i in range(len(args)):
+        a = args[i]
+        if a.kind == "kw" and a.s == "wrapper" and off == 1:
+            self.err("update_wrapper() got multiple values for argument 'wrapper'")
+        if a.kind == "kw" and a.s not in names:
+            self.err(f"{what}() got an unexpected keyword argument '{a.s}'")
+        k = names.index(a.s) if a.kind == "kw" else pos
+        if given[k] >= 0:
+            self.err(f"{what}() got multiple values for argument '{names[k]}'")
+        given[k] = i
+        pos += 0 if a.kind == "kw" else 1
+    if given[0] < 0:
+        self.err(f"{what}() missing 1 required positional argument: 'wrapped'")
+    assigned = ["__name__", "__qualname__"]
+    if given[1] >= 0:
+        an = args[given[1]].kids[0] if args[given[1]].kind == "kw" else args[given[1]]
+        if (an.kind == "tuple" or an.kind == "list") and all(x.kind == "str" for x in an.kids):
+            assigned = [x.s for x in an.kids]
+        elif an.kind == "name" and an.s in self.strtuples and self.globread(an.s):
+            assigned = self.strtuples[an.s]
+        else:
+            self.err(f"{what}()'s assigned is supported as a tuple of str constants, or a module's name that one assignment binds to one (WRAPPER_ASSIGNMENTS): the attributes it names are known as Pystachy compiles")
+    if not v.t.startswith("fn[c:"):
+        self.err(f"{what}() of {typestr(v.t)} is not supported: of a function a def or lambda makes in a function, or a decorated def, it is")
+    fk = v.t[5:-1]
+    clo = self.closures[int(fk[: fk.find(":")])]
+    w = vals[given[0]]
+    if w.t in self.classes and "__name__" not in self.classes[w.t].ftypes and "__qualname__" not in self.classes[w.t].ftypes:
+        return
+    ns = self.fn_names(w.t)
+    if len(ns) == 0:
+        clo.wunknown = f"the __name__ and __qualname__ of a function that functools.{what}() gives those of a {typestr(w.t)} are not supported: they are not known as Pystachy compiles"
+        return
+    clo.wname = ns[0] if "__name__" in assigned else clo.name
+    clo.wqual = ns[1] if "__qualname__" in assigned else clo.qual
 
 def gen_deco_callee(self, x: Node, mod: str) -> Node:
     # what decorator x, of module mod, evaluates to the function it calls: its call @d(args), or

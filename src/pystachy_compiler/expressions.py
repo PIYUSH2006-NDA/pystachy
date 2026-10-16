@@ -729,6 +729,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
                 return Val(self.sconst(mn if n.s == "__name__" else tname(fk[fk.find(":") + 1 :]) + "." + mn), "str")
             if o.t.startswith("fn[c:"):
                 clo = self.closures[int(fk[: fk.find(":")])]
+                if clo.wunknown != "":
+                    self.err(clo.wunknown)
+                if clo.wname != "":
+                    return Val(self.sconst(clo.wname if n.s == "__name__" else clo.wqual), "str")  # (functools.wraps())
                 return Val(self.sconst(clo.name if n.s == "__name__" else clo.qual), "str")
             return Val(self.sconst(short(fk) if o.t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]), "str")
         if o.t in self.nts and n.s == "_fields":

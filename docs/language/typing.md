@@ -22,10 +22,12 @@ unsupported forms, see [compatibility](compatibility.md).
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
-`bytes(s, encoding[, errors])`), `bytes.fromhex(s)` and
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)`, `bytes.maketrans(frm, to)` and
 `s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
 `+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
-printing work as in CPython. The methods are `decode`, `hex`, `join`, `split`, `rsplit`,
+printing work as in CPython. The methods are `decode`, `hex` (also with `sep` and
+`bytes_per_sep`, by position or name), `translate` (with a table or `None`, and `delete`, by
+position or name), `join`, `split`, `rsplit`,
 `splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
 `startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
 `removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
@@ -700,7 +702,9 @@ Object methods and supported string, list, dict and file methods bind their obje
 `handler = obj.method`, `key=str.lower`, `write=file.write`. Bound methods compare equal
 when they refer to the same method of the same object; their identity test is rejected.
 Static and class methods, and numeric methods, cannot be stored as method values.
-Function values expose `__name__` and `__qualname__`; printing them is unsupported.
+Function values expose `__name__` and `__qualname__` (those of the function `functools.wraps()`
+wraps, where it does: [functools](../../lib/compatibility.md#functools)); printing them is
+unsupported.
 
 A lambda or nested `def` creates a closure on each execution. Captured variables are shared,
 so later assignments and `nonlocal` updates are visible. Captured variables must already be
