@@ -655,15 +655,14 @@ def reads_builtin(n: Node, name: str, listed: bool, hidden: bool, mods: dict[str
         c = n.kids[0]
         return reads_builtin(c, name, False, hidden, mods) if len(c.kids) != 2 else reads_builtin(c.kids[1], name, listed, hidden, mods)
     inner = hidden  # (of a function's body; its defaults, annotations and decorators run outside)
-    if k == "def" or k == "lambda":
-        own: dict[str, bool] = {}
+    if k == "def" and hidden:
         decl: dict[str, bool] = {}
-        if k == "def":
-            own = scope_names(n)
-            globals_in(n.kids[2].kids, decl)
-        for p in n.kids[0].kids if k == "lambda" else n.kids[:0]:
-            own[p.s] = True
-        inner = name in own or (hidden and name not in decl)
+        globals_in(n.kids[2].kids, decl)
+        inner = name not in decl  # (global name: the module's, which may not bind it)
+    elif k == "def":
+        inner = name in scope_names(n)
+    elif k == "lambda" and not hidden:
+        inner = len([p for p in n.kids[0].kids if p.s == name]) > 0
     for i in range(len(n.kids)):
         body = (k == "def" and i == 2) or (k == "lambda" and i == 1)
         if reads_builtin(n.kids[i], name, listed, inner if body else hidden, mods):
@@ -674,9 +673,11 @@ def reads_builtin(n: Node, name: str, listed: bool, hidden: bool, mods: dict[str
 def module_reads(body: Node, name: str) -> bool:
     # may a module's code read builtin name (reads_builtin)? A module-level binding of the name,
     # also by a function's global statement, is what the module's code reads (Gen.bound)
-    top: dict[str, bool] = {}
-    binds(body.kids, top, True)
-    fn_globals(body, top)
+    top: dict[str, bool] = {name: True}  # (where no name node is the name: no scope reads it so)
+    if mentions(body, [name]):
+        top = {}
+        binds(body.kids, top, True)
+        fn_globals(body, top)
     mods: dict[str, bool] = {}
     builtins_names(body, mods)
     return reads_builtin(body, name, False, name in top, mods)
