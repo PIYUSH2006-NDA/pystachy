@@ -40,6 +40,7 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
+    key_problem,
     kw_names,
     literal_format,
     lt,
@@ -166,7 +167,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
         self.err(f"{name}() is supported as the argument of list(), tuple() (with scalar or optional scalar items), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), and as the value assigned to a list slice, which take its items at once; elsewhere use a list comprehension")
-    if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
+    if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod" or name == "dict"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
     if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
         # format(v, spec): what the f-string field {v:spec} gives, v.__format__(spec)
@@ -266,12 +267,20 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if len(args) == 0:
             self.err("int() missing string argument")
         args = args + base
+    if name == "math.isclose":
+        return self.isclose(args)
     if name == "math.prod":
         # prod(iterable, /, *, start=1): start is sum()'s second argument
         npos = len([a for a in args if a.kind != "kw"])
         if npos != 1:
             self.err(f"prod() takes exactly 1 positional argument ({npos} given)")
         args = [a.kids[0] if a.kind == "kw" and a.s == "start" else a for a in args]
+        # A nonnumeric product must consume lazy inputs one item at a time: the
+        # first multiplication may raise or invoke user code before the next item.
+        if len(args) == 2 and (self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")):
+            stt = self.dry(args[1])
+            if stt == "str" or is_list(stt) or is_dict(stt) or is_set(stt):
+                return self.reduce(name, args, stt)
     npos = 0
     for a in args:
         if a.kind != "kw":
@@ -292,6 +301,11 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     # range(), zip(), ... is made, before the function iterates it (as CPython calls it)
     kws = [a for a in args if a.kind == "kw" and (a.s == "key" or a.s == "reverse") and (name == "sorted" or name == "min" or name == "max")]
     kvals: list[Val] = []
+    if name == "dict" and npos == 1 and (self.iterator_call(args[0]) or args[0].kind == "listcomp" or args[0].kind == "list"):
+        # dict(zip(ks, vs)), dict(enumerate(xs)), dict((k, v) for ...), dict([(k, v), ...]): a new
+        # dict of the pairs (taken at once, as list() takes them)
+        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want else ""
+        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft))
     if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
         # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
@@ -402,6 +416,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
                 self.err(f"unsupported call {name}({','.join([typestr(v.t) for v in vals])})")
             self.err(f"argument {i + 1} of {name}() may be None ({typestr(vals[i].t)}); test it with 'is not None' first")
     key = f"{name}({','.join([v.t for v in vals])})"
+    asked = key  # (math's calls convert their arguments below; a rejection names them as given)
     if self.rtmode and name.startswith("_rt."):
         return self.primitive(name[4:], vals)
     if key in DEFAULTS:
@@ -434,8 +449,39 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             return self.as_int(vals[0])
         nd = self.coerce(self.as_int(vals[1]), "int")
         return Val(self.rt("pys_round_int", "i64", [f"i64 {self.as_int(vals[0]).v}", f"i64 {nd.v}"]), "int")
+    if name == "math.perm" and (len(vals) == 1 or (len(vals) == 2 and vals[1].t == "None")) and (vals[0].t == "int" or vals[0].t == "bool"):
+        # perm(n) and perm(n, None) are factorial(n), as math_perm_impl makes them
+        return Val(self.rt("pys_m_factorial", "i64", [f"i64 {self.as_int(vals[0]).v}"]), "int")
+    if (name == "math.gcd" or name == "math.lcm") and len(vals) != 2 and all(v.t == "int" or v.t == "bool" for v in vals):
+        # gcd() and lcm() of other than two ints (math_gcd, math_lcm): 0 and 1 of none, |x| of one,
+        # and else the first two's, then that and the third's, ... (lcm's stays 0 once it is 0)
+        if len(vals) == 0:
+            return Val("0" if name == "math.gcd" else "1", "int")
+        acc = self.as_int(vals[0])
+        if len(vals) == 1:
+            neg = self.num_cmp('<', acc, Val('0', "int")).v
+            return Val(self.select(neg, Val(self.iop("-", "0", acc.v), "int"), acc), "int")
+        for v in vals[1:]:
+            acc = Val(self.rt("pys_m_gcd" if name == "math.gcd" else "pys_m_lcm", "i64", [f"i64 {acc.v}", f"i64 {self.as_int(v).v}"]), "int")
+        return acc
+    if name == "math.hypot" and len(vals) != 2 and all(self.isnum(v.t) for v in vals):
+        # hypot() of other than two coordinates (math_hypot): 0.0 of none, |x| of one, and else
+        # the norm of them all, which math.dist's (vnorm) is
+        if len(vals) == 0:
+            return Val(fbits("0.0"), "float")
+        if len(vals) == 1:
+            return Val(self.rt("fabs", "double", [f"double {self.as_float(vals[0]).v}"]), "float")
+        xs = self.rt("pys_list_new", "ptr", [f"i64 {len(vals)}"])
+        for v in vals:
+            self.rt("pys_list_append", "void", [f"ptr {xs}", "i64 " + self.to_slot(self.as_float(v))])
+        return Val(self.rt("pys_m_hypot_list", "double", [f"ptr {xs}"]), "float")
+    if name == "math.prod" and len(vals) == 2 and is_list(vals[0].t) and (vals[1].t == "str" or is_list(vals[1].t) or is_dict(vals[1].t) or is_set(vals[1].t)):
+        return self.prod_seq(vals[0], vals[1])
     if key not in CALLS and name == "math.ldexp" and len(vals) == 2:
         vals = [self.as_float(self.as_int(vals[0])), self.as_int(vals[1])]
+        key = f"{name}({','.join([v.t for v in vals])})"
+    if key not in CALLS and name.startswith("math.") and f"{name}({','.join(['int' if v.t == 'bool' else v.t for v in vals])})" in CALLS:
+        vals = [self.as_int(v) for v in vals]  # (a bool where an int is taken: comb(True, False))
         key = f"{name}({','.join([v.t for v in vals])})"
     if key not in CALLS and (name == "math.fsum" or name == "math.prod" or name == "math.dist"):
         # CPython makes a float of each int item (in a product, of each item and the start once
@@ -548,6 +594,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "pow" and len(vals) == 3 and self.as_int(v).t == "int":
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
+    elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
+        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
     elif name == "dict" and is_dict(t):
         # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c)
         return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"]), t)
@@ -569,7 +617,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(NONEARG[name].replace("NoneType", tname(t)))
     if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
         self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
-    self.err(f"unsupported call {key}")
+    self.err(f"unsupported call {asked if name.startswith('math.') else key}")
     return v
 
 def gen_vnode(self, v: Val) -> Node:
@@ -810,7 +858,10 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     self.place(arg.split)
     if r.t == "":
         self.err("cannot infer the element type of this comprehension")
-    if name == "sum":
+    if name == "math.prod":
+        sv = self.expr(args[1], "")
+        self.mstore(r.stt, self.coerce(sv, r.stt).v, r.acc)
+    elif name == "sum":
         sv = self.expr(args[1], "") if len(args) == 2 else Val("0" if r.t != "float" else fbits("0.0"), "int" if r.t != "float" else "float")
         if r.t == "float":
             self.mstore('float', self.as_float(sv).v, r.acc)
@@ -827,6 +878,8 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
         self.mstore('bool', 'true', r.first)
     self.br(arg.trav)
     self.place(back)
+    if name == "math.prod":
+        return Val(self.mload(r.stt, r.acc), r.stt)
     if name != "sum" and r.collect:
         d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
         lv = self.mload('%ptr', r.acc)
@@ -853,7 +906,9 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
         r.t = v.t
         if r.name == "sum" and v.t != "int" and v.t != "bool" and v.t != "float":
             self.err(f"unsupported call sum(list[{v.t}]{',' + r.stt if r.stt != '' else ''})")
-        if r.name == "sum":
+        if r.name == "math.prod":
+            r.acc = self.alloca(r.stt, "")
+        elif r.name == "sum":
             r.acc = self.alloca("float" if v.t == "float" or r.stt == "float" else "int", "")
             if v.t == "float":
                 r.comp = self.alloca("float", "")
@@ -865,6 +920,10 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
         else:
             r.collect = True
             r.acc = self.alloca(self.ctype("list", [v.t]), "")
+    if r.name == "math.prod":
+        result = self.prod_item(Val(self.mload(r.stt, r.acc), r.stt), v)
+        self.mstore(r.stt, self.coerce(result, r.stt, "math.prod() must preserve its start type").v, r.acc)
+        return
     if r.collect:
         self.rt("pys_list_append", "void", [f"ptr {self.mload('%ptr', r.acc)}", "i64 " + self.to_slot(self.coerce(v, r.t))])
         return
@@ -1308,6 +1367,12 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         return self.update(o, args)
     if o.t == "str" and (m == "format" or m == "format_map"):
         self.err(runtime_format(m))
+    if (is_tuple(o.t) or is_vtuple(o.t)) and (m == "index" or m == "count"):
+        tm = self.tmethod(o, m, args)
+        if tm.t != "":
+            return tm
+    if o.t == "str" and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
+        args = args[:2] + [args[2].kids[0]]  # (count may be given by name, as of Python 3.13)
     for a in args:
         if a.kind == "kw":
             self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")
@@ -1334,6 +1399,9 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if is_list(o.t):
         base = "list"
         T = elem(o.t)
+    elif is_vtuple(o.t):
+        base = "vtuple"
+        T = targs(o.t)[0]
     elif is_dict(o.t):
         base = "dict"
         kv = targs(o.t)
@@ -1358,6 +1426,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and not optget:
         self.err(f"dict.get(key{', None' if len(args) == 2 else ''}) needs values that can be None ({OPTTYPES}), not {typestr(V)}: give another default")
     spec = METHODS[key]
+    if key == "str.replace" and len(args) == 3:
+        spec = "str:str,str,int"  # (replace(old, new, count): pys_str_replace_count)
     c = spec.find(":")
     av = [f"{lt(o.t)} {o.v}"]
     nones: list[str] = []  # optional str arguments: None raises (nmsg) once all are evaluated
@@ -1414,7 +1484,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     pending.extend(query.kids)
                 if not contextual:
                     want_arg = ""
-            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove"] and i == 0)
+            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
             self.stkkey = self.nokey
             if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
@@ -1452,7 +1522,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
             elif key == "dict.get" and i == 1 and self.optdefault(v, V) != V:
                 pt = self.optdefault(v, V)  # d.get(k, default) with a default that may be None: V | None
                 optget = True
-            if base == "list" and p == "*T" and self.isnum(v.t) and self.isnum(unopt(T)) and v.t != unopt(T) and (m == "index" or m == "count" or m == "remove"):
+            if (base == "list" or base == "vtuple") and p == "*T" and self.isnum(v.t) and self.isnum(unopt(T)) and v.t != unopt(T) and (m == "index" or m == "count" or m == "remove"):
                 numx = v
                 nk = self.numkey(v, unopt(T))
                 v = Val(nk[0], unopt(T))
@@ -1466,7 +1536,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 nones.append(v.v)
                 nmsg.append(self.none_arg(m, i + 1))
                 v = Val(v.v, pt)
-            elif (is_opt(v.t) or v.t == "None") and slot and p == "*T" and (unopt(v.t) == T or (v.t == "None" and T not in self.classes)) and base == "list" and m != "append" and m != "insert" and self.optional(T) != "" and not self.isnum(T):
+            elif (is_opt(v.t) or v.t == "None") and slot and p == "*T" and (unopt(v.t) == T or (v.t == "None" and T not in self.classes)) and (base == "list" or base == "vtuple") and m != "append" and m != "insert" and self.optional(T) != "" and not self.isnum(T):
                 pt = self.optional(T)  # xs.index(None): found where xs holds None, as == finds it
                 dt = pt
             v = self.coerce(v, pt, f"argument {i + 1} of {tname(o.t)}.{m}()" if is_opt(v.t) else "")
@@ -1477,8 +1547,6 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
             self.err(f"missing argument for {m}()")
         i += 1
     if i < len(args):
-        if base == "str" and m == "replace" and len(args) == 3:
-            self.err("str.replace() with a count is not supported (only replace(old, new) is)")
         self.err(f"too many arguments for {m}()")
     for j in range(len(nones)):
         self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
@@ -1489,7 +1557,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     rtype = self.subst(r[1:] if slot else r, T, K, V, o.t)
     if optget:
         rtype = self.optional(V)
-    fn = f"pys_{base}_{m}"
+    fn = "pys_str_replace_count" if key == "str.replace" and len(args) == 3 else f"pys_{base}_{m}"
     if first:
         fn = "pys_str_split_first"
         rtype = "str"
@@ -1497,7 +1565,12 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         fn = "pys_dict_getbox"  # (the value's box: an int | None)
     if numok != "true" and m == "remove":
         self.guard(self.scalar('xor', [Val(numok, 'bool'), Val('true', 'bool')]), "ValueError: list.remove(x): x not in list")
-    if numx.t != "" and m == "index":
+    if numx.t != "" and m == "index" and base == "vtuple":
+        if numok != "true":
+            # (an item can equal x only where x is a number of the items' type: CPython's
+            # ValueError is the same for every x)
+            self.guard(self.scalar('xor', [Val(numok, 'bool'), Val('true', 'bool')]), "ValueError: tuple.index(x): x not in tuple")
+    elif numx.t != "" and m == "index":
         fn = "pys_list_index_as"  # (its ValueError names x, not the item)
         av = av + ["i64 " + self.to_slot(Val(numok, "bool")), "i64 " + self.to_slot(numx), f"ptr {self.sconst(self.desc(numx.t, '=='))}"]
     if bk.t != "":
@@ -1543,5 +1616,272 @@ def gen_update(self, o: Val, args: list[Node]) -> Val:
     if kw.t != "":
         self.rt("pys_dict_update", "void", [f"ptr {o.v}", f"ptr {kw.v}"])
     return Val("null", "None")
+
+def gen_isclose(self, args: list[Node]) -> Val:
+    # math.isclose(a, b, *, rel_tol=1e-09, abs_tol=0.0): the arguments evaluated in the order
+    # written, then each made a float in the order of the parameters (an int or a bool), as the
+    # call's argument parsing makes them, then math_isclose_impl (runtime.c)
+    names = ["a", "b", "rel_tol", "abs_tol"]
+    given: dict[str, Val] = {}
+    npos = len([a for a in args if a.kind != "kw"])
+    if npos > 2:
+        self.err(f"isclose() takes exactly 2 positional arguments ({npos} given)")
+    for a in args:
+        if a.kind == "starred" or a.kind == "dstar":
+            self.err("math.isclose() with * or ** arguments is not supported")
+        nm = a.s if a.kind == "kw" else names[len(given)]
+        if nm not in names:
+            self.err(f"isclose() got an unexpected keyword argument '{nm}'")
+        if nm in given:
+            self.err(f"argument for isclose() given by name ('{nm}') and position ({names.index(nm) + 1})")
+        given[nm] = self.expr(a.kids[0] if a.kind == "kw" else a, "float")
+    for j in range(2):
+        if names[j] not in given:
+            self.err(f"isclose() missing required argument '{names[j]}' (pos {j + 1})")
+    fs: list[str] = []
+    for nm in names:
+        v = given[nm] if nm in given else Val(fbits("1e-09") if nm == "rel_tol" else fbits("0.0"), "float")
+        if is_opt(v.t) and self.isnum(unopt(v.t)):
+            v = self.unwrap(v, "TypeError: must be real number, not NoneType")
+        if not self.isnum(v.t):
+            self.err(f"must be real number, not {tname(v.t)} (argument '{nm}' of math.isclose())")
+        fs.append(f"double {self.as_float(v).v}")
+    return self.rres(self.rt("pys_m_isclose", "i64", fs), "bool")
+
+def gen_prod_seq(self, xs: Val, s: Val) -> Val:
+    # math.prod(xs, start=s) of a str, list, dict or set s, as math_prod_impl multiplies:
+    # s * x, then that * the next x, ... (PyNumber_Multiply), each a new str or list (repeated, or
+    # emptied by an x < 1, after which it stays empty). For no item the result is s itself, and a
+    # start that the items cannot multiply raises CPython's TypeError at the first
+    et = elem(xs.t)
+    acc = self.alloca(s.t, "")
+    self.mstore(s.t, s.v, acc)
+    ctr = self.alloca("int", "")
+    self.mstore('int', '0', ctr)
+    lc = self.label()
+    lb = self.label()
+    le = self.label()
+    self.br(lc)
+    self.place(lc)
+    i = self.mload('int', ctr)
+    self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', xs.v), "int")).v, lb, le)
+    self.place(lb)
+    item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
+    self.mstore(s.t, self.coerce(self.prod_item(Val(self.mload(s.t, acc), s.t), item), s.t, "math.prod() must preserve its start type").v, acc)
+    self.mstore('int', self.scalar('add', [Val(i, 'int'), Val('1', 'int')]), ctr)
+    self.br(lc)
+    self.place(le)
+    return Val(self.mload(s.t, acc), s.t)
+
+def gen_prod_item(self, s: Val, item: Val) -> Val:
+    # PyNumber_Multiply for a nonnumeric start. Keep the accumulator's static
+    # type; unsupported type-changing reflected methods are diagnosed explicitly.
+    if is_opt(item.t) or is_union(unopt(item.t)):
+        members = umembers(unopt(item.t)) if is_union(unopt(item.t)) else [unopt(item.t)]
+        if is_opt(item.t):
+            members = ["None"] + members
+        end = self.label()
+        ph = Ins("phi", s.t, "")
+        for i in range(len(members)):
+            member = members[i]
+            hit = self.label()
+            miss = self.label() if i + 1 < len(members) else ""
+            if miss == "":
+                self.br(hit)
+            elif member == "None":
+                self.cbr(self.ptr_cmp('==', item, Val('null', 'None')).v, hit, miss)
+            else:
+                self.cbr(self.utest(item, [member], False), hit, miss)
+            self.place(hit)
+            value = Val("null", "None") if member == "None" else self.uget(Val(item.v, unopt(item.t)), member) if is_union(unopt(item.t)) else self.deref(item)
+            result = self.prod_item(s, value)
+            if not self.term:
+                self.incoming(ph, self.coerce(result, s.t, "math.prod() must preserve its start type").v, self.cur)
+                self.br(end)
+            if miss != "":
+                self.place(miss)
+        self.place(end)
+        if len(ph.a) == 0:
+            self.unreachable()
+            return s
+        return Val(self.phi(ph), s.t)
+    seq = s.t == "str" or is_list(s.t)
+    if item.t in self.classes:
+        methods = self.classes[item.t].methods
+        protocol = "__rmul__" if "__rmul__" in methods else "__index__" if seq and "__index__" in methods else ""
+        if self.classes[item.t].tag > 0:
+            for cls in self.classes.values():
+                if cls.tag > 0 and self.derives(cls.name, item.t):
+                    selected = "__rmul__" if "__rmul__" in cls.methods else "__index__" if seq and "__index__" in cls.methods else ""
+                    if selected != protocol:
+                        self.err("math.prod() with subclass-dependent multiplication protocols requires narrowing with isinstance() first")
+        # Class values are nullable in this subset; None has neither protocol.
+        null = self.label()
+        call = self.label()
+        end = self.label()
+        self.cbr(self.isnull(item), null, call)
+        self.place(null)
+        self.prod_item(s, Val("null", "None"))
+        self.br(end)
+        self.place(call)
+        self.nn[item.v] = True
+        if "__rmul__" in methods:
+            result = self.protocol(item, "__rmul__", [s])
+            if result.t != s.t:
+                self.err("math.prod() must preserve its start type; type-changing __rmul__ is not supported")
+        elif seq and "__index__" in methods:
+            index = self.protocol(item, "__index__", [])
+            if index.t != "int" and index.t != "bool":
+                self.raise_("TypeError", self.sconst(f"__index__ returned non-int (type {tname(index.t)})"))
+                result = s
+            else:
+                result = self.arith("*", s, index)
+        else:
+            bad = f"can't multiply sequence by non-int of type '{tname(item.t)}'" if seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(item.t)}'"
+            self.raise_("TypeError", self.sconst(bad))
+            result = s
+        self.br(end)
+        self.place(end)
+        return result
+    if seq and (item.t == "int" or item.t == "bool"):
+        return self.arith("*", s, item)
+    other_seq = item.t == "str" or is_list(item.t) or is_tuple(item.t) or is_vtuple(item.t)
+    bad = f"can't multiply sequence by non-int of type '{tname(item.t) if seq else tname(s.t)}'" if seq or other_seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(item.t)}'"
+    self.raise_("TypeError", self.sconst(bad))
+    return s
+
+def gen_dict_pairs(self, v: Val) -> Val:
+    # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
+    # PyDict_MergeFromSeq2 inserts them
+    et = elem(v.t) if is_list(v.t) else ""
+    if is_tuple(et) and len(targs(et)) != 2:
+        self.err(f"dictionary update sequence element #0 has length {len(targs(et))}; 2 is required (dict() of a {typestr(v.t)})")
+    if not is_tuple(et):
+        self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
+    kv = targs(et)
+    if key_problem(kv[0]) != "":
+        self.err(key_problem(kv[0]))
+    d = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"])
+    self.rt("pys_dict_update_pairs", "void", [f"ptr {d}", f"ptr {v.v}"])
+    return Val(d, self.ctype("dict", kv))
+
+def gen_tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
+    # t.index(x, start, stop) and t.count(x) of a tuple of fixed shape, as CPython's
+    # tuple_index_impl and tuple_count: each item in turn (of index()'s span, from start
+    # and stop as they clamp to the tuple) is compared as x in t compares it (titem_eq);
+    # index() stops at the first that is x or equals it. The arguments are evaluated first.
+    # A runtime-length tuple uses the same equality and identity rules in a loop.
+    for a in args:
+        if a.kind == "kw":
+            self.err(f"tuple.{m}() takes no keyword arguments")
+    if m == "count" and len(args) != 1:
+        self.err(f"tuple.count() takes exactly one argument ({len(args)} given)")
+    if m == "index" and (len(args) == 0 or len(args) > 3):
+        self.err(f"index expected at {'least 1 argument' if len(args) == 0 else 'most 3 arguments'}, got {len(args)}")
+    x = self.expr(args[0], "", resultsoft=True)
+    if "?" in x.t:
+        self.err(f"cannot infer the type of the argument of tuple.{m}(): give it a type")
+    bounds: list[Val] = []
+    for j in range(1, len(args)):
+        bounds.append(self.coerce(self.as_int(self.expr(args[j], "int")), "int", f"argument {j + 1} of tuple.index()"))
+    if is_vtuple(o.t):
+        size = Val(self.mload('int', o.v), "int")
+        span = [Val("0", "int"), size]
+        for j in range(len(bounds)):
+            b = bounds[j]
+            adjusted = Val(self.scalar('add', [b, size]), "int")
+            b = Val(self.select(self.num_cmp('<', b, Val('0', "int")).v, adjusted, b), "int")
+            b = Val(self.select(self.num_cmp('<', b, Val('0', "int")).v, Val('0', "int"), b), "int")
+            span[j] = Val(self.select(self.num_cmp('>', b, size).v, size, b), "int")
+        index = self.alloca("int", "")
+        count = self.alloca("int", "")
+        self.mstore('int', span[0].v, index)
+        self.mstore('int', '0', count)
+        cond = self.label()
+        body = self.label()
+        hit = self.label()
+        step = self.label()
+        done = self.label()
+        end = self.label()
+        self.br(cond)
+        self.place(cond)
+        vi = self.mload('int', index)
+        self.cbr(self.num_cmp('<', Val(vi, "int"), span[1]).v, body, done)
+        self.place(body)
+        item = self.from_slot(self.rt("pys_vtuple_get", "i64", [f"ptr {o.v}", f"i64 {vi}"]), targs(o.t)[0])
+        matched = self.titem_eq(item, x, hit, None, "")
+        self.br(step)
+        if matched:
+            self.place(hit)
+            if m == "index":
+                self.br(end)
+            else:
+                self.mstore('int', self.scalar('add', [Val(self.mload('int', count), 'int'), Val('1', 'int')]), count)
+                self.br(step)
+        self.place(step)
+        self.mstore('int', self.scalar('add', [Val(vi, 'int'), Val('1', 'int')]), index)
+        self.br(cond)
+        self.place(done)
+        if m == "index":
+            self.raise_("ValueError", self.sconst("tuple.index(x): x not in tuple"))
+        else:
+            self.br(end)
+        self.place(end)
+        return Val(self.mload('int', index if m == "index" else count), "int")
+    n = len(targs(o.t))
+    if m == "count":
+        ctr = self.alloca("int", "")
+        self.mstore('int', '0', ctr)
+        for i in range(n):
+            hit = self.label()
+            if self.titem_eq(self.tget(o, i), x, hit, None, ""):
+                nx = self.label()
+                self.br(nx)
+                self.place(hit)
+                self.mstore('int', self.scalar('add', [Val(self.mload('int', ctr), 'int'), Val('1', 'int')]), ctr)
+                self.br(nx)
+                self.place(nx)
+        return Val(self.mload('int', ctr), "int")
+    # start and stop: constants are clamped here, others where the method runs (st <= i < en)
+    st = Val("0", "int")
+    en = Val(str(n), "int")
+    if len(bounds) > 0:
+        st = bounds[0]
+        if st.v.lstrip("-").isdigit():
+            st = Val(str(max(int(st.v) + n, 0) if int(st.v) < 0 else int(st.v)), "int")
+        else:
+            neg = self.num_cmp('<', st, Val('0', "int")).v
+            sum_ = Val(self.scalar('add', [st, Val(str(n), 'int')]), "int")
+            low = Val(self.select(self.num_cmp('<', sum_, Val('0', "int")).v, Val("0", "int"), sum_), "int")
+            st = Val(self.select(neg, low, st), "int")
+    if len(bounds) > 1:
+        en = bounds[1]
+        if en.v.lstrip("-").isdigit():
+            en = Val(str(int(en.v) + n if int(en.v) < 0 else int(en.v)), "int")
+        else:
+            neg = self.num_cmp('<', en, Val('0', "int")).v
+            en = Val(self.select(neg, Val(self.scalar('add', [en, Val(str(n), 'int')]), "int"), en), "int")
+    lend = self.label()
+    ph = Ins("phi", "int", "")
+    known = st.v.lstrip("-").isdigit() and en.v.lstrip("-").isdigit()
+    for i in range(n):
+        if known and not int(st.v) <= i < int(en.v):
+            continue
+        skip = ""
+        if not known:
+            inr = self.scalar('and', [self.num_cmp('<=', st, Val(str(i), "int")), self.num_cmp('<', Val(str(i), "int"), en)])
+            test = self.label()
+            skip = self.label()
+            self.cbr(inr, test, skip)
+            self.place(test)
+        self.titem_eq(self.tget(o, i), x, lend, ph, str(i))
+        if skip != "":
+            self.br(skip)
+            self.place(skip)
+    self.raise_("ValueError", self.sconst("tuple.index(x): x not in tuple"))
+    self.place(lend)
+    if len(ph.a) == 0:
+        return Val("0", "int")  # (not reached: no item can equal x)
+    return Val(self.phi(ph), "int")
 
 # ---- sets: runtime.c's, which make them as CPython's setobject.c does

@@ -45,6 +45,11 @@ from src.pystachy_compiler.builtins import (
     gen_anyall as builtins_anyall,
     gen_as_list as builtins_as_list,
     gen_bmethod as builtins_bmethod,
+    gen_tmethod as builtins_tmethod,
+    gen_dict_pairs as builtins_dict_pairs,
+    gen_isclose as builtins_isclose,
+    gen_prod_seq as builtins_prod_seq,
+    gen_prod_item as builtins_prod_item,
     gen_builtin as builtins_builtin,
     gen_call_key as builtins_call_key,
     gen_consume as builtins_consume,
@@ -335,6 +340,7 @@ from src.pystachy_compiler.expressions import (
     gen_class_store as expressions_class_store,
     gen_cls_bound as expressions_cls_bound,
     gen_cmp2 as expressions_cmp2,
+    gen_titem_eq as expressions_titem_eq,
     gen_cmp_method as expressions_cmp_method,
     gen_concrete_cmp as expressions_concrete_cmp,
     gen_comparable as expressions_comparable,
@@ -1913,8 +1919,8 @@ class Gen:
     def none_operand(self, op: str, a: Val, b: Val) -> None:
         return statements_none_operand(self, op, a, b)
 
-    def none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
-        return statements_none_operands(self, op, a, b, shown)
+    def none_operands(self, op: str, a: Val, b: Val, shown: str, right: bool = True) -> None:
+        return statements_none_operands(self, op, a, b, shown, right)
 
     def hide(self, names: list[str]) -> None:
         return statements_hide(self, names)
@@ -2252,6 +2258,9 @@ class Gen:
     def cmp2(self, op: str, a: Val, b: Val) -> Val:
         return expressions_cmp2(self, op, a, b)
 
+    def titem_eq(self, item: Val, a: Val, hit: str, ph: Ins | None, value: str) -> bool:
+        return expressions_titem_eq(self, item, a, hit, ph, value)
+
     def tuple_order(self, op: str, a: Val, b: Val) -> Val:
         return expressions_tuple_order(self, op, a, b)
 
@@ -2527,6 +2536,21 @@ class Gen:
 
     def update(self, o: Val, args: list[Node]) -> Val:
         return builtins_update(self, o, args)
+
+    def tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
+        return builtins_tmethod(self, o, m, args)
+
+    def dict_pairs(self, v: Val) -> Val:
+        return builtins_dict_pairs(self, v)
+
+    def isclose(self, args: list[Node]) -> Val:
+        return builtins_isclose(self, args)
+
+    def prod_item(self, s: Val, item: Val) -> Val:
+        return builtins_prod_item(self, s, item)
+
+    def prod_seq(self, xs: Val, s: Val) -> Val:
+        return builtins_prod_seq(self, xs, s)
 
     def set_display(self, n: Node, want: str, folded: bool, returnctx: bool = False, resultsoft: bool = False) -> Val:
         return containers_set_display(self, n, want, folded, returnctx, resultsoft)

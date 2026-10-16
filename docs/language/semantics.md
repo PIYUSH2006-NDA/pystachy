@@ -105,12 +105,12 @@ Comparisons with `None` are supported where the static types permit them.
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
 `filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`,
-`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, the value assigned to a
-list slice or to a starred target, or a `*` item of a list or tuple display, subject to each
-consumer's item types. `tuple()` also accepts generator expressions and
-`range`/`map`/`filter`/`reversed` calls producing supported scalar or optional scalar items.
-Direct `enumerate`/`zip` items are tuples; project a scalar in a generator expression first
-([runtime-length tuples](typing.md)).
+`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, those that give key/value pairs
+of `dict`, the value assigned to a list slice or to a starred target, or a `*` item of a list
+or tuple display, subject to each consumer's item types. `tuple()` also accepts generator
+expressions and `range`/`map`/`filter`/`reversed` calls producing supported scalar or optional
+scalar items. Direct `enumerate`/`zip` items are tuples; project a scalar in a generator
+expression first ([runtime-length tuples](typing.md)).
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.

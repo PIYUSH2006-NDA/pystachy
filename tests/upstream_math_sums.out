@@ -35,12 +35,29 @@ prod([float(x) for x in range(-1000, 1000)]) nan
 isinstance(prod([1, 2, 3, 4, 5, 6]), int) True
 isinstance(prod(range(1, 21)), int) True
 isinstance(prod(range(1, 10000), start=1.0), float) True
+prod(['a', 'b', 'c'], start='') TypeError can't multiply sequence by non-int of type 'str'
+prod([[1], [2], [3]], start=[]) TypeError can't multiply sequence by non-int of type 'list'
+prod([{2:3}]*2, start={2:3}) TypeError unsupported operand type(s) for *: 'dict' and 'dict'
+prod([2, 3], start='ab') 'abababababab'
+prod([2, 3], start=[1, 2]) [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+prod([], start={2: 3}) {2: 3}
+hypot(*args[:0]) 0.0
+hypot(*args[:1]) 2.718281828459045
 hypot(*args[:2]) 4.154354402313313
+hypot(*args[:3]) 4.388469038288866
+hypot(*args[:4]) 5.504845335956008
+hypot(*args[:5]) 5.572113834395971
 hypot(12.0, 5.0) 13.0
 hypot(12, 5) 13.0
 hypot(0.75, -1) 1.25
 hypot(-1, 0.75) 1.25
+hypot(True, False, True, True, True) 2.0
 hypot(0.0, 0.0) 0.0
+hypot(-10.5) 10.5
+hypot() 0.0
+copysign(1.0, hypot(-0.0)) 1.0
+hypot(1.5, 1.5, 0.5) 2.179449471770337
+hypot(INF) inf
 hypot(0, INF) inf
 hypot(10, INF) inf
 hypot(-10, INF) inf
@@ -51,11 +68,22 @@ hypot(NAN, NINF) inf
 hypot(-INF, INF) inf
 hypot(-INF, -INF) inf
 hypot(10, -INF) inf
+isnan(hypot(NAN)) True
 isnan(hypot(0, NAN)) True
 isnan(hypot(NAN, 10)) True
 isnan(hypot(10, NAN)) True
 isnan(hypot(NAN, NAN)) True
+isnan(hypot(NAN)) True
+isclose(hypot(*([fourthmax]*0)), fourthmax * sqrt(0)) True
+isclose(hypot(*([fourthmax]*1)), fourthmax * sqrt(1)) True
 isclose(hypot(*([fourthmax]*2)), fourthmax * sqrt(2)) True
+isclose(hypot(*([fourthmax]*3)), fourthmax * sqrt(3)) True
+isclose(hypot(*([fourthmax]*4)), fourthmax * sqrt(4)) True
+isclose(hypot(*([fourthmax]*5)), fourthmax * sqrt(5)) True
+isclose(hypot(*([fourthmax]*6)), fourthmax * sqrt(6)) True
+isclose(hypot(*([fourthmax]*7)), fourthmax * sqrt(7)) True
+isclose(hypot(*([fourthmax]*8)), fourthmax * sqrt(8)) True
+isclose(hypot(*([fourthmax]*9)), fourthmax * sqrt(9)) True
 hypot(4*scale, 3*scale), exp 0 1.1125369292536007e-307
 hypot(4*scale, 3*scale), exp 1 5.562684646268003e-308
 hypot(4*scale, 3*scale), exp 2 2.7813423231340017e-308

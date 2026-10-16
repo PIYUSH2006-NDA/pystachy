@@ -38,6 +38,7 @@ for name, args in [
     ("istitle", ""), ("isdecimal", ""), ("isnumeric", ""), ("expandtabs", "4"),
 ]:
     OPS.append((f"str.{name}", f"print(repr(s.{name}({args})))"))
+OPS.append(("str.replace_count", "print(repr(s.replace('', 'x', 2)))"))
 SAFE = """print(repr(s), bool(s), s == s, s in s, repr(s + s))
 print(s.split(), repr(s.strip()), repr(s.center(8)), s.isascii(), s.isspace())
 print(s.partition('b'))

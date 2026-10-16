@@ -1,0 +1,32 @@
+-5 a+b+c+d abcd a<->b<->c<->d
+-1 a+b+c+d abcd a<->b<->c<->d
+0 a-b-c-d a-b-c-d a-b-c-d
+1 a+b-c-d ab-c-d a<->b-c-d
+2 a+b+c-d abc-d a<->b<->c-d
+3 a+b+c+d abcd a<->b<->c<->d
+4 a+b+c+d abcd a<->b<->c<->d
+100 a+b+c+d abcd a<->b<->c<->d
+baa bb bba
+baa baa aaa
+aaa  ''
+-1 -a-b-c- '-' abc
+0 abc '' abc
+1 -abc '-' abc
+2 -a-bc '-' abc
+3 -a-b-c '-' abc
+4 -a-b-c- '-' abc
+9 -a-b-c- '-' abc
+a=b=c-d a-b-c-d
+a/b/c-d a/b/c/d a/b/c/d
+summer à Paris, summer à Lyon, été été in Paris, été à Lyon, été ete à Paris, eté à Lyon, été
+日x語日本語 naive
+baa bbb bba
+baa aab
+arg s
+arg old
+arg new
+arg count
+zyzyx
+*** two *** two one
+one *** one *** one
+[exit 0]

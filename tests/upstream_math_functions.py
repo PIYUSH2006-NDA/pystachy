@@ -3,8 +3,10 @@
 # testAsinh, testAtan, testAtanh, testAtan2, testCbrt, testCos, testCosh, testDegrees, testExp,
 # testExp2, testFabs, testLog, testLog1p, testLog2, testLog2Exact, testLog10, testPow,
 # testRadians, testSin, testSinh, testSqrt, testTan, testTanh, testTanhSign, testIsfinite,
-# testIsnan, testIsinf, test_nan_constant, test_inf_constant and test_exceptions, commit
-# cbc944f4bc59639a444dd971c737788ba2283a91.
+# testIsnan, testIsinf, test_nan_constant, test_inf_constant and test_exceptions, and class
+# IsCloseTests: test_negative_tolerances, test_identical, test_eight_decimal_places,
+# test_near_zero, test_identical_infinite, test_inf_ninf_nan, test_zero_tolerance,
+# test_asymmetry and test_integers, commit cbc944f4bc59639a444dd971c737788ba2283a91.
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name; ftest(name, got, expected) prints got and
 # asserts that it is within the tolerance of expected, assertEqual(a, b) prints a and asserts
@@ -14,7 +16,9 @@
 # rebinding it (a variable has one type here): ftest converts both before it calls it, and every
 # call passes a float as got, as upstream's do. ulp_abs_check()'s fmt and result_check()'s
 # fail_fmt, locals upstream, are written where they are used (a format string is a literal here).
-# test_exceptions runs upstream only in verbose mode.
+# test_exceptions runs upstream only in verbose mode. IsCloseTests' assertIsClose(a, b, ...) and
+# assertIsNotClose print the result with upstream's message and assert it; its examples' lists
+# hold one type, so test_identical's int pairs are lists of their own.
 # EXCLUDED upstream cases (see also tests/upstream_math_float_ops.py and
 # tests/upstream_math_integer.py):
 # - every assertRaises(TypeError, math.f) of a call without arguments (testAcos, testAcosh,
@@ -28,8 +32,8 @@
 #   (math.sumprod() is not supported), test_issue39871 (__float__, getattr()) and
 #   test_input_exceptions (TypeErrors: compile-time errors here, worded "unsupported call ...",
 #   as #277's)
-# - IsCloseTests (math.isclose() is not supported); load_tests' doctest of
-#   Lib/test/mathdata/ieee754.txt is tests/upstream_math_ieee754.py
+# - IsCloseTests' test_decimals and test_fractions (decimal and fractions are not supported);
+#   load_tests' doctest of Lib/test/mathdata/ieee754.txt is tests/upstream_math_ieee754.py
 import math
 import sys
 
@@ -628,3 +632,132 @@ testIsinf()
 test_nan_constant()
 test_inf_constant()
 test_exceptions()
+
+
+def assertIsClose(a, b, rel_tol: float = 1e-09, abs_tol: float = 0.0) -> None:
+    r = math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
+    print("%s and %s should be close!" % (a, b), r)
+    assert r
+
+
+def assertIsNotClose(a, b, rel_tol: float = 1e-09, abs_tol: float = 0.0) -> None:
+    r = math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
+    print("%s and %s should not be close!" % (a, b), r)
+    assert not r
+
+
+def assertAllClose(examples, rel_tol: float = 1e-09, abs_tol: float = 0.0) -> None:
+    for a, b in examples:
+        assertIsClose(a, b, rel_tol, abs_tol)
+
+
+def assertAllNotClose(examples, rel_tol: float = 1e-09, abs_tol: float = 0.0) -> None:
+    for a, b in examples:
+        assertIsNotClose(a, b, rel_tol, abs_tol)
+
+
+def test_negative_tolerances() -> None:
+    # ValueError should be raised if either tolerance is less than zero
+    try:
+        assertIsClose(1, 1, rel_tol=-1e-100)
+        assert False
+    except ValueError as e:
+        print("ValueError", e)
+    try:
+        assertIsClose(1, 1, rel_tol=1e-100, abs_tol=-1e10)
+        assert False
+    except ValueError as e:
+        print("ValueError", e)
+
+
+def test_identical() -> None:
+    # identical values must test as close
+    identical_examples = [(2.0, 2.0),
+                          (0.1e200, 0.1e200),
+                          (1.123e-300, 1.123e-300),
+                          (0.0, -0.0)]
+    assertAllClose(identical_examples, rel_tol=0.0, abs_tol=0.0)
+    assertAllClose([(12345, 12345.0)], rel_tol=0.0, abs_tol=0.0)
+    assertAllClose([(345678, 345678)], rel_tol=0.0, abs_tol=0.0)
+
+
+def test_eight_decimal_places() -> None:
+    # examples that are close to 1e-8, but not 1e-9
+    eight_decimal_places_examples = [(1e8, 1e8 + 1),
+                                     (-1e-8, -1.000000009e-8),
+                                     (1.12345678, 1.12345679)]
+    assertAllClose(eight_decimal_places_examples, rel_tol=1e-8)
+    assertAllNotClose(eight_decimal_places_examples, rel_tol=1e-9)
+
+
+def test_near_zero() -> None:
+    # values close to zero
+    near_zero_examples = [(1e-9, 0.0),
+                          (-1e-9, 0.0),
+                          (-1e-150, 0.0)]
+    # these should not be close to any rel_tol
+    assertAllNotClose(near_zero_examples, rel_tol=0.9)
+    # these should be close to abs_tol=1e-8
+    assertAllClose(near_zero_examples, abs_tol=1e-8)
+
+
+def test_identical_infinite() -> None:
+    # these are close regardless of tolerance -- i.e. they are equal
+    assertIsClose(INF, INF)
+    assertIsClose(INF, INF, abs_tol=0.0)
+    assertIsClose(NINF, NINF)
+    assertIsClose(NINF, NINF, abs_tol=0.0)
+
+
+def test_inf_ninf_nan() -> None:
+    # these should never be close (following IEEE 754 rules for equality)
+    not_close_examples = [(NAN, NAN),
+                          (NAN, 1e-100),
+                          (1e-100, NAN),
+                          (INF, NAN),
+                          (NAN, INF),
+                          (INF, NINF),
+                          (INF, 1.0),
+                          (1.0, INF),
+                          (INF, 1e308),
+                          (1e308, INF)]
+    # use largest reasonable tolerance
+    assertAllNotClose(not_close_examples, abs_tol=0.999999999999999)
+
+
+def test_zero_tolerance() -> None:
+    # test with zero tolerance
+    zero_tolerance_close_examples = [(1.0, 1.0),
+                                     (-3.4, -3.4),
+                                     (-1e-300, -1e-300)]
+    assertAllClose(zero_tolerance_close_examples, rel_tol=0.0)
+
+    zero_tolerance_not_close_examples = [(1.0, 1.000000000000001),
+                                         (0.99999999999999, 1.0),
+                                         (1.0e200, .999999999999999e200)]
+    assertAllNotClose(zero_tolerance_not_close_examples, rel_tol=0.0)
+
+
+def test_asymmetry() -> None:
+    # test the asymmetry example from PEP 485
+    assertAllClose([(9, 10), (10, 9)], rel_tol=0.1)
+
+
+def test_integers() -> None:
+    # test with integer values
+    integer_examples = [(100000001, 100000000),
+                        (123456789, 123456788)]
+
+    assertAllClose(integer_examples, rel_tol=1e-8)
+    assertAllNotClose(integer_examples, rel_tol=1e-9)
+
+
+test_negative_tolerances()
+test_identical()
+test_eight_decimal_places()
+test_near_zero()
+test_identical_infinite()
+test_inf_ninf_nan()
+test_zero_tolerance()
+test_asymmetry()
+test_integers()

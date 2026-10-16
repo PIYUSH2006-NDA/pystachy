@@ -1,27 +1,26 @@
 # Adapted from CPython 3.13.16 Lib/test/test_dict.py, class DictTest: test_constructor,
-# test_bool, test_keys, test_values, test_items, test_contains, test_len, test_getitem,
-# test_clear, test_update, test_fromkeys, test_copy, test_copy_fuzz, test_copy_noncompact,
-# test_get, test_setdefault, test_pop, test_popitem, test_repr, test_eq, test_tuple_keyerror,
-# test_resize1, test_empty_presized_dict_in_freelist and test_hash_collision_remove_add, commit
-# cbc944f4bc59639a444dd971c737788ba2283a91.
+# test_merge_operator, test_bool, test_keys, test_values, test_items, test_contains, test_len,
+# test_getitem, test_clear, test_update, test_fromkeys, test_copy, test_copy_fuzz,
+# test_copy_noncompact, test_get, test_setdefault, test_popitem, test_pop, test_repr, test_eq,
+# test_tuple_keyerror, test_resize1, test_empty_presized_dict_in_freelist and
+# test_hash_collision_remove_add, commit cbc944f4bc59639a444dd971c737788ba2283a91.
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name; assertEqual(a, b) prints a and asserts
-# a == b (test_popitem's loops only assert), assertFalse(x) asserts not x, assertRaises a try
-# statement that prints the exception. An empty display and dict()
-# that nothing types get an annotation; a variable has one type, so where upstream rebinds `d`
-# to another type the new value has a name of its own. Test-local exception classes are module
-# classes. dict(zip(...)) and dict(items), dict() of pairs (not supported), are the equal
-# displays or a loop. test_copy_fuzz's random sizes come from random.randrange(), seeded here
-# so that they are the same on every run, and its new key is -1, an int as the dict's keys, where
-# upstream adds 'key'. test_tuple_keyerror checks repr() of the KeyError, as its args are not
-# supported. test_hash_collision_remove_add's CustomHash(h) keys are ints that hash to h in
-# CPython (h, and h + 2**61 - 1 for the colliding pair), and its values are strs (str(h) where
-# upstream has h), as a dict holds one value type.
+# a == b, assertFalse(x) asserts not x, assertRaises a try statement that prints the exception.
+# An empty display and dict() that nothing types get an annotation; a variable has one type, so
+# where upstream rebinds `d` to another type the new value has a name of its own. Test-local
+# exception classes are module classes. test_popitem asserts each item and prints a line for each size. test_copy_fuzz's
+# random sizes come from random.randrange(), seeded here so that they are the same on every run,
+# and its new key is -1, an int as the dict's keys, where upstream adds 'key'.
+# test_tuple_keyerror checks repr() of the KeyError, as its args are not supported.
+# test_hash_collision_remove_add's CustomHash(h) keys are ints that hash to h in CPython (h, and
+# h + 2**61 - 1 for the colliding pair), and its values are strs (str(h) where upstream has h),
+# as a dict holds one value type.
 # EXCLUDED upstream cases (see also tests/upstream_dict_iteration.py):
 # - test_invalid_keyword_arguments (`**` of a dict with an int key, dict subclasses),
 #   test_literal_constructor (eval(), random strings), test_views_mapping (.mapping, subclasses)
-# - test_merge_operator: `|` and `|=` of dicts (PEP 584) are rejected at compile time, with
-#   "unsupported operand type(s) for |: 'dict' and 'dict'"; a.__or__(...) and a.__ior__(...)
+# - test_merge_operator's a.__or__(...) and a.__ior__(...) (a dict's special methods are not
+#   methods to call here)
 # - test_keys', test_values' and test_items' repr(dict(a=1).keys()) and the like: keys(),
 #   values() and items() are list snapshots here (a documented deviation: "['a']")
 # - TypeErrors of calls with arguments that do not fit (d.keys(None), d.__contains__(),
@@ -68,6 +67,29 @@ def test_constructor() -> None:
     check("dict()", new, empty)
     other: dict[int, int] = dict()
     check("dict() is not {}", other is not empty, True)
+
+
+def test_merge_operator() -> None:
+
+    a = {0: 0, 1: 1, 2: 1}
+    b = {1: 1, 2: 2, 3: 3}
+
+    c = a.copy()
+    c |= b
+
+    check("a | b", a | b, {0: 0, 1: 1, 2: 2, 3: 3})
+    check("c", c, {0: 0, 1: 1, 2: 2, 3: 3})
+
+    c = b.copy()
+    c |= a
+
+    check("b | a", b | a, {1: 1, 2: 1, 3: 3, 0: 0})
+    check("c", c, {1: 1, 2: 1, 3: 3, 0: 0})
+
+    c = a.copy()
+    c |= [(1, 1), (2, 2), (3, 3)]
+
+    check("c", c, {0: 0, 1: 1, 2: 2, 3: 3})
 
 
 def test_bool() -> None:
@@ -158,8 +180,8 @@ def test_fromkeys() -> None:
     check("dict.fromkeys('abc')", fromkeys, nones)
 
     # test fast path for dictionary inputs
-    res = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}  # dict(zip(range(6), [0]*6))
-    d = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5}  # dict(zip(range(6), range(6)))
+    res = dict(zip(list(range(6)), [0]*6))  # (range() in zip() is made a list here)
+    d = dict(zip(list(range(6)), list(range(6))))
     check("dict.fromkeys(d, 0)", dict.fromkeys(d, 0), res)
     # test fast path for set inputs
     d_set = set(range(6))
@@ -217,6 +239,38 @@ def test_copy_noncompact() -> None:
     print(list(d2.items())[:3])
 
 
+def test_popitem() -> None:
+    # dict.popitem()
+    for copymode in -1, +1:
+        # -1: b has same structure as a
+        # +1: b is a.copy()
+        for log2size in range(12):
+            size = 2**log2size
+            a: dict[str, int] = {}
+            b: dict[str, int] = {}
+            for i in range(size):
+                a[repr(i)] = i
+                if copymode < 0:
+                    b[repr(i)] = i
+            if copymode > 0:
+                b = a.copy()
+            for i in range(size):
+                ka, va = ta = a.popitem()
+                assert va == int(ka)
+                kb, vb = tb = b.popitem()
+                assert vb == int(kb)
+                assert not (copymode < 0 and ta != tb)
+            assert not a
+            assert not b
+            print("popitem", copymode, size, ta, tb)
+
+    d: dict[int, int] = {}
+    try:
+        d.popitem()
+    except KeyError as e:
+        print("KeyError", e)
+
+
 def test_get() -> None:
     d: dict[str, int] = {}
     check("d.get('c') is None", d.get('c') is None, True)
@@ -260,40 +314,6 @@ def test_pop() -> None:
         assert False, "expected KeyError"
 
     check("d.pop(k, v)", d.pop(k, v), v)
-
-
-def test_popitem() -> None:
-    # dict.popitem()
-    for copymode in -1, +1:
-        # -1: b has same structure as a
-        # +1: b is a.copy()
-        for log2size in range(12):
-            size = 2**log2size
-            a: dict[str, int] = {}
-            b: dict[str, int] = {}
-            for i in range(size):
-                a[repr(i)] = i
-                if copymode < 0:
-                    b[repr(i)] = i
-            if copymode > 0:
-                b = a.copy()
-            for i in range(size):
-                ka, va = ta = a.popitem()
-                assert va == int(ka)
-                kb, vb = tb = b.popitem()
-                assert vb == int(kb)
-                assert not (copymode < 0 and ta != tb)
-            assert not a
-            assert not b
-        print("popitem copymode", copymode)
-
-    d: dict[int, int] = {}
-    try:
-        d.popitem()
-    except KeyError as e:
-        print("d.popitem(): KeyError", e)
-    else:
-        assert False, "expected KeyError"
 
 
 class Exc(Exception): pass
@@ -368,14 +388,6 @@ def test_empty_presized_dict_in_freelist() -> None:
     print("test_empty_presized_dict_in_freelist", d2)
 
 
-def dict_of(items: list[tuple[int, str]]) -> dict[int, str]:
-    # dict(items)
-    d: dict[int, str] = {}
-    for key, value in items:
-        d[key] = value
-    return d
-
-
 def test_hash_collision_remove_add() -> None:
     # There should be enough space, so all elements with unique hash
     # will be placed in corresponding cells without collision.
@@ -385,22 +397,23 @@ def test_hash_collision_remove_add() -> None:
     a = n               # CustomHash(n)
     b = n + 2**61 - 1   # CustomHash(n): hash(b) == n
     items += [(a, 'a'), (b, 'b')]
-    d = dict_of(items)
+    d = dict(items)
     check("len(d)", len(d), len(items))
     del d[a]
     # "a" has been replaced with a dummy.
     del items[n]
     check("len(d)", len(d), len(items))
-    check("d == dict(items)", d == dict_of(items), True)
+    check("d == dict(items)", d == dict(items), True)
     d[b] = 'c'
     # "b" should not replace the dummy.
     items[n] = (b, 'c')
     check("len(d)", len(d), len(items))
-    check("d == dict(items)", d == dict_of(items), True)
+    check("d == dict(items)", d == dict(items), True)
     print(list(d.items())[-3:])
 
 
 test_constructor()
+test_merge_operator()
 test_bool()
 test_keys()
 test_values()
@@ -416,8 +429,8 @@ test_copy_fuzz()
 test_copy_noncompact()
 test_get()
 test_setdefault()
-test_pop()
 test_popitem()
+test_pop()
 test_repr()
 test_eq()
 test_tuple_keyerror()

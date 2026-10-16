@@ -183,27 +183,33 @@ determine whether a particular call compiles.
 `set()` and `frozenset()` take supported iterables of their element type. Their methods support
 multiple iterable arguments where CPython's do.
 
-The common `str`, `list` and `dict` methods are implemented, including:
+The common `str`, `list`, `dict` and `tuple` methods are implemented, including:
 
 - `find`, `index` and `count` with start and end bounds, including `None`.
 - `startswith` and `endswith`, including a tuple of strings.
 - `split`, `rsplit`, `partition`, `rpartition`, `splitlines`, `removeprefix` and `removesuffix`.
+- `replace` with a count, also given as `count=`.
 - `center`, `ljust` and `rjust` with a fill character; `zfill`, `expandtabs`, `capitalize`,
   `title` and `swapcase`.
 - `dict.pop()` with a default; `dict.popitem()`; `dict.update()` from a dict of its type, a list
   of key/value tuples, or keyword arguments for string keys; and `dict.fromkeys(xs, v)`.
+- `tuple.index()` with start and stop, and `tuple.count()`, also of NamedTuples and
+  runtime-length tuples.
 - `int.bit_length()` and `int.bit_count()`, including on a `bool`.
 - `str.format()` and `str.format_map()` of a string literal (see
   [formatting](semantics.md#literals-and-formatting)).
+
+`a | b` of two dicts of one type is a new dict, and `a |= b` updates `a` as `a.update(b)` does.
+`dict()` takes a dict, a list or tuple of key/value tuples, or the pairs of a generator
+expression, list comprehension, `zip()`, `enumerate()`, `reversed()`, `map()` or `filter()`.
 
 `dict.fromkeys()` can omit `v`, or use `None`, when an annotation provides an optional value
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;
 an empty `()` or `{}` takes the expected dict's key type.
 
-Unsupported operations include dict union (`a | b`), dict displays with `**`,
-`str.replace(old, new, count)`, `dict()` from pairs, and tuple `index()` and
-`count()`. Supported iteration contexts and other restrictions are in the
-[language guide](../language.md#expressions).
+Unsupported operations include `a | b` of dicts of different types, dict displays with `**`,
+and `dict()` with keyword arguments. Supported iteration contexts and other restrictions are in
+the [language guide](../language.md#expressions).
 
 ## Builtin modules and files
 
@@ -228,4 +234,14 @@ are documented in [CPython deviations](../language.md#deviations-from-cpython).
 `fsum()` and `prod()` accept the iterables accepted by `sum()`; `fsum()` also accepts a tuple
 mixing ints and floats. `dist()` accepts two lists or tuples of numbers, NamedTuples, or objects
 with `__iter__`. It copies the first point's items before iterating the second, as CPython's
-`tuple(p)` does. `gamma`, `isclose`, `lgamma` and `sumprod` are unsupported.
+`tuple(p)` does. `prod()`'s `start` may also be a str or list, repeated by each int item in
+turn, or a dict or set, returned when there are no items. Class items may supply `__index__`
+for repetition or `__rmul__` returning the same type as the start; products that change the
+start type are rejected. Subclasses that change the selected multiplication protocol need
+`isinstance()` narrowing. With these starts, generators and `map()` are consumed one item at
+a time, stopping at the first failed multiplication.
+
+`gamma()` and `lgamma()` are CPython's own Lanczos implementation, so their results match
+CPython's bit for bit. `isclose()` takes `rel_tol=` and `abs_tol=`. `gcd()`, `lcm()` and
+`hypot()` take any number of arguments, `perm(n)` and `perm(n, None)` are `factorial(n)`,
+and the integer functions accept bools. `sumprod` is unsupported.

@@ -212,7 +212,7 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
 - An optional import of a module that Pystachy does not find runs its handler, also where
   CPython would find the module (a standard library module Pystachy lacks, or a package
   installed for CPython), and so does one of a name that a builtin module of Pystachy lacks
-  (`from math import gamma`); a handler that may end the program is rejected instead (see the restrictions below). A
+  (`from math import sumprod`); a handler that may end the program is rejected instead (see the restrictions below). A
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 

@@ -1,0 +1,21 @@
+('c', 3) {'a': 1, 'b': 2} 2
+{'a': 1} ['d', 'b', 'a'] ('d', 4) ('b', 2) {'a': 1}
+{'a': 10} ('e', 5) {'a': 10}
+KeyError 'popitem(): dictionary is empty' KeyError('popitem(): dictionary is empty') {}
+(9, 81) {0: 0, 1: 1, 2: 4} [0, 1, 2] [2, 1, 0] {0: 0, 1: 1, 2: 4} {0: 0, 1: 1, 2: 4}
+{0: 0, 1: 1} (100, 1) (2, 4) {0: 0, 1: 1}
+((2, 'q'), 1.5) {(1, 'p'): 0.5}
+('s', 7) ('n', None) {}
+2 2 {1: 'one'}
+y [3, 4] {'x': [1, 2]}
+('outer', {'inner': [1]}) {}
+('é', 2) {'ω': 1}
+loop p ('r', 3)
+RuntimeError dictionary changed size during iteration {'p': 1, 'q': 2}
+reversed r ('r', 3)
+RuntimeError dictionary changed size during iteration {'p': 1, 'q': 2}
+4999950000 0 {}
+[('z', 3), ('y', 2), ('x', 1)] []
+('b', 2) ('a', 3) {}
+KeyError 'popitem(): dictionary is empty'
+[exit 0]

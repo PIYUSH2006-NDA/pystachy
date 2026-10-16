@@ -1,9 +1,11 @@
 # Adapted from CPython 3.13.16 Lib/test/test_tuple.py, class TupleTest: test_truth, test_len,
 # test_iadd, test_repr and test_lexicographic_ordering; and the methods of Lib/test/seq_tests.py's CommonTest that TupleTest
 # runs: test_truth, test_getitem, test_contains, test_contains_fake, test_contains_order,
-# test_len, test_minmax, test_add, test_mul, test_iadd, test_repeat and test_cmp (with
-# _assert_cmp); commit cbc944f4bc59639a444dd971c737788ba2283a91. test.support's ALWAYS_EQ and
-# NEVER_EQ are written out, and test_contains_order's classes are at the module's top level.
+# test_len, test_minmax, test_add, test_mul, test_iadd, test_repeat, test_cmp (with
+# _assert_cmp), test_count and test_index; commit cbc944f4bc59639a444dd971c737788ba2283a91.
+# test.support's ALWAYS_EQ and NEVER_EQ are written out, and the classes of test_contains_order,
+# test_count and test_index are at the module's top level (test_index's BadCmp and BadExc are
+# test_count's).
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name, CommonTest's prefixed seq_; assertEqual(a,
 # b) prints a and asserts a == b. `is` between bools is rejected here, so _assert_cmp's
@@ -33,8 +35,10 @@
 #   special methods are not supported)
 # - test_contains' u.__contains__() and test_getitem's u.__getitem__() (TypeError; tuple's
 #   special methods are not supported), test_subscript (a.__getitem__(), slice objects)
-# - test_getslice (slicing a tuple is not supported), test_count and test_index (tuple.count()
-#   and tuple.index() are not supported)
+# - test_getslice (slicing a tuple is not supported)
+# - test_count's a.count() and test_index's u.index() (TypeError: a compile-time error here, as
+#   tests/errors/tuple_count_arity.py's); test_index's a.index(0, -4*sys.maxsize, 4*sys.maxsize)
+#   and a.index(0, 4*sys.maxsize, -4*sys.maxsize) (ints are 64-bit: 4*sys.maxsize overflows)
 # - test_repeat's id(s) == id(s*1) (id() is not supported); test_bigrepeat (it runs only where
 #   sys.maxsize <= 2**31 - 1)
 # - test_repr_large, and test_repeat's (0, 1, 2)*4 (a tuple holds at most 9 items here: (0,) * 10
@@ -280,6 +284,90 @@ def test_lexicographic_ordering() -> None:
     check_true("b < c", b < c)
 
 
+class BadExc(Exception):
+    pass
+
+
+class BadCmp:
+    def __eq__(self, other) -> bool:
+        if other == 2:
+            raise BadExc()
+        return False
+
+
+def seq_test_count() -> None:
+    a = (0, 1, 2)*3
+    check("a.count(0)", a.count(0), 3)
+    check("a.count(1)", a.count(1), 3)
+    check("a.count(3)", a.count(3), 0)
+
+    check("a.count(ALWAYS_EQ)", a.count(ALWAYS_EQ), 9)
+    check("(ALWAYS_EQ, ALWAYS_EQ).count(1)", (ALWAYS_EQ, ALWAYS_EQ).count(1), 2)
+    check("(ALWAYS_EQ, ALWAYS_EQ).count(NEVER_EQ)", (ALWAYS_EQ, ALWAYS_EQ).count(NEVER_EQ), 2)
+    check("(NEVER_EQ, NEVER_EQ).count(ALWAYS_EQ)", (NEVER_EQ, NEVER_EQ).count(ALWAYS_EQ), 0)
+
+    try:
+        a.count(BadCmp())
+        assert False, "a.count(BadCmp())"
+    except BadExc:
+        print("a.count(BadCmp()): BadExc")
+
+
+def seq_test_index() -> None:
+    u = (0, 1)
+    check("u.index(0)", u.index(0), 0)
+    check("u.index(1)", u.index(1), 1)
+    try:
+        u.index(2)
+        assert False, "u.index(2)"
+    except ValueError as e:
+        print("u.index(2): ValueError", e)
+
+    u2 = (-2, -1, 0, 0, 1, 2)  # (u, rebound)
+    check("u.count(0)", u2.count(0), 2)
+    check("u.index(0)", u2.index(0), 2)
+    check("u.index(0, 2)", u2.index(0, 2), 2)
+    check("u.index(-2, -10)", u2.index(-2, -10), 0)
+    check("u.index(0, 3)", u2.index(0, 3), 3)
+    check("u.index(0, 3, 4)", u2.index(0, 3, 4), 3)
+    try:
+        u2.index(2, 0, -10)
+        assert False, "u.index(2, 0, -10)"
+    except ValueError as e:
+        print("u.index(2, 0, -10): ValueError", e)
+
+    check("u.index(ALWAYS_EQ)", u2.index(ALWAYS_EQ), 0)
+    check("(ALWAYS_EQ, ALWAYS_EQ).index(1)", (ALWAYS_EQ, ALWAYS_EQ).index(1), 0)
+    check("(ALWAYS_EQ, ALWAYS_EQ).index(NEVER_EQ)", (ALWAYS_EQ, ALWAYS_EQ).index(NEVER_EQ), 0)
+    try:
+        (NEVER_EQ, NEVER_EQ).index(ALWAYS_EQ)
+        assert False, "(NEVER_EQ, NEVER_EQ).index(ALWAYS_EQ)"
+    except ValueError as e:
+        print("(NEVER_EQ, NEVER_EQ).index(ALWAYS_EQ): ValueError", e)
+
+    a = (0, 1, 2, 3)
+    try:
+        a.index(BadCmp())
+        assert False, "a.index(BadCmp())"
+    except BadExc:
+        print("a.index(BadCmp()): BadExc")
+
+    a2 = (-2, -1, 0, 0, 1, 2)  # (a, rebound)
+    check("a.index(0)", a2.index(0), 2)
+    check("a.index(0, 2)", a2.index(0, 2), 2)
+    check("a.index(0, -4)", a2.index(0, -4), 2)
+    check("a.index(-2, -10)", a2.index(-2, -10), 0)
+    check("a.index(0, 3)", a2.index(0, 3), 3)
+    check("a.index(0, -3)", a2.index(0, -3), 3)
+    check("a.index(0, 3, 4)", a2.index(0, 3, 4), 3)
+    check("a.index(0, -3, -2)", a2.index(0, -3, -2), 3)
+    try:
+        a2.index(2, 0, -10)
+        assert False, "a.index(2, 0, -10)"
+    except ValueError as e:
+        print("a.index(2, 0, -10): ValueError", e)
+
+
 def test_repr() -> None:
     l0 = ()  # tuple()
     l2 = (0, 1, 2)
@@ -303,5 +391,7 @@ seq_test_mul()
 test_iadd()
 seq_test_repeat()
 seq_test_cmp()
+seq_test_count()
+seq_test_index()
 test_repr()
 test_lexicographic_ordering()

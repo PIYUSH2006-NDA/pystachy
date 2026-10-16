@@ -1,0 +1,26 @@
+index
+index
+abababab
+index
+[1, 2, 1, 2]
+rmul a
+rmul a!
+a!!
+dict rmul
+dict rmul
+{'x': 3}
+__index__ returned non-int (type str)
+start
+item 1
+unsupported operand type(s) for *: 'dict' and 'int'
+start
+item 1
+unsupported operand type(s) for *: 'dict' and 'int'
+can't multiply sequence by non-int of type 'dict'
+can't multiply sequence by non-int of type 'set'
+can't multiply sequence by non-int of type 'str'
+unsupported operand type(s) for *: 'dict' and 'int'
+unchanged
+can't multiply sequence by non-int of type 'NoneType'
+can't multiply sequence by non-int of type 'NoneType'
+[exit 0]
