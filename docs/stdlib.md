@@ -18,7 +18,7 @@ adaptations, deviations and tests. The [language guide](language.md) explains th
 | Approach | Modules and useful APIs |
 |---|---|
 | Unchanged CPython sources | `bisect`, `colorsys`, selected `operator` functions, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this` |
-| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template`, selected `statistics` operations, `urllib.parse`, `html`, `keyword`, `shlex` and the incremental `html.parser` probe |
+| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template`, selected `statistics` operations, `urllib.parse`, `html`, `keyword`, `shlex`, `datetime` (without the local time zone) and the incremental `html.parser` probe |
 | Larger port | `re`: CPython's Python parser/compiler plus a matcher adapted from its C engine |
 | Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key`, `collections.deque`, `io.StringIO`, `csv` |
 

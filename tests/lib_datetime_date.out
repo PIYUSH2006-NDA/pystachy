@@ -1,0 +1,234 @@
+1 9999 0001-01-01 9999-12-31 1 day, 0:00:00 datetime.date(1, 1, 1) datetime.date(9999, 12, 31)
+date(1, 1, 1) datetime.date(1, 1, 1)
+date(9999, 12, 31) datetime.date(9999, 12, 31)
+date(0, 1, 1) ValueError: year 0 is out of range
+date(10000, 1, 1) ValueError: year 10000 is out of range
+date(-5, 1, 1) ValueError: year -5 is out of range
+date(2020, 0, 1) ValueError: month must be in 1..12
+date(2020, 13, 1) ValueError: month must be in 1..12
+date(2020, 1, 0) ValueError: day is out of range for month
+date(2020, 1, 32) ValueError: day is out of range for month
+date(2020, 4, 31) ValueError: day is out of range for month
+date(2021, 2, 29) ValueError: day is out of range for month
+date(2020, 2, 30) ValueError: day is out of range for month
+date(2020, 2, 29) datetime.date(2020, 2, 29)
+date(2020, 6, 30) datetime.date(2020, 6, 30)
+date(2020, 12, 31) datetime.date(2020, 12, 31)
+leap 1 ValueError: day is out of range for month
+leap 4 0004-02-29 2
+leap 100 ValueError: day is out of range for month
+leap 200 ValueError: day is out of range for month
+leap 300 ValueError: day is out of range for month
+leap 400 0400-02-29 2
+leap 1600 1600-02-29 2
+leap 1700 ValueError: day is out of range for month
+leap 1800 ValueError: day is out of range for month
+leap 1900 ValueError: day is out of range for month
+leap 2000 2000-02-29 2
+leap 2004 2004-02-29 2
+leap 2023 ValueError: day is out of range for month
+leap 2024 2024-02-29 2
+leap 2100 ValueError: day is out of range for month
+leap 2400 2400-02-29 2
+leap 9996 9996-02-29 2
+leap 9999 ValueError: day is out of range for month
+3664 183200123764 0001-01-01 9999-12-31 2000-01-01
+fromordinal(0) ValueError: ordinal must be >= 1
+fromordinal(-1) ValueError: ordinal must be >= 1
+fromordinal(3652060) ValueError: year 10000 is out of range
+730120 719163 365
+0001-12-26:2/3/1-52-3 0001-12-27:3/4/1-52-4 0001-12-28:4/5/1-52-5 0001-12-29:5/6/1-52-6 0001-12-30:6/7/1-52-7 0001-12-31:0/1/2-1-1 0002-01-01:1/2/2-1-2
+0001-01-01:0/1/1-1-1 0001-01-02:1/2/1-1-2 0001-01-03:2/3/1-1-3 0001-01-04:3/4/1-1-4 0001-01-05:4/5/1-1-5 0001-01-06:5/6/1-1-6 0001-01-07:6/7/1-1-7
+1999-12-26:6/7/1999-51-7 1999-12-27:0/1/1999-52-1 1999-12-28:1/2/1999-52-2 1999-12-29:2/3/1999-52-3 1999-12-30:3/4/1999-52-4 1999-12-31:4/5/1999-52-5 2000-01-01:5/6/1999-52-6
+1999-01-01:4/5/1998-53-5 1999-01-02:5/6/1998-53-6 1999-01-03:6/7/1998-53-7 1999-01-04:0/1/1999-1-1 1999-01-05:1/2/1999-1-2 1999-01-06:2/3/1999-1-3 1999-01-07:3/4/1999-1-4
+2004-12-26:6/7/2004-52-7 2004-12-27:0/1/2004-53-1 2004-12-28:1/2/2004-53-2 2004-12-29:2/3/2004-53-3 2004-12-30:3/4/2004-53-4 2004-12-31:4/5/2004-53-5 2005-01-01:5/6/2004-53-6
+2004-01-01:3/4/2004-1-4 2004-01-02:4/5/2004-1-5 2004-01-03:5/6/2004-1-6 2004-01-04:6/7/2004-1-7 2004-01-05:0/1/2004-2-1 2004-01-06:1/2/2004-2-2 2004-01-07:2/3/2004-2-3
+2009-12-26:5/6/2009-52-6 2009-12-27:6/7/2009-52-7 2009-12-28:0/1/2009-53-1 2009-12-29:1/2/2009-53-2 2009-12-30:2/3/2009-53-3 2009-12-31:3/4/2009-53-4 2010-01-01:4/5/2009-53-5
+2009-01-01:3/4/2009-1-4 2009-01-02:4/5/2009-1-5 2009-01-03:5/6/2009-1-6 2009-01-04:6/7/2009-1-7 2009-01-05:0/1/2009-2-1 2009-01-06:1/2/2009-2-2 2009-01-07:2/3/2009-2-3
+2015-12-26:5/6/2015-52-6 2015-12-27:6/7/2015-52-7 2015-12-28:0/1/2015-53-1 2015-12-29:1/2/2015-53-2 2015-12-30:2/3/2015-53-3 2015-12-31:3/4/2015-53-4 2016-01-01:4/5/2015-53-5
+2015-01-01:3/4/2015-1-4 2015-01-02:4/5/2015-1-5 2015-01-03:5/6/2015-1-6 2015-01-04:6/7/2015-1-7 2015-01-05:0/1/2015-2-1 2015-01-06:1/2/2015-2-2 2015-01-07:2/3/2015-2-3
+2020-12-26:5/6/2020-52-6 2020-12-27:6/7/2020-52-7 2020-12-28:0/1/2020-53-1 2020-12-29:1/2/2020-53-2 2020-12-30:2/3/2020-53-3 2020-12-31:3/4/2020-53-4 2021-01-01:4/5/2020-53-5
+2020-01-01:2/3/2020-1-3 2020-01-02:3/4/2020-1-4 2020-01-03:4/5/2020-1-5 2020-01-04:5/6/2020-1-6 2020-01-05:6/7/2020-1-7 2020-01-06:0/1/2020-2-1 2020-01-07:1/2/2020-2-2
+2021-12-26:6/7/2021-51-7 2021-12-27:0/1/2021-52-1 2021-12-28:1/2/2021-52-2 2021-12-29:2/3/2021-52-3 2021-12-30:3/4/2021-52-4 2021-12-31:4/5/2021-52-5 2022-01-01:5/6/2021-52-6
+2021-01-01:4/5/2020-53-5 2021-01-02:5/6/2020-53-6 2021-01-03:6/7/2020-53-7 2021-01-04:0/1/2021-1-1 2021-01-05:1/2/2021-1-2 2021-01-06:2/3/2021-1-3 2021-01-07:3/4/2021-1-4
+2026-12-26:5/6/2026-52-6 2026-12-27:6/7/2026-52-7 2026-12-28:0/1/2026-53-1 2026-12-29:1/2/2026-53-2 2026-12-30:2/3/2026-53-3 2026-12-31:3/4/2026-53-4 2027-01-01:4/5/2026-53-5
+2026-01-01:3/4/2026-1-4 2026-01-02:4/5/2026-1-5 2026-01-03:5/6/2026-1-6 2026-01-04:6/7/2026-1-7 2026-01-05:0/1/2026-2-1 2026-01-06:1/2/2026-2-2 2026-01-07:2/3/2026-2-3
+9998-12-26:5/6/9998-52-6 9998-12-27:6/7/9998-52-7 9998-12-28:0/1/9998-53-1 9998-12-29:1/2/9998-53-2 9998-12-30:2/3/9998-53-3 9998-12-31:3/4/9998-53-4 9999-01-01:4/5/9998-53-5
+9998-01-01:3/4/9998-1-4 9998-01-02:4/5/9998-1-5 9998-01-03:5/6/9998-1-6 9998-01-04:6/7/9998-1-7 9998-01-05:0/1/9998-2-1 9998-01-06:1/2/9998-2-2 9998-01-07:2/3/9998-2-3
+9999-12-25:5/6/9999-51-6 9999-12-26:6/7/9999-51-7 9999-12-27:0/1/9999-52-1 9999-12-28:1/2/9999-52-2 9999-12-29:2/3/9999-52-3 9999-12-30:3/4/9999-52-4 9999-12-31:4/5/9999-52-5
+9999-01-01:4/5/9998-53-5 9999-01-02:5/6/9998-53-6 9999-01-03:6/7/9998-53-7 9999-01-04:0/1/9999-1-1 9999-01-05:1/2/9999-1-2 9999-01-06:2/3/9999-1-3 9999-01-07:3/4/9999-1-4
+datetime.IsoCalendarDate(year=2020, week=53, weekday=4) 2020 53 4 2020 True 3
+fromisocalendar(2020, 53, 7) datetime.date(2021, 1, 3)
+fromisocalendar(2021, 53, 1) ValueError: Invalid week: 53
+fromisocalendar(2015, 53, 1) datetime.date(2015, 12, 28)
+fromisocalendar(2004, 53, 5) datetime.date(2004, 12, 31)
+fromisocalendar(1, 1, 1) datetime.date(1, 1, 1)
+fromisocalendar(9999, 52, 5) datetime.date(9999, 12, 31)
+fromisocalendar(9999, 52, 7) ValueError: year 10000 is out of range
+fromisocalendar(0, 1, 1) ValueError: Year is out of range: 0
+fromisocalendar(10000, 1, 1) ValueError: Year is out of range: 10000
+fromisocalendar(2020, 0, 1) ValueError: Invalid week: 0
+fromisocalendar(2020, 54, 1) ValueError: Invalid week: 54
+fromisocalendar(2020, 1, 0) ValueError: Invalid day: 0 (range is [1, 7])
+fromisocalendar(2020, 1, 8) ValueError: Invalid day: 8 (range is [1, 7])
+fromisoformat('2020-01-01') datetime.date(2020, 1, 1)
+fromisoformat('20200101') datetime.date(2020, 1, 1)
+fromisoformat('2020-W01') datetime.date(2019, 12, 30)
+fromisoformat('2020W01') datetime.date(2019, 12, 30)
+fromisoformat('2020-W01-3') datetime.date(2020, 1, 1)
+fromisoformat('2020W013') datetime.date(2020, 1, 1)
+fromisoformat('2020-W53-7') datetime.date(2021, 1, 3)
+fromisoformat('2021-W53') ValueError: Invalid isoformat string: '2021-W53'
+fromisoformat('0001-01-01') datetime.date(1, 1, 1)
+fromisoformat('9999-12-31') datetime.date(9999, 12, 31)
+fromisoformat('0000-01-01') ValueError: year 0 is out of range
+fromisoformat('2020-1-01') ValueError: Invalid isoformat string: '2020-1-01'
+fromisoformat('2020-13-01') ValueError: month must be in 1..12
+fromisoformat('2020-02-30') ValueError: day is out of range for month
+fromisoformat('') ValueError: Invalid isoformat string: ''
+fromisoformat('abcd-ef-gh') ValueError: Invalid isoformat string: 'abcd-ef-gh'
+fromisoformat('2020-01-01T00') ValueError: Invalid isoformat string: '2020-01-01T00'
+fromisoformat('2020-01') ValueError: Invalid isoformat string: '2020-01'
+fromisoformat('202001') ValueError: Invalid isoformat string: '202001'
+fromisoformat('2020-0101') ValueError: Invalid isoformat string: '2020-0101'
+fromisoformat('2020W01-3') ValueError: Invalid isoformat string: '2020W01-3'
+fromisoformat('2020-W013') ValueError: Invalid isoformat string: '2020-W013'
+fromisoformat('２０２０-01-01') ValueError: Invalid isoformat string: '２０２０-01-01'
+fromisoformat('2020-01-0١') ValueError: Invalid isoformat string: '2020-01-0١'
+fromisoformat('2020-01-1é') ValueError: Invalid isoformat string: '2020-01-1é'
+0001-01-01 datetime.date(1, 1, 1) 0001-01-01 Mon Jan  1 00:00:00 0001 0001-01-01 01.01.1 0001-01-01 time.struct_time(tm_year=1, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=1, tm_isdst=-1)
+0999-09-09 datetime.date(999, 9, 9) 0999-09-09 Mon Sep  9 00:00:00 0999 0999-09-09 09.09.999 0999-09-09 time.struct_time(tm_year=999, tm_mon=9, tm_mday=9, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=252, tm_isdst=-1)
+2024-02-29 datetime.date(2024, 2, 29) 2024-02-29 Thu Feb 29 00:00:00 2024 2024-02-29 29.02.2024 2024-02-29 time.struct_time(tm_year=2024, tm_mon=2, tm_mday=29, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=60, tm_isdst=-1)
+9999-12-31 datetime.date(9999, 12, 31) 9999-12-31 Fri Dec 31 00:00:00 9999 9999-12-31 31.12.9999 9999-12-31 time.struct_time(tm_year=9999, tm_mon=12, tm_mday=31, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=4, tm_yday=365, tm_isdst=-1)
+2024-02-29 2028-02-29 2024-03-29 2024-02-01 2000-01-02
+replace(year=2023) ValueError: day is out of range for month
+replace(month=13) ValueError: month must be in 1..12
+2024-03-01 2025-03-01 2023-12-31 2024-03-01 2024-02-29 8825 days, 0:00:00 -8825 days, 0:00:00 3652058 days, 0:00:00 9999-12-31
+max + 1 OverflowError: date value out of range
+min - 1 OverflowError: date value out of range
+min - 1us datetime.date(1, 1, 1)
+max + huge OverflowError: date value out of range
+[False, False, False, False, True] [True, False, True, False, False] [False, True, False, True, True] [True, True, True, True, False]
+[True, False, True, False, True] [False, True, False, False, False] [True, False, True, True, True] [False, True, False, True, False]
+[False, False, False, False, True] [True, False, True, False, False] [False, True, False, True, True] [True, True, True, True, False]
+[True, True, True, False, True] [False, False, False, True, False] [True, True, True, False, True] [False, False, False, True, False]
+[False, False, False, False, False] [False, False, False, False, True] [True, True, True, True, False] [True, True, True, True, True]
+[datetime.date(1, 1, 1), datetime.date(2019, 12, 31), datetime.date(2020, 1, 1), datetime.date(2020, 1, 1), datetime.date(9999, 1, 1)] 9999-01-01 0001-01-01
+False True False
+datetime < date TypeError: '<' not supported between instances of 'datetime.datetime' and 'datetime.date'
+date - datetime TypeError: unsupported operand type(s) for -: 'datetime.date' and 'datetime.datetime'
+'Mon Monday Jan January Jan Mon Jan  1 00:00:00 1'
+'0 01 01/01/01  1 1-01-01 01 1 001'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'1 00 01 1 01 01/01/01 00:00:00 01 1'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'1 1 1  1  1 00001 0000000001 000   1   1 001'
+'MON JANUARY MON MONDAY JAN am AM am'
+'01 1 0 01/01/01 00:00:00 Mon Jan  1 00:00:00 1 01  1 00 01 01 January Jan %Ed %EB %OY'
+'    Monday|       Mon| January|00000Jan'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'     1-01-01|     1-01-01|000001/01/01|MON JAN  1 00:00:00 1'
+'%: %z %:'
+'é1 ü 01 ✓ %ébB %é'
+'x\x001\x00y'
+3050 '00000000000000000000' '00000000000000000001'
+'Thu Thursday Dec December Dec Thu Dec 31 00:00:00 99'
+'0 31 12/31/99 31 99-12-31 99 99 365'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'4 52 53 4 52 12/31/99 00:00:00 99 99'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'31 12 365 31 12 00031 0000000099 000  31  31 031'
+'THU DECEMBER THU THURSDAY DEC am AM am'
+'99 99 0 12/31/99 00:00:00 Thu Dec 31 00:00:00 99 31 31 00 12 99 December Dec %Ed %EB %OY'
+'  Thursday|       Thu|December|00000Dec'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'    99-12-31|    99-12-31|000012/31/99|THU DEC 31 00:00:00 99'
+'%: %z %:'
+'é99 ü 31 ✓ %ébB %é'
+'x\x0099\x00y'
+3050 '00000000000000000000' '00000000000000000031'
+'Sat Saturday Jun June Jun Sat Jun 15 00:00:00 999'
+'9 15 06/15/99 15 999-06-15 99 999 166'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'6 23 24 6 23 06/15/99 00:00:00 99 999'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'15 6 166 15  6 00015 0000000999 009  15  15 015'
+'SAT JUNE SAT SATURDAY JUN am AM am'
+'99 999 9 06/15/99 00:00:00 Sat Jun 15 00:00:00 999 15 15 00 06 99 June Jun %Ed %EB %OY'
+'  Saturday|       Sat|    June|00000Jun'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'   999-06-15|   999-06-15|000006/15/99|SAT JUN 15 00:00:00 999'
+'%: %z %:'
+'é999 ü 15 ✓ %ébB %é'
+'x\x00999\x00y'
+3050 '00000000000000000000' '00000000000000000015'
+'Thu Thursday Feb February Feb Thu Feb 29 00:00:00 2024'
+'20 29 02/29/24 29 2024-02-29 24 2024 060'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'4 08 09 4 09 02/29/24 00:00:00 24 2024'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'29 2 60 29  2 00029 0000002024 020  29  29 029'
+'THU FEBRUARY THU THURSDAY FEB am AM am'
+'24 2024 20 02/29/24 00:00:00 Thu Feb 29 00:00:00 2024 29 29 00 02 24 February Feb %Ed %EB %OY'
+'  Thursday|       Thu|February|00000Feb'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'  2024-02-29|  2024-02-29|000002/29/24|THU FEB 29 00:00:00 2024'
+'%: %z %:'
+'é2024 ü 29 ✓ %ébB %é'
+'x\x002024\x00y'
+3050 '00000000000000000000' '00000000000000000029'
+'Sun Sunday Jan January Jan Sun Jan  3 00:00:00 2021'
+'20 03 01/03/21  3 2021-01-03 20 2020 003'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'7 01 53 0 00 01/03/21 00:00:00 21 2021'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'3 1 3  3  1 00003 0000002021 020   3   3 003'
+'SUN JANUARY SUN SUNDAY JAN am AM am'
+'21 2021 20 01/03/21 00:00:00 Sun Jan  3 00:00:00 2021 03  3 00 01 21 January Jan %Ed %EB %OY'
+'    Sunday|       Sun| January|00000Jan'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'  2021-01-03|  2021-01-03|000001/03/21|SUN JAN  3 00:00:00 2021'
+'%: %z %:'
+'é2021 ü 03 ✓ %ébB %é'
+'x\x002021\x00y'
+3050 '00000000000000000000' '00000000000000000003'
+'Fri Friday Dec December Dec Fri Dec 31 00:00:00 9999'
+'99 31 12/31/99 31 9999-12-31 99 9999 365'
+'00 12  0 12 00 AM am 12:00:00 AM 00:00 00 00:00:00'
+'5 52 52 5 52 12/31/99 00:00:00 99 9999'
+'\n\t%'
+'000000|||'
+'%Q %q %v %1 %+ %E %'
+'%'
+'a%'
+'31 12 365 31 12 00031 0000009999 099  31  31 031'
+'FRI DECEMBER FRI FRIDAY DEC am AM am'
+'99 9999 99 12/31/99 00:00:00 Fri Dec 31 00:00:00 9999 31 31 00 12 99 December Dec %Ed %EB %OY'
+'    Friday|       Fri|December|00000Dec'
+'  %|  %|  %|00%|%|%|     ||00000||'
+'  9999-12-31|  9999-12-31|000012/31/99|FRI DEC 31 00:00:00 9999'
+'%: %z %:'
+'é9999 ü 31 ✓ %ébB %é'
+'x\x009999\x00y'
+3050 '00000000000000000000' '00000000000000000031'
+[exit 0]

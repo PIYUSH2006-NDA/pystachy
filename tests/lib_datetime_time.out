@@ -1,0 +1,117 @@
+00:00:00 23:59:59.999999 0:00:00.000001 datetime.time(0, 0) datetime.time(23, 59, 59, 999999) datetime.time(0, 0)
+time(0, 0, 0, 0) datetime.time(0, 0)
+time(23, 59, 59, 999999) datetime.time(23, 59, 59, 999999)
+time(24, 0, 0, 0) ValueError: hour must be in 0..23
+time(-1, 0, 0, 0) ValueError: hour must be in 0..23
+time(0, 60, 0, 0) ValueError: minute must be in 0..59
+time(0, 0, 60, 0) ValueError: second must be in 0..59
+time(0, 0, 0, 1000000) ValueError: microsecond must be in 0..999999
+time(0, 0, 0, -1) ValueError: microsecond must be in 0..999999
+time(12, 5, 0, 7) datetime.time(12, 5, 0, 7)
+fold=2 ValueError: fold must be either 0 or 1
+fold=-1 ValueError: fold must be either 0 or 1
+isoformat('auto') 09:05:03.025000 09:05:00
+isoformat('hours') 09 09
+isoformat('minutes') 09:05 09:05
+isoformat('seconds') 09:05:03 09:05:00
+isoformat('milliseconds') 09:05:03.025 09:05:00.000
+isoformat('microseconds') 09:05:03.025000 09:05:00.000000
+isoformat('nanos') ValueError: Unknown timespec value
+isoformat('') ValueError: Unknown timespec value
+09:05:03.025000 datetime.time(9, 5, 3, 25000) 9 5 3 25000 None 0 09:05:03.025000 09.05.03.025000 None None None
+fromisoformat('12') datetime.time(12, 0)
+fromisoformat('1230') datetime.time(12, 30)
+fromisoformat('12:30') datetime.time(12, 30)
+fromisoformat('123045') datetime.time(12, 30, 45)
+fromisoformat('12:30:45') datetime.time(12, 30, 45)
+fromisoformat('12:30:45.5') datetime.time(12, 30, 45, 500000)
+fromisoformat('12:30:45,123') datetime.time(12, 30, 45, 123000)
+fromisoformat('T12:30') datetime.time(12, 30)
+fromisoformat('12:30:45.1234567') datetime.time(12, 30, 45, 123456)
+fromisoformat('12:30:45.000001') datetime.time(12, 30, 45, 1)
+fromisoformat('12:30+05') datetime.time(12, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=18000)))
+fromisoformat('12:30-0530') datetime.time(12, 30, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=66600)))
+fromisoformat('12:30+05:30:15') datetime.time(12, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=19815)))
+fromisoformat('12:30+05:30:15.5') datetime.time(12, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=19815, microseconds=500000)))
+fromisoformat('12:30Z') datetime.time(12, 30, tzinfo=datetime.timezone.utc)
+fromisoformat('12:30z') ValueError: Invalid isoformat string: '12:30z'
+fromisoformat('12:30Z00') ValueError: Invalid isoformat string: '12:30Z00'
+fromisoformat('00:00+00:00') datetime.time(0, 0, tzinfo=datetime.timezone.utc)
+fromisoformat('00:00-00:00') datetime.time(0, 0, tzinfo=datetime.timezone.utc)
+fromisoformat('23:59:59.999999+23:59:59.999999') datetime.time(23, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(seconds=86399, microseconds=999999)))
+fromisoformat('00:00+24:00') ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=1).
+fromisoformat('00:00-24:00') ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=-1).
+fromisoformat('24:00') ValueError: hour must be in 0..23
+fromisoformat('12:60') ValueError: minute must be in 0..59
+fromisoformat('12:3') ValueError: Invalid isoformat string: '12:3'
+fromisoformat('1') ValueError: Invalid isoformat string: '1'
+fromisoformat('') ValueError: Invalid isoformat string: ''
+fromisoformat('T') ValueError: Invalid isoformat string: 'T'
+fromisoformat('TT12') ValueError: Invalid isoformat string: 'TT12'
+fromisoformat('12:30:') ValueError: Invalid isoformat string: '12:30:'
+fromisoformat('12:30.') ValueError: Invalid isoformat string: '12:30.'
+fromisoformat('12:30:45.') ValueError: Invalid isoformat string: '12:30:45.'
+fromisoformat('12:30.5') datetime.time(12, 30, 0, 500000)
+fromisoformat('1230:45') ValueError: Invalid isoformat string: '1230:45'
+fromisoformat('12:3045') ValueError: Invalid isoformat string: '12:3045'
+fromisoformat('20200101') datetime.time(20, 20, 1, 10000)
+fromisoformat('12:30:45:123') datetime.time(12, 30, 45, 123000)
+fromisoformat('123045123') datetime.time(12, 30, 45, 123000)
+fromisoformat('12:30+') ValueError: Invalid isoformat string: '12:30+'
+fromisoformat('12:30+5') ValueError: Invalid isoformat string: '12:30+5'
+fromisoformat('12:30+053') ValueError: Invalid isoformat string: '12:30+053'
+fromisoformat('12:30 ') ValueError: Invalid isoformat string: '12:30 '
+fromisoformat(' 12:30') ValueError: Invalid isoformat string: ' 12:30'
+fromisoformat('12:30é') ValueError: Invalid isoformat string: '12:30é'
+fromisoformat('１２:30') ValueError: Invalid isoformat string: '１２:30'
+fromisoformat('12:30+05:30garbage') ValueError: Invalid isoformat string: '12:30+05:30garbage'
+fromisoformat('12\x0030') ValueError: Invalid isoformat string: '12\x0030'
+datetime.timezone.utc | UTC | UTC 0:00:00 None True False
+datetime.timezone.utc | UTC | UTC 0:00:00 None True False
+datetime.timezone.utc | UTC | UTC 0:00:00 None True False
+datetime.timezone(datetime.timedelta(0), 'UTC') | UTC | UTC 0:00:00 None True False
+datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST') | EST | EST -1 day, 19:00:00 None False True
+datetime.timezone(datetime.timedelta(seconds=19800)) | UTC+05:30 | UTC+05:30 5:30:00 None False False
+datetime.timezone(datetime.timedelta(days=-1, seconds=86369, microseconds=999995)) | UTC-00:00:30.000005 | UTC-00:00:30.000005 -1 day, 23:59:29.999995 None False False
+datetime.timezone(datetime.timedelta(seconds=86399, microseconds=999999)) | UTC+23:59:59.999999 | UTC+23:59:59.999999 23:59:59.999999 None False False
+datetime.timezone(datetime.timedelta(days=-1, seconds=60)) | UTC-23:59 | UTC-23:59 -1 day, 0:01:00 None False False
+datetime.timezone(datetime.timedelta(seconds=86340)) | UTC+23:59 | UTC+23:59 23:59:00 None False False
+datetime.timezone(datetime.timedelta(seconds=1), 'naïve ±') | naïve ± | naïve ± 0:00:01 None False False
+timezone(24h) ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=1).
+timezone(-24h) ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=-1).
+timezone(-24h+1us) datetime.timezone(datetime.timedelta(days=-1, microseconds=1))
+datetime.time(12, 0, tzinfo=datetime.timezone.utc) 12:00:00+00:00 0:00:00 UTC None 12:00+00:00
+   [True, True, True, False, False, False] [False, False, False, True, True, True]
+datetime.time(7, 0, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) 07:00:00-05:00 -1 day, 19:00:00 EST None 07:00-05:00
+   [True, True, True, False, False, False] [False, False, False, True, True, True]
+datetime.time(17, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800))) 17:30:00+05:30 5:30:00 UTC+05:30 None 17:30+05:30
+   [True, True, True, False, False, False] [False, False, False, True, True, True]
+datetime.time(12, 0, 0, 5, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=86369, microseconds=999995))) 12:00:00.000005-00:00:30.000005 -1 day, 23:59:29.999995 UTC-00:00:30.000005 None 12:00-00:00:30.000005
+   [False, False, False, True, False, False] [True, True, True, False, True, True]
+datetime.time(11, 59, 30, 5, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=86369, microseconds=999995))) 11:59:30.000005-00:00:30.000005 -1 day, 23:59:29.999995 UTC-00:00:30.000005 None 11:59-00:00:30.000005
+   [False, False, False, False, True, False] [True, True, True, True, False, True]
+datetime.time(12, 0) 12:00:00 None None None 12:00
+   [False, False, False, False, False, True] [True, True, True, True, True, False]
+[False, False, False, True, True] [True, True, True, False, False]
+[False, False, False, True, True] [True, True, True, False, False]
+[False, False, False, True, True] [True, True, True, False, False]
+[False, False, False, False, False] [True, True, True, True, True]
+[False, False, False, True, False] [True, True, True, False, True]
+naive < aware TypeError: can't compare offset-naive and offset-aware times
+aware > naive TypeError: can't compare offset-naive and offset-aware times
+datetime.time(1, 2, 3, 4, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'), fold=1) datetime.time(5, 2, 3, 4, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'), fold=1) datetime.time(1, 2, 3, 4, fold=1) datetime.time(1, 2, 3, 4, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.time(1, 2, 3, tzinfo=datetime.timezone.utc, fold=1) datetime.time(1, 2, 3, 4, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'), fold=1)
+replace(minute=60) ValueError: minute must be in 0..59
+'01:02:03.000004' '23:59:01.000009'
+'01 AM am' '11 PM pm'
+'1900-01-01 001 Mon Monday 00 01 01' '1900-01-01 001 Mon Monday 00 01 01'
+'-0500|-05:00|EST' '||'
+'Mon Jan  1 01:02:03 1900' 'Mon Jan  1 23:59:01 1900'
+'01:02:03 01/01/00' '23:59:01 01/01/00'
+'1| 2|003|AM|' '23|59|001|PM|'
+'%f %z' '%f %z'
+'é 01 ü' 'é 23 ü'
+datetime.time(10, 30, tzinfo=Fixed(90, 'Zoné+1:30')) 10:30:00+01:30 1:30:00 Zoné+1:30 0:00:00 Zoné+1:30 +0130 +01:30
+True True True
+utcoffset 24h ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24).
+isoformat 24h ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24).
+[exit 0]

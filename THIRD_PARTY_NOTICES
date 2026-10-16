@@ -117,6 +117,12 @@ and Lib/test/test_keyword.py from the same commit; their headers pin the source 
 and identify exclusions. These sources and tests use the same PSF license and copyright
 notice. Every source adaptation is marked # Pystachy port:.
 
+lib/datetime.py is CPython 3.13.16's Lib/_pydatetime.py (which Lib/datetime.py re-exports) with
+the edits lib/README.md lists, each marked # Pystachy port:. Where CPython's C module differs, the
+edits follow Modules/_datetimemodule.c and the strftime() of Modules/timemodule.c at commit
+cbc944f4bc59639a444dd971c737788ba2283a91. It is derived from Python and is used under the same
+license and copyright notice.
+
 lib/shlex.py adapts CPython 3.13.16's Lib/shlex.py at the same commit. Its upstream
 table assertions in tests/lib_shlex_upstream.py derive from Lib/test/test_shlex.py.
 lib/collections/__init__.py implements a typed deque after Modules/_collectionsmodule.c,

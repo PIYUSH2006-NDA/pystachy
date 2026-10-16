@@ -31,8 +31,17 @@ observable contract.
 | `html.entities` | `Lib/html/entities.py` | `d9c65fb2828dbc1f3e399058a341d51e9375ec5bca95a8e92599c41bd5b78bde` |
 | `keyword` | `Lib/keyword.py` | `18c2be738c04ad20ad375f6a71db34b3823c7f40b0340f5294d0e89f3c9b093b` |
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
+| `datetime` | `Lib/_pydatetime.py` | `9a6652ecbdc8bcb9774136febc36b13f99aa926c7b42c19ac77e6c84128560a4` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
+`datetime` is `_pydatetime`, which CPython's `Lib/datetime.py` re-exports when its C
+accelerator is missing. Where CPython's accelerator behaves differently, the edits follow
+`Modules/_datetimemodule.c` (SHA-256
+`56cb991f5244e79edb81de4a0b45ae4138fe4270bd82920e4ed9eb957dc08e5a`): messages, float
+`timedelta` arguments, ISO 8601 parsing, comparisons and the `strftime()` format scan.
+Its `strftime()` reproduces `Modules/timemodule.c` (SHA-256
+`695d4f627d2ff472c0bf4df4583bf97ea832b96b0cc9a7eb1f13ddd51ee19deb`) on glibc: ASCII runs
+formatted as glibc 2.39's C-locale `wcsftime()` formats them, within its growing buffer.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
 weighted means. `urllib.parse` includes codec logic corresponding to CPython's
 `unicodeobject.c`, `stringlib/codecs.h` and `codecs.c`, plus bracketed-host and
@@ -77,6 +86,7 @@ Historical upstream-suite checks recorded with the ports:
 | `html` | `test_html` | Both tests passed |
 | `keyword` | `test_keyword` | All 11 tests passed |
 | `shlex` | `test_shlex` | 43 of 44 passed; punctuation field is writable |
+| `datetime` | `test_datetime`'s pure-Python cases | 1209 of 1775 passed, 27 skipped; the others need local time, pickling, hashing, subclass construction, `NotImplemented` reflection, the `timezone.utc` singleton or dynamic argument types |
 
 These counts describe specific recorded checks of the adapted source under
 CPython, not the number of APIs or upstream tests executed by the compiled

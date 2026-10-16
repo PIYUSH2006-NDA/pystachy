@@ -1,0 +1,17 @@
+today NotImplementedError: datetime: local time is not supported (Pystachy's time module has no localtime())
+now NotImplementedError: datetime: local time is not supported (Pystachy's time module has no localtime())
+fromtimestamp NotImplementedError: datetime: local time is not supported (Pystachy's time module has no localtime())
+timestamp NotImplementedError: datetime: local time is not supported (Pystachy's time module has no mktime())
+astimezone() NotImplementedError: datetime: local time is not supported (Pystachy's time module has no localtime())
+naive astimezone NotImplementedError: datetime: local time is not supported (Pystachy's time module has no localtime())
+%s NotImplementedError: strftime(): %s needs the local time zone, which Pystachy's time module does not provide
+total_seconds OverflowError: integer result does not fit in 64 bits
+// OverflowError: integer result does not fit in 64 bits
+/ OverflowError: integer result does not fit in 64 bits
+float us OverflowError: Python int too large to convert to C int
+False True datetime.timezone.utc
+name None datetime.timezone(datetime.timedelta(seconds=3600))
+date < datetime TypeError: '>' not supported between instances of 'datetime.datetime' and 'datetime.date'
+separator ValueError: Invalid isoformat string: '2024-02-29é12:00'
+datetime.date(2024, 2, 29) False False
+[exit 0]
