@@ -76,8 +76,8 @@ def gen_subclass_problem(self, st: Node) -> str:
         return UNSUPPORTED["subclass"] + " (the module may have rebound the name 'object' before this statement)"
     if b == "":
         return "unsupported base class: single inheritance requires a previously declared ordinary class or a supported exception class"
-    if b not in self.classes and (EXCEPTIONS.get(b, "-") == "-" or exc_derives(b, "SyntaxError")):
-        return f"deriving from {b} is not supported"
+    if b not in self.classes and (EXCEPTIONS.get(b, "-") == "-" or EXCEPTIONS.get(b, "") == "u" or exc_derives(b, "SyntaxError")):
+        return f"deriving from {b} is not supported"  # (u: a UnicodeError whose five arguments make its message)
     if len(st.kids[0].kids) > 1:
         return f"an exception class with a decorator (@{st.kids[0].kids[1].s}) is not supported"
     return ""
