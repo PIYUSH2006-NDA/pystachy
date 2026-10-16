@@ -37,6 +37,7 @@ Imports search builtin modules first, then the program's directory,
 | `random` | Adapted CPython on a subset `_random` (`_pyrandom`) | Seeded `Random` and module functions, integers, sequences, distributions, state | Int, bool and float seeds; 63-bit `getrandbits`; no subclasses |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
 | `codecs` | Adapted CPython on a subset `_codecs` (`_pystachy_codecs`) | BOM constants, `encode`, `decode`, the UTF-8, Latin-1, ASCII and charmap codec functions, `lookup_error`, `register_error`, the incremental classes | No codec registry (`lookup()`); no UTF-16, UTF-32, UTF-7 or escape codecs |
+| `atexit` | Subset port of CPython's C module (`_pystachy_atexit`) | `register` (also as a decorator, with arguments), callbacks run at the end of the program, also after `sys.exit()` or an uncaught exception; `_run_exitfuncs`, `_clear`, `_ncallbacks` | No `unregister`; a failing callback's report shows the exception's last line |
 | `binascii` | Subset port of CPython's C module (`_pystachy_binascii`) | Hex with separators, base64 with strict mode, uu, quoted-printable, `crc32`, `crc_hqx`, `Error` and `Incomplete` | Bytes and ASCII-str arguments only; Python functions, not builtins |
 | `datetime` | Adapted CPython (`_pydatetime`, following `_datetime`) | `timedelta`, `date`, `time`, `datetime`, fixed-offset `timezone`, `tzinfo` subclasses, ISO 8601, `strftime()` | No local time zone; no `strptime()` or pickling |
 
@@ -82,9 +83,9 @@ to the compiled paths listed here and in the compatibility reference.
 `curses/__init__.py` is a Pystachy stand-in for the package that normally imports
 `_curses`; it does not provide terminal control.
 
-`_pystachy_binascii.py` is `binascii` and `_pystachy_codecs.py` is `_codecs`, modules CPython
-builds into its interpreter: Pystachy loads those files for `import binascii` and `import
-_codecs`, where CPython imports its C modules.
+`_pystachy_binascii.py` is `binascii`, `_pystachy_codecs.py` is `_codecs` and `_pystachy_atexit.py`
+is `atexit`, modules CPython builds into its interpreter: Pystachy loads those files for `import
+binascii`, `import _codecs` and `import atexit`, where CPython imports its C modules.
 
 `_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers
 (`list_iterator`, `dict_keyiterator`, ...). The compiler loads it for a program that calls

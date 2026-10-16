@@ -3166,14 +3166,22 @@ void pys_files_exit(void) {            /* the open files closed in the order the
   for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
   nfiles = 0;
 }
+static void **exit_hook;               /* the address of atexit's _hook (lib/_pystachy_atexit.py), a Callable */
+void pys_exit_hook(void **hook) { exit_hook = hook; }   /* the program's main gives it, where it imports atexit */
 void pys_finish(void) {                /* at exit, what CPython's shows of its end: stdout flushed after the code (see
-                                          out_flush), the collector's report, stdout flushed in finalization (a
-                                          failure is reported, status 120), the open files closed in the order they
-                                          were opened (a failure is reported), and an uncaught KeyboardInterrupt's
-                                          end by SIGINT */
+                                          out_flush), atexit's callbacks run (once its module has run: CPython's
+                                          finalization runs them first), the collector's report, stdout flushed in
+                                          finalization (a failure is reported, status 120), the open files closed in
+                                          the order they were opened (a failure is reported), and an uncaught
+                                          KeyboardInterrupt's end by SIGINT */
   static int done;
   if (done++) return;
   out_flush();
+  if (exit_hook && *exit_hook) {       /* a Callable: {code, env}, code taking env */
+    void **c = *exit_hook;
+    exit_hook = 0;
+    ((void (*)(void *))c[0])(c[1]);
+  }
   if (gc_stats) gc_report();
   int bad = 0, e;
   if (!std_out.closed && (e = flush1(&std_out))) {
