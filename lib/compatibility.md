@@ -440,8 +440,9 @@ Field names count UTF-8 bytes, so only ASCII digits make positional ones.
 ## Statistics
 
 Supported APIs are `fmean` (including weights), `geometric_mean`, `median`,
-`median_low`, `median_high`, `median_grouped`, `quantiles`, `mode` and `multimode`
-for the compatible sequence types. Weighted `fmean` uses the port of CPython's
+`median_low`, `median_high`, `median_grouped`, `quantiles`, `mode`, `multimode` and
+`covariance` for the compatible sequence types, and `correlation` (linear and ranked) of
+floats. Weighted `fmean` uses the port of CPython's
 `math.sumprod` algorithm; unsupported iterators are materialized first.
 
 - `median` and `quantiles` require floats: integer/bool inputs can produce
@@ -452,9 +453,13 @@ for the compatible sequence types. Weighted `fmean` uses the port of CPython's
   CPython's integers continue growing.
 - The port's `sumprod` returns a float, including `11.0` for integer inputs and
   `0.0` for empty inputs, where CPython can return an integer.
+- `correlation` of ints is a compile-time error: it rebinds its list-of-int parameters to
+  the float deviations or ranks ([error test](../tests/errors/lib_statistics_correlation.py)).
+  Its ranks for `method='ranked'` come from itertools' `count()` and `groupby()`, in a list
+  that starts as floats, where CPython's starts as ints and holds the same float ranks.
 
 Unsupported APIs are `mean`, `harmonic_mean`, variance/stdev and their population
-variants, `covariance`, `correlation`, `linear_regression`, `kde`, `kde_random`,
+variants, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
 iterators, properties or other features beyond the port's compiled paths. Only
 CPython runs the module's import of `random`, which `kde_random` and
@@ -787,3 +792,80 @@ reference](../docs/language/compatibility.md#text-and-file-positions)).
 - The tables, about 850 KB of source, are compiled into each program that imports
   `unicodedata`: they add about 1 MB of IR and 0.4 s to a `pystachy run`. A function decodes
   the table it reads the first time it reads it, into a few lists of ints.
+
+## Itertools
+
+`itertools` is `_pystachy_itertools`, which Pystachy loads for `import itertools`, where CPython
+imports its C module (`Modules/itertoolsmodule.c`). It has all of the module's functions:
+`count`, `cycle`, `repeat`, `accumulate` (with `func` and `initial`), `batched` (with `strict`),
+`chain` and `chain.from_iterable`, `compress`, `dropwhile`, `filterfalse`, `groupby`, `islice`,
+`pairwise`, `starmap`, `takewhile`, `tee`, `zip_longest`, `product` (with `repeat`),
+`permutations`, `combinations` and `combinations_with_replacement`. Each iterates as the
+pure-Python equivalent that CPython's documentation gives for it (`Doc/library/itertools.rst`),
+on generators, with the C module's argument checks and messages when it is called and the C
+types' order of reads: an iterator reads its input one item at a time, as it is iterated, so
+infinite inputs (`count()`, `cycle()`, generators) end where `islice()`, `zip()`, `takewhile()`
+or `break` stop reading, and `islice()` reads no item past its stop. As in CPython, `cycle()`
+keeps the items it has read, `tee()` keeps the items its slowest iterator has not read (in
+shared links of 57), and `product()`, `permutations()`, `combinations()` and
+`combinations_with_replacement()` read the whole of their iterables when they are called. The
+functions are templates: each call's argument types make its code
+([tests](../tests/lib_itertools_terminating.py), [ranges](../tests/lib_itertools_range.py),
+[generators](../tests/lib_itertools_generators.py),
+[upstream](../tests/upstream_itertools.py)).
+
+- The iterators are generators (`Generator[T]`), which yield items of one type: `chain()` of
+  iterables of different item types ([error test](../tests/errors/lib_itertools_chain_mixed.py)),
+  an `accumulate()` function that returns another type than the items'
+  ([error test](../tests/errors/lib_itertools_accumulate_type.py)) and a `zip_longest()`
+  `fillvalue` of another type than an iterable's items
+  ([error test](../tests/errors/lib_itertools_zip_longest_fillvalue.py)) are compile-time
+  errors. `accumulate()` of bools gives a bool and then ints, as in CPython, and `zip_longest()`
+  without `fillvalue` gives optional items.
+- `batched()`, `permutations()`, `combinations()`, `combinations_with_replacement()` and
+  `product(..., repeat=n)` yield tuples whose length the program knows only as it runs, whose
+  items must be ints, floats, bools, strs or their optional types
+  ([tuples](../docs/language/typing.md)): of tuples, lists or objects, they are compile-time
+  errors ([error test](../tests/errors/lib_itertools_combinations_objects.py),
+  [another](../tests/errors/lib_itertools_batched_tuples.py)), and `product()` with `repeat`
+  needs one item type across its iterables
+  ([error test](../tests/errors/lib_itertools_product_repeat_mixed.py)). `product()` without
+  `repeat` and `zip_longest()` yield a tuple with an item of each iterable, of its type.
+- A list unpacked into the iterables of `chain()`, `zip_longest()` or `product()` is a number of
+  arguments known only as the program runs, a compile-time error
+  ([error test](../tests/errors/lib_itertools_star_list.py)); `chain.from_iterable()` takes a
+  list of iterables. `starmap()` takes tuples of arguments, not lists
+  ([error test](../tests/errors/lib_itertools_starmap_list.py)).
+- `tee(iterable, n)` gives a list of the `n` iterators, where CPython gives a tuple
+  ([deviation](../tests/deviations/lib_itertools_tee_list.py)); `tee(iterable)` gives a tuple of
+  two. Unpacking, indexing, `len()` and loops see the same iterators.
+- `groupby()`'s key of `None` groups by the items themselves; a key function that is an object
+  in a variable may be `None`, so its keys must have the items' type unless it is made in the
+  call ([error test](../tests/errors/lib_itertools_groupby_key_object.py)). Its groups are
+  generators that share the `groupby()`'s iterator, as the C type's do: advancing the
+  `groupby()` ends the group before it ([test](../tests/lib_itertools_groupby.py)).
+- An iterator that an exception has left (from its function, predicate or key, or from its
+  input) is finished, as a generator is, where CPython's C iterators can go on
+  ([deviation](../tests/deviations/lib_itertools_exception.py)). So is an iterator whose input
+  has ended: called again, it reads no input, where CPython's `accumulate()`, `compress()`,
+  `dropwhile()`, `filterfalse()`, `groupby()`, `starmap()` and `takewhile()` read their inputs
+  again, which an input that yields again after its end, or `compress()`'s data, which it reads
+  before it finds its selectors' end, shows
+  ([deviation](../tests/deviations/lib_itertools_ended.py)). An iterator that its own input
+  resumes raises `ValueError: generator already executing`, where CPython's go on
+  ([deviation](../tests/deviations/lib_itertools_reenter.py)); `tee()` raises CPython's
+  `RuntimeError`.
+- An input generator is not closed when the iterator reading it is dropped, as a generator the
+  program drops is not ([deviation](../tests/deviations/lib_itertools_close.py)).
+- `chain` is an object whose calls make generators, with `from_iterable()` as a method and the C
+  type's repr, not a class: `isinstance(x, itertools.chain)` is a compile-time error
+  ([error test](../tests/errors/lib_itertools_isinstance.py)), as are the other functions as
+  classes. The iterators do not print (CPython prints `count(5)`), and their type's name,
+  pickling, `copy.copy()` (but for `tee()`'s `__copy__()`), `__reduce__()`, `__setstate__()`
+  and `__length_hint__()` are not there
+  ([error test](../tests/errors/lib_itertools_print.py),
+  [another](../tests/errors/lib_itertools_type_name.py)).
+- `zip()`, `map()`, `filter()`, `enumerate()` and `reversed()` are not values, so an itertools
+  function cannot take one ([error test](../tests/errors/lib_itertools_zip_argument.py)); it can
+  take a generator expression over them. Ints are 64-bit: `count()` past `2**63 - 1` raises
+  `OverflowError`, where CPython's ints grow.
