@@ -26,8 +26,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [hosted-0, hosted-1, native-0, native-1, opt-off, python-free-0, python-free-1, ubsan-0, ubsan-1, gc-self,
-                gc-jit, gc-aot-0, gc-aot-1, gc-aot-2, runtime-cache, contracts, benchmarks, scaling-1]
+        group: [hosted-0, hosted-1, native-0, native-1, opt-off-0, opt-off-1, python-free-0, python-free-1, ubsan-0,
+                ubsan-1, gc-self, gc-jit, gc-aot-0, gc-aot-1, gc-aot-2, runtime-cache, contracts, benchmarks, scaling-1]
     env:
       PYSTACHY_LLVM: /usr/lib/llvm-18/bin
     steps:

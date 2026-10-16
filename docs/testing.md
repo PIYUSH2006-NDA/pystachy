@@ -142,14 +142,14 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Eighteen groups run in parallel, each with its own fixed-point bootstrap. The target is under
+Nineteen groups run in parallel, each with its own fixed-point bootstrap. The target is under
 ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
 |---|---|
 | `hosted-0`, `hosted-1` | Two disjoint halves of the CPython-hosted differential suite, JIT and AOT. |
 | `native-0`, `native-1` | Two disjoint halves of the native differential suite, JIT and AOT. |
-| `opt-off` | Native suite with IR optimizations disabled. |
+| `opt-off-0`, `opt-off-1` | Two disjoint halves of the native suite with IR optimizations disabled. |
 | `python-free-0`, `python-free-1` | Rebuild with no Python on `PATH`; two disjoint halves of the suite with that compiler. |
 | `ubsan-0`, `ubsan-1` | Sanitized compiler/runtime; two disjoint halves of the JIT/AOT suite. |
 | `gc-self` | Collector-stressed self-compilation and identical-IR check. |
@@ -180,11 +180,12 @@ corpus, including rejection and syntax checks. The final gate requires all five 
 execution modes, the stress intervals, distinct AOT shard identities and complete counts for
 every job. `tests/verify.sh gc-stress` still runs all GC checks locally with one bootstrap;
 `gc-aot` runs the three AOT thirds.
-The CPython-hosted, native, python-free and UBSan suites are split the same way, in halves
+The CPython-hosted, native, opt-off, python-free and UBSan suites are split the same way, in halves
 (`tests/verify.sh`'s `shard_cases`). The gate requires each half's shard identity and complete
-count, and that the halves together make as many checks as an unsharded suite: the native halves
-as the opt-off suite, the CPython-hosted and python-free halves as the native ones, and the UBSan
-halves as GC JIT and the GC AOT thirds. Locally, `hosted` and `native` run both of their halves,
+count, and that the halves together make as many checks as an unsharded suite: the JIT and AOT
+halves as many as `tests/verify.sh` counts in the whole corpus (each report's
+`sources.suite_checks`; opt-off's once per `PYSTACHY_OPT` setting), and the UBSan halves as GC JIT
+and the GC AOT thirds. Locally, `hosted`, `native` and `opt-off` run both of their halves,
 `python-free` rebuilds the compiler once and runs both of its halves, and `ubsan` builds the
 sanitized compiler once and runs both of its halves.
 The compiler-scaling check is split by shapes: `scaling-0` (in `benchmarks`) checks those of

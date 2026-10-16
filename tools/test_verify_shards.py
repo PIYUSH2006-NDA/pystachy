@@ -1,5 +1,5 @@
 """Exercise the real verification shell's suite shards with deterministic compiler/test doubles:
-CPython-hosted, native, python-free and UBSan (the GC shards have tools/test_verify_gc.py)."""
+CPython-hosted, native, opt-off, python-free and UBSan (the GC shards have tools/test_verify_gc.py)."""
 import json
 import os
 from pathlib import Path
@@ -16,6 +16,7 @@ CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/exampl
 # how many tests/run.sh runs make them
 SHARDS = [("hosted-0", "tests-cpython-0", ["jit", "aot"], 6, 1), ("hosted-1", "tests-cpython-1", ["jit", "aot"], 4, 1),
           ("native-0", "tests-native-0", ["jit", "aot"], 6, 1), ("native-1", "tests-native-1", ["jit", "aot"], 4, 1),
+          ("opt-off-0", "tests-opt-off-0", ["jit", "aot"], 6, 1), ("opt-off-1", "tests-opt-off-1", ["jit", "aot"], 4, 1),
           ("python-free-0", "python-free-0", None, 6, 1), ("python-free-1", "python-free-1", None, 4, 1),
           ("ubsan-0", "ubsan-0", ["aot", "jit"], 8, 2), ("ubsan-1", "ubsan-1", ["aot", "jit"], 6, 2)]
 # the LLVM tools python-free links into its PATH (doubles: only clang is called)
@@ -81,7 +82,7 @@ else:
         suite = self.root / "tests/run.sh"
         suite.write_text('''#!/bin/sh
 compiler=$1; mode=$2; shift 2
-echo "suite: $compiler $mode"
+echo "suite: $compiler $mode${PYSTACHY_OPT:+ PYSTACHY_OPT=$PYSTACHY_OPT}"
 case "$compiler $mode" in
   *" -m pystachy jit aot") m=2 ;;
   */pystachy2" jit aot") [ -z "$PYSTACHY_CFLAGS" ] || exit 9; m=2 ;;
@@ -144,8 +145,13 @@ esac
                     self.assertTrue(step["ir_identical"])
                 if group.startswith("python-free"):
                     self.assertFalse(step["python_on_path"])
+                # (opt-off alone runs with the IR passes off)
+                self.assertEqual("PYSTACHY_OPT=-all" in logs[name], group.startswith("opt-off"))
+                if group.startswith("opt-off"):
+                    self.assertEqual(step["PYSTACHY_OPT"], ["-all"])
+                self.assertEqual(report["sources"]["suite_checks"], 10)  # (CASES's checks in JIT and AOT)
                 observed[group] = CASES[index::2]
-        for kind in ("hosted", "native", "python-free", "ubsan"):
+        for kind in ("hosted", "native", "opt-off", "python-free", "ubsan"):
             first, second = observed[f"{kind}-0"], observed[f"{kind}-1"]
             self.assertFalse(set(first) & set(second))
             self.assertCountEqual(first + second, CASES)
@@ -153,6 +159,7 @@ esac
     def test_local_aliases_run_both_halves(self):
         for group, steps, total in (("hosted", ["tests-cpython-0", "tests-cpython-1"], 10),
                                     ("native", ["tests-native-0", "tests-native-1"], 10),
+                                    ("opt-off", ["tests-opt-off-0", "tests-opt-off-1"], 10),
                                     ("python-free", ["python-free-0", "python-free-1"], 10),
                                     ("ubsan", ["ubsan-0", "ubsan-1"], 14)):
             with self.subTest(group=group):

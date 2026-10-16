@@ -7,8 +7,9 @@
 #                  disjoint halves of the corpus (see shard_cases), together the whole of it
 #   tests-native-0/-1 tests/run.sh with the stage-2 native compiler, JIT and AOT, each on one of two
 #                  disjoint halves of the corpus (shard_cases)
-#   tests-opt-off  tests/run.sh with the stage-2 compiler and every optimization on the IR turned off
-#                  (PYSTACHY_OPT=-all): the passes change no output
+#   tests-opt-off-0/-1 tests/run.sh with the stage-2 compiler and every optimization on the IR turned
+#                  off (PYSTACHY_OPT=-all), each on one of two disjoint halves of the corpus
+#                  (shard_cases): the passes change no output
 #   runtime-cache  tests/cache.sh with both compilers: the cached runtime is used while nothing it is
 #                  built from changes, built again when runtime.c, a file it includes from ryu/,
 #                  runtime.py, the compiler or a tool changes (also by a same-size edit whose mtime is
@@ -85,14 +86,16 @@ ROOT=$(pwd)
 # --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
 plan() {
   case $1 in
-    all) echo 'bootstrap tests-cpython-0 tests-cpython-1 tests-native-0 tests-native-1 tests-opt-off runtime-cache python-free-0 python-free-1 ubsan-0 ubsan-1 check-ir runtime-table gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit scaling-0 scaling-1' ;;
+    all) echo 'bootstrap tests-cpython-0 tests-cpython-1 tests-native-0 tests-native-1 tests-opt-off-0 tests-opt-off-1 runtime-cache python-free-0 python-free-1 ubsan-0 ubsan-1 check-ir runtime-table gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit scaling-0 scaling-1' ;;
     hosted-0) echo 'bootstrap tests-cpython-0' ;;
     hosted-1) echo 'bootstrap tests-cpython-1' ;;
     hosted) echo 'bootstrap tests-cpython-0 tests-cpython-1' ;; # local alias
     native-0) echo 'bootstrap tests-native-0' ;;
     native-1) echo 'bootstrap tests-native-1' ;;
     native) echo 'bootstrap tests-native-0 tests-native-1' ;; # local alias
-    opt-off) echo 'bootstrap tests-opt-off' ;;
+    opt-off-0) echo 'bootstrap tests-opt-off-0' ;;
+    opt-off-1) echo 'bootstrap tests-opt-off-1' ;;
+    opt-off) echo 'bootstrap tests-opt-off-0 tests-opt-off-1' ;; # local alias
     python-free-0) echo 'bootstrap python-free-0' ;;
     python-free-1) echo 'bootstrap python-free-1' ;;
     python-free) echo 'bootstrap python-free-0 python-free-1' ;; # local alias (one rebuild for both halves)
@@ -114,10 +117,10 @@ plan() {
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
 }
-[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted-0|hosted-1|hosted|native-0|native-1|native|opt-off|python-free-0|python-free-1|python-free|ubsan-0|ubsan-1|ubsan|gc-self|gc-jit|gc-aot-0|gc-aot-1|gc-aot-2|gc-aot|gc-stress|runtime-cache|contracts|benchmarks|scaling-1|scaling|--list]' >&2; exit 2; }
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted-0|hosted-1|hosted|native-0|native-1|native|opt-off-0|opt-off-1|opt-off|python-free-0|python-free-1|python-free|ubsan-0|ubsan-1|ubsan|gc-self|gc-jit|gc-aot-0|gc-aot-1|gc-aot-2|gc-aot|gc-stress|runtime-cache|contracts|benchmarks|scaling-1|scaling|--list]' >&2; exit 2; }
 GROUP=${1:-all}
 if [ "$GROUP" = --list ]; then
-  for g in all hosted-0 hosted-1 native-0 native-1 opt-off python-free-0 python-free-1 ubsan-0 ubsan-1 gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 runtime-cache contracts benchmarks scaling-1; do
+  for g in all hosted-0 hosted-1 native-0 native-1 opt-off-0 opt-off-1 python-free-0 python-free-1 ubsan-0 ubsan-1 gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 runtime-cache contracts benchmarks scaling-1; do
     printf '%s %s\n' "$g" "$(plan "$g")"
   done
   exit 0
@@ -298,17 +301,23 @@ for shard in 0 1; do
   x=$(tests "$(checks "jit aot" "$@")" "$L" 2>> "$L") && r=pass
   step tests-native-$shard $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "shard_index": '"$shard"', "shard_count": 2'"$x"
 done
-if want tests-opt-off; then
-L=$V/tests-opt-off.log; s=$(now); logs=""; offs=""; nl=0
-# shellcheck disable=SC2043 # (a list of one, for now)
-for o in all; do
-  PYSTACHY_OPT=-$o tests/run.sh "$V/pystachy2" > "$V/tests-opt-off-$o.log" 2>&1
-  logs="$logs $V/tests-opt-off-$o.log"; offs="$offs, \"-$o\""; nl=$((nl + 1))
+for shard in 0 1; do
+  want tests-opt-off-$shard || continue
+  L=$V/tests-opt-off-$shard.log; s=$(now); logs=""; offs=""; nl=0
+  shard_cases $shard 2 "$V/tests-opt-off-$shard-cases.log"
+  set --
+  while IFS= read -r f; do set -- "$@" "$f"; done < "$V/tests-opt-off-$shard-cases.log"
+  # An empty shard must not silently invoke run.sh's whole-suite default.
+  [ $# != 0 ] || { echo 'empty opt-off shard' > "$L"; step tests-opt-off-$shard fail "$s" "$L" ""; continue; }
+  # shellcheck disable=SC2043 # (a list of one, for now)
+  for o in all; do
+    PYSTACHY_OPT=-$o tests/run.sh "$V/pystachy2" "jit aot" "$@" > "$V/tests-opt-off-$shard-$o.log" 2>&1
+    logs="$logs $V/tests-opt-off-$shard-$o.log"; offs="$offs, \"-$o\""; nl=$((nl + 1))
+  done
+  for l in $logs; do echo "== $(basename "$l")"; cat "$l"; done > "$L"
+  x=$(tests $((nl * $(checks "jit aot" "$@"))) $logs 2>> "$L") && r=pass || r=fail
+  step tests-opt-off-$shard $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"'], "shard_index": '"$shard"', "shard_count": 2'"$x"
 done
-for l in $logs; do echo "== $(basename "$l")"; cat "$l"; done > "$L"
-x=$(tests $((nl * ALL)) $logs 2>> "$L") && r=pass || r=fail
-step tests-opt-off $r "$s" "$L" ', "compiler": "stage2", "modes": ["jit", "aot"], "PYSTACHY_OPT": ['"${offs#, }"']'"$x"
-fi
 
 # ---- runtime-cache: the cached runtime's rules, each compiler with a private home (tests/cache.sh,
 # whose checks are 58 with the native compiler and 60 with CPython's, including component edits)
@@ -631,16 +640,20 @@ ver() { "$@" 2>&1 | head -1; }
     "$(js "$("${LLVM}opt" --version 2>&1 | sed -n 's/^ *Host CPU: //p')")"
   printf '  "toolchain": {"python": %s, "clang": %s, "llvm": %s, "llvm_dir": %s},\n' "$(js "$(ver $PY --version)")" \
     "$(js "$(ver "${LLVM}clang" --version)")" "$(js "$(ver "${LLVM}opt" --version)")" "$(js "${PYSTACHY_LLVM:-PATH}")"
-  $PY - <<'PY'
+  SUITE_CHECKS=$ALL $PY - <<'PY'
 import hashlib
 import json
+import os
 from pathlib import Path
 paths = [Path(p) for p in ("pystachy.py", "runtime.c", "runtime.py")]
 paths += sorted(Path("src").rglob("*.py"))
 sources = {str(p): {"lines": p.read_bytes().count(b"\n"),
                     "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths}
+# (suite_checks: the checks of the whole corpus in JIT and AOT, which the halves of each such suite
+# make together)
 sources.update(test_programs=len(list(Path("tests").glob("*.py"))),
-               rejection_tests=len(list(Path("tests/errors").glob("*.py"))))
+               rejection_tests=len(list(Path("tests/errors").glob("*.py"))),
+               suite_checks=int(os.environ["SUITE_CHECKS"]))
 print('  "sources": ' + json.dumps(sources, sort_keys=True) + ',')
 PY
   printf '  "steps": [\n'; cat "$V/steps.json"; printf '\n  ]\n}\n'

@@ -10,8 +10,8 @@ from unittest import mock
 
 import merge_verification as merge
 
-CONTRACT = """all bootstrap tests-opt-off check-ir
-opt-off bootstrap tests-opt-off
+CONTRACT = """all bootstrap tests-opt-off-0 check-ir
+opt-off-0 bootstrap tests-opt-off-0
 contracts bootstrap check-ir
 """
 COMMIT = "a" * 40
@@ -26,13 +26,13 @@ def report(group, steps):
             step.update(ir_identical=True, ir_sha256="b" * 64)
         if name in merge.SUITE_STEPS:
             step.update(passed=10, failed=0, expected=10, failures=[])
-        if name in ("tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1",
-                    "python-free-0", "python-free-1"):
+        if name in ("tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
+                    "tests-opt-off-1", "python-free-0", "python-free-1"):
             step.update(passed=5, expected=5)   # halves of a 10-check suite
         if name in ("gc-aot-0", "gc-aot-1", "gc-aot-2"):
             count = 4 if name == "gc-aot-0" else 3   # thirds of a 10-check suite
             step.update(passed=count, expected=count)
-        if name == "tests-opt-off":
+        if name.startswith("tests-opt-off"):
             step.update(PYSTACHY_OPT=["-all"])
         if name == "gc-self":
             step.update(compiler_interval=5000, ir_identical=True)
@@ -47,7 +47,7 @@ def report(group, steps):
     return {"project": "Pystachy", "group": group, "result": "pass",
             "summary": {"steps": len(steps), "passed": len(steps), "failed": 0, "seconds": 6.0},
             "git": {"commit": COMMIT, "dirty": False},
-            "sources": {"pystachy.py": {"sha256": "c" * 64}, "test_programs": 5},
+            "sources": {"pystachy.py": {"sha256": "c" * 64}, "test_programs": 5, "suite_checks": 10},
             "toolchain": {"llvm": "LLVM 18", "python": "Python 3.13"},
             "platform": {"machine": "x86_64"}, "steps": checks}
 
@@ -55,8 +55,7 @@ def report(group, steps):
 class ContractTests(unittest.TestCase):
     def test_real_plan_requires_native_suites_and_every_gc_job(self):
         groups = merge.load_groups()
-        self.assertEqual(groups["opt-off"], ["bootstrap", "tests-opt-off"])
-        for alias in ("gc-stress", "gc-aot", "hosted", "ubsan", "native", "python-free", "scaling"):
+        for alias in ("gc-stress", "gc-aot", "hosted", "ubsan", "native", "opt-off", "python-free", "scaling"):
             self.assertNotIn(alias, groups)  # Compatibility aliases must not duplicate CI work.
         for group in ("gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2", "ubsan-0", "ubsan-1",
                       "python-free-0", "python-free-1", "runtime-cache", "scaling-1"):
@@ -64,6 +63,7 @@ class ContractTests(unittest.TestCase):
         for shard in ("0", "1"):
             self.assertEqual(groups["hosted-" + shard], ["bootstrap", "tests-cpython-" + shard])
             self.assertEqual(groups["native-" + shard], ["bootstrap", "tests-native-" + shard])
+            self.assertEqual(groups["opt-off-" + shard], ["bootstrap", "tests-opt-off-" + shard])
         self.assertEqual(groups["benchmarks"], ["bootstrap", "benchmarks", "scaling-0"])
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
@@ -75,16 +75,16 @@ class ContractTests(unittest.TestCase):
                 path.write_text(json.dumps(report(group, steps)))
             result = merge.merge_reports(directory, groups, COMMIT)
             self.assertEqual([step["name"] for step in result["steps"]], groups["all"])
-            for group in ("opt-off", "gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2", "hosted-0", "hosted-1",
-                          "native-0", "native-1", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1",
-                          "runtime-cache", "contracts", "benchmarks", "scaling-1"):
+            for group in ("opt-off-0", "opt-off-1", "gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2",
+                          "hosted-0", "hosted-1", "native-0", "native-1", "python-free-0", "python-free-1",
+                          "ubsan-0", "ubsan-1", "runtime-cache", "contracts", "benchmarks", "scaling-1"):
                 path = directory / f"verification-{group}" / "verification.json"
                 original = path.read_text()
                 path.unlink()
                 with self.subTest(missing=group), self.assertRaisesRegex(ValueError, f"missing report groups.*{group}"):
                     merge.merge_reports(directory, groups, COMMIT)
                 path.write_text(original)
-            for group in ("gc-aot-0", "gc-aot-2", "hosted-1", "native-0", "python-free-1", "ubsan-0"):
+            for group in ("gc-aot-0", "gc-aot-2", "hosted-1", "native-0", "opt-off-1", "python-free-1", "ubsan-0"):
                 path = directory / f"verification-{group}" / "verification.json"
                 original = path.read_text()
                 for delta in (-1, 1):
@@ -96,6 +96,36 @@ class ContractTests(unittest.TestCase):
                             self.assertRaisesRegex(ValueError, "same full-suite check count"):
                         merge.merge_reports(directory, groups, COMMIT)
                 path.write_text(original)
+            # opt-off's halves run the corpus once per PYSTACHY_OPT setting, the same settings in both
+            for settings, scale, error in (([["-all", "-inline"]] * 2, 2, None),
+                                           ([["-all", "-inline"]] * 2, 1, "same full-suite check count"),
+                                           ([["-all"], ["-inline"]], 1, "same PYSTACHY_OPT settings"),
+                                           ([[], []], 1, "same PYSTACHY_OPT settings")):
+                for index in (0, 1):
+                    data = report(f"opt-off-{index}", groups[f"opt-off-{index}"])
+                    count = data["steps"][-1]["expected"] * scale
+                    data["steps"][-1].update(passed=count, expected=count, PYSTACHY_OPT=settings[index])
+                    (directory / f"verification-opt-off-{index}" / "verification.json").write_text(json.dumps(data))
+                with self.subTest(settings=settings, scale=scale):
+                    if error is None:
+                        merge.merge_reports(directory, groups, COMMIT)
+                    else:
+                        with self.assertRaisesRegex(ValueError, error):
+                            merge.merge_reports(directory, groups, COMMIT)
+            for index in (0, 1):
+                (directory / f"verification-opt-off-{index}" / "verification.json").write_text(
+                    json.dumps(report(f"opt-off-{index}", groups[f"opt-off-{index}"])))
+            # the halves of each JIT and AOT suite make the checks of the whole corpus (sources.suite_checks)
+            paths = sorted(directory.glob("verification-*/verification.json"))
+            for suite, error in ((11, "shards must cover the same full-suite check count as the corpus"), (10, None)):
+                for path in paths:
+                    data = json.loads(path.read_text())
+                    data["sources"]["suite_checks"] = suite
+                    path.write_text(json.dumps(data))
+                if error is not None:
+                    with self.subTest(suite_checks=suite), self.assertRaisesRegex(ValueError, error):
+                        merge.merge_reports(directory, groups, COMMIT)
+            merge.merge_reports(directory, groups, COMMIT)
             # scaling-0 and scaling-1 check every shape of tools/scaling.py once
             path = directory / "verification-scaling-1" / "verification.json"
             original = path.read_text()
@@ -130,8 +160,8 @@ class ContractTests(unittest.TestCase):
                            lambda step: step.update(shard_count=3),
                            lambda step: step.update(shard_count="2"),
                            lambda step: step.pop("shard_count")]
-        for group in ("hosted-0", "hosted-1", "native-0", "native-1", "python-free-0", "python-free-1",
-                      "ubsan-0", "ubsan-1"):
+        for group in ("hosted-0", "hosted-1", "native-0", "native-1", "opt-off-0", "opt-off-1", "python-free-0",
+                      "python-free-1", "ubsan-0", "ubsan-1"):
             mutations[group] = shard_mutations + [lambda step: step.update(passed=step["expected"] - 1),
                                                   lambda step: step.update(failed=1),
                                                   lambda step: step.pop("expected")]
@@ -163,12 +193,24 @@ class ContractTests(unittest.TestCase):
                 with self.subTest(group=group, mutation=index), self.assertRaises(ValueError):
                     merge.validate_report(data, group, groups[group])
 
+    def test_reports_require_the_corpus_check_count(self):
+        groups = merge.load_groups()
+        valid = report("native-0", groups["native-0"])
+        merge.validate_report(valid, "native-0", groups["native-0"])
+        for mutate in (lambda sources: sources.pop("suite_checks"), lambda sources: sources.update(suite_checks=0),
+                       lambda sources: sources.update(suite_checks="10"),
+                       lambda sources: sources.update(suite_checks=True)):
+            data = copy.deepcopy(valid)
+            mutate(data["sources"])
+            with self.subTest(sources=data["sources"]), self.assertRaisesRegex(ValueError, "suite_checks"):
+                merge.validate_report(data, "native-0", groups["native-0"])
+
     def test_missing_duplicate_or_unknown_checks_cannot_weaken_the_gate(self):
         contracts = [CONTRACT.replace("contracts bootstrap check-ir", "contracts bootstrap"),
                      CONTRACT + "extra bootstrap check-ir\n",
                      CONTRACT.replace("contracts bootstrap check-ir", "contracts bootstrap unknown"),
-                     CONTRACT + "opt-off bootstrap tests-opt-off\n",
-                     CONTRACT.replace("opt-off bootstrap", "opt-off tests-opt-off"),
+                     CONTRACT + "opt-off-0 bootstrap tests-opt-off-0\n",
+                     CONTRACT.replace("opt-off-0 bootstrap", "opt-off-0 tests-opt-off-0"),
                      CONTRACT.replace("all bootstrap tests-opt-off", "all bootstrap bootstrap tests-opt-off")]
         for contract in contracts:
             with self.subTest(contract=contract), self.assertRaises(ValueError):
@@ -202,9 +244,9 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(merged["summary"], {"steps": 3, "passed": 3, "failed": 0, "seconds": 9.0})
         self.assertEqual(merged["ci"]["runner_seconds"], 15.0)
         self.assertEqual(merged["ci"]["max_group_seconds"], 9.0)
-        self.assertEqual(merged["git"], self.reports["opt-off"]["git"])
-        self.assertEqual(merged["sources"], self.reports["opt-off"]["sources"])
-        self.assertEqual(merged["steps"][0]["ci_group"], "opt-off")
+        self.assertEqual(merged["git"], self.reports["opt-off-0"]["git"])
+        self.assertEqual(merged["sources"], self.reports["opt-off-0"]["sources"])
+        self.assertEqual(merged["steps"][0]["ci_group"], "opt-off-0")
         self.assertTrue(merged["steps"][2]["log"].endswith("verification-contracts/verify/check-ir.log"))
 
     def test_missing_group_cannot_report_success(self):
@@ -213,7 +255,7 @@ class ReportTests(unittest.TestCase):
             self.merged()
 
     def test_failed_skipped_missing_reordered_and_unexpected_steps_are_rejected(self):
-        original = copy.deepcopy(self.reports["opt-off"])
+        original = copy.deepcopy(self.reports["opt-off-0"])
         mutations = [lambda data: data.update(result="fail"),
                      lambda data: data["steps"][1].update(result="skip"),
                      lambda data: data["steps"].pop(),
@@ -226,10 +268,10 @@ class ReportTests(unittest.TestCase):
                      lambda data: data["steps"][1].update(failures=["lost case"]),
                      lambda data: data["steps"][1].update(seconds=float("nan"))]
         for mutation in mutations:
-            self.reports["opt-off"] = copy.deepcopy(original)
-            mutation(self.reports["opt-off"])
+            self.reports["opt-off-0"] = copy.deepcopy(original)
+            mutation(self.reports["opt-off-0"])
             self.write_reports()
-            with self.subTest(report=self.reports["opt-off"]), self.assertRaises(ValueError):
+            with self.subTest(report=self.reports["opt-off-0"]), self.assertRaises(ValueError):
                 self.merged()
 
     def test_unexpected_and_duplicate_groups_are_rejected(self):
@@ -240,7 +282,7 @@ class ReportTests(unittest.TestCase):
         (self.directory / "verification-unknown/verification.json").unlink()
         duplicate = self.directory / "verification-opt-off-copy"
         duplicate.mkdir()
-        (duplicate / "verification.json").write_text(json.dumps(self.reports["opt-off"]))
+        (duplicate / "verification.json").write_text(json.dumps(self.reports["opt-off-0"]))
         with self.assertRaisesRegex(ValueError, "duplicate report group"):
             self.merged()
 

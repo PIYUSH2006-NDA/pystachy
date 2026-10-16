@@ -13,13 +13,14 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off",
-               "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1", "gc-jit", "gc-aot-0",
-               "gc-aot-1", "gc-aot-2"}
+SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
+               "tests-opt-off-1", "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1",
+               "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
 # Steps that run one of the disjoint shards of the corpus (tests/verify.sh shard_cases), and how many
 # shards their suite has: the name ends in the shard index.
 SHARDED_STEPS = {f"{suite}-{index}": count for suite, count in
-                 (("tests-cpython", 2), ("tests-native", 2), ("python-free", 2), ("ubsan", 2), ("gc-aot", 3))
+                 (("tests-cpython", 2), ("tests-native", 2), ("tests-opt-off", 2), ("python-free", 2),
+                  ("ubsan", 2), ("gc-aot", 3))
                  for index in range(count)}
 GC_STEPS = {"gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
 # The halves of tools/scaling.py's check (tests/verify.sh's SCALING_0 and the shapes it leaves)
@@ -142,6 +143,7 @@ def validate_report(report, group, expected):
     for key in ("git", "sources", "toolchain"):
         if not isinstance(report.get(key), dict) or not report[key]:
             raise ValueError(f"{group}: missing {key} identity")
+    integer(report["sources"].get("suite_checks"), f"{group}.sources.suite_checks", 1)
     if not re.fullmatch(r"[0-9a-f]{40}", str(report["git"].get("commit", ""))):
         raise ValueError(f"{group}: invalid git commit")
 
@@ -164,24 +166,29 @@ def merge_reports(directory, groups, expected_commit=None):
     if set(reports) != set(wanted):
         raise ValueError(f"missing report groups: {sorted(set(wanted) - set(reports))}")
     # Shards together must make as many checks as an unsharded suite of the same modes (each
-    # group's suite is its last step, whose count validate_report checked).
-    # The native shards' sum is checked against the unsharded opt-off suite, one run per PYSTACHY_OPT.
-    native = ("native-0", "native-1")
+    # group's suite is its last step, whose count validate_report checked). The halves of a JIT and
+    # AOT suite make as many as tests/verify.sh counts in the whole corpus (sources.suite_checks, the
+    # same in every report: see the identities below), opt-off's once per PYSTACHY_OPT setting.
+    suite = reports[wanted[0]]["sources"]["suite_checks"]
+    for kind, what in (("hosted", "CPython-hosted"), ("native", "native"), ("opt-off", "opt-off"),
+                       ("python-free", "python-free")):
+        halves = [reports[group]["steps"][-1] for group in (f"{kind}-0", f"{kind}-1") if group in reports]
+        if len(halves) < 2:
+            continue
+        runs = 1
+        if kind == "opt-off":
+            settings = halves[0].get("PYSTACHY_OPT")
+            if not isinstance(settings, list) or not settings or halves[1].get("PYSTACHY_OPT") != settings:
+                raise ValueError("opt-off shards must run the same PYSTACHY_OPT settings")
+            runs = len(settings)
+        if halves[0]["expected"] + halves[1]["expected"] != suite * runs:
+            raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
     for shards, whole, what in ((("gc-aot-0", "gc-aot-1", "gc-aot-2"), ("gc-jit",),
                                  "GC AOT shards must cover the same full-suite check count as GC JIT"),
-                                (native, ("opt-off",),
-                                 "native shards must cover the same full-suite check count as the opt-off suite"),
-                                (("hosted-0", "hosted-1"), native,
-                                 "CPython-hosted shards must cover the same full-suite check count as the native suite"),
-                                (("python-free-0", "python-free-1"), native,
-                                 "python-free shards must cover the same full-suite check count as the native suite"),
                                 (("ubsan-0", "ubsan-1"), ("gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"),
                                  "UBSan shards must cover the same full-suite check count as GC JIT and GC AOT")):
         if all(group in reports for group in shards + whole):
             count = {group: reports[group]["steps"][-1]["expected"] for group in shards + whole}
-            if whole == ("opt-off",):
-                runs = reports["opt-off"]["steps"][-1].get("PYSTACHY_OPT")
-                count["opt-off"] //= len(runs) if isinstance(runs, list) and runs else 1
             if sum(count[group] for group in shards) != sum(count[group] for group in whole):
                 raise ValueError(what)
     halves = {step["name"]: step["shapes"] for report in reports.values() for step in report["steps"]
