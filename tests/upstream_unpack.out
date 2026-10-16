@@ -1,0 +1,36 @@
+True
+True
+True
+True
+99
+100
+too many values to unpack (expected 2)
+not enough values to unpack (expected 4, got 3)
+ok
+too many values to unpack (expected 0)
+True
+True
+True
+True
+True
+True
+True
+True
+1 [2] 3
+4 [5, 6] 7
+True
+True
+(0, 1, [2, 3, 4])
+([0, 1, 2], 3, 4)
+[('w', 12), ('x', 1), ('y', 2), ('z', 0)]
+[('x', 1), ('y', 2), ('z', 3)]
+[('x', 3), ('y', 2)]
+[('x', 4)]
+{}
+{}
+{0: 4}
+[0, 1, 2, 3, 4]
+1 2 3
+not enough values to unpack (expected at least 4, got 3)
+not enough values to unpack (expected at least 4, got 3)
+[exit 0]

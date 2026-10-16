@@ -16,8 +16,9 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
 `ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
 CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
-For `binascii`, Pystachy loads its port of that C module, `lib/_pystachy_binascii.py`
-([library reference](../../lib/compatibility.md#binascii)).
+For `binascii` and `_codecs`, Pystachy loads its ports of those C modules,
+`lib/_pystachy_binascii.py` and `lib/_pystachy_codecs.py` ([library
+reference](../../lib/compatibility.md#binascii)).
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's

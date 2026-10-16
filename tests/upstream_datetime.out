@@ -1,0 +1,5162 @@
+datetime.timedelta(0)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=1)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(days=7)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=3600)
+datetime.timedelta(seconds=60)
+datetime.timedelta(seconds=1)
+datetime.timedelta(microseconds=1000)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=3600)
+datetime.timedelta(seconds=60)
+datetime.timedelta(seconds=1)
+datetime.timedelta(microseconds=1000)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(days=7, seconds=60, microseconds=1000)
+datetime.timedelta(days=6, seconds=86340)
+datetime.timedelta(days=6, seconds=86340)
+datetime.timedelta(days=-7)
+datetime.timedelta(days=7)
+datetime.timedelta(days=-1, seconds=86340)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999000)
+datetime.timedelta(days=7)
+datetime.timedelta(days=7)
+datetime.timedelta(days=7)
+datetime.timedelta(seconds=60)
+datetime.timedelta(days=70)
+datetime.timedelta(seconds=600)
+datetime.timedelta(seconds=600)
+datetime.timedelta(microseconds=10000)
+datetime.timedelta(microseconds=10000)
+datetime.timedelta(days=-7)
+datetime.timedelta(days=-1, seconds=86280)
+datetime.timedelta(days=-1, seconds=86399, microseconds=998000)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=1)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=6)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(seconds=60480)
+datetime.timedelta(microseconds=168000)
+datetime.timedelta(days=14)
+datetime.timedelta(seconds=120)
+datetime.timedelta(days=1)
+datetime.timedelta(seconds=6)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(seconds=60480)
+datetime.timedelta(microseconds=168000)
+datetime.timedelta(microseconds=123456)
+datetime.timedelta(microseconds=611229)
+datetime.timedelta(microseconds=611229)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(microseconds=1)
+ZeroDivisionError: integer division or modulo by zero
+ZeroDivisionError: integer division or modulo by zero
+ZeroDivisionError: integer division or modulo by zero
+TypeError: unsupported operand type(s) for /: 'datetime.timedelta' and 'str'
+1
+7
+31
+31536000.0
+-1e-06
+-2e-06
+-0.000123
+datetime.timedelta(microseconds=1)
+3010437511937009226
+datetime.timedelta(days=49)
+-1424237436981612580
+1
+datetime.timedelta(days=2, seconds=3, microseconds=4)
+True
+True
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+'1 day, 0:00:00'
+'-1 day, 0:00:00'
+'2 days, 0:00:00'
+'-2 days, 0:00:00'
+'12:58:59'
+'2:03:04'
+'-210 days, 23:12:34'
+'0:00:00.001000'
+'0:00:00.000003'
+'999999999 days, 23:59:59.999999'
+'-(1:00:00)'
+'datetime.timedelta(days=1)'
+'datetime.timedelta(days=10, seconds=2)'
+'datetime.timedelta(days=-10, seconds=2, microseconds=400000)'
+'datetime.timedelta(seconds=60)'
+'datetime.timedelta(0)'
+'datetime.timedelta(microseconds=100)'
+'datetime.timedelta(days=1, microseconds=100)'
+'datetime.timedelta(seconds=1, microseconds=100)'
+True
+True
+True
+True
+datetime.timedelta(days=-999999999)
+datetime.timedelta(days=999999999, seconds=86399, microseconds=999999)
+datetime.timedelta(microseconds=1)
+OverflowError: days=-1000000000; must have magnitude <= 999999999
+OverflowError: days=-1000000000; must have magnitude <= 999999999
+OverflowError: days=1000000000; must have magnitude <= 999999999
+OverflowError: days=1000000000; must have magnitude <= 999999999
+OverflowError: days=-1000000000; must have magnitude <= 999999999
+OverflowError: days=1000000000; must have magnitude <= 999999999
+OverflowError: days=1000000000; must have magnitude <= 999999999
+OverflowError: Python int too large to convert to C int
+OverflowError: Python int too large to convert to C int
+OverflowError: days=1111111111; must have magnitude <= 999999999
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999999)
+datetime.timedelta(microseconds=2)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999998)
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(microseconds=7812)
+datetime.timedelta(days=-1, seconds=86399, microseconds=992188)
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(0)
+datetime.timedelta(0)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999999)
+(-1, 86399, 999999)
+True
+True
+True
+True
+False
+5059.0
+5059
+2.5
+2
+ZeroDivisionError: division by zero
+ZeroDivisionError: integer division or modulo by zero
+datetime.timedelta(seconds=30)
+datetime.timedelta(seconds=30)
+ZeroDivisionError: integer modulo by zero
+2
+datetime.timedelta(seconds=30)
+-2
+datetime.timedelta(seconds=30)
+ZeroDivisionError: integer division or modulo by zero
+2002
+3
+1
+datetime.date(1, 1, 1)
+datetime.date(8, 1, 1)
+datetime.date(7, 12, 31)
+2556
+datetime.date(15, 1, 1)
+datetime.date(14, 12, 31)
+5113
+datetime.date(22, 1, 1)
+datetime.date(21, 12, 31)
+7670
+datetime.date(29, 1, 1)
+datetime.date(28, 12, 31)
+10227
+datetime.date(36, 1, 1)
+datetime.date(35, 12, 31)
+12783
+datetime.date(43, 1, 1)
+datetime.date(42, 12, 31)
+15340
+datetime.date(50, 1, 1)
+datetime.date(49, 12, 31)
+17897
+datetime.date(57, 1, 1)
+datetime.date(56, 12, 31)
+20454
+datetime.date(64, 1, 1)
+datetime.date(63, 12, 31)
+23010
+datetime.date(71, 1, 1)
+datetime.date(70, 12, 31)
+25567
+datetime.date(78, 1, 1)
+datetime.date(77, 12, 31)
+28124
+datetime.date(85, 1, 1)
+datetime.date(84, 12, 31)
+30681
+datetime.date(92, 1, 1)
+datetime.date(91, 12, 31)
+33237
+datetime.date(99, 1, 1)
+datetime.date(98, 12, 31)
+35794
+datetime.date(106, 1, 1)
+datetime.date(105, 12, 31)
+38350
+datetime.date(113, 1, 1)
+datetime.date(112, 12, 31)
+40907
+datetime.date(120, 1, 1)
+datetime.date(119, 12, 31)
+43463
+datetime.date(127, 1, 1)
+datetime.date(126, 12, 31)
+46020
+datetime.date(134, 1, 1)
+datetime.date(133, 12, 31)
+48577
+datetime.date(141, 1, 1)
+datetime.date(140, 12, 31)
+51134
+datetime.date(148, 1, 1)
+datetime.date(147, 12, 31)
+53690
+datetime.date(155, 1, 1)
+datetime.date(154, 12, 31)
+56247
+datetime.date(162, 1, 1)
+datetime.date(161, 12, 31)
+58804
+datetime.date(169, 1, 1)
+datetime.date(168, 12, 31)
+61361
+datetime.date(176, 1, 1)
+datetime.date(175, 12, 31)
+63917
+datetime.date(183, 1, 1)
+datetime.date(182, 12, 31)
+66474
+datetime.date(190, 1, 1)
+datetime.date(189, 12, 31)
+69031
+datetime.date(197, 1, 1)
+datetime.date(196, 12, 31)
+71588
+datetime.date(204, 1, 1)
+datetime.date(203, 12, 31)
+74143
+datetime.date(211, 1, 1)
+datetime.date(210, 12, 31)
+76700
+datetime.date(218, 1, 1)
+datetime.date(217, 12, 31)
+79257
+datetime.date(225, 1, 1)
+datetime.date(224, 12, 31)
+81814
+datetime.date(232, 1, 1)
+datetime.date(231, 12, 31)
+84370
+datetime.date(239, 1, 1)
+datetime.date(238, 12, 31)
+86927
+datetime.date(246, 1, 1)
+datetime.date(245, 12, 31)
+89484
+datetime.date(253, 1, 1)
+datetime.date(252, 12, 31)
+92041
+datetime.date(260, 1, 1)
+datetime.date(259, 12, 31)
+94597
+datetime.date(267, 1, 1)
+datetime.date(266, 12, 31)
+97154
+datetime.date(274, 1, 1)
+datetime.date(273, 12, 31)
+99711
+datetime.date(281, 1, 1)
+datetime.date(280, 12, 31)
+102268
+datetime.date(288, 1, 1)
+datetime.date(287, 12, 31)
+104824
+datetime.date(295, 1, 1)
+datetime.date(294, 12, 31)
+107381
+datetime.date(302, 1, 1)
+datetime.date(301, 12, 31)
+109937
+datetime.date(309, 1, 1)
+datetime.date(308, 12, 31)
+112494
+datetime.date(316, 1, 1)
+datetime.date(315, 12, 31)
+115050
+datetime.date(323, 1, 1)
+datetime.date(322, 12, 31)
+117607
+datetime.date(330, 1, 1)
+datetime.date(329, 12, 31)
+120164
+datetime.date(337, 1, 1)
+datetime.date(336, 12, 31)
+122721
+datetime.date(344, 1, 1)
+datetime.date(343, 12, 31)
+125277
+datetime.date(351, 1, 1)
+datetime.date(350, 12, 31)
+127834
+datetime.date(358, 1, 1)
+datetime.date(357, 12, 31)
+130391
+datetime.date(365, 1, 1)
+datetime.date(364, 12, 31)
+132948
+datetime.date(372, 1, 1)
+datetime.date(371, 12, 31)
+135504
+datetime.date(379, 1, 1)
+datetime.date(378, 12, 31)
+138061
+datetime.date(386, 1, 1)
+datetime.date(385, 12, 31)
+140618
+datetime.date(393, 1, 1)
+datetime.date(392, 12, 31)
+143175
+datetime.date(400, 1, 1)
+datetime.date(399, 12, 31)
+145731
+datetime.date(407, 1, 1)
+datetime.date(406, 12, 31)
+148288
+datetime.date(414, 1, 1)
+datetime.date(413, 12, 31)
+150845
+datetime.date(421, 1, 1)
+datetime.date(420, 12, 31)
+153402
+datetime.date(428, 1, 1)
+datetime.date(427, 12, 31)
+155958
+datetime.date(435, 1, 1)
+datetime.date(434, 12, 31)
+158515
+datetime.date(442, 1, 1)
+datetime.date(441, 12, 31)
+161072
+datetime.date(449, 1, 1)
+datetime.date(448, 12, 31)
+163629
+datetime.date(456, 1, 1)
+datetime.date(455, 12, 31)
+166185
+datetime.date(463, 1, 1)
+datetime.date(462, 12, 31)
+168742
+datetime.date(470, 1, 1)
+datetime.date(469, 12, 31)
+171299
+datetime.date(477, 1, 1)
+datetime.date(476, 12, 31)
+173856
+datetime.date(484, 1, 1)
+datetime.date(483, 12, 31)
+176412
+datetime.date(491, 1, 1)
+datetime.date(490, 12, 31)
+178969
+datetime.date(498, 1, 1)
+datetime.date(497, 12, 31)
+181526
+datetime.date(505, 1, 1)
+datetime.date(504, 12, 31)
+184082
+datetime.date(512, 1, 1)
+datetime.date(511, 12, 31)
+186638
+datetime.date(519, 1, 1)
+datetime.date(518, 12, 31)
+189195
+datetime.date(526, 1, 1)
+datetime.date(525, 12, 31)
+191752
+datetime.date(533, 1, 1)
+datetime.date(532, 12, 31)
+194309
+datetime.date(540, 1, 1)
+datetime.date(539, 12, 31)
+196865
+datetime.date(547, 1, 1)
+datetime.date(546, 12, 31)
+199422
+datetime.date(554, 1, 1)
+datetime.date(553, 12, 31)
+201979
+datetime.date(561, 1, 1)
+datetime.date(560, 12, 31)
+204536
+datetime.date(568, 1, 1)
+datetime.date(567, 12, 31)
+207092
+datetime.date(575, 1, 1)
+datetime.date(574, 12, 31)
+209649
+datetime.date(582, 1, 1)
+datetime.date(581, 12, 31)
+212206
+datetime.date(589, 1, 1)
+datetime.date(588, 12, 31)
+214763
+datetime.date(596, 1, 1)
+datetime.date(595, 12, 31)
+217319
+datetime.date(603, 1, 1)
+datetime.date(602, 12, 31)
+219875
+datetime.date(610, 1, 1)
+datetime.date(609, 12, 31)
+222432
+datetime.date(617, 1, 1)
+datetime.date(616, 12, 31)
+224989
+datetime.date(624, 1, 1)
+datetime.date(623, 12, 31)
+227545
+datetime.date(631, 1, 1)
+datetime.date(630, 12, 31)
+230102
+datetime.date(638, 1, 1)
+datetime.date(637, 12, 31)
+232659
+datetime.date(645, 1, 1)
+datetime.date(644, 12, 31)
+235216
+datetime.date(652, 1, 1)
+datetime.date(651, 12, 31)
+237772
+datetime.date(659, 1, 1)
+datetime.date(658, 12, 31)
+240329
+datetime.date(666, 1, 1)
+datetime.date(665, 12, 31)
+242886
+datetime.date(673, 1, 1)
+datetime.date(672, 12, 31)
+245443
+datetime.date(680, 1, 1)
+datetime.date(679, 12, 31)
+247999
+datetime.date(687, 1, 1)
+datetime.date(686, 12, 31)
+250556
+datetime.date(694, 1, 1)
+datetime.date(693, 12, 31)
+253113
+datetime.date(701, 1, 1)
+datetime.date(700, 12, 31)
+255669
+datetime.date(708, 1, 1)
+datetime.date(707, 12, 31)
+258225
+datetime.date(715, 1, 1)
+datetime.date(714, 12, 31)
+260782
+datetime.date(722, 1, 1)
+datetime.date(721, 12, 31)
+263339
+datetime.date(729, 1, 1)
+datetime.date(728, 12, 31)
+265896
+datetime.date(736, 1, 1)
+datetime.date(735, 12, 31)
+268452
+datetime.date(743, 1, 1)
+datetime.date(742, 12, 31)
+271009
+datetime.date(750, 1, 1)
+datetime.date(749, 12, 31)
+273566
+datetime.date(757, 1, 1)
+datetime.date(756, 12, 31)
+276123
+datetime.date(764, 1, 1)
+datetime.date(763, 12, 31)
+278679
+datetime.date(771, 1, 1)
+datetime.date(770, 12, 31)
+281236
+datetime.date(778, 1, 1)
+datetime.date(777, 12, 31)
+283793
+datetime.date(785, 1, 1)
+datetime.date(784, 12, 31)
+286350
+datetime.date(792, 1, 1)
+datetime.date(791, 12, 31)
+288906
+datetime.date(799, 1, 1)
+datetime.date(798, 12, 31)
+291463
+datetime.date(806, 1, 1)
+datetime.date(805, 12, 31)
+294020
+datetime.date(813, 1, 1)
+datetime.date(812, 12, 31)
+296577
+datetime.date(820, 1, 1)
+datetime.date(819, 12, 31)
+299133
+datetime.date(827, 1, 1)
+datetime.date(826, 12, 31)
+301690
+datetime.date(834, 1, 1)
+datetime.date(833, 12, 31)
+304247
+datetime.date(841, 1, 1)
+datetime.date(840, 12, 31)
+306804
+datetime.date(848, 1, 1)
+datetime.date(847, 12, 31)
+309360
+datetime.date(855, 1, 1)
+datetime.date(854, 12, 31)
+311917
+datetime.date(862, 1, 1)
+datetime.date(861, 12, 31)
+314474
+datetime.date(869, 1, 1)
+datetime.date(868, 12, 31)
+317031
+datetime.date(876, 1, 1)
+datetime.date(875, 12, 31)
+319587
+datetime.date(883, 1, 1)
+datetime.date(882, 12, 31)
+322144
+datetime.date(890, 1, 1)
+datetime.date(889, 12, 31)
+324701
+datetime.date(897, 1, 1)
+datetime.date(896, 12, 31)
+327258
+datetime.date(904, 1, 1)
+datetime.date(903, 12, 31)
+329813
+datetime.date(911, 1, 1)
+datetime.date(910, 12, 31)
+332370
+datetime.date(918, 1, 1)
+datetime.date(917, 12, 31)
+334927
+datetime.date(925, 1, 1)
+datetime.date(924, 12, 31)
+337484
+datetime.date(932, 1, 1)
+datetime.date(931, 12, 31)
+340040
+datetime.date(939, 1, 1)
+datetime.date(938, 12, 31)
+342597
+datetime.date(946, 1, 1)
+datetime.date(945, 12, 31)
+345154
+datetime.date(953, 1, 1)
+datetime.date(952, 12, 31)
+347711
+datetime.date(960, 1, 1)
+datetime.date(959, 12, 31)
+350267
+datetime.date(967, 1, 1)
+datetime.date(966, 12, 31)
+352824
+datetime.date(974, 1, 1)
+datetime.date(973, 12, 31)
+355381
+datetime.date(981, 1, 1)
+datetime.date(980, 12, 31)
+357938
+datetime.date(988, 1, 1)
+datetime.date(987, 12, 31)
+360494
+datetime.date(995, 1, 1)
+datetime.date(994, 12, 31)
+363051
+datetime.date(1002, 1, 1)
+datetime.date(1001, 12, 31)
+365607
+datetime.date(1009, 1, 1)
+datetime.date(1008, 12, 31)
+368164
+datetime.date(1016, 1, 1)
+datetime.date(1015, 12, 31)
+370720
+datetime.date(1023, 1, 1)
+datetime.date(1022, 12, 31)
+373277
+datetime.date(1030, 1, 1)
+datetime.date(1029, 12, 31)
+375834
+datetime.date(1037, 1, 1)
+datetime.date(1036, 12, 31)
+378391
+datetime.date(1044, 1, 1)
+datetime.date(1043, 12, 31)
+380947
+datetime.date(1051, 1, 1)
+datetime.date(1050, 12, 31)
+383504
+datetime.date(1058, 1, 1)
+datetime.date(1057, 12, 31)
+386061
+datetime.date(1065, 1, 1)
+datetime.date(1064, 12, 31)
+388618
+datetime.date(1072, 1, 1)
+datetime.date(1071, 12, 31)
+391174
+datetime.date(1079, 1, 1)
+datetime.date(1078, 12, 31)
+393731
+datetime.date(1086, 1, 1)
+datetime.date(1085, 12, 31)
+396288
+datetime.date(1093, 1, 1)
+datetime.date(1092, 12, 31)
+398845
+datetime.date(1100, 1, 1)
+datetime.date(1099, 12, 31)
+401401
+datetime.date(1107, 1, 1)
+datetime.date(1106, 12, 31)
+403957
+datetime.date(1114, 1, 1)
+datetime.date(1113, 12, 31)
+406514
+datetime.date(1121, 1, 1)
+datetime.date(1120, 12, 31)
+409071
+datetime.date(1128, 1, 1)
+datetime.date(1127, 12, 31)
+411627
+datetime.date(1135, 1, 1)
+datetime.date(1134, 12, 31)
+414184
+datetime.date(1142, 1, 1)
+datetime.date(1141, 12, 31)
+416741
+datetime.date(1149, 1, 1)
+datetime.date(1148, 12, 31)
+419298
+datetime.date(1156, 1, 1)
+datetime.date(1155, 12, 31)
+421854
+datetime.date(1163, 1, 1)
+datetime.date(1162, 12, 31)
+424411
+datetime.date(1170, 1, 1)
+datetime.date(1169, 12, 31)
+426968
+datetime.date(1177, 1, 1)
+datetime.date(1176, 12, 31)
+429525
+datetime.date(1184, 1, 1)
+datetime.date(1183, 12, 31)
+432081
+datetime.date(1191, 1, 1)
+datetime.date(1190, 12, 31)
+434638
+datetime.date(1198, 1, 1)
+datetime.date(1197, 12, 31)
+437195
+datetime.date(1205, 1, 1)
+datetime.date(1204, 12, 31)
+439752
+datetime.date(1212, 1, 1)
+datetime.date(1211, 12, 31)
+442308
+datetime.date(1219, 1, 1)
+datetime.date(1218, 12, 31)
+444865
+datetime.date(1226, 1, 1)
+datetime.date(1225, 12, 31)
+447422
+datetime.date(1233, 1, 1)
+datetime.date(1232, 12, 31)
+449979
+datetime.date(1240, 1, 1)
+datetime.date(1239, 12, 31)
+452535
+datetime.date(1247, 1, 1)
+datetime.date(1246, 12, 31)
+455092
+datetime.date(1254, 1, 1)
+datetime.date(1253, 12, 31)
+457649
+datetime.date(1261, 1, 1)
+datetime.date(1260, 12, 31)
+460206
+datetime.date(1268, 1, 1)
+datetime.date(1267, 12, 31)
+462762
+datetime.date(1275, 1, 1)
+datetime.date(1274, 12, 31)
+465319
+datetime.date(1282, 1, 1)
+datetime.date(1281, 12, 31)
+467876
+datetime.date(1289, 1, 1)
+datetime.date(1288, 12, 31)
+470433
+datetime.date(1296, 1, 1)
+datetime.date(1295, 12, 31)
+472989
+datetime.date(1303, 1, 1)
+datetime.date(1302, 12, 31)
+475545
+datetime.date(1310, 1, 1)
+datetime.date(1309, 12, 31)
+478102
+datetime.date(1317, 1, 1)
+datetime.date(1316, 12, 31)
+480659
+datetime.date(1324, 1, 1)
+datetime.date(1323, 12, 31)
+483215
+datetime.date(1331, 1, 1)
+datetime.date(1330, 12, 31)
+485772
+datetime.date(1338, 1, 1)
+datetime.date(1337, 12, 31)
+488329
+datetime.date(1345, 1, 1)
+datetime.date(1344, 12, 31)
+490886
+datetime.date(1352, 1, 1)
+datetime.date(1351, 12, 31)
+493442
+datetime.date(1359, 1, 1)
+datetime.date(1358, 12, 31)
+495999
+datetime.date(1366, 1, 1)
+datetime.date(1365, 12, 31)
+498556
+datetime.date(1373, 1, 1)
+datetime.date(1372, 12, 31)
+501113
+datetime.date(1380, 1, 1)
+datetime.date(1379, 12, 31)
+503669
+datetime.date(1387, 1, 1)
+datetime.date(1386, 12, 31)
+506226
+datetime.date(1394, 1, 1)
+datetime.date(1393, 12, 31)
+508783
+datetime.date(1401, 1, 1)
+datetime.date(1400, 12, 31)
+511339
+datetime.date(1408, 1, 1)
+datetime.date(1407, 12, 31)
+513895
+datetime.date(1415, 1, 1)
+datetime.date(1414, 12, 31)
+516452
+datetime.date(1422, 1, 1)
+datetime.date(1421, 12, 31)
+519009
+datetime.date(1429, 1, 1)
+datetime.date(1428, 12, 31)
+521566
+datetime.date(1436, 1, 1)
+datetime.date(1435, 12, 31)
+524122
+datetime.date(1443, 1, 1)
+datetime.date(1442, 12, 31)
+526679
+datetime.date(1450, 1, 1)
+datetime.date(1449, 12, 31)
+529236
+datetime.date(1457, 1, 1)
+datetime.date(1456, 12, 31)
+531793
+datetime.date(1464, 1, 1)
+datetime.date(1463, 12, 31)
+534349
+datetime.date(1471, 1, 1)
+datetime.date(1470, 12, 31)
+536906
+datetime.date(1478, 1, 1)
+datetime.date(1477, 12, 31)
+539463
+datetime.date(1485, 1, 1)
+datetime.date(1484, 12, 31)
+542020
+datetime.date(1492, 1, 1)
+datetime.date(1491, 12, 31)
+544576
+datetime.date(1499, 1, 1)
+datetime.date(1498, 12, 31)
+547133
+datetime.date(1506, 1, 1)
+datetime.date(1505, 12, 31)
+549689
+datetime.date(1513, 1, 1)
+datetime.date(1512, 12, 31)
+552246
+datetime.date(1520, 1, 1)
+datetime.date(1519, 12, 31)
+554802
+datetime.date(1527, 1, 1)
+datetime.date(1526, 12, 31)
+557359
+datetime.date(1534, 1, 1)
+datetime.date(1533, 12, 31)
+559916
+datetime.date(1541, 1, 1)
+datetime.date(1540, 12, 31)
+562473
+datetime.date(1548, 1, 1)
+datetime.date(1547, 12, 31)
+565029
+datetime.date(1555, 1, 1)
+datetime.date(1554, 12, 31)
+567586
+datetime.date(1562, 1, 1)
+datetime.date(1561, 12, 31)
+570143
+datetime.date(1569, 1, 1)
+datetime.date(1568, 12, 31)
+572700
+datetime.date(1576, 1, 1)
+datetime.date(1575, 12, 31)
+575256
+datetime.date(1583, 1, 1)
+datetime.date(1582, 12, 31)
+577813
+datetime.date(1590, 1, 1)
+datetime.date(1589, 12, 31)
+580370
+datetime.date(1597, 1, 1)
+datetime.date(1596, 12, 31)
+582927
+datetime.date(1604, 1, 1)
+datetime.date(1603, 12, 31)
+585483
+datetime.date(1611, 1, 1)
+datetime.date(1610, 12, 31)
+588040
+datetime.date(1618, 1, 1)
+datetime.date(1617, 12, 31)
+590597
+datetime.date(1625, 1, 1)
+datetime.date(1624, 12, 31)
+593154
+datetime.date(1632, 1, 1)
+datetime.date(1631, 12, 31)
+595710
+datetime.date(1639, 1, 1)
+datetime.date(1638, 12, 31)
+598267
+datetime.date(1646, 1, 1)
+datetime.date(1645, 12, 31)
+600824
+datetime.date(1653, 1, 1)
+datetime.date(1652, 12, 31)
+603381
+datetime.date(1660, 1, 1)
+datetime.date(1659, 12, 31)
+605937
+datetime.date(1667, 1, 1)
+datetime.date(1666, 12, 31)
+608494
+datetime.date(1674, 1, 1)
+datetime.date(1673, 12, 31)
+611051
+datetime.date(1681, 1, 1)
+datetime.date(1680, 12, 31)
+613608
+datetime.date(1688, 1, 1)
+datetime.date(1687, 12, 31)
+616164
+datetime.date(1695, 1, 1)
+datetime.date(1694, 12, 31)
+618721
+datetime.date(1702, 1, 1)
+datetime.date(1701, 12, 31)
+621277
+datetime.date(1709, 1, 1)
+datetime.date(1708, 12, 31)
+623834
+datetime.date(1716, 1, 1)
+datetime.date(1715, 12, 31)
+626390
+datetime.date(1723, 1, 1)
+datetime.date(1722, 12, 31)
+628947
+datetime.date(1730, 1, 1)
+datetime.date(1729, 12, 31)
+631504
+datetime.date(1737, 1, 1)
+datetime.date(1736, 12, 31)
+634061
+datetime.date(1744, 1, 1)
+datetime.date(1743, 12, 31)
+636617
+datetime.date(1751, 1, 1)
+datetime.date(1750, 12, 31)
+639174
+datetime.date(1758, 1, 1)
+datetime.date(1757, 12, 31)
+641731
+datetime.date(1765, 1, 1)
+datetime.date(1764, 12, 31)
+644288
+datetime.date(1772, 1, 1)
+datetime.date(1771, 12, 31)
+646844
+datetime.date(1779, 1, 1)
+datetime.date(1778, 12, 31)
+649401
+datetime.date(1786, 1, 1)
+datetime.date(1785, 12, 31)
+651958
+datetime.date(1793, 1, 1)
+datetime.date(1792, 12, 31)
+654515
+datetime.date(1800, 1, 1)
+datetime.date(1799, 12, 31)
+657071
+datetime.date(1807, 1, 1)
+datetime.date(1806, 12, 31)
+659627
+datetime.date(1814, 1, 1)
+datetime.date(1813, 12, 31)
+662184
+datetime.date(1821, 1, 1)
+datetime.date(1820, 12, 31)
+664741
+datetime.date(1828, 1, 1)
+datetime.date(1827, 12, 31)
+667297
+datetime.date(1835, 1, 1)
+datetime.date(1834, 12, 31)
+669854
+datetime.date(1842, 1, 1)
+datetime.date(1841, 12, 31)
+672411
+datetime.date(1849, 1, 1)
+datetime.date(1848, 12, 31)
+674968
+datetime.date(1856, 1, 1)
+datetime.date(1855, 12, 31)
+677524
+datetime.date(1863, 1, 1)
+datetime.date(1862, 12, 31)
+680081
+datetime.date(1870, 1, 1)
+datetime.date(1869, 12, 31)
+682638
+datetime.date(1877, 1, 1)
+datetime.date(1876, 12, 31)
+685195
+datetime.date(1884, 1, 1)
+datetime.date(1883, 12, 31)
+687751
+datetime.date(1891, 1, 1)
+datetime.date(1890, 12, 31)
+690308
+datetime.date(1898, 1, 1)
+datetime.date(1897, 12, 31)
+692865
+datetime.date(1905, 1, 1)
+datetime.date(1904, 12, 31)
+695421
+datetime.date(1912, 1, 1)
+datetime.date(1911, 12, 31)
+697977
+datetime.date(1919, 1, 1)
+datetime.date(1918, 12, 31)
+700534
+datetime.date(1926, 1, 1)
+datetime.date(1925, 12, 31)
+703091
+datetime.date(1933, 1, 1)
+datetime.date(1932, 12, 31)
+705648
+datetime.date(1940, 1, 1)
+datetime.date(1939, 12, 31)
+708204
+datetime.date(1947, 1, 1)
+datetime.date(1946, 12, 31)
+710761
+datetime.date(1954, 1, 1)
+datetime.date(1953, 12, 31)
+713318
+datetime.date(1961, 1, 1)
+datetime.date(1960, 12, 31)
+715875
+datetime.date(1968, 1, 1)
+datetime.date(1967, 12, 31)
+718431
+datetime.date(1975, 1, 1)
+datetime.date(1974, 12, 31)
+720988
+datetime.date(1982, 1, 1)
+datetime.date(1981, 12, 31)
+723545
+datetime.date(1989, 1, 1)
+datetime.date(1988, 12, 31)
+726102
+datetime.date(1996, 1, 1)
+datetime.date(1995, 12, 31)
+728658
+datetime.date(2003, 1, 1)
+datetime.date(2002, 12, 31)
+731215
+datetime.date(2010, 1, 1)
+datetime.date(2009, 12, 31)
+733772
+datetime.date(2017, 1, 1)
+datetime.date(2016, 12, 31)
+736329
+datetime.date(2024, 1, 1)
+datetime.date(2023, 12, 31)
+738885
+datetime.date(2031, 1, 1)
+datetime.date(2030, 12, 31)
+741442
+datetime.date(2038, 1, 1)
+datetime.date(2037, 12, 31)
+743999
+datetime.date(2045, 1, 1)
+datetime.date(2044, 12, 31)
+746556
+datetime.date(2052, 1, 1)
+datetime.date(2051, 12, 31)
+749112
+datetime.date(2059, 1, 1)
+datetime.date(2058, 12, 31)
+751669
+datetime.date(2066, 1, 1)
+datetime.date(2065, 12, 31)
+754226
+datetime.date(2073, 1, 1)
+datetime.date(2072, 12, 31)
+756783
+datetime.date(2080, 1, 1)
+datetime.date(2079, 12, 31)
+759339
+datetime.date(2087, 1, 1)
+datetime.date(2086, 12, 31)
+761896
+datetime.date(2094, 1, 1)
+datetime.date(2093, 12, 31)
+764453
+datetime.date(2101, 1, 1)
+datetime.date(2100, 12, 31)
+767009
+datetime.date(2108, 1, 1)
+datetime.date(2107, 12, 31)
+769565
+datetime.date(2115, 1, 1)
+datetime.date(2114, 12, 31)
+772122
+datetime.date(2122, 1, 1)
+datetime.date(2121, 12, 31)
+774679
+datetime.date(2129, 1, 1)
+datetime.date(2128, 12, 31)
+777236
+datetime.date(2136, 1, 1)
+datetime.date(2135, 12, 31)
+779792
+datetime.date(2143, 1, 1)
+datetime.date(2142, 12, 31)
+782349
+datetime.date(2150, 1, 1)
+datetime.date(2149, 12, 31)
+784906
+datetime.date(2157, 1, 1)
+datetime.date(2156, 12, 31)
+787463
+datetime.date(2164, 1, 1)
+datetime.date(2163, 12, 31)
+790019
+datetime.date(2171, 1, 1)
+datetime.date(2170, 12, 31)
+792576
+datetime.date(2178, 1, 1)
+datetime.date(2177, 12, 31)
+795133
+datetime.date(2185, 1, 1)
+datetime.date(2184, 12, 31)
+797690
+datetime.date(2192, 1, 1)
+datetime.date(2191, 12, 31)
+800246
+datetime.date(2199, 1, 1)
+datetime.date(2198, 12, 31)
+802803
+datetime.date(2206, 1, 1)
+datetime.date(2205, 12, 31)
+805359
+datetime.date(2213, 1, 1)
+datetime.date(2212, 12, 31)
+807916
+datetime.date(2220, 1, 1)
+datetime.date(2219, 12, 31)
+810472
+datetime.date(2227, 1, 1)
+datetime.date(2226, 12, 31)
+813029
+datetime.date(2234, 1, 1)
+datetime.date(2233, 12, 31)
+815586
+datetime.date(2241, 1, 1)
+datetime.date(2240, 12, 31)
+818143
+datetime.date(2248, 1, 1)
+datetime.date(2247, 12, 31)
+820699
+datetime.date(2255, 1, 1)
+datetime.date(2254, 12, 31)
+823256
+datetime.date(2262, 1, 1)
+datetime.date(2261, 12, 31)
+825813
+datetime.date(2269, 1, 1)
+datetime.date(2268, 12, 31)
+828370
+datetime.date(2276, 1, 1)
+datetime.date(2275, 12, 31)
+830926
+datetime.date(2283, 1, 1)
+datetime.date(2282, 12, 31)
+833483
+datetime.date(2290, 1, 1)
+datetime.date(2289, 12, 31)
+836040
+datetime.date(2297, 1, 1)
+datetime.date(2296, 12, 31)
+838597
+datetime.date(2304, 1, 1)
+datetime.date(2303, 12, 31)
+841152
+datetime.date(2311, 1, 1)
+datetime.date(2310, 12, 31)
+843709
+datetime.date(2318, 1, 1)
+datetime.date(2317, 12, 31)
+846266
+datetime.date(2325, 1, 1)
+datetime.date(2324, 12, 31)
+848823
+datetime.date(2332, 1, 1)
+datetime.date(2331, 12, 31)
+851379
+datetime.date(2339, 1, 1)
+datetime.date(2338, 12, 31)
+853936
+datetime.date(2346, 1, 1)
+datetime.date(2345, 12, 31)
+856493
+datetime.date(2353, 1, 1)
+datetime.date(2352, 12, 31)
+859050
+datetime.date(2360, 1, 1)
+datetime.date(2359, 12, 31)
+861606
+datetime.date(2367, 1, 1)
+datetime.date(2366, 12, 31)
+864163
+datetime.date(2374, 1, 1)
+datetime.date(2373, 12, 31)
+866720
+datetime.date(2381, 1, 1)
+datetime.date(2380, 12, 31)
+869277
+datetime.date(2388, 1, 1)
+datetime.date(2387, 12, 31)
+871833
+datetime.date(2395, 1, 1)
+datetime.date(2394, 12, 31)
+874390
+datetime.date(2402, 1, 1)
+datetime.date(2401, 12, 31)
+876947
+datetime.date(2409, 1, 1)
+datetime.date(2408, 12, 31)
+879504
+datetime.date(2416, 1, 1)
+datetime.date(2415, 12, 31)
+882060
+datetime.date(2423, 1, 1)
+datetime.date(2422, 12, 31)
+884617
+datetime.date(2430, 1, 1)
+datetime.date(2429, 12, 31)
+887174
+datetime.date(2437, 1, 1)
+datetime.date(2436, 12, 31)
+889731
+datetime.date(2444, 1, 1)
+datetime.date(2443, 12, 31)
+892287
+datetime.date(2451, 1, 1)
+datetime.date(2450, 12, 31)
+894844
+datetime.date(2458, 1, 1)
+datetime.date(2457, 12, 31)
+897401
+datetime.date(2465, 1, 1)
+datetime.date(2464, 12, 31)
+899958
+datetime.date(2472, 1, 1)
+datetime.date(2471, 12, 31)
+902514
+datetime.date(2479, 1, 1)
+datetime.date(2478, 12, 31)
+905071
+datetime.date(2486, 1, 1)
+datetime.date(2485, 12, 31)
+907628
+datetime.date(2493, 1, 1)
+datetime.date(2492, 12, 31)
+910185
+datetime.date(2500, 1, 1)
+datetime.date(2499, 12, 31)
+912741
+datetime.date(2507, 1, 1)
+datetime.date(2506, 12, 31)
+915297
+datetime.date(2514, 1, 1)
+datetime.date(2513, 12, 31)
+917854
+datetime.date(2521, 1, 1)
+datetime.date(2520, 12, 31)
+920411
+datetime.date(2528, 1, 1)
+datetime.date(2527, 12, 31)
+922967
+datetime.date(2535, 1, 1)
+datetime.date(2534, 12, 31)
+925524
+datetime.date(2542, 1, 1)
+datetime.date(2541, 12, 31)
+928081
+datetime.date(2549, 1, 1)
+datetime.date(2548, 12, 31)
+930638
+datetime.date(2556, 1, 1)
+datetime.date(2555, 12, 31)
+933194
+datetime.date(2563, 1, 1)
+datetime.date(2562, 12, 31)
+935751
+datetime.date(2570, 1, 1)
+datetime.date(2569, 12, 31)
+938308
+datetime.date(2577, 1, 1)
+datetime.date(2576, 12, 31)
+940865
+datetime.date(2584, 1, 1)
+datetime.date(2583, 12, 31)
+943421
+datetime.date(2591, 1, 1)
+datetime.date(2590, 12, 31)
+945978
+datetime.date(2598, 1, 1)
+datetime.date(2597, 12, 31)
+948535
+datetime.date(2605, 1, 1)
+datetime.date(2604, 12, 31)
+951091
+datetime.date(2612, 1, 1)
+datetime.date(2611, 12, 31)
+953647
+datetime.date(2619, 1, 1)
+datetime.date(2618, 12, 31)
+956204
+datetime.date(2626, 1, 1)
+datetime.date(2625, 12, 31)
+958761
+datetime.date(2633, 1, 1)
+datetime.date(2632, 12, 31)
+961318
+datetime.date(2640, 1, 1)
+datetime.date(2639, 12, 31)
+963874
+datetime.date(2647, 1, 1)
+datetime.date(2646, 12, 31)
+966431
+datetime.date(2654, 1, 1)
+datetime.date(2653, 12, 31)
+968988
+datetime.date(2661, 1, 1)
+datetime.date(2660, 12, 31)
+971545
+datetime.date(2668, 1, 1)
+datetime.date(2667, 12, 31)
+974101
+datetime.date(2675, 1, 1)
+datetime.date(2674, 12, 31)
+976658
+datetime.date(2682, 1, 1)
+datetime.date(2681, 12, 31)
+979215
+datetime.date(2689, 1, 1)
+datetime.date(2688, 12, 31)
+981772
+datetime.date(2696, 1, 1)
+datetime.date(2695, 12, 31)
+984328
+datetime.date(2703, 1, 1)
+datetime.date(2702, 12, 31)
+986884
+datetime.date(2710, 1, 1)
+datetime.date(2709, 12, 31)
+989441
+datetime.date(2717, 1, 1)
+datetime.date(2716, 12, 31)
+991998
+datetime.date(2724, 1, 1)
+datetime.date(2723, 12, 31)
+994554
+datetime.date(2731, 1, 1)
+datetime.date(2730, 12, 31)
+997111
+datetime.date(2738, 1, 1)
+datetime.date(2737, 12, 31)
+999668
+datetime.date(2745, 1, 1)
+datetime.date(2744, 12, 31)
+1002225
+datetime.date(2752, 1, 1)
+datetime.date(2751, 12, 31)
+1004781
+datetime.date(2759, 1, 1)
+datetime.date(2758, 12, 31)
+1007338
+datetime.date(2766, 1, 1)
+datetime.date(2765, 12, 31)
+1009895
+datetime.date(2773, 1, 1)
+datetime.date(2772, 12, 31)
+1012452
+datetime.date(2780, 1, 1)
+datetime.date(2779, 12, 31)
+1015008
+datetime.date(2787, 1, 1)
+datetime.date(2786, 12, 31)
+1017565
+datetime.date(2794, 1, 1)
+datetime.date(2793, 12, 31)
+1020122
+datetime.date(2801, 1, 1)
+datetime.date(2800, 12, 31)
+1022679
+datetime.date(2808, 1, 1)
+datetime.date(2807, 12, 31)
+1025235
+datetime.date(2815, 1, 1)
+datetime.date(2814, 12, 31)
+1027792
+datetime.date(2822, 1, 1)
+datetime.date(2821, 12, 31)
+1030349
+datetime.date(2829, 1, 1)
+datetime.date(2828, 12, 31)
+1032906
+datetime.date(2836, 1, 1)
+datetime.date(2835, 12, 31)
+1035462
+datetime.date(2843, 1, 1)
+datetime.date(2842, 12, 31)
+1038019
+datetime.date(2850, 1, 1)
+datetime.date(2849, 12, 31)
+1040576
+datetime.date(2857, 1, 1)
+datetime.date(2856, 12, 31)
+1043133
+datetime.date(2864, 1, 1)
+datetime.date(2863, 12, 31)
+1045689
+datetime.date(2871, 1, 1)
+datetime.date(2870, 12, 31)
+1048246
+datetime.date(2878, 1, 1)
+datetime.date(2877, 12, 31)
+1050803
+datetime.date(2885, 1, 1)
+datetime.date(2884, 12, 31)
+1053360
+datetime.date(2892, 1, 1)
+datetime.date(2891, 12, 31)
+1055916
+datetime.date(2899, 1, 1)
+datetime.date(2898, 12, 31)
+1058473
+datetime.date(2906, 1, 1)
+datetime.date(2905, 12, 31)
+1061029
+datetime.date(2913, 1, 1)
+datetime.date(2912, 12, 31)
+1063586
+datetime.date(2920, 1, 1)
+datetime.date(2919, 12, 31)
+1066142
+datetime.date(2927, 1, 1)
+datetime.date(2926, 12, 31)
+1068699
+datetime.date(2934, 1, 1)
+datetime.date(2933, 12, 31)
+1071256
+datetime.date(2941, 1, 1)
+datetime.date(2940, 12, 31)
+1073813
+datetime.date(2948, 1, 1)
+datetime.date(2947, 12, 31)
+1076369
+datetime.date(2955, 1, 1)
+datetime.date(2954, 12, 31)
+1078926
+datetime.date(2962, 1, 1)
+datetime.date(2961, 12, 31)
+1081483
+datetime.date(2969, 1, 1)
+datetime.date(2968, 12, 31)
+1084040
+datetime.date(2976, 1, 1)
+datetime.date(2975, 12, 31)
+1086596
+datetime.date(2983, 1, 1)
+datetime.date(2982, 12, 31)
+1089153
+datetime.date(2990, 1, 1)
+datetime.date(2989, 12, 31)
+1091710
+datetime.date(2997, 1, 1)
+datetime.date(2996, 12, 31)
+1094267
+datetime.date(3004, 1, 1)
+datetime.date(3003, 12, 31)
+1096822
+datetime.date(3011, 1, 1)
+datetime.date(3010, 12, 31)
+1099379
+datetime.date(3018, 1, 1)
+datetime.date(3017, 12, 31)
+1101936
+datetime.date(3025, 1, 1)
+datetime.date(3024, 12, 31)
+1104493
+datetime.date(3032, 1, 1)
+datetime.date(3031, 12, 31)
+1107049
+datetime.date(3039, 1, 1)
+datetime.date(3038, 12, 31)
+1109606
+datetime.date(3046, 1, 1)
+datetime.date(3045, 12, 31)
+1112163
+datetime.date(3053, 1, 1)
+datetime.date(3052, 12, 31)
+1114720
+datetime.date(3060, 1, 1)
+datetime.date(3059, 12, 31)
+1117276
+datetime.date(3067, 1, 1)
+datetime.date(3066, 12, 31)
+1119833
+datetime.date(3074, 1, 1)
+datetime.date(3073, 12, 31)
+1122390
+datetime.date(3081, 1, 1)
+datetime.date(3080, 12, 31)
+1124947
+datetime.date(3088, 1, 1)
+datetime.date(3087, 12, 31)
+1127503
+datetime.date(3095, 1, 1)
+datetime.date(3094, 12, 31)
+1130060
+datetime.date(3102, 1, 1)
+datetime.date(3101, 12, 31)
+1132616
+datetime.date(3109, 1, 1)
+datetime.date(3108, 12, 31)
+1135173
+datetime.date(3116, 1, 1)
+datetime.date(3115, 12, 31)
+1137729
+datetime.date(3123, 1, 1)
+datetime.date(3122, 12, 31)
+1140286
+datetime.date(3130, 1, 1)
+datetime.date(3129, 12, 31)
+1142843
+datetime.date(3137, 1, 1)
+datetime.date(3136, 12, 31)
+1145400
+datetime.date(3144, 1, 1)
+datetime.date(3143, 12, 31)
+1147956
+datetime.date(3151, 1, 1)
+datetime.date(3150, 12, 31)
+1150513
+datetime.date(3158, 1, 1)
+datetime.date(3157, 12, 31)
+1153070
+datetime.date(3165, 1, 1)
+datetime.date(3164, 12, 31)
+1155627
+datetime.date(3172, 1, 1)
+datetime.date(3171, 12, 31)
+1158183
+datetime.date(3179, 1, 1)
+datetime.date(3178, 12, 31)
+1160740
+datetime.date(3186, 1, 1)
+datetime.date(3185, 12, 31)
+1163297
+datetime.date(3193, 1, 1)
+datetime.date(3192, 12, 31)
+1165854
+datetime.date(3200, 1, 1)
+datetime.date(3199, 12, 31)
+1168410
+datetime.date(3207, 1, 1)
+datetime.date(3206, 12, 31)
+1170967
+datetime.date(3214, 1, 1)
+datetime.date(3213, 12, 31)
+1173524
+datetime.date(3221, 1, 1)
+datetime.date(3220, 12, 31)
+1176081
+datetime.date(3228, 1, 1)
+datetime.date(3227, 12, 31)
+1178637
+datetime.date(3235, 1, 1)
+datetime.date(3234, 12, 31)
+1181194
+datetime.date(3242, 1, 1)
+datetime.date(3241, 12, 31)
+1183751
+datetime.date(3249, 1, 1)
+datetime.date(3248, 12, 31)
+1186308
+datetime.date(3256, 1, 1)
+datetime.date(3255, 12, 31)
+1188864
+datetime.date(3263, 1, 1)
+datetime.date(3262, 12, 31)
+1191421
+datetime.date(3270, 1, 1)
+datetime.date(3269, 12, 31)
+1193978
+datetime.date(3277, 1, 1)
+datetime.date(3276, 12, 31)
+1196535
+datetime.date(3284, 1, 1)
+datetime.date(3283, 12, 31)
+1199091
+datetime.date(3291, 1, 1)
+datetime.date(3290, 12, 31)
+1201648
+datetime.date(3298, 1, 1)
+datetime.date(3297, 12, 31)
+1204205
+datetime.date(3305, 1, 1)
+datetime.date(3304, 12, 31)
+1206761
+datetime.date(3312, 1, 1)
+datetime.date(3311, 12, 31)
+1209317
+datetime.date(3319, 1, 1)
+datetime.date(3318, 12, 31)
+1211874
+datetime.date(3326, 1, 1)
+datetime.date(3325, 12, 31)
+1214431
+datetime.date(3333, 1, 1)
+datetime.date(3332, 12, 31)
+1216988
+datetime.date(3340, 1, 1)
+datetime.date(3339, 12, 31)
+1219544
+datetime.date(3347, 1, 1)
+datetime.date(3346, 12, 31)
+1222101
+datetime.date(3354, 1, 1)
+datetime.date(3353, 12, 31)
+1224658
+datetime.date(3361, 1, 1)
+datetime.date(3360, 12, 31)
+1227215
+datetime.date(3368, 1, 1)
+datetime.date(3367, 12, 31)
+1229771
+datetime.date(3375, 1, 1)
+datetime.date(3374, 12, 31)
+1232328
+datetime.date(3382, 1, 1)
+datetime.date(3381, 12, 31)
+1234885
+datetime.date(3389, 1, 1)
+datetime.date(3388, 12, 31)
+1237442
+datetime.date(3396, 1, 1)
+datetime.date(3395, 12, 31)
+1239998
+datetime.date(3403, 1, 1)
+datetime.date(3402, 12, 31)
+1242554
+datetime.date(3410, 1, 1)
+datetime.date(3409, 12, 31)
+1245111
+datetime.date(3417, 1, 1)
+datetime.date(3416, 12, 31)
+1247668
+datetime.date(3424, 1, 1)
+datetime.date(3423, 12, 31)
+1250224
+datetime.date(3431, 1, 1)
+datetime.date(3430, 12, 31)
+1252781
+datetime.date(3438, 1, 1)
+datetime.date(3437, 12, 31)
+1255338
+datetime.date(3445, 1, 1)
+datetime.date(3444, 12, 31)
+1257895
+datetime.date(3452, 1, 1)
+datetime.date(3451, 12, 31)
+1260451
+datetime.date(3459, 1, 1)
+datetime.date(3458, 12, 31)
+1263008
+datetime.date(3466, 1, 1)
+datetime.date(3465, 12, 31)
+1265565
+datetime.date(3473, 1, 1)
+datetime.date(3472, 12, 31)
+1268122
+datetime.date(3480, 1, 1)
+datetime.date(3479, 12, 31)
+1270678
+datetime.date(3487, 1, 1)
+datetime.date(3486, 12, 31)
+1273235
+datetime.date(3494, 1, 1)
+datetime.date(3493, 12, 31)
+1275792
+datetime.date(3501, 1, 1)
+datetime.date(3500, 12, 31)
+1278348
+datetime.date(3508, 1, 1)
+datetime.date(3507, 12, 31)
+1280904
+datetime.date(3515, 1, 1)
+datetime.date(3514, 12, 31)
+1283461
+datetime.date(3522, 1, 1)
+datetime.date(3521, 12, 31)
+1286018
+datetime.date(3529, 1, 1)
+datetime.date(3528, 12, 31)
+1288575
+datetime.date(3536, 1, 1)
+datetime.date(3535, 12, 31)
+1291131
+datetime.date(3543, 1, 1)
+datetime.date(3542, 12, 31)
+1293688
+datetime.date(3550, 1, 1)
+datetime.date(3549, 12, 31)
+1296245
+datetime.date(3557, 1, 1)
+datetime.date(3556, 12, 31)
+1298802
+datetime.date(3564, 1, 1)
+datetime.date(3563, 12, 31)
+1301358
+datetime.date(3571, 1, 1)
+datetime.date(3570, 12, 31)
+1303915
+datetime.date(3578, 1, 1)
+datetime.date(3577, 12, 31)
+1306472
+datetime.date(3585, 1, 1)
+datetime.date(3584, 12, 31)
+1309029
+datetime.date(3592, 1, 1)
+datetime.date(3591, 12, 31)
+1311585
+datetime.date(3599, 1, 1)
+datetime.date(3598, 12, 31)
+1314142
+datetime.date(3606, 1, 1)
+datetime.date(3605, 12, 31)
+1316699
+datetime.date(3613, 1, 1)
+datetime.date(3612, 12, 31)
+1319256
+datetime.date(3620, 1, 1)
+datetime.date(3619, 12, 31)
+1321812
+datetime.date(3627, 1, 1)
+datetime.date(3626, 12, 31)
+1324369
+datetime.date(3634, 1, 1)
+datetime.date(3633, 12, 31)
+1326926
+datetime.date(3641, 1, 1)
+datetime.date(3640, 12, 31)
+1329483
+datetime.date(3648, 1, 1)
+datetime.date(3647, 12, 31)
+1332039
+datetime.date(3655, 1, 1)
+datetime.date(3654, 12, 31)
+1334596
+datetime.date(3662, 1, 1)
+datetime.date(3661, 12, 31)
+1337153
+datetime.date(3669, 1, 1)
+datetime.date(3668, 12, 31)
+1339710
+datetime.date(3676, 1, 1)
+datetime.date(3675, 12, 31)
+1342266
+datetime.date(3683, 1, 1)
+datetime.date(3682, 12, 31)
+1344823
+datetime.date(3690, 1, 1)
+datetime.date(3689, 12, 31)
+1347380
+datetime.date(3697, 1, 1)
+datetime.date(3696, 12, 31)
+1349937
+datetime.date(3704, 1, 1)
+datetime.date(3703, 12, 31)
+1352492
+datetime.date(3711, 1, 1)
+datetime.date(3710, 12, 31)
+1355049
+datetime.date(3718, 1, 1)
+datetime.date(3717, 12, 31)
+1357606
+datetime.date(3725, 1, 1)
+datetime.date(3724, 12, 31)
+1360163
+datetime.date(3732, 1, 1)
+datetime.date(3731, 12, 31)
+1362719
+datetime.date(3739, 1, 1)
+datetime.date(3738, 12, 31)
+1365276
+datetime.date(3746, 1, 1)
+datetime.date(3745, 12, 31)
+1367833
+datetime.date(3753, 1, 1)
+datetime.date(3752, 12, 31)
+1370390
+datetime.date(3760, 1, 1)
+datetime.date(3759, 12, 31)
+1372946
+datetime.date(3767, 1, 1)
+datetime.date(3766, 12, 31)
+1375503
+datetime.date(3774, 1, 1)
+datetime.date(3773, 12, 31)
+1378060
+datetime.date(3781, 1, 1)
+datetime.date(3780, 12, 31)
+1380617
+datetime.date(3788, 1, 1)
+datetime.date(3787, 12, 31)
+1383173
+datetime.date(3795, 1, 1)
+datetime.date(3794, 12, 31)
+1385730
+datetime.date(3802, 1, 1)
+datetime.date(3801, 12, 31)
+1388286
+datetime.date(3809, 1, 1)
+datetime.date(3808, 12, 31)
+1390843
+datetime.date(3816, 1, 1)
+datetime.date(3815, 12, 31)
+1393399
+datetime.date(3823, 1, 1)
+datetime.date(3822, 12, 31)
+1395956
+datetime.date(3830, 1, 1)
+datetime.date(3829, 12, 31)
+1398513
+datetime.date(3837, 1, 1)
+datetime.date(3836, 12, 31)
+1401070
+datetime.date(3844, 1, 1)
+datetime.date(3843, 12, 31)
+1403626
+datetime.date(3851, 1, 1)
+datetime.date(3850, 12, 31)
+1406183
+datetime.date(3858, 1, 1)
+datetime.date(3857, 12, 31)
+1408740
+datetime.date(3865, 1, 1)
+datetime.date(3864, 12, 31)
+1411297
+datetime.date(3872, 1, 1)
+datetime.date(3871, 12, 31)
+1413853
+datetime.date(3879, 1, 1)
+datetime.date(3878, 12, 31)
+1416410
+datetime.date(3886, 1, 1)
+datetime.date(3885, 12, 31)
+1418967
+datetime.date(3893, 1, 1)
+datetime.date(3892, 12, 31)
+1421524
+datetime.date(3900, 1, 1)
+datetime.date(3899, 12, 31)
+1424080
+datetime.date(3907, 1, 1)
+datetime.date(3906, 12, 31)
+1426636
+datetime.date(3914, 1, 1)
+datetime.date(3913, 12, 31)
+1429193
+datetime.date(3921, 1, 1)
+datetime.date(3920, 12, 31)
+1431750
+datetime.date(3928, 1, 1)
+datetime.date(3927, 12, 31)
+1434306
+datetime.date(3935, 1, 1)
+datetime.date(3934, 12, 31)
+1436863
+datetime.date(3942, 1, 1)
+datetime.date(3941, 12, 31)
+1439420
+datetime.date(3949, 1, 1)
+datetime.date(3948, 12, 31)
+1441977
+datetime.date(3956, 1, 1)
+datetime.date(3955, 12, 31)
+1444533
+datetime.date(3963, 1, 1)
+datetime.date(3962, 12, 31)
+1447090
+datetime.date(3970, 1, 1)
+datetime.date(3969, 12, 31)
+1449647
+datetime.date(3977, 1, 1)
+datetime.date(3976, 12, 31)
+1452204
+datetime.date(3984, 1, 1)
+datetime.date(3983, 12, 31)
+1454760
+datetime.date(3991, 1, 1)
+datetime.date(3990, 12, 31)
+1457317
+datetime.date(3998, 1, 1)
+datetime.date(3997, 12, 31)
+1459874
+datetime.date(4005, 1, 1)
+datetime.date(4004, 12, 31)
+1462431
+datetime.date(4012, 1, 1)
+datetime.date(4011, 12, 31)
+1464987
+datetime.date(4019, 1, 1)
+datetime.date(4018, 12, 31)
+1467544
+datetime.date(4026, 1, 1)
+datetime.date(4025, 12, 31)
+1470101
+datetime.date(4033, 1, 1)
+datetime.date(4032, 12, 31)
+1472658
+datetime.date(4040, 1, 1)
+datetime.date(4039, 12, 31)
+1475214
+datetime.date(4047, 1, 1)
+datetime.date(4046, 12, 31)
+1477771
+datetime.date(4054, 1, 1)
+datetime.date(4053, 12, 31)
+1480328
+datetime.date(4061, 1, 1)
+datetime.date(4060, 12, 31)
+1482885
+datetime.date(4068, 1, 1)
+datetime.date(4067, 12, 31)
+1485441
+datetime.date(4075, 1, 1)
+datetime.date(4074, 12, 31)
+1487998
+datetime.date(4082, 1, 1)
+datetime.date(4081, 12, 31)
+1490555
+datetime.date(4089, 1, 1)
+datetime.date(4088, 12, 31)
+1493112
+datetime.date(4096, 1, 1)
+datetime.date(4095, 12, 31)
+1495668
+datetime.date(4103, 1, 1)
+datetime.date(4102, 12, 31)
+1498224
+datetime.date(4110, 1, 1)
+datetime.date(4109, 12, 31)
+1500781
+datetime.date(4117, 1, 1)
+datetime.date(4116, 12, 31)
+1503338
+datetime.date(4124, 1, 1)
+datetime.date(4123, 12, 31)
+1505894
+datetime.date(4131, 1, 1)
+datetime.date(4130, 12, 31)
+1508451
+datetime.date(4138, 1, 1)
+datetime.date(4137, 12, 31)
+1511008
+datetime.date(4145, 1, 1)
+datetime.date(4144, 12, 31)
+1513565
+datetime.date(4152, 1, 1)
+datetime.date(4151, 12, 31)
+1516121
+datetime.date(4159, 1, 1)
+datetime.date(4158, 12, 31)
+1518678
+datetime.date(4166, 1, 1)
+datetime.date(4165, 12, 31)
+1521235
+datetime.date(4173, 1, 1)
+datetime.date(4172, 12, 31)
+1523792
+datetime.date(4180, 1, 1)
+datetime.date(4179, 12, 31)
+1526348
+datetime.date(4187, 1, 1)
+datetime.date(4186, 12, 31)
+1528905
+datetime.date(4194, 1, 1)
+datetime.date(4193, 12, 31)
+1531462
+datetime.date(4201, 1, 1)
+datetime.date(4200, 12, 31)
+1534018
+datetime.date(4208, 1, 1)
+datetime.date(4207, 12, 31)
+1536574
+datetime.date(4215, 1, 1)
+datetime.date(4214, 12, 31)
+1539131
+datetime.date(4222, 1, 1)
+datetime.date(4221, 12, 31)
+1541688
+datetime.date(4229, 1, 1)
+datetime.date(4228, 12, 31)
+1544245
+datetime.date(4236, 1, 1)
+datetime.date(4235, 12, 31)
+1546801
+datetime.date(4243, 1, 1)
+datetime.date(4242, 12, 31)
+1549358
+datetime.date(4250, 1, 1)
+datetime.date(4249, 12, 31)
+1551915
+datetime.date(4257, 1, 1)
+datetime.date(4256, 12, 31)
+1554472
+datetime.date(4264, 1, 1)
+datetime.date(4263, 12, 31)
+1557028
+datetime.date(4271, 1, 1)
+datetime.date(4270, 12, 31)
+1559585
+datetime.date(4278, 1, 1)
+datetime.date(4277, 12, 31)
+1562142
+datetime.date(4285, 1, 1)
+datetime.date(4284, 12, 31)
+1564699
+datetime.date(4292, 1, 1)
+datetime.date(4291, 12, 31)
+1567255
+datetime.date(4299, 1, 1)
+datetime.date(4298, 12, 31)
+1569812
+datetime.date(4306, 1, 1)
+datetime.date(4305, 12, 31)
+1572368
+datetime.date(4313, 1, 1)
+datetime.date(4312, 12, 31)
+1574925
+datetime.date(4320, 1, 1)
+datetime.date(4319, 12, 31)
+1577481
+datetime.date(4327, 1, 1)
+datetime.date(4326, 12, 31)
+1580038
+datetime.date(4334, 1, 1)
+datetime.date(4333, 12, 31)
+1582595
+datetime.date(4341, 1, 1)
+datetime.date(4340, 12, 31)
+1585152
+datetime.date(4348, 1, 1)
+datetime.date(4347, 12, 31)
+1587708
+datetime.date(4355, 1, 1)
+datetime.date(4354, 12, 31)
+1590265
+datetime.date(4362, 1, 1)
+datetime.date(4361, 12, 31)
+1592822
+datetime.date(4369, 1, 1)
+datetime.date(4368, 12, 31)
+1595379
+datetime.date(4376, 1, 1)
+datetime.date(4375, 12, 31)
+1597935
+datetime.date(4383, 1, 1)
+datetime.date(4382, 12, 31)
+1600492
+datetime.date(4390, 1, 1)
+datetime.date(4389, 12, 31)
+1603049
+datetime.date(4397, 1, 1)
+datetime.date(4396, 12, 31)
+1605606
+datetime.date(4404, 1, 1)
+datetime.date(4403, 12, 31)
+1608162
+datetime.date(4411, 1, 1)
+datetime.date(4410, 12, 31)
+1610719
+datetime.date(4418, 1, 1)
+datetime.date(4417, 12, 31)
+1613276
+datetime.date(4425, 1, 1)
+datetime.date(4424, 12, 31)
+1615833
+datetime.date(4432, 1, 1)
+datetime.date(4431, 12, 31)
+1618389
+datetime.date(4439, 1, 1)
+datetime.date(4438, 12, 31)
+1620946
+datetime.date(4446, 1, 1)
+datetime.date(4445, 12, 31)
+1623503
+datetime.date(4453, 1, 1)
+datetime.date(4452, 12, 31)
+1626060
+datetime.date(4460, 1, 1)
+datetime.date(4459, 12, 31)
+1628616
+datetime.date(4467, 1, 1)
+datetime.date(4466, 12, 31)
+1631173
+datetime.date(4474, 1, 1)
+datetime.date(4473, 12, 31)
+1633730
+datetime.date(4481, 1, 1)
+datetime.date(4480, 12, 31)
+1636287
+datetime.date(4488, 1, 1)
+datetime.date(4487, 12, 31)
+1638843
+datetime.date(4495, 1, 1)
+datetime.date(4494, 12, 31)
+1641400
+datetime.date(4502, 1, 1)
+datetime.date(4501, 12, 31)
+1643956
+datetime.date(4509, 1, 1)
+datetime.date(4508, 12, 31)
+1646513
+datetime.date(4516, 1, 1)
+datetime.date(4515, 12, 31)
+1649069
+datetime.date(4523, 1, 1)
+datetime.date(4522, 12, 31)
+1651626
+datetime.date(4530, 1, 1)
+datetime.date(4529, 12, 31)
+1654183
+datetime.date(4537, 1, 1)
+datetime.date(4536, 12, 31)
+1656740
+datetime.date(4544, 1, 1)
+datetime.date(4543, 12, 31)
+1659296
+datetime.date(4551, 1, 1)
+datetime.date(4550, 12, 31)
+1661853
+datetime.date(4558, 1, 1)
+datetime.date(4557, 12, 31)
+1664410
+datetime.date(4565, 1, 1)
+datetime.date(4564, 12, 31)
+1666967
+datetime.date(4572, 1, 1)
+datetime.date(4571, 12, 31)
+1669523
+datetime.date(4579, 1, 1)
+datetime.date(4578, 12, 31)
+1672080
+datetime.date(4586, 1, 1)
+datetime.date(4585, 12, 31)
+1674637
+datetime.date(4593, 1, 1)
+datetime.date(4592, 12, 31)
+1677194
+datetime.date(4600, 1, 1)
+datetime.date(4599, 12, 31)
+1679750
+datetime.date(4607, 1, 1)
+datetime.date(4606, 12, 31)
+1682306
+datetime.date(4614, 1, 1)
+datetime.date(4613, 12, 31)
+1684863
+datetime.date(4621, 1, 1)
+datetime.date(4620, 12, 31)
+1687420
+datetime.date(4628, 1, 1)
+datetime.date(4627, 12, 31)
+1689976
+datetime.date(4635, 1, 1)
+datetime.date(4634, 12, 31)
+1692533
+datetime.date(4642, 1, 1)
+datetime.date(4641, 12, 31)
+1695090
+datetime.date(4649, 1, 1)
+datetime.date(4648, 12, 31)
+1697647
+datetime.date(4656, 1, 1)
+datetime.date(4655, 12, 31)
+1700203
+datetime.date(4663, 1, 1)
+datetime.date(4662, 12, 31)
+1702760
+datetime.date(4670, 1, 1)
+datetime.date(4669, 12, 31)
+1705317
+datetime.date(4677, 1, 1)
+datetime.date(4676, 12, 31)
+1707874
+datetime.date(4684, 1, 1)
+datetime.date(4683, 12, 31)
+1710430
+datetime.date(4691, 1, 1)
+datetime.date(4690, 12, 31)
+1712987
+datetime.date(4698, 1, 1)
+datetime.date(4697, 12, 31)
+1715544
+datetime.date(4705, 1, 1)
+datetime.date(4704, 12, 31)
+1718100
+datetime.date(4712, 1, 1)
+datetime.date(4711, 12, 31)
+1720656
+datetime.date(4719, 1, 1)
+datetime.date(4718, 12, 31)
+1723213
+datetime.date(4726, 1, 1)
+datetime.date(4725, 12, 31)
+1725770
+datetime.date(4733, 1, 1)
+datetime.date(4732, 12, 31)
+1728327
+datetime.date(4740, 1, 1)
+datetime.date(4739, 12, 31)
+1730883
+datetime.date(4747, 1, 1)
+datetime.date(4746, 12, 31)
+1733440
+datetime.date(4754, 1, 1)
+datetime.date(4753, 12, 31)
+1735997
+datetime.date(4761, 1, 1)
+datetime.date(4760, 12, 31)
+1738554
+datetime.date(4768, 1, 1)
+datetime.date(4767, 12, 31)
+1741110
+datetime.date(4775, 1, 1)
+datetime.date(4774, 12, 31)
+1743667
+datetime.date(4782, 1, 1)
+datetime.date(4781, 12, 31)
+1746224
+datetime.date(4789, 1, 1)
+datetime.date(4788, 12, 31)
+1748781
+datetime.date(4796, 1, 1)
+datetime.date(4795, 12, 31)
+1751337
+datetime.date(4803, 1, 1)
+datetime.date(4802, 12, 31)
+1753894
+datetime.date(4810, 1, 1)
+datetime.date(4809, 12, 31)
+1756451
+datetime.date(4817, 1, 1)
+datetime.date(4816, 12, 31)
+1759008
+datetime.date(4824, 1, 1)
+datetime.date(4823, 12, 31)
+1761564
+datetime.date(4831, 1, 1)
+datetime.date(4830, 12, 31)
+1764121
+datetime.date(4838, 1, 1)
+datetime.date(4837, 12, 31)
+1766678
+datetime.date(4845, 1, 1)
+datetime.date(4844, 12, 31)
+1769235
+datetime.date(4852, 1, 1)
+datetime.date(4851, 12, 31)
+1771791
+datetime.date(4859, 1, 1)
+datetime.date(4858, 12, 31)
+1774348
+datetime.date(4866, 1, 1)
+datetime.date(4865, 12, 31)
+1776905
+datetime.date(4873, 1, 1)
+datetime.date(4872, 12, 31)
+1779462
+datetime.date(4880, 1, 1)
+datetime.date(4879, 12, 31)
+1782018
+datetime.date(4887, 1, 1)
+datetime.date(4886, 12, 31)
+1784575
+datetime.date(4894, 1, 1)
+datetime.date(4893, 12, 31)
+1787132
+datetime.date(4901, 1, 1)
+datetime.date(4900, 12, 31)
+1789688
+datetime.date(4908, 1, 1)
+datetime.date(4907, 12, 31)
+1792244
+datetime.date(4915, 1, 1)
+datetime.date(4914, 12, 31)
+1794801
+datetime.date(4922, 1, 1)
+datetime.date(4921, 12, 31)
+1797358
+datetime.date(4929, 1, 1)
+datetime.date(4928, 12, 31)
+1799915
+datetime.date(4936, 1, 1)
+datetime.date(4935, 12, 31)
+1802471
+datetime.date(4943, 1, 1)
+datetime.date(4942, 12, 31)
+1805028
+datetime.date(4950, 1, 1)
+datetime.date(4949, 12, 31)
+1807585
+datetime.date(4957, 1, 1)
+datetime.date(4956, 12, 31)
+1810142
+datetime.date(4964, 1, 1)
+datetime.date(4963, 12, 31)
+1812698
+datetime.date(4971, 1, 1)
+datetime.date(4970, 12, 31)
+1815255
+datetime.date(4978, 1, 1)
+datetime.date(4977, 12, 31)
+1817812
+datetime.date(4985, 1, 1)
+datetime.date(4984, 12, 31)
+1820369
+datetime.date(4992, 1, 1)
+datetime.date(4991, 12, 31)
+1822925
+datetime.date(4999, 1, 1)
+datetime.date(4998, 12, 31)
+1825482
+datetime.date(5006, 1, 1)
+datetime.date(5005, 12, 31)
+1828038
+datetime.date(5013, 1, 1)
+datetime.date(5012, 12, 31)
+1830595
+datetime.date(5020, 1, 1)
+datetime.date(5019, 12, 31)
+1833151
+datetime.date(5027, 1, 1)
+datetime.date(5026, 12, 31)
+1835708
+datetime.date(5034, 1, 1)
+datetime.date(5033, 12, 31)
+1838265
+datetime.date(5041, 1, 1)
+datetime.date(5040, 12, 31)
+1840822
+datetime.date(5048, 1, 1)
+datetime.date(5047, 12, 31)
+1843378
+datetime.date(5055, 1, 1)
+datetime.date(5054, 12, 31)
+1845935
+datetime.date(5062, 1, 1)
+datetime.date(5061, 12, 31)
+1848492
+datetime.date(5069, 1, 1)
+datetime.date(5068, 12, 31)
+1851049
+datetime.date(5076, 1, 1)
+datetime.date(5075, 12, 31)
+1853605
+datetime.date(5083, 1, 1)
+datetime.date(5082, 12, 31)
+1856162
+datetime.date(5090, 1, 1)
+datetime.date(5089, 12, 31)
+1858719
+datetime.date(5097, 1, 1)
+datetime.date(5096, 12, 31)
+1861276
+datetime.date(5104, 1, 1)
+datetime.date(5103, 12, 31)
+1863831
+datetime.date(5111, 1, 1)
+datetime.date(5110, 12, 31)
+1866388
+datetime.date(5118, 1, 1)
+datetime.date(5117, 12, 31)
+1868945
+datetime.date(5125, 1, 1)
+datetime.date(5124, 12, 31)
+1871502
+datetime.date(5132, 1, 1)
+datetime.date(5131, 12, 31)
+1874058
+datetime.date(5139, 1, 1)
+datetime.date(5138, 12, 31)
+1876615
+datetime.date(5146, 1, 1)
+datetime.date(5145, 12, 31)
+1879172
+datetime.date(5153, 1, 1)
+datetime.date(5152, 12, 31)
+1881729
+datetime.date(5160, 1, 1)
+datetime.date(5159, 12, 31)
+1884285
+datetime.date(5167, 1, 1)
+datetime.date(5166, 12, 31)
+1886842
+datetime.date(5174, 1, 1)
+datetime.date(5173, 12, 31)
+1889399
+datetime.date(5181, 1, 1)
+datetime.date(5180, 12, 31)
+1891956
+datetime.date(5188, 1, 1)
+datetime.date(5187, 12, 31)
+1894512
+datetime.date(5195, 1, 1)
+datetime.date(5194, 12, 31)
+1897069
+datetime.date(5202, 1, 1)
+datetime.date(5201, 12, 31)
+1899626
+datetime.date(5209, 1, 1)
+datetime.date(5208, 12, 31)
+1902183
+datetime.date(5216, 1, 1)
+datetime.date(5215, 12, 31)
+1904739
+datetime.date(5223, 1, 1)
+datetime.date(5222, 12, 31)
+1907296
+datetime.date(5230, 1, 1)
+datetime.date(5229, 12, 31)
+1909853
+datetime.date(5237, 1, 1)
+datetime.date(5236, 12, 31)
+1912410
+datetime.date(5244, 1, 1)
+datetime.date(5243, 12, 31)
+1914966
+datetime.date(5251, 1, 1)
+datetime.date(5250, 12, 31)
+1917523
+datetime.date(5258, 1, 1)
+datetime.date(5257, 12, 31)
+1920080
+datetime.date(5265, 1, 1)
+datetime.date(5264, 12, 31)
+1922637
+datetime.date(5272, 1, 1)
+datetime.date(5271, 12, 31)
+1925193
+datetime.date(5279, 1, 1)
+datetime.date(5278, 12, 31)
+1927750
+datetime.date(5286, 1, 1)
+datetime.date(5285, 12, 31)
+1930307
+datetime.date(5293, 1, 1)
+datetime.date(5292, 12, 31)
+1932864
+datetime.date(5300, 1, 1)
+datetime.date(5299, 12, 31)
+1935420
+datetime.date(5307, 1, 1)
+datetime.date(5306, 12, 31)
+1937976
+datetime.date(5314, 1, 1)
+datetime.date(5313, 12, 31)
+1940533
+datetime.date(5321, 1, 1)
+datetime.date(5320, 12, 31)
+1943090
+datetime.date(5328, 1, 1)
+datetime.date(5327, 12, 31)
+1945646
+datetime.date(5335, 1, 1)
+datetime.date(5334, 12, 31)
+1948203
+datetime.date(5342, 1, 1)
+datetime.date(5341, 12, 31)
+1950760
+datetime.date(5349, 1, 1)
+datetime.date(5348, 12, 31)
+1953317
+datetime.date(5356, 1, 1)
+datetime.date(5355, 12, 31)
+1955873
+datetime.date(5363, 1, 1)
+datetime.date(5362, 12, 31)
+1958430
+datetime.date(5370, 1, 1)
+datetime.date(5369, 12, 31)
+1960987
+datetime.date(5377, 1, 1)
+datetime.date(5376, 12, 31)
+1963544
+datetime.date(5384, 1, 1)
+datetime.date(5383, 12, 31)
+1966100
+datetime.date(5391, 1, 1)
+datetime.date(5390, 12, 31)
+1968657
+datetime.date(5398, 1, 1)
+datetime.date(5397, 12, 31)
+1971214
+datetime.date(5405, 1, 1)
+datetime.date(5404, 12, 31)
+1973770
+datetime.date(5412, 1, 1)
+datetime.date(5411, 12, 31)
+1976326
+datetime.date(5419, 1, 1)
+datetime.date(5418, 12, 31)
+1978883
+datetime.date(5426, 1, 1)
+datetime.date(5425, 12, 31)
+1981440
+datetime.date(5433, 1, 1)
+datetime.date(5432, 12, 31)
+1983997
+datetime.date(5440, 1, 1)
+datetime.date(5439, 12, 31)
+1986553
+datetime.date(5447, 1, 1)
+datetime.date(5446, 12, 31)
+1989110
+datetime.date(5454, 1, 1)
+datetime.date(5453, 12, 31)
+1991667
+datetime.date(5461, 1, 1)
+datetime.date(5460, 12, 31)
+1994224
+datetime.date(5468, 1, 1)
+datetime.date(5467, 12, 31)
+1996780
+datetime.date(5475, 1, 1)
+datetime.date(5474, 12, 31)
+1999337
+datetime.date(5482, 1, 1)
+datetime.date(5481, 12, 31)
+2001894
+datetime.date(5489, 1, 1)
+datetime.date(5488, 12, 31)
+2004451
+datetime.date(5496, 1, 1)
+datetime.date(5495, 12, 31)
+2007007
+datetime.date(5503, 1, 1)
+datetime.date(5502, 12, 31)
+2009563
+datetime.date(5510, 1, 1)
+datetime.date(5509, 12, 31)
+2012120
+datetime.date(5517, 1, 1)
+datetime.date(5516, 12, 31)
+2014677
+datetime.date(5524, 1, 1)
+datetime.date(5523, 12, 31)
+2017233
+datetime.date(5531, 1, 1)
+datetime.date(5530, 12, 31)
+2019790
+datetime.date(5538, 1, 1)
+datetime.date(5537, 12, 31)
+2022347
+datetime.date(5545, 1, 1)
+datetime.date(5544, 12, 31)
+2024904
+datetime.date(5552, 1, 1)
+datetime.date(5551, 12, 31)
+2027460
+datetime.date(5559, 1, 1)
+datetime.date(5558, 12, 31)
+2030017
+datetime.date(5566, 1, 1)
+datetime.date(5565, 12, 31)
+2032574
+datetime.date(5573, 1, 1)
+datetime.date(5572, 12, 31)
+2035131
+datetime.date(5580, 1, 1)
+datetime.date(5579, 12, 31)
+2037687
+datetime.date(5587, 1, 1)
+datetime.date(5586, 12, 31)
+2040244
+datetime.date(5594, 1, 1)
+datetime.date(5593, 12, 31)
+2042801
+datetime.date(5601, 1, 1)
+datetime.date(5600, 12, 31)
+2045358
+datetime.date(5608, 1, 1)
+datetime.date(5607, 12, 31)
+2047914
+datetime.date(5615, 1, 1)
+datetime.date(5614, 12, 31)
+2050471
+datetime.date(5622, 1, 1)
+datetime.date(5621, 12, 31)
+2053028
+datetime.date(5629, 1, 1)
+datetime.date(5628, 12, 31)
+2055585
+datetime.date(5636, 1, 1)
+datetime.date(5635, 12, 31)
+2058141
+datetime.date(5643, 1, 1)
+datetime.date(5642, 12, 31)
+2060698
+datetime.date(5650, 1, 1)
+datetime.date(5649, 12, 31)
+2063255
+datetime.date(5657, 1, 1)
+datetime.date(5656, 12, 31)
+2065812
+datetime.date(5664, 1, 1)
+datetime.date(5663, 12, 31)
+2068368
+datetime.date(5671, 1, 1)
+datetime.date(5670, 12, 31)
+2070925
+datetime.date(5678, 1, 1)
+datetime.date(5677, 12, 31)
+2073482
+datetime.date(5685, 1, 1)
+datetime.date(5684, 12, 31)
+2076039
+datetime.date(5692, 1, 1)
+datetime.date(5691, 12, 31)
+2078595
+datetime.date(5699, 1, 1)
+datetime.date(5698, 12, 31)
+2081152
+datetime.date(5706, 1, 1)
+datetime.date(5705, 12, 31)
+2083708
+datetime.date(5713, 1, 1)
+datetime.date(5712, 12, 31)
+2086265
+datetime.date(5720, 1, 1)
+datetime.date(5719, 12, 31)
+2088821
+datetime.date(5727, 1, 1)
+datetime.date(5726, 12, 31)
+2091378
+datetime.date(5734, 1, 1)
+datetime.date(5733, 12, 31)
+2093935
+datetime.date(5741, 1, 1)
+datetime.date(5740, 12, 31)
+2096492
+datetime.date(5748, 1, 1)
+datetime.date(5747, 12, 31)
+2099048
+datetime.date(5755, 1, 1)
+datetime.date(5754, 12, 31)
+2101605
+datetime.date(5762, 1, 1)
+datetime.date(5761, 12, 31)
+2104162
+datetime.date(5769, 1, 1)
+datetime.date(5768, 12, 31)
+2106719
+datetime.date(5776, 1, 1)
+datetime.date(5775, 12, 31)
+2109275
+datetime.date(5783, 1, 1)
+datetime.date(5782, 12, 31)
+2111832
+datetime.date(5790, 1, 1)
+datetime.date(5789, 12, 31)
+2114389
+datetime.date(5797, 1, 1)
+datetime.date(5796, 12, 31)
+2116946
+datetime.date(5804, 1, 1)
+datetime.date(5803, 12, 31)
+2119501
+datetime.date(5811, 1, 1)
+datetime.date(5810, 12, 31)
+2122058
+datetime.date(5818, 1, 1)
+datetime.date(5817, 12, 31)
+2124615
+datetime.date(5825, 1, 1)
+datetime.date(5824, 12, 31)
+2127172
+datetime.date(5832, 1, 1)
+datetime.date(5831, 12, 31)
+2129728
+datetime.date(5839, 1, 1)
+datetime.date(5838, 12, 31)
+2132285
+datetime.date(5846, 1, 1)
+datetime.date(5845, 12, 31)
+2134842
+datetime.date(5853, 1, 1)
+datetime.date(5852, 12, 31)
+2137399
+datetime.date(5860, 1, 1)
+datetime.date(5859, 12, 31)
+2139955
+datetime.date(5867, 1, 1)
+datetime.date(5866, 12, 31)
+2142512
+datetime.date(5874, 1, 1)
+datetime.date(5873, 12, 31)
+2145069
+datetime.date(5881, 1, 1)
+datetime.date(5880, 12, 31)
+2147626
+datetime.date(5888, 1, 1)
+datetime.date(5887, 12, 31)
+2150182
+datetime.date(5895, 1, 1)
+datetime.date(5894, 12, 31)
+2152739
+datetime.date(5902, 1, 1)
+datetime.date(5901, 12, 31)
+2155295
+datetime.date(5909, 1, 1)
+datetime.date(5908, 12, 31)
+2157852
+datetime.date(5916, 1, 1)
+datetime.date(5915, 12, 31)
+2160408
+datetime.date(5923, 1, 1)
+datetime.date(5922, 12, 31)
+2162965
+datetime.date(5930, 1, 1)
+datetime.date(5929, 12, 31)
+2165522
+datetime.date(5937, 1, 1)
+datetime.date(5936, 12, 31)
+2168079
+datetime.date(5944, 1, 1)
+datetime.date(5943, 12, 31)
+2170635
+datetime.date(5951, 1, 1)
+datetime.date(5950, 12, 31)
+2173192
+datetime.date(5958, 1, 1)
+datetime.date(5957, 12, 31)
+2175749
+datetime.date(5965, 1, 1)
+datetime.date(5964, 12, 31)
+2178306
+datetime.date(5972, 1, 1)
+datetime.date(5971, 12, 31)
+2180862
+datetime.date(5979, 1, 1)
+datetime.date(5978, 12, 31)
+2183419
+datetime.date(5986, 1, 1)
+datetime.date(5985, 12, 31)
+2185976
+datetime.date(5993, 1, 1)
+datetime.date(5992, 12, 31)
+2188533
+datetime.date(6000, 1, 1)
+datetime.date(5999, 12, 31)
+2191089
+datetime.date(6007, 1, 1)
+datetime.date(6006, 12, 31)
+2193646
+datetime.date(6014, 1, 1)
+datetime.date(6013, 12, 31)
+2196203
+datetime.date(6021, 1, 1)
+datetime.date(6020, 12, 31)
+2198760
+datetime.date(6028, 1, 1)
+datetime.date(6027, 12, 31)
+2201316
+datetime.date(6035, 1, 1)
+datetime.date(6034, 12, 31)
+2203873
+datetime.date(6042, 1, 1)
+datetime.date(6041, 12, 31)
+2206430
+datetime.date(6049, 1, 1)
+datetime.date(6048, 12, 31)
+2208987
+datetime.date(6056, 1, 1)
+datetime.date(6055, 12, 31)
+2211543
+datetime.date(6063, 1, 1)
+datetime.date(6062, 12, 31)
+2214100
+datetime.date(6070, 1, 1)
+datetime.date(6069, 12, 31)
+2216657
+datetime.date(6077, 1, 1)
+datetime.date(6076, 12, 31)
+2219214
+datetime.date(6084, 1, 1)
+datetime.date(6083, 12, 31)
+2221770
+datetime.date(6091, 1, 1)
+datetime.date(6090, 12, 31)
+2224327
+datetime.date(6098, 1, 1)
+datetime.date(6097, 12, 31)
+2226884
+datetime.date(6105, 1, 1)
+datetime.date(6104, 12, 31)
+2229440
+datetime.date(6112, 1, 1)
+datetime.date(6111, 12, 31)
+2231996
+datetime.date(6119, 1, 1)
+datetime.date(6118, 12, 31)
+2234553
+datetime.date(6126, 1, 1)
+datetime.date(6125, 12, 31)
+2237110
+datetime.date(6133, 1, 1)
+datetime.date(6132, 12, 31)
+2239667
+datetime.date(6140, 1, 1)
+datetime.date(6139, 12, 31)
+2242223
+datetime.date(6147, 1, 1)
+datetime.date(6146, 12, 31)
+2244780
+datetime.date(6154, 1, 1)
+datetime.date(6153, 12, 31)
+2247337
+datetime.date(6161, 1, 1)
+datetime.date(6160, 12, 31)
+2249894
+datetime.date(6168, 1, 1)
+datetime.date(6167, 12, 31)
+2252450
+datetime.date(6175, 1, 1)
+datetime.date(6174, 12, 31)
+2255007
+datetime.date(6182, 1, 1)
+datetime.date(6181, 12, 31)
+2257564
+datetime.date(6189, 1, 1)
+datetime.date(6188, 12, 31)
+2260121
+datetime.date(6196, 1, 1)
+datetime.date(6195, 12, 31)
+2262677
+datetime.date(6203, 1, 1)
+datetime.date(6202, 12, 31)
+2265233
+datetime.date(6210, 1, 1)
+datetime.date(6209, 12, 31)
+2267790
+datetime.date(6217, 1, 1)
+datetime.date(6216, 12, 31)
+2270347
+datetime.date(6224, 1, 1)
+datetime.date(6223, 12, 31)
+2272903
+datetime.date(6231, 1, 1)
+datetime.date(6230, 12, 31)
+2275460
+datetime.date(6238, 1, 1)
+datetime.date(6237, 12, 31)
+2278017
+datetime.date(6245, 1, 1)
+datetime.date(6244, 12, 31)
+2280574
+datetime.date(6252, 1, 1)
+datetime.date(6251, 12, 31)
+2283130
+datetime.date(6259, 1, 1)
+datetime.date(6258, 12, 31)
+2285687
+datetime.date(6266, 1, 1)
+datetime.date(6265, 12, 31)
+2288244
+datetime.date(6273, 1, 1)
+datetime.date(6272, 12, 31)
+2290801
+datetime.date(6280, 1, 1)
+datetime.date(6279, 12, 31)
+2293357
+datetime.date(6287, 1, 1)
+datetime.date(6286, 12, 31)
+2295914
+datetime.date(6294, 1, 1)
+datetime.date(6293, 12, 31)
+2298471
+datetime.date(6301, 1, 1)
+datetime.date(6300, 12, 31)
+2301027
+datetime.date(6308, 1, 1)
+datetime.date(6307, 12, 31)
+2303583
+datetime.date(6315, 1, 1)
+datetime.date(6314, 12, 31)
+2306140
+datetime.date(6322, 1, 1)
+datetime.date(6321, 12, 31)
+2308697
+datetime.date(6329, 1, 1)
+datetime.date(6328, 12, 31)
+2311254
+datetime.date(6336, 1, 1)
+datetime.date(6335, 12, 31)
+2313810
+datetime.date(6343, 1, 1)
+datetime.date(6342, 12, 31)
+2316367
+datetime.date(6350, 1, 1)
+datetime.date(6349, 12, 31)
+2318924
+datetime.date(6357, 1, 1)
+datetime.date(6356, 12, 31)
+2321481
+datetime.date(6364, 1, 1)
+datetime.date(6363, 12, 31)
+2324037
+datetime.date(6371, 1, 1)
+datetime.date(6370, 12, 31)
+2326594
+datetime.date(6378, 1, 1)
+datetime.date(6377, 12, 31)
+2329151
+datetime.date(6385, 1, 1)
+datetime.date(6384, 12, 31)
+2331708
+datetime.date(6392, 1, 1)
+datetime.date(6391, 12, 31)
+2334264
+datetime.date(6399, 1, 1)
+datetime.date(6398, 12, 31)
+2336821
+datetime.date(6406, 1, 1)
+datetime.date(6405, 12, 31)
+2339378
+datetime.date(6413, 1, 1)
+datetime.date(6412, 12, 31)
+2341935
+datetime.date(6420, 1, 1)
+datetime.date(6419, 12, 31)
+2344491
+datetime.date(6427, 1, 1)
+datetime.date(6426, 12, 31)
+2347048
+datetime.date(6434, 1, 1)
+datetime.date(6433, 12, 31)
+2349605
+datetime.date(6441, 1, 1)
+datetime.date(6440, 12, 31)
+2352162
+datetime.date(6448, 1, 1)
+datetime.date(6447, 12, 31)
+2354718
+datetime.date(6455, 1, 1)
+datetime.date(6454, 12, 31)
+2357275
+datetime.date(6462, 1, 1)
+datetime.date(6461, 12, 31)
+2359832
+datetime.date(6469, 1, 1)
+datetime.date(6468, 12, 31)
+2362389
+datetime.date(6476, 1, 1)
+datetime.date(6475, 12, 31)
+2364945
+datetime.date(6483, 1, 1)
+datetime.date(6482, 12, 31)
+2367502
+datetime.date(6490, 1, 1)
+datetime.date(6489, 12, 31)
+2370059
+datetime.date(6497, 1, 1)
+datetime.date(6496, 12, 31)
+2372616
+datetime.date(6504, 1, 1)
+datetime.date(6503, 12, 31)
+2375171
+datetime.date(6511, 1, 1)
+datetime.date(6510, 12, 31)
+2377728
+datetime.date(6518, 1, 1)
+datetime.date(6517, 12, 31)
+2380285
+datetime.date(6525, 1, 1)
+datetime.date(6524, 12, 31)
+2382842
+datetime.date(6532, 1, 1)
+datetime.date(6531, 12, 31)
+2385398
+datetime.date(6539, 1, 1)
+datetime.date(6538, 12, 31)
+2387955
+datetime.date(6546, 1, 1)
+datetime.date(6545, 12, 31)
+2390512
+datetime.date(6553, 1, 1)
+datetime.date(6552, 12, 31)
+2393069
+datetime.date(6560, 1, 1)
+datetime.date(6559, 12, 31)
+2395625
+datetime.date(6567, 1, 1)
+datetime.date(6566, 12, 31)
+2398182
+datetime.date(6574, 1, 1)
+datetime.date(6573, 12, 31)
+2400739
+datetime.date(6581, 1, 1)
+datetime.date(6580, 12, 31)
+2403296
+datetime.date(6588, 1, 1)
+datetime.date(6587, 12, 31)
+2405852
+datetime.date(6595, 1, 1)
+datetime.date(6594, 12, 31)
+2408409
+datetime.date(6602, 1, 1)
+datetime.date(6601, 12, 31)
+2410965
+datetime.date(6609, 1, 1)
+datetime.date(6608, 12, 31)
+2413522
+datetime.date(6616, 1, 1)
+datetime.date(6615, 12, 31)
+2416078
+datetime.date(6623, 1, 1)
+datetime.date(6622, 12, 31)
+2418635
+datetime.date(6630, 1, 1)
+datetime.date(6629, 12, 31)
+2421192
+datetime.date(6637, 1, 1)
+datetime.date(6636, 12, 31)
+2423749
+datetime.date(6644, 1, 1)
+datetime.date(6643, 12, 31)
+2426305
+datetime.date(6651, 1, 1)
+datetime.date(6650, 12, 31)
+2428862
+datetime.date(6658, 1, 1)
+datetime.date(6657, 12, 31)
+2431419
+datetime.date(6665, 1, 1)
+datetime.date(6664, 12, 31)
+2433976
+datetime.date(6672, 1, 1)
+datetime.date(6671, 12, 31)
+2436532
+datetime.date(6679, 1, 1)
+datetime.date(6678, 12, 31)
+2439089
+datetime.date(6686, 1, 1)
+datetime.date(6685, 12, 31)
+2441646
+datetime.date(6693, 1, 1)
+datetime.date(6692, 12, 31)
+2444203
+datetime.date(6700, 1, 1)
+datetime.date(6699, 12, 31)
+2446759
+datetime.date(6707, 1, 1)
+datetime.date(6706, 12, 31)
+2449315
+datetime.date(6714, 1, 1)
+datetime.date(6713, 12, 31)
+2451872
+datetime.date(6721, 1, 1)
+datetime.date(6720, 12, 31)
+2454429
+datetime.date(6728, 1, 1)
+datetime.date(6727, 12, 31)
+2456985
+datetime.date(6735, 1, 1)
+datetime.date(6734, 12, 31)
+2459542
+datetime.date(6742, 1, 1)
+datetime.date(6741, 12, 31)
+2462099
+datetime.date(6749, 1, 1)
+datetime.date(6748, 12, 31)
+2464656
+datetime.date(6756, 1, 1)
+datetime.date(6755, 12, 31)
+2467212
+datetime.date(6763, 1, 1)
+datetime.date(6762, 12, 31)
+2469769
+datetime.date(6770, 1, 1)
+datetime.date(6769, 12, 31)
+2472326
+datetime.date(6777, 1, 1)
+datetime.date(6776, 12, 31)
+2474883
+datetime.date(6784, 1, 1)
+datetime.date(6783, 12, 31)
+2477439
+datetime.date(6791, 1, 1)
+datetime.date(6790, 12, 31)
+2479996
+datetime.date(6798, 1, 1)
+datetime.date(6797, 12, 31)
+2482553
+datetime.date(6805, 1, 1)
+datetime.date(6804, 12, 31)
+2485110
+datetime.date(6812, 1, 1)
+datetime.date(6811, 12, 31)
+2487666
+datetime.date(6819, 1, 1)
+datetime.date(6818, 12, 31)
+2490223
+datetime.date(6826, 1, 1)
+datetime.date(6825, 12, 31)
+2492780
+datetime.date(6833, 1, 1)
+datetime.date(6832, 12, 31)
+2495337
+datetime.date(6840, 1, 1)
+datetime.date(6839, 12, 31)
+2497893
+datetime.date(6847, 1, 1)
+datetime.date(6846, 12, 31)
+2500450
+datetime.date(6854, 1, 1)
+datetime.date(6853, 12, 31)
+2503007
+datetime.date(6861, 1, 1)
+datetime.date(6860, 12, 31)
+2505564
+datetime.date(6868, 1, 1)
+datetime.date(6867, 12, 31)
+2508120
+datetime.date(6875, 1, 1)
+datetime.date(6874, 12, 31)
+2510677
+datetime.date(6882, 1, 1)
+datetime.date(6881, 12, 31)
+2513234
+datetime.date(6889, 1, 1)
+datetime.date(6888, 12, 31)
+2515791
+datetime.date(6896, 1, 1)
+datetime.date(6895, 12, 31)
+2518347
+datetime.date(6903, 1, 1)
+datetime.date(6902, 12, 31)
+2520903
+datetime.date(6910, 1, 1)
+datetime.date(6909, 12, 31)
+2523460
+datetime.date(6917, 1, 1)
+datetime.date(6916, 12, 31)
+2526017
+datetime.date(6924, 1, 1)
+datetime.date(6923, 12, 31)
+2528573
+datetime.date(6931, 1, 1)
+datetime.date(6930, 12, 31)
+2531130
+datetime.date(6938, 1, 1)
+datetime.date(6937, 12, 31)
+2533687
+datetime.date(6945, 1, 1)
+datetime.date(6944, 12, 31)
+2536244
+datetime.date(6952, 1, 1)
+datetime.date(6951, 12, 31)
+2538800
+datetime.date(6959, 1, 1)
+datetime.date(6958, 12, 31)
+2541357
+datetime.date(6966, 1, 1)
+datetime.date(6965, 12, 31)
+2543914
+datetime.date(6973, 1, 1)
+datetime.date(6972, 12, 31)
+2546471
+datetime.date(6980, 1, 1)
+datetime.date(6979, 12, 31)
+2549027
+datetime.date(6987, 1, 1)
+datetime.date(6986, 12, 31)
+2551584
+datetime.date(6994, 1, 1)
+datetime.date(6993, 12, 31)
+2554141
+datetime.date(7001, 1, 1)
+datetime.date(7000, 12, 31)
+2556697
+datetime.date(7008, 1, 1)
+datetime.date(7007, 12, 31)
+2559253
+datetime.date(7015, 1, 1)
+datetime.date(7014, 12, 31)
+2561810
+datetime.date(7022, 1, 1)
+datetime.date(7021, 12, 31)
+2564367
+datetime.date(7029, 1, 1)
+datetime.date(7028, 12, 31)
+2566924
+datetime.date(7036, 1, 1)
+datetime.date(7035, 12, 31)
+2569480
+datetime.date(7043, 1, 1)
+datetime.date(7042, 12, 31)
+2572037
+datetime.date(7050, 1, 1)
+datetime.date(7049, 12, 31)
+2574594
+datetime.date(7057, 1, 1)
+datetime.date(7056, 12, 31)
+2577151
+datetime.date(7064, 1, 1)
+datetime.date(7063, 12, 31)
+2579707
+datetime.date(7071, 1, 1)
+datetime.date(7070, 12, 31)
+2582264
+datetime.date(7078, 1, 1)
+datetime.date(7077, 12, 31)
+2584821
+datetime.date(7085, 1, 1)
+datetime.date(7084, 12, 31)
+2587378
+datetime.date(7092, 1, 1)
+datetime.date(7091, 12, 31)
+2589934
+datetime.date(7099, 1, 1)
+datetime.date(7098, 12, 31)
+2592491
+datetime.date(7106, 1, 1)
+datetime.date(7105, 12, 31)
+2595047
+datetime.date(7113, 1, 1)
+datetime.date(7112, 12, 31)
+2597604
+datetime.date(7120, 1, 1)
+datetime.date(7119, 12, 31)
+2600160
+datetime.date(7127, 1, 1)
+datetime.date(7126, 12, 31)
+2602717
+datetime.date(7134, 1, 1)
+datetime.date(7133, 12, 31)
+2605274
+datetime.date(7141, 1, 1)
+datetime.date(7140, 12, 31)
+2607831
+datetime.date(7148, 1, 1)
+datetime.date(7147, 12, 31)
+2610387
+datetime.date(7155, 1, 1)
+datetime.date(7154, 12, 31)
+2612944
+datetime.date(7162, 1, 1)
+datetime.date(7161, 12, 31)
+2615501
+datetime.date(7169, 1, 1)
+datetime.date(7168, 12, 31)
+2618058
+datetime.date(7176, 1, 1)
+datetime.date(7175, 12, 31)
+2620614
+datetime.date(7183, 1, 1)
+datetime.date(7182, 12, 31)
+2623171
+datetime.date(7190, 1, 1)
+datetime.date(7189, 12, 31)
+2625728
+datetime.date(7197, 1, 1)
+datetime.date(7196, 12, 31)
+2628285
+datetime.date(7204, 1, 1)
+datetime.date(7203, 12, 31)
+2630841
+datetime.date(7211, 1, 1)
+datetime.date(7210, 12, 31)
+2633398
+datetime.date(7218, 1, 1)
+datetime.date(7217, 12, 31)
+2635955
+datetime.date(7225, 1, 1)
+datetime.date(7224, 12, 31)
+2638512
+datetime.date(7232, 1, 1)
+datetime.date(7231, 12, 31)
+2641068
+datetime.date(7239, 1, 1)
+datetime.date(7238, 12, 31)
+2643625
+datetime.date(7246, 1, 1)
+datetime.date(7245, 12, 31)
+2646182
+datetime.date(7253, 1, 1)
+datetime.date(7252, 12, 31)
+2648739
+datetime.date(7260, 1, 1)
+datetime.date(7259, 12, 31)
+2651295
+datetime.date(7267, 1, 1)
+datetime.date(7266, 12, 31)
+2653852
+datetime.date(7274, 1, 1)
+datetime.date(7273, 12, 31)
+2656409
+datetime.date(7281, 1, 1)
+datetime.date(7280, 12, 31)
+2658966
+datetime.date(7288, 1, 1)
+datetime.date(7287, 12, 31)
+2661522
+datetime.date(7295, 1, 1)
+datetime.date(7294, 12, 31)
+2664079
+datetime.date(7302, 1, 1)
+datetime.date(7301, 12, 31)
+2666635
+datetime.date(7309, 1, 1)
+datetime.date(7308, 12, 31)
+2669192
+datetime.date(7316, 1, 1)
+datetime.date(7315, 12, 31)
+2671748
+datetime.date(7323, 1, 1)
+datetime.date(7322, 12, 31)
+2674305
+datetime.date(7330, 1, 1)
+datetime.date(7329, 12, 31)
+2676862
+datetime.date(7337, 1, 1)
+datetime.date(7336, 12, 31)
+2679419
+datetime.date(7344, 1, 1)
+datetime.date(7343, 12, 31)
+2681975
+datetime.date(7351, 1, 1)
+datetime.date(7350, 12, 31)
+2684532
+datetime.date(7358, 1, 1)
+datetime.date(7357, 12, 31)
+2687089
+datetime.date(7365, 1, 1)
+datetime.date(7364, 12, 31)
+2689646
+datetime.date(7372, 1, 1)
+datetime.date(7371, 12, 31)
+2692202
+datetime.date(7379, 1, 1)
+datetime.date(7378, 12, 31)
+2694759
+datetime.date(7386, 1, 1)
+datetime.date(7385, 12, 31)
+2697316
+datetime.date(7393, 1, 1)
+datetime.date(7392, 12, 31)
+2699873
+datetime.date(7400, 1, 1)
+datetime.date(7399, 12, 31)
+2702429
+datetime.date(7407, 1, 1)
+datetime.date(7406, 12, 31)
+2704985
+datetime.date(7414, 1, 1)
+datetime.date(7413, 12, 31)
+2707542
+datetime.date(7421, 1, 1)
+datetime.date(7420, 12, 31)
+2710099
+datetime.date(7428, 1, 1)
+datetime.date(7427, 12, 31)
+2712655
+datetime.date(7435, 1, 1)
+datetime.date(7434, 12, 31)
+2715212
+datetime.date(7442, 1, 1)
+datetime.date(7441, 12, 31)
+2717769
+datetime.date(7449, 1, 1)
+datetime.date(7448, 12, 31)
+2720326
+datetime.date(7456, 1, 1)
+datetime.date(7455, 12, 31)
+2722882
+datetime.date(7463, 1, 1)
+datetime.date(7462, 12, 31)
+2725439
+datetime.date(7470, 1, 1)
+datetime.date(7469, 12, 31)
+2727996
+datetime.date(7477, 1, 1)
+datetime.date(7476, 12, 31)
+2730553
+datetime.date(7484, 1, 1)
+datetime.date(7483, 12, 31)
+2733109
+datetime.date(7491, 1, 1)
+datetime.date(7490, 12, 31)
+2735666
+datetime.date(7498, 1, 1)
+datetime.date(7497, 12, 31)
+2738223
+datetime.date(7505, 1, 1)
+datetime.date(7504, 12, 31)
+2740779
+datetime.date(7512, 1, 1)
+datetime.date(7511, 12, 31)
+2743335
+datetime.date(7519, 1, 1)
+datetime.date(7518, 12, 31)
+2745892
+datetime.date(7526, 1, 1)
+datetime.date(7525, 12, 31)
+2748449
+datetime.date(7533, 1, 1)
+datetime.date(7532, 12, 31)
+2751006
+datetime.date(7540, 1, 1)
+datetime.date(7539, 12, 31)
+2753562
+datetime.date(7547, 1, 1)
+datetime.date(7546, 12, 31)
+2756119
+datetime.date(7554, 1, 1)
+datetime.date(7553, 12, 31)
+2758676
+datetime.date(7561, 1, 1)
+datetime.date(7560, 12, 31)
+2761233
+datetime.date(7568, 1, 1)
+datetime.date(7567, 12, 31)
+2763789
+datetime.date(7575, 1, 1)
+datetime.date(7574, 12, 31)
+2766346
+datetime.date(7582, 1, 1)
+datetime.date(7581, 12, 31)
+2768903
+datetime.date(7589, 1, 1)
+datetime.date(7588, 12, 31)
+2771460
+datetime.date(7596, 1, 1)
+datetime.date(7595, 12, 31)
+2774016
+datetime.date(7603, 1, 1)
+datetime.date(7602, 12, 31)
+2776573
+datetime.date(7610, 1, 1)
+datetime.date(7609, 12, 31)
+2779130
+datetime.date(7617, 1, 1)
+datetime.date(7616, 12, 31)
+2781687
+datetime.date(7624, 1, 1)
+datetime.date(7623, 12, 31)
+2784243
+datetime.date(7631, 1, 1)
+datetime.date(7630, 12, 31)
+2786800
+datetime.date(7638, 1, 1)
+datetime.date(7637, 12, 31)
+2789357
+datetime.date(7645, 1, 1)
+datetime.date(7644, 12, 31)
+2791914
+datetime.date(7652, 1, 1)
+datetime.date(7651, 12, 31)
+2794470
+datetime.date(7659, 1, 1)
+datetime.date(7658, 12, 31)
+2797027
+datetime.date(7666, 1, 1)
+datetime.date(7665, 12, 31)
+2799584
+datetime.date(7673, 1, 1)
+datetime.date(7672, 12, 31)
+2802141
+datetime.date(7680, 1, 1)
+datetime.date(7679, 12, 31)
+2804697
+datetime.date(7687, 1, 1)
+datetime.date(7686, 12, 31)
+2807254
+datetime.date(7694, 1, 1)
+datetime.date(7693, 12, 31)
+2809811
+datetime.date(7701, 1, 1)
+datetime.date(7700, 12, 31)
+2812367
+datetime.date(7708, 1, 1)
+datetime.date(7707, 12, 31)
+2814923
+datetime.date(7715, 1, 1)
+datetime.date(7714, 12, 31)
+2817480
+datetime.date(7722, 1, 1)
+datetime.date(7721, 12, 31)
+2820037
+datetime.date(7729, 1, 1)
+datetime.date(7728, 12, 31)
+2822594
+datetime.date(7736, 1, 1)
+datetime.date(7735, 12, 31)
+2825150
+datetime.date(7743, 1, 1)
+datetime.date(7742, 12, 31)
+2827707
+datetime.date(7750, 1, 1)
+datetime.date(7749, 12, 31)
+2830264
+datetime.date(7757, 1, 1)
+datetime.date(7756, 12, 31)
+2832821
+datetime.date(7764, 1, 1)
+datetime.date(7763, 12, 31)
+2835377
+datetime.date(7771, 1, 1)
+datetime.date(7770, 12, 31)
+2837934
+datetime.date(7778, 1, 1)
+datetime.date(7777, 12, 31)
+2840491
+datetime.date(7785, 1, 1)
+datetime.date(7784, 12, 31)
+2843048
+datetime.date(7792, 1, 1)
+datetime.date(7791, 12, 31)
+2845604
+datetime.date(7799, 1, 1)
+datetime.date(7798, 12, 31)
+2848161
+datetime.date(7806, 1, 1)
+datetime.date(7805, 12, 31)
+2850717
+datetime.date(7813, 1, 1)
+datetime.date(7812, 12, 31)
+2853274
+datetime.date(7820, 1, 1)
+datetime.date(7819, 12, 31)
+2855830
+datetime.date(7827, 1, 1)
+datetime.date(7826, 12, 31)
+2858387
+datetime.date(7834, 1, 1)
+datetime.date(7833, 12, 31)
+2860944
+datetime.date(7841, 1, 1)
+datetime.date(7840, 12, 31)
+2863501
+datetime.date(7848, 1, 1)
+datetime.date(7847, 12, 31)
+2866057
+datetime.date(7855, 1, 1)
+datetime.date(7854, 12, 31)
+2868614
+datetime.date(7862, 1, 1)
+datetime.date(7861, 12, 31)
+2871171
+datetime.date(7869, 1, 1)
+datetime.date(7868, 12, 31)
+2873728
+datetime.date(7876, 1, 1)
+datetime.date(7875, 12, 31)
+2876284
+datetime.date(7883, 1, 1)
+datetime.date(7882, 12, 31)
+2878841
+datetime.date(7890, 1, 1)
+datetime.date(7889, 12, 31)
+2881398
+datetime.date(7897, 1, 1)
+datetime.date(7896, 12, 31)
+2883955
+datetime.date(7904, 1, 1)
+datetime.date(7903, 12, 31)
+2886510
+datetime.date(7911, 1, 1)
+datetime.date(7910, 12, 31)
+2889067
+datetime.date(7918, 1, 1)
+datetime.date(7917, 12, 31)
+2891624
+datetime.date(7925, 1, 1)
+datetime.date(7924, 12, 31)
+2894181
+datetime.date(7932, 1, 1)
+datetime.date(7931, 12, 31)
+2896737
+datetime.date(7939, 1, 1)
+datetime.date(7938, 12, 31)
+2899294
+datetime.date(7946, 1, 1)
+datetime.date(7945, 12, 31)
+2901851
+datetime.date(7953, 1, 1)
+datetime.date(7952, 12, 31)
+2904408
+datetime.date(7960, 1, 1)
+datetime.date(7959, 12, 31)
+2906964
+datetime.date(7967, 1, 1)
+datetime.date(7966, 12, 31)
+2909521
+datetime.date(7974, 1, 1)
+datetime.date(7973, 12, 31)
+2912078
+datetime.date(7981, 1, 1)
+datetime.date(7980, 12, 31)
+2914635
+datetime.date(7988, 1, 1)
+datetime.date(7987, 12, 31)
+2917191
+datetime.date(7995, 1, 1)
+datetime.date(7994, 12, 31)
+2919748
+datetime.date(8002, 1, 1)
+datetime.date(8001, 12, 31)
+2922305
+datetime.date(8009, 1, 1)
+datetime.date(8008, 12, 31)
+2924862
+datetime.date(8016, 1, 1)
+datetime.date(8015, 12, 31)
+2927418
+datetime.date(8023, 1, 1)
+datetime.date(8022, 12, 31)
+2929975
+datetime.date(8030, 1, 1)
+datetime.date(8029, 12, 31)
+2932532
+datetime.date(8037, 1, 1)
+datetime.date(8036, 12, 31)
+2935089
+datetime.date(8044, 1, 1)
+datetime.date(8043, 12, 31)
+2937645
+datetime.date(8051, 1, 1)
+datetime.date(8050, 12, 31)
+2940202
+datetime.date(8058, 1, 1)
+datetime.date(8057, 12, 31)
+2942759
+datetime.date(8065, 1, 1)
+datetime.date(8064, 12, 31)
+2945316
+datetime.date(8072, 1, 1)
+datetime.date(8071, 12, 31)
+2947872
+datetime.date(8079, 1, 1)
+datetime.date(8078, 12, 31)
+2950429
+datetime.date(8086, 1, 1)
+datetime.date(8085, 12, 31)
+2952986
+datetime.date(8093, 1, 1)
+datetime.date(8092, 12, 31)
+2955543
+datetime.date(8100, 1, 1)
+datetime.date(8099, 12, 31)
+2958099
+datetime.date(8107, 1, 1)
+datetime.date(8106, 12, 31)
+2960655
+datetime.date(8114, 1, 1)
+datetime.date(8113, 12, 31)
+2963212
+datetime.date(8121, 1, 1)
+datetime.date(8120, 12, 31)
+2965769
+datetime.date(8128, 1, 1)
+datetime.date(8127, 12, 31)
+2968325
+datetime.date(8135, 1, 1)
+datetime.date(8134, 12, 31)
+2970882
+datetime.date(8142, 1, 1)
+datetime.date(8141, 12, 31)
+2973439
+datetime.date(8149, 1, 1)
+datetime.date(8148, 12, 31)
+2975996
+datetime.date(8156, 1, 1)
+datetime.date(8155, 12, 31)
+2978552
+datetime.date(8163, 1, 1)
+datetime.date(8162, 12, 31)
+2981109
+datetime.date(8170, 1, 1)
+datetime.date(8169, 12, 31)
+2983666
+datetime.date(8177, 1, 1)
+datetime.date(8176, 12, 31)
+2986223
+datetime.date(8184, 1, 1)
+datetime.date(8183, 12, 31)
+2988779
+datetime.date(8191, 1, 1)
+datetime.date(8190, 12, 31)
+2991336
+datetime.date(8198, 1, 1)
+datetime.date(8197, 12, 31)
+2993893
+datetime.date(8205, 1, 1)
+datetime.date(8204, 12, 31)
+2996449
+datetime.date(8212, 1, 1)
+datetime.date(8211, 12, 31)
+2999005
+datetime.date(8219, 1, 1)
+datetime.date(8218, 12, 31)
+3001562
+datetime.date(8226, 1, 1)
+datetime.date(8225, 12, 31)
+3004119
+datetime.date(8233, 1, 1)
+datetime.date(8232, 12, 31)
+3006676
+datetime.date(8240, 1, 1)
+datetime.date(8239, 12, 31)
+3009232
+datetime.date(8247, 1, 1)
+datetime.date(8246, 12, 31)
+3011789
+datetime.date(8254, 1, 1)
+datetime.date(8253, 12, 31)
+3014346
+datetime.date(8261, 1, 1)
+datetime.date(8260, 12, 31)
+3016903
+datetime.date(8268, 1, 1)
+datetime.date(8267, 12, 31)
+3019459
+datetime.date(8275, 1, 1)
+datetime.date(8274, 12, 31)
+3022016
+datetime.date(8282, 1, 1)
+datetime.date(8281, 12, 31)
+3024573
+datetime.date(8289, 1, 1)
+datetime.date(8288, 12, 31)
+3027130
+datetime.date(8296, 1, 1)
+datetime.date(8295, 12, 31)
+3029686
+datetime.date(8303, 1, 1)
+datetime.date(8302, 12, 31)
+3032242
+datetime.date(8310, 1, 1)
+datetime.date(8309, 12, 31)
+3034799
+datetime.date(8317, 1, 1)
+datetime.date(8316, 12, 31)
+3037356
+datetime.date(8324, 1, 1)
+datetime.date(8323, 12, 31)
+3039912
+datetime.date(8331, 1, 1)
+datetime.date(8330, 12, 31)
+3042469
+datetime.date(8338, 1, 1)
+datetime.date(8337, 12, 31)
+3045026
+datetime.date(8345, 1, 1)
+datetime.date(8344, 12, 31)
+3047583
+datetime.date(8352, 1, 1)
+datetime.date(8351, 12, 31)
+3050139
+datetime.date(8359, 1, 1)
+datetime.date(8358, 12, 31)
+3052696
+datetime.date(8366, 1, 1)
+datetime.date(8365, 12, 31)
+3055253
+datetime.date(8373, 1, 1)
+datetime.date(8372, 12, 31)
+3057810
+datetime.date(8380, 1, 1)
+datetime.date(8379, 12, 31)
+3060366
+datetime.date(8387, 1, 1)
+datetime.date(8386, 12, 31)
+3062923
+datetime.date(8394, 1, 1)
+datetime.date(8393, 12, 31)
+3065480
+datetime.date(8401, 1, 1)
+datetime.date(8400, 12, 31)
+3068037
+datetime.date(8408, 1, 1)
+datetime.date(8407, 12, 31)
+3070593
+datetime.date(8415, 1, 1)
+datetime.date(8414, 12, 31)
+3073150
+datetime.date(8422, 1, 1)
+datetime.date(8421, 12, 31)
+3075707
+datetime.date(8429, 1, 1)
+datetime.date(8428, 12, 31)
+3078264
+datetime.date(8436, 1, 1)
+datetime.date(8435, 12, 31)
+3080820
+datetime.date(8443, 1, 1)
+datetime.date(8442, 12, 31)
+3083377
+datetime.date(8450, 1, 1)
+datetime.date(8449, 12, 31)
+3085934
+datetime.date(8457, 1, 1)
+datetime.date(8456, 12, 31)
+3088491
+datetime.date(8464, 1, 1)
+datetime.date(8463, 12, 31)
+3091047
+datetime.date(8471, 1, 1)
+datetime.date(8470, 12, 31)
+3093604
+datetime.date(8478, 1, 1)
+datetime.date(8477, 12, 31)
+3096161
+datetime.date(8485, 1, 1)
+datetime.date(8484, 12, 31)
+3098718
+datetime.date(8492, 1, 1)
+datetime.date(8491, 12, 31)
+3101274
+datetime.date(8499, 1, 1)
+datetime.date(8498, 12, 31)
+3103831
+datetime.date(8506, 1, 1)
+datetime.date(8505, 12, 31)
+3106387
+datetime.date(8513, 1, 1)
+datetime.date(8512, 12, 31)
+3108944
+datetime.date(8520, 1, 1)
+datetime.date(8519, 12, 31)
+3111500
+datetime.date(8527, 1, 1)
+datetime.date(8526, 12, 31)
+3114057
+datetime.date(8534, 1, 1)
+datetime.date(8533, 12, 31)
+3116614
+datetime.date(8541, 1, 1)
+datetime.date(8540, 12, 31)
+3119171
+datetime.date(8548, 1, 1)
+datetime.date(8547, 12, 31)
+3121727
+datetime.date(8555, 1, 1)
+datetime.date(8554, 12, 31)
+3124284
+datetime.date(8562, 1, 1)
+datetime.date(8561, 12, 31)
+3126841
+datetime.date(8569, 1, 1)
+datetime.date(8568, 12, 31)
+3129398
+datetime.date(8576, 1, 1)
+datetime.date(8575, 12, 31)
+3131954
+datetime.date(8583, 1, 1)
+datetime.date(8582, 12, 31)
+3134511
+datetime.date(8590, 1, 1)
+datetime.date(8589, 12, 31)
+3137068
+datetime.date(8597, 1, 1)
+datetime.date(8596, 12, 31)
+3139625
+datetime.date(8604, 1, 1)
+datetime.date(8603, 12, 31)
+3142180
+datetime.date(8611, 1, 1)
+datetime.date(8610, 12, 31)
+3144737
+datetime.date(8618, 1, 1)
+datetime.date(8617, 12, 31)
+3147294
+datetime.date(8625, 1, 1)
+datetime.date(8624, 12, 31)
+3149851
+datetime.date(8632, 1, 1)
+datetime.date(8631, 12, 31)
+3152407
+datetime.date(8639, 1, 1)
+datetime.date(8638, 12, 31)
+3154964
+datetime.date(8646, 1, 1)
+datetime.date(8645, 12, 31)
+3157521
+datetime.date(8653, 1, 1)
+datetime.date(8652, 12, 31)
+3160078
+datetime.date(8660, 1, 1)
+datetime.date(8659, 12, 31)
+3162634
+datetime.date(8667, 1, 1)
+datetime.date(8666, 12, 31)
+3165191
+datetime.date(8674, 1, 1)
+datetime.date(8673, 12, 31)
+3167748
+datetime.date(8681, 1, 1)
+datetime.date(8680, 12, 31)
+3170305
+datetime.date(8688, 1, 1)
+datetime.date(8687, 12, 31)
+3172861
+datetime.date(8695, 1, 1)
+datetime.date(8694, 12, 31)
+3175418
+datetime.date(8702, 1, 1)
+datetime.date(8701, 12, 31)
+3177974
+datetime.date(8709, 1, 1)
+datetime.date(8708, 12, 31)
+3180531
+datetime.date(8716, 1, 1)
+datetime.date(8715, 12, 31)
+3183087
+datetime.date(8723, 1, 1)
+datetime.date(8722, 12, 31)
+3185644
+datetime.date(8730, 1, 1)
+datetime.date(8729, 12, 31)
+3188201
+datetime.date(8737, 1, 1)
+datetime.date(8736, 12, 31)
+3190758
+datetime.date(8744, 1, 1)
+datetime.date(8743, 12, 31)
+3193314
+datetime.date(8751, 1, 1)
+datetime.date(8750, 12, 31)
+3195871
+datetime.date(8758, 1, 1)
+datetime.date(8757, 12, 31)
+3198428
+datetime.date(8765, 1, 1)
+datetime.date(8764, 12, 31)
+3200985
+datetime.date(8772, 1, 1)
+datetime.date(8771, 12, 31)
+3203541
+datetime.date(8779, 1, 1)
+datetime.date(8778, 12, 31)
+3206098
+datetime.date(8786, 1, 1)
+datetime.date(8785, 12, 31)
+3208655
+datetime.date(8793, 1, 1)
+datetime.date(8792, 12, 31)
+3211212
+datetime.date(8800, 1, 1)
+datetime.date(8799, 12, 31)
+3213768
+datetime.date(8807, 1, 1)
+datetime.date(8806, 12, 31)
+3216325
+datetime.date(8814, 1, 1)
+datetime.date(8813, 12, 31)
+3218882
+datetime.date(8821, 1, 1)
+datetime.date(8820, 12, 31)
+3221439
+datetime.date(8828, 1, 1)
+datetime.date(8827, 12, 31)
+3223995
+datetime.date(8835, 1, 1)
+datetime.date(8834, 12, 31)
+3226552
+datetime.date(8842, 1, 1)
+datetime.date(8841, 12, 31)
+3229109
+datetime.date(8849, 1, 1)
+datetime.date(8848, 12, 31)
+3231666
+datetime.date(8856, 1, 1)
+datetime.date(8855, 12, 31)
+3234222
+datetime.date(8863, 1, 1)
+datetime.date(8862, 12, 31)
+3236779
+datetime.date(8870, 1, 1)
+datetime.date(8869, 12, 31)
+3239336
+datetime.date(8877, 1, 1)
+datetime.date(8876, 12, 31)
+3241893
+datetime.date(8884, 1, 1)
+datetime.date(8883, 12, 31)
+3244449
+datetime.date(8891, 1, 1)
+datetime.date(8890, 12, 31)
+3247006
+datetime.date(8898, 1, 1)
+datetime.date(8897, 12, 31)
+3249563
+datetime.date(8905, 1, 1)
+datetime.date(8904, 12, 31)
+3252119
+datetime.date(8912, 1, 1)
+datetime.date(8911, 12, 31)
+3254675
+datetime.date(8919, 1, 1)
+datetime.date(8918, 12, 31)
+3257232
+datetime.date(8926, 1, 1)
+datetime.date(8925, 12, 31)
+3259789
+datetime.date(8933, 1, 1)
+datetime.date(8932, 12, 31)
+3262346
+datetime.date(8940, 1, 1)
+datetime.date(8939, 12, 31)
+3264902
+datetime.date(8947, 1, 1)
+datetime.date(8946, 12, 31)
+3267459
+datetime.date(8954, 1, 1)
+datetime.date(8953, 12, 31)
+3270016
+datetime.date(8961, 1, 1)
+datetime.date(8960, 12, 31)
+3272573
+datetime.date(8968, 1, 1)
+datetime.date(8967, 12, 31)
+3275129
+datetime.date(8975, 1, 1)
+datetime.date(8974, 12, 31)
+3277686
+datetime.date(8982, 1, 1)
+datetime.date(8981, 12, 31)
+3280243
+datetime.date(8989, 1, 1)
+datetime.date(8988, 12, 31)
+3282800
+datetime.date(8996, 1, 1)
+datetime.date(8995, 12, 31)
+3285356
+datetime.date(9003, 1, 1)
+datetime.date(9002, 12, 31)
+3287912
+datetime.date(9010, 1, 1)
+datetime.date(9009, 12, 31)
+3290469
+datetime.date(9017, 1, 1)
+datetime.date(9016, 12, 31)
+3293026
+datetime.date(9024, 1, 1)
+datetime.date(9023, 12, 31)
+3295582
+datetime.date(9031, 1, 1)
+datetime.date(9030, 12, 31)
+3298139
+datetime.date(9038, 1, 1)
+datetime.date(9037, 12, 31)
+3300696
+datetime.date(9045, 1, 1)
+datetime.date(9044, 12, 31)
+3303253
+datetime.date(9052, 1, 1)
+datetime.date(9051, 12, 31)
+3305809
+datetime.date(9059, 1, 1)
+datetime.date(9058, 12, 31)
+3308366
+datetime.date(9066, 1, 1)
+datetime.date(9065, 12, 31)
+3310923
+datetime.date(9073, 1, 1)
+datetime.date(9072, 12, 31)
+3313480
+datetime.date(9080, 1, 1)
+datetime.date(9079, 12, 31)
+3316036
+datetime.date(9087, 1, 1)
+datetime.date(9086, 12, 31)
+3318593
+datetime.date(9094, 1, 1)
+datetime.date(9093, 12, 31)
+3321150
+datetime.date(9101, 1, 1)
+datetime.date(9100, 12, 31)
+3323706
+datetime.date(9108, 1, 1)
+datetime.date(9107, 12, 31)
+3326262
+datetime.date(9115, 1, 1)
+datetime.date(9114, 12, 31)
+3328819
+datetime.date(9122, 1, 1)
+datetime.date(9121, 12, 31)
+3331376
+datetime.date(9129, 1, 1)
+datetime.date(9128, 12, 31)
+3333933
+datetime.date(9136, 1, 1)
+datetime.date(9135, 12, 31)
+3336489
+datetime.date(9143, 1, 1)
+datetime.date(9142, 12, 31)
+3339046
+datetime.date(9150, 1, 1)
+datetime.date(9149, 12, 31)
+3341603
+datetime.date(9157, 1, 1)
+datetime.date(9156, 12, 31)
+3344160
+datetime.date(9164, 1, 1)
+datetime.date(9163, 12, 31)
+3346716
+datetime.date(9171, 1, 1)
+datetime.date(9170, 12, 31)
+3349273
+datetime.date(9178, 1, 1)
+datetime.date(9177, 12, 31)
+3351830
+datetime.date(9185, 1, 1)
+datetime.date(9184, 12, 31)
+3354387
+datetime.date(9192, 1, 1)
+datetime.date(9191, 12, 31)
+3356943
+datetime.date(9199, 1, 1)
+datetime.date(9198, 12, 31)
+3359500
+datetime.date(9206, 1, 1)
+datetime.date(9205, 12, 31)
+3362057
+datetime.date(9213, 1, 1)
+datetime.date(9212, 12, 31)
+3364614
+datetime.date(9220, 1, 1)
+datetime.date(9219, 12, 31)
+3367170
+datetime.date(9227, 1, 1)
+datetime.date(9226, 12, 31)
+3369727
+datetime.date(9234, 1, 1)
+datetime.date(9233, 12, 31)
+3372284
+datetime.date(9241, 1, 1)
+datetime.date(9240, 12, 31)
+3374841
+datetime.date(9248, 1, 1)
+datetime.date(9247, 12, 31)
+3377397
+datetime.date(9255, 1, 1)
+datetime.date(9254, 12, 31)
+3379954
+datetime.date(9262, 1, 1)
+datetime.date(9261, 12, 31)
+3382511
+datetime.date(9269, 1, 1)
+datetime.date(9268, 12, 31)
+3385068
+datetime.date(9276, 1, 1)
+datetime.date(9275, 12, 31)
+3387624
+datetime.date(9283, 1, 1)
+datetime.date(9282, 12, 31)
+3390181
+datetime.date(9290, 1, 1)
+datetime.date(9289, 12, 31)
+3392738
+datetime.date(9297, 1, 1)
+datetime.date(9296, 12, 31)
+3395295
+datetime.date(9304, 1, 1)
+datetime.date(9303, 12, 31)
+3397850
+datetime.date(9311, 1, 1)
+datetime.date(9310, 12, 31)
+3400407
+datetime.date(9318, 1, 1)
+datetime.date(9317, 12, 31)
+3402964
+datetime.date(9325, 1, 1)
+datetime.date(9324, 12, 31)
+3405521
+datetime.date(9332, 1, 1)
+datetime.date(9331, 12, 31)
+3408077
+datetime.date(9339, 1, 1)
+datetime.date(9338, 12, 31)
+3410634
+datetime.date(9346, 1, 1)
+datetime.date(9345, 12, 31)
+3413191
+datetime.date(9353, 1, 1)
+datetime.date(9352, 12, 31)
+3415748
+datetime.date(9360, 1, 1)
+datetime.date(9359, 12, 31)
+3418304
+datetime.date(9367, 1, 1)
+datetime.date(9366, 12, 31)
+3420861
+datetime.date(9374, 1, 1)
+datetime.date(9373, 12, 31)
+3423418
+datetime.date(9381, 1, 1)
+datetime.date(9380, 12, 31)
+3425975
+datetime.date(9388, 1, 1)
+datetime.date(9387, 12, 31)
+3428531
+datetime.date(9395, 1, 1)
+datetime.date(9394, 12, 31)
+3431088
+datetime.date(9402, 1, 1)
+datetime.date(9401, 12, 31)
+3433644
+datetime.date(9409, 1, 1)
+datetime.date(9408, 12, 31)
+3436201
+datetime.date(9416, 1, 1)
+datetime.date(9415, 12, 31)
+3438757
+datetime.date(9423, 1, 1)
+datetime.date(9422, 12, 31)
+3441314
+datetime.date(9430, 1, 1)
+datetime.date(9429, 12, 31)
+3443871
+datetime.date(9437, 1, 1)
+datetime.date(9436, 12, 31)
+3446428
+datetime.date(9444, 1, 1)
+datetime.date(9443, 12, 31)
+3448984
+datetime.date(9451, 1, 1)
+datetime.date(9450, 12, 31)
+3451541
+datetime.date(9458, 1, 1)
+datetime.date(9457, 12, 31)
+3454098
+datetime.date(9465, 1, 1)
+datetime.date(9464, 12, 31)
+3456655
+datetime.date(9472, 1, 1)
+datetime.date(9471, 12, 31)
+3459211
+datetime.date(9479, 1, 1)
+datetime.date(9478, 12, 31)
+3461768
+datetime.date(9486, 1, 1)
+datetime.date(9485, 12, 31)
+3464325
+datetime.date(9493, 1, 1)
+datetime.date(9492, 12, 31)
+3466882
+datetime.date(9500, 1, 1)
+datetime.date(9499, 12, 31)
+3469438
+datetime.date(9507, 1, 1)
+datetime.date(9506, 12, 31)
+3471994
+datetime.date(9514, 1, 1)
+datetime.date(9513, 12, 31)
+3474551
+datetime.date(9521, 1, 1)
+datetime.date(9520, 12, 31)
+3477108
+datetime.date(9528, 1, 1)
+datetime.date(9527, 12, 31)
+3479664
+datetime.date(9535, 1, 1)
+datetime.date(9534, 12, 31)
+3482221
+datetime.date(9542, 1, 1)
+datetime.date(9541, 12, 31)
+3484778
+datetime.date(9549, 1, 1)
+datetime.date(9548, 12, 31)
+3487335
+datetime.date(9556, 1, 1)
+datetime.date(9555, 12, 31)
+3489891
+datetime.date(9563, 1, 1)
+datetime.date(9562, 12, 31)
+3492448
+datetime.date(9570, 1, 1)
+datetime.date(9569, 12, 31)
+3495005
+datetime.date(9577, 1, 1)
+datetime.date(9576, 12, 31)
+3497562
+datetime.date(9584, 1, 1)
+datetime.date(9583, 12, 31)
+3500118
+datetime.date(9591, 1, 1)
+datetime.date(9590, 12, 31)
+3502675
+datetime.date(9598, 1, 1)
+datetime.date(9597, 12, 31)
+3505232
+datetime.date(9605, 1, 1)
+datetime.date(9604, 12, 31)
+3507789
+datetime.date(9612, 1, 1)
+datetime.date(9611, 12, 31)
+3510345
+datetime.date(9619, 1, 1)
+datetime.date(9618, 12, 31)
+3512902
+datetime.date(9626, 1, 1)
+datetime.date(9625, 12, 31)
+3515459
+datetime.date(9633, 1, 1)
+datetime.date(9632, 12, 31)
+3518016
+datetime.date(9640, 1, 1)
+datetime.date(9639, 12, 31)
+3520572
+datetime.date(9647, 1, 1)
+datetime.date(9646, 12, 31)
+3523129
+datetime.date(9654, 1, 1)
+datetime.date(9653, 12, 31)
+3525686
+datetime.date(9661, 1, 1)
+datetime.date(9660, 12, 31)
+3528243
+datetime.date(9668, 1, 1)
+datetime.date(9667, 12, 31)
+3530799
+datetime.date(9675, 1, 1)
+datetime.date(9674, 12, 31)
+3533356
+datetime.date(9682, 1, 1)
+datetime.date(9681, 12, 31)
+3535913
+datetime.date(9689, 1, 1)
+datetime.date(9688, 12, 31)
+3538470
+datetime.date(9696, 1, 1)
+datetime.date(9695, 12, 31)
+3541026
+datetime.date(9703, 1, 1)
+datetime.date(9702, 12, 31)
+3543582
+datetime.date(9710, 1, 1)
+datetime.date(9709, 12, 31)
+3546139
+datetime.date(9717, 1, 1)
+datetime.date(9716, 12, 31)
+3548696
+datetime.date(9724, 1, 1)
+datetime.date(9723, 12, 31)
+3551252
+datetime.date(9731, 1, 1)
+datetime.date(9730, 12, 31)
+3553809
+datetime.date(9738, 1, 1)
+datetime.date(9737, 12, 31)
+3556366
+datetime.date(9745, 1, 1)
+datetime.date(9744, 12, 31)
+3558923
+datetime.date(9752, 1, 1)
+datetime.date(9751, 12, 31)
+3561479
+datetime.date(9759, 1, 1)
+datetime.date(9758, 12, 31)
+3564036
+datetime.date(9766, 1, 1)
+datetime.date(9765, 12, 31)
+3566593
+datetime.date(9773, 1, 1)
+datetime.date(9772, 12, 31)
+3569150
+datetime.date(9780, 1, 1)
+datetime.date(9779, 12, 31)
+3571706
+datetime.date(9787, 1, 1)
+datetime.date(9786, 12, 31)
+3574263
+datetime.date(9794, 1, 1)
+datetime.date(9793, 12, 31)
+3576820
+datetime.date(9801, 1, 1)
+datetime.date(9800, 12, 31)
+3579376
+datetime.date(9808, 1, 1)
+datetime.date(9807, 12, 31)
+3581932
+datetime.date(9815, 1, 1)
+datetime.date(9814, 12, 31)
+3584489
+datetime.date(9822, 1, 1)
+datetime.date(9821, 12, 31)
+3587046
+datetime.date(9829, 1, 1)
+datetime.date(9828, 12, 31)
+3589603
+datetime.date(9836, 1, 1)
+datetime.date(9835, 12, 31)
+3592159
+datetime.date(9843, 1, 1)
+datetime.date(9842, 12, 31)
+3594716
+datetime.date(9850, 1, 1)
+datetime.date(9849, 12, 31)
+3597273
+datetime.date(9857, 1, 1)
+datetime.date(9856, 12, 31)
+3599830
+datetime.date(9864, 1, 1)
+datetime.date(9863, 12, 31)
+3602386
+datetime.date(9871, 1, 1)
+datetime.date(9870, 12, 31)
+3604943
+datetime.date(9878, 1, 1)
+datetime.date(9877, 12, 31)
+3607500
+datetime.date(9885, 1, 1)
+datetime.date(9884, 12, 31)
+3610057
+datetime.date(9892, 1, 1)
+datetime.date(9891, 12, 31)
+3612613
+datetime.date(9899, 1, 1)
+datetime.date(9898, 12, 31)
+3615170
+datetime.date(9906, 1, 1)
+datetime.date(9905, 12, 31)
+3617726
+datetime.date(9913, 1, 1)
+datetime.date(9912, 12, 31)
+3620283
+datetime.date(9920, 1, 1)
+datetime.date(9919, 12, 31)
+3622839
+datetime.date(9927, 1, 1)
+datetime.date(9926, 12, 31)
+3625396
+datetime.date(9934, 1, 1)
+datetime.date(9933, 12, 31)
+3627953
+datetime.date(9941, 1, 1)
+datetime.date(9940, 12, 31)
+3630510
+datetime.date(9948, 1, 1)
+datetime.date(9947, 12, 31)
+3633066
+datetime.date(9955, 1, 1)
+datetime.date(9954, 12, 31)
+3635623
+datetime.date(9962, 1, 1)
+datetime.date(9961, 12, 31)
+3638180
+datetime.date(9969, 1, 1)
+datetime.date(9968, 12, 31)
+3640737
+datetime.date(9976, 1, 1)
+datetime.date(9975, 12, 31)
+3643293
+datetime.date(9983, 1, 1)
+datetime.date(9982, 12, 31)
+3645850
+datetime.date(9990, 1, 1)
+datetime.date(9989, 12, 31)
+3648407
+datetime.date(9997, 1, 1)
+datetime.date(9996, 12, 31)
+3650964
+2
+datetime.date(1, 1, 2)
+3652058
+datetime.date(9999, 12, 30)
+ValueError: year 0 is out of range
+ValueError: year 10000 is out of range
+ValueError: month must be in 1..12
+ValueError: month must be in 1..12
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+datetime.date(2000, 12, 31)
+1
+datetime.date(2001, 1, 1)
+1
+0
+0
+datetime.date(2002, 3, 3)
+datetime.date(2002, 3, 1)
+datetime.date(2002, 3, 9)
+datetime.date(2002, 2, 23)
+datetime.timedelta(days=7)
+datetime.timedelta(days=1)
+datetime.timedelta(days=-7)
+datetime.timedelta(days=-1)
+datetime.timedelta(days=-7)
+datetime.timedelta(days=-1)
+datetime.timedelta(days=7)
+datetime.timedelta(days=1)
+datetime.timedelta(days=1)
+TypeError: unsupported operand type(s) for *: 'datetime.timedelta' and 'datetime.date'
+TypeError: unsupported operand type(s) for //: 'datetime.timedelta' and 'datetime.date'
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+OverflowError: date value out of range
+TypeError: 'NoneType' object cannot be interpreted as an integer
+0
+1
+0
+1
+1
+2
+1
+2
+2
+3
+2
+3
+3
+4
+3
+4
+4
+5
+4
+5
+5
+6
+5
+6
+6
+7
+6
+7
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 7)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 5)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 3)
+(53, 4)
+(52, 5)
+(52, 6)
+(1, 1)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 6)
+(52, 7)
+(1, 1)
+(1, 2)
+(53, 4)
+(52, 5)
+(52, 6)
+(52, 7)
+(1, 2)
+(1, 3)
+(53, 4)
+(52, 5)
+[4, 9, 15, 20, 26, 32, 37, 43, 48, 54, 60, 65, 71, 76, 82, 88, 93, 99, 105, 111, 116, 122, 128, 133, 139, 144, 150, 156, 161, 167, 172, 178, 184, 189, 195, 201, 207, 212, 218, 224, 229, 235, 240, 246, 252, 257, 263, 268, 274, 280, 285, 291, 296, 303, 308, 314, 320, 325, 331, 336, 342, 348, 353, 359, 364, 370, 376, 381, 387, 392, 398]
+'0002-03-02'
+'Sat Mar  2 00:00:00 2002'
+'m:03 d:02 y:05'
+''
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+'03'
+"'' '' ''"
+'2007-09-10'
+'A'
+'2007-09-10'
+'m:09 d:10 y:07'
+'m:09 d:10 y:07'
+'B'
+'m:09 d:10 y:07 H:00 M:00 S:00'
+'m:09 d:10 y:07 H:00 M:00 S:00'
+'B'
+'  '
+'  '
+'B'
+True
+True
+datetime.timedelta(days=3652058)
+datetime.date(9999, 12, 31)
+datetime.date(1, 1, 1)
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=2, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=2, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=2, tm_yday=32, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=61, tm_isdst=-1)
+1956
+3
+1
+0
+0
+0
+3
+61
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=3, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=1, tm_yday=3, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=2, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=33, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=2, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=4, tm_yday=62, tm_isdst=-1)
+1956
+3
+2
+0
+0
+0
+4
+62
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=4, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=2, tm_yday=4, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=3, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=4, tm_yday=34, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=3, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=5, tm_yday=63, tm_isdst=-1)
+1956
+3
+3
+0
+0
+0
+5
+63
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=5, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=5, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=4, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=5, tm_yday=35, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=4, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=6, tm_yday=64, tm_isdst=-1)
+1956
+3
+4
+0
+0
+0
+6
+64
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=6, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=4, tm_yday=6, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=5, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=6, tm_yday=36, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=5, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=65, tm_isdst=-1)
+1956
+3
+5
+0
+0
+0
+0
+65
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=7, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=5, tm_yday=7, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=6, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=37, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=6, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=1, tm_yday=66, tm_isdst=-1)
+1956
+3
+6
+0
+0
+0
+1
+66
+-1
+time.struct_time(tm_year=1956, tm_mon=1, tm_mday=8, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=6, tm_yday=8, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=2, tm_mday=7, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=1, tm_yday=38, tm_isdst=-1)
+time.struct_time(tm_year=1956, tm_mon=3, tm_mday=7, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=2, tm_yday=67, tm_isdst=-1)
+1956
+3
+7
+0
+0
+0
+2
+67
+-1
+datetime.date(2, 3, 4)
+True
+True
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+True
+True
+True
+True
+True
+True
+False
+False
+False
+False
+False
+False
+True
+True
+ValueError: day is out of range for month
+datetime.date(1, 1, 1)
+datetime.date(1000, 2, 14)
+datetime.date(1900, 1, 1)
+datetime.date(2000, 2, 29)
+datetime.date(2004, 11, 12)
+datetime.date(2004, 4, 3)
+datetime.date(2017, 5, 30)
+datetime.date(1, 1, 1)
+datetime.date(2000, 1, 1)
+datetime.date(2025, 1, 2)
+datetime.date(9999, 12, 31)
+datetime.date(1, 1, 1)
+datetime.date(2000, 1, 1)
+datetime.date(2025, 1, 2)
+datetime.date(9999, 12, 31)
+datetime.date(2024, 12, 30)
+datetime.date(2024, 12, 30)
+datetime.date(2025, 1, 2)
+datetime.date(2025, 1, 2)
+datetime.date(2025, 12, 29)
+datetime.date(2025, 12, 29)
+datetime.date(2025, 12, 31)
+datetime.date(2025, 12, 31)
+datetime.date(2022, 12, 26)
+datetime.date(2022, 12, 26)
+datetime.date(2023, 1, 1)
+datetime.date(2023, 1, 1)
+datetime.date(2015, 12, 31)
+datetime.date(2015, 12, 31)
+datetime.date(2016, 1, 1)
+datetime.date(2020, 12, 28)
+datetime.date(2020, 12, 28)
+datetime.date(2021, 1, 2)
+ValueError: Invalid isoformat string: ''
+ValueError: Invalid isoformat string: '\ud800'
+ValueError: Invalid isoformat string: '009-03-04'
+ValueError: Invalid isoformat string: '123456789'
+ValueError: Invalid isoformat string: '200a-12-04'
+ValueError: Invalid isoformat string: '2009-1a-04'
+ValueError: Invalid isoformat string: '2009-12-0a'
+ValueError: day is out of range for month
+ValueError: day is out of range for month
+ValueError: Invalid isoformat string: '2019-W53-1'
+ValueError: Invalid isoformat string: '2020-W54-1'
+ValueError: Invalid isoformat string: '0000-W25-1'
+ValueError: Invalid isoformat string: '10000-W25-1'
+ValueError: Invalid isoformat string: '2020-W25-0'
+ValueError: Invalid isoformat string: '2020-W25-8'
+ValueError: Invalid isoformat string: '2020+12'
+ValueError: Invalid isoformat string: '2020 12'
+ValueError: Invalid isoformat string: '+020-06-15'
+ValueError: Invalid isoformat string: '202012+9'
+ValueError: Invalid isoformat string: '2020-W 5'
+ValueError: Invalid isoformat string: '2020061'
+ValueError: Invalid isoformat string: '2020-W2'
+ValueError: Invalid isoformat string: '٢025-03-09'
+ValueError: Invalid isoformat string: '2009\ud80002\ud80028'
+[exit 0]

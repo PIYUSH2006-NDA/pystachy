@@ -1,0 +1,5 @@
+PropertyGet 5
+PropertySet 5
+PropertyDel 5
+AttributeError: property 'foo' of 'cls' object has no setter
+[exit 0]

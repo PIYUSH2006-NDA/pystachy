@@ -5,7 +5,7 @@ from src.pystachy_compiler.analysis import calls_init, local_names, stmt_walrus
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.names import short
+from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     CLASSVAR,
     CTYPES,
@@ -21,6 +21,7 @@ from src.pystachy_compiler.specs import (
     PATHLIKE,
     PYBUILTINS,
     SPECIAL,
+    STANDINS,
     STUB,
     TYPEARGS,
     TYPEVAR,
@@ -666,7 +667,7 @@ def gen_typing_forms(self, m: Mod, body: list[Node], cls: bool) -> list[Node]:
         elif a is not st and len(st.kids) == 3 and self.typing_ref(a) == "Final":
             # (a field, typed by its constant)
             v = st.kids[2]
-            if v.kind == "int" or v.kind == "float" or v.kind == "str":
+            if v.kind == "int" or v.kind == "float" or v.kind == "str" or v.kind == "bytes":
                 st.kids[1] = mk("name", v.kind, v.line, [])
             elif v.kind == "True" or v.kind == "False":
                 st.kids[1] = mk("name", "bool", v.line, [])
@@ -1863,7 +1864,7 @@ def guess_scope(f: FnInfo) -> list[Node]:
 
 def gen_guess(self, e: Node, f: FnInfo) -> str:
     k = e.kind
-    if k == "int" or k == "float" or k == "str":
+    if k == "int" or k == "float" or k == "str" or k == "bytes":
         return k
     if k == "True" or k == "False":
         return "bool"
@@ -2140,9 +2141,13 @@ def gen_fn_attr_read(self, o: Val, name: str) -> None:
     # o.name read through object o, where its class binds name to a function in its body
     # (name = f): CPython binds o to the function's first parameter there, as for a method, which
     # is not supported. A builtin function (fn[b:...]) or a bound method that a class attribute
-    # holds is read as itself through an object, as in CPython
+    # holds is read as itself through an object, as in CPython, and so is a function of a
+    # stand-in for a C module (STANDINS: encodings.utf_8's _buffer_decode = codecs.utf_8_decode),
+    # which is CPython's builtin
     ci = self.classes[o.t]
     t = ci.ftypes.get(name, "")
+    if t.startswith("fn[f:") and owner(t[5:-1]) in STANDINS:
+        return
     if name in ci.fdefault and (t.startswith("fn[f:") or t.startswith("fn[c:") or t.startswith("fn[u:")):
         self.err(f"class attribute '{name}' of '{short(o.t)}' holds a function ({name} = ...): reading it through an object is not supported (CPython binds the object to the function's first parameter, as for a method); read it through the class ({short(o.t)}.{name}), or define {name} with def")
 

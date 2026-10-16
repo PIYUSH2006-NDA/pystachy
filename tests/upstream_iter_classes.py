@@ -18,7 +18,7 @@
 # - pickle, __reduce__, __setstate__, two-argument iter(), sequence classes (iteration through
 #   __getitem__ alone), generators, tracebacks and reference counting: as in
 #   tests/upstream_iter_builtins.py
-# - test_nested_comprehensions_iter: a comprehension with three for clauses
+# - test_nested_comprehensions_iter: tests/upstream_iter_comprehensions.py adopts it
 # - test_new_style_iter_class and test_error_iter: iter() of an object whose class has no
 #   __next__ (or no __iter__) is a compile-time error here (tests/errors/iterator_no_next.py)
 # - test_in_and_not_in's items of other types than int ("abc", 42.42, (3, 4), [], {1: 1},

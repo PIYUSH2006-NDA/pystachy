@@ -412,6 +412,7 @@ from src.pystachy_compiler.exceptions import (
     gen_landing as exceptions_landing,
     gen_no_code as exceptions_no_code,
     gen_os_error as exceptions_os_error,
+    gen_unicode_error as exceptions_unicode_error,
     gen_raise_ as exceptions_raise_,
     gen_raise_stmt as exceptions_raise_stmt,
     gen_super_call as exceptions_super_call,
@@ -2192,6 +2193,9 @@ class Gen:
 
     def os_error(self, name: str, vals: list[Val]) -> list[str]:
         return exceptions_os_error(self, name, vals)
+
+    def unicode_error(self, name: str, vals: list[Val]) -> list[str]:
+        return exceptions_unicode_error(self, name, vals)
 
     def exc_value(self, name: str, vals: list[Val]) -> Val:
         return exceptions_exc_value(self, name, vals)

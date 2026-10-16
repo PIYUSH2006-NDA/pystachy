@@ -174,10 +174,16 @@ def _charat(s: str, i: int) -> str:
     if b < 0xC2 or b >= 0xF5:
         return c
     n = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
-    # Match _codes(): a truncated sequence or invalid continuation is one standalone byte.
+    # Match _codes(): a truncated sequence or invalid continuation is one standalone byte. So is
+    # an overlong form or a value past U+10FFFF, as runtime.c's u8char (ord(), repr()) reads them.
+    # The second byte tells: below A0 after E0 (under U+0800), below 90 after F0 (under U+10000)
+    # or from 90 after F4 (past U+10FFFF); every other lead from C2 decodes in range.
     if i + n > len(s):
         return c
-    for j in range(1, n):
+    x = ord(s[i + 1])
+    if x & 0xC0 != 0x80 or (b == 0xE0 and x < 0xA0) or (b == 0xF0 and x < 0x90) or (b == 0xF4 and x >= 0x90):
+        return c
+    for j in range(2, n):
         if ord(s[i + j]) & 0xC0 != 0x80:
             return c
     return s[i : i + n]
@@ -236,6 +242,8 @@ def _codes(string: str, limit: int) -> list[int]:
                     cp = b & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
                     if i + k > len(bs):
                         k = 1
+                    elif (b == 0xE0 and bs[i + 1] < 0xA0) or (b == 0xF0 and bs[i + 1] < 0x90) or (b == 0xF4 and bs[i + 1] >= 0x90):
+                        k = 1  # (an overlong form or a value past U+10FFFF: see _charat())
                     else:
                         for j in range(1, k):
                             if bs[i + j] & 0xC0 != 0x80:
