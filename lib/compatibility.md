@@ -137,7 +137,8 @@ snapshots when item comparison callbacks mutate a queue. Searches (`count`,
 `index`, containment and `remove`) read live items and detect structural mutations
 with CPython's operation-specific errors; same-size replacements are preserved.
 `reversed`, reflected multiplication, comparisons with other containers, pickling,
-`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable.
+`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable. A `deque`
+is not a `collections.abc.Sequence` to `isinstance`.
 
 ## Shlex
 
@@ -338,7 +339,9 @@ for the compatible sequence types. Weighted `fmean` uses the port of CPython's
 Unsupported APIs are `mean`, `harmonic_mean`, variance/stdev and their population
 variants, `covariance`, `correlation`, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
-iterators, properties or other features beyond the port's compiled paths.
+iterators, properties or other features beyond the port's compiled paths. Only
+CPython runs the module's import of `random`, which `kde_random` and
+`NormalDist.samples` use.
 
 ## Random
 
@@ -358,17 +361,24 @@ as Pystachy's `math` has none.
 - A float seeds with its hash, as in CPython; a NaN's hash is 0 rather than
   CPython's object-dependent value.
 - `getrandbits(k)` takes at most 63 bits and raises `OverflowError` for more,
-  before drawing. Ranges whose width leaves 64 bits raise `OverflowError`.
+  before drawing. `randrange` and `randint` raise `OverflowError` where the width,
+  `b + 1` or the width plus the step leaves 64 bits (`randint(a, 2**63 - 1)`).
 - Populations are lists, strings and runtime-length tuples; a `range` is not a
   value, so pass `list(range(n))`. Strings are sequences of bytes past ASCII.
-  Weights and counts share one numeric type.
+  Weights and counts share one numeric type. `sample` raises `TypeError` for a
+  `deque`, which `isinstance` does not find a `Sequence`, and takes a dict view,
+  which is a list.
+- Of the module functions, only `random` and `getrandbits` convert to a typed
+  `Callable`; the others are unannotated upstream methods, which unannotated
+  parameters or a lambda can take.
 - `randrange` and `randint` take ints or bools, and `triangular` floats: with int
   bounds, its `low == high` case would return an int.
 
 Seeds of `str`, `bytes` or `bytearray` (SHA-512 into a long integer), `randbytes`,
-`SystemRandom`, subclasses of `Random` (its `__init_subclass__` chooses how they
-draw integers) and pickling are unsupported. An integer passed as `choices`'
-weights is a compile error rather than CPython's hint to pass `k=`.
+`SystemRandom` (absent from `__all__`), subclasses of `Random` (its
+`__init_subclass__` chooses how they draw integers) and pickling are unsupported.
+An integer passed as `choices`' weights is a compile error rather than CPython's
+hint to pass `k=`.
 
 ## Urllib.parse
 

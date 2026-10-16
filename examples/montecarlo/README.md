@@ -30,9 +30,10 @@ the executable print the same estimates for a seed.
 
 ## Recorded benchmark
 
-Measured with the library of commit `c5bdb41` on a 4-core x86-64 VM with LLVM 18.1.3 and CPython 3.13.16;
-median of five runs each, including startup; seed 42. Other jobs shared the host (load average
-about 20), so the CPU (user + system) times are the steadier comparison.
+Measured on a 4-core x86-64 VM with LLVM 18.1.3 and CPython 3.13.16, with the compiler of commit
+`bdc20a2` and the `random` library added with this example; median of five runs each, including
+startup; seed 42. Other jobs shared the host (load average about 20), so the CPU (user + system)
+times are the steadier comparison.
 
 | Samples | CPython wall | AOT wall | Speedup | CPython CPU | AOT CPU | Speedup |
 |---|---:|---:|---:|---:|---:|---:|
