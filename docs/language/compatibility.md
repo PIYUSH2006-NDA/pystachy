@@ -673,8 +673,9 @@ supported alternatives.
   tested the value (`isinstance()` does not change the type of a value), a call `x.__init__(...)`
   on an object of a class that a class deriving from it defines `__init__` again for,
   `Base.method(self, ...)` naming a base other than the class's own, one whose `__init__` may leave
-  a field of the base unassigned where the base's code reads it, or where a def or lambda that it
-  defines before the field is assigned reads it (call `super().__init__()` first),
+  a field of the base unassigned where the base's code reads it (a method it calls on `self` or
+  `super()` before the field is assigned), or where a def or lambda that it defines before the
+  field is assigned reads it (call `super().__init__()` first),
   keyword arguments where no class of its line has an `__init__` (but those its builtin base's
   takes, such as `ImportError`'s `name` and `path`), more than three arguments for one deriving
   from `OSError` (or for `OSError` itself); for exception classes, `super()` outside their methods,

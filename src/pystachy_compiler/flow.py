@@ -579,6 +579,10 @@ def gen_user_call(self, n: Node) -> bool:
         return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s in self.classes:
         return True  # C.m(...): a static or class method
+    if n.kind == "raise":
+        for x in n.kids:
+            if x.kind == "name" and x.s in self.classes:
+                return True  # raise E (or from E): the class is called, which runs its __init__
     if n.kind == "uimport":
         # it runs a module's code, which can call this module's functions only if it imports
         # this module (circular imports): as this module imports it, only if both are in one
@@ -853,15 +857,22 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
             fl.probed[e.kids[2].s] = True
     elif k == "call":
         c = e.kids[0]
-        if c.kind == "attr":
+        # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
+        sup = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "call" and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super"
+        if sup:
+            for a in c.kids[0].kids[1:]:
+                self.fl_expr(fl, a)
+        elif c.kind == "attr":
             self.fl_expr(fl, c.kids[0])
+        elif fl.me != "" and c.kind == "name" and c.s == "super" and c.s not in self.funcs:
+            # super() otherwise (super().m(...)): self, which the base's methods are given, as self.m(...)
+            fl.exposed()
+            fl.escaped = True
         elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes) or c.s == fl.me:
             self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called; self shadows a function or class)
         elif c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
             c.chk = True
             fl.marks[c.s] = True
-        # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
-        sup = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "call" and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super"
         based = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "name" and c.kids[0].s == fl.base and len(e.kids) > 1 and e.kids[1].kind == "name" and e.kids[1].s == fl.me
         for i in range(2 if based else 1, len(e.kids)):
             self.fl_expr(fl, e.kids[i])
