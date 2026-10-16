@@ -27,7 +27,8 @@ supports matching strings and lists of strings, while its generator-based diff A
 compile. `textwrap` supports its public operations, but widths count UTF-8 bytes.
 
 Selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile` are compiler builtins.
-`typing`, `collections.abc` and `dataclasses` also have compiler support; this does not provide
+`typing`, `collections.abc` (also imported as `_collections_abc`) and `dataclasses` also have
+compiler support; this does not provide
 the full dynamic `collections` package; its shipped subset provides `deque`, `defaultdict`,
 `OrderedDict` and `Counter`, without `namedtuple`.
 See the [builtin module table](language/modules.md#builtin-modules-and-files).

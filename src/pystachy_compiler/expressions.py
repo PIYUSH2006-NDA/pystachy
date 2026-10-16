@@ -371,10 +371,10 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return self.isnone(t)
     abc = self.typing_ref(c) if c.kind == "attr" or (c.kind == "name" and c.s not in self.classes and self.imported(c.s) != "") else ""
     if abc == "Sequence" or abc == "MutableSequence" or abc == "Mapping" or abc == "MutableMapping":
-        # (collections.abc's: str and tuple, also a NamedTuple, are Sequences, list is a mutable one)
+        # (collections.abc's: str, bytes and tuple, also a NamedTuple, are Sequences, list is a mutable one)
         if abc.endswith("Mapping"):
             return 1 if is_dict(t) else 0
-        if is_list(t) or (abc == "Sequence" and (t == "str" or is_tuple(t) or is_vtuple(t))):
+        if is_list(t) or (abc == "Sequence" and (t == "str" or t == "bytes" or is_tuple(t) or is_vtuple(t))):
             return 1
         return -2 if abc == "Sequence" and (t in self.nts or t == RANGEC) else 0  # (a range is a Sequence too)
     if c.kind != "name":

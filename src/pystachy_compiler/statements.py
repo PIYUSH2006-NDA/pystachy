@@ -7,6 +7,8 @@ from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg,
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     ABCS,
+    ABCSMORE,
+    ABCSOTHER,
     DUNDER,
     FUTURE,
     FXBIT,
@@ -171,6 +173,8 @@ def gen_check_import(self, a: Node) -> None:
     if mod == "__future__":
         if x not in FUTURE:
             self.err(f"future feature {x} is not defined")
+    elif mod == "collections.abc" and x in ABCSMORE:
+        self.err(ABCSOTHER.replace("NAME", x))
     elif mod == "typing" or mod == "collections.abc":
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
