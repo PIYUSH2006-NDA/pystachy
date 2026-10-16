@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 import copy
 from datetime import datetime, timezone
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -12,8 +13,18 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_STEPS = {"tests-cpython", "tests-native", "tests-opt-off", "runtime-cache",
-               "python-free", "ubsan", "gc-jit", "gc-aot-0", "gc-aot-1"}
+SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
+               "tests-opt-off-1", "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1",
+               "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+# Steps that run one of the disjoint shards of the corpus (tests/verify.sh shard_cases), and how many
+# shards their suite has: the name ends in the shard index.
+SHARDED_STEPS = {f"{suite}-{index}": count for suite, count in
+                 (("tests-cpython", 2), ("tests-native", 2), ("tests-opt-off", 2), ("python-free", 2),
+                  ("ubsan", 2), ("gc-jit", 2), ("gc-aot", 3))
+                 for index in range(count)}
+GC_STEPS = {"gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+# The halves of tools/scaling.py's check (tests/verify.sh's SCALING_0 and the shapes it leaves)
+SCALING_STEPS = ("scaling-0", "scaling-1")
 
 
 def parse_groups(text):
@@ -36,6 +47,14 @@ def parse_groups(text):
     if covered != Counter(groups["all"][1:]):
         raise ValueError("CI groups must cover every all step exactly once, except bootstrap")
     return groups
+
+
+def scaling_shapes():
+    """The shapes of tools/scaling.py, which scaling-0 and scaling-1 share out."""
+    spec = importlib.util.spec_from_file_location("scaling", ROOT / "tools/scaling.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return list(module.SHAPES)
 
 
 def load_groups():
@@ -97,16 +116,20 @@ def validate_report(report, group, expected):
             if (step.get("ir_identical") is not True or
                     integer(step.get("compiler_interval"), f"{label}.compiler_interval", 1) != 5000):
                 raise ValueError(f"{label}: missing GC-stressed IR identity or wrong interval")
-        if step["name"] in {"gc-jit", "gc-aot-0", "gc-aot-1"}:
-            mode = "jit" if step["name"] == "gc-jit" else "aot"
+        if step["name"] in GC_STEPS:
+            mode = "jit" if step["name"].startswith("gc-jit") else "aot"
             if (step.get("modes") != [mode] or
                     integer(step.get("tests_compiler_interval"), f"{label}.tests_compiler_interval", 1) != 1000 or
                     integer(step.get("tests_interval"), f"{label}.tests_interval", 1) != 1):
                 raise ValueError(f"{label}: wrong GC stress mode or intervals")
-            if mode == "aot" and (
-                    integer(step.get("shard_index"), f"{label}.shard_index") != int(step["name"][-1]) or
-                    integer(step.get("shard_count"), f"{label}.shard_count", 1) != 2):
-                raise ValueError(f"{label}: wrong GC AOT shard")
+        if step["name"] in SHARDED_STEPS and (
+                integer(step.get("shard_index"), f"{label}.shard_index") != int(step["name"][-1]) or
+                integer(step.get("shard_count"), f"{label}.shard_count", 1) != SHARDED_STEPS[step["name"]]):
+            raise ValueError(f"{label}: wrong shard")
+        if step["name"] in SCALING_STEPS:
+            shapes = step.get("shapes")
+            if not isinstance(shapes, list) or not shapes or not all(isinstance(x, str) for x in shapes):
+                raise ValueError(f"{label}: missing the shapes it checked")
         if step["name"] in SUITE_STEPS:
             expected_checks = integer(step.get("expected"), f"{label}.expected", 1)
             if integer(step.get("passed"), f"{label}.passed") != expected_checks:
@@ -120,6 +143,8 @@ def validate_report(report, group, expected):
     for key in ("git", "sources", "toolchain"):
         if not isinstance(report.get(key), dict) or not report[key]:
             raise ValueError(f"{group}: missing {key} identity")
+    for key in ("suite_checks", "mode_checks"):
+        integer(report["sources"].get(key), f"{group}.sources.{key}", 1)
     if not re.fullmatch(r"[0-9a-f]{40}", str(report["git"].get("commit", ""))):
         raise ValueError(f"{group}: invalid git commit")
 
@@ -141,11 +166,39 @@ def merge_reports(directory, groups, expected_commit=None):
     wanted = [name for name in groups if name != "all"]
     if set(reports) != set(wanted):
         raise ValueError(f"missing report groups: {sorted(set(wanted) - set(reports))}")
-    gc_groups = ("gc-jit", "gc-aot-0", "gc-aot-1")
-    if all(group in reports for group in gc_groups):
-        jit_checks, *aot_checks = [reports[group]["steps"][-1]["expected"] for group in gc_groups]
-        if sum(aot_checks) != jit_checks:
-            raise ValueError("GC AOT shards must cover the same full-suite check count as GC JIT")
+    # Shards together must make as many checks as an unsharded suite of the same modes (each
+    # group's suite is its last step, whose count validate_report checked). The halves of a JIT and
+    # AOT suite make as many as tests/verify.sh counts in the whole corpus (sources.suite_checks, the
+    # same in every report: see the identities below), opt-off's once per PYSTACHY_OPT setting.
+    suite = reports[wanted[0]]["sources"]["suite_checks"]
+    for kind, what in (("hosted", "CPython-hosted"), ("native", "native"), ("opt-off", "opt-off"),
+                       ("python-free", "python-free")):
+        halves = [reports[group]["steps"][-1] for group in (f"{kind}-0", f"{kind}-1") if group in reports]
+        if len(halves) < 2:
+            continue
+        runs = 1
+        if kind == "opt-off":
+            settings = halves[0].get("PYSTACHY_OPT")
+            if not isinstance(settings, list) or not settings or halves[1].get("PYSTACHY_OPT") != settings:
+                raise ValueError("opt-off shards must run the same PYSTACHY_OPT settings")
+            runs = len(settings)
+        if halves[0]["expected"] + halves[1]["expected"] != suite * runs:
+            raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
+    # The shards of a GC suite, which runs in one mode, make as many as the corpus has in one mode
+    # (sources.mode_checks), and the UBSan halves, which run in both modes one at a time, twice as many.
+    mode_checks = reports[wanted[0]]["sources"]["mode_checks"]
+    for shards, runs, what in ((("gc-jit-0", "gc-jit-1"), 1, "GC JIT"),
+                               (("gc-aot-0", "gc-aot-1", "gc-aot-2"), 1, "GC AOT"),
+                               (("ubsan-0", "ubsan-1"), 2, "UBSan")):
+        if (all(group in reports for group in shards) and
+                sum(reports[group]["steps"][-1]["expected"] for group in shards) != mode_checks * runs):
+            raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
+    halves = {step["name"]: step["shapes"] for report in reports.values() for step in report["steps"]
+              if step["name"] in SCALING_STEPS}
+    if len(halves) == len(SCALING_STEPS):
+        checked = [shape for name in SCALING_STEPS for shape in halves[name]]
+        if sorted(checked) != sorted(scaling_shapes()):
+            raise ValueError("scaling-0 and scaling-1 must check every shape of tools/scaling.py, each once")
     first = reports[wanted[0]]
     commit = first["git"]["commit"]
     if expected_commit is not None and commit != expected_commit:

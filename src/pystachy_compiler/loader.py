@@ -10,7 +10,6 @@ from src.pystachy_compiler.analysis import (
     builtin_import,
     builtin_module,
     builtin_of,
-    calls_iter,
     calls,
     catches_import,
     clean_doc,
@@ -30,6 +29,7 @@ from src.pystachy_compiler.analysis import (
     local_types,
     mark,
     may_end,
+    module_reads,
     names_name,
     own_specials,
     read_names,
@@ -62,6 +62,7 @@ from src.pystachy_compiler.specs import (
     STANDINS,
     TYPING,
     VERSIONINFO,
+    is_excname,
 )
 from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
 from src.pystachy_compiler.utils import clone, int_fits
@@ -147,8 +148,9 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
-        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
-        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        # the type parameters of the generic classes and defs (class C[T], def f[T]) it is in, by
+        # name: the names of their own that they are qualified to (<class's or def's name>$$T,
+        # unlike any other)
         self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
@@ -203,7 +205,7 @@ class Loader:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
         self.intry = 0
-        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if calls_iter(x.body, False)]) > 0:
+        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if module_reads(x.body, "iter")]) > 0:
             # iter() makes iterator objects of builtin containers: of lib's classes, whose module
             # nothing imports (it imports nothing either, so it comes first)
             self.load(ITERS, self.dirs[-1] + "/" + ITERS + ".py", "")
@@ -1868,6 +1870,8 @@ class Loader:
                 if a.s == "*":
                     fail(f"'from {path} import *' is not supported", line)
                 self.bind(m, a.s, "b:" + a.kids[0].s, infn, line)
+                if not infn and a.kids[0].s.startswith("builtins.") and is_excname(a.kids[0].s[9:]):
+                    continue  # (a builtin exception class, which qname() names itself)
                 keep.kids.append(a)
                 if not infn and a.kids[0].s == "builtins." + a.s:
                     continue  # the same builtin is available before the import too
@@ -2090,7 +2094,8 @@ class Loader:
         elif k.startswith("b:"):
             p = k[2:]
             self.bind(m, name, k, infn, line)
-            keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
+            if infn or not (p.startswith("builtins.") and is_excname(p[9:])):  # (qname() names a builtin exception class itself)
+                keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
         elif k != "v":
             al = self.aliased.get(src.name + " " + x, None)
             if k.startswith("t:") and al is not None and not src.done and src.at > 0 and al.line > src.at:
@@ -2129,6 +2134,8 @@ class Loader:
         if s in self.qren:
             return self.qren[s]
         k = self.kind(m, s)
+        if k.startswith("b:builtins.") and is_excname(k[11:]) and s not in self.fk:
+            return k[11:]  # (a builtin exception class by another name: from builtins import RuntimeError as error)
         if k == "f" or k == "c" or k == "v" or k.startswith("b:"):
             if m.name == "" and s in PYBUILTINS:
                 return "__main__$" + s  # (other modules' code still sees the builtin)
@@ -2446,6 +2453,14 @@ class Loader:
                 self.qdef = True
                 ren = self.qren
                 self.qren = dict(ren)
+                for nm in st.kids[2].s.split():
+                    # (a generic def's type parameters, in its body as a generic class's are in its
+                    # methods: CPython's TypeVars, not the module's or an enclosing function's
+                    # names, which they hide)
+                    self.qren[nm] = st.s + "$$" + nm
+                    m.deftps.append(self.qren[nm])
+                    if nm not in own:
+                        inner.pop(nm, False)
                 for nm in decl:
                     self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)

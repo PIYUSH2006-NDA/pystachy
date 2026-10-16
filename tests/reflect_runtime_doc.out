@@ -1,0 +1,7 @@
+__doc__ '\nMulti-line docstring.\n    Indented line.\n'
+__doc__ None
+__static_attributes__ ('c', 'g', 'k', 'o', 'x')
+__static_attributes__ ()
+__firstlineno__ 5
+__firstlineno__ 32
+[exit 0]

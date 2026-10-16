@@ -1,0 +1,11 @@
+Box(size=3) 3 box 5 [2, 2] 3 True
+1.5 ['a', 'a'] s
+4 [1, 1] True
+3 [0, 1, 2] 3 t
+True True
+k:1 1.5:None :
+True True
+Tagged(tag='t', n=0) Tagged(tag='u', n=2)
+Doubled(n=6) Doubled(n=10)
+7 7
+[exit 0]

@@ -1,6 +1,6 @@
 """Functions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.analysis import globals_in, lambda_flags, local_names, nonlocal_decls
+from src.pystachy_compiler.analysis import globals_in, lambda_flags, local_names, nonlocal_decls, str_appends
 from src.pystachy_compiler.ir import Blk, FnInfo, IFn, Try, Val
 from src.pystachy_compiler.local_versions import local_versions
 from src.pystachy_compiler.names import short
@@ -43,10 +43,13 @@ def gen_enter(self, f: FnInfo, body: list[Node]) -> None:
     self.uflags = f.uflags
     self.lflag = {}
     self.iflag = {}
+    self.appends = {}
+    self.owned = {}
     self.lcs = []
     self.lct = []
     self.lcsoft = []
     self.nonevars = {}
+    self.nonesites = {}
     self.narrowed = {}
     self.lkk = {}
     self.branch = 0
@@ -117,6 +120,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             for cv in self.cells:
                 if cv in nl:
                     self.nlw[cv] = True
+        if not self.rtmode:
+            str_appends(body, self.appends)  # (those that are str locals get an owned flag: alloca)
     for i in range(len(f.params)):
         t = f.ptypes[i]
         if t == "None":
@@ -144,6 +149,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             a = self.maddr('%ptr', env, f'{len(c.caps) + len(c.defs) + j}', True)
             self.iflag[c.iflags[j]] = self.mload('%ptr', a)
     self.none_ends()
+    if f.gen:
+        self.gen_begin(f)  # (a generator: a call makes it, and runs none of the code below)
     if f.ll.startswith("@init."):
         # a module's code runs once, when the first import of it runs
         done = f.ll + ".done"
@@ -184,6 +191,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
         self.handler = hm
         self.place(tr.body)
     self.stmts(body)
+    if f.gen:
+        self.gen_end(f)
     if f.ret == "":
         f.ret = "None"  # a template's function without a return statement that has a value
         f.noret = f.infer and self.term

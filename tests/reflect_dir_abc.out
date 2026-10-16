@@ -1,0 +1,6 @@
+['__abstractmethods__', '__slots__', '_abc_impl', 'area', 'n']
+['__abstractmethods__', '_abc_impl']
+True True False
+['n', 'area', '_abc_impl', '__abstractmethods__', '__slots__']
+{'n': 4} Square
+[exit 0]
