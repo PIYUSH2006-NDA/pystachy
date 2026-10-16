@@ -342,7 +342,9 @@ Dictionary fusion is deliberately bounded; it does not promise to combine every 
 lookup. Calls that may mutate containers, joins and exception handlers limit reuse.
 Unpacking a list (`a, b = xs`, `a, *b, c = xs`) reads its items with `list.load` whatever
 the switches: its length check has passed, and no code that could shorten it runs before
-the reads (a target with a setter is stored only once every item is read).
+the reads. Reads interleave with stores only when every target is a plain name; any other
+target (a setter, a subscript, a nested tuple whose item has `__iter__`) is stored only once
+every item is read, as CPython does.
 
 <a id="72-exceptions-m5-10"></a>
 

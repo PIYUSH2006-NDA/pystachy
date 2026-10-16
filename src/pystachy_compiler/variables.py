@@ -1605,8 +1605,9 @@ def gen_assign(self, t: Node, v: Val) -> None:
     elif k == "tuple" and (is_list(v.t) or v.t == "str"):
         # a, b = xs: the length is checked when it runs, as CPython does. CPython takes every
         # item before it stores the first, so where a store may change the list (xs[1], xs[0] =
-        # xs, or a __setitem__ that empties it), the items are all read first; a store to a name
-        # runs no code, so each item is read within the length checked (list_slot)
+        # xs, a __setitem__ that empties it, or a nested target whose item's __iter__ does), the
+        # items are all read first; a store to a plain name runs no code, so with only those
+        # each item is read within the length checked (list_slot)
         self.rt("pys_unpack_check", "void", [f"i64 {self.mload('int', v.v)}", f"i64 {len(t.kids)}"])
         first = v.t != "str" and not name_targets(t)
         items: list[Val] = []
@@ -1795,7 +1796,8 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
         self.assign(star if i == s else t.kids[i], items[i])
 def gen_list_slot(self, o: Val, i: str) -> str:
     # the slot of list o at index i, which a check of its length since it last changed keeps in
-    # range (unpacking's: no code runs between): an inline list.load, as listget makes of a
+    # range (unpacking's: no code runs between, as only plain-name stores or none come before
+    # the read): an inline list.load, as listget makes of a
     # list.get, without a bounds check (each one an exit from a loop, which costs clang -O2 time)
     read = Ins("list.load", "int", "")
     read.a = [o, Val(i, "int")]
