@@ -727,6 +727,12 @@ value. Later changes to the class attribute affect those instances. Unannotated 
 assignments infer their type, except in dataclasses and NamedTuples, where annotations are
 required. Supported subclasses also inherit their base's fields and class attributes.
 
+A class attribute may hold a function (`encode = enc`, as CPython's `encodings` modules bind
+their codec functions). It is read and called through its class or a subclass
+(`Codec.encode(s)`, `f = Codec.encode`). Through an object, a builtin function that a class
+attribute holds (`size = len`) is read as itself, as in CPython. A Python function is not:
+CPython binds it to the object as a method there, and Pystachy rejects that read.
+
 A `@dataclass` writes `__init__` (which calls `__post_init__`), `__repr__` and `__eq__` unless
 its `init`, `repr` or `eq` option is false, and with `order=True` the comparisons of the tuples
 of its fields. `dataclasses.field()` takes `default`, `default_factory`, `init`, `repr`,

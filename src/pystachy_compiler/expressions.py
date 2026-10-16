@@ -709,6 +709,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         bm = self.method_value(o, n.s)
         if bm.t != "":
             return bm
+        if o.t in self.classes:
+            self.fn_attr_read(o, n.s)
         return self.getfield(o, self.field(o, n.s), n.s)
     if k == "index":
         return self.index(n, want)

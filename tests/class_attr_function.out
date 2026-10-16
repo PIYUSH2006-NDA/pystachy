@@ -1,0 +1,7 @@
+('abc', 3)
+('XY', -1) ('PQ', 2)
+('hello', 5) ('Z', 1)
+('value', 5) ('W', 1)
+codec codec
+3 4
+[exit 0]
