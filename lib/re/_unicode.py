@@ -137,6 +137,12 @@ IDCONTINUE = (
     '1wi f2 15u 3t7 5 38g f9e8 6o'
 )
 
+# str.isalpha() differs from single-character str.isidentifier(), over U+0000..U+10FFFF
+ALPHA_IDSTART_DELTA = (
+    '2n 1 m2 1 248 1 3j 1 1mi 3 b8 2 1ox 1 l 1 1d z 2 4 2hy 1 d3 1 p 9 e 3 nfv a gvi 6 ba 2 38 1 1 1 '
+    '1 1 1 1 1 1 1 1 1 1 1 1 7z 2 bk 1h cs 1 8 1 3q 5 6cq 33'
+)
+
 # Py_UNICODE_TOLOWER
 LOWER = (
     '1t:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w 1:w '

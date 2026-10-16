@@ -34,9 +34,11 @@ class GCVerificationTests(unittest.TestCase):
         (self.root / "tests/errors/syntax_example.py").write_text("# error: syntax_example.py: mock syntax\n")
         compiler = self.root / "bin/compiler"
         compiler.write_text(f"#!{sys.executable}\n" + '''import os
+import signal
+if os.environ.get("VERIFY_MOCK_MODE") == "timeout-kill" and os.environ.get("PYSTACHY_GC_STRESS"):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)   # before the other imports: TERM must find it ignored
 from pathlib import Path
 import shutil
-import signal
 import sys
 import time
 args = sys.argv[1:]
@@ -58,8 +60,6 @@ else:
         assert os.environ["PYSTACHY_GC"] == "stats"
         Path("gc-child.pid").write_text(str(os.getpid()))
         mode = os.environ["VERIFY_MOCK_MODE"]
-        if mode == "timeout-kill":
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
         if mode in ("timeout", "timeout-kill", "signal"):
             time.sleep(30)
         if mode == "failure":
@@ -111,7 +111,9 @@ echo "$checks passed, 0 failed"
         timeout.write_text(f"#!{sys.executable}\n" + f'''import os
 import sys
 assert sys.argv[1:4] == ["--verbose", "--kill-after=10s", "10m"]
-limit = "0.2s" if os.environ["VERIFY_MOCK_MODE"].startswith("timeout") else "10s"
+mode = os.environ["VERIFY_MOCK_MODE"]
+# timeout-kill's mock must ignore TERM before it comes: 0.2s is less than a cold Python's start
+limit = "3s" if mode == "timeout-kill" else "0.2s" if mode.startswith("timeout") else "10s"
 os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sys.argv[4:]])
 ''')
         timeout.chmod(0o755)

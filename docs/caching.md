@@ -7,11 +7,14 @@ The [router example](../examples/route/README.md) shows an application result ca
 | Cache | A hit skips | Bound |
 |---|---|---|
 | `fnmatch._compile_pattern` | Glob translation and regex compilation | 32,768 patterns, LRU |
-| `re.compile` | Regex parsing and compilation | 512 patterns, FIFO |
-| Regex replacement template | Replacement parsing and group resolution | 512 templates, FIFO |
+| `re.compile` | Regex parsing and compilation | 512 patterns; 256-entry FIFO front, recency refresh on front misses |
+| Regex replacement template | Replacement parsing and group resolution | 512 templates; same two-level policy |
 | Pattern ASCII classes | Character-class opcode interpretation | 128 entries per used class, owned by pattern |
 | Regex decoded subject | Decoding the same string object again | Last subject only |
 | Application `lru_cache` | Entire function body | Chosen `maxsize` |
+
+The regex front caches reference entries in their larger caches; they do not compile extra
+patterns or templates. Repeated front hits only read the cache, and `re.purge()` clears both levels.
 
 ASCII tables are built lazily; non-ASCII characters retain the class evaluator. Stable integer
 constants also allow LLVM switches in regex dispatch. Textwrap skips unnecessary tab expansion
