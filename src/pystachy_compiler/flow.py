@@ -14,7 +14,7 @@ from src.pystachy_compiler.analysis import (
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.syntax import Node, has_kind, mk
+from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import is_const
 
 
@@ -757,17 +757,18 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
         self.fl_expr(fl, e.kids[2])
         mark = len(fl.log)
         self.fl_target(fl, e.kids[1])
-        for i in range(len(e.kids)):
-            if i != 1 and i != 2:
-                self.fl_expr(fl, e.kids[i])
+        for c in e.kids[3:]:
+            self.fl_expr(fl, c)
+        self.fl_expr(fl, e.kids[0])
         fl.undo(mark)
     elif k == "walrus":
         self.fl_expr(fl, e.kids[0])
         fl.put(e.s)
-    elif (k == "boolop" or k == "ifexp" or k == "cmp") and has_kind(e, "walrus"):
+    elif k == "boolop" or k == "ifexp" or k == "cmp":
         # what may not run: the operands of and/or after the first, the arms of an if-else and
         # the comparisons of a chain after the first. What a := there binds is not surely bound
-        # after it (each arm is analysed from the state after the test, and they are joined)
+        # after it (each arm is analysed from the state after the test, and they are joined).
+        # Defaults of lambdas evaluated in an operand can bind names too; their bodies cannot.
         n = 1 if k != "cmp" else 2
         for c in e.kids[:n]:
             self.fl_expr(fl, c)

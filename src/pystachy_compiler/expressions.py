@@ -1722,6 +1722,7 @@ def gen_ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
     self.cbr(c, l1, l2)
     self.place(l1)
     pre = self.narrow_by(n.kids[0], True)
+    self.branch += 1  # (neither arm surely rebinds a template parameter whose argument is None)
     a = self.expr(n.kids[1], want, resultsoft=resultsoft)
     if is_vtuple(unopt(want)):
         a = self.coerce(a, want)  # (construct the requested representation in its arm)
@@ -1737,6 +1738,7 @@ def gen_ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
     if want == "" and n.kids[2].kind == "ifexp" and self.optional(a.t) != "":
         wb = self.optional(a.t)  # (x if c else y if d else None: T | None)
     b = self.expr(n.kids[2], wb, resultsoft=resultsoft)
+    self.branch -= 1
     if is_vtuple(unopt(want)):
         b = self.coerce(b, want)
     if (is_fn(b.t) and is_callable(unopt(want))) or is_union(unopt(want)):
@@ -1799,7 +1801,9 @@ def gen_boolop(self, n: Node, ascond: bool, want: str, resultsoft: bool = False)
         self.cbr(c, l3, l2)
     self.place(l2)
     pre = self.narrow_by(n.kids[0], n.s == "and")
+    self.branch += 1
     b = Val(self.cond(n.kids[1]), "bool") if ascond else self.expr(n.kids[1], a.t, resultsoft=resultsoft)
+    self.branch -= 1
     self.narrowed = self.forget_walrus(pre, n.kids[1:])
     # a right operand that ends the program (sys.exit()) has no edge to the join, and no value
     rt = a.t
@@ -2297,7 +2301,9 @@ def gen_compare(self, n: Node) -> Val:
     ph = Ins("phi", "bool", "")
     r = a
     for i in range(len(ops)):
+        self.branch += 1 if i > 0 else 0
         b = self.expr(n.kids[i + 1], a.t, resultsoft=True)
+        self.branch -= 1 if i > 0 else 0
         r = self.cmp2(ops[i], a, b)
         if i < len(ops) - 1:
             nx = self.label()

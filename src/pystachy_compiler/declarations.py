@@ -1,7 +1,7 @@
 """Declarations component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.analysis import calls_init, local_names
+from src.pystachy_compiler.analysis import calls_init, local_names, stmt_walrus
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
@@ -1019,7 +1019,9 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
     for st in ci.node.kids[0].kids:
         self.line = st.line
-        if has_kind(st, "walrus") or (st.kind == "def" and len([p for p in st.kids[0].kids if has_kind(p, "walrus")]) > 0):
+        binds: dict[str, bool] = {}
+        stmt_walrus(st, binds)
+        if has_kind(st, "walrus") or len(binds) > 0:
             why = "an assignment expression (:=) in a class body is not supported (CPython binds a class attribute)"
             if ci.mod == "":
                 self.err(why)
