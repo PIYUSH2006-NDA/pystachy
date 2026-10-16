@@ -321,8 +321,13 @@ bench/pyperformance/LICENSE, with its list of authors in bench/pyperformance/AUT
 keeps its upstream header: regex_v8.py's holds the V8 project's BSD license ("Copyright 2009 the
 V8 project authors"), and raytrace.py's says it may be redistributed under the MIT License
 ("Copyright Callum and Tony Garnock-Jones, 2008"). deltablue.py's says that the JavaScript
-implementation it derives from was licensed under the GPL; pyperformance distributes this Python
-port under its MIT License.
+implementation it derives from was licensed under the GPL. fannkuch.py, meteor_contest.py,
+nbody.py, regex_dna.py and spectral_norm.py say they come from The Computer Language Benchmarks
+Game, whose programs are published under the 3-clause BSD License; richards.py and
+richards_super.py credit a Java version "Copyright (C) 1995 Sun Microsystems, Inc."; chaos.py says
+"Copyright (C) 2005 Carl Friedrich Bolz". pyperformance distributes all of these files under its
+MIT License; their origins are listed here so that a license review can confirm that this
+suffices.
 
 Ryu (ryu/)
 ----------

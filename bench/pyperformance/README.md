@@ -105,8 +105,13 @@ reporting the first compiler error.
 pyperformance is distributed under the MIT License; [LICENSE](LICENSE) and [AUTHORS](AUTHORS)
 are its `COPYING` and `AUTHORS` files. Each port keeps its upstream header. `regex_v8.py`'s
 header carries the V8 project's BSD license, and `raytrace.py`'s states the MIT License.
-`deltablue.py`'s docstring says the JavaScript original was licensed under the GPL;
-pyperformance distributes this Python port under its MIT License. See
+`deltablue.py`'s docstring says the JavaScript original was licensed under the GPL.
+`fannkuch.py`, `meteor_contest.py`, `nbody.py`, `regex_dna.py` and `spectral_norm.py` say they
+come from The Computer Language Benchmarks Game, whose programs are published under the
+3-clause BSD License. `richards.py` and `richards_super.py` credit a Java version
+"Copyright (C) 1995 Sun Microsystems, Inc.", and `chaos.py` says "Copyright (C) 2005 Carl
+Friedrich Bolz". pyperformance distributes all of these files under its MIT License; their
+origins are listed so that a license review can confirm that this suffices. See
 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES).
 
 ## Adaptations
