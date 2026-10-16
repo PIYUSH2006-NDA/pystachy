@@ -22,7 +22,7 @@ Archive SHA-256: `06d37247c6985739b707b8b39b6b83e06e8af783b2531e31965501ba983985
 | `earth_gravity.py` | `70057a3a1ed33c96b8c191c28c4012b4d2fdbd55b5775ec9bdaaabf78f418879` | 1 |
 | `ext.py` | `31240fe331e03d3427adf8afc113838a6a09ab769d5c484b8c13c7cbf1fc6287` | 2 |
 | `functions.py` | `8947e790097ae705f35244a3233a8b0ec61b214873618a241488686993b79e40` | none |
-| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 7 |
+| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 6 |
 | `model.py` | `8725b573ea25f33497022dcab447a139d3ee3eb71e0894da52658877ce6cc324` | 8 |
 | `propagation.py` | `fa851ca7d8710eb54d684de61bc84cc8a3687241518e4ee4cfe8249e0fb33a92` | 6 |
 
@@ -39,7 +39,9 @@ Archive SHA-256: `06d37247c6985739b707b8b39b6b83e06e8af783b2531e31965501ba983985
 - The 2,069-line propagator needs six small edits; the remaining adaptation is in model construction and API plumbing.
 - The re-baseline (#262) restored upstream's unannotated `Satrec` methods (specialized for
   their arguments, with `whichconst` rebound to its gravity model), the slots, the two
-  properties, `EarthGravity(*getgravconst(...))` and `days2mdhms()`'s rebound `minute`.
+  properties, `EarthGravity(*getgravconst(...))`, `days2mdhms()`'s rebound `minute` and the
+  `re` patterns of `io.py`. Compiling the two patterns, which nothing in sgp4 uses, makes each
+  AOT build about 3 s longer and the executable about 150 KB larger.
 
 ## Validation snapshot
 

@@ -3,18 +3,16 @@
 This is a minimally-edited copy of "sgp4io.cpp".
 
 """
-# Pystachy port: re and datetime are not Pystachy modules (#11). re only compiles INT_RE and
-# FLOAT_RE, which nothing uses; datetime only builds the legacy satrec.epoch, and
-# _check_datetime() makes its checks (below).
-# import re
+import re
+# Pystachy port: datetime is not a Pystachy module (#11). It only builds the legacy
+# satrec.epoch, and _check_datetime() makes its checks (below).
 # from datetime import datetime
 from math import pi, pow
 from sgp4.ext import days2mdhms, invjday, jday
 from sgp4.propagation import sgp4init
 
-# Pystachy port: re, as above
-# INT_RE = re.compile(r'[+-]?\d*')
-# FLOAT_RE = re.compile(r'[+-]?\d*(\.\d*)?')
+INT_RE = re.compile(r'[+-]?\d*')
+FLOAT_RE = re.compile(r'[+-]?\d*(\.\d*)?')
 
 LINE1 = '1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN'
 LINE2 = '2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN'
