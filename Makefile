@@ -56,6 +56,16 @@ bench-extended-check: $(BENCH_COMPILER)
 	$(PY) -m unittest discover -s tools -p test_bench_extended.py
 	$(PY) tools/bench_extended.py --compiler "$(BENCH_COMPILER)" --smoke --json build/extended-smoke.json
 
+# Ported pyperformance benchmarks (bench/pyperformance/README.md): CPython, JIT and AOT wall times,
+# each run's output compared with CPython's; advisory, no thresholds. The check runs small inputs
+# once (correctness only); --census needs the pinned sdist.
+bench-pyperformance: $(BENCH_COMPILER)
+	$(PY) tools/bench_pyperformance.py --compiler "$(BENCH_COMPILER)" $(BENCH_ARGS)
+
+bench-pyperformance-check: $(BENCH_COMPILER)
+	$(PY) -m unittest discover -s tools -p test_bench_pyperformance.py
+	$(PY) tools/bench_pyperformance.py --compiler "$(BENCH_COMPILER)" --smoke --json build/pyperformance-smoke.json
+
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
 # (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those). It also
@@ -218,4 +228,4 @@ uninstall:
 test-install:
 	$(PY) -m unittest discover -s tools -p test_install.py
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe unicode-audit verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check bench-pyperformance bench-pyperformance-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe unicode-audit verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install

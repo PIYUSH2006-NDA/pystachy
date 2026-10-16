@@ -2,8 +2,9 @@
 # fixes of rule families such as UP, C4, SIM, PL, RUF, FURB or PERF bring in set literals, starred
 # expressions and other forms the subset rejects; no ruff format either, for the same reason
 target-version = "py313"
-# vendored CPython stdlib, a port, and the test programs, whose output CPython recorded
-extend-exclude = ["lib", "ports", "tests"]
+# vendored CPython stdlib, ports, the test programs, whose output CPython recorded, and the adapted
+# pyperformance benchmarks
+extend-exclude = ["lib", "ports", "tests", "bench/pyperformance"]
 # also for paths named on the command line: tests/errors/nest_*.py overflow ruff's stack
 force-exclude = true
 
