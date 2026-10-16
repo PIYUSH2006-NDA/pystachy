@@ -741,21 +741,46 @@ def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
         free_reads(kid, bound, out)
 
 
+def target_unbound(t: Node, names: list[str], bound: list[str]) -> str:
+    # the first of names that assigning to target t reads (in an attribute's object, or in a
+    # subscript) before a name it binds is bound, or "": bound has the names bound so far, and
+    # gets t's own, in the order t assigns them (left to right)
+    k = t.kind
+    if k == "name":
+        bound.append(t.s)
+        return ""
+    if k == "tuple" or k == "list" or k == "starred":
+        for x in t.kids:
+            nm = target_unbound(x, names, bound)
+            if nm != "":
+                return nm
+        return ""
+    out: dict[str, bool] = {}
+    for x in t.kids:
+        free_reads(x, {}, out)
+    for nm in names:
+        if nm in out and nm not in bound:
+            return nm
+    return ""
+
+
 def comp_unbound(c: Node, names: list[str]) -> str:
-    # why comprehension c, whose variables are names, is not supported, or "": a later clause
-    # reads one of them that only that clause's target or a later one binds, which CPython finds
-    # unbound (UnboundLocalError)
+    # why comprehension c, whose variables are names, is not supported, or "": a clause (a
+    # condition, a later for clause's iterable, or a for clause's target) reads one of them that
+    # only that clause's target or a later one binds, which CPython finds unbound (UnboundLocalError)
     bound: list[str] = []
-    names_in(c.kids[1], bound)
+    nm = target_unbound(c.kids[1], names, bound)
     for x in c.kids[3:] if len(c.kids) > 3 and (c.kids[3].kind == "compfor" or c.kids[3].kind == "compif") else c.kids[:0]:
+        if nm != "":
+            break
         out: dict[str, bool] = {}
         free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, out)
-        for nm in names:
-            if nm in out and nm not in bound:
-                return f"'{nm}' is read before the comprehension's for clause that binds it, where CPython raises UnboundLocalError (not supported)"
-        if x.kind == "compfor":
-            names_in(x.kids[0], bound)
-    return ""
+        for v in names:
+            if v in out and v not in bound and nm == "":
+                nm = v
+        if nm == "" and x.kind == "compfor":
+            nm = target_unbound(x.kids[0], names, bound)
+    return "" if nm == "" else f"'{nm}' is read before the comprehension's for clause that binds it, where CPython raises UnboundLocalError (not supported)"
 
 
 def closure_free(d: Node, out: dict[str, bool]) -> None:
