@@ -142,16 +142,16 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Eleven groups run in parallel, each with its own fixed-point bootstrap. The target is under
+Thirteen groups run in parallel, each with its own fixed-point bootstrap. The target is under
 ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
 |---|---|
-| `hosted` | CPython-hosted differential suite. |
+| `hosted-0`, `hosted-1` | Two disjoint halves of the CPython-hosted differential suite, JIT and AOT. |
 | `native` | Native differential suite. |
 | `opt-off` | Native suite with IR optimizations disabled. |
 | `python-free` | Rebuild and run with no Python on `PATH`. |
-| `ubsan` | Sanitized compiler/runtime and JIT/AOT suite. |
+| `ubsan-0`, `ubsan-1` | Sanitized compiler/runtime; two disjoint halves of the JIT/AOT suite. |
 | `gc-self` | Collector-stressed self-compilation and identical-IR check. |
 | `gc-jit` | Full JIT suite with compiler and program GC stress. |
 | `gc-aot-0`, `gc-aot-1` | Two disjoint halves of the full AOT suite, with compiler and program GC stress. |
@@ -178,6 +178,11 @@ rejection and syntax checks. The final gate requires all four groups, both execu
 the stress intervals, distinct AOT shard identities and complete counts for every job.
 `tests/verify.sh gc-stress` still runs all GC checks locally with one bootstrap; `gc-aot`
 runs both AOT halves.
+The CPython-hosted and UBSan suites are split the same way (`tests/verify.sh`'s `shard_cases`).
+The gate requires each half's shard identity and complete count, and that the halves together
+make as many checks as the native suite (`hosted-*`) or as GC JIT and both GC AOT halves
+(`ubsan-*`). Locally, `hosted` runs both CPython-hosted halves, and `ubsan` builds the sanitized
+compiler once and runs both of its halves.
 The final report job allows ten minutes for artifact downloads and validation.
 
 The [Lint workflow](../.github/workflows/lint.yml) runs alongside CI: lint, report-gate tests

@@ -263,12 +263,57 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   Its data can then be missing when the file is read back, and appends through several
   dropped writers can land out of order.
 
+- A suspended generator that the program drops (a variable that goes, `del`, a generator kept
+  only in a container, a temporary such as `next(g())`'s, one still suspended when the program
+  ends) is never closed: its `finally` blocks and `with` blocks do not run, where CPython closes
+  it as its last reference goes (at the latest as the interpreter shuts down). A generator
+  that a `for` loop's iterable has just made is closed as CPython closes it, where the loop is
+  left, and so is a generator that `yield from` delegates to when its delegating generator is
+  closed so. (`tests/deviations/gen_finalization.py`) Where an exception leaves a consumer's
+  generator expression (`any(f(x) for x in g())`), the generator it iterates is closed before
+  the handler runs; CPython closes it once the handler has finished, as the exception's
+  traceback holds the expression's frame until then. (`tests/deviations/gen_genexp_close_timing.py`)
+
+- In a program without `try` or `with` statements, a `StopIteration` raised by a function that a
+  generator calls ends the program as `StopIteration`, where PEP 479 makes it
+  `RuntimeError: generator raised StopIteration` as it leaves the generator; nothing could catch
+  either, and the exit status is the same. A `raise StopIteration` or a `next()` in the
+  generator's own body is converted, and so is everything in a program with `try` or `with`.
+  (`tests/deviations/gen_pep479_no_try.py`)
+
+- What closing a generator raises (other than `GeneratorExit`) is reported, not propagated, when
+  a `yield from` closes the generator it delegates to: CPython raises it in the delegating
+  generator, whose own handlers may see it. A generator expression's first iterable is evaluated
+  where it is written, but a `range()`, `enumerate()`, `zip()` or `reversed()` there checks its
+  arguments (a zero step), and a dict's or set's iterator records its size, when the generator
+  first runs, not where it is made.
+
 ## Rejected rather than miscompiled
 
 CPython can execute these constructs, often raising a runtime error. Pystachy instead rejects
 them at compile time with a `file:line: error:`. The lists are grouped by feature; the
 [typing](typing.md), [module](modules.md) and [execution](semantics.md) references explain the
 supported alternatives.
+
+### Generators
+
+- the value of a `yield` expression (`x = yield v`: there is no `send()`), a `yield from` whose
+  value is used other than assigned to a variable (`r = yield from g()`), the value of a
+  `yield from` that delegates to a generator other than a call of a generator function (whose
+  return type is not known), and a `return v` in a generator annotated `Iterator[T]` or
+  `Iterable[T]`
+- `send()`, `throw()` and `close()` of a generator, `Generator[Y, S, R]` with a send type other
+  than `None`, a generator function's return annotation other than `Iterator[T]`, `Iterable[T]`
+  or `Generator[Y, None, R]`, async generators, and printing or comparing a generator object
+- an unannotated generator function that delegates to itself (`yield from f(...)`) before its
+  first `yield`, whose yield type is not known there
+- a generator expression made a value (not a direct argument of a consumer) that reads a
+  variable of a comprehension around it, a variable of a function around its own, or a variable
+  of its function that may be bound again (or not yet be bound) where it is written: CPython
+  reads such a variable when the generator runs (late binding), and Pystachy passes its value
+  where the expression is
+- `reversed()` of a generator, `len()` of one, `dict()` of one (a dict comprehension over it
+  works), and a generator where a list is expected
 
 ### Names and scopes
 
@@ -399,18 +444,18 @@ supported alternatives.
 - comparison dunders and `__bool__` that do not return `bool`, `__str__`/`__repr__` that do not
   return `str`, a `__len__` that returns neither an `int` nor a `bool`, methods without `self` (or
   a class method without `cls`)
-- an `__iter__` that is a generator, or that returns something other than an iterator object
+- an `__iter__` that is not a generator and returns something other than an iterator object
   (a list it returns as it is is rejected by CPython too: `iter() returned non-iterator of type
   'list'`); in an `__iter__` annotated `-> Iterator[T]` that returns `iter(x)`, an `x` other than
   a list, a tuple, a `str` or an object with such an `__iter__` (a dict or its `keys()`,
   `values()` or `items()`, whose iterator raises if the dict changes size, or an object whose
   `__iter__` returns an iterator object: leave out the annotation), and a call of that
   `__iter__` (`o.__iter__()`)
-- a `__reversed__` that is a generator, or that returns anything but `iter(xs)` or
+- a `__reversed__` that is not a generator and returns anything but `iter(xs)` or
   `reversed(xs)` of a list, a tuple, a `str` or an object with an `__iter__` annotated as above
   (also an iterator object, which CPython iterates over)
-- `iter(callable, sentinel)`; `iter()` of `enumerate()`, `zip()`, `map()`, `filter()`,
-  `reversed()` or a generator expression; `next(it, default)` where the default's type and the
+- `iter(callable, sentinel)`; `iter()` of `enumerate()`, `zip()`, `map()`, `filter()` or
+  `reversed()`; `next(it, default)` where the default's type and the
   items' join to no type; and an iterator class without `__iter__` where CPython 3.13 calls
   `iter()` of the iterator again: in a comprehension and in `str.join()`
 - a class in an inheritance hierarchy whose `__init__` calls `iter()` or takes an

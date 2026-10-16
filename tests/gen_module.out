@@ -1,0 +1,13 @@
+mods: init mods
+mods.shapes: init mods.shapes
+3
+True False
+line a
+line b
+line c
+['a', 'b', 'c'] ['c', 'b', 'a']
+[1, 2]
+[3, 4]
+[5]
+['abc', 'de']
+[exit 0]

@@ -549,6 +549,38 @@ from src.pystachy_compiler.flow import (
     gen_scc as flow_scc,
     gen_user_call as flow_user_call,
 )
+from src.pystachy_compiler.generators import (
+    gen_builtin_catch as generators_builtin_catch,
+    gen_gen_ann_ret as generators_gen_ann_ret,
+    gen_gen_begin as generators_gen_begin,
+    gen_gen_cleanup as generators_gen_cleanup,
+    gen_gen_contains as generators_gen_contains,
+    gen_gen_unpack as generators_gen_unpack,
+    gen_gen_declare as generators_gen_declare,
+    gen_gen_drop as generators_gen_drop,
+    gen_gen_end as generators_gen_end,
+    gen_gen_enter as generators_gen_enter,
+    gen_gen_list as generators_gen_list,
+    gen_hidden_loop as generators_hidden_loop,
+    gen_gen_name as generators_gen_name,
+    gen_gen_next as generators_gen_next,
+    gen_gen_none_end as generators_gen_none_end,
+    gen_none_null as generators_none_null,
+    gen_gen_promise as generators_gen_promise,
+    gen_gen_ret as generators_gen_ret,
+    gen_gen_method as generators_gen_method,
+    gen_genexp_value as generators_genexp_value,
+    gen_gen_next_value as generators_gen_next_value,
+    gen_gen_unhandle as generators_gen_unhandle,
+    gen_gen_return as generators_gen_return,
+    gen_gen_stream as generators_gen_stream,
+    gen_gen_suspend as generators_gen_suspend,
+    gen_owned_gen as generators_owned_gen,
+    gen_owned_node as generators_owned_node,
+    gen_owned_loop as generators_owned_loop,
+    gen_yield_from as generators_yield_from,
+    gen_yield_stmt as generators_yield_stmt,
+)
 from src.pystachy_compiler.functions import (
     gen_enter as functions_enter,
     gen_extern_args as functions_extern_args,
@@ -584,6 +616,7 @@ from src.pystachy_compiler.ircheck import (
     gen_nums as ircheck_nums,
     gen_opfx as ircheck_opfx,
     gen_verify as ircheck_verify,
+    gen_verify_gen as ircheck_verify_gen,
 )
 from src.pystachy_compiler.lowering import (
     gen_eh_ir as lowering_eh_ir,
@@ -595,6 +628,7 @@ from src.pystachy_compiler.lower_module import (
     gen_cextern as lower_module_cextern,
     gen_dispatch as lower_module_dispatch,
     gen_extern_decl as lower_module_extern_decl,
+    gen_gen_module as lower_module_gen_module,
     gen_lower_module as lower_module_lower_module,
     gen_pyext as lower_module_pyext,
 )
@@ -954,6 +988,15 @@ class Gen:
         self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
         self.nlw: dict[str, bool] = {}  # and those of them, or of the variables it takes, that a closure assigns (nonlocal)
+        # the generator object a call of a generator function made last (the call's value), and that
+        # function (Gen.call_fn): a loop over that value owns the generator (owned_gen)
+        self.gencall = ""
+        self.gencallf: FnInfo | None = None
+        self.ngenexp = 0  # the generator expressions made values (genexp_value): each a function of its own
+        self.vowned: dict[str, FnInfo] = {}  # val nodes of such generators (owned_node), by the node's text
+        self.gendrops = False  # a gen.drop op was lowered: the module defines its helper (lower_module)
+        self.coros = False  # a generator function was lowered: the module declares LLVM's coroutine intrinsics
+        self.lowblk = ""  # the label of the block being lowered (gen.start's phi names it)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
         self.brks: list[list[dict[str, str]]] = []  # for each loop being compiled, what narrowed holds at its breaks
@@ -1896,6 +1939,97 @@ class Gen:
     def function(self, f: FnInfo, body: list[Node]) -> None:
         return functions_function(self, f, body)
 
+    def builtin_catch(self, b: str) -> str:
+        return generators_builtin_catch(self, b)
+
+    def gen_ann_ret(self, n: Node) -> list[str]:
+        return generators_gen_ann_ret(self, n)
+
+    def gen_begin(self, f: FnInfo) -> None:
+        return generators_gen_begin(self, f)
+
+    def gen_cleanup(self) -> int:
+        return generators_gen_cleanup(self)
+
+    def gen_unpack(self, t: Node, g: Val) -> None:
+        return generators_gen_unpack(self, t, g)
+
+    def gen_contains(self, x: Val, g: Val) -> Val:
+        return generators_gen_contains(self, x, g)
+
+    def gen_declare(self, f: FnInfo, d: Node) -> str:
+        return generators_gen_declare(self, f, d)
+
+    def gen_drop(self, h: Val) -> None:
+        return generators_gen_drop(self, h)
+
+    def gen_end(self, f: FnInfo) -> None:
+        return generators_gen_end(self, f)
+
+    def gen_enter(self) -> None:
+        return generators_gen_enter(self)
+
+    def hidden_loop(self, loop: Node, own: list[str], names: list[str]) -> None:
+        return generators_hidden_loop(self, loop, own, names)
+
+    def gen_list(self, v: Val, want: str) -> Val:
+        return generators_gen_list(self, v, want)
+
+    def gen_name(self, f: FnInfo) -> str:
+        return generators_gen_name(self, f)
+
+    def gen_next(self, h: Val, done: str) -> str:
+        return generators_gen_next(self, h, done)
+
+    def gen_none_end(self) -> None:
+        return generators_gen_none_end(self)
+
+    def none_null(self, t: str) -> bool:
+        return generators_none_null(self, t)
+
+    def gen_promise(self, h: Val) -> str:
+        return generators_gen_promise(self, h)
+
+    def gen_unhandle(self) -> None:
+        return generators_gen_unhandle(self)
+
+
+    def genexp_value(self, n: Node) -> Val:
+        return generators_genexp_value(self, n)
+
+    def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        return generators_gen_method(self, o, m, args)
+
+    def gen_next_value(self, g: Val, dflt: Val) -> Val:
+        return generators_gen_next_value(self, g, dflt)
+
+    def gen_ret(self, v: Val) -> None:
+        return generators_gen_ret(self, v)
+
+    def gen_return(self, n: Node) -> None:
+        return generators_gen_return(self, n)
+
+    def gen_stream(self, name: str, v: Val, args: list[Node], want: str, resultsoft: bool) -> Val:
+        return generators_gen_stream(self, name, v, args, want, resultsoft)
+
+    def gen_suspend(self, slot: str, k: int, sub: Val) -> None:
+        return generators_gen_suspend(self, slot, k, sub)
+
+    def owned_gen(self, v: Val, it: Node) -> int:
+        return generators_owned_gen(self, v, it)
+
+    def owned_node(self, v: Val) -> Node:
+        return generators_owned_node(self, v)
+
+    def owned_loop(self, owned: list[Val], close: bool, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None, made: SeqStart | None) -> None:
+        return generators_owned_loop(self, owned, close, tgt, seqs, mode, body, start, hide, arg, made)
+
+    def yield_from(self, x: Node) -> Val:
+        return generators_yield_from(self, x)
+
+    def yield_stmt(self, n: Node) -> None:
+        return generators_yield_stmt(self, n)
+
     def extern_args(self, x: Node, more: bool) -> list[str]:
         return functions_extern_args(self, x, more)
 
@@ -1917,6 +2051,9 @@ class Gen:
     def lower_module(self) -> str:
         return lower_module_lower_module(self)
 
+    def gen_module(self) -> list[str]:
+        return lower_module_gen_module(self)
+
     def lower(self, fn: IFn) -> None:
         return lowering_lower(self, fn)
 
@@ -1928,6 +2065,9 @@ class Gen:
 
     def verify(self, fn: IFn, eh: bool) -> None:
         return ircheck_verify(self, fn, eh)
+
+    def verify_gen(self, fn: IFn, b: Blk, i: Ins, j: int) -> None:
+        return ircheck_verify_gen(self, fn, b, i, j)
 
     def nums(self, i: Ins) -> int:
         return ircheck_nums(self, i)

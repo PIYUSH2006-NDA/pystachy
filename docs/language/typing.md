@@ -17,8 +17,9 @@ unsupported forms, see [compatibility](compatibility.md).
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
 | `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
-| `T \| None` | Optional values, including containers and `Callable` |
+| `T \| None` | Optional values, including containers, `Callable` and generators (`Generator[Y, None, None] \| None`) |
 | `TextIO` | Text files |
+| `Generator[Y, None, R]`; `Iterator[T]` or `Iterable[T]` as a generator function's return | Generator objects that yield `T` (any generator function's); see [generators](semantics.md#generators). Elsewhere `Iterator[T]` and `Iterable[T]` type nothing ([iterators](semantics.md#iterators)) |
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
@@ -55,11 +56,10 @@ Runtime-length tuples currently do not support concatenation, repetition,
 membership, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
 expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
-`bool`, `str` or optional versions of those types, and the objects of iterator classes.
-Direct `enumerate` and `zip` produce tuple-valued items, which runtime-length tuples cannot
+`bool`, `str` or optional versions of those types, the objects of iterator classes and
+generators. Direct `enumerate` and `zip` produce tuple-valued items, which runtime-length tuples cannot
 hold. Project a scalar first, for example `tuple(value for index, value in enumerate("ab"))`
-or `tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Generators are not yet
-supported. This enables the existing `re.Match.groups()` implementation
+or `tuple(left + right for left, right in zip([1, 2], [3, 4]))`. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, objects of the program's classes, or tuples containing `int`,
