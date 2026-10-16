@@ -460,6 +460,10 @@ established type, and comparison methods must return `bool`.
 Function annotations mentioning a module-level `TypeVar` or `TypeVarTuple` (also one
 from-imported from another module), or a PEP 695 function type parameter
 (`def identity[T](value: T) -> T`), make those parts of the signature inferred. Generic classes bind their type variables differently, as described below.
+A PEP 695 function's `**P` and `*Ts` are such type parameters too, also in its nested defs:
+`def logged[**P, R](fn: Callable[P, R]) -> Callable[P, R]` may return a nested
+`def wrapper(*args: P.args, **kwargs: P.kwargs) -> R` that forwards them (also with
+`Concatenate[int, P]`). A module-level `ParamSpec` is unsupported.
 
 ### Variadic arguments
 
@@ -579,8 +583,9 @@ PEP 695 syntax declares the same class: `class Box[T]:` is `class Box(Generic[T]
 type variables of its own, which hide a module-level name `T` (but where a method's `global T`
 names it), and `class Row[*Ts, R]:` is `Generic[*Ts, R]`. A bound, constraints or a default
 (`class Num[T: (int, float)]`) is not checked: the arguments' types bind the variable, as for
-a `TypeVar`. A PEP 695 function's type parameters hide a module-level name in its annotations
-and body, as a class's do in its methods; a read of one as a value is a `TypeVar`'s error.
+a `TypeVar`. A PEP 695 function's type parameters hide a module-level or an enclosing
+function's name in its annotations and body, as a class's do in its methods; a read of one as
+a value is a `TypeVar`'s error.
 
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), `Callable[[A, *Ts], R]`,

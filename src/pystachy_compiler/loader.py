@@ -2438,9 +2438,12 @@ class Loader:
                 self.qren = dict(ren)
                 for nm in st.kids[2].s.split():
                     # (a generic def's type parameters, in its body as a generic class's are in its
-                    # methods: CPython's TypeVars, not the module's names, which they hide)
+                    # methods: CPython's TypeVars, not the module's or an enclosing function's
+                    # names, which they hide)
                     self.qren[nm] = st.s + "$$" + nm
                     m.deftps.append(self.qren[nm])
+                    if nm not in own:
+                        inner.pop(nm, False)
                 for nm in decl:
                     self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)
