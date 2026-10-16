@@ -38,6 +38,9 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
            "_weakref array atexit binascii cmath faulthandler fcntl gc grp itertools marshal posix pwd pyexpat select "
            "syslog unicodedata zlib").split():
     CBUILTIN[_k] = True
+# the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
+# that file as the module (Loader.modpath), where CPython imports its C module
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())

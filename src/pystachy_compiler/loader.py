@@ -58,6 +58,7 @@ from src.pystachy_compiler.specs import (
     MODULES,
     NOCALL,
     PYBUILTINS,
+    STANDINS,
     TYPING,
     VERSIONINFO,
 )
@@ -335,6 +336,8 @@ class Loader:
         # the file module name is loaded from: NAME/__init__.py or NAME.py, the first found on the
         # module path or in the parent package, else the directories of a namespace package
         # (separated by ":"); "" if there is none
+        if name in STANDINS and len(self.dirs) > 0:
+            return self.dirs[-1] + "/" + STANDINS[name] + ".py"  # (lib's stand-in for a C module)
         if name in CBUILTIN:
             return ""  # a module built into CPython: no file on the path replaces it (find())
         if name == ITERS:

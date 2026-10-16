@@ -570,3 +570,24 @@ can use the inherited `fromutc()`.
 - Ordering a `date` with a `datetime` raises the `TypeError` of the reflected comparison.
 - Strings are UTF-8 bytes: `fromisoformat()` rejects a non-ASCII separator, and its length
   checks count bytes, as `_datetime`'s parser does.
+
+## Binascii
+
+`binascii` is `_pystachy_binascii`, a port of CPython's C module (`Modules/binascii.c`) to the
+subset. Pystachy loads it for `import binascii`, where CPython imports its C module, and a
+`binascii.py` or package on the module path replaces neither. All twelve functions are there,
+with the C module's signatures, results and errors (`binascii.Error`, a `ValueError`, with its
+messages): `hexlify` and `b2a_hex` with `sep` and `bytes_per_sep`, `unhexlify` and `a2b_hex`,
+`b2a_base64` and `a2b_base64` (with `strict_mode`), `b2a_uu` and `a2b_uu` (with `backtick`),
+`b2a_qp` and `a2b_qp` (with `quotetabs`, `istext` and `header`), `crc32` and `crc_hqx`.
+`binascii.Incomplete` exists, as in CPython, where no function raises it.
+
+- Binary data is `bytes`, as Pystachy has no `bytearray`, `memoryview` or `array`. The `a2b_*()`
+  functions also take a `str` of ASCII characters, as CPython's do. Another type of argument
+  is a compile-time error, where CPython raises `TypeError`.
+- `hexlify(data, None)` and `b2a_hex(data, None, n)` separate nothing, as without a `sep`, where
+  CPython raises `TypeError` ([deviation](../tests/deviations/lib_binascii_sep_none.py)).
+- The functions are Python functions, whose reprs are `<function hexlify at ...>`, not
+  `<built-in function hexlify>`. `a2b_base64.__doc__` is CPython's docstring without the
+  indentation of its option's description, which CPython 3.13 removes from a Python function's
+  docstring.
