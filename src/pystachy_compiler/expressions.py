@@ -2152,7 +2152,7 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         ik = self.expr(n.kids[1], self.argtype(t, "__getitem__", 1, f"'{tname(t)}' object is not subscriptable"))
         self.notnone(o, sub)
         return self.protocol(o, "__getitem__", [ik])
-    self.err(f"'{t}' object is not subscriptable")
+    self.err(f"'{tname(t) if is_gen(t) else t}' object is not subscriptable")
     return o
 
 def gen_pick(self, o: Val, tests: list[Val], exc: str, msg: str, what: str, want: str, dflt: Val | None = None) -> Val:

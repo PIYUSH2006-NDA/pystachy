@@ -373,7 +373,7 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
     "subclass": "class inheritance is not supported",
-    "yield": "'yield' is not supported (there are no generator functions)",
+    "yield": "the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)",
     "starred": "starred expressions (*x) are not supported",
     "dictstar": "dict displays with ** are not supported",
     "dstar": "star arguments are not supported",
