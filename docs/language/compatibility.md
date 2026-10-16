@@ -208,6 +208,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   lookup that misses an object key runs the key's `__repr__` as it is raised, likewise, where
   CPython runs it only when the error is printed.
 
+- An `__exit__` whose traceback parameter is not annotated `TracebackType | None` (from `types`)
+  is given `None` for it where CPython passes the exception's traceback (`tb is None` is true);
+  annotated so, it takes an object of `TracebackType` that has none of a traceback's attributes.
+  (`tests/deviations/with_traceback_none.py`)
+
 ### Modules and libraries
 
 - An import of a builtin module binds its names for the whole program, wherever it appears.
@@ -328,6 +333,20 @@ supported alternatives.
   where the expression is
 - `reversed()` of a generator, `len()` of one, `dict()` of one (a dict comprehension over it
   works), and a generator where a list is expected
+
+### Context managers
+
+- a `with` item whose value is neither a file nor an object of a class of the program that
+  defines `__enter__` and `__exit__` (a union of such classes, a class without `__exit__`: CPython's
+  `TypeError` message), and `with suppress(...) as x` or `suppress()` with something other than
+  exception classes named (`contextlib.suppress` is compiled as an except clause) or used outside
+  a `with` statement's item
+- an exception class as a value (`cm.__exit__(KeyError, None, None)`, `issubclass(t, cls)` of a
+  variable `cls`), `type(e)` of an exception object that may be `None`, attributes of an
+  exception's class other than `__name__`, and a `nullcontext(None)` that is not
+  `nullcontext()`
+- `contextlib`'s `ExitStack`, `redirect_stdout`, `redirect_stderr`, `chdir`, `aclosing`,
+  `asynccontextmanager` and `AsyncExitStack` (not ported: `lib/compatibility.md`)
 
 ### Names and scopes
 
@@ -651,8 +670,6 @@ supported alternatives.
   (the function would not see the exception)
 - `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
   or `__ne__` (`is` works), but between objects of classes with a base in common
-- an exception that may be `None` (`Exception | None`, `ValueError | None`; an object of an
-  exception class may be)
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:
   annotate it with the class or a base of the program), objects of exception classes with no base
   in common in the program in one list, and a builtin exception where an object of an exception
@@ -674,7 +691,9 @@ supported alternatives.
   `obj` of `AttributeError`, `name` of `NameError`, `name` and `path` of `ImportError`: assign it
   after `super().__init__(...)`, or give it a default in the class body, which CPython's objects
   keep apart from the base's attribute)
-- reading those attributes where the class has no such field (`self.args`, `S(5).value`),
+- exception attributes other than `__cause__` (`e.args`, `e.__context__`, `e.__traceback__`),
+  `__cause__` of an object of an exception class (catch it as a builtin class to read it), and
+  reading those attributes where the class has no such field (`self.args`, `S(5).value`),
   `BaseException`'s methods other than `__str__` and `__repr__` (`e.add_note()`,
   `e.with_traceback()`), a field of a class deriving from a value's class read after `isinstance()`
   tested the value (`isinstance()` does not change the type of a value), a call `x.__init__(...)`

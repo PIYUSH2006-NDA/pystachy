@@ -144,8 +144,9 @@ The usual assignments, `if`, `while`, `for`, loop `else`, `break`, `continue`,
 containers, ranges, files and iterator-like objects.
 
 Unpacking takes a fixed target shape or one starred target, `first, *rest = xs`, whose name
-gets a new list of the remaining items. File context managers support `with open(...) as f:`;
-arbitrary context managers are not supported. Exceptions use the normal
+gets a new list of the remaining items. `with` takes files and context managers of the
+program's classes (`__enter__` and `__exit__`), and `lib/contextlib` provides
+`@contextmanager`, `closing`, `nullcontext` and `suppress`. Exceptions use the normal
 `try` / `except` / `else` / `finally` syntax.
 
 ## Expressions

@@ -22,7 +22,9 @@ tests/upstream_textwrap_wrap.py, tests/upstream_textwrap_layout.py,
 tests/upstream_textwrap_indent.py and tests/deviations/upstream_textwrap_unicode.py
 adapt that commit's Lib/test/test_textwrap.py. tests/upstream_functools_cache.py
 adapts selected methods from Lib/test/test_functools.py, whose source SHA-256 is
-recorded in its header. They preserve the upstream assertions for the supported
+recorded in its header. tests/upstream_contextlib.py and tests/upstream_generators_protocol.py
+adapt selected cases of that commit's Lib/test/test_contextlib.py and
+Lib/test/test_generators.py. They preserve the upstream assertions for the supported
 cases and disclose adaptations and exclusions; the same PSF license applies.
 
 CPython's sequence regression (tests/upstream_slice_none.py)
@@ -135,6 +137,10 @@ license and copyright notice.
 lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and
 copyright notice.
+
+lib/contextlib.py is CPython 3.13.16's Lib/contextlib.py with the edits lib/compatibility.md
+lists, each marked "Pystachy port" in the source; it is derived from Python and is used under
+the same license and copyright notice.
 
 lib/heapq.py is CPython 3.13.16's Lib/heapq.py with its functions nsmallest() and nlargest()
 edited as lib/README.md lists, each edit marked in the source; it is derived from Python and is

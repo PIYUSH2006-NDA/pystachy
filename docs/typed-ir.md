@@ -95,7 +95,8 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 | `IFn` | Function signature, parameter indices, entry slots, blocks, loops, handlers and effect summary |
 
 Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
-`union[int,str]`. A closed union is an immutable pointer to a program-wide
+`union[int,str]`; `exc` is an exception, `exctype` its class (the exception itself, as a
+context manager's `__exit__` takes it), and `opt[exc]` and `opt[exctype]` use null for `None`. A closed union is an immutable pointer to a program-wide
 type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
 Mixed scalar/list/dict unions store the original container pointer in that slot;
 unboxing never copies a container or changes its element storage type.

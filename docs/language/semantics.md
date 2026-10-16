@@ -12,7 +12,7 @@ closures and class fields are described in [typing](typing.md); imports and buil
 | Control flow | `if` / `elif` / `else`, `while`, `for`, loop `else`, `break`, `continue`, `return` |
 | Scope and definitions | `global`, `nonlocal`, `def`, nested function definitions, lambdas, supported class definitions |
 | Runtime checks | `assert`, `raise`, `try` / `except` / `else` / `finally` |
-| Resources | `with open(...) as f:`, including several file contexts, with or without parentheses |
+| Resources | `with` over files and [context managers](#context-managers) of the program's classes, several items, with or without parentheses |
 | Deletion | `del` of a local, list item, dict key or supported object's item |
 | Other | Imports, docstrings, `pass` and `...` |
 
@@ -220,12 +220,47 @@ leaves a generator's body finishes the generator; a `StopIteration` becomes
 `RuntimeError: generator raised StopIteration` (PEP 479). A generator that resumes itself raises
 `ValueError: generator already executing`.
 
+A generator suspended inside a `with` block keeps its context manager: closing it, or throwing
+into it, runs the manager's `__exit__` as CPython does, and `contextlib.contextmanager` drives a
+generator through these calls (see [context managers](#context-managers)).
+
 `close()` is supported as a statement; its value (what a generator returns as it closes, in
 CPython 3.13) is not. `throw(type, value, traceback)`, `async` generators and frame
 introspection are not supported, nor `yield from` of an iterator that is no generator in a
 generator that takes a value from `send()` (CPython sends the value on to the iterator, which has
 no `send()`). A generator the program drops while it is suspended is not closed (see
 [deviations](compatibility.md#memory-and-resource-lifetime)).
+
+<a id="context-managers"></a>
+
+## Context managers
+
+A `with` statement takes a file (`with open(...) as f:`) or an object of a class of the program
+that defines `__enter__` and `__exit__` (PEP 343). `__enter__()` gives the `as` target; an
+exception in the block goes to `__exit__(type, value, traceback)`, which suppresses it by
+returning a true value, and leaving the block otherwise (its end, `break`, `continue`,
+`return`) calls `__exit__(None, None, None)`. Several items nest as CPython nests them, and a
+name the block binds may be unbound after a suppressed exception. A class without `__enter__`
+or `__exit__` is a compile-time error with CPython's message; a manager that is `None` raises
+CPython's `TypeError`.
+
+`__exit__` may be annotated as typeshed annotates it, left unannotated (each of its two calls is
+compiled for its arguments), or take `*args`:
+
+| Parameter | Annotation | Value |
+|---|---|---|
+| The exception's class | `type[BaseException] \| None` | `None`, or the class: `__name__`, `issubclass()`, `str()` and `repr()` (`<class 'KeyError'>`) |
+| The exception | `BaseException \| None` | `None`, or the exception: `str()`, `repr()`, `isinstance()`, `is`, `raise` |
+| The traceback | `TracebackType \| None` (`from types import TracebackType`) | `None`, or an object with none of a traceback's attributes |
+
+`type(e)` of an exception is such a class value, and `sys.exception()` the exception being
+handled (or `None`). `e.__cause__` is the cause that `raise ... from c` gave, or the
+`StopIteration` that PEP 479's `RuntimeError` replaced.
+
+`lib/contextlib` provides `contextmanager` (also as a decorator, `@cm()`), `closing`,
+`nullcontext`, `suppress` (as a `with` statement's item, with exception classes named) and
+`AbstractContextManager`; `io.StringIO` and `_thread`'s locks are context managers too
+([library](../../lib/compatibility.md#contextlib)).
 
 ## Object protocols
 
@@ -427,13 +462,16 @@ Calling a builtin exception class produces an exception value. Values can be sto
 printed, converted to `str` / `repr`, formatted, raised, compared by identity, and tested
 with `isinstance()` or `type(e).__name__`. An annotation such as `Exception` names the
 builtin exception value type; it does not accept arbitrary user exception objects.
+`BaseException | None` (any exception class with `| None`) is an exception that may be
+`None`, which `raise` raises as CPython does (`TypeError` for `None`), and
+`type[BaseException]` the class of an exception ([context managers](#context-managers)).
 
 `OSError(errno, strerror[, filename])` selects the subclass associated with the errno.
 `UnicodeDecodeError(encoding, object, start, end, reason)` (of a bytes object) and
 `UnicodeEncodeError(...)` (of a str, whose characters `start` and `end` count) take CPython's
 five arguments and give its message, which names the byte or character at `start` or the range
 to `end`. `ImportError`, `AttributeError` and `NameError` accept their supported keyword
-arguments. Exception attributes such as `args` are unsupported.
+arguments. Exception attributes such as `args` are unsupported; `__cause__` is supported.
 
 ### Control flow
 
@@ -442,9 +480,9 @@ A return value is computed before `finally`; a return, break or continue in `fin
 discards the exception in flight.
 
 Bare `raise` re-raises the currently handled exception, with the prior handler restored
-when an inner handler exits. `raise ... from ...` evaluates and validates its cause, but
-the abbreviated error output does not show exception chaining. A cause that is not an
-exception raises `TypeError`.
+when an inner handler exits; `sys.exception()` returns it. `raise ... from ...` evaluates and
+validates its cause, which `e.__cause__` reads, but the abbreviated error output does not show
+exception chaining. A cause that is not an exception raises `TypeError`.
 
 An exception leaving a file context closes the file. If closing fails, its `OSError`
 replaces the exception being handled. A failed Python-module import leaves its imported

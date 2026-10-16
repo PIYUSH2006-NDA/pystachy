@@ -224,6 +224,23 @@ Handlers match exception classes and rethrow unmatched exceptions. `finally` and
 cleanup run on the relevant normal and exceptional exits. Nested `finally` handling avoids
 exponential duplication. The C runtime is compiled with exception support in both tiers.
 
+A `with` statement over a file registers the file's close as an unwind action. Over an object
+of a class that defines `__enter__` and `__exit__`, `statements.with_cm` builds a `try`
+statement of its own and compiles it as any other: the block (after the `as` target, assigned
+from `__enter__()`) is its body, its one except clause calls `__exit__` with the exception's
+class and the exception (`excinfo` nodes, which read the clause's exception) and raises it again
+unless the call returns a true value, and its else block calls `__exit__(None, None, None)`, as
+an exit pushed for the block (like a finally block's) does for a `break`, `continue` or
+`return`. The items after the first such manager, and the block, are its body (they nest). The
+exception's class is the exception itself under another type (`exctype`); an exception that may
+be `None` is `opt[exc]`, both null for `None`. `__enter__` and `__exit__` are method templates
+(`utils.template_ok`), so an unannotated `__exit__` is compiled once for the exception's
+arguments and once for three `None`s. A program with such a class lets flow analysis end a
+`with` block anywhere (`Gen.cm_exits`). `contextlib.suppress(A, B)` as an item is the except
+clause `except (A, B): pass` (`statements.suppress_item`). A program that reads `__cause__`
+(`Gen.causeread`) records it, `pys_exc_setcause`, for `raise ... from c` and PEP 479's
+`RuntimeError`.
+
 Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
 over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
 (and its subclasses), restores the exception being handled and leaves the loop; the loop
@@ -274,7 +291,11 @@ suspended generator keeps none of its exception state among its consumer's: it s
 blocks' unwind actions aside (`pys_gen_leave`, `pys_gen_enter`), its `try` statements' marks
 (and those of the `StopIteration` catches of its loops over iterator objects) are relative to the
 depth where it was last resumed, and the exception it handles in an
-`except` clause or a `finally` block is its own again when it resumes.
+`except` clause or a `finally` block is its own again when it resumes. In a program that reads
+`sys.exception()` (`Gen.excread`), a try statement in a generator notes the exception being
+handled as it starts as null where it is the resumer's (`exc_mark`), and the end of its clauses
+restores the resumer's of the current resume for null (`exc_back`), as CPython's generator
+falls back on its caller's exception state.
 
 `close()` resumes a generator suspended where closing it runs its code with the `close()`
 command, under which its landing block leaves what it raises for `close()` (`pys_gen_unraisable`

@@ -236,7 +236,8 @@ stream errors follow CPython's implementation.
 
 - Sizes and positions count bytes rather than Unicode characters.
 - Iteration and `next()` read one line at a time from the shared stream position.
-- `with StringIO()` is unsupported; `with` handles files only.
+- `with StringIO() as f:` closes it as the block is left (`__enter__` raises CPython's
+  `ValueError` for a closed one).
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
 
@@ -752,14 +753,41 @@ class whose subclasses' `__init__` binds their fields.
   `RuntimeError: deadlock: ...`, where CPython waits for another thread to release the lock, and
   so do `_acquire_restore()` of a reentrant lock that is held and `join()` of a thread handle that
   is not done ([deviation](../tests/deviations/lib_thread_deadlock.py)).
-- `with lock:` is a compile-time error, as `with` takes only files
-  ([error test](../tests/errors/lib_thread_with.py)): call `acquire()` and `release()`.
+- `with lock:` acquires the lock and releases it as the block is left, for both kinds of lock.
 - `get_ident()` is the process's id, and so is `get_native_id()`, as Linux gives a process's main
   thread the process's id; CPython's `get_ident()` is the thread's `pthread_t`.
 - `interrupt_main()` of another signal than SIGINT does nothing, as CPython's default handlers do
   (Linux's signal numbers: those from 65 on are out of range).
 - `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
   `NotImplementedError`: no thread but the main one runs.
+
+## Contextlib
+
+Ported from CPython 3.13's `Lib/contextlib.py`, each change marked `Pystachy port`.
+`@contextmanager` keeps `_GeneratorContextManager`'s `__enter__` and `__exit__`: "generator
+didn't yield", "generator didn't stop" and "generator didn't stop after throw()" are its
+`RuntimeError`s, an exception of the block is thrown into the generator where it is suspended and
+suppressed where the generator swallows it, and a `StopIteration` or `GeneratorExit` of the block,
+or a `RuntimeError` that PEP 479 or the generator made of the `StopIteration`, goes on as itself.
+A manager it makes also decorates a function (`@cm()`, `ContextDecorator`), and both take keyword
+arguments. `closing(thing)`, `nullcontext()`, `nullcontext(value)`, `suppress(A, B)` and
+`AbstractContextManager` (to derive from) are the others.
+
+- `suppress()` takes exception classes, named, as a `with` statement's item, which is compiled
+  as an `except` clause that catches them (exception classes are no values of the subset);
+  `with suppress(...) as x`, and a `suppress` object elsewhere, are compile-time errors.
+- `nullcontext(enter_result)` takes it positionally, and not `None` alone (`nullcontext(None)`
+  is `nullcontext()`); `nullcontext` is a function that makes one of two classes' objects, and
+  the managers are no subclasses of `AbstractContextManager` (class templates have no bases).
+- `__doc__`, `__name__` (no `functools.wraps()`) and `gen` of a `_GeneratorContextManager` are
+  not available, and its `__exit__` called with a class but no exception returns `False` (CPython
+  makes the exception, `typ()`; a class is no value).
+- A function that a manager decorates and that calls itself is rejected (the decorator's `inner()`
+  calls itself before its return type is inferred): use the manager inside it instead.
+- `ExitStack`, `redirect_stdout`, `redirect_stderr`, `chdir` and the async managers
+  (`asynccontextmanager`, `aclosing`, `AsyncExitStack`, `AbstractAsyncContextManager`) are not
+  ported: the subset has no list of managers of different classes, no assignable `sys.stdout`,
+  no `os.getcwd()` and no `async def`.
 
 ## Unicodedata
 
