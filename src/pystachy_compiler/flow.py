@@ -14,7 +14,7 @@ from src.pystachy_compiler.analysis import (
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, mentions, mk
 from src.pystachy_compiler.utils import is_const
 
 
@@ -52,6 +52,7 @@ class Flow:
         # lets self escape, and whether this __init__ does
         self.sup: list[str] = []
         self.base = ""  # (the class's base, whose __init__ it may call as Base.__init__(self, ...))
+        self.sbase = ""  # (the base of the class defining __init__, whose methods super().m(...) calls)
         self.leak = False
         self.escaped = False
         # the variables of the function analysed (its locals and those it takes from around it),
@@ -310,6 +311,29 @@ def self_fields(n: Node, me: str, fields: list[str], out: dict[str, bool]) -> bo
     return True
 
 
+def gen_fl_super(self, fl: Flow, m: str) -> bool:
+    # super().m(...) in __init__ (field mode): whether self escapes no further than to the fields
+    # it reads, which are marked. super() dispatches statically: the method m of the base (or
+    # BaseException's __str__ or __repr__, which read only hidden fields). One that uses self only
+    # as self.f, of fields f, reads only those (as a closure does, fl_nested); any other use
+    # (passing self on, self.m, str(self), super()) may call code that reads any field
+    if fl.sbase not in self.classes or m not in self.classes[fl.sbase].methods:
+        return True
+    f = self.classes[fl.sbase].methods[m]
+    if f.deco != "":
+        return True  # (a static or class method, given no object)
+    if f.prop or f.synthetic or f.node.kind != "def" or len(f.params) == 0 or mentions(f.node.kids[2], ["super"]):
+        return False
+    used: dict[str, bool] = {}
+    if not self_fields(f.node.kids[2], f.params[0], fl.fields, used):
+        return False
+    if " dead" not in fl.defd:
+        for x in used:
+            if "." + x not in fl.defd:
+                fl.unsafe[x] = True
+    return True
+
+
 def gen_fl_nested(self, fl: Flow, n: Node) -> None:
     # a def or lambda n in the code fl analyses: its defaults and decorators run here. The
     # variables of fl's function that it reads must be assigned here, but a def's own name: a
@@ -463,6 +487,7 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         if init.params[0] not in asg:
             # (if __init__ rebinds self, no assignment is known to reach the new object)
             fl.me = init.params[0]
+            fl.sbase = self.classes[init.cls].base if init.cls in self.classes else ""
             # (outside a hierarchy, whose reads keep their flags' tests; the builtin hasattr)
             fl.probes = ci.exc == "" and ci.tag == 0 and "hasattr" not in asg and "hasattr" not in init.params and not self.bound("hasattr")
             self.fl_stmts(fl, init.node.kids[2].kids)
@@ -862,6 +887,8 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
         if sup:
             for a in c.kids[0].kids[1:]:
                 self.fl_expr(fl, a)
+        elif fl.me != "" and c.kind == "attr" and c.kids[0].kind == "call" and len(c.kids[0].kids) == 1 and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super" and "super" not in self.funcs and self.fl_super(fl, c.s):
+            pass  # (super().m(...), which reads only the fields fl_super marks)
         elif c.kind == "attr":
             self.fl_expr(fl, c.kids[0])
         elif fl.me != "" and c.kind == "name" and c.s == "super" and c.s not in self.funcs:
