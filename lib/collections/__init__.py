@@ -248,23 +248,31 @@ class deque(Generic[_T]):
         """Return a reverse iterator over the deque."""
         return iter(list(reversed(self._right)) + self._left)
 
+    def _others(self, other: Self, op: str) -> list[_T]:
+        # the items of the other operand of a comparison; None (an optional deque's) makes
+        # CPython's TypeError, as deque_richcompare returns NotImplemented
+        if other is None:
+            raise TypeError(f"'{op}' not supported between instances of 'collections.deque' and 'NoneType'")
+        return other._items()
+
     def __eq__(self, other: Self) -> bool:
-        return self._items() == other._items()
+        # (None is not equal: NotImplemented, then an identity test)
+        return other is not None and self._items() == other._items()
 
     def __ne__(self, other: Self) -> bool:
-        return self._items() != other._items()
+        return other is None or self._items() != other._items()
 
     def __lt__(self, other: Self) -> bool:
-        return self._items() < other._items()
+        return self._items() < self._others(other, "<")
 
     def __le__(self, other: Self) -> bool:
-        return self._items() <= other._items()
+        return self._items() <= self._others(other, "<=")
 
     def __gt__(self, other: Self) -> bool:
-        return self._items() > other._items()
+        return self._items() > self._others(other, ">")
 
     def __ge__(self, other: Self) -> bool:
-        return self._items() >= other._items()
+        return self._items() >= self._others(other, ">=")
 
     def __add__(self, other: Self) -> Self:
         d = self.copy()
@@ -325,6 +333,49 @@ def _update(self, other) -> None:
             self[key] = other[key]
 
 
+def _typename(x) -> str:
+    # type(x).__name__ (Pystachy has it for exceptions): the types an operand may have
+    if isinstance(x, bool):
+        return "bool"
+    if isinstance(x, int):
+        return "int"
+    if isinstance(x, float):
+        return "float"
+    if isinstance(x, str):
+        return "str"
+    if isinstance(x, list):
+        return "list"
+    if isinstance(x, tuple):
+        return "tuple"
+    if isinstance(x, set):
+        return "set"
+    if isinstance(x, frozenset):
+        return "frozenset"
+    return type(x).__name__
+
+
+def _dict_eq(data, other) -> bool:
+    # data == other, of a mapping's items (data, a dict) and an operand whose own __eq__ returned
+    # NotImplemented, as dict_richcompare answers then: the items of a dict or another of these
+    # mappings, in any order; any other object (None) is not equal (CPython's identity test)
+    if isinstance(other, dict):
+        return data == other
+    if isinstance(other, (defaultdict, OrderedDict, Counter)):
+        return data == other._dict()
+    return False
+
+
+def _or_error(cls: str, other) -> str:
+    # Pystachy port: CPython's | of a defaultdict or OrderedDict (defdict_or, odict_or) returns
+    # NotImplemented unless other is a dict: its TypeError's message, for None and the builtin
+    # types that are no mapping (an object of another class is read as a mapping, as by update)
+    if other is None:
+        return f"unsupported operand type(s) for |: '{cls}' and 'NoneType'"
+    if isinstance(other, (bool, int, float, str, list, tuple, set, frozenset)):
+        return f"unsupported operand type(s) for |: '{cls}' and '{_typename(other)}'"
+    return ""
+
+
 def _factory_repr(factory) -> str:
     # repr(default_factory) of a defaultdict: a builtin class's, as CPython's; a function's or a
     # Callable's has no address here
@@ -350,7 +401,7 @@ class defaultdict(Generic[_KT, _VT]):
     """
 
     def __init__(self, default_factory: Callable[[], _VT] | None = None,
-                 other: "Iterable[tuple[_KT, _VT]] | dict[_KT, _VT] | defaultdict[_KT, _VT] | OrderedDict[_KT, _VT]" = (),
+                 other: "Iterable[tuple[_KT, _VT]] | dict[_KT, _VT] | defaultdict[_KT, _VT] | OrderedDict[_KT, _VT] | Counter[_KT]" = (),
                  /) -> None:
         # (the items are a dict's, and keyword arguments are not taken: an annotation such as
         # defaultdict[str, int] names the types)
@@ -464,14 +515,14 @@ class defaultdict(Generic[_KT, _VT]):
 
     def __eq__(self, other) -> bool:
         # (dict's: a dict or another mapping of the same items, in any order)
-        if isinstance(other, dict):
-            return self._data == other
-        return self._data == other._dict()
+        return _dict_eq(self._data, other)
 
     def __ne__(self, other) -> bool:
         return not self == other
 
-    def __or__(self, other):
+    def __or__(self, other) -> Self:
+        if other is None or isinstance(other, (bool, int, float, str, list, tuple, set, frozenset)):
+            raise TypeError(_or_error('collections.defaultdict', other))
         new = self.copy()
         _update(new, other)
         return new
@@ -501,7 +552,7 @@ class OrderedDict(Generic[_KT, _VT]):
     # is added or removed in O(1); an end that a pop finds empty takes half of the other dict's
     # items, so that each operation takes amortized O(1) time, as with the linked list.
 
-    def __init__(self, other: "Iterable[tuple[_KT, _VT]] | dict[_KT, _VT] | OrderedDict[_KT, _VT] | defaultdict[_KT, _VT]" = (),
+    def __init__(self, other: "Iterable[tuple[_KT, _VT]] | dict[_KT, _VT] | OrderedDict[_KT, _VT] | defaultdict[_KT, _VT] | Counter[_KT]" = (),
                  /) -> None:
         '''Initialize an ordered dictionary.  The signature is the same as
         regular dictionaries.  Keyword argument order is preserved.
@@ -669,11 +720,9 @@ class OrderedDict(Generic[_KT, _VT]):
         while comparison to a regular mapping is order-insensitive.
 
         '''
-        if isinstance(other, dict):
-            return self._dict() == other
         if isinstance(other, OrderedDict):
             return self._dict() == other._dict() and self.keys() == other.keys()
-        return self._dict() == other._dict()
+        return _dict_eq(self._dict(), other)
 
     def __ne__(self, other) -> bool:
         return not self == other
@@ -682,7 +731,9 @@ class OrderedDict(Generic[_KT, _VT]):
         self.update(other)
         return self
 
-    def __or__(self, other):
+    def __or__(self, other) -> Self:
+        if other is None or isinstance(other, (bool, int, float, str, list, tuple, set, frozenset)):
+            raise TypeError(_or_error('collections.OrderedDict', other))
         new = OrderedDict(self)
         new.update(other)
         return new
@@ -988,11 +1039,9 @@ class Counter(Generic[_T]):
 
     def __eq__(self, other) -> bool:
         'True if all counts agree. Missing counts are treated as zero.'
-        if isinstance(other, dict):
-            # (NotImplemented, and so dict's equality, of the items)
-            return self._data == other
         if not isinstance(other, Counter):
-            return self._data == other._dict()
+            # Pystachy port: NotImplemented, after which CPython compares a dict's items
+            return _dict_eq(self._data, other)
         return all([self[e] == other[e] for e in self]) and all([self[e] == other[e] for e in other])
 
     def __ne__(self, other) -> bool:
@@ -1001,18 +1050,30 @@ class Counter(Generic[_T]):
 
     def __le__(self, other: Self) -> bool:
         'True if all counts in self are a subset of those in other.'
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("'<=' not supported between instances of 'Counter' and 'NoneType'")
         return all([self[e] <= other[e] for e in self]) and all([self[e] <= other[e] for e in other])
 
     def __lt__(self, other: Self) -> bool:
         'True if all counts in self are a proper subset of those in other.'
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("'<' not supported between instances of 'Counter' and 'NoneType'")
         return self <= other and self != other
 
     def __ge__(self, other: Self) -> bool:
         'True if all counts in self are a superset of those in other.'
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("'>=' not supported between instances of 'Counter' and 'NoneType'")
         return all([self[e] >= other[e] for e in self]) and all([self[e] >= other[e] for e in other])
 
     def __gt__(self, other: Self) -> bool:
         'True if all counts in self are a proper superset of those in other.'
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("'>' not supported between instances of 'Counter' and 'NoneType'")
         return self >= other and self != other
 
     def __add__(self, other: Self) -> Self:
@@ -1022,6 +1083,9 @@ class Counter(Generic[_T]):
         Counter({'b': 4, 'c': 2, 'a': 1})
 
         '''
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("unsupported operand type(s) for +: 'Counter' and 'NoneType'")
         result: Counter[_T] = Counter()
         for elem, count in self.items():
             newcount = count + other[elem]
@@ -1039,6 +1103,9 @@ class Counter(Generic[_T]):
         Counter({'b': 2, 'a': 1})
 
         '''
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("unsupported operand type(s) for -: 'Counter' and 'NoneType'")
         result: Counter[_T] = Counter()
         for elem, count in self.items():
             newcount = count - other[elem]
@@ -1056,6 +1123,9 @@ class Counter(Generic[_T]):
         Counter({'b': 3, 'c': 2, 'a': 1})
 
         '''
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("unsupported operand type(s) for |: 'Counter' and 'NoneType'")
         result: Counter[_T] = Counter()
         for elem, count in self.items():
             other_count = other[elem]
@@ -1074,6 +1144,9 @@ class Counter(Generic[_T]):
         Counter({'b': 1})
 
         '''
+        if not isinstance(other, Counter):
+            # Pystachy port: NotImplemented, which makes CPython's TypeError (other is None)
+            raise TypeError("unsupported operand type(s) for &: 'Counter' and 'NoneType'")
         result: Counter[_T] = Counter()
         for elem, count in self.items():
             other_count = other[elem]

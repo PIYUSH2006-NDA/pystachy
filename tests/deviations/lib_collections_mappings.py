@@ -19,8 +19,11 @@ for k in c:
         c["z"] = 1
 print(c)
 
-# A factory that is not a builtin class has no repr here: CPython prints
-# defaultdict(<function <lambda> at 0x...>, {'x': 0}).
+# A factory that is not a builtin class given to the constructor has no repr here: CPython
+# prints defaultdict(<function <lambda> at 0x...>, {'x': 0}), then defaultdict(<class 'int'>,
+# {'x': 0}) for a builtin class assigned to default_factory later.
 lam: defaultdict[str, int] = defaultdict(lambda: 0)
 lam["x"]
+print(lam)
+lam.default_factory = int
 print(lam)
