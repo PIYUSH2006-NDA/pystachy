@@ -115,13 +115,25 @@ from src.pystachy_compiler.containers import (
     gen_affix_any as containers_affix_any,
     gen_bool_find as containers_bool_find,
     gen_dkey as containers_dkey,
+    gen_elem_problem as containers_elem_problem,
     gen_fromkeys as containers_fromkeys,
+    gen_hash_classes as containers_hash_classes,
+    gen_hash_desc as containers_hash_desc,
+    gen_hash_kind as containers_hash_kind,
+    gen_hash_value as containers_hash_value,
+    gen_hashable as containers_hashable,
     gen_iter_elem as containers_iter_elem,
+    gen_key_class as containers_key_class,
+    gen_key_fx as containers_key_fx,
+    gen_key_items as containers_key_items,
     gen_key_kind as containers_key_kind,
+    gen_key_problem as containers_key_problem,
+    gen_key_repr as containers_key_repr,
     gen_keyed as containers_keyed,
     gen_keys_list as containers_keys_list,
     gen_none_arg as containers_none_arg,
     gen_nonekey as containers_nonekey,
+    gen_obj_hash as containers_obj_hash,
     gen_obj_str as containers_obj_str,
     gen_optdefault as containers_optdefault,
     gen_repr as containers_repr,
@@ -489,6 +501,7 @@ from src.pystachy_compiler.statements import (
     gen_for_range as statements_for_range,
     gen_for_rrange as statements_for_rrange,
     gen_for_seq as statements_for_seq,
+    gen_hash_helper as statements_hash_helper,
     gen_hidden as statements_hidden,
     gen_hide as statements_hide,
     gen_hoist as statements_hoist,
@@ -667,6 +680,7 @@ class Gen:
         self.called: dict[str, bool] = {}
         self.gflag: dict[str, bool] = {}
         self.ocls: dict[str, int] = {}  # classes that appear inside containers: id in descriptors
+        self.hcls: dict[str, bool] = {}  # those of them that keys hash through the program (H<id>: obj_hash)
         self.lenient = False
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
@@ -879,8 +893,8 @@ class Gen:
     def select(self, c: str, x: Val, y: Val) -> str:
         return emission_select(self, c, x, y)
 
-    def rt(self, name: str, ret: str, args: list[str]) -> str:
-        return emission_rt(self, name, ret, args)
+    def rt(self, name: str, ret: str, args: list[str], x: str = "") -> str:
+        return emission_rt(self, name, ret, args, x)
 
     def alloc_fixed(self, t: str) -> Val:
         return emission_alloc_fixed(self, t)
@@ -1541,6 +1555,9 @@ class Gen:
 
     def obj_helpers(self, c: str) -> None:
         return statements_obj_helpers(self, c)
+
+    def hash_helper(self, c: str) -> None:
+        return statements_hash_helper(self, c)
 
     def dispatch(self, op: str) -> None:
         return lower_module_dispatch(self, op)
@@ -2256,8 +2273,8 @@ class Gen:
     def sitems(self, v: Val, et: str, what: str) -> Val:
         return containers_sitems(self, v, et, what)
 
-    def supdate(self, s: str, v: Val) -> None:
-        return containers_supdate(self, s, v)
+    def supdate(self, s: str, v: Val, et: str) -> None:
+        return containers_supdate(self, s, v, et)
 
     def sdiscard(self, ov: str, v: Val, et: str) -> None:
         return containers_sdiscard(self, ov, v, et)
@@ -2295,6 +2312,42 @@ class Gen:
     def key_kind(self, kt: str) -> str:
         return containers_key_kind(self, kt)
 
+    def key_class(self, t: str) -> bool:
+        return containers_key_class(self, t)
+
+    def key_items(self, t: str) -> bool:
+        return containers_key_items(self, t)
+
+    def key_problem(self, t: str) -> str:
+        return containers_key_problem(self, t)
+
+    def elem_problem(self, t: str) -> str:
+        return containers_elem_problem(self, t)
+
+    def hash_kind(self, c: str) -> str:
+        return containers_hash_kind(self, c)
+
+    def hash_classes(self, t: str) -> list[ClassInfo]:
+        return containers_hash_classes(self, t)
+
+    def hash_desc(self, t: str) -> str:
+        return containers_hash_desc(self, t)
+
+    def key_fx(self, kt: str) -> str:
+        return containers_key_fx(self, kt)
+
+    def key_repr(self, t: str) -> bool:
+        return containers_key_repr(self, t)
+
+    def obj_hash(self, v: Val) -> Val:
+        return containers_obj_hash(self, v)
+
+    def hash_value(self, v: Val) -> Val:
+        return containers_hash_value(self, v)
+
+    def hashable(self, t: str) -> bool:
+        return containers_hashable(self, t)
+
     def dkey(self, k: Val, kt: str) -> Val:
         return containers_dkey(self, k, kt)
 
@@ -2307,8 +2360,8 @@ class Gen:
     def store_elem(self, k: Val, et: str) -> Val:
         return containers_store_elem(self, k, et)
 
-    def nonekey(self, k: Val, none: str, fn: str, av: list[str]) -> str:
-        return containers_nonekey(self, k, none, fn, av)
+    def nonekey(self, k: Val, none: str, fn: str, av: list[str], x: str) -> str:
+        return containers_nonekey(self, k, none, fn, av, x)
 
     def keyed(self, k: Val, av: list[str]) -> list[str]:
         return containers_keyed(self, k, av)

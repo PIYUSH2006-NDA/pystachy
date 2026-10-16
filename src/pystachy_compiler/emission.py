@@ -203,11 +203,12 @@ def gen_select(self, c: str, x: Val, y: Val) -> str:
     self.put(i, 1)
     return f"%t{i.r[0]}"
 
-def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
+def gen_rt(self, name: str, ret: str, args: list[str], x: str = "") -> str:
     # an rt op: a call of runtime function name (its LLVM symbol), whose LLVM result type is
     # ret, with args "<LLVM type> <value>", which must be what its RUNTIME entry says. (In
     # runtime mode, a function that runtime.py defines is called the same way: it is defined,
-    # not declared, with RUNTIME's types, which Gen.function checks.)
+    # not declared, with RUNTIME's types, which Gen.function checks.) x: the descriptor of the
+    # keys a dict or set op hashes (key_fx), for its U?
     if self.unicode_audit and not self.rtmode and name.startswith("pys_str_") and name[8:] in UNICODE_AUDIT:
         self.rt("pys_str_audit", "void", [args[0], f"ptr {self.sconst('str.' + name[8:])}"])
     if self.rtmode and "@" + name == self.curfn.ll:
@@ -218,6 +219,7 @@ def gen_rt(self, name: str, ret: str, args: list[str]) -> str:
     ok = ret == ll[0] and len(args) == len(ll) - 1
     i = Ins("rt", ts[0], k)
     i.a = []
+    i.x = x
     for j in range(len(args) if ok else 0):
         sp = args[j].find(" ")
         ok = ok and args[j][:sp] == ll[j + 1]

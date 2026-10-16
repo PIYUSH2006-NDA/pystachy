@@ -64,9 +64,9 @@ class _CmpKey(Generic[_T, _F]):
     def __ge__(self, other) -> bool:
         return self._compare(other) >= 0
 
-    # Pystachy port: defining __eq__ disables __hash__ under CPython without
-    # an explicit None class attribute (unsupported in the subset). Pystachy
-    # rejects hash() on user-class instances at compile time.
+    # Pystachy port: K's __hash__ = None; this TypeError names the native KeyWrapper.
+    def __hash__(self) -> int:
+        raise TypeError("unhashable type: 'functools.KeyWrapper'")
 
 
 def cmp_to_key(mycmp):

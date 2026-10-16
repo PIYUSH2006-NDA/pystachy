@@ -555,12 +555,13 @@ def empty_default(n: Node, name: str, kind: str) -> bool:
 
 def key_problem(t: str) -> str:
     # why t cannot be a dict's key type, or "": keys are ints, strs, or tuples whose items are ints,
-    # bools, strs, str | None or such tuples (runtime.c hashes and compares them by descriptor)
+    # bools, strs, str | None or such tuples (runtime.c hashes and compares them by descriptor), and
+    # objects, also as such items (Gen.key_problem)
     if t == "int" or t == "str" or (is_tuple(t) and key_items(t)):
         return ""
     if is_opt(t):
         return f"dict keys must be int or str, not {typestr(t)} (a key cannot be None)"
-    return f"dict keys must be int or str, or tuples of int, bool, str and str | None items, not {typestr(t)}"
+    return f"dict keys must be int or str, objects, or tuples of int, bool, str, str | None and objects, not {typestr(t)}"
 
 
 def elem_problem(t: str) -> str:

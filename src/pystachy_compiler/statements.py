@@ -23,7 +23,6 @@ from src.pystachy_compiler.syntax import Node, mk, names_in
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
-    elem_problem,
     empty_result_type,
     folds,
     is_const,
@@ -79,6 +78,20 @@ def gen_obj_helpers(self, c: str) -> None:
         self.function(f, bodies[i])
     self.lenient = False
 
+def gen_hash_helper(self, c: str) -> None:
+    # @o.hash.<class>: the hash of an object of class c, which runtime.c takes for a key whose
+    # class hashes it (H<id>: obj_hash), through the program's pys_obj_eq(-1 - id, a, 0); compiled
+    # leniently, as obj_helpers' are
+    line = self.classes[c].node.line
+    a = mk("name", "a", line, [])
+    f = FnInfo("hash", f"@o.hash.{c}", self.classes[c].node, "")
+    f.params = ["a"]
+    f.ptypes = [c]
+    f.ret = "int"
+    self.lenient = True
+    self.function(f, [mk("return", "", line, [mk("call", "", line, [mk("name", "__pys_hash", line, []), a])])])
+    self.lenient = False
+
 def gen_check_special(self, f: FnInfo) -> None:
     # the special methods Pystachy calls implicitly must have the shape it relies on; in an
     # imported module's class, a wrong one is an error where the method is called, as is a
@@ -96,8 +109,8 @@ def gen_check_special(self, f: FnInfo) -> None:
         pass  # (a template: each instance's return type is checked where it is compiled, see instance)
     elif f.name == "__bool__" and f.ret != "bool":
         f.bad = f"__bool__ should return bool, returned {tname(f.ret)}"  # (CPython's TypeError)
-    elif ret != "" and f.ret != ret and not (f.name == "__len__" and f.ret == "bool"):
-        f.bad = f"{f.name} must return {ret}"  # (a bool is an int to len())
+    elif ret != "" and f.ret != ret and not ((f.name == "__len__" or f.name == "__hash__") and f.ret == "bool"):
+        f.bad = f"{f.name} must return {ret}"  # (a bool is an int to len() and hash())
     elif f.name == "__format__" and f.ptypes[1] != "str":
         f.bad = "__format__ takes the format spec as a str"
     if f.bad != "" and self.classes[f.cls].mod == "":
@@ -668,7 +681,7 @@ def gen_stmt(self, n: Node) -> None:
                 o = self.unwrap(o, nodel)
                 if bool_for_int(kval.t, kt):
                     self.bool_find(o.v, kval, key)
-                self.nonekey(kx, "", "pys_dict_pop", [f"ptr {o.v}", "i64 " + key])
+                self.nonekey(kx, "", "pys_dict_pop", [f"ptr {o.v}", "i64 " + key], self.key_fx(kt))
             elif o.t in self.classes:
                 # del o[k]: o.__delitem__(k)
                 ik = self.expr(dt.kids[1], self.argtype(o.t, "__delitem__", 1, f"'{tname(o.t)}' object doesn't support item deletion"))
@@ -721,10 +734,10 @@ def gen_stmt(self, n: Node) -> None:
         if et == "":
             self.lct[-1] = self.none_items(v.t) if n.s == "set" and is_tuple(v.t) else v.t
             et = self.lct[-1]
-            if n.s == "set" and elem_problem(et) != "":
-                self.err(elem_problem(et))
+            if n.s == "set" and self.elem_problem(et) != "":
+                self.err(self.elem_problem(et))
         if n.s == "set":
-            self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))])
+            self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))], self.key_fx(et))
         elif n.s == "discard":
             self.sdiscard(f"ptr {self.lcs[-1]}", v, et)
         else:
@@ -848,7 +861,7 @@ def gen_augassign(self, n: Node) -> None:
         if not is_set(v.t):
             self.err(f"unsupported operand type(s) for |=: 'set' and '{tname(v.t)}'")
         self.refine(t.s, self.ctype("set", [selem(v.t)]))
-        self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"])
+        self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"], self.key_fx(selem(self.qtype(t.s))))
         self.store_name(t.s, Val(cur.v, self.qtype(t.s)))
     elif t.kind == "name":
         cur = self.read(t)
@@ -906,9 +919,9 @@ def gen_augassign(self, n: Node) -> None:
                 self.guard(self.ptr_cmp('==', kx, Val('null', 'None')).v, "KeyError: None")
                 if is_sopt(kx.t):
                     key = self.to_slot(self.deref(kx))  # (an int key is the int its box holds)
-            cur = self.from_slot(self.rt("pys_dict_getitem", "i64", [f"ptr {o.v}", f"i64 {key}"]), kv[1])
+            cur = self.from_slot(self.rt("pys_dict_getitem", "i64", [f"ptr {o.v}", f"i64 {key}"], self.key_fx(kv[0])), kv[1])
             r = self.coerce(self.inplace(op, cur, n.kids[1]), kv[1])
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(r)])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(r)], self.key_fx(kv[0]))
         elif o.t in self.classes:
             # o[k] op= v: o.__setitem__(k, o.__getitem__(k) op v), k evaluated once
             ik = self.expr(t.kids[1], self.argtype(o.t, "__getitem__", 1, f"'{tname(o.t)}' object is not subscriptable"))
@@ -969,10 +982,11 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             self.err(f"unsupported operand type(s) for {op}=: '{tname(cur.t)}' and '{tname(b.t)}'")
         if self.wider(selem(b.t), selem(cur.t)) != selem(cur.t):
             self.err(f"unsupported operand types for {op}=: {typestr(cur.t)} and {typestr(b.t)} (a set holds elements of one type)")
+        kx = self.key_fx(selem(cur.t)) + self.key_fx(selem(b.t))
         if op == "&":
-            self.rt("pys_set_assign", "void", [f"ptr {cur.v}", f"ptr {self.rt('pys_set_and', 'ptr', [f'ptr {cur.v}', f'ptr {b.v}'])}"])
+            self.rt("pys_set_assign", "void", [f"ptr {cur.v}", f"ptr {self.rt('pys_set_and', 'ptr', [f'ptr {cur.v}', f'ptr {b.v}'], kx)}"])
         else:
-            self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"])
+            self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"], kx)
         return cur
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:

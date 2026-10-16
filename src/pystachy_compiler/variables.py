@@ -26,7 +26,6 @@ from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTI
 from src.pystachy_compiler.syntax import Node, mk, name_targets, names_in
 from src.pystachy_compiler.utils import (
     elem,
-    elem_problem,
     empty_ann,
     empty_default,
     empty_display,
@@ -38,7 +37,6 @@ from src.pystachy_compiler.utils import (
     is_opt,
     is_set,
     is_tuple,
-    key_problem,
     lt,
     same_kind,
     selem,
@@ -874,10 +872,10 @@ def gen_refine(self, name: str, t: str, glob: bool = False) -> None:
             if nm == name or "?" in self.gtypes[nm]:
                 self.gtypes[nm] = t
                 toks += " " + self.gkk.pop(nm, "")
-    if is_dict(t) and key_problem(targs(t)[0]) != "":
-        self.err(key_problem(targs(t)[0]))
-    if is_set(t) and elem_problem(selem(t)) != "":
-        self.err(elem_problem(selem(t)))
+    if is_dict(t) and self.key_problem(targs(t)[0]) != "":
+        self.err(self.key_problem(targs(t)[0]))
+    if is_set(t) and self.elem_problem(selem(t)) != "":
+        self.err(self.elem_problem(selem(t)))
     for h in toks.split():
         self.holes[int(h)] = t
         if is_dict(t) or is_set(t):
@@ -1216,7 +1214,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         v = self.expr(args[0], "")
         self.refine(name, self.ctype("set", [v.t]))
         t = self.qtype(name)
-        self.rt("pys_set_add", "void", [f"ptr {o.v}", "i64 " + self.to_slot(self.store_elem(v, selem(t)))])
+        self.rt("pys_set_add", "void", [f"ptr {o.v}", "i64 " + self.to_slot(self.store_elem(v, selem(t)))], self.key_fx(selem(t)))
         return Val("null", "None")
     if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind == "listcomp" and args[0].s == "gen":
         # (item by item, as smethod's)
@@ -1225,7 +1223,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
     if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind != "kw":
         v = self.siter(args[0], "", "set.update()")
         self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
-        self.supdate(o.v, v)
+        self.supdate(o.v, v, selem(self.qtype(name)))
         return Val("null", "None")
     if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
         # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
@@ -1238,8 +1236,8 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
         et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
         et = self.none_items(et) if is_tuple(et) else et
-        if elem_problem(et) != "":
-            self.err(elem_problem(et))
+        if self.elem_problem(et) != "":
+            self.err(self.elem_problem(et))
         self.refine(name, self.ctype("set", [et]))
         return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
     if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
@@ -1248,7 +1246,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         k = self.expr(args[0], "")
         v = self.expr(args[1], want if "?" not in want else "")
         self.refine(name, self.ctype("dict", [k.t, v.t]))
-        return self.from_slot(self.rt(f"pys_dict_{m}", "i64", [f"ptr {o.v}", "i64 " + self.to_slot(k), "i64 " + self.to_slot(v)]), v.t)
+        return self.from_slot(self.rt(f"pys_dict_{m}", "i64", [f"ptr {o.v}", "i64 " + self.to_slot(k), "i64 " + self.to_slot(v)], self.key_fx(targs(self.qtype(name))[0])), v.t)
     # any other method: the type a later use shows (or an error), then the method as usual
     return self.method(self.load_name(name), m, args)
 
@@ -1411,7 +1409,7 @@ def gen_assign(self, t: Node, v: Val) -> None:
         if is_dict(o.t):
             kval = self.expr(t.kids[1], "")
             self.refine(t.kids[0].s, self.ctype("dict", [kval.t, v.t]))
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", "i64 " + self.to_slot(kval), "i64 " + self.to_slot(v)])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", "i64 " + self.to_slot(kval), "i64 " + self.to_slot(v)], self.key_fx(targs(self.qtype(t.kids[0].s))[0]))
         else:
             ix = self.ival(t.kids[1])
             self.refine(t.kids[0].s, self.ctype("list", [v.t]))
@@ -1428,7 +1426,7 @@ def gen_assign(self, t: Node, v: Val) -> None:
             kv = targs(unopt(o.t))
             key = self.to_slot(self.store_key(self.expr(t.kids[1], kv[0]), kv[0]))
             o = self.unwrap(o, nosub)
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(self.coerce(v, kv[1]))])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(self.coerce(v, kv[1]))], self.key_fx(kv[0]))
         elif o.t in self.classes:
             # o[k] = v: o.__setitem__(k, v), once v, o and k are evaluated
             ik = self.expr(t.kids[1], self.argtype(o.t, "__setitem__", 1, f"'{tname(o.t)}' object does not support item assignment"))

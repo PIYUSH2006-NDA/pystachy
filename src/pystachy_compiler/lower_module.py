@@ -181,13 +181,16 @@ def gen_pyext(self) -> list[str]:
     return o
 
 def gen_dispatch(self, op: str) -> None:
-    # pys_obj_<op>(class id, [op code,] a, b), called by the runtime for "O<id>" descriptors
+    # pys_obj_<op>(class id, [op code,] a, b), called by the runtime for "O<id>" descriptors;
+    # pys_obj_eq(-1 - id, a, 0) is the hash of a, for "H<id>" (hcls: hash_helper)
     r = "ptr" if op == "repr" else "i64"
+    hs = [c for c in self.hcls] if op == "eq" else []
     self.out.append(f"define {r} @pys_obj_{op}(i64 %c, {'i64 %op, ' if op == 'cmp' else ''}i64 %a, i64 %b) {{")
     self.out.append("entry:")
     self.out.append("  %pa = inttoptr i64 %a to ptr")
     self.out.append("  %pb = inttoptr i64 %b to ptr")
-    self.out.append(f"  switch i64 %c, label %none [{' '.join([f'i64 {self.ocls[c]}, label %k{self.ocls[c]}' for c in self.ocls])}]")
+    cases = [f"i64 {self.ocls[c]}, label %k{self.ocls[c]}" for c in self.ocls] + [f"i64 {-1 - self.ocls[c]}, label %h{self.ocls[c]}" for c in hs]
+    self.out.append(f"  switch i64 %c, label %none [{' '.join(cases)}]")
     for c in self.ocls:
         i = self.ocls[c]
         self.out.append(f"k{i}:")
@@ -198,6 +201,11 @@ def gen_dispatch(self, op: str) -> None:
             self.out.append(f"  %r{i} = call i1 @o.{op}.{c}({'i64 %op, ' if op == 'cmp' else ''}ptr %pa, ptr %pb)")
             self.out.append(f"  %z{i} = zext i1 %r{i} to i64")
             self.out.append(f"  ret i64 %z{i}")
+    for c in hs:
+        i = self.ocls[c]
+        self.out.append(f"h{i}:")
+        self.out.append(f"  %x{i} = call i64 @o.hash.{c}(ptr %pa)")
+        self.out.append(f"  ret i64 %x{i}")
     self.out.append("none:")
     self.out.append("  unreachable")
     self.out.append("}")
