@@ -1,0 +1,11 @@
+AttributeError: 'Peek' object has no attribute 'items'
+size 12
+2
+AttributeError: 'Hook' object has no attribute 'name'
+HOOK
+AttributeError: 'Nested' object has no attribute 'tag'
+AttributeError: 'Nested' object has no attribute 'tag'
+t tt
+AttributeError: 'Ranked' object has no attribute 'weight'
+['b', 'a']
+[exit 0]

@@ -661,7 +661,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "walrus":
-        return self.walrus(n, want)
+        v = self.walrus(n, want)
+        self.gencall = ""  # (its target holds a generator the call made: no loop owns it, owned_gen)
+        return v
     if k == "binop" and n.s == "%" and self.refl_dict_of(n.kids[1]) is not None and (n.kids[0].kind == "str" or (n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str")):
         return self.refl_percent(n.kids[0].s if n.kids[0].kind == "str" else self.strglobals[n.kids[0].s], n.kids[1])  # (fmt % vars(x): reflection.py)
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":

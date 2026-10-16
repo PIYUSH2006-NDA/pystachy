@@ -2257,7 +2257,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             if is_opt(p.t) or is_union(p.t):
                 self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
             return Val(r, p.t)
-    if name in ci.fflag:
+    if name in ci.fflag and name not in ci.fsure:
         f = self.fgep(o, ci.fflag[name])
         if bad == "":
             bad = self.scalar('xor', [Val(self.mem_load(Val(f, '*bool')).v, 'bool'), Val('true', 'bool')])
