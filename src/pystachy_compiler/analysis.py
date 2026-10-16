@@ -1,7 +1,7 @@
 """Analysis component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, RANGE_METHODS, RANGE_TAKERS, TYPING
+from src.pystachy_compiler.specs import ABCS, ABCSMORE, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, RANGE_METHODS, RANGE_TAKERS, TYPING
 from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mentions, mk, names_in, other_return, starred_target
 from src.pystachy_compiler.utils import int_fits
 
@@ -242,7 +242,7 @@ def builtin_has(mod: str, x: str) -> bool:
     if mod == "typing":
         return x in TYPING
     if mod == "collections.abc":
-        return x in ABCS
+        return x in ABCS or x in ABCSMORE  # (CPython's other names: rejected where imported)
     if mod == "dataclasses":
         return x == "dataclass"
     if mod == "ffi":

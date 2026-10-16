@@ -73,6 +73,11 @@ by that code. The runtime binding check still applies.
 it can instead be a value the package binds after importing that submodule.
 `import collections.abc` binds `collections` to the `lib/` package and runs its code, although
 `collections.abc` itself is builtin; the package binds `abc` to that module, as CPython's does.
+`_collections_abc` is that builtin module too, as in CPython, whose `collections` binds
+`sys.modules['collections.abc']` to `_collections_abc`: `import _collections_abc` and
+`from _collections_abc import Mapping` bind it and its ABCs, without the package. The module's other
+names, such as `_check_methods`, `_type_repr` and `bytes_iterator`, are rejected, also in an
+optional import, whose `except ImportError` clause CPython would not run.
 
 ## Compile-time branches
 
@@ -259,7 +264,7 @@ arguments. Supported iteration contexts and other restrictions are in the
 | `tempfile` | `mkdtemp`. |
 | `errno` | The errno constants. |
 | `math` | Functions and constants with CPython's domain and range errors; restrictions below. |
-| Type and compiler support | `typing`, `collections.abc`, `dataclasses`, `builtins`, `__future__`; [FFI](../ffi.md) provides `@ffi.extern` and `@ffi.export`. |
+| Type and compiler support | `typing`, `collections.abc` (also `_collections_abc`), `dataclasses`, `builtins`, `__future__`; [FFI](../ffi.md) provides `@ffi.extern` and `@ffi.export`. |
 
 `open()` supports text modes, `buffering=`, `newline=` translation and positions for `"+"`
 modes. Files provide `read`, `readline`, `readlines`, `write`, `writelines`, `flush`, `close`,
