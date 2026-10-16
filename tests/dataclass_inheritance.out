@@ -79,6 +79,7 @@ Square.__post_init__ 9.0
 Square(name='sq', tags=['new'], sides=4, seen=1, color='black', filled=True, size=9.0)
 Point3(x=1, y=7, z=0) Point3(x=1, y=2, z=3) True False
 True False Labeled(x=5, y=7, z=1, label='p')
+True True
 frozen cannot assign to field 'kind'
 Version(kind='app', major=1, minor=2) True [Version(kind='a', major=1, minor=5), Version(kind='a', major=2, minor=0), Version(kind='b', major=1, minor=0)]
 [exit 0]

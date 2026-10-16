@@ -139,6 +139,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   the right operand's class defines the reflected method, which CPython calls with `None`
   instead (`B.__ror__(b, None)`; reflected methods are not supported, below).
 
+- A comparison method that `@dataclass` writes, called directly (`p.__eq__(q)`, `p.__lt__(q)`)
+  with `None` or an object of another class, compares the fields (`__eq__` returns `False` for
+  `None`) or raises `TypeError` where CPython's returns `NotImplemented`. The operators
+  (`p == q`, `p < q`) decline such an operand as CPython does.
+
 - An optional value that is `None`, passed to a builtin method's parameter that has a
   default (`s.split(sep)`, `s.strip(chars)`), means the default, as an explicit `None` does,
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and

@@ -715,7 +715,8 @@ def gen_replace(self, o: Val, args: list[Node]) -> Val:
 
 def gen_dc_replace(self, args: list[Node]) -> Val:
     # dataclasses.replace(obj, **changes): a new object of obj's class, which its __init__ makes
-    # from the changes and the values of obj's other init=True fields, read in field order
+    # from the changes (each passed, as CPython passes them) and the values of obj's other
+    # init=True fields, read in field order
     npos = len([a for a in args if a.kind != "kw"])
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
         self.err("star arguments are not supported")
@@ -729,9 +730,7 @@ def gen_dc_replace(self, args: list[Node]) -> Val:
     for a in args[1:]:
         if a.s in ci.fopts and "no-init" in ci.fopts[a.s]:
             self.err(f"field {a.s} is declared with init=False, it cannot be specified with replace()")
-        if a.s not in ci.ftypes:
-            self.err(f"{short(o.t)}.__init__() got an unexpected keyword argument '{a.s}'")
-        given[a.s] = self.expr(a.kids[0], ci.ftypes[a.s])
+        given[a.s] = self.expr(a.kids[0], ci.ftypes.get(a.s, ""))
     self.notnone(o, "TypeError: replace() should be called on dataclass instances")
     # (an object of a subclass: the subclass's __init__, also given its own fields)
     cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
@@ -748,10 +747,11 @@ def gen_dc_replace(self, args: list[Node]) -> Val:
             self.place(arm)
         x = Val(o.v, c.name)
         kws: list[Node] = []
+        for k in given:
+            kws.append(mk("kw", k, self.line, [self.vnode(given[k])]))
         for fl in self.dc_fields(c):
-            if "no-init" not in c.fopts[fl]:
-                v = given[fl] if fl in given else self.getfield(x, self.field(x, fl), fl)
-                kws.append(mk("kw", fl, self.line, [self.vnode(v)]))
+            if "no-init" not in c.fopts[fl] and fl not in given:
+                kws.append(mk("kw", fl, self.line, [self.vnode(self.getfield(x, self.field(x, fl), fl))]))
         r = self.new_obj(c.name)
         self.call_fn(c.methods["__init__"], [r], kws, direct=True)
         if end != "" and not self.term:

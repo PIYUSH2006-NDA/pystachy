@@ -1,7 +1,8 @@
 # @dataclass options: order=True compares the tuples of the fields (but compare=False ones),
 # eq=False keeps identity equality, frozen=True raises FrozenInstanceError (an AttributeError)
-# outside the __init__ it writes, init=False writes no __init__, match_args=False sets no
-# __match_args__, and frozen or unsafe_hash classes may be defaults of other dataclasses.
+# outside the __init__ it writes, init=False writes no __init__ (nor checks the order of
+# defaults), match_args=False sets no __match_args__, and frozen or unsafe_hash classes may be
+# defaults of other dataclasses. None compared to an object raises CPython's TypeError.
 import dataclasses
 from dataclasses import FrozenInstanceError, dataclass, field
 
@@ -25,6 +26,11 @@ try:
     print(v[0] < missing)
 except TypeError as e:
     print("TypeError", e)
+for op in ["<", ">="]:
+    try:
+        print(missing < v[0] if op == "<" else missing >= v[0])
+    except TypeError as e:
+        print("TypeError", e)
 
 
 @dataclass(order=True)
@@ -144,6 +150,15 @@ class Bare:
     b: str = "x"
 
 
+@dataclass(init=False)
+class Late:
+    a: int = 1
+    b: int
+
+    def __init__(self, b: int) -> None:
+        self.b = b
+
+
 m = Manual(4)
-print(m, Bare(), Bare() == Bare())
+print(m, Bare(), Bare() == Bare(), Late(2))
 p.x = 99

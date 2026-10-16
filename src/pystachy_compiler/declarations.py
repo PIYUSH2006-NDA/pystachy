@@ -1046,6 +1046,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
     dc = self.is_dc(ci.name) and ci.name not in self.nts
     kwmode = ci.kwonly  # (@dataclass(kw_only=True), or after _: KW_ONLY)
+    kwseen = False
     flines: dict[str, int] = {}  # (a dataclass's fields its body declares, and where)
     for st in ci.node.kids[0].kids:
         self.line = st.line
@@ -1053,9 +1054,10 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             continue
         if dc and st.kind == "annassign" and st.kids[0].kind == "name" and self.imported_ref(st.kids[1]) == "dataclasses.KW_ONLY":
             # _: KW_ONLY is no field: the fields after it are keyword-only parameters of __init__
-            if kwmode and not ci.kwonly:
+            if kwseen:
                 self.err(f"'{st.kids[0].s}' is KW_ONLY, but KW_ONLY has already been specified")
             kwmode = True
+            kwseen = True
             continue
         if dc and st.kind == "annassign" and st.kids[0].kind == "name":
             # (a base dataclass's field declared again has only its new default and options)
@@ -1125,7 +1127,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         elif st.kind != "def" and st.kind != "pass" and not (st.kind == "expr" and (st.kids[0].kind == "str" or st.kids[0].kind == "ellipsis")):
             what = "an assignment to anything but one name (x = v)" if st.kind == "assign" else "an expression statement" if st.kind == "expr" else f"a{'n' if st.kind[0] in 'aeiou' else ''} {st.kind} statement"
             self.err(f"a class body may only contain fields, methods, a docstring, pass and ..., not {what}")
-    for fl in ci.fields if dc else []:
+    for fl in ci.fields if dc and "no-init" not in ci.dcopts else []:
         # the positional parameters of the __init__ @dataclass writes, the base's fields first
         if fl in ci.fopts and "no-init" not in ci.fopts[fl] and "kw_only" not in ci.fopts[fl]:
             if fl in ci.fdefault or fl in ci.factory:

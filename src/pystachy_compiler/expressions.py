@@ -233,7 +233,13 @@ def gen_has(self, t: str, a: str) -> int:
             self.err(f"hasattr() of '{a}' on a NamedTuple is not supported")
         if a in HASATTR["obj"].split():
             return -1
-        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() and not (a == "__match_args__" and "no-match_args" in ci.dcopts) else 0
+        if self.is_dc(t) and a == "__match_args__":
+            # (but for match_args=False, which leaves the one a base dataclass writes, if any)
+            c = t
+            while c in self.classes and "no-match_args" in self.classes[c].dcopts:
+                c = self.classes[c].base
+            return -1 if c in self.classes else 0
+        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__".split() else 0
     b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:
@@ -2098,7 +2104,9 @@ def gen_richcmp(self, op: str, a: Val, b: Val) -> Val:
         self.incoming(ph, r.v, self.cur)
         self.br(lend)
         self.place(lnone)
-    if rf != "":
+    if rf != "" and not (self.classes[b.t].methods[rf].synthetic and self.is_dc(self.classes[b.t].methods[rf].cls)):
+        # (what @dataclass writes returns NotImplemented for None, here a, as for an object of
+        # another class)
         lcall = self.label()
         lerr = self.label()
         self.cbr(self.isnull(b), lerr, lcall)

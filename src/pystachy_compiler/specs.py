@@ -249,6 +249,7 @@ for _k in ("BaseExceptionGroup:BaseException GeneratorExit:BaseException Keyboar
 # what assigning a field of a @dataclass(frozen=True) object raises (an except clause lists it
 # only in a program that has such a class: Gen.hasfrozen)
 FROZENERR = "dataclasses.FrozenInstanceError"
+FROZENUSE = "dataclasses.FrozenInstanceError is only supported in an except clause, which catches what assigning a field of a frozen dataclass raises"
 
 
 # the hidden fields an exception class's objects begin with (see Gen.declare_fields), with their types

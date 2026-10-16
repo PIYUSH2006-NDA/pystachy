@@ -93,6 +93,19 @@ print(Point3(1), Point3(1, 2, 3), Point3(1) == Point3(1, 7, 0), Point3(1) == Poi
 print(Labeled(1, label="a") == Labeled(1, label="b"), Labeled(1) == Labeled(2), Labeled(5, z=1))
 
 
+@dataclass(match_args=False)
+class Unmatched(Point):  # (Point's __match_args__ is still its)
+    pass
+
+
+@dataclass(match_args=False)
+class Unmatched3(Unmatched):
+    w: int = 0
+
+
+print(hasattr(Unmatched(1), "__match_args__"), hasattr(Unmatched3(1), "__match_args__"))
+
+
 @dataclass(frozen=True)
 class Key:
     kind: str

@@ -3,6 +3,8 @@ False True True True True True
 Version(major=1, minor=2, patch=0, name='') Version(major=0, minor=9, patch=9, name='old')
 ['1.2.0', '1.2.0', '1.0.5', '0.9.9']
 TypeError '<' not supported between instances of 'Version' and 'NoneType'
+TypeError '<' not supported between instances of 'NoneType' and 'Version'
+TypeError '>=' not supported between instances of 'NoneType' and 'Version'
 [Word(text='Z', weight=1.0), Word(text='a', weight=0.5), Word(text='a', weight=2.5), Word(text='ü', weight=1.0)]
 False True True True
 False True
@@ -16,5 +18,5 @@ Point(x=1, y=2, tags=['in place'])
 Checked(n=5)
 post_init cannot assign to field 'n'
 Uses(origin=Origin(x=0), key=Key(k='k'), plain=Plain(n=0)) True True
-Manual(a=8, b='b') Bare(a=1, b='x') True
+Manual(a=8, b='b') Bare(a=1, b='x') True Late(a=1, b=2)
 [exit 1]

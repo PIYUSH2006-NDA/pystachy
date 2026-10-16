@@ -11,6 +11,8 @@ from src.pystachy_compiler.specs import (
     DEFAULTS,
     ERRNO,
     FLOATINFO,
+    FROZENERR,
+    FROZENUSE,
     METHODS,
     MODATTRS,
     MODFUNCS,
@@ -95,6 +97,8 @@ def gen_modattr(self, path: str) -> Val:
     if (path.endswith(".__name__") or path.endswith(".__qualname__")) and path[: path.rfind(".")] in MODFUNCS:
         fp = path[: path.rfind(".")]
         return Val(self.sconst(fp[fp.rfind(".") + 1 :]), "str")
+    if path == FROZENERR:
+        self.err(FROZENUSE)
     self.err(f"unsupported module attribute {path}")
     return Val("", "")
 
@@ -134,6 +138,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.dc_replace(args)
     if name == "dataclasses.field":
         self.err("dataclasses.field() is only supported as the value of a field in the body of a @dataclass class")
+    if name == FROZENERR:
+        self.err(FROZENUSE)
     if "." not in name and name not in PYBUILTINS:
         self.err(f"name '{short(name)}' is not defined")
     # builtins and module functions ("os.system"); most are one call listed in CALLS
