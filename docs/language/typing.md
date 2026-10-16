@@ -19,7 +19,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
 | `T \| None` | Optional values, including containers, `Callable` and generators (`Generator[Y, None, None] \| None`) |
 | `TextIO` | Text files |
-| `Generator[Y, None, R]`; `Iterator[T]` or `Iterable[T]` as a generator function's return | Generator objects that yield `T` (any generator function's); see [generators](semantics.md#generators). Elsewhere `Iterator[T]` and `Iterable[T]` type nothing ([iterators](semantics.md#iterators)) |
+| `Generator[Y, S, R]`; `Iterator[T]` or `Iterable[T]` as a generator function's return | Generator objects that yield `Y` (any generator function's) and take `S` from `send()`; see [generators](semantics.md#generators). Elsewhere `Iterator[T]` and `Iterable[T]` type nothing ([iterators](semantics.md#iterators)) |
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,

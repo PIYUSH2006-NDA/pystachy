@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENRET, GENSLOTS, GENSTATE, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENNEW, GENRET, GENSLOTS, GENSLOTSX, GENSTATE, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
 
 
@@ -15,7 +15,7 @@ def gen_lower(self, fn: IFn) -> None:
     o.append(f"define {'' if f.export else 'internal '}{lt(f.ret)} {f.ll}({', '.join(ps)}){' presplitcoroutine' if fn.coro else ''}{' personality ptr @pys_personality' if fn.pads else ''} {{")
     o.append("entry:")
     if fn.coro:
-        o.append(f"  %coro.promise = alloca [{GENSLOTS} x i64], align 8")
+        o.append(f"  %coro.promise = alloca [{GENSLOTSX if self.gproto else GENSLOTS} x i64], align 8")
         self.coros = True
     for i in fn.slots:
         if i.k == 1:
@@ -195,9 +195,13 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         o.append("coro.begin:")
         o.append(f"  %coro.frame = phi ptr [null, %{self.lowblk}], [%coro.mem, %coro.alloc]")
         o.append("  %coro.hdl = call ptr @llvm.coro.begin(token %coro.id, ptr %coro.frame)")
-        o.append(f"  store [{GENSLOTS} x i64] zeroinitializer, ptr %coro.promise")
+        o.append(f"  store [{GENSLOTSX if self.gproto else GENSLOTS} x i64] zeroinitializer, ptr %coro.promise")
         o.append(f"  %coro.name = getelementptr i64, ptr %coro.promise, i64 {GENNAME}")
         o.append(f"  store ptr {i.a[0].v}, ptr %coro.name")
+        if self.gproto:
+            # (not started: what send() and throw() tell from a generator suspended at a yield)
+            o.append(f"  %coro.new = getelementptr i64, ptr %coro.promise, i64 {GENSTATE}")
+            o.append(f"  store i64 {GENNEW}, ptr %coro.new")
         o.append("  %coro.first = call i8 @llvm.coro.suspend(token none, i1 false)")
         o.append(f"  switch i8 %coro.first, label %coro.ret [i8 0, label %{i.b[0]} i8 1, label %coro.cleanup]")
     elif op == "gen.yield":

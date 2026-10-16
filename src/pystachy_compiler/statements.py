@@ -470,6 +470,7 @@ def gen_stmt(self, n: Node) -> None:
         if n.kids[0].kind == "yield":
             self.yield_stmt(n.kids[0])  # (a generator's yield, or yield from)
         elif n.kids[0].kind != "str" and n.kids[0].kind != "ellipsis":
+            self.stmtexpr = n.kids[0]  # (whose value is dropped: g.close() as a statement)
             self.expr(n.kids[0], "")  # (a string or ... alone does nothing)
     elif k == "gendrop":
         self.gen_drop(self.expr(n.kids[0], ""))  # (a generator a loop owns: owned_loop)

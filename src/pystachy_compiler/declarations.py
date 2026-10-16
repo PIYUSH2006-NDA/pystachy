@@ -37,6 +37,7 @@ from src.pystachy_compiler.utils import (
     clone,
     elem,
     gelem,
+    gsend,
     is_callable,
     is_const,
     is_dict,
@@ -166,7 +167,7 @@ def gen_ann(self, n: Node) -> str:
             # Iterator[T], Generator[Y, None, R] (typing's or collections.abc's): a generator object
             # (an iterator of another kind, as #477 makes them, is not one of these)
             yr = self.gen_ann_ret(n)
-            return "!" + yr[0] if len(yr) == 1 else self.ctype("gen", [yr[0]])
+            return "!" + yr[0] if len(yr) == 1 else self.gen_type(yr[0], yr[2])
         if base == "callable":
             # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
             if len(a) != 2 or (a[0].kind != "list" and a[0].kind != "ellipsis"):
@@ -861,6 +862,8 @@ def gen_widens(self, a: str, b: str) -> bool:
         return True
     if is_opt(b):
         return a == "None" or (not is_sopt(b) and self.widens(unopt(a), unopt(b)))  # (an int | None is a box)
+    if is_gen(a) and is_gen(b) and gsend(b) == "None" and gelem(a) == gelem(b):
+        return True  # (a generator that takes S from send() as one that next() alone resumes)
     if b in self.classes:
         return a == "None" or (a in self.classes and self.derives(a, b))
     if is_union(b):

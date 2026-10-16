@@ -243,10 +243,11 @@ a handle (an `invoke` in a `try`), and `gen.drop` closes and destroys a generato
 lives in a scanned stack frame.
 
 A generator object is the coroutine's handle, so every generator that yields `Y` has the type
-`gen[Y]` (shown as `Generator[Y]`), whatever function made it. The promise holds five words:
-the value yielded last, the value returned (`r = yield from g()`), the state (suspended, suspended
-where closing it runs its code, finished, running), the consumer's command (close) and the
-generator's `__qualname__`. A consumer checks the state before it resumes (a finished generator
+`gen[Y]` (shown as `Generator[Y]`), whatever function made it; one whose function takes `S` from
+`send()` (`Generator[Y, S, R]`, `S` not `None`) has the type `gen[Y,S]`, which widens to `gen[Y]`.
+The promise holds five words: the value yielded last, the value returned (`r = yield from g()`),
+the state (suspended, suspended where closing it runs its code, finished, running), the
+consumer's command (close by a loop, `close()`, `throw()`) and the generator's `__qualname__`. A consumer checks the state before it resumes (a finished generator
 is never resumed; a running one raises `ValueError`) and after (finished: the loop ends).
 `for_seq` takes a generator as one more kind of sequence, so `for`, `enumerate()`, `zip()` and
 comprehensions iterate generators; consumers that take all items read them into a list, and
@@ -266,6 +267,24 @@ blocks' unwind actions aside (`pys_gen_leave`, `pys_gen_enter`), its `try` state
 (and those of the `StopIteration` catches of its loops over iterator objects) are relative to the
 depth where it was last resumed, and the exception it handles in an
 `except` clause or a `finally` block is its own again when it resumes.
+
+`close()` resumes a generator suspended where closing it runs its code with the `close()`
+command, under which its landing block leaves what it raises for `close()` (`pys_gen_unraisable`
+keeps it, `pys_gen_closed` takes it) instead of reporting it; any other generator is just marked
+finished. A `yield from` suspended so closes the generator it delegates to the same way before it
+raises `GeneratorExit` (PEP 380), so what that raises is raised at the `yield from`. A program
+that calls a method named `send` or `throw` (`Gen.gproto`, decided from the source before
+anything is compiled) gives its generators two more promise words, the value sent and the
+exception thrown, and a state for a generator that has not started (a `send()` of a value and a
+`throw()` tell it from one suspended at a `yield`). `send(v)` stores `v` and resumes, and a
+`yield` whose value is used reads it (in a program without `send()`, a `yield`'s value is
+`None`); `throw(e)` stores `e` and resumes with the `throw()` command, which the `yield` raises,
+where a `try`, `with` or `yield from` may handle it, and raises it in the thrower elsewhere (a
+`StopIteration` as PEP 479's `RuntimeError` where it leaves a suspended generator). A `yield from`
+there sends what it is sent on to its generator, throws what is thrown into it into its generator
+(closing it for `GeneratorExit`) and suspends again with what that yields, or finishes with its
+value. Programs without `send` and `throw` keep five words and the code they had; only a
+`yield from` whose closing may run code closes its generator as above.
 
 A generator expression that no consumer takes directly becomes an anonymous generator
 function, called with its first iterable (evaluated where it is written) and the values of

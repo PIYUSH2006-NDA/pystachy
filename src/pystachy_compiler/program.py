@@ -5,6 +5,7 @@ import sys
 from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
+from src.pystachy_compiler.generators import uses_protocol
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
@@ -707,6 +708,7 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
+        self.gproto = self.gproto or uses_protocol(m.body)  # (generators: send(), throw(), a yield's value)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
     for m in mods:

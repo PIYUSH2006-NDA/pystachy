@@ -673,8 +673,14 @@ def elem(t: str) -> str:
 
 
 def gelem(t: str) -> str:
-    # Y, of a generator gen[Y]
-    return t[4:-1]
+    # Y, of a generator gen[Y] (or gen[Y,S], whose send type S is not None)
+    return targs(t)[0]
+
+
+def gsend(t: str) -> str:
+    # S, the send type of a generator gen[Y,S]: None for a gen[Y]
+    a = targs(t)
+    return a[1] if len(a) > 1 else "None"
 
 
 def targs(t: str) -> list[str]:

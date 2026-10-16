@@ -504,16 +504,29 @@ IROPS: dict[str, str] = {
 # a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
 # state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
 # what closing it raises). State: suspended where closing it runs no code of its, suspended
-# where it does (a yield in try, with or yield from), finished, running
+# where it does (a yield in try, with or yield from), finished, running. In a program that uses
+# the generator protocol's send() or throw(), or the value of a yield (Gen.gproto), seven: also
+# the value sent to it (send(), which the yield it resumes at gives) and the exception thrown
+# into it (throw()); a generator that has not started yet is in state new there, so that a
+# send() of a value other than None and a throw() can tell it from one suspended at a yield.
+# Commands: close (a loop that owns it drops it: what closing raises is reported), close()
+# (raised by close()), throw() (raised at the yield)
 GENVAL = 0
 GENRET = 1
 GENSTATE = 2
 GENCMD = 3
 GENNAME = 4
 GENSLOTS = 5
+GENSEND = 5
+GENEXC = 6
+GENSLOTSX = 7
 GENCLEAN = 1
 GENDONE = 2
 GENRUN = 3
+GENNEW = 4
+GENDROPC = 1
+GENCLOSEC = 2
+GENTHROWC = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -716,9 +729,10 @@ RUNTIME: dict[str, str] = {
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
     # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
     # again when it resumes (gen.enter, which returns their depth below them); the reports of a
-    # generator closed by its loop that yielded again or raised
+    # generator closed by its loop that yielded again or raised, and what one that close() closed
+    # raised (gen.closed: null if nothing)
     "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
-    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|", "gen.closed": "exc:|I|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
     "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams

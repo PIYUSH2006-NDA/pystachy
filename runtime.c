@@ -146,9 +146,10 @@ static uintptr_t *mstk;                /* mark stack of (address, bytes) ranges 
 static I msp, mcap;
 static Str *ch1[256];                  /* runtime statics that hold heap pointers (roots) */
 static List *args;
-static struct { Exc *cur, *handled, *shown, *pend; } xr;   /* the exception raised last, the one being handled,
-                                     the uncaught one whose str() is being shown, the one a with-file's close
-                                     raised while unwinding (see exceptions) */
+static struct { Exc *cur, *handled, *shown, *pend, *closed; } xr;   /* the exception raised last, the one being
+                                     handled, the uncaught one whose str() is being shown, the one a with-file's
+                                     close raised while unwinding (see exceptions), the one a generator raised
+                                     as close() closed it (see generators) */
 static int eh;                         /* the program has try or with: stored by pys_eh_on alone (see exceptions) */
 typedef void Thrower(Exc *);
 static Thrower *xthrow;                /* where the funnels send what they raise: NULL until pys_eh_on (ditto),
@@ -3845,7 +3846,11 @@ void *pys_gen_leave(I base) {
 /* What closing a generator that a loop owns raises, and its yield after GeneratorExit, are
    reported as CPython reports an exception it ignores (unraisable), and the loop goes on: the
    first line names the generator by its __qualname__ (and its promise's address, where CPython
-   shows the object's), the last is the exception's, as an uncaught one's (no traceback lines) */
+   shows the object's), the last is the exception's, as an uncaught one's (no traceback lines).
+   A generator that close() closes (its promise's command word, slot 3, is 2: specs.GENCLOSEC)
+   raises what it raises out of close(): its landing block, which hands it here as it would
+   report it, leaves it for close() instead (pys_gen_closed takes it once the generator has
+   finished, before any other code runs), so the generator's own code is the same either way */
 static void gen_ignored_in(Str *name, void *p) {
   out_flush();
   fputs("Exception ignored in: <generator object ", stderr);
@@ -3857,12 +3862,14 @@ void pys_gen_ignored(Str *name, void *p) {
   fputs("RuntimeError: generator ignored GeneratorExit\n", stderr);
 }
 void pys_gen_unraisable(Exc *e, Str *name, void *p) {
+  if (((I *)p)[3] == 2) { xr.closed = e; return; }
   gen_ignored_in(name, p);
   Str *k = e->obj ? XCLS(e)->disp : e->kind, *m = e->obj ? XCLS(e)->str(e->obj) : e->detail ? e->detail : e->msg;
   fwrite(k->s, 1, k->len, stderr);
   if (m->len || e->detail) { fputs(": ", stderr); ewrite(m->s, m->len); }
   fputc('\n', stderr);
 }
+Exc *pys_gen_closed(void) { Exc *e = xr.closed; xr.closed = 0; return e; }
 Exc *pys_exc_begin(void *ue, I mark) { /* a landing starts: put right what the raise left, handle the Exc */
   Exc *e = ue;
   xr.cur = e; io_busy = 0;

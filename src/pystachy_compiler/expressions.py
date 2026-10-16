@@ -650,10 +650,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.listcomp(n.kids[0], want, "", "", None, k[:-4], resultsoft)
     if k == "dictstar":
         return self.dict_merge(n, want)
-    if k == "yield" and n.s == "from":
-        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
     if k == "yield":
-        self.err("the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)")
+        return self.yield_value(n)  # (what send() sends the generator)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "walrus":

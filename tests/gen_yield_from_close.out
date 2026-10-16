@@ -1,0 +1,11 @@
+got 1
+noisy closing
+tolerant caught KeyError('cleanup')
+tolerant ends
+after break
+wraps_stubborn finally
+after stubborn
+noisy closing
+caught ValueError('body')
+end
+[exit 0]

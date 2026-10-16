@@ -286,12 +286,14 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   generator's own body is converted, and so is everything in a program with `try` or `with`.
   (`tests/deviations/gen_pep479_no_try.py`)
 
-- What closing a generator raises (other than `GeneratorExit`) is reported, not propagated, when
-  a `yield from` closes the generator it delegates to: CPython raises it in the delegating
-  generator, whose own handlers may see it. A generator expression's first iterable is evaluated
-  where it is written, but a `range()`, `enumerate()`, `zip()` or `reversed()` there checks its
-  arguments (a zero step), and a dict's or set's iterator records its size, when the generator
-  first runs, not where it is made.
+- The `StopIteration` that `next()`, `send()` or `throw()` raises as a generator returns a value
+  has no value (`str(e)` is empty, `repr(e)` is `StopIteration()`), where CPython's shows it; a
+  generator's static type does not hold its return type. `r = yield from g()` gets the value.
+  (`tests/deviations/gen_stop_value.py`)
+
+- A generator expression's first iterable is evaluated where it is written, but a `range()`,
+  `enumerate()`, `zip()` or `reversed()` there checks its arguments (a zero step), and a dict's or
+  set's iterator records its size, when the generator first runs, not where it is made.
 
 ## Rejected rather than miscompiled
 
@@ -302,14 +304,19 @@ supported alternatives.
 
 ### Generators
 
-- the value of a `yield` expression (`x = yield v`: there is no `send()`), a `yield from` whose
-  value is used other than assigned to a variable (`r = yield from g()`), the value of a
-  `yield from` that delegates to a generator other than a call of a generator function (whose
-  return type is not known), and a `return v` in a generator annotated `Iterator[T]` or
-  `Iterable[T]`
-- `send()`, `throw()` and `close()` of a generator, `Generator[Y, S, R]` with a send type other
-  than `None`, a generator function's return annotation other than `Iterator[T]`, `Iterable[T]`
-  or `Generator[Y, None, R]`, async generators, and printing or comparing a generator object
+- a `yield from` whose value is used other than assigned to a variable (`r = yield from g()`),
+  the value of a `yield from` that delegates to a generator other than a call of a generator
+  function (whose return type is not known), and a `return v` of a value other than `None` in a
+  generator annotated `Iterator[T]` or `Iterable[T]`
+- `send()` of a value other than `None` to a generator whose send type is `None` (its function is
+  annotated `Iterator[T]`, `Generator[Y, None, R]` or not at all), a send type that cannot be
+  `None` (`next()` sends `None`), a `yield from` that sends on to a generator with another send
+  type, or to an iterator that is no generator, in a generator that takes a value from `send()`
+- the value of `close()` (in CPython 3.13, what the generator returns as it closes), `throw()` with
+  more than one argument (the deprecated `throw(type, value, traceback)`), a generator's `send`
+  or `throw` method as a value
+- a generator function's return annotation other than `Iterator[T]`, `Iterable[T]` or
+  `Generator[Y, S, R]`, async generators, and printing or comparing a generator object
 - an unannotated generator function that delegates to itself (`yield from f(...)`) before its
   first `yield`, whose yield type is not known there
 - a generator expression made a value (not a direct argument of a consumer) that reads a

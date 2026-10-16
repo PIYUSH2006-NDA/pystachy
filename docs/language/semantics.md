@@ -154,13 +154,15 @@ has its value's type. A `Generic[T]` class's `Iterable[T]` parameter binds `T` t
 
 A function or method whose body contains `yield` or `yield from` is a generator function.
 Calling one runs none of its body: it makes a generator object, which runs to its next `yield`
-each time a consumer asks for an item. Generator functions that yield one type share one static
-type (`Generator[T]` in messages). A generator function's return annotation is `Iterator[T]`,
-`Iterable[T]` or `Generator[Y, None, R]`, from `typing` or `collections.abc`; elsewhere
+each time a consumer asks for an item. Generator functions that yield one type and take one
+type from `send()` share one static type (`Generator[T]` in messages, `Generator[T, S]` where
+the send type `S` is not `None`). A generator function's return annotation is `Iterator[T]`,
+`Iterable[T]` or `Generator[Y, S, R]`, from `typing` or `collections.abc`; elsewhere
 `Iterator[T]` and `Iterable[T]` type nothing (see [iterators](#iterators)), so a parameter
 annotated so takes generators as well as iterator objects, and `Generator[T, None, None]` names
-a generator's type (`holder: list[Generator[int, None, None]] = []`). An unannotated generator
-function is a template: its first `yield` gives the type for each call's argument types. An
+a generator's type (`holder: list[Generator[int, None, None]] = []`). A generator that takes `S`
+is also one that takes `None`. An unannotated generator function is a template: its first
+`yield` gives the type for each call's argument types, and its send type is `None`. An
 `__iter__` or `__reversed__` that yields makes the generator that iterates its object.
 
 | Use | Behavior |
@@ -172,7 +174,11 @@ function is a template: its first `yield` gives the type for each call's argumen
 | `list`, `tuple`, `sorted`, `set`, `frozenset`, `str.join`, `list.extend` | All the items |
 | `x in g` | Iterates until an item equals `x` |
 | `a, b = g`, `a, *rest = g` | One item for each target, then one more step that must find `g` finished; with a starred target, all the items |
-| `yield from x` | Each item of `x`; for a generator, delegation, and `r = yield from g()` is `g`'s return value |
+| `yield from x` | Each item of `x`; for a generator, delegation (PEP 380: `send()`, `throw()` and `close()` go on to `x`), and `r = yield from g()` is `g`'s return value |
+| `g.send(v)` | Resumes `g` with `v` as the value of the `yield` where it is suspended; returns the next item, or raises `StopIteration` once it has finished; `send(None)` is `next(g)`, and another value cannot start `g` (`TypeError`) |
+| `g.throw(e)` | Raises `e` (an exception, an exception class or a call of one) at the suspended `yield`; returns the next item if `g` handles it, raises `StopIteration` if `g` finishes, and the exception if it leaves `g`. Into a generator that has not started or has finished, `e` is raised as it is |
+| `g.close()` | Raises `GeneratorExit` at the suspended `yield` where a `try`, `with` or `yield from` there may see it, else finishes `g` at once; what `g` raises then comes out of `close()`, and a `yield` after `GeneratorExit` raises `RuntimeError: generator ignored GeneratorExit` |
+| `x = yield v` | The value `send()` gave as it resumed the generator: `None` from `next()`, a loop or `throw()`. In a generator annotated `Generator[Y, S, R]` its type is `S \| None`; with a send type of `None`, `None` |
 
 A generator expression that no consumer takes directly, such as one stored in a variable or
 returned, is an anonymous generator: its first iterable is evaluated where it is written and
@@ -192,9 +198,12 @@ leaves a generator's body finishes the generator; a `StopIteration` becomes
 `RuntimeError: generator raised StopIteration` (PEP 479). A generator that resumes itself raises
 `ValueError: generator already executing`.
 
-`send()`, `throw()`, `close()`, the value of a `yield` expression, `async` generators and frame
-introspection are not supported. A generator the program drops while it is suspended is not
-closed (see [deviations](compatibility.md#memory-and-resource-lifetime)).
+`close()` is supported as a statement; its value (what a generator returns as it closes, in
+CPython 3.13) is not. `throw(type, value, traceback)`, `async` generators and frame
+introspection are not supported, nor `yield from` of an iterator that is no generator in a
+generator that takes a value from `send()` (CPython sends the value on to the iterator, which has
+no `send()`). A generator the program drops while it is suspended is not closed (see
+[deviations](compatibility.md#memory-and-resource-lifetime)).
 
 ## Object protocols
 
