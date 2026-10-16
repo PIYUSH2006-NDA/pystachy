@@ -140,7 +140,11 @@ except ImportError:
         # sin(pi*x), giving accurate results for all finite x (especially x integral or close to
         # an integer)
         y = _fmod(_fabs(x), 2.0)
-        n = round(2.0 * y)
+        # (int)round(2.0*y): C's round() takes a half away from zero, where Python's takes it to
+        # even (2.0*y - n is exact)
+        n = int(2.0 * y)
+        if 2.0 * y - n >= 0.5:
+            n += 1
         if n == 0:
             r = _sin(_pi * y)
         elif n == 1:
@@ -162,8 +166,9 @@ except ImportError:
             if _isnan(x):
                 return x  # lgamma(nan) = nan
             return _inf  # lgamma(+-inf) = +inf
-        # integer arguments
-        if x == _floor(x) and x <= 2.0:
+        # integer arguments: x == floor(x), tested with fmod(), as math.floor() gives an int, which
+        # would overflow 64 bits for a float of 2**63 or more
+        if _fmod(x, 1.0) == 0.0 and x <= 2.0:
             if x <= 0.0:
                 raise ValueError("math domain error")  # lgamma(n) = inf for integers n <= 0
             return 0.0  # lgamma(1) = lgamma(2) = 0.0

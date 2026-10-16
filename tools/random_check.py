@@ -164,10 +164,12 @@ def main():
     print(f"{len(floats)} float hashes, {hashes} differ")
 
     lgamma = lgamma_port((LIB / "random.py").read_text(encoding="utf-8"))
-    args = [float(i) for i in range(-20, 2000)]
+    args = [float(i) for i in range(-20, 2000)] + [i / 8 for i in range(-400, 400)]
+    args += [-1e20, 1e20, -1e300, 1e300, 2.0**63, -2.0**63, 0.49999999999999994,
+             -2.5000000000000004]
     for i in range(200 * count):
-        args.append(gen.choice([float(gen.randrange(1, 10**12)), gen.uniform(-100.0, 100.0),
-                                math.ldexp(gen.random(), gen.randrange(-70, 1024))]))
+        big = math.ldexp(gen.random(), gen.randrange(-70, 1024)) * gen.choice([1, -1])
+        args.append(gen.choice([float(gen.randrange(1, 10**12)), gen.uniform(-100.0, 100.0), big]))
     gammas = sum(outcome(math.lgamma, x) != outcome(lgamma, x) for x in args)
     print(f"{len(args)} lgamma arguments, {gammas} differ")
 

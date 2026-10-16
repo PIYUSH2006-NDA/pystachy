@@ -3,8 +3,9 @@
 # normalvariate(), gauss() and its saved second value, lognormvariate(), expovariate(),
 # vonmisesvariate(), gammavariate() (alpha below, at and above 1), betavariate(), paretovariate(),
 # weibullvariate() and binomialvariate() on its three paths (n == 1, the geometric method and BTRS,
-# whose test uses the port of math.lgamma()), on Random objects and the module's functions, with
-# their errors
+# whose test uses the port of math.lgamma()) up to n near 2**63, on Random objects and the module's
+# functions, with their errors, and the lgamma port (math.lgamma in CPython) at quarter-integers,
+# where C's round() differs from Python's, and past 64-bit ints
 import math
 import random
 from random import Random
@@ -67,6 +68,22 @@ for name in ["gauss", "normalvariate", "gammavariate", "betavariate", "vonmisesv
     print(name, math.fsum(values), min(values), max(values), values[1999])
 draws = [r.binomialvariate(50 + i % 40, 0.3 + (i % 9) / 20) for i in range(3000)]
 print("binomial", sum(draws), min(draws), max(draws), draws[-5:])
+
+print("binomialvariate near 2**63")
+M = 9223372036854775807
+print([Random(s).binomialvariate(M - 1, 2e-18) for s in [0, 1, 2]],
+      [Random(s).binomialvariate(M - 1, 0.5) for s in [0, 1]],
+      Random(5).binomialvariate(M - 1, 0.75))
+
+print("lgamma")
+for x in [-0.25, -0.75, -1.25, -2.25, -3.25, -2.75, -1.5, -4.5, 0.5, 2.5, -1.4999999999999998,
+          0.49999999999999994, 1e-25, -1e-25, 1.0, 2.0, 3.0, 1e20, 1e300, 2.0**63, 1e306, 0.0, -1.0,
+          -1e20, -1e300, -2.0**63, math.inf, -math.inf]:
+    try:
+        print(x, random._lgamma(x))
+    except (ValueError, OverflowError) as e:
+        print(x, type(e).__name__, e)
+print(math.isnan(random._lgamma(math.nan)), random._lgamma(7))
 
 print("gauss's second value")
 r = Random(8)
