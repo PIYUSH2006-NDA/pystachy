@@ -219,7 +219,7 @@ object as a value (#7). The compiler's side is described in [internals](../inter
 
 `type(x).__name__`, `__qualname__` and `__module__`, and `x.__class__.__name__` (also
 `self.__class__.__name__` in a method), give CPython's names: the class's own name, `int`,
-`str`, `list`, `NoneType`, ... for builtin values, and `builtins` as their module. Inside an
+`str`, `bytes`, `list`, `NoneType`, ... for builtin values, and `builtins` as their module. Inside an
 expression, `type(a) is C`, `type(a) == type(b)`, their negations and `x.__class__ is C` compare
 the exact classes (`type(True) is bool`, `type(True) is int` is false). `str()` and `repr()` of a
 reference union print each object as its own class prints it. `type(x)` as a value (a class
@@ -267,7 +267,8 @@ names `__slots__` closes.
 slots, the methods, properties and class attributes of its class and bases, the attributes
 every object has, and those a class body or `@dataclass` adds (`__module__`, `__dict__`,
 `__weakref__`, `__firstlineno__`, `__static_attributes__`, `__annotations__`,
-`__dataclass_fields__`, ...). It also takes `int`, `float`, `bool`, `str`, containers and `None`.
+`__dataclass_fields__`, ...). It also takes `int`, `float`, `bool`, `str`, `bytes`, containers and
+`None`.
 
 ### `dataclasses`
 

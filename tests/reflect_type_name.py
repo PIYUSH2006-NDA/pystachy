@@ -61,7 +61,7 @@ for a in zoo:
     print(type(a).__name__, a.__class__.__name__, a.kind())
 print(type(Box(1)).__name__, type(Box("s")).__name__)
 print(name_of(1), name_of(2.5), name_of(True), name_of("s"), name_of(None), name_of([1]), name_of({"a": 1}), name_of((1, "a")), name_of({1}), name_of(frozenset({1})), name_of(Cat()))
-print(type(1).__module__, type(None).__qualname__, type([1, 2]).__name__)
+print(type(1).__module__, type(None).__qualname__, type([1, 2]).__name__, name_of(b"x"), type(b"x") is bytes, dir(b"")[-2:])
 u: int | str = "a"
 print(type(u).__name__)
 u = 3

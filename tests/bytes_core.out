@@ -1,0 +1,23 @@
+b'hello' b'' 5 0
+104 111 b'el' b'olleh' b'' b'ello' b'hlo'
+104 101 108 108 111 
+[104, 101, 108, 108, 111] [104, 101, 108, 108, 111]
+b'hello world' b'hellohello' b'ababab' b''
+True False True True True True True
+True False True False True
+True False True
+truthy
+b'hello' b'hello' b'hello' b'hello'
+b'\x00\x7f\x80\xff\t\n\r\\\'"' b"it's" b'say "hi"' b'\'"'
+{b'a': 1, b'b': 2, b'c': 3} 1 True [b'a', b'b', b'c']
+True 2
+b'hi!'
+True
+b'z'
+[b'a', b'b'] [b'a', b'ab', b'b'] b'b' b'a'
+(b'k', 1) b'k'
+IndexError index out of range
+b'abcd' b'\\x41' b'ABC'
+b'ABCDE' b'ifmmp' b'HELLO' b'olleh'
+little b'\xff\xfe'
+[exit 0]

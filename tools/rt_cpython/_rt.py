@@ -106,3 +106,32 @@ def find_sub(h, n, st, en):
     if not 0 <= st <= en <= len(h):
         raise IndexError("search out of range")
     return h.find(n, st, en)
+
+
+class UnicodeDecodeError(UnicodeDecodeError):  # (CPython's, with the message runtime.py made)
+    def __init__(self, msg):
+        super().__init__("utf-8", b"", 0, 0, "")
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
+
+
+class UnicodeEncodeError(UnicodeEncodeError):
+    def __init__(self, msg):
+        super().__init__("utf-8", "", 0, 0, "")
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
+
+
+def fail(kind, msg):
+    # raise builtin exception kind with message msg (a UnicodeDecodeError or UnicodeEncodeError,
+    # whose constructor takes the parts of its message, is one whose str() is msg)
+    if kind == "UnicodeDecodeError":
+        raise UnicodeDecodeError(msg)
+    if kind == "UnicodeEncodeError":
+        raise UnicodeEncodeError(msg)
+    import builtins
+    raise getattr(builtins, kind)(msg)

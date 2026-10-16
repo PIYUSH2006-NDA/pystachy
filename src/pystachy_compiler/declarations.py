@@ -115,7 +115,7 @@ def gen_ann(self, n: Node) -> str:
             return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)
         if s in self.tmpl:
             return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
-        if s == "int" or s == "float" or s == "bool" or s == "str" or s in self.classes:
+        if s == "int" or s == "float" or s == "bool" or s == "str" or s == "bytes" or s in self.classes:
             return s
         if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
@@ -723,7 +723,7 @@ def gen_optional(self, t: str) -> str:
     if is_union(t):
         # (a union that holds a class's objects may be None, as the class's objects may)
         return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
-    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
+    if (t == "str" or t == "bytes" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
 

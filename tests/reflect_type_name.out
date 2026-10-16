@@ -7,7 +7,7 @@ Bird Bird Bird
 Parrot Parrot Parrot
 Box Box
 int float bool str NoneType list dict tuple set frozenset Cat
-builtins NoneType list
+builtins NoneType list bytes True ['upper', 'zfill']
 str
 int
 NoneType

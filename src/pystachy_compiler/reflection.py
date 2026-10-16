@@ -39,7 +39,7 @@ RF_TAGGED = 8
 RF_BUILTIN = 16
 
 # the builtin types type(x) names for a statically typed value, by the start of its type
-BUILTIN_TYPES: list[str] = ["int", "float", "bool", "str", "None"]
+BUILTIN_TYPES: list[str] = ["int", "float", "bool", "str", "bytes", "None"]
 
 
 class RLeaf:
@@ -202,7 +202,7 @@ def gen_refl_type_of(self, v: Val, what: str, nonnull: bool = False) -> list[RLe
         cs = ["None"] + cs
     for c in cs:
         if self.refl_type_name(c, what) == "":
-            self.err(f"type(x).{what} of {typestr(c)} is not supported (#486: user classes and the builtin types int, float, bool, str, list, dict, tuple, set and frozenset)")
+            self.err(f"type(x).{what} of {typestr(c)} is not supported (#486: user classes and the builtin types int, float, bool, str, bytes, list, dict, tuple, set and frozenset)")
     return [RLeaf(c, "", Val("", c)) for c in cs]
 
 
@@ -253,7 +253,7 @@ def gen_refl_type_operand(self, n: Node) -> str:
     if n.kind == "name" and n.s in self.classes and n.s not in self.ltype and self.classes[n.s].exc == "":
         self.class_ready(n)
         return n.s
-    if n.kind == "name" and n.s in ["int", "float", "bool", "str", "list", "dict", "tuple", "set", "frozenset"] and not self.bound(n.s):
+    if n.kind == "name" and n.s in ["int", "float", "bool", "str", "bytes", "list", "dict", "tuple", "set", "frozenset"] and not self.bound(n.s):
         # (a container type's record is its name's: any element types)
         return "list[int]" if n.s == "list" else "dict[int,int]" if n.s == "dict" else "tuple[int]" if n.s == "tuple" else "set[int]" if n.s == "set" else "frozenset[int]" if n.s == "frozenset" else n.s
     if n.kind == "call" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[0].s == "type" and n.kids[1].kind == "None" and not self.bound("type"):

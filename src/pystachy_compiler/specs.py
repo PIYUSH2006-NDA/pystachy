@@ -81,7 +81,7 @@ UNARY: dict[str, str] = {"-": "__neg__", "+": "__pos__", "~": "__invert__"}
 CALLS: dict[str, str] = {
     "ord(str)": "pys_ord:int", "chr(int)": "pys_chr:str", "int(float)": "pys_f2i:int", "int(str,int)": "pys_int_str:int",
     "float(str)": "pys_float_str:float", "round(float)": "pys_round:int", "round(float,int)": "pys_round_n:float", "input(str)": "pys_input:str",
-    "abs(float)": "fabs:float", "list(str)": "pys_str_list:list[str]",
+    "abs(float)": "fabs:float", "list(str)": "pys_str_list:list[str]", "list(bytes)": "pys_bytes_list:list[int]",
     "sum(list[int],int)": "pys_sum_int:int", "sum(list[float],float)": "pys_sum_float:float", "sum(list[bool],int)": "pys_sum_int:int",
     "sum(list[float],int)": "pys_sum_float_int:float", "sum(list[int],float)": "pys_sum_int_float:float",
     "sum(list[bool],float)": "pys_sum_int_float:float", "any(list[bool])": "pys_any:bool",
@@ -115,12 +115,15 @@ CALLS: dict[str, str] = {
 # (TBAA), so that a loop that builds one str keeps the lengths it reads in registers. udiv and
 # urem divide 64-bit patterns as unsigned ints, and mul_ovf tells whether a * b would overflow.
 # find_sub(h, n, st, en) is the first index of n in h[st:en], or -1 (memmem, linear in glibc).
+# fail(kind, msg) raises builtin exception kind (a str literal) with message msg, as pys_raise
+# does: for those a raise statement cannot give a message to (UnicodeDecodeError's constructor
+# takes the parts of its message).
 RTL: dict[str, str] = {
     "byte": "str,int:int", "str_new": "int:str", "str_put": "str,int,int:None", "str_done": "str:str",
     "copy": "str,int,str,int,int:None", "wrap_add": "int,int:int", "wrap_sub": "int,int:int",
     "wrap_mul": "int,int:int", "shl": "int,int:int", "lshr": "int,int:int", "null": "str:bool",
     "same": "str,int,str,int,int:bool", "find_byte": "str,int,int,int:int", "udiv": "int,int:int",
-    "urem": "int,int:int", "mul_ovf": "int,int:bool", "find_sub": "str,str,int,int:int",
+    "urem": "int,int:int", "mul_ovf": "int,int:bool", "find_sub": "str,str,int,int:int", "fail": "str,str:None",
 }
 TBAA_LEN = 3
 TBAA_BYTES = 4
@@ -162,7 +165,7 @@ CTYPES: dict[str, str] = {"c_int": "i32 signext:0", "c_uint": "i32 zeroext:1", "
 for _k in "sys os os.path math tempfile typing dataclasses __future__ builtins time errno ffi".split():
     MODULES[_k] = True
 MODATTRS: dict[str, bool] = {}
-for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform math.pi math.e math.inf math.tau math.nan "
+for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform sys.byteorder math.pi math.e math.inf math.tau math.nan "
            "os.name os.sep os.curdir os.pardir os.extsep os.pathsep os.linesep os.devnull").split():
     MODATTRS[_k] = True
 # the os module's constants on POSIX systems
@@ -211,7 +214,7 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
     ABCS[_k] = True
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
-OPTTYPES = "class types, str, int, float, bool, list, dict and tuple"
+OPTTYPES = "class types, str, bytes, int, float, bool, list, dict and tuple"
 TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template, and of a generic class (Generic[T]) with an __init__, whose objects bind it"
 STUB = "an @overload stub of 'NAME' must be followed by the def that implements it (calling a stub raises NotImplementedError)"
 PATHLIKE = "os.PathLike is only supported in a union with str (str | os.PathLike[str] is a str: Pystachy has no other path type)"
@@ -327,6 +330,10 @@ HASATTR: dict[str, str] = {
     "list": "__add__ __class_getitem__ __contains__ __delitem__ __getitem__ __iadd__ __imul__ __iter__ __len__ __mul__ __reversed__ "
             "__rmul__ __setitem__ append clear copy count extend index insert pop remove reverse sort",
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
+    "bytes": "__add__ __buffer__ __bytes__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mod__ __mul__ __rmod__ __rmul__ "
+             "capitalize center count decode endswith expandtabs find fromhex hex index isalnum isalpha isascii isdigit islower isspace "
+             "istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition "
+             "rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
     "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
@@ -365,7 +372,7 @@ UNSUPPORTED: dict[str, str] = {
     "yield": "'yield' is not supported (there are no generator functions)",
     "starred": "starred expressions (*x) are not supported",
     "dictstar": "dict displays with ** are not supported",
-    "dstar": "star arguments are not supported", "bytes": "bytes literals are not supported (there is no bytes type)",
+    "dstar": "star arguments are not supported",
     "ellipsis": "Ellipsis (...) is not supported", "complex": "complex numbers are not supported",
     "await": "'await' is not supported",
     "async": "'async' statements are not supported",
@@ -430,6 +437,20 @@ METHODS: dict[str, str] = {
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
+    # bytes (runtime.py's pys_bytes_*: their RUNTIME entries take strs, the Strs a bytes is)
+    "bytes.decode": "str:str=null,str=null", "bytes.hex": "str:", "bytes.join": "bytes:list[bytes]",
+    "bytes.split": "list[bytes]:bytes=null,int=-1", "bytes.rsplit": "list[bytes]:bytes=null,int=-1", "bytes.strip": "bytes:bytes=null",
+    "bytes.lstrip": "bytes:bytes=null", "bytes.rstrip": "bytes:bytes=null", "bytes.startswith": "bool:bytes,int=0,int=9223372036854775807",
+    "bytes.endswith": "bool:bytes,int=0,int=9223372036854775807", "bytes.find": "int:bytes,int=0,int=9223372036854775807", "bytes.rfind": "int:bytes,int=0,int=9223372036854775807",
+    "bytes.index": "int:bytes,int=0,int=9223372036854775807", "bytes.rindex": "int:bytes,int=0,int=9223372036854775807", "bytes.count": "int:bytes,int=0,int=9223372036854775807",
+    "bytes.replace": "bytes:bytes,bytes", "bytes.upper": "bytes:", "bytes.lower": "bytes:",
+    "bytes.swapcase": "bytes:", "bytes.capitalize": "bytes:", "bytes.isdigit": "bool:",
+    "bytes.isalpha": "bool:", "bytes.isalnum": "bool:", "bytes.isspace": "bool:",
+    "bytes.isupper": "bool:", "bytes.islower": "bool:", "bytes.isascii": "bool:",
+    "bytes.ljust": "bytes:int,bytes=null", "bytes.rjust": "bytes:int,bytes=null", "bytes.center": "bytes:int,bytes=null",
+    "bytes.zfill": "bytes:int", "bytes.partition": "tuple[bytes,bytes,bytes]:bytes", "bytes.rpartition": "tuple[bytes,bytes,bytes]:bytes",
+    "bytes.removeprefix": "bytes:bytes", "bytes.removesuffix": "bytes:bytes", "bytes.splitlines": "list[bytes]:bool=0",
+    "str.encode": "bytes:str=null,str=null",
 }
 # Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
 # These are conservative: even a byte-correct delimiter search is a porting audit hit.
@@ -589,6 +610,23 @@ RUNTIME: dict[str, str] = {
     "str.rpartition": "tuple[str,str,str]:S,str|R A|", "str.removeprefix": "str:S,str|A|", "str.removesuffix": "str:S,str|A|",
     "str.expandtabs": "str:S,int|R A|", "str.int": "str:int|A|", "str.float": "str:float|A|", "str.list": "list[str]:str|R A|",
     "chr": "str:int|R A|", "ord": "int:str|R|", "ascii": "str:str|A|", "pct_char": "str:str|R|", "pct_chr": "str:int|R A|",
+    # bytes: a Str, its bytes as a str's (see bytes in runtime.c)
+    "bytes.get": "int:S,int|R|", "bytes.list": "list[int]:bytes|A|", "bytes.add": "bytes:S,bytes|A|", "bytes.mul": "bytes:S,int|R A|",
+    "bytes.slice": "bytes:S,int,int|A|", "bytes.slice_step": "bytes:S,int,int,int|R A|", "bytes.has": "bool:str,int|R|",
+    "bytes.contains": "bool:str,str|R|", "bytes.decode": "str:str,str,str|R A|", "str.encode": "str:str,str,str|R A|",
+    "bytes.hex": "str:str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
+    "bytes.zeros": "str:int|R A|", "bytes.join": "str:str,list[str]|R A rL|", "bytes.split": "list[str]:str,str,int|R A|",
+    "bytes.rsplit": "list[str]:str,str,int|R A|", "bytes.strip": "str:str,str|R A|", "bytes.lstrip": "str:str,str|R A|",
+    "bytes.rstrip": "str:str,str|R A|", "bytes.startswith": "bool:str,str,int,int|R|", "bytes.endswith": "bool:str,str,int,int|R|",
+    "bytes.find": "int:str,str,int,int|R|", "bytes.rfind": "int:str,str,int,int|R|", "bytes.count": "int:str,str,int,int|R|",
+    "bytes.index": "int:str,str,int,int|R|", "bytes.rindex": "int:str,str,int,int|R|", "bytes.replace": "str:str,str,str|R A|",
+    "bytes.replace_count": "str:str,str,str,int|R A|", "bytes.upper": "str:str|A|", "bytes.lower": "str:str|A|",
+    "bytes.swapcase": "str:str|A|", "bytes.capitalize": "str:str|A|", "bytes.isdigit": "bool:str||",
+    "bytes.isalpha": "bool:str||", "bytes.isalnum": "bool:str||", "bytes.isspace": "bool:str||",
+    "bytes.isupper": "bool:str||", "bytes.islower": "bool:str||", "bytes.isascii": "bool:str||",
+    "bytes.ljust": "str:str,int,str|R A|", "bytes.rjust": "str:str,int,str|R A|", "bytes.center": "str:str,int,str|R A|",
+    "bytes.zfill": "str:str,int|R A|", "bytes.partition": "tuple[str,str,str]:str,str|R A|", "bytes.rpartition": "tuple[str,str,str]:str,str|R A|",
+    "bytes.removeprefix": "str:str,str|R A|", "bytes.removesuffix": "str:str,str|R A|", "bytes.splitlines": "list[str]:str,bool|R A|",
     # numbers
     "floordiv": "int:int,int|R|", "mod": "int:int,int|R|", "pow": "int:int,int|R|", "powmod": "int:int,int,int|R|",
     "shl": "int:int,int|R|", "shr": "int:int,int|R|", "idiv": "float:int,int|R|", "fdiv": "float:float,float|R|",

@@ -540,7 +540,7 @@ def gen_open_(self, args: list[Node]) -> Val:
     if "file" not in given:
         self.err("open() missing required argument 'file' (pos 1)")
     if "mode" in given and given["mode"].kind == "str" and given["mode"].s.find("b") >= 0:
-        self.err("binary files are not supported (there is no bytes type)")
+        self.err("binary files are not supported (files read and write str)")
     e = given.get("errors", mk("None", "", self.line, []))
     if not (e.kind == "None" or (e.kind == "str" and e.s == "strict")):
         self.err("open(errors=...) is not supported: files are UTF-8, and decoding errors are not checked")
@@ -574,6 +574,14 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
+    if o.t == "fn[b:bytes]" and m == "fromhex":
+        # bytes.fromhex(s), the class method, of a str
+        if len(args) != 1 or args[0].kind in ["kw", "starred", "dstar"]:
+            self.err("bytes.fromhex() takes exactly one positional argument")
+        s = self.unwrap(self.expr(args[0], "str"), "TypeError: fromhex() argument must be str, not None")
+        if s.t != "str":
+            self.err(f"fromhex() argument must be str, not {tname(s.t)}")
+        return Val(self.rt("pys_bytes_fromhex", "ptr", [f"ptr {s.v}"]), "bytes")
     if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and (has_method(o.t[5:-1], m) or (o.t == "fn[b:str]" and (m == "format" or m == "format_map"))):
         return self.unbound_call(o.t[5:-1], m, args)
     if is_kw(o.t):
