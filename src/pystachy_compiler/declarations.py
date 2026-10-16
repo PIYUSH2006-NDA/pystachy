@@ -1775,7 +1775,7 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node], known: dic
                     h.acc = g.acc
                     g = h
                 self.scanning[ci.name + "." + name] = True
-                self.scan_fields(ci, g, g.node.kids[2].kids)
+                self.scan_fields(ci, g, g.node.kids[2].kids, {})
                 del self.scanning[ci.name + "." + name]
                 self.line = st.line
         for kid in st.kids:
