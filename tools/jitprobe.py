@@ -51,6 +51,22 @@ class Item:
 print(live_root(20))
 print([Item(1)] == [Item(1)], [Item(1)] < [Item(2)])
 print(sorted([Item(2), Item(1)]))
+
+# Seven fields need 56 bytes on the supported 64-bit targets. LLVM's default
+# layout folds their size to 48 before ORC supplies the actual host layout.
+class Layout:
+    def __init__(self, value: int):
+        self.a = True
+        self.b = value
+        self.c = True
+        self.d = value + 1
+        self.e = True
+        self.f = value + 2
+        self.tags: list[str] = []
+
+padded = Layout(17)
+padded.tags.append("kept")
+print(padded.a, padded.b, padded.c, padded.d, padded.e, padded.f, padded.tags)
 '''
 
 
@@ -100,6 +116,10 @@ def main():
             if run(cmd + ["run", str(source)], env) != expected:
                 raise RuntimeError(f"{label}: JIT output differs from CPython")
             executed = capture.read_text()
+            if 'target datalayout = ' not in executed or 'target triple = ' not in executed:
+                raise RuntimeError(f"{label}: JIT optimization ran without the runtime's target")
+            if not re.search(r"call ptr @pys_alloc\(i64 56\)", executed):
+                raise RuntimeError(f"{label}: padded object allocation does not use the host's 56-byte layout")
             remaining = {name for name in dead if f"@{name}(" in executed}
             if remaining:
                 raise RuntimeError(f"{label}: {len(remaining)} unused functions reached lli: {sorted(remaining)[:3]}")

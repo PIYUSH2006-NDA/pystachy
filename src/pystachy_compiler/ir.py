@@ -108,7 +108,12 @@ class FnInfo:
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.synthetic = False  # a dataclass's method that the compiler writes (Gen.synth), not the program
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
-        self.prop = False  # a read-only @property: an attribute read calls this instance method
+        self.prop = False  # a @property getter: an attribute read calls this instance method
+        # a property's @name.setter or @name.deleter ("setter", "deleter"; its methods key is
+        # name.setter): an assignment or del of the attribute calls it; accof: what the decorator
+        # names the property by, name or Base.name
+        self.acc = ""
+        self.accof = ""
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
         self.orig = node  # and then its immutable def before cls was renamed (shared by inherited methods)
         self.pending = False  # inherited class method: node shares orig's body until materialize()
@@ -370,7 +375,13 @@ class ClassInfo:
         self.mod = ""
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used
         self.hook = ""  # the same for a special method Pystachy never calls (UNCALLED): its class statement compiles
+        self.excluded = False  # bad_class: it has no objects, and dispatch on a base's class tag leaves it out
         self.kwonly = False  # @dataclass(kw_only=True): its __init__ takes the fields by keyword only
+        self.dcopts: dict[str, bool] = {}  # @dataclass(...)'s other options that differ from their defaults (frozen, order, no-eq, ...: dc_args)
+        # dataclasses.field(...)'s options of each field that differ from their defaults
+        # (no-init, no-repr, no-compare, kw_only), and the default_factory of those that have one
+        self.fopts: dict[str, dict[str, bool]] = {}
+        self.factory: dict[str, Node] = {}
         # its single base (a class of the program or a builtin exception class), and the
         # builtin exception class it derives from through it ("" for an ordinary class)
         self.base = ""

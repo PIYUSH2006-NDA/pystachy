@@ -78,7 +78,10 @@ part is built with `-fexceptions` so exceptions can unwind through runtime frame
 JIT uses an object compiled from the combined bitcode; AOT links that runtime into
 the program.
 
-Cache names have the form `build/runtime-py-<L>-<K>.bc` and `.o`. The content key
+Cache names have the form `build/runtime-py-<L>-<K>.bc`, `.o` and `.target`.
+The small `.target` file preserves the runtime's target triple and data layout;
+JIT optimization applies them before folding object sizes and field offsets.
+The content key
 includes runtime and compiler bytes, C flags, disabled `PYSTACHY_OPT` passes and
 LLVM tool identities. Host CPU information is included for flags such as
 `-march=native`. The path/flag group `L` separates compiler and tool configurations.

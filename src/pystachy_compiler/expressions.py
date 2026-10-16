@@ -221,6 +221,8 @@ def gen_has(self, t: str, a: str) -> int:
         return -1 if r == 1 else 0  # (unless it is None)
     if t in self.classes:
         ci = self.classes[t]
+        if "." in a:
+            return 0  # (no attribute name: a key of a property's setter, x.setter, or a default_factory's)
         if a in ci.methods and ci.methods[a].prop:
             self.err(f"hasattr() of property '{a}' is not supported: read it in a try/except AttributeError block")
         if a in ci.fflag and t + "." + a not in self.cvars:
@@ -231,7 +233,13 @@ def gen_has(self, t: str, a: str) -> int:
             self.err(f"hasattr() of '{a}' on a NamedTuple is not supported")
         if a in HASATTR["obj"].split():
             return -1
-        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() else 0
+        if self.is_dc(t) and a == "__match_args__":
+            # (but for match_args=False, which leaves the one a base dataclass writes, if any)
+            c = t
+            while c in self.classes and "no-match_args" in self.classes[c].dcopts:
+                c = self.classes[c].base
+            return -1 if c in self.classes else 0
+        return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__".split() else 0
     b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:
@@ -2013,6 +2021,8 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
             if op == "!=" and m not in ms and "__eq__" in ms:
                 m = "__eq__"
                 invert = True
+            if m in ms and ms[m].synthetic and self.is_dc(ms[m].cls) and lhs.t != rhs.t:
+                continue  # (what @dataclass writes returns NotImplemented for an object of another class)
             if m in ms:
                 if self.cmp_method(lhs.t, m, rhs.t) == "":
                     self.err(f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}")
@@ -2104,7 +2114,9 @@ def gen_richcmp(self, op: str, a: Val, b: Val) -> Val:
         self.incoming(ph, r.v, self.cur)
         self.br(lend)
         self.place(lnone)
-    if rf != "":
+    if rf != "" and not (self.classes[b.t].methods[rf].synthetic and self.is_dc(self.classes[b.t].methods[rf].cls)):
+        # (what @dataclass writes returns NotImplemented for None, here a, as for an object of
+        # another class)
         lcall = self.label()
         lerr = self.label()
         self.cbr(self.isnull(b), lerr, lcall)

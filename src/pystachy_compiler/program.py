@@ -58,11 +58,16 @@ def gen_subclass_problem(self, st: Node) -> str:
         return "multiple inheritance is not supported: a class may have only one base"
     if st.kids[1].kind == "name" and st.kids[1].s in self.classes and self.classes[st.kids[1].s].exc == "":
         base_ci = self.classes[st.kids[1].s]
-        if self.is_dc(base_ci.name) or base_ci.name in self.nts:
-            return "inheritance from a dataclass or NamedTuple is not supported"
+        dc = len(st.kids[0].kids) == 2 and self.imported(st.kids[0].kids[1].s) == "dataclasses.dataclass"
+        if base_ci.name in self.nts:
+            return "inheritance from a NamedTuple is not supported"
+        if self.is_dc(base_ci.name) and not dc:
+            return "inheritance from a dataclass is only supported by a @dataclass class"
         if base_ci.name in self.tparams or self.init_template(base_ci.node) or self.init_template(st.kids[0]):
             return "inheritance with generic class templates is not supported: annotate __init__ parameters"
-        if len(st.kids[0].kids) > 1:
+        if dc and not self.is_dc(base_ci.name):
+            return "a @dataclass class whose base is not a dataclass is not supported"
+        if len(st.kids[0].kids) > 1 and not dc:
             return "a class with inheritance and a decorator is not supported"
         return ""
     b = self.exc_base(st.kids[1])
@@ -106,6 +111,8 @@ def gen_inherit(self, ci: ClassInfo) -> None:
     b = self.classes[ci.base]
     for m in b.methods:
         f = b.methods[m]
+        if f.acc != "" and m not in ci.methods and f.node.s in ci.methods and ci.methods[f.node.s].cls == ci.name:
+            continue  # (its own @property def makes a new property, without the base's setter and deleter)
         if m not in ci.methods and f.clsuse and f.mod == ci.mod and len([x for x in f.defaults if not is_const(x) and x.kind != "noann"]) == 0:
             self.line = f.node.line
             self.lib = f.mod != ""
@@ -129,13 +136,68 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             ci.methods[m] = f
         elif f.prop != ci.methods[m].prop:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
+            self.bad_class(ci, f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
         elif ci.exc == "" and f.deco != ci.methods[m].deco:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding '{m}' of '{short(b.name)}' with another kind of method (instance, static or class method) in '{short(ci.name)}' is not supported")
+            self.bad_class(ci, f"overriding '{m}' of '{short(b.name)}' with another kind of method (instance, static or class method) in '{short(ci.name)}' is not supported")
         elif ci.exc != "" and m != "__init__" and m != "__str__" and m != "__repr__":
             self.line = ci.methods[m].node.line
             self.err(f"method '{m}' of '{short(ci.name)}' overrides that of '{short(b.methods[m].cls)}': only __init__, __str__ and __repr__ may be overridden")
+    for m in ci.methods:
+        f = ci.methods[m]
+        if f.cls == ci.name and f.acc != "" and short(f.accof) != f.node.s:
+            # @Base.x.setter: a new property x with the getter (and deleter) of Base's, the
+            # property this class inherits, and this method
+            p = f.node.s
+            bn = f.accof[: f.accof.rfind(".")]
+            if p not in ci.methods or not ci.methods[p].prop or ci.methods[p].cls == ci.name or bn not in self.classes or p not in self.classes[bn].methods or ci.methods[p] is not self.classes[bn].methods[p]:
+                self.line = f.node.line
+                self.bad_class(ci, f"@{short(f.accof)}.{f.acc} is not supported here: {short(bn)} must be the base class whose property {f.node.s} this class inherits")
+
+def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
+    # method d of class ci, decorated @x.setter or @x.deleter (or @Base.x.setter, see inherit):
+    # ".setter" or ".deleter", which adds it to property x (its methods key is x.setter); else ""
+    s = d.kids[3].s if len(d.kids) == 4 and len(d.kids[3].kids) == 0 else ""
+    acc = s[s.rfind(".") + 1 :]
+    if "." in s and acc == "getter" and short(s[: s.rfind(".")]) == d.s:
+        self.err(f"unsupported decorator @{short(s)}: define the property's getter once, with @property")
+    if "." not in s or (acc != "setter" and acc != "deleter"):
+        return ""
+    of = short(s[: s.rfind(".")])
+    if of == d.s and (d.s not in ci.methods or not ci.methods[d.s].prop):
+        # (CPython's NameError, or AttributeError: 'function' object has no attribute 'setter')
+        self.err(f"@{of}.{acc} needs property {d.s}, a @property def {d.s} before it in the class body")
+    if of != d.s and (of[of.rfind(".") + 1 :] != d.s or ci.base not in self.classes):
+        self.err(f"@{of}.{acc} on method {d.s} is not supported: a property's {acc} takes its name ({of[of.rfind('.') + 1 :]}), and a base's property is named through the base class")
+    return "." + acc
+
+def gen_class_ref(self, m: Mod, s: str) -> str:
+    # the class that dotted name s names in module m's code, where the loader leaves a
+    # decorator's name of another module's class as written (see Loader.qdeco), else s
+    root = s[: s.find(".")] if "." in s else s
+    k = m.kinds.get(root[len(m.q) :] if root.startswith(m.q) else root, "")
+    if k.startswith("a:"):
+        return k[2:] + s[len(root) :]
+    if k.startswith("m:"):
+        return (k[2:] + s[len(root) :]).replace(".", "$")
+    return s
+
+def gen_dc_options(self, ci: ClassInfo) -> None:
+    # class ci's decorators: @dataclass, whose options (dc_args) it keeps, and no other
+    st = ci.node
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
+        self.err(dc_args(st.kids[1])[1:])
+    for o in dc_args(st.kids[1]).split() if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" else []:
+        ci.dcopts[o] = True
+    ci.kwonly = "kw_only" in ci.dcopts
+    if "order" in ci.dcopts and "no-eq" in ci.dcopts:
+        self.err("eq must be true if order is true")  # (CPython's ValueError where it creates the class)
+    if "frozen" in ci.dcopts:
+        self.hasfrozen = True
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
+        self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
+    if len(st.kids) > 2:
+        self.err(f"unsupported decorator @{st.kids[2].s}")
 
 def gen_derives(self, c: str, base: str) -> bool:
     # is c, a class of the program or a builtin exception class, base or derived from it
@@ -210,12 +272,21 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
     # docstring
     if len(st.kids) > 2 or (len(st.kids) > 1 and (dc_args(st.kids[1]).startswith("!") or self.imported(st.kids[1].s) != "dataclasses.dataclass")):
         return f"its decorator @{short(st.kids[1].s)} is not supported"
+    props: dict[str, bool] = {}  # (its properties, and their setters and deleters: x.setter)
     for b in st.kids[0].kids:
         if b.kind == "def":
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
+            # @x.setter or @x.deleter on def x after @property def x, once each; @Base.x.setter
+            # in a subclass (see accessor and inherit)
+            of = deco[: deco.rfind(".")] if "." in deco else ""
+            acc = (deco.endswith(".setter") or deco.endswith(".deleter")) and (of == b.s and b.s in props or (exc and of.endswith("." + b.s))) and b.s + deco[deco.rfind(".") :] not in props
+            if acc:
+                props[b.s + deco[deco.rfind(".") :]] = True
+            elif deco == "property":
+                props[b.s] = True
+            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property" and not acc) or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:
                 return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
@@ -615,18 +686,19 @@ def gen_program(self, mods: list[Mod]) -> str:
                 ci.base = st.kids[1].s if st.kids[1].kind == "name" and st.kids[1].s in self.classes else self.exc_base(st.kids[1])
                 ci.exc = self.classes[ci.base].exc if ci.base in self.classes else ci.base
                 self.classes[st.s] = ci
+                if self.is_dc(st.s):
+                    # a dataclass deriving from another (subclass_problem): frozen as its base is
+                    self.dc_options(ci)
+                    if "frozen" in self.classes[ci.base].dcopts and "frozen" not in ci.dcopts:
+                        self.err("cannot inherit non-frozen dataclass from a frozen one")  # (CPython's TypeError where it creates the class)
+                    if "frozen" in ci.dcopts and "frozen" not in self.classes[ci.base].dcopts:
+                        self.err("cannot inherit frozen dataclass from a non-frozen one")
             elif st.kind == "class":
                 if st.s in self.classes:
                     self.err(f"redefinition of class '{st.s}' is not supported")
                 self.classes[st.s] = ClassInfo(st.s, st)
                 self.classes[st.s].mod = m.name
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
-                    self.err(dc_args(st.kids[1])[1:])
-                self.classes[st.s].kwonly = len(st.kids) > 1 and dc_args(st.kids[1]) == "kw"
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
-                    self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
-                if len(st.kids) > 2:
-                    self.err(f"unsupported decorator @{st.kids[2].s}")
+                self.dc_options(self.classes[st.s])
     # Only ordinary inheritance hierarchies need a runtime class tag. Keeping unrelated
     # classes unchanged preserves their compact layout, including dataclasses and tuples.
     for ci in self.classes.values():
@@ -684,14 +756,18 @@ def gen_program(self, mods: list[Mod]) -> str:
                 for d in self.classes[st.s].node.kids[0].kids:
                     if d.kind == "def":
                         self.line = d.line
-                        if d.s in self.classes[st.s].methods:
+                        key = d.s + self.accessor(self.classes[st.s], d)
+                        if key in self.classes[st.s].methods:
                             self.err(f"redefinition of method '{st.s}.{d.s}' is not supported")
                         self.lib = m.name != ""
                         self.selfcls = st.s
-                        self.classes[st.s].methods[d.s] = self.declare_fn(d, st.s)
+                        g = self.declare_fn(d, st.s)
                         self.selfcls = ""
                         self.lib = False
-                        self.classes[st.s].methods[d.s].mod = m.name
+                        g.mod = m.name
+                        if "." in g.accof:
+                            g.accof = self.class_ref(m, g.accof[: g.accof.rfind(".")]) + g.accof[g.accof.rfind(".") :]  # (@Base.x.setter)
+                        self.classes[st.s].methods[key] = g
                 top.append(mk("cdefaults", st.s, st.line, []))
             else:
                 top.append(st)

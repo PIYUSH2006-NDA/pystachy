@@ -233,9 +233,9 @@ for _k in ("OSError IOError EnvironmentError BlockingIOError ChildProcessError C
 for _k in "UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
     EXCEPTIONS[_k] = "-"
 # the builtin exception classes, each with its bases (CPython 3.13's: tools/check_runtime.py
-# checks them), and io.UnsupportedOperation, which the runtime raises too. IOError and
-# EnvironmentError are other names of OSError. An except clause catches a class and the classes
-# deriving from it
+# checks them), io.UnsupportedOperation, which the runtime raises too, and
+# dataclasses.FrozenInstanceError. IOError and EnvironmentError are other names of OSError. An
+# except clause catches a class and the classes deriving from it
 EXCBASES: dict[str, str] = {"BaseException": ""}
 for _k in ("BaseExceptionGroup:BaseException GeneratorExit:BaseException KeyboardInterrupt:BaseException SystemExit:BaseException "
            "Exception:BaseException ArithmeticError:Exception FloatingPointError:ArithmeticError OverflowError:ArithmeticError "
@@ -253,8 +253,12 @@ for _k in ("BaseExceptionGroup:BaseException GeneratorExit:BaseException Keyboar
            "UnicodeTranslateError:UnicodeError Warning:Exception BytesWarning:Warning DeprecationWarning:Warning "
            "EncodingWarning:Warning FutureWarning:Warning ImportWarning:Warning PendingDeprecationWarning:Warning "
            "ResourceWarning:Warning RuntimeWarning:Warning SyntaxWarning:Warning UnicodeWarning:Warning UserWarning:Warning "
-           "io.UnsupportedOperation:OSError,ValueError").split():
+           "io.UnsupportedOperation:OSError,ValueError dataclasses.FrozenInstanceError:AttributeError").split():
     EXCBASES[_k[: _k.find(":")]] = _k[_k.find(":") + 1 :]
+# what assigning a field of a @dataclass(frozen=True) object raises (an except clause lists it
+# only in a program that has such a class: Gen.hasfrozen)
+FROZENERR = "dataclasses.FrozenInstanceError"
+FROZENUSE = "dataclasses.FrozenInstanceError is only supported in an except clause, which catches what assigning a field of a frozen dataclass raises"
 
 
 # the hidden fields an exception class's objects begin with (see Gen.declare_fields), with their types

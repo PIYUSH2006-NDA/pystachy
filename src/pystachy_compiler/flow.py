@@ -408,8 +408,11 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         fl.exposed()
         ci.leak = fl.leak
     elif ci.methods["__init__"].node.kids[0].kind == "noann":
-        if not self.is_dc(ci.name):
+        if not self.is_dc(ci.name) or "no-init" in ci.dcopts:
             fl.exposed()
+        for f in ci.fields:
+            if f in ci.fopts and "no-init" in ci.fopts[f] and f not in ci.fdefault and f not in ci.factory:
+                fl.unsafe[f] = True  # (a field(init=False) without a default, which the __init__ @dataclass writes leaves unassigned)
     else:
         init = ci.methods["__init__"]
         asg: dict[str, bool] = {}
@@ -721,6 +724,9 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
 def gen_fl_target(self, fl: Flow, t: Node) -> None:
     if t.kind == "name":
         fl.put(t.s)
+    elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me and t.s not in fl.fields:
+        fl.exposed()  # (self.x = v of a property x: its setter takes self)
+        fl.escaped = True
     elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me:
         fl.put("." + t.s)
     elif t.kind == "tuple":

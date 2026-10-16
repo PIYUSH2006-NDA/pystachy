@@ -99,10 +99,12 @@ Lambdas, closures and decorators of functions are supported. Functions with `*ar
 `**kwargs` specialize for the call's argument shape; forwarding is more restricted than in
 fully dynamic Python.
 
-Classes support fields, methods, class attributes, read-only `@property`, `@staticmethod`, `@classmethod` and
-supported operator and container methods. Dataclasses support `kw_only=True` and
-`__post_init__`; options such as `frozen=True`, `order=True` and `dataclasses.field()` are
-not supported.
+Classes support fields, methods, class attributes, `@property` with `@x.setter` and
+`@x.deleter`, `@staticmethod`, `@classmethod` and supported operator and container methods.
+Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`,
+the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
+`kw_only`, and inheritance from another dataclass; `slots=True`, `asdict()`, `astuple()` and
+`fields()` are not supported.
 
 Literal `__slots__` strings, tuples and lists restrict instance field writes when every
 base also declares slots. A subclass without slots, or with an unslotted base, may add
@@ -119,10 +121,10 @@ new slots shadowing inherited methods, properties or class variables.
 Ordinary classes support single inheritance, inherited fields and constructors, overrides of
 instance, static and class methods, `super()` and runtime `isinstance()` checks. A base-typed
 receiver calls its concrete class's instance-method override. Constructors in these
-hierarchies need annotated parameters; inheritance involving class templates, dataclasses,
-NamedTuples or builtin types is unsupported. Exception classes retain their separate
-inheritance rules, and `Generic[...]` or PEP 695 type parameters (`class Box[T]`) declare a
-generic class, which has no other base.
+hierarchies need annotated parameters; inheritance involving class templates, NamedTuples or
+builtin types, or between a dataclass and a class that is not one, is unsupported. Exception
+classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
+parameters (`class Box[T]`) declare a generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.
 

@@ -713,6 +713,60 @@ def gen_replace(self, o: Val, args: list[Node]) -> Val:
     self.call_fn(ci.methods["__init__"], vals, [])
     return vals[0]
 
+def gen_dc_replace(self, args: list[Node]) -> Val:
+    # dataclasses.replace(obj, **changes): a new object of obj's class, which its __init__ makes
+    # from the changes (each passed, as CPython passes them) and the values of obj's other
+    # init=True fields, read in field order
+    npos = len([a for a in args if a.kind != "kw"])
+    if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+        self.err("star arguments are not supported")
+    if npos != 1 or args[0].kind == "kw":
+        self.err("replace() missing 1 required positional argument: 'obj'" if npos == 0 else f"replace() takes 1 positional argument but {npos} were given")
+    o = self.expr(args[0], "")
+    if not self.is_dc(o.t) or o.t in self.nts:
+        self.err(f"replace() should be called on dataclass instances, not {tname(o.t)}")
+    ci = self.classes[o.t]
+    given: dict[str, Val] = {}
+    for a in args[1:]:
+        if a.s in ci.fopts and "no-init" in ci.fopts[a.s]:
+            self.err(f"field {a.s} is declared with init=False, it cannot be specified with replace()")
+        given[a.s] = self.expr(a.kids[0], ci.ftypes.get(a.s, ""))
+    self.notnone(o, "TypeError: replace() should be called on dataclass instances")
+    # (an object of a subclass: the subclass's __init__, also given its own fields)
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
+    tag = self.mload('int', o.v) if len(cs) > 1 else ""
+    end = self.label() if len(cs) > 1 else ""
+    ph = Ins("phi", o.t, "")
+    r = o
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        x = Val(o.v, c.name)
+        kws: list[Node] = []
+        for k in given:
+            kws.append(mk("kw", k, self.line, [self.vnode(given[k])]))
+        for fl in self.dc_fields(c):
+            if "no-init" not in c.fopts[fl] and fl not in given:
+                kws.append(mk("kw", fl, self.line, [self.vnode(self.getfield(x, self.field(x, fl), fl))]))
+        r = self.new_obj(c.name)
+        self.call_fn(c.methods["__init__"], [r], kws, direct=True)
+        if end != "" and not self.term:
+            self.incoming(ph, r.v, self.cur)
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    if end == "":
+        return r
+    self.place(end)
+    if len(ph.a) == 0:
+        self.unreachable()
+        return Val("null", o.t)
+    return Val(self.phi(ph), o.t)
+
 def gen_asdict(self, o: Val, args: list[Node]) -> Val:
     # p._asdict(): a dict from its fields' names to their values, which must then share one type
     ci = self.classes[o.t]
@@ -736,7 +790,7 @@ def gen_new_obj(self, c: str) -> Val:
     self.nn[o.v] = True
     if self.classes[c].tag > 0:
         self.mstore('int', f'{self.classes[c].tag}', o.v)
-    if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
+    if not (self.is_dc(c) and "no-init" not in self.classes[c].dcopts and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
         line = self.line
         self.class_defaults(o)
         self.line = line
@@ -871,6 +925,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             wrapped = self.getfield(cache, self.field(cache, "__wrapped__"), "__wrapped__")
             pre[0] = Val(wrapped.v, "env")
     df = self.dflt_fn(f)
+    facs: list[int] = []  # (the parameters whose default is a dataclass field's default_factory)
     for j in range(np):
         if vals[j].t == "":
             t = f.ptypes[j]
@@ -880,6 +935,8 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 self.err(df.dglob[j][1:])
             if df.dglob[j] == "=None":
                 vals[j] = Val("null", "None")
+            elif df.dglob[j] == "()":
+                facs.append(j)
             elif df.dglob[j].startswith("&"):
                 # a closure's default: in its env (pre[0]), evaluated where it was defined
                 t = t if t != "" else df.dtypes[j]
@@ -890,6 +947,12 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 vals[j] = Val(self.mload(t, df.dglob[j]), t)
             else:
                 vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
+    for fl in self.dc_fields(self.classes[f.cls]) if len(facs) > 0 else []:
+        # a dataclass field's default_factory, called for each object (see dc_factory), after
+        # the other defaults, which only read globals, in field order (see declare_fields)
+        for j in facs:
+            if f.params[j] == fl or f.params[j] == fl + ".factory":
+                vals[j] = self.call_fn(self.classes[f.cls].methods[fl + ".factory"], [], [])
     self.line = line
     if cache is not None:
         # Evaluate and bind as an ordinary call, including def-time closure defaults,
@@ -1014,7 +1077,7 @@ def gen_arity(self, f: FnInfo, npre: int, args: list[Node]) -> None:
         filled[j] = True
     off = 1 if f.deco == "classmethod" else -1 if f.clo >= 0 else 0  # (cls, which CPython counts and f.params leaves out; a closure's env, the reverse)
     if f.vararg < 0 and given > last:
-        if f.name == "__init__" and f.node.kids[0].kind == "noann" and not self.is_dc(f.cls):
+        if f.name == "__init__" and f.node.kids[0].kind == "noann" and (not self.is_dc(f.cls) or "no-init" in self.classes[f.cls].dcopts):
             self.err(f"{short(f.cls)}() takes no arguments")
         dflt = len([j for j in range(last) if f.defaults[j].kind != "noann"])
         kwg = len([j for j in range(last, np) if filled[j]])

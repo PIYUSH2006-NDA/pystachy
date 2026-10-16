@@ -65,19 +65,29 @@ def as_target(n: Node) -> Node:
     return n
 
 
+# @dataclass's options that Pystachy supports, and their defaults
+DCOPTS: dict[str, bool] = {"init": True, "repr": True, "eq": True, "order": False, "unsafe_hash": False, "frozen": False,
+                           "match_args": True, "kw_only": False}
+
+
 def dc_args(d: Node) -> str:
-    # the arguments of a @dataclass(...) decorator d: "kw" for kw_only=True, "" for none (or
-    # kw_only=False), "!" and the error for any other
-    r = ""
+    # the arguments of a @dataclass(...) decorator d: the options it turns on ("kw_only",
+    # "frozen", "order", "unsafe_hash") or off ("no-init", "no-repr", "no-eq", "no-match_args"),
+    # each a word; "!" and the error for any other
+    on: dict[str, bool] = {}
     if len(d.kids) > 0 and d.kids[0].kind != "call":
         return "!@dataclass(...) with arguments is not supported"
     for a in d.kids[0].kids[1:] if len(d.kids) > 0 else []:
-        if a.kind != "kw" or a.s != "kw_only":
-            return "!@dataclass(" + (a.s + "=..." if a.kind == "kw" else "...") + ") is not supported: of its arguments, only kw_only= is"
+        if a.kind != "kw" or a.s not in DCOPTS:
+            return "!@dataclass(" + (a.s + "=..." if a.kind == "kw" else "...") + ") is not supported: its supported arguments are " + ", ".join([k + "=" for k in DCOPTS])
         if a.kids[0].kind != "True" and a.kids[0].kind != "False":
-            return "!@dataclass(kw_only=...) needs True or False"
-        r = "kw" if a.kids[0].kind == "True" else ""
-    return r
+            return f"!@dataclass({a.s}=...) needs True or False"
+        on[a.s] = a.kids[0].kind == "True"
+    r: list[str] = []
+    for k in DCOPTS:
+        if k in on and on[k] != DCOPTS[k]:
+            r.append(k if on[k] else "no-" + k)
+    return " ".join(r)
 
 
 def name_targets(t: Node) -> bool:

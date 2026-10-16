@@ -1,0 +1,12 @@
+AttributeError 'Derived' object has no attribute 'cache'
+{'x': 1} Derived(x=1, y=2)
+Base.__eq__
+Base.__eq__
+Base.__eq__
+True True True True
+False False True
+TypeError '<' not supported between instances of 'Derived' and 'NoneType'
+TypeError '<' not supported between instances of 'Base' and 'Derived'
+True True
+Base(x=1)
+[exit 0]

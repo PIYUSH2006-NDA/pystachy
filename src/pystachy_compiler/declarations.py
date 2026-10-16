@@ -12,6 +12,7 @@ from src.pystachy_compiler.specs import (
     EXCATTRS,
     EXCFIELDS,
     EXCINIT,
+    FROZENERR,
     IOPS,
     METHODS,
     MODFUNCS,
@@ -909,8 +910,15 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
                 break
             if st.s == "property" or ((st.kind == "assign" or st.kind == "annassign") and st.kids[0].kind == "name" and st.kids[0].s == "property"):
                 self.err("unsupported decorator @property: the name is shadowed in the class body")
+    acc = deco[deco.rfind(".") + 1 :] if cls != "" and len(d.kids) == 4 and len(d.kids[3].kids) == 0 and "." in deco else ""
+    if acc == "setter" or acc == "deleter":
+        # @x.setter, @Base.x.setter: the property's other method (the class checks the name, see accessor)
+        f.acc = acc
+        f.accof = deco[: deco.rfind(".")]
+        f.name = d.s + "." + acc
+        f.ll = f"@m.{cls}.{f.name}"
     deco = short(deco)
-    if deco != "" and f.deco == "" and not f.prop and not self.lib and not f.extern and not f.pyexport:
+    if deco != "" and f.deco == "" and not f.prop and f.acc == "" and not self.lib and not f.extern and not f.pyexport:
         # (CPython applies a decorator when the def runs, called or not: see decorators())
         if deco in TYPING and self.imported(deco) == "" and not self.bound(deco):
             self.err(f"name '{deco}' is not defined (import it from typing)")
@@ -1027,7 +1035,7 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.npos = len(f.params) if f.kwarg < 0 else f.kwarg
     if f.vararg >= 0:
         f.npos = f.vararg
-    if len(d.kids) > 3 and f.deco == "" and not f.prop and not f.extern and not f.pyexport:
+    if len(d.kids) > 3 and f.deco == "" and not f.prop and f.acc == "" and not f.extern and not f.pyexport:
         bad = f"unsupported decorator @{deco}" if deco != "" else "async functions are not supported"
         bad = STUB.replace("NAME", short(d.s)) if stub else bad
     if f.deco != "" and d.s.startswith("__") and d.s.endswith("__"):
@@ -1039,6 +1047,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
             bad = f"@property on the special method {d.s} is not supported"
         elif d.kids[1].kind == "noann" and d not in held:
             bad = f"property {d.s} needs a return annotation"
+    if f.acc != "" and (len(ps) != (2 if f.acc == "setter" else 1) or len([p for p in ps if p.kind != "param"]) > 0 or f.npos < len(ps)):
+        bad = f"property {f.acc} {d.s} must take only self" + (" and the value, by position" if f.acc == "setter" else "")
     if not inherited and f.deco == "classmethod" and bad == "" and ps[0].kind == "param":
         # its cls parameter names the class in its body: cls(...) makes one, cls.x reads a
         # class attribute, cls.m(...) calls a static or class method
@@ -1125,6 +1135,16 @@ def gen_exc_attr(self, ci: ClassInfo, name: str) -> None:
                 self.err(why)
             ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
 
+def gen_bad_class(self, ci: ClassInfo, why: str) -> None:
+    # why class ci cannot be compiled: an error, or for an imported module's class, one only where
+    # the program uses it. Its objects cannot be made, so dispatch on a base's class tag leaves it
+    # out, and the classes deriving from it too (see declare_fields)
+    if ci.mod == "":
+        self.err(why)
+    ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+    ci.excluded = True
+    ci.tag = 0
+
 def gen_shadowed(self, ci: ClassInfo, name: str) -> bool:
     # does class ci or a base of the program give attribute name a default in its class body:
     # then CPython's instances keep it in their __dict__, apart from the slot of the builtin
@@ -1169,7 +1189,7 @@ def gen_init_after(self, ci: ClassInfo, name: str) -> bool:
 
 def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
     if name in ci.methods and ci.methods[name].prop:
-        self.err(f"field '{name}' of '{short(ci.name)}' conflicts with read-only property '{name}'")
+        self.err(f"field '{name}' of '{short(ci.name)}' conflicts with property '{name}'")
     if name not in ci.ftypes:
         self.exc_attr(ci, name)
     if name in ci.ftypes:
@@ -1183,6 +1203,9 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
+    if ci.base in self.classes and self.classes[ci.base].excluded:
+        why = self.classes[ci.base].bad
+        self.bad_class(ci, f"its base {shown(ci.base)} is not supported: {why[why.find(': ') + 2 :]}")
     # Slot names constrain layout; the declaration remains a class attribute. A
     # subclass without its own __slots__, or with an unslotted base, has a dict.
     if ci.base in self.classes:
@@ -1254,6 +1277,10 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             self.add_field(ci, x, b.ftypes[x])
             if x in b.fdefault:
                 ci.fdefault[x] = b.fdefault[x]
+            if x in b.fopts:
+                ci.fopts[x] = b.fopts[x]  # (a dataclass's: its fields come first, as they are)
+            if x in b.factory:
+                ci.factory[x] = b.factory[x]
     elif ci.tag != 0:
         self.add_field(ci, " class", "int")
     elif ci.exc != "":
@@ -1262,11 +1289,43 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         xs = EXCFIELDS.split()
         for x in xs if exc_derives(ci.exc, "SystemExit") else xs[:3]:
             self.add_field(ci, " " + x[: x.find(":")], x[x.find(":") + 1 :])
+    dc = self.is_dc(ci.name) and ci.name not in self.nts
+    kwmode = ci.kwonly  # (@dataclass(kw_only=True), or after _: KW_ONLY)
+    kwseen = False
+    flines: dict[str, int] = {}  # (a dataclass's fields its body declares, and where)
     for st in ci.node.kids[0].kids:
         self.line = st.line
         if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
             continue
-        if st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
+        if dc and st.kind == "annassign" and st.kids[0].kind == "name" and self.imported_ref(st.kids[1]) == "dataclasses.KW_ONLY":
+            # _: KW_ONLY is no field: the fields after it are keyword-only parameters of __init__
+            if kwseen:
+                self.err(f"'{st.kids[0].s}' is KW_ONLY, but KW_ONLY has already been specified")
+            kwmode = True
+            kwseen = True
+            continue
+        if dc and st.kind == "annassign" and st.kids[0].kind == "name":
+            # (a base dataclass's field declared again has only its new default and options)
+            flines[st.kids[0].s] = st.line
+            ci.fopts[st.kids[0].s] = {}
+            if st.kids[0].s in ci.factory:
+                del ci.factory[st.kids[0].s]
+        if st.kind == "annassign" and len(st.kids) == 3 and st.kids[2].kind == "call" and self.imported_ref(st.kids[2].kids[0]) == "dataclasses.field":
+            if not dc:
+                self.err("dataclasses.field() is only supported in the body of a @dataclass class")
+            self.dc_field(ci, st)  # (its default becomes the statement's value)
+        if dc and st.kind == "annassign" and st.kids[0].kind == "name":
+            if st.kids[0].s in ci.fdefault and len(st.kids) < 3:
+                del ci.fdefault[st.kids[0].s]
+            o = ci.fopts[st.kids[0].s]
+            if "kw_only" not in o and "pos" not in o and kwmode:
+                o["kw_only"] = True
+        if dc and st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
+            # (a base dataclass's field declared again, with or without a default)
+            if self.vtype(st.kids[1]) != self.classes[ci.base].ftypes[st.kids[0].s]:
+                self.bad_class(ci, f"field '{st.kids[0].s}' of '{short(ci.base)}' declared again in '{short(ci.name)}' with another type (not supported)")
+                continue
+        elif st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
             # (a class attribute of the base bound again, with the same type: as x = v is)
             b = self.classes[ci.base]
             if len(st.kids) < 3 or st.kids[0].s not in b.fdefault or self.vtype(st.kids[1]) != b.ftypes[st.kids[0].s]:
@@ -1275,19 +1334,28 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             # an imported module's class: an error only where the program uses it
             ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {self.ann_problem(st.kids[1], False)}"
             self.add_field(ci, st.kids[0].s, "int")
+            if dc:
+                del ci.fopts[st.kids[0].s]  # (whose default is not checked: see below)
         elif st.kind == "annassign" and st.kids[0].kind == "name":
-            self.add_field(ci, st.kids[0].s, self.vtype(st.kids[1]))
+            name = st.kids[0].s
+            self.add_field(ci, name, self.vtype(st.kids[1]))
             if len(st.kids) == 3:
-                ci.fdefault[st.kids[0].s] = st.kids[2]
-                last = st.kids[0].s
+                ci.fdefault[name] = st.kids[2]
+            if ci.name in self.nts and len(st.kids) == 3:
+                last = name
             elif last != "" and ci.name in self.nts:
-                self.err(f"Non-default namedtuple field {st.kids[0].s} cannot follow default field {last}")
-            elif last != "" and self.is_dc(ci.name) and not ci.kwonly:
-                self.err(f"non-default argument '{st.kids[0].s}' follows default argument '{last}'")
+                self.err(f"Non-default namedtuple field {name} cannot follow default field {last}")
+        elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and dc and st.kids[1].kind == "call" and self.imported_ref(st.kids[1].kids[0]) == "dataclasses.field":
+            self.err(f"'{st.kids[0].s}' is a field but has no type annotation")  # (CPython's TypeError where it creates the class)
         elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and self.is_dc(ci.name):
-            self.err(f"a class attribute without an annotation ({st.kids[0].s} = ...), which is no field of a {'NamedTuple' if ci.name in self.nts else 'dataclass'}, is not supported: annotate it")
+            self.bad_class(ci, f"a class attribute without an annotation ({st.kids[0].s} = ...), which is no field of a {'NamedTuple' if ci.name in self.nts else 'dataclass'}, is not supported: annotate it")
         elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name":
             # x = v: a class attribute, typed by v as a field is (and from here on read as x: T = v)
+            if st.kids[1].kind == "call" and st.kids[1].kids[0].kind == "name" and st.kids[1].kids[0].s == "property" and "property" not in self.funcs:
+                why = "property() called as a function is not supported: decorate the getter with @property and the setter with @x.setter"
+                if ci.mod == "":
+                    self.err(why)
+                ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
             t = self.guess(st.kids[1], FnInfo("", "", ci.node, ""))
             bt = self.classes[ci.base].ftypes.get(st.kids[0].s, "") if ci.base in self.classes else ""
             if t != "" and bt != "" and (self.widens(t, bt) or self.boxes(t, bt)):
@@ -1304,6 +1372,23 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         elif st.kind != "def" and st.kind != "pass" and not (st.kind == "expr" and (st.kids[0].kind == "str" or st.kids[0].kind == "ellipsis")):
             what = "an assignment to anything but one name (x = v)" if st.kind == "assign" else "an expression statement" if st.kind == "expr" else f"a{'n' if st.kind[0] in 'aeiou' else ''} {st.kind} statement"
             self.err(f"a class body may only contain fields, methods, a docstring, pass and ..., not {what}")
+    for fl in ci.fields if dc and "no-init" not in ci.dcopts else []:
+        # the positional parameters of the __init__ @dataclass writes, the base's fields first
+        if fl in ci.fopts and "no-init" not in ci.fopts[fl] and "kw_only" not in ci.fopts[fl]:
+            if fl in ci.fdefault or fl in ci.factory:
+                last = fl
+            elif last != "":
+                self.line = flines[fl] if fl in flines else ci.node.line
+                self.err(f"non-default argument '{fl}' follows default argument '{last}'")
+    if dc and ci.base in self.classes:
+        # the methods @dataclass wrote for the base, after inherit() copied its others, but the
+        # __init__ it writes for this class
+        b = self.classes[ci.base]
+        if "no-init" not in ci.dcopts and "__init__" in ci.methods and ci.methods["__init__"].cls != ci.name:
+            del ci.methods["__init__"]
+        for m in b.methods:
+            if m not in ci.methods and (m != "__init__" or "no-init" in ci.dcopts):
+                ci.methods[m] = b.methods[m]
     if ci.name in self.nts:
         self.nt_class(ci)
     if self.is_dc(ci.name):
@@ -1326,7 +1411,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         self.line = ci.node.line
         owner = short(b.methods["__init_subclass__"].cls if "__init_subclass__" in b.methods else self.default_home(b, "__init_subclass__").name)
         self.err(f"a base that defines __init_subclass__ is not supported (CPython calls {owner}.__init_subclass__() when it creates class {short(ci.name)})")
-    if "__init__" not in ci.methods and ci.base in self.classes and "__init__" in self.classes[ci.base].methods:
+    if "__init__" not in ci.methods and ci.base in self.classes and "__init__" in self.classes[ci.base].methods and not (dc and "no-init" not in ci.dcopts):
         # A base with no explicit initializer acquired its empty one while its fields were
         # declared, after inherit() copied its other methods.
         ci.methods["__init__"] = self.classes[ci.base].methods["__init__"]
@@ -1340,7 +1425,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             if name in ci.methods:
                 self.line = ci.node.line
                 owner = short(ci.methods[name].cls)
-                self.err(f"field '{name}' of '{short(ci.name)}' conflicts with method '{owner}.{name}': method and field shadowing in an inheritance hierarchy is not supported")
+                self.bad_class(ci, f"field '{name}' of '{short(ci.name)}' conflicts with method '{owner}.{name}': method and field shadowing in an inheritance hierarchy is not supported")
+                break
     if "__init__" in ci.methods or ci.exc != "":
         return
     # synthesize __init__: @dataclass takes every field as a parameter
@@ -1353,15 +1439,45 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
     f.generic = ci.tag != 0
     f.defaults.append(noann)
     f.dglob.append("")
-    if self.is_dc(ci.name):
-        if ci.kwonly:
-            f.npos = 1  # (self, and the fields by keyword)
-        for fl in ci.fields:
-            f.params.append(fl)
-            f.ptypes.append(ci.ftypes[fl])
-            f.defaults.append(ci.fdefault[fl] if fl in ci.fdefault else noann)
-            f.dglob.append("")
-            body.append(mk("assign", "", d.line, [mk("attr", fl, d.line, [mk("name", me, d.line, [])]), mk("name", fl, d.line, [])]))
+    if self.is_dc(ci.name) and "no-init" not in ci.dcopts:
+        # its parameters: the fields with init=True, the keyword-only ones last, then for each
+        # init=False field with a default_factory one that no call can name (x.factory). A call
+        # that leaves out such a parameter calls the field's default_factory (dglob "()"), after
+        # it evaluates its arguments, in field order (see call_fn), as the __init__ @dataclass
+        # writes calls each in turn. Its body assigns each field from its parameter, else from
+        # its default (CPython reads it from the class); a field with neither stays unassigned
+        plain: dict[str, bool] = {}  # (a NamedTuple's field, which has no options)
+        dfs = self.dc_fields(ci)
+        for kw in [False, True]:
+            if kw and len([x for x in ci.fields if x in ci.fopts and "kw_only" in ci.fopts[x]]) > 0:
+                f.npos = len(f.params)  # (self and the positional ones)
+            for fl in dfs:
+                o = ci.fopts[fl] if fl in ci.fopts else plain
+                if "no-init" not in o and ("kw_only" in o) == kw:
+                    f.params.append(fl)
+                    f.ptypes.append(ci.ftypes[fl])
+                    f.defaults.append(ci.fdefault[fl] if fl in ci.fdefault else mk("None", "", d.line, []) if fl in ci.factory else noann)
+                    f.dglob.append("()" if fl in ci.factory else "")
+        for fl in dfs:
+            if fl in ci.factory and "no-init" in ci.fopts[fl]:
+                f.npos = len(f.params) if f.npos < 0 else f.npos
+                f.params.append(fl + ".factory")
+                f.ptypes.append(ci.ftypes[fl])
+                f.defaults.append(mk("None", "", d.line, []))
+                f.dglob.append("()")
+        cn = mk("name", ci.name, d.line, [])
+        for fl in dfs:
+            o = ci.fopts[fl] if fl in ci.fopts else plain
+            v = mk("name", fl, d.line, [])
+            if fl in ci.factory and not (fl in b.factory and b.factory[fl] is ci.factory[fl]):
+                self.dc_factory(ci, fl)  # (else the base's, which it inherits)
+            if "no-init" in o and fl in ci.factory:
+                v = mk("name", fl + ".factory", d.line, [])
+            elif "no-init" in o and fl in ci.fdefault:
+                v = mk("attr", fl, d.line, [cn])
+            elif "no-init" in o:
+                continue
+            body.append(mk("assign", "", d.line, [mk("attr", fl, d.line, [mk("name", me, d.line, [])]), v]))
         if "__post_init__" in ci.methods:
             # (then calls __post_init__, as the __init__ @dataclass writes does)
             post = mk("attr", "__post_init__", d.line, [mk("name", me, d.line, [])])
@@ -1403,6 +1519,87 @@ def gen_nt_base(self, n: Node) -> bool:
     # does a class's base n name typing.NamedTuple
     return (n.kind == "name" and self.imported(n.s) == "typing.NamedTuple") or (n.kind == "attr" and self.typing_attr(n) == "NamedTuple")
 
+def gen_dc_fields(self, ci: ClassInfo) -> list[str]:
+    # the fields of dataclass (or NamedTuple) ci that @dataclass knows: those with options (not
+    # a base's other attributes, which its own __init__ assigns, nor the class tag)
+    return [x for x in ci.fields if x in ci.fopts or ci.name in self.nts]
+
+def gen_dc_field(self, ci: ClassInfo, st: Node) -> None:
+    # x: T = field(...) in the body of dataclass ci: the field's options (ci.fopts) and its
+    # default_factory (ci.factory); its default, if any, becomes the statement's value, which
+    # the class statement evaluates where CPython evaluates field()'s arguments
+    call = st.kids[2]
+    name = st.kids[0].s
+    o: dict[str, bool] = {}
+    dflt: list[Node] = []
+    for a in call.kids[1:]:
+        if a.kind != "kw":
+            n = len([x for x in call.kids[1:] if x.kind != "kw"])
+            if a.kind == "starred" or a.kind == "dstar":
+                self.bad_class(ci, "star arguments are not supported")
+                continue
+            self.err(f"field() takes 0 positional arguments but {n} {'was' if n == 1 else 'were'} given")
+        v = a.kids[0]
+        if a.s == "default":
+            dflt.append(v)
+        elif a.s == "default_factory":
+            ci.factory[name] = v
+        elif a.s == "init" or a.s == "repr" or a.s == "compare" or a.s == "kw_only":
+            if v.kind != "True" and v.kind != "False":
+                self.bad_class(ci, f"field({a.s}=...) needs True or False")
+            if a.s == "kw_only":
+                o["kw_only" if v.kind == "True" else "pos"] = True
+            elif v.kind == "False":
+                o["no-" + a.s] = True
+        elif a.s == "hash":
+            if v.kind != "True" and v.kind != "False" and v.kind != "None":
+                self.bad_class(ci, "field(hash=...) needs True, False or None")
+        elif a.s == "metadata":
+            self.bad_class(ci, "field(metadata=...) is not supported")
+        else:
+            self.err(f"field() got an unexpected keyword argument '{a.s}'")
+    if len(dflt) > 0 and name in ci.factory:
+        self.err("cannot specify both default and default_factory")  # (CPython's ValueError)
+    ci.fopts[name] = o
+    st.kids = st.kids[:2] + dflt
+
+def gen_dc_factory(self, ci: ClassInfo, fl: str) -> None:
+    # field fl's default_factory: a static method of the class, fl.factory, compiled if called,
+    # that returns what it gives (a function's or class's call, or a lambda's body). The
+    # __init__ @dataclass writes calls it for each object it is not given fl for
+    line = ci.factory[fl].line
+    x = ci.factory[fl]
+    if x.kind == "lambda" and len(x.kids[0].kids) == 0:
+        v = x.kids[1]
+    elif x.kind == "name" or x.kind == "attr":
+        v = mk("call", "", line, [x])
+        later = (x.s in self.funcs and self.funcs[x.s].mod == ci.mod and self.funcs[x.s].node.line > ci.node.line) or (x.s in self.classes and self.classes[x.s].mod == ci.mod and self.classes[x.s].node.line >= ci.node.line)
+        if x.kind == "name" and later:
+            self.line = line
+            self.err(f"name '{short(x.s)}' is not defined (CPython reads a default_factory when it creates the class, before this def or class statement runs)")
+    else:
+        self.line = line
+        self.bad_class(ci, "default_factory= is only supported as a function, a class or a lambda without parameters")
+        v = mk("None", "", line, [])
+    f = FnInfo(fl + ".factory", f"@m.{ci.name}.{fl}.factory", mk("def", fl, line, [mk("noann", "", line, []), mk("noann", "", line, []), mk("block", "", line, [mk("return", "", line, [v])])]), ci.name)
+    f.deco = "staticmethod"
+    f.ret = ci.ftypes[fl]
+    f.synthetic = True
+    f.mod = ci.mod
+    ci.methods[f.name] = f
+    self.lazy[f.ll] = f
+
+def gen_frozen_store(self, o: Val, name: str, delete: bool = False) -> bool:
+    # o.name = v (delete: del o.name) of a field of a @dataclass(frozen=True) object: CPython's
+    # __setattr__ (__delattr__) raises FrozenInstanceError, but in the __init__ @dataclass
+    # writes, which sets the fields as object.__setattr__ does. True when it raises
+    ci = self.classes[o.t]
+    if "frozen" not in ci.dcopts or (not delete and self.curfn.name == "__init__" and self.derives(o.t, self.curfn.cls) and self.curfn.node.kids[0].kind == "noann"):
+        return False
+    self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}' and no __dict__ for setting new attributes")
+    self.raise_(FROZENERR, self.sconst(f"cannot {'delete' if delete else 'assign to'} field '{name}'"))
+    return True
+
 def gen_frozen(self, t: str, name: str) -> None:
     # a NamedTuple's fields are assigned only by its __init__
     if t in self.nts and not (self.curfn.name == "__init__" and self.curfn.cls == t):
@@ -1415,7 +1612,7 @@ def gen_synth(self, ci: ClassInfo, name: str, ret: str, body: list[Node]) -> Non
     f = FnInfo(name, f"@m.{ci.name}.{name}", mk("def", name, line, [noann, noann, mk("block", "", line, body)]), ci.name)
     f.params.append("self")
     f.ptypes.append(ci.name)
-    if name == "__eq__":
+    if name in ["__eq__", "__lt__", "__le__", "__gt__", "__ge__"]:
         f.params.append("other")
         f.ptypes.append(ci.name)
     for _ in f.params:
@@ -1427,16 +1624,28 @@ def gen_synth(self, ci: ClassInfo, name: str, ret: str, body: list[Node]) -> Non
     self.lazy[f.ll] = f
 
 def gen_dc_methods(self, ci: ClassInfo) -> None:
-    # @dataclass: __repr__ is Name(field=repr(value), ...), __eq__ compares the fields in order
+    # @dataclass: __repr__ is Name(field=repr(value), ...), __eq__ compares the fields in order,
+    # and order=True's __lt__, __le__, __gt__ and __ge__ compare the tuples of their values; a
+    # field(repr=False) is left out of __repr__, a field(compare=False) out of the comparisons
     line = ci.node.line
     me = mk("name", "self", line, [])
     other = mk("name", "other", line, [])
-    if "__repr__" not in ci.methods:
+    # (what it writes replaces what the class inherits, but not what its body defines)
+    own: dict[str, bool] = {}
+    for m in ci.methods:
+        if ci.methods[m].cls == ci.name:
+            own[m] = True
+    reprs = [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-repr" not in ci.fopts[x]]
+    cmps = [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-compare" not in ci.fopts[x]]
+    if "no-repr" in ci.dcopts and "__repr__" in ci.methods and ci.methods["__repr__"].synthetic and "__repr__" not in own:
+        self.line = line
+        self.bad_class(ci, f"repr=False in a dataclass whose base's __repr__ is the one @dataclass writes is not supported (CPython's shows the object's class, {short(ci.name)})")
+    if "__repr__" not in own and "no-repr" not in ci.dcopts:
         parts: list[Node] = []
         lit = short(ci.name) + "("
-        for i in range(len(ci.fields)):
-            parts.append(mk("str", lit + (", " if i > 0 else "") + ci.fields[i] + "=", line, []))
-            parts.append(mk("call", "", line, [mk("name", "__pys_repr", line, []), mk("attr", ci.fields[i], line, [me])]))
+        for i in range(len(reprs)):
+            parts.append(mk("str", lit + (", " if i > 0 else "") + reprs[i] + "=", line, []))
+            parts.append(mk("call", "", line, [mk("name", "__pys_repr", line, []), mk("attr", reprs[i], line, [me])]))
             lit = ""
         parts.append(mk("str", lit + ")", line, []))
         # like reprlib.recursive_repr: an object already being printed shows as ...
@@ -1451,17 +1660,28 @@ def gen_dc_methods(self, ci: ClassInfo) -> None:
                                               mk("assign", "", line, [r, mk("fstr", "", line, parts)]),
                                               mk("expr", "", line, [mk("call", "", line, [mk("name", "__pys_repr_leave", line, []), me])]),
                                               mk("return", "", line, [r])])
-    if "__eq__" not in ci.methods and ci.name not in self.nts:  # (a NamedTuple's is tuple's, see ntop)
+    isnone = mk("cmp", "is", line, [other, mk("None", "", line, [])])
+    if "__eq__" not in own and ci.name not in self.nts and "no-eq" not in ci.dcopts:  # (a NamedTuple's is tuple's, see ntop)
         test = mk("True", "", line, [])
-        for i in range(len(ci.fields)):
-            c = mk("cmp", "==", line, [mk("attr", ci.fields[i], line, [me]), mk("attr", ci.fields[i], line, [other])])
+        for i in range(len(cmps)):
+            c = mk("cmp", "==", line, [mk("attr", cmps[i], line, [me]), mk("attr", cmps[i], line, [other])])
             test = c if i == 0 else mk("boolop", "and", line, [test, c])
         same = mk("cmp", "is", line, [other, me])
         yes = mk("block", "", line, [mk("return", "", line, [mk("True", "", line, [])])])
-        isnone = mk("cmp", "is", line, [other, mk("None", "", line, [])])
         no = mk("block", "", line, [mk("return", "", line, [mk("False", "", line, [])])])
         self.synth(ci, "__eq__", "bool", [mk("if", "", line, [same, yes, mk("block", "", line, [])]),
                                         mk("if", "", line, [isnone, no, mk("block", "", line, [])]), mk("return", "", line, [test])])
+    if "unsafe_hash" in ci.dcopts and "__hash__" in own:
+        self.err(f"Cannot overwrite attribute __hash__ in class {short(ci.name)}")
+    for m in ["__lt__", "__le__", "__gt__", "__ge__"] if "order" in ci.dcopts else []:
+        if m in own:
+            self.err(f"Cannot overwrite attribute {m} in class {short(ci.name)} Consider using functools.total_ordering")
+        op = {"__lt__": "<", "__le__": "<=", "__gt__": ">", "__ge__": ">="}[m]
+        mine = mk("tuple", "", line, [mk("attr", x, line, [me]) for x in cmps])
+        theirs = mk("tuple", "", line, [mk("attr", x, line, [other]) for x in cmps])
+        msg = mk("str", f"'{op}' not supported between instances of '{short(ci.name)}' and 'NoneType'", line, [])
+        bad = mk("block", "", line, [mk("raise", "", line, [mk("call", "", line, [mk("name", "TypeError", line, []), msg])])])
+        self.synth(ci, m, "bool", [mk("if", "", line, [isnone, bad, mk("block", "", line, [])]), mk("return", "", line, [mk("cmp", op, line, [mine, theirs])])])
 
 def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
     # fields are the attributes assigned on self inside __init__
@@ -1470,7 +1690,8 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
         k = st.kind
         if (k == "assign" or k == "annassign") and st.kids[0].kind == "attr" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == f.params[0]:
             name = st.kids[0].s
-            if name not in ci.ftypes:
+            ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods  # (a specialization's are declared after its fields)
+            if name not in ci.ftypes and not (name in ms and ms[name].prop):  # (a property's setter takes it)
                 self.exc_attr(ci, name)
                 why = self.ann_problem(st.kids[1], False) if k == "annassign" and ci.mod != "" else ""
                 t = "" if why != "" else self.vtype(st.kids[1]) if k == "annassign" else self.guess(st.kids[-1], f)
@@ -1486,6 +1707,22 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
                     ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
                     t = "int"
                 self.add_field(ci, name, t)
+            elif name not in ci.ftypes and name + ".setter" in ms and ms[name + ".setter"].cls == (ci.origin if ci.origin != "" else ci.name) and ci.name + "." + name not in self.scanning:
+                # self.x = v of property x in __init__ (or in a setter it calls so): the fields
+                # its setter assigns too
+                g = ms[name + ".setter"]
+                if ci.origin != "":
+                    # (a specialization's, whose value has the type of v, unless annotated with
+                    # no type variable, as its __init__'s parameters have the arguments')
+                    h = FnInfo(g.name, g.ll, g.node, ci.name)
+                    h.params = g.params
+                    h.ptypes = [ci.name, g.ptypes[1] if g.ptypes[1] != "" else self.guess(st.kids[-1], f)]
+                    h.acc = g.acc
+                    g = h
+                self.scanning[ci.name + "." + name] = True
+                self.scan_fields(ci, g, g.node.kids[2].kids)
+                del self.scanning[ci.name + "." + name]
+                self.line = st.line
         for kid in st.kids:
             if kid.kind == "block":
                 self.scan_fields(ci, f, kid.kids)
@@ -1815,5 +2052,56 @@ def gen_setfield(self, o: Val, p: Val, name: str, v: Val) -> None:
     self.mem_store(Val(p.v, "*" + p.t), self.coerce(v, p.t, what))
     if name in ci.fflag:
         self.mem_store(Val(self.fgep(o, ci.fflag[name]), "*bool"), Val("true", "bool"))
+
+def gen_is_prop(self, t: str, name: str) -> bool:
+    # is attribute name of objects of type t a property (of the class or its specialization's template)
+    if t not in self.classes:
+        return False
+    ci = self.classes[t]
+    ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods
+    return name in ms and ms[name].prop
+
+def gen_prop_store(self, o: Val, name: str, v: Val | None) -> None:
+    # o.name = v, or del o.name (v None), of a property: its setter (deleter), selected by the
+    # object's class as a method call is; a class whose property has none raises CPython's
+    # AttributeError, which names the object's class
+    kind = "deleter" if v is None else "setter"
+    key = name + "." + kind
+    none = f"AttributeError: 'NoneType' object has no attribute '{name}' and no __dict__ for setting new attributes"
+    args: list[Node] = []
+    if v is not None:
+        args.append(self.vnode(v))
+    if self.frozen_store(o, name, v is None):
+        return  # (a frozen dataclass's __setattr__ raises first)
+    ci = self.classes[o.t]
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
+    if len([c for c in cs if key not in c.methods]) == 0:
+        self.call_fn(ci.methods[key], [o], args, none=none)
+        return
+    self.notnone(o, none)
+    tag = self.mload('int', o.v) if len(cs) > 1 else ""
+    end = self.label()
+    reached = False
+    narrow = dict(self.narrowed)
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        self.narrowed = dict(narrow)
+        if key in c.methods:
+            self.call_fn(c.methods[key], [Val(o.v, c.name)], args, direct=True)
+        else:
+            self.raise_("AttributeError", self.sconst(f"property '{name}' of '{short(c.name)}' object has no {kind}"))
+        if not self.term:
+            reached = True
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    self.narrowed = narrow
+    if reached:
+        self.place(end)
 
 # ---- variables

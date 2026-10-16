@@ -1,4 +1,4 @@
-# error: inheritance from a dataclass or NamedTuple is not supported
+# error: inheritance from a dataclass is only supported by a @dataclass class
 from dataclasses import dataclass
 
 

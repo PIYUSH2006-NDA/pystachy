@@ -74,6 +74,7 @@ from src.pystachy_compiler.calls import (
     gen_adapter_ret as calls_adapter_ret,
     gen_arity as calls_arity,
     gen_asdict as calls_asdict,
+    gen_dc_replace as calls_dc_replace,
     gen_bound as calls_bound,
     gen_cached_wrapper as calls_cached_wrapper,
     gen_call as calls_call,
@@ -183,9 +184,16 @@ from src.pystachy_compiler.declarations import (
     gen_declare_fields as declarations_declare_fields,
     gen_declare_fn as declarations_declare_fn,
     gen_exc_attr as declarations_exc_attr,
+    gen_bad_class as declarations_bad_class,
     gen_fgep as declarations_fgep,
     gen_field as declarations_field,
     gen_frozen as declarations_frozen,
+    gen_frozen_store as declarations_frozen_store,
+    gen_dc_field as declarations_dc_field,
+    gen_dc_fields as declarations_dc_fields,
+    gen_dc_factory as declarations_dc_factory,
+    gen_is_prop as declarations_is_prop,
+    gen_prop_store as declarations_prop_store,
     gen_generic_base as declarations_generic_base,
     gen_getfield as declarations_getfield,
     gen_guess as declarations_guess,
@@ -475,6 +483,9 @@ from src.pystachy_compiler.program import (
     gen_exc_base as program_exc_base,
     gen_hook as program_hook,
     gen_inherit as program_inherit,
+    gen_accessor as program_accessor,
+    gen_class_ref as program_class_ref,
+    gen_dc_options as program_dc_options,
     gen_init_template as program_init_template,
     gen_left_out as program_left_out,
     gen_makes_tmpl as program_makes_tmpl,
@@ -800,6 +811,8 @@ class Gen:
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)
+        self.hasfrozen = False  # a @dataclass(frozen=True) class: except clauses list dataclasses.FrozenInstanceError
+        self.scanning: dict[str, bool] = {}  # the properties whose setters scan_fields is scanning (C.x)
         # "C.x": class attribute x of plain class C, which the program assigns through the class
         # (C.x = v, cls.x += 1): a global that objects read until they assign x (see cvar_stores)
         self.cvars: dict[str, bool] = {}
@@ -1151,6 +1164,9 @@ class Gen:
     def exc_attr(self, ci: ClassInfo, name: str) -> None:
         return declarations_exc_attr(self, ci, name)
 
+    def bad_class(self, ci: ClassInfo, why: str) -> None:
+        return declarations_bad_class(self, ci, why)
+
     def shadowed(self, ci: ClassInfo, name: str) -> bool:
         return declarations_shadowed(self, ci, name)
 
@@ -1174,6 +1190,24 @@ class Gen:
 
     def frozen(self, t: str, name: str) -> None:
         return declarations_frozen(self, t, name)
+
+    def frozen_store(self, o: Val, name: str, delete: bool=False) -> bool:
+        return declarations_frozen_store(self, o, name, delete)
+
+    def dc_field(self, ci: ClassInfo, st: Node) -> None:
+        return declarations_dc_field(self, ci, st)
+
+    def dc_fields(self, ci: ClassInfo) -> list[str]:
+        return declarations_dc_fields(self, ci)
+
+    def dc_factory(self, ci: ClassInfo, fl: str) -> None:
+        return declarations_dc_factory(self, ci, fl)
+
+    def is_prop(self, t: str, name: str) -> bool:
+        return declarations_is_prop(self, t, name)
+
+    def prop_store(self, o: Val, name: str, v: Val | None) -> None:
+        return declarations_prop_store(self, o, name, v)
 
     def synth(self, ci: ClassInfo, name: str, ret: str, body: list[Node]) -> None:
         return declarations_synth(self, ci, name, ret, body)
@@ -1495,6 +1529,15 @@ class Gen:
 
     def inherit(self, ci: ClassInfo) -> None:
         return program_inherit(self, ci)
+
+    def accessor(self, ci: ClassInfo, d: Node) -> str:
+        return program_accessor(self, ci, d)
+
+    def class_ref(self, m: Mod, s: str) -> str:
+        return program_class_ref(self, m, s)
+
+    def dc_options(self, ci: ClassInfo) -> None:
+        return program_dc_options(self, ci)
 
     def derives(self, c: str, base: str) -> bool:
         return program_derives(self, c, base)
@@ -2161,6 +2204,9 @@ class Gen:
 
     def asdict(self, o: Val, args: list[Node]) -> Val:
         return calls_asdict(self, o, args)
+
+    def dc_replace(self, args: list[Node]) -> Val:
+        return calls_dc_replace(self, args)
 
     def new_obj(self, c: str) -> Val:
         return calls_new_obj(self, c)

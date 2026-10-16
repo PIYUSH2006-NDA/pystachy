@@ -1,0 +1,30 @@
+label default note
+class created
+numbered
+Tally()
+post_init Ada
+numbered
+Tally()
+post_init Bo
+Order(customer='Ada', items=[], numbers=[1, 2, 3], prices={}, note='default note', pairs=[(1, 'ä')], total=0.0, lines=['header'])
+Order(customer='Bo', items=['pen'], numbers=[1, 2, 3], prices={'pen': 1.5}, note='é', pairs=[(1, 'ä')], total=1.5, lines=['header'])
+['ink'] ['pen'] ['header', 'body'] ['header'] False
+0.0 1.5 checked Ada checked Bo
+numbered
+Tally()
+post_init Ada
+False False
+numbered
+Tally()
+post_init Ada
+False 0 5
+Account(owner='Zoë', balance=10, currency='USD', tags=[]) Account(owner='Al', balance=0, currency='EUR', tags=['a'])
+Mixed(x=1, y=2, z=3) Mixed(x=1, y=0, z=4)
+AttributeError 'Lazy' object has no attribute 'cache'
+{'lazy': 4} Lazy(name='lazy', cache={'lazy': 4})
+Tally()
+post_init c0
+Tally()
+post_init c1
+[[0], [1]] [[], []]
+[exit 0]

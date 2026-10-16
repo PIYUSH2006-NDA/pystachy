@@ -139,6 +139,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   the right operand's class defines the reflected method, which CPython calls with `None`
   instead (`B.__ror__(b, None)`; reflected methods are not supported, below).
 
+- A comparison method that `@dataclass` writes, called directly (`p.__eq__(q)`, `p.__lt__(q)`)
+  with `None` or an object of another class, compares the fields (`__eq__` returns `False` for
+  `None`) or raises `TypeError` where CPython's returns `NotImplemented`. The operators
+  (`p == q`, `p < q`) decline such an operand as CPython does.
+
 - An optional value that is `None`, passed to a builtin method's parameter that has a
   default (`s.split(sep)`, `s.strip(chars)`), means the default, as an explicit `None` does,
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
@@ -393,11 +398,12 @@ supported alternatives.
 
 ### Classes, dataclasses and NamedTuples
 
-- multiple inheritance; ordinary inheritance involving a class template, `Generic`, dataclass,
-  NamedTuple or builtin type; a decorated subclass; overriding a method with another kind of
-  method (instance, static or class method); calls whose possible instance-method overrides
-  cannot accept the arguments or return a common supported type, and calls through a
-  base-typed object of a static or class method that a subclass overrides. See
+- multiple inheritance; ordinary inheritance involving a class template, `Generic`, NamedTuple
+  or builtin type, or a dataclass and a class that is not one; a decorated subclass other than
+  a dataclass deriving from a dataclass; overriding a method with another kind of method
+  (instance, static or class method); calls whose possible instance-method overrides cannot
+  accept the arguments or return a common supported type, and calls through a base-typed
+  object of a static or class method that a subclass overrides. See
   [single inheritance](typing.md#single-inheritance).
 - assigning an inherited class attribute through a subclass that does not declare its own
   default; changing an inherited field's type; reading derived-only fields through a base
@@ -408,15 +414,23 @@ supported alternatives.
   or explicit `super(C, self)` with an unrelated class or a different receiver expression
 - a class method's `cls` used as a value or assigned, `@staticmethod` or `@classmethod` on a
   special method, a method of objects called through its class (`C.m(o)`) outside an ordinary
-  inheritance hierarchy, and decorators other than these, `@dataclass` and `@overload`
+  inheritance hierarchy, and decorators other than these, `@property` (and its `.setter` and
+  `.deleter`), `@dataclass` and `@overload`
 - a class that defines (by a `def` or a class attribute) or inherits `__new__`, `__getattr__`,
   `__getattribute__`, `__setattr__` or `__delattr__`, which CPython calls implicitly and Pystachy
   never does (in an imported module, an error where the program uses the class; its class
   statement still runs), and a class whose base defines `__init_subclass__`, which
   CPython calls when it creates the class (also in an imported module, whose code creates it when
   it is imported)
-- `@dataclass` arguments other than `kw_only` (`frozen=`, `order=`, ...), and `dataclasses.field()`
-  and `KW_ONLY`
+- `@dataclass(slots=True)` and `weakref_slot=`, `@dataclass` and `field()` options that are not
+  `True` or `False` literals, `field(metadata=...)`, a `default_factory` that is not a function,
+  a class or a lambda without parameters, `dataclasses.asdict()`, `astuple()`, `fields()` and
+  `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
+  `except` clause, `hash()` of a dataclass object, a base dataclass's field declared again with
+  another type, and `repr=False` in a dataclass whose base has the `__repr__` `@dataclass` writes
+- a property's `@x.getter`, a second setter or deleter, a setter or deleter of another name than
+  its property, `property()` called as a function, assigning `super().x`, and `del` of an
+  attribute that is not a property
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
   its class to a dataclass's or NamedTuple's class attribute, or to one its class body does not
   bind
@@ -426,7 +440,9 @@ supported alternatives.
   types, the functional `NamedTuple("P", [...])`, slicing a tuple, a NamedTuple or an object (whose
   `__getitem__` would take a slice object), a tuple `*` a number that is not a constant, and
   CPython's class-creation errors of a NamedTuple (a field after a default, an underscored field,
-  an overwritten `__init__`) and of a dataclass (a field without a default after one with it)
+  an overwritten `__init__`) and of a dataclass (a field without a default after one with it,
+  also a base's, a mutable default, `order=True` without `eq`, a generated method the class
+  defines, a frozen dataclass deriving from one that is not, or the reverse)
 
 ### Optional values
 

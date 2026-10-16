@@ -1,0 +1,4 @@
+3 [Entry(key='a', rank=2, tags=['x']), Entry(key='b', rank=2, tags=['module']), Entry(key='c', rank=1, tags=['module'])]
+Entry(key='b', rank=9, tags=['module']) True
+frozen cannot assign to field 'rank'
+[exit 0]

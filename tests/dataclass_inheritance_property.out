@@ -1,0 +1,4 @@
+Account(owner='a', _cents=1350) 13.5
+Savings(owner='b', _cents=1350, rate=0.01, history=[12.5, 13.5]) 13.5
+Scene(origin=Origin3(x=1, z=2), accounts=[Account(owner='a', _cents=1350), Savings(owner='b', _cents=1350, rate=0.01, history=[12.5, 13.5])]) True False
+[exit 0]

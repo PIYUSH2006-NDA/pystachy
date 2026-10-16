@@ -523,7 +523,7 @@ def main() -> None:
         if useo == parto:
             mvs.append(f"mv -f {q(parto)} {q(rto)}")
         old = f"{q(cache)}/runtime-py-{lin}-{'?' * 16}"
-        mvs.append(f"for f in {old}.bc {old}.o; do case $f in {q(rtb)} | {q(rto)}) ;; *) rm -f \"$f\" ;; esac; done")
+        mvs.append(f"for f in {old}.bc {old}.o {old}.target; do case $f in {q(rtb)} | {q(rto)} | {q(rtb[:-3] + '.target')}) ;; *) rm -f \"$f\" ;; esac; done")
     for g in glue:
         if pub and g[3] != "":
             old = f"{q(cache)}/runtime-py-{lin}-{'?' * 16}.{g[0]}.bc"
@@ -567,6 +567,43 @@ def main() -> None:
             out = diagnostics.SRC[:-3] if diagnostics.SRC.endswith(".py") else diagnostics.SRC + ".exe"
         code = sh(f"{link} && {llvm}clang -O2 -c {q(bc)} -o {q(obj)} -Wno-unused-command-line-argument{ccflags} && {llvm}clang {q(obj)} -o {q(out)}{libs} -lm{cflags}")
     else:
+        # Match the precompiled runtime's target before instcombine folds sizeof/GEP.
+        # LLVM's default layout gives i64 only four-byte alignment; ORC later installs
+        # the host layout, too late to repair an allocation size already folded to a
+        # constant. Cache just the two target directives beside the keyed runtime.
+        target = rtb[:-3] + ".target"
+        layout = ""
+        if trusted and os.path.exists(target):
+            try:
+                f = open(target, "r", encoding=RAW)
+                layout = f.read()
+                f.close()
+            except OSError:
+                pass  # (optional metadata: unreadable means derive it from the bitcode)
+        if layout == "":
+            code = sh(f"{tc[3]} -S -passes=verify {q(usebc)} -o {q(rsl)}")
+            if code == 0:
+                f = open(rsl, "r", encoding=RAW)
+                layout = "\n".join([s for s in f.read().split("\n") if s.startswith("target ")]) + "\n"
+                f.close()
+                if pub:
+                    tp = f"{target}.{os.getpid()}.{own}"
+                    try:
+                        f = open(tp, "w", encoding=RAW)
+                        f.write(layout)
+                        f.close()
+                        sh(f"mv -f {q(tp)} {q(target)} 2> /dev/null")
+                    except OSError:
+                        pass  # (a read-only cache still supplies its runtime)
+                    if os.path.exists(tp):
+                        try:
+                            os.remove(tp)
+                        except OSError:
+                            pass
+        if code == 0:
+            f = open(ll, "w", encoding=RAW)
+            f.write(layout + ir)
+            f.close()
         # JIT tier: discard unused internal functions before SSA cleanup and ORC's module-wide
         # code generation. The frontend still checks their bodies; external pys_obj_* dispatch
         # callbacks stay visible to the precompiled runtime (which this tier never inlines). A
@@ -579,7 +616,8 @@ def main() -> None:
         if ir.count("\n") <= int(lim):
             clean = f"cgscc(inline,{clean})"
         fast = f"{llvm}opt -passes='globaldce,{clean}'"
-        code = sh(f"{fast} {q(ll)} -o {q(bc)}")
+        if code == 0:
+            code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:
             # then this process becomes lli, through a shell that opens the bitcode and the runtime's
             # machine code for it (the cache's, or this run's own) and removes the files: the program's

@@ -140,7 +140,7 @@ def gen_check_import(self, a: Node) -> None:
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
     elif mod == "dataclasses":
-        if x != "dataclass":
+        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace"]:
             self.err(f"dataclasses.{x} is not supported")
     elif not builtin_has(mod, x):
         self.err(f"cannot import name '{x}' from '{mod}': Pystachy's {mod} module has no '{x}'")
@@ -261,7 +261,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
         self.left_out(self.cnodes[ci.node.line], ci.bad)
         return
     bound: dict[str, bool] = {}
-    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann"  # (a dataclass's)
+    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann" and ci.methods["__init__"].cls == ci.name  # (a dataclass's)
     later = ""
     for st in ci.node.kids[0].kids:
         self.line = st.line
@@ -271,8 +271,10 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
             bound[fl] = True
             t = ci.ftypes[fl]
             u = unopt(t)  # (a default of a T | None field that is not None is a T)
-            if self.is_dc(ci.name) and ci.name not in self.nts and not is_const(st.kids[2]) and (is_list(u) or is_dict(u) or self.unhashable(u) or (self.is_dc(u) and u not in self.nts)):
-                self.err(f"mutable default {u} for dataclass field '{fl}' is not allowed")
+            if self.is_dc(ci.name) and ci.name not in self.nts and not is_const(st.kids[2]) and (is_list(u) or is_dict(u) or (is_set(u) and not is_fset(u)) or self.unhashable(u)):
+                # (CPython's ValueError where it creates the class: the default's class has __hash__ = None)
+                c = u[: u.find("[")] if "[" in u else f"{self.classes[u].mod if self.classes[u].mod != '' else '__main__'}.{short(u)}"
+                self.err(f"mutable default <class '{c}'> for field {fl} is not allowed: use default_factory")
             for m in ["__set_name__", "__get__", "__set__", "__delete__"] if t in self.classes and not is_const(st.kids[2]) else []:
                 # (__set_name__ runs when CPython creates the class, __get__ too with @dataclass)
                 now = m == "__set_name__" or (m == "__get__" and self.is_dc(ci.name))
@@ -289,6 +291,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
                 ci.fglob[fl] = self.hidden(f"@d.c.{ci.name}.{fl}", self.coerce(self.expr(st.kids[2], t), t))
         elif st.kind == "def":
             f = ci.methods[st.s]
+            for k in [st.s + ".setter", st.s + ".deleter"]:
+                f = ci.methods[k] if k in ci.methods and ci.methods[k].node is st else f  # (a property's setter or deleter)
             for d in f.defaults:
                 self.no_class_names(d, bound, ci)
             bound[st.s] = True
@@ -297,7 +301,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
     if syn:
         init = ci.methods["__init__"]
         for j in range(1, len(init.params)):
-            init.dglob[j] = ci.fglob.get(init.params[j], "")
+            h = self.default_home(ci, init.params[j])  # (a base dataclass's field: the global of its class's default)
+            init.dglob[j] = h.fglob.get(init.params[j], "") if init.dglob[j] != "()" else "()"
     ci.bad = later if later != "" else ci.hook  # (an imported module's class: an error where the program uses it)
 
 def gen_no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> None:
@@ -309,8 +314,14 @@ def gen_no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> 
 
 def gen_unhashable(self, t: str) -> bool:
     # a class that defines __eq__ without __hash__ has __hash__ = None in CPython (a NamedTuple
-    # has a tuple's)
-    return t in self.classes and "__eq__" in self.classes[t].methods and "__hash__" not in self.classes[t].methods and t not in self.nts
+    # has a tuple's), as has a dataclass with eq=True but for frozen=True or unsafe_hash=True,
+    # whose __hash__ @dataclass writes
+    if t not in self.classes or t in self.nts:
+        return False
+    ci = self.classes[t]
+    if self.is_dc(t) and ("unsafe_hash" in ci.dcopts or ("frozen" in ci.dcopts and "no-eq" not in ci.dcopts)):
+        return False
+    return "__eq__" in ci.methods and "__hash__" not in ci.methods
 
 def gen_while_(self, n: Node) -> None:
     l1 = self.label()
@@ -653,6 +664,14 @@ def gen_stmt(self, n: Node) -> None:
             if dt.kind == "name":
                 self.del_name(dt)
                 continue
+            if dt.kind == "attr" and self.dotted(dt) == "" and not (dt.kids[0].kind == "name" and dt.kids[0].s in self.classes and dt.kids[0].s not in self.ltype):
+                o = self.expr(dt.kids[0], "")
+                if self.is_prop(o.t, dt.s):
+                    self.prop_store(o, dt.s, None)  # (del o.x of a property x: its deleter)
+                    continue
+                if o.t in self.classes and dt.s in self.classes[o.t].ftypes and self.frozen_store(o, dt.s, True):
+                    continue
+                self.err("del of an attribute is only supported for a property (which calls its deleter)")
             o = self.expr(dt.kids[0], "") if dt.kind == "index" else Val("", "")
             nodel = "TypeError: 'NoneType' object does not support item deletion"
             if is_list(unopt(o.t)):
@@ -861,6 +880,10 @@ def gen_augassign(self, n: Node) -> None:
         self.class_store(ci, t.s, self.inplace(op, self.class_attr(t.kids[0], t.s), n.kids[1]))
     elif t.kind == "attr":
         o = self.expr(t.kids[0], "")
+        if self.is_prop(o.t, t.s):
+            # o.x op= v of a property x: its getter, then its setter
+            self.prop_store(o, t.s, self.inplace(op, self.method_value(o, t.s), n.kids[1]))
+            return
         p = self.field(o, t.s, False)
         self.frozen(o.t, t.s)
         cur = self.getfield(o, p, t.s)
@@ -869,7 +892,9 @@ def gen_augassign(self, n: Node) -> None:
             self.err(f"field '{t.s}' is outside __slots__ of '{short(ci.name)}'")
         if t.s == "__slots__" and t.s not in ci.fpos:
             self.err("rebinding __slots__ through an instance is not supported")
-        self.setfield(o, p, t.s, self.inplace(op, cur, n.kids[1]))
+        nv = self.inplace(op, cur, n.kids[1])
+        if not self.frozen_store(o, t.s):
+            self.setfield(o, p, t.s, nv)
     elif t.kind == "index":
         o = self.expr(t.kids[0], "")
         sub = "TypeError: 'NoneType' object is not subscriptable"
