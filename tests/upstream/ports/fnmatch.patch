@@ -1,6 +1,6 @@
 --- a/Lib/fnmatch.py
 +++ b/lib/fnmatch.py
-@@ -9,12 +9,55 @@
+@@ -9,12 +9,59 @@
  The function translate(PATTERN) returns a regular expression
  corresponding to PATTERN.  (It does not compile it.)
  """
@@ -21,13 +21,17 @@
 +    if not _UTF8 or i >= len(s):
 +        return i + 1
 +    b = ord(s[i])
-+    # Pystachy port: use re._codes()'s byte fallback for incomplete/invalid UTF-8.
++    # Pystachy port: use re._codes()'s byte fallback for incomplete/invalid UTF-8, an overlong
++    # form or a value past U+10FFFF (re._charat()).
 +    if b < 0xC2 or b >= 0xF5:
 +        return i + 1
 +    width = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
 +    if i + width > len(s):
 +        return i + 1
-+    for j in range(1, width):
++    x = ord(s[i + 1])
++    if x & 0xC0 != 0x80 or (b == 0xE0 and x < 0xA0) or (b == 0xF0 and x < 0x90) or (b == 0xF4 and x >= 0x90):
++        return i + 1
++    for j in range(2, width):
 +        if ord(s[i + j]) & 0xC0 != 0x80:
 +            return i + 1
 +    return i + width
@@ -56,7 +60,7 @@
  
  def fnmatch(name, pat):
      """Test whether FILENAME matches PATTERN.
-@@ -36,7 +79,7 @@
+@@ -36,7 +83,7 @@
      return fnmatchcase(name, pat)
  
  @functools.lru_cache(maxsize=32768, typed=True)
@@ -65,7 +69,7 @@
      if isinstance(pat, bytes):
          pat_str = str(pat, 'ISO-8859-1')
          res_str = translate(pat_str)
-@@ -50,7 +93,7 @@
+@@ -50,7 +97,7 @@
      result = []
      pat = os.path.normcase(pat)
      match = _compile_pattern(pat)
@@ -74,7 +78,7 @@
          # normcase on posix is NOP. Optimize it away from the loop.
          for name in names:
              if match(name):
-@@ -77,13 +120,13 @@
+@@ -77,13 +124,13 @@
      There is no way to quote meta-characters.
      """
  
@@ -90,7 +94,7 @@
      add = res.append
      i, n = 0, len(pat)
      while i < n:
-@@ -111,14 +154,15 @@
+@@ -111,14 +158,15 @@
                      stuff = stuff.replace('\\', r'\\')
                  else:
                      chunks = []
@@ -108,7 +112,7 @@
                      chunk = pat[i:j]
                      if chunk:
                          chunks.append(chunk)
-@@ -126,15 +170,24 @@
+@@ -126,15 +174,24 @@
                          chunks[-1] += '-'
                      # Remove empty ranges -- invalid in RE.
                      for k in range(len(chunks)-1, 0, -1):
@@ -136,7 +140,7 @@
                  i = j+1
                  if not stuff:
                      # Empty range: never match.
-@@ -156,7 +209,7 @@
+@@ -156,7 +213,7 @@
  
  def _join_translated_parts(inp, STAR):
      # Deal with STARs.
@@ -145,7 +149,7 @@
      add = res.append
      i, n = 0, len(inp)
      # Fixed pieces at the start?
-@@ -177,16 +230,16 @@
+@@ -177,16 +234,16 @@
              add(".*")
              break
          assert inp[i] is not STAR

@@ -1,0 +1,2 @@
+NotImplementedError: codecs.lookup() is not supported: Pystachy has no codec registry, and str.encode() and bytes.decode() have UTF-8, Latin-1 and ASCII
+[exit 0]

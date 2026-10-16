@@ -1,0 +1,23 @@
+'foo'
+'foobar'
+'foo6bar-6'
+'-test-'
+KeyError: 'arg'
+'-test-'
+KeyError: 'self'
+'-test-'
+KeyError: 'format_string'
+'foobar6'
+' bar  '
+' bar   X'
+ValueError: cannot switch from manual field specification to automatic field numbering
+ValueError: cannot switch from manual field specification to automatic field numbering
+"-'test'-"
+'test'
+ValueError: Unknown conversion specifier h
+'42'
+"'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'"
+"'\\xff'"
+"'\\u0100'"
+"'foo':None"
+[exit 0]

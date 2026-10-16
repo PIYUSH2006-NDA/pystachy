@@ -16,10 +16,12 @@ for char in ["é", "中", "😀"]:
     text = char + chr(128)
     print("trailing byte", fnmatch._last_char(text) == len(char), fnmatch._next_char(text, 0) == len(char))
 
-# Existing re._codes accepts structurally complete encodings by value. Range translation must
-# not introduce ord() errors for those encodings (the broader regex scalar policy is unchanged).
-overlong = chr(224) + chr(128) + chr(128)
-outside = chr(244) + chr(191) + chr(191) + chr(191)
-print("values", fnmatch._char_value(overlong) == 0, fnmatch._char_value(outside) == 1310719)
-print("translated", len(fnmatch.translate("[" + overlong + "-a]")) > 0,
-      fnmatch.translate("[" + outside + "-a]") == r"(?s:(?!))\Z")
+# An overlong form or a value past U+10FFFF is bytes, as ord() reads it; at each boundary the
+# strict sequence, and a surrogate, is one character (tests/lib_re_utf8_overlong.py has CPython's
+# translations and matches for the bytes)
+for text in [chr(224) + chr(159) + chr(191), chr(240) + chr(143) + chr(191) + chr(191),
+             chr(244) + chr(144) + chr(128) + chr(128)]:
+    print("not utf8", fnmatch._next_char(text, 0) == 1, fnmatch._last_char(text) == len(text) - 1)
+for text in [chr(0x800), chr(0x10000), chr(0x10FFFF), chr(0xD800)]:
+    print("utf8", fnmatch._next_char(text, 0) == len(text), fnmatch._last_char("a" + text) == 1,
+          fnmatch._char_value(text) == ord(text))

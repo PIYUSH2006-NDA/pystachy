@@ -40,7 +40,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
     CBUILTIN[_k] = True
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
-STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii"}
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -244,8 +244,11 @@ for _k in ("OSError IOError EnvironmentError BlockingIOError ChildProcessError C
            "InterruptedError IsADirectoryError NotADirectoryError PermissionError ProcessLookupError TimeoutError "
            "SyntaxError IndentationError TabError").split():
     EXCEPTIONS[_k] = "x"
-for _k in "UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
+for _k in "UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
     EXCEPTIONS[_k] = "-"
+# (made of CPython's five arguments, which give their message: Gen.unicode_error)
+EXCEPTIONS["UnicodeDecodeError"] = "u"
+EXCEPTIONS["UnicodeEncodeError"] = "u"
 # the builtin exception classes, each with its bases (CPython 3.13's: tools/check_runtime.py
 # checks them), io.UnsupportedOperation, which the runtime raises too, and
 # dataclasses.FrozenInstanceError. IOError and EnvironmentError are other names of OSError. An
@@ -636,6 +639,7 @@ RUNTIME: dict[str, str] = {
     "bytes.get": "int:S,int|R|", "bytes.list": "list[int]:bytes|A|", "bytes.add": "bytes:S,bytes|A|", "bytes.mul": "bytes:S,int|R A|",
     "bytes.slice": "bytes:S,int,int|A|", "bytes.slice_step": "bytes:S,int,int,int|R A|", "bytes.has": "bool:str,int|R|",
     "bytes.contains": "bool:str,str|R|", "bytes.decode": "str:str,str,str|R A|", "str.encode": "str:str,str,str|R A|",
+    "unicode_error_str": "str:int,str,str,int,int,str|R A|",
     "bytes.hex": "str:str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
     "bytes.zeros": "str:int|R A|", "bytes.join": "str:str,list[str]|R A rL|", "bytes.split": "list[str]:str,str,int|R A|",
     "bytes.rsplit": "list[str]:str,str,int|R A|", "bytes.strip": "str:str,str|R A|", "bytes.lstrip": "str:str,str|R A|",

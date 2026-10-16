@@ -289,7 +289,9 @@ per `group` call), runtime-length `groups(default=None)` tuples, indexing,
 dictionaries, positions, spans and expansion.
 
 - Matches decode code points, but positions (`pos`, `endpos`, group spans and
-  pattern-error positions) are byte indices.
+  pattern-error positions) are byte indices. A byte that `ord()` reads as no
+  character's part (a truncated, overlong or above-U+10FFFF sequence) is its own
+  character, as `chr()` made it.
 - `findall` with two or more groups still raises `NotImplementedError`; its
   ported result contract remains `list[str]`. `Match.regs` remains unsupported
   because its runtime-length tuple contains tuple elements.
@@ -592,3 +594,40 @@ messages): `hexlify` and `b2a_hex` with `sep` and `bytes_per_sep`, `unhexlify` a
   `<built-in function hexlify>`. `a2b_base64.__doc__` is CPython's docstring without the
   indentation of its option's description, which CPython 3.13 removes from a Python function's
   docstring.
+
+## Codecs
+
+`codecs` is CPython 3.13.16's `Lib/codecs.py` with three marked edits, on `_pystachy_codecs`,
+a subset port of the C module `_codecs` that Pystachy loads for `import _codecs`. The BOM
+constants, `encode()`, `decode()`, `lookup_error()`, `register_error()`, `strict_errors()` and
+the incremental classes (derived from with methods) work as in CPython, and so do the codec
+functions of UTF-8, Latin-1, ASCII and charmap (`utf_8_encode()`, `utf_8_decode()` that is not
+final, `charmap_build()`, `charmap_encode()`, `charmap_decode()`, ...) with every builtin error
+handler but `namereplace`, raising CPython's `UnicodeDecodeError` and `UnicodeEncodeError` with
+its messages.
+
+- Encoding with `namereplace`, which needs the characters' names, raises `LookupError: unknown
+  error handler name 'namereplace'`, as `str.encode()` does
+  ([language reference](../docs/language/compatibility.md)), where CPython writes `\N{...}`.
+- `codecs.lookup()`, which Pystachy has no codec registry for, raises `NotImplementedError`
+  ([deviation](../tests/deviations/lib_codecs_lookup.py)); reading its result's attributes, as
+  `getencoder()` and the other functions built on it do, is a compile-time error. `register()`
+  and `unregister()` do nothing.
+- The UTF-16, UTF-32, UTF-7 and escape codec functions raise `NotImplementedError`, and so do the
+  error handler functions but `strict_errors()` (`ignore_errors()`, ...), which read attributes
+  that Pystachy's `UnicodeError` does not have. A handler `register_error()` registers is one that
+  `lookup_error()` gives; `str.encode()`, `bytes.decode()` and the charmap codec take only the
+  builtin handlers' names.
+- `charmap_build()` gives a dict of code points to bytes, where CPython's is an `EncodingMap`
+  object (but a dict where the table does not start with U+0000 or leaves the BMP), and
+  `charmap_decode()` takes a decoding table, a str, not a dict.
+- A class attribute that binds a function of a subclass's codec (`_buffer_decode =
+  codecs.utf_8_decode`, as the `encodings` modules bind them) over a method of its base is not
+  supported: define the method with `def`.
+- `codecs.strict_errors.__name__` and the other handlers' are unsupported: the handlers are
+  `Callable` values.
+
+The edits: the error handlers are bound without the `except LookupError` clause for builds
+without them, which binds them to `None`; the four incremental classes' `errors` parameters
+are annotated, so that the classes are no templates; and the `import encodings`, which never
+runs, is left out.
