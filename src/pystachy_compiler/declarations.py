@@ -2040,7 +2040,7 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
     # specialization of lib/_pystachy_iterators.py's class for a builtin container
     if a.kind == "call" and a.kids[0].kind == "name" and a.kids[0].s == "range" and not self.bound("range"):
         c = ITERS + "$range_iterator"
-        return self.specialize(c, ["int", "int", "int"], {}, False) if c in self.tmpl else ""
+        return self.specialize(c, ["int", "int", "int"], {}, False, {}) if c in self.tmpl else ""
     m = a.kids[0].s if a.kind == "call" and len(a.kids) == 1 and a.kids[0].kind == "attr" else ""
     t = unopt(self.guess(a.kids[0].kids[0] if m == "keys" or m == "values" or m == "items" else a, f))
     name = ""
@@ -2070,7 +2070,7 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
     elif is_set(t):
         name = "set_iterator"
     c = ITERS + "$" + name
-    return self.specialize(c, [t], {}, False) if name != "" and c in self.tmpl else ""
+    return self.specialize(c, [t], {}, False, {}) if name != "" and c in self.tmpl else ""
 
 def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
     if name == "__class__" and (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")):
