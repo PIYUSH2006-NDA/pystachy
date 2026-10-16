@@ -489,7 +489,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
             >>> print(this)
             OrderedSet([3, 5])
         """
-        items_to_remove = set()  # type: Set[T]
+        items_to_remove: set[str] = set()  # Pystachy port: type the empty set even with no sets (M4)
         for other in sets:
             items_as_set = set(other)  # type: Set[T]
             items_to_remove |= items_as_set

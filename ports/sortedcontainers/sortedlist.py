@@ -340,7 +340,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         self.update(iterable)
 
 
-    def __contains__(self, value: int):  # Pystachy port: annotated (M2)
+    def __contains__(self, value):
         """Return true if `value` is an element of the sorted list.
 
         ``sl.__contains__(value)`` <==> ``value in sl``
@@ -1457,7 +1457,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self
 
 
-    def __mul__(self, num: int):  # Pystachy port: annotated (M2)
+    def __mul__(self, num):
         """Return new sorted list with `num` shallow copies of values.
 
         ``sl.__mul__(num)`` <==> ``sl * num``
@@ -1479,7 +1479,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self.__mul__(num)
 
 
-    def __imul__(self, num: int):  # Pystachy port: annotated (M2)
+    def __imul__(self, num):
         """Update the sorted list with `num` shallow copies of values.
 
         ``sl.__imul__(num)`` <==> ``sl *= num``

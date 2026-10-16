@@ -140,3 +140,11 @@ print(this)
 this = OrderedSet(["1", "4", "3", "5", "7"])
 this.symmetric_difference_update(other)
 print(this)
+
+# No arguments must keep both populated and empty sets unchanged.
+this = OrderedSet(["b", "a", "b"])
+this.difference_update()
+print(this)
+empty = OrderedSet()
+empty.difference_update()
+print(empty)
