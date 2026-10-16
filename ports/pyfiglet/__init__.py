@@ -8,14 +8,14 @@ Python FIGlet adaption
 from __future__ import print_function, unicode_literals, annotations
 from typing import Any, Optional
 
-# Pystachy port: itertools, importlib.resources, pathlib, re, shutil, zipfile and optparse are
+# Pystachy port: itertools, importlib.resources, pathlib, shutil, zipfile and optparse are
 # modules Pystachy does not have (native stdlib hubs, #11). The fonts are the strings of
-# _fontdata, and the font parser's regular expressions are the string functions below.
+# _fontdata.
 # import itertools
 # import importlib.resources
 import os
 # import pathlib  # Pystachy port: (see above)
-# import re
+import re
 # import shutil
 import sys
 # import zipfile  # Pystachy port: (see above)
@@ -68,10 +68,8 @@ else:
     SHARED_DIRECTORY = '/usr/local/share/pyfiglet/'
 
 
-# Pystachy port: Figlet's keywords, not **kwargs (M3, #8), and a return annotation (M2, #7)
-def figlet_format(text:str, font:str=DEFAULT_FONT, direction:str='auto', justify:str='auto',
-                  width:int=80) -> str:
-    fig = Figlet(font, direction=direction, justify=justify, width=width)
+def figlet_format(text:str, font:str=DEFAULT_FONT, **kwargs):  # Pystachy port: kwargs not Any (M4, #9)
+    fig = Figlet(font, **kwargs)
     return fig.renderText(text)
 
 
@@ -91,7 +89,7 @@ class FigletError(Exception):
     def __init__(self, error:str):
         self.error = error
 
-    def __str__(self) -> str:  # Pystachy port: a return annotation (M2, #7)
+    def __str__(self):
         return self.error
 
 class CharNotPrinted(FigletError):
@@ -123,10 +121,10 @@ class FigletFont(object):
     meta-data about how it should be displayed by default
     """
 
-    # Pystachy port: reMagicNumber and reEndMarker are _magic() and _end_marker() below (re:
-    # #11); the fields that loadFont() assigns are declared, as only __init__ types them (M2, #7)
-    # reMagicNumber = re.compile(r'^[tf]lf2.')
-    # reEndMarker = re.compile(r'(.)\s*$')
+    reMagicNumber = re.compile(r'^[tf]lf2.')
+    reEndMarker = re.compile(r'(.)\s*$')
+    # Pystachy port: the fields that loadFont() assigns are declared, as only __init__ types
+    # them (M2, #7)
     height: int
     hardBlank: str
     printDirection: Optional[int]
@@ -284,18 +282,18 @@ class FigletFont(object):
         try:
             # Remove any unicode line splitting characters other
             # than CRLF - to match figlet line parsing
-            # Pystachy port: re.sub() as str.replace() (re: #11), and new names (text,
-            # header_line) where a variable took another type (M4, #9)
-            text = self.data.replace("\u0085", " ").replace("\u2028", " ").replace("\u2029", " ")
+            # Pystachy port: new names (text, header_line) where a variable is rebound (M4, #9) to
+            # another type, which it may not be in a try statement
+            text = re.sub(r"[\u0085\u2028\u2029]", " ", self.data)
 
             # Parse first line of file, the header
             data = text.splitlines()  # Pystachy port: (see above)
 
             header_line = data.pop(0)  # Pystachy port: (see above)
-            if not _magic(header_line):
+            if self.reMagicNumber.search(header_line) is None:
                 raise FontError('%s is not a valid figlet font' % self.font)
 
-            header = header_line[5:].split()  # Pystachy port: reMagicNumber.sub('', ...)
+            header = self.reMagicNumber.sub('', header_line).split()  # Pystachy port: (see above)
 
             if len(header) < 6:
                 raise FontError('malformed header for %s' % self.font)
@@ -333,14 +331,36 @@ class FigletFont(object):
             for i in range(0, commentLines):
                 self.comment += data.pop(0)
 
-            # Pystachy port: __char(), a closure (M3, #8), is the method _load_char() below
+            def __char(data: list[str]) -> tuple[int, list[str]]:
+                """
+                Function loads one character in the internal array from font
+                file content
+                """
+                end = None
+                width = 0
+                chars: list[str] = []
+                for _ in range(0, height):
+                    line = data.pop(0)
+                    if end is None:
+                        # Pystachy port: mark for the end mark, a str, as end is not rebound (M4,
+                        # #9) from it to the pattern; group(1) is never None after a match
+                        mark = self.reEndMarker.search(line).group(1)  # type: ignore
+                        assert mark is not None
+                        end = re.compile(re.escape(mark) + r'{1,2}\s*$')
+
+                    line = end.sub('', line)
+
+                    if len(line) > width:
+                        width = len(line)
+                    chars.append(line)
+                return width, chars
 
             # Load ASCII standard character set (32 - 127).
             # Don't skip space definition as later rendering pipeline will
             # ignore all missing chars and space is critical for the line
             # breaking logic.
             for i in range(32, 127):
-                width, letter = self._load_char(data, height)  # Pystachy port: (see above)
+                width, letter = __char(data)
                 if i == 32 or ''.join(letter) != '':
                     self.chars[i] = letter
                     self.width[i] = width
@@ -350,7 +370,7 @@ class FigletFont(object):
                 # Pystachy port: _chars() gives the characters of a str, whose iteration steps
                 # through UTF-8 bytes; ch, not i, which is an int (M4, #9)
                 for ch in _chars('ÄÖÜäöüß'):
-                    width, letter = self._load_char(data, height)
+                    width, letter = __char(data)
                     if ''.join(letter) != '':
                         self.chars[ord(ch)] = letter  # Pystachy port: (see above)
                         self.width[ord(ch)] = width
@@ -358,15 +378,14 @@ class FigletFont(object):
             # Load ASCII extended character set
             while data:
                 line = data.pop(0).strip()
-                # Pystachy port: code, not i, which is an int (M4, #9); re.search() as a
-                # comparison (re: #11)
+                # Pystachy port: code, not i, which is an int (M4, #9)
                 code = line.split(' ', 1)[0]
                 if (code == ''):
                     continue
-                hex_match = code[:2].lower() == '0x'
-                if hex_match:
+                hex_match = re.search('^0x', code, re.IGNORECASE)
+                if hex_match is not None:
                     i = int(code, 16)
-                    width, letter = self._load_char(data, height)  # Pystachy port: (see above)
+                    width, letter = __char(data)
                     if ''.join(letter) != '':
                         self.chars[i] = letter
                         self.width[i] = width
@@ -374,67 +393,16 @@ class FigletFont(object):
         except Exception as e:
             raise FontError('problem parsing %s font: %s' % (self.font, e))
 
-    # Pystachy port: __char() of loadFont(), a closure (M3, #8), as a method that takes the
-    # height; reEndMarker and the pattern compiled from the end mark are _end_marker() and
-    # _strip_end() (re: #11)
-    def _load_char(self, data: list[str], height: int) -> tuple[int, list[str]]:
-        """
-        Function loads one character in the internal array from font
-        file content
-        """
-        end = None
-        width = 0
-        chars: list[str] = []
-        for _ in range(0, height):
-            line = data.pop(0)
-            if end is None:
-                end = _end_marker(line)
-
-            line = _strip_end(line, end)
-
-            if len(line) > width:
-                width = len(line)
-            chars.append(line)
-        return width, chars
-
-    def __str__(self) -> str:  # Pystachy port: a return annotation (M2, #7)
+    def __str__(self):
         return '<FigletFont object: %s>' % self.font
 
 
-# Pystachy port: string functions in place of the regular expressions (re: #11), and _chars(),
-# the characters of a str: iterating a str steps through its UTF-8 bytes in Pystachy
-# (docs/language.md, "Deviations from CPython"), so each item is one character as ord() reads
-# it: a well-formed UTF-8 sequence, whose ord() is its code point, else one byte, whose ord() is
-# its value (chr() below 256 is that byte). Under CPython _UTF8_STR is False: one per item.
+# Pystachy port: _chars(), the characters of a str: iterating a str steps through its UTF-8
+# bytes in Pystachy (docs/language.md, "Deviations from CPython"), so each item is one
+# character as ord() reads it: a well-formed UTF-8 sequence, whose ord() is its code point, else
+# one byte, whose ord() is its value (chr() below 256 is that byte). Under CPython _UTF8_STR is
+# False: one per item.
 _UTF8_STR = len('\u00e9') == 2
-
-
-def _magic(header: str) -> bool:
-    """reMagicNumber.search(header) is not None: ^[tf]lf2. (any character but a newline)"""
-    return header[:1] in ('t', 'f') and header[1:4] == 'lf2' and header[4:5] not in ('', '\n')
-
-
-def _end_marker(line: str) -> str:
-    """reEndMarker.search(line).group(1), for (.)\\s*$: the last character that is not
-    whitespace, or the first of a line of whitespace"""
-    if line == '':
-        raise AttributeError("'NoneType' object has no attribute 'group'")
-    stripped = line.rstrip()
-    if stripped == '':
-        return line[0]
-    return stripped[-1]
-
-
-def _strip_end(line: str, end: str) -> str:
-    """re.compile(re.escape(end) + r'{1,2}\\s*$').sub('', line): the line up to the first end
-    mark that at most one more end mark and then only whitespace follow"""
-    p = line.find(end)
-    while p != -1:
-        rest = line[p + 1:]
-        if rest.strip() == '' or (rest[:1] == end and rest[1:].strip() == ''):
-            return line[:p]
-        p = line.find(end, p + 1)
-    return line
 
 
 def _chars(text: str) -> list[str]:
@@ -553,15 +521,15 @@ class FigletRenderingEngine(object):
     def __init__(self, base:Optional[Figlet]=None):
         self.base = base
 
-    def render(self, text:str) -> str:  # Pystachy port: a return annotation (M2, #7)
+    def render(self, text:str):
         """
         Render an ASCII text string in figlet
         """
         builder = FigletBuilder(text,
                                 self.base.Font,
-                                self.base.direction(),  # Pystachy port: a method (M2, #7)
+                                self.base.direction,
                                 self.base.width,
-                                self.base.justify())  # Pystachy port: (same)
+                                self.base.justify)
 
         while builder.isNotFinished():
             builder.addCharToProduct()
@@ -665,7 +633,7 @@ class FigletBuilder(object):
     def goToNextChar(self):
         self.iterator += 1
 
-    def returnProduct(self) -> str:  # Pystachy port: return annotations, here and below (M2, #7)
+    def returnProduct(self):
         """
         Returns the output string created by formatProduct
         """
@@ -674,7 +642,7 @@ class FigletBuilder(object):
         self.formatProduct()
         return self.product.getString()
 
-    def isNotFinished(self) -> bool:  # Pystachy port: (see above)
+    def isNotFinished(self):
         ret = self.iterator < len(self.text)
         return ret
 
@@ -716,11 +684,10 @@ class FigletBuilder(object):
     def getCurChar(self) -> Optional[list[str]]:
         return self.getCharAt(self.iterator)
 
-    def getCurWidth(self) -> Optional[int]:  # Pystachy port: (see above)
+    def getCurWidth(self):
         return self.getCharWidthAt(self.iterator)
 
-    # Pystachy port: annotated (M2, #7)
-    def getLeftSmushedChar(self, i:int, addLeft: str) -> tuple[str, int]:
+    def getLeftSmushedChar(self, i:int, addLeft):
         idx = len(addLeft) - self.maxSmush + i
         if idx >= 0 and idx < len(addLeft):
             left = addLeft[idx]
@@ -728,12 +695,12 @@ class FigletBuilder(object):
             left = ''
         return left, idx
 
-    def currentSmushAmount(self, curChar: list[str]) -> int:  # Pystachy port: (see above)
+    def currentSmushAmount(self, curChar: list[str]):
         return self.smushAmount(self.buffer, curChar)
 
-    # Pystachy port: annotated (M2, #7); a None smushed, which join() rejects below, raises its
-    # TypeError here, as a list[str] holds no None (M4, #9)
-    def updateSmushedCharInLeftBuffer(self, addLeft: str, idx: int, smushed: Optional[str]) -> str:
+    # Pystachy port: a None smushed, which join() rejects below, raises its TypeError here, as a
+    # list[str] holds no None (M4, #9)
+    def updateSmushedCharInLeftBuffer(self, addLeft, idx, smushed):
         l = list(addLeft)
         if idx < 0 or idx > len(l):
             return addLeft
@@ -743,7 +710,7 @@ class FigletBuilder(object):
         addLeft = ''.join(l)
         return addLeft
 
-    def smushRow(self, curChar:list[str], row:int) -> tuple[str, str]:  # Pystachy port: (see above)
+    def smushRow(self, curChar:list[str], row:int):
         addLeft = self.buffer[row]
         addRight = curChar[row]
 
@@ -771,8 +738,7 @@ class FigletBuilder(object):
             return
         self.maxSmush = self.currentSmushAmount(curChar)
 
-    # Pystachy port: annotated (M2, #7)
-    def cutBufferAtLastBlank(self, saved_buffer: list[str], saved_iterator:int):
+    def cutBufferAtLastBlank(self, saved_buffer, saved_iterator:int):
         self.product.append(saved_buffer)
         self.iterator = saved_iterator
         self.cutBufferCommon()
@@ -782,10 +748,10 @@ class FigletBuilder(object):
         self.iterator -= 1
         self.cutBufferCommon()
 
-    def blankExist(self, last_blank:int) -> bool:  # Pystachy port: a return annotation (M2, #7)
+    def blankExist(self, last_blank:int):
         return last_blank != -1
 
-    def getLastBlank(self) -> tuple[list[str], int]:  # Pystachy port: (see above)
+    def getLastBlank(self) -> tuple[list[str], int]:  # Pystachy port: a return annotation (M2, #7)
         try:
             saved_buffer, saved_iterator = self.blankMarkers.pop()
         except IndexError:
@@ -799,8 +765,8 @@ class FigletBuilder(object):
         else:
             self.cutBufferAtLastChar()
 
-    # Pystachy port: justify may be None (see __init__); a return annotation (M2, #7)
-    def justifyString(self, justify:Optional[str], buffer:list[str]) -> list[str]:
+    # Pystachy port: justify may be None (see __init__)
+    def justifyString(self, justify:Optional[str], buffer:list[str]):
         if justify == 'right':
             for row in range(0, self.font.height):
                 buffer[row] = (
@@ -813,13 +779,12 @@ class FigletBuilder(object):
                         ) + buffer[row]
         return buffer
 
-    def replaceHardblanks(self, buffer:list[str]) -> str:  # Pystachy port: (see above)
+    def replaceHardblanks(self, buffer:list[str]):
         string = '\n'.join(buffer) + '\n'
         string = string.replace(self.font.hardBlank, ' ')
         return string
 
-    # Pystachy port: a return annotation (M2, #7)
-    def smushAmount(self, buffer:list[str]=[], curChar:list[str]=[]) -> int:
+    def smushAmount(self, buffer:list[str]=[], curChar:list[str]=[]):
         """
         Calculate the amount of smushing we can do between this char and the
         last If this is the first char it will throw a series of exceptions
@@ -870,7 +835,7 @@ class FigletBuilder(object):
 
         return maxSmush
 
-    def smushChars(self, left:str='', right:str='') -> Optional[str]:  # Pystachy port: (see above)
+    def smushChars(self, left:str='', right:str=''):
         """
         Given 2 characters which represent the edges rendered figlet
         fonts where they would touch, see if they can be smushed together.
@@ -973,14 +938,14 @@ class Figlet(object):
         self.setFont()
         self.engine = FigletRenderingEngine(base=self)
 
-    # Pystachy port: font=, the one keyword setFont() reads, not **kwargs (M3, #8)
-    def setFont(self, font:Optional[str]=None) -> None:
-        if font is not None:
-            self.font = font
+    def setFont(self, **kwargs:str) -> None:
+        if 'font' in kwargs:
+            self.font = kwargs['font']
 
         self.Font = FigletFont(font=self.font)
 
-    # Pystachy port: methods, not properties, called as self.direction() (M2, #7)
+    # Pystachy port: return annotations, here and below, as a property needs one (M2, #7)
+    @property
     def direction(self) -> str:
         if self._direction == 'auto':
             direction = self.Font.printDirection
@@ -995,11 +960,12 @@ class Figlet(object):
             return self._direction
 
     # Pystachy port: (see above); None where no branch returns, as for direction='sideways' (M4, #9)
+    @property
     def justify(self) -> Optional[str]:
         if self._justify == 'auto':
-            if self.direction() == 'left-to-right':  # Pystachy port: (see above)
+            if self.direction == 'left-to-right':
                 return 'left'
-            elif self.direction() == 'right-to-left':  # Pystachy port: (see above)
+            elif self.direction == 'right-to-left':
                 return 'right'
 
         else:

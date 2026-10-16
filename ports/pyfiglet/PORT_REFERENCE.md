@@ -16,7 +16,7 @@ Archive SHA-256: `db9c9940ed1bf3048deff534ed52ff2dafbbc2cd7610b17bb5eca1df6d4278
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `bae593a5b013824c47412db63fb9b66c943b6b9cb0a940e0b785690ce3fb497f` | 58 regions |
+| `__init__.py` | `bae593a5b013824c47412db63fb9b66c943b6b9cb0a940e0b785690ce3fb497f` | 40 marked edits in 20 diff hunks |
 | `version.py` | `b611991d8ea92cf84973a0b06018d4690ea91b12e1c0f329fe98e862c8b0bc8e` | none |
 | `fonts/standard.flf` | `398a52d40da3ec217ce3673f532eb8e2303023369cfa0dc27b11ff43cc306a4f` | none: a string of `_fontdata.py` |
 | `fonts/slant.flf` | `0a1f6ebfa9b0a1658107765d5273f537e2a626c79a6fb431e1ca1e5330a74f2a` | none: a string of `_fontdata.py` |
@@ -25,9 +25,16 @@ Archive SHA-256: `db9c9940ed1bf3048deff534ed52ff2dafbbc2cd7610b17bb5eca1df6d4278
 ## Adaptation record
 
 - Three unmodified font files are embedded byte-for-byte in `_fontdata.py`; the FIGlet BSD license is reproduced in `THIRD_PARTY_NOTICES`.
-- Methods/fields receive types, properties become methods, and the glyph-loading closure becomes `_load_char()`.
-- String operations replace the narrow font-parser regular expressions. `_chars()` decodes UTF-8 sequences while preserving the port’s raw-byte behavior at invalid sequences.
-- The renderer returns plain strings rather than the `str` subclass, and explicit parameters replace keyword forwarding in the exposed API.
+- Fields that `loadFont()` and `setFont()` assign are declared in the class bodies.
+  `preloadFont()`, whose result types a field, and `getLastBlank()`, which returns an empty
+  list, keep return annotations, as do the `direction` and `justify` properties.
+- The font parser keeps upstream's regular expressions and its glyph-loading closure; locals
+  that its `try` statement rebinds to another type get new names. `_chars()` decodes UTF-8 sequences while preserving the port’s raw-byte behavior at invalid sequences.
+- The renderer returns plain strings rather than the `str` subclass.
+- The re-baseline (#262) restored the properties, the keyword forwarding of `figlet_format()`
+  and `setFont()`, the inferred results of 16 methods, the closure and the regular
+  expressions, where earlier versions of the port had methods, explicit parameters, return
+  annotations, a `_load_char()` method and string functions.
 
 ### Font licensing
 
@@ -109,3 +116,11 @@ self.text))`) for each character.
 `figlet_format("Hi")` takes 1.0 s of CPU, against 0.16 s for `print(1)`, and makes a 178 KB
 executable (28 KB for `print(1)`) that holds the three fonts (56 KB of text) and needs no files at
 run time.
+
+**After the re-baseline (#262).** With upstream's regular expressions in the font parser, the
+headline workload took a median of 1.068 s of CPU time as an AOT executable, against 0.953 s for
+the port with string functions and 2.105 s for CPython on unmodified pyfiglet 1.0.4 (2.0 times
+faster), measured together on the VM at a load average near 10. Loading a font alone takes about
+3.7 times as long as with the string functions (30 loads: 0.081 s against 0.022 s). The compiled
+`re` engine makes builds about 4.5 s longer (7.0 s against 2.6 s, at that load) and the
+executable about 190 KB larger.

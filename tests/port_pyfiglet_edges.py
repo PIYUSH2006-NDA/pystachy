@@ -1,7 +1,7 @@
 # pyfiglet's figlet_format(), Figlet and FigletFont on the edge cases its port met: what the font
-# parser reads from each embedded font (the end marks, which _strip_end() removes, are also the
+# parser reads from each embedded font (the end marks, which the parser removes, are also the
 # '@' glyph's own characters), justification and direction, among them a direction pyfiglet does
-# not know (Figlet.justify() then returns None), wrapping at blanks and inside words at widths
+# not know (the property Figlet.justify is then None), wrapping at blanks and inside words at widths
 # around a glyph's, widths too small for a glyph, 2**63 - 1, new lines, tabs and returns, text
 # with Latin-1 and Latin Extended-A letters (str holds UTF-8 in Pystachy), text made with chr()
 # (below 256 one byte in Pystachy) and characters the fonts lack, str() of a font, a missing font,
@@ -45,6 +45,9 @@ def justify_and_direction() -> None:
                                              justify="left"))
     show("sideways right", Figlet(font="small", direction="sideways", justify="right",
                                   width=30).renderText("ok"))
+    for f in [Figlet(), Figlet(font="slant", direction="right-to-left"),
+              Figlet(direction="sideways"), Figlet(justify="center")]:
+        print("properties:", f.direction, f.justify)
 
 
 def wrapping() -> None:
