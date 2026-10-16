@@ -1,0 +1,46 @@
+'(?iⅠ)' missing -, : or ) 3
+'(?-Ⅰ:x)' missing flag 3
+'(?-iⅠ:x)' missing : 4
+'(?i℘)' missing -, : or ) 3
+'(?-℘:x)' missing flag 3
+'(?-i℘:x)' missing : 4
+'(?iᢅ)' missing -, : or ) 3
+'(?-ᢅ:x)' missing flag 3
+'(?-iᢅ:x)' missing : 4
+'(?iͺ)' unknown flag 3
+'(?-ͺ:x)' unknown flag 3
+'(?-iͺ:x)' unknown flag 4
+'(?iำ)' unknown flag 3
+'(?-ำ:x)' unknown flag 3
+'(?-iำ:x)' unknown flag 4
+'(?iﷺ)' unknown flag 3
+'(?-ﷺ:x)' unknown flag 3
+'(?-iﷺ:x)' unknown flag 4
+'(?i𐅀)' missing -, : or ) 3
+'(?-𐅀:x)' missing flag 3
+'(?-i𐅀:x)' missing : 4
+'(?i𐐀)' unknown flag 3
+'(?-𐐀:x)' unknown flag 3
+'(?-i𐐀:x)' unknown flag 4
+'(?ié)' unknown flag 3
+'(?-é:x)' unknown flag 3
+'(?-ié:x)' unknown flag 4
+'(?í)' missing -, : or ) 3
+'(?-́:x)' missing flag 3
+'(?-í:x)' missing : 4
+'(?i_)' missing -, : or ) 3
+'(?-_:x)' missing flag 3
+'(?-i_:x)' missing : 4
+'(?i1)' missing -, : or ) 3
+'(?-1:x)' missing flag 3
+'(?-i1:x)' missing : 4
+'(?i!)' missing -, : or ) 3
+'(?-!:x)' missing flag 3
+'(?-i!:x)' missing : 4
+'(?iz)' unknown flag 3
+'(?-z:x)' unknown flag 3
+'(?-iz:x)' unknown flag 4
+'(?i\\w)' missing -, : or ) 3
+'(?-\\w:x)' missing flag 3
+'(?-i\\w:x)' missing : 4
+[exit 0]
