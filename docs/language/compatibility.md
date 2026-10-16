@@ -492,6 +492,10 @@ supported alternatives.
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
   its class to a dataclass's or NamedTuple's class attribute, or to one its class body does not
   bind
+- reading through an object (`o.encode(s)`, `self.encode`) a class attribute that the class
+  body binds to a Python function (`encode = enc`), which CPython binds to the object as a
+  method; reading it through the class is supported, as is reading a builtin function's class
+  attribute through an object
 - a NamedTuple without fields, assigned a field outside its `__init__`, whose class defines
   `__getitem__` or `__iter__`, compared or added through its own operator method with another type,
   given to `hasattr()` of a name it does not define, `_make()`, `_asdict()` of fields of different
