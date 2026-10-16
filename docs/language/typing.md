@@ -624,6 +624,9 @@ The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 parameter and has no `*args`, `**kwargs` or `TypeVarTuple`. It works in variable, field,
 parameter and return annotations, including nested types such as `list[C[int]]`, and in
 constructor calls such as `C[int]()`. The class statement must precede the annotation.
+A generic class without an `__init__` of its own, or a generic dataclass, binds nothing:
+`C[int]` is `C`, and its methods' parameters annotated with its type variables take each
+call's types. Its fields cannot use the type variables.
 
 Constructor arguments bind first; the named specialization or surrounding annotation fills
 variables the arguments leave unbound. Thus `q: Stack[int] = Stack()` and
