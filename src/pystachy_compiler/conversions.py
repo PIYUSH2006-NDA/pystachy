@@ -219,6 +219,18 @@ def gen_desc(self, t: str, use: str) -> str:
             takes = f is None or op == "repr" or f.ptypes[1] == t or f.ptypes[1] == "" or (f.ptypes[1] in self.classes and self.derives(t, f.ptypes[1]))
             if f is not None and (f.bad != "" or not takes):
                 self.err(f.bad if f.bad != "" else f"comparing {shown(t)} objects (in a list, tuple, in, count, index, sort, min or max) calls {m}() with a {shown(t)}, but it takes a {typestr(f.ptypes[1])}")
+            # (and between the subclasses' objects a t-typed value may hold, compared by their
+            # classes, as inherit_cmp does: the helpers raise where it runs, see concrete_cmp)
+            ks = self.cmp_kinds(t) if op != "repr" else []
+            for x in ks:
+                for y in ks:
+                    p = self.cmp_pick(op, x, y) if x != t or y != t else []
+                    if len(p) > 0:
+                        lt = x if p[0] == "a" else y
+                        rt = y if p[0] == "a" else x
+                        g = self.classes[lt].methods[p[1]]
+                        if self.cmp_method(lt, p[1], rt) == "":
+                            self.err(g.bad if g.bad != "" else f"comparing {shown(t)} objects (in a list, tuple, in, count, index, sort, min or max) calls {p[1]}() of {shown(lt)} with a {shown(rt)}, but it takes a {typestr(g.ptypes[1])}")
         if t not in self.ocls:
             self.ocls[t] = len(self.ocls)
         return f"O{self.ocls[t]:03d}"

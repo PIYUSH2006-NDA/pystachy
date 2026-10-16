@@ -110,3 +110,16 @@ class Sub(Base):
 s = Sub(1)
 d: dict[str, Base] = {"k": s}
 print(s == Sub(1), s != Sub(1), d)  # (d's helpers compare Bases, which Sub.__eq__ cannot take)
+
+
+class Pr(Exception):
+    pass
+
+
+class Narrow(Pr):
+    def __eq__(self, other: "Narrow") -> bool:
+        return True
+
+
+gs: list[Pr] = [Narrow("h"), Pr("g")]
+print(gs, len(gs), gs[0] is gs[0])  # (gs's helpers compare Prs, which Narrow.__eq__ cannot take)

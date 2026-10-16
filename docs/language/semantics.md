@@ -453,7 +453,10 @@ methods, docstrings and custom `__str__` / `__repr__`.
 
 A subclass inherits fields and methods and can override `__init__`, `__str__` and
 `__repr__`. String conversion, comparisons and uncaught error output use the object's actual
-class: `x == y` of `E`-typed values runs `__eq__` of a subclass that defines it.
+class: `x == y` of `E`-typed values runs `__eq__` of a subclass that defines it. Where that
+method is annotated to take only its subclass (`__eq__(self, other: "F")`), CPython would call
+it with an `E`, so the comparison, and `in`, `count()`, `index()`, `==` and sorting of
+containers of `E`, are rejected at compile time, as for ordinary classes.
 `super().__init__`, `super().__str__`, `super().__repr__`, explicit base calls and
 `super(E, self)` are supported within the documented restrictions.
 

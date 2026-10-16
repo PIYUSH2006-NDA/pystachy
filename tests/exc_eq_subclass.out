@@ -44,4 +44,5 @@ P.__eq__ q p
 P.__eq__ q p
 False False True
 True False {'k': Sub(1)}
+[Narrow('h'), Pr('g')] 2 True
 [exit 0]

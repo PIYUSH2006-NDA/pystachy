@@ -2746,6 +2746,37 @@ def gen_exc_kinds(self, t: str) -> list[str]:
             return cs
     return []
 
+def gen_cmp_kinds(self, t: str) -> list[str]:
+    # the classes an object of class t may be of, which inherit_cmp compares it as: by the tag
+    # of an ordinary class, by the ExcClass of an exception class (exc_kinds)
+    if self.classes[t].tag != 0:
+        return [c.name for c in self.classes.values() if c.tag != 0 and self.derives(c.name, t)]
+    ks = self.exc_kinds(t)
+    return ks if len(ks) > 0 else [t]
+
+def gen_cmp_pick(self, op: str, at: str, bt: str) -> list[str]:
+    # the method concrete_cmp calls for op between objects of the concrete classes at and bt, as
+    # [the operand it is called on ("a" or "b"), the method, "!" if its result is inverted
+    # (a != b by __eq__)]; [] where neither class has one
+    right = at in self.classes and bt in self.classes and at != bt and self.derives(bt, at)
+    sides = ["b", "a"] if right else ["a", "b"]
+    methods = [DUNDER[REFL[op]] if op in REFL else DUNDER[op], DUNDER[op]] if right else [DUNDER[op], DUNDER[REFL[op]] if op in REFL else DUNDER[op]]
+    for i in range(2):
+        lt = bt if sides[i] == "b" else at
+        rt = at if sides[i] == "b" else bt
+        m = methods[i]
+        inv = ""
+        if lt in self.classes:
+            ms = self.classes[lt].methods
+            if op == "!=" and m not in ms and "__eq__" in ms:
+                m = "__eq__"
+                inv = "!"
+            if m in ms and ms[m].synthetic and self.is_dc(ms[m].cls) and lt != rt:
+                continue  # (what @dataclass writes returns NotImplemented for an object of another class)
+            if m in ms:
+                return [sides[i], m, inv]
+    return []
+
 def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
     # Compare concrete runtime types, including None. Both operands matter: Python gives
     # the right operand's reflected comparison priority when its class is a strict subtype.
@@ -2754,11 +2785,7 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
     v = a if phase == 0 else b
     if v.t not in self.classes:
         return self.inherit_cmp(op, a, b, phase + 1)
-    cs = [v.t]
-    if self.classes[v.t].tag != 0:
-        cs = [c.name for c in self.classes.values() if c.tag != 0 and self.derives(c.name, v.t)]
-    elif len(self.exc_kinds(v.t)) > 0:
-        cs = self.exc_kinds(v.t)
+    cs = self.cmp_kinds(v.t)
     if len(cs) == 1 and v.v in self.nn:
         return self.inherit_cmp(op, a, b, phase + 1)
     end = self.label()
@@ -2802,30 +2829,21 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
 def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
     # Both objects now have known, non-null concrete classes. NotImplemented is outside
     # the subset; a supported comparison method returns bool, so the first one completes.
-    right = a.t in self.classes and b.t in self.classes and a.t != b.t and self.derives(b.t, a.t)
-    vals = [b, a] if right else [a, b]
-    methods = [DUNDER[REFL[op]] if op in REFL else DUNDER[op], DUNDER[op]] if right else [DUNDER[op], DUNDER[REFL[op]] if op in REFL else DUNDER[op]]
-    for i in range(2):
-        lhs = vals[i]
-        rhs = vals[1 - i]
-        m = methods[i]
-        invert = False
-        if lhs.t in self.classes:
-            ms = self.classes[lhs.t].methods
-            if op == "!=" and m not in ms and "__eq__" in ms:
-                m = "__eq__"
-                invert = True
-            if m in ms and ms[m].synthetic and self.is_dc(ms[m].cls) and lhs.t != rhs.t:
-                continue  # (what @dataclass writes returns NotImplemented for an object of another class)
-            if m in ms:
-                if self.cmp_method(lhs.t, m, rhs.t) == "":
-                    why = f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}"
-                    if not self.lenient:
-                        self.err(why)
-                    self.raise_("TypeError", self.sconst(why))  # (obj_helpers': where it runs)
-                    return Val("false", "bool")
-                r = self.coerce(self.call_fn(ms[m], [lhs, rhs], [], direct=True), "bool")
-                return Val(self.scalar('xor', [Val(r.v, 'bool'), Val('true', 'bool')]), "bool") if invert else r
+    p = self.cmp_pick(op, a.t, b.t)
+    if len(p) > 0:
+        lhs = a if p[0] == "a" else b
+        rhs = b if p[0] == "a" else a
+        m = p[1]
+        if self.cmp_method(lhs.t, m, rhs.t) == "":
+            why = f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}"
+            if not self.lenient or not self.curfn.ll.startswith("@o."):
+                self.err(why)
+            # (in obj_helpers' bodies, which a container that is only printed compiles too, it
+            # raises where it runs; desc rejects the operations that run it)
+            self.raise_("TypeError", self.sconst(why))
+            return Val("false", "bool")
+        r = self.coerce(self.call_fn(self.classes[lhs.t].methods[m], [lhs, rhs], [], direct=True), "bool")
+        return Val(self.scalar('xor', [Val(r.v, 'bool'), Val('true', 'bool')]), "bool") if p[2] == "!" else r
     if op == "==" or op == "!=":
         # object.__eq__ declines, then Python falls back to object identity.
         if (a.t in self.classes or a.t == "None") and (b.t in self.classes or b.t == "None"):
@@ -3250,8 +3268,12 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             a = self.coerce(a, unopt(b.t))
     if (op == "==" or op == "!=" or op in REFL) and ((a.t in self.classes and self.classes[a.t].tag != 0) or (b.t in self.classes and self.classes[b.t].tag != 0)):
         return self.inherit_cmp(op, a, b)
-    if (op == "==" or op == "!=" or op in REFL) and (len(self.exc_kinds(a.t)) > 0 or len(self.exc_kinds(b.t)) > 0) and a.t != "exc" and b.t != "exc":
-        return self.inherit_cmp(op, a, b)  # (an exception, of a builtin class, stays rejected: exc_eq)
+    ka = self.exc_kinds(a.t) if op == "==" or op == "!=" or op in REFL else []
+    kb = self.exc_kinds(b.t) if op == "==" or op == "!=" or op in REFL else []
+    if (len(ka) > 1 or len(kb) > 1 or (a.t != b.t and len(ka) + len(kb) > 0)) and a.t != "exc" and b.t != "exc":
+        # (objects of one exception class that has no subclass call its method as before; an
+        # exception, of a builtin class, stays rejected: exc_eq)
+        return self.inherit_cmp(op, a, b)
     if (op == "in" or op == "not in") and b.t in self.classes and self.classes[b.t].tag != 0:
         return self.inherit_contains(op, a, b)
     if (is_union(unopt(a.t)) or is_union(unopt(b.t))) and a.t != "None" and b.t != "None":
