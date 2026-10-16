@@ -210,10 +210,11 @@ An object that is `None` when the operation executes raises the corresponding ru
 Reflection works on values whose possible classes the compiler knows: one class, an ordinary
 hierarchy (the object's class tag selects its class), or a reference union (its member tag,
 then the class tag). The program's own classes and dataclasses are supported, and so are the
-builtin types where noted; exception objects, NamedTuples and file objects are not. What
-Pystachy cannot match is a compile-time error that names the missing feature: a value whose
-type only the run time knows (#487), names that need per-object storage (#489), or a class
-object as a value (#7). The compiler's side is described in [internals](../internals.md#reflection).
+builtin types where noted; exception objects, NamedTuples and file objects are not, nor are
+classes with private attributes (`__x`), whose names CPython mangles and Pystachy does not
+(see [compatibility](compatibility.md#functions-and-object-identity)). What Pystachy cannot
+match is a compile-time error that names the missing feature: a value whose type only the run
+time knows (#487), names that need per-object storage (#489), or a class object as a value (#7). The compiler's side is described in [internals](../internals.md#reflection).
 
 ### Types and their names
 
@@ -245,7 +246,11 @@ variable of the main program), `dir(x)` and `sorted(dir(x))`, `dataclasses.field
 items' `.name` is the field's name) and `vars(x).items()`. The body is compiled once per name
 with the name read as that literal; the loop variable is still assigned, and `continue`, `break`
 and an `else` block keep their meaning. Tests of the literal (`name.startswith("test_")`,
-`name == "x"`, `name in ("a", "b")`) are decided in each copy. One loop, and the loops nested in
+`name == "x"`, `name in ("a", "b")`) are decided in each copy. A function's parameter is not a
+variable bound once (a loop may iterate its argument before the function binds it again). Over
+`dir(x)` and `vars(x)`, one run of copies is compiled per exact class `x` may have, with a
+variable `x` narrowed to that class; `dir(x)`'s list is made as the loop starts, a field
+`__init__` may leave unassigned in it where it is set then. One loop, and the loops nested in
 it, compile at most 256 copies of a body.
 
 ### `vars()`, `__dict__` and `dir()`
@@ -257,19 +262,24 @@ format) or copied (`dict(vars(x))`, `vars(x).copy()`). Its keys are the attribut
 holds in CPython's order: the order its `__init__` (a dataclass's: its fields) first assigns
 them, with a field `__init__` may leave unassigned only where it is set; a class attribute is not
 in it. Iteration reads each attribute as its turn comes, as CPython's iterator over the live
-`__dict__` does, and its values (where the loop binds them, and in a copy) have the join of the
-fields' types; a loop over the names alone takes fields of any types. A `__dict__` kept as a value,
-an order that depends on the run (two attributes first assigned in one branch), a class with
-`__slots__` (CPython raises) and a class attribute that the program may also assign through an
-object are rejected. `hasattr(x, "__dict__")` and `"__weakref__"` are false for a class whose
+`__dict__` does: where the body assigns a field that was unassigned as the loop began, the next
+step raises `RuntimeError: dictionary changed size during iteration`. Its values (where the loop
+binds them, and in a copy) have the join of the fields' types; a loop over the names alone takes
+fields of any types. A `__dict__` kept as a value, an order that depends on the run (two
+attributes first assigned in one branch, or a field `__init__` may leave unassigned that other
+code may assign, which CPython then inserts last, unless it is last anyway), an attribute
+`__post_init__` adds, a class with `__slots__` (CPython raises) and a class attribute that the
+program may also assign through an object are rejected. `hasattr(x, "__dict__")` and `"__weakref__"` are false for a class whose
 names `__slots__` closes.
 
 `dir(x)` makes a new sorted list of the names CPython lists for the object: its fields and
 slots, the methods, properties and class attributes of its class and bases, the attributes
 every object has, and those a class body or `@dataclass` adds (`__module__`, `__dict__`,
-`__weakref__`, `__firstlineno__`, `__static_attributes__`, `__annotations__`,
-`__dataclass_fields__`, ...). It also takes `int`, `float`, `bool`, `str`, `bytes`, containers and
-`None`.
+`__weakref__`, `__firstlineno__`, `__static_attributes__`, `__annotations__` where a class body
+annotates a name, `__dataclass_fields__`, a generic class's `__orig_bases__`, `__parameters__`,
+`__class_getitem__` and, with PEP 695's syntax, `__type_params__`, ...). A slot is listed whether
+or not it is assigned (its descriptor is the class's). It also takes `int`, `float`, `bool`, `str`,
+`bytes`, containers and `None`.
 
 ### `dataclasses`
 
@@ -297,12 +307,13 @@ consumer needs no value of the attribute, for objects whose possible classes are
 - the text of `getattr(o, name)` and `getattr(o, name, default)` in `print()`, `str()`, `repr()`
   and f-string fields without a format spec: a field's or property's value, a bound method
   (`<bound method C.m of ...>`, with the object's `repr()`), the attributes of the object and its
-  type (`__class__`, `__module__`, `__doc__`, `__dict__`, `__firstlineno__`,
-  `__static_attributes__`, method wrappers), the default for a name the object does not have,
-  and CPython's `AttributeError` otherwise. The lookup runs where the argument is evaluated,
-  and the text is made where `print()` converts it, as CPython does. Dataclasses and classes
-  with annotated class attributes are rejected (their `__annotations__` and
-  `__dataclass_fields__` are not printed).
+  type (`__class__`, `__module__`, `__doc__` as CPython 3.13 cleans a docstring, `__dict__`,
+  `__firstlineno__`, `__static_attributes__`: the sorted names its functions store as `self.x`,
+  method wrappers), the default for a name the object does not have, and CPython's
+  `AttributeError` otherwise. The lookup runs where the argument is evaluated, and the text is
+  made where `print()` converts it, as CPython does. Dataclasses, generic classes, classes with
+  annotated class attributes and builtin values are rejected (their `__annotations__`,
+  `__dataclass_fields__`, `__orig_bases__` and methods are not printed).
 - `setattr(o, name, value)` on objects whose class closes its names with `__slots__`: a slot
   field stores the value, which must fit every slot field (a run-time check would raise where
   CPython does not), a property calls its setter, a method's or other attribute's name raises

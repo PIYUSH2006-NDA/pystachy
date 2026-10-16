@@ -10,7 +10,7 @@ that reach such a site, which LLVM's globaldce and llvm-link --only-needed drop 
 """
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.analysis import local_names
+from src.pystachy_compiler.analysis import clean_doc, local_names
 from src.pystachy_compiler.ir import Data, FnInfo, Ins, Loop, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import HASATTR, ITERS
@@ -395,7 +395,7 @@ def gen_refl_getattr(self, args: list[Node], want: str) -> Val:
     self.refl_args("getattr", args, 2, 3)
     a = self.refl_name(args[1])
     if a == "":
-        self.err("getattr() of a name only the run time knows is supported where its text is used (print(), str(), repr(), an f-string field): elsewhere its value would need a type of its own (#487, #489); use a str literal or a constant set of names (#486)")
+        self.err("getattr() of a name only the run time knows is supported where its text is used (print(), str(), repr(), an f-string field without a format spec): elsewhere its value would need a type of its own (#487, #489); use a str literal or a constant set of names (#486)")
     if len(args) == 2 and not self.refl_derived_only(args[0], a):
         return self.expr(mk("attr", a, args[0].line, [args[0]]), want)
     o = self.expr(args[0], "")
@@ -590,6 +590,8 @@ def gen_refl_bound_once(self, name: str) -> list[str] | None:
     local = not self.modlevel and (name in self.ltype or name in self.assigned) and name not in self.gdecl
     if "$" in name or (not local and (self.curfn.mod != "" or "" not in self.inits)):
         return None
+    if local and (self.curfn.node.kind != "def" or name in self.curfn.params or len([p for p in self.curfn.node.kids[0].kids if p.s == name]) > 0):
+        return None  # (a parameter, which a loop may iterate before the statement binds it again)
     scope = self.curfn.node.kids[2] if local else self.inits[""].node
     body = scope.kids
     lits: list[str] | None = None
@@ -653,6 +655,8 @@ def gen_refl_unroll_for(self, n: Node) -> bool:
         return False  # (the run-time name it then is: see refl_getattr)
     groups: list[list[str]] = [names]
     labels: list[str] = [""]
+    narrow: list[str] = [""]  # (each group's class, which a variable x of dir(x) is narrowed to)
+    objs: list[Val] = [Val("", "")]  # (and its object, whose fields' flags decide the names listed)
     if it.kind == "name":
         self.expr(it, "")  # (its read checks that it is assigned, as the loop's would)
     dx = self.refl_dir_of(it)
@@ -660,13 +664,16 @@ def gen_refl_unroll_for(self, n: Node) -> bool:
         o = self.expr(dx, "")
         groups = []
         labels = []
+        narrow = []
+        objs = []
+        xt = self.ltype.get(dx.s, "") if dx.kind == "name" and dx.s not in asg and self.narrowable(dx.s) else ""
         for lf in self.refl_split(o, self.knownobj(dx)):
             labels.append(lf.label)
+            narrow.append(lf.c if xt in self.classes and self.classes[xt].tag > 0 and lf.c in self.classes and lf.c != xt and self.derives(lf.c, xt) else "")
+            objs.append(lf.v)
             g: list[str] = []
             for nk in self.refl_dir_names(lf.c):
-                if nk[1] == "g":
-                    self.err(f"a loop over dir() of a {short(lf.c)}, whose field {nk[0]} its __init__ may leave unassigned, is not supported (#486)")
-                g.append(nk[0])
+                g.append(nk[0] if lf.c not in self.classes or self.refl_listed(lf.c, nk) else " " + nk[0])  # (" ": where its flag is set)
             groups.append(g)
     total = 0
     for g in groups:
@@ -682,9 +689,22 @@ def gen_refl_unroll_for(self, n: Node) -> bool:
     for gi in range(len(groups)):
         if labels[gi] != "":
             self.place(labels[gi])
+        # (dir() lists a field __init__ may leave unassigned where its flag is set as the loop
+        # starts: the list it makes then is what the loop goes through)
+        snap: dict[str, str] = {}
         for nm in groups[gi]:
+            if nm.startswith(" "):
+                snap[nm] = self.mem_load(Val(self.fgep(objs[gi], self.classes[objs[gi].t].fflag[nm[1:]]), "*bool")).v
+        for entry in groups[gi]:
             nxt = self.label()
+            nm = entry[1:] if entry.startswith(" ") else entry
+            if entry.startswith(" "):
+                go = self.label()
+                self.cbr(snap[entry], go, nxt)
+                self.place(go)
             self.narrowed = dict(after)
+            if narrow[gi] != "":
+                self.narrowed[dx.s if dx is not None else ""] = narrow[gi]  # (its object's exact class here)
             self.assign(tgt, Val(self.sconst(nm), "str"))
             lp = Loop("while", self.cur, self.cur, nxt, brk)
             self.loops.append(lp)
@@ -780,10 +800,15 @@ def gen_refl_names(self, c: str) -> list[list[str]]:
     k = c
     while k in self.classes:
         if refl_annotated(refl_body(self.classes[k].node)):
-            out["__annotations__"] = "o"
+            out["__annotations__"] = "o"  # (a dataclass without fields has none)
+        o = self.classes[k].origin if self.classes[k].origin != "" else k
+        if o in self.tparams:
+            # a generic class's (Generic[T], class C[T]), which its subclasses inherit or get
+            for n in ["__class_getitem__", "__orig_bases__", "__parameters__"] + (["__type_params__"] if o in self.pep695 else []):
+                out[n] = "o"
         k = self.classes[k].base
     if self.is_dc(c):
-        for n in ["__annotations__", "__dataclass_fields__", "__dataclass_params__", "__replace__"]:
+        for n in ["__dataclass_fields__", "__dataclass_params__", "__replace__"]:
             out[n] = "o"
         if self.has(c, "__match_args__") != 0:
             out["__match_args__"] = "o"
@@ -811,7 +836,23 @@ def gen_refl_names(self, c: str) -> list[list[str]]:
     for fl in ci.slots:
         if fl not in out:
             out[fl] = "u"  # (a slot no code assigns: listed, but never set)
+    for n in out:
+        self.refl_public(c, n)
     return [[n, out[n]] for n in sorted(out.keys())]
+
+
+def gen_refl_public(self, c: str, n: str) -> None:
+    # attribute n of class c, whose name reflection shows, must not be private (__x): CPython's
+    # compiler mangles such a name in a class body (to _C__x), which Pystachy does not
+    if n.startswith("__") and not n.endswith("__") and "." not in n:
+        self.err(f"reflection over a {short(c)} object is not supported: CPython mangles the name of its private attribute {n} (to _ClassName{n}), which Pystachy does not (#486)")
+
+
+def gen_refl_listed(self, c: str, nk: list[str]) -> bool:
+    # does dir() of an object of class c list name nk (refl_names) whatever the object: all but a
+    # field __init__ may leave unassigned, which is listed where its flag is set (a slot always is:
+    # its descriptor is the class's)
+    return nk[1] != "g" or nk[0] in self.classes[c].slots
 
 
 def refl_self_stores(n: Node, me: str, out: list[str]) -> None:
@@ -821,7 +862,8 @@ def refl_self_stores(n: Node, me: str, out: list[str]) -> None:
         return
     if n.kind == "attr" and n.kids[0].kind == "name" and n.kids[0].s == me:
         return
-    if n.kind == "assign" or n.kind == "annassign" or n.kind == "augassign":
+    if n.kind == "assign" or (n.kind == "annassign" and len(n.kids) == 3) or n.kind == "augassign":
+        # (an annotation without a value, me.x: int, assigns nothing)
         ts = n.kids[:-1] if n.kind == "assign" else n.kids[:1]
         for t in ts:
             refl_target_stores(t, me, out)
@@ -838,13 +880,14 @@ def refl_target_stores(t: Node, me: str, out: list[str]) -> None:
             refl_target_stores(k, me, out)
 
 
-def gen_refl_init_order(self, c: str, f: FnInfo, out: list[str]) -> bool:
+def gen_refl_init_order(self, c: str, f: FnInfo, out: list[str], maybe: dict[str, bool]) -> bool:
     # append to out the attributes __init__ f assigns to its object (of class c), in the order a
     # run assigns them first: its body's own statements one by one, a super().__init__(...) or
     # Base.__init__(self, ...) statement in the base's. A branch or loop may assign one new
     # attribute (where it runs: the field's flag says), which no later statement assigns after
     # another new one. False where that order is not known (more new attributes in one branch or
-    # loop, an assignment through a property's setter)
+    # loop, an assignment through a property's setter). maybe gets the attributes a branch or
+    # loop assigns first, which an object may lack after its __init__
     if len(f.params) == 0 or f.node.kind != "def":
         return False
     me = f.params[0]
@@ -856,7 +899,7 @@ def gen_refl_init_order(self, c: str, f: FnInfo, out: list[str]) -> bool:
             if base not in self.classes or self.classes[base].exc != "":
                 return False
             if (r.kind == "call" and r.kids[0].kind == "name" and r.kids[0].s == "super") or (r.kind == "name" and r.s == base):
-                if "__init__" in self.classes[base].methods and not self.refl_init_order(c, self.classes[base].methods["__init__"], out):
+                if "__init__" in self.classes[base].methods and not self.refl_init_order(c, self.classes[base].methods["__init__"], out, maybe):
                     return False
                 continue
         stores: list[str] = []
@@ -870,6 +913,8 @@ def gen_refl_init_order(self, c: str, f: FnInfo, out: list[str]) -> bool:
             for x in stores:
                 if x not in out:
                     out.append(x)
+                if x in maybe:
+                    del maybe[x]  # (assigned whatever the branch did)
             continue
         new = [x for x in stores if x not in out]
         if len(new) > 1:
@@ -877,6 +922,7 @@ def gen_refl_init_order(self, c: str, f: FnInfo, out: list[str]) -> bool:
         if len(new) == 1:
             out.append(new[0])
             cond[new[0]] = len(out)
+            maybe[new[0]] = True
     return True
 
 
@@ -889,6 +935,7 @@ def gen_refl_dict_order(self, c: str) -> list[str]:
     if ci.slotlimit:
         self.err(f"'{short(c)}' object has no attribute '__dict__' (its class defines __slots__): vars() argument must have __dict__ attribute")
     out: list[str] = []
+    maybe: dict[str, bool] = {}  # (those an object may lack after its __init__)
     if self.is_dc(c) and c not in self.nts and "no-init" not in ci.dcopts:
         for fl in self.dc_fields(ci):
             if "no-init" in ci.fopts[fl] and fl not in ci.fdefault and fl not in ci.factory:
@@ -896,10 +943,18 @@ def gen_refl_dict_order(self, c: str) -> list[str]:
             out.append(fl)
         if "__post_init__" in ci.methods:
             pi = ci.methods["__post_init__"]
-            if not self.refl_init_order(c, pi, out):
+            if not self.refl_init_order(c, pi, out, maybe):
                 self.err(f"vars() of {short(c)} is not supported: the order its __post_init__ assigns attributes in is not known at compile time (#486)")
-    elif "__init__" in ci.methods and not self.refl_init_order(c, ci.methods["__init__"], out):
+    elif "__init__" in ci.methods and not self.refl_init_order(c, ci.methods["__init__"], out, maybe):
         self.err(f"vars() of {short(c)} is not supported: the order its __init__ assigns attributes in is not known at compile time (an assignment in a branch, a loop or a property's setter) (#486)")
+    for fl in out:
+        if fl not in ci.ftypes:
+            self.err(f"vars() of {short(c)} is not supported: it assigns attribute {fl}, which is no field of its class (#486)")
+        self.refl_public(c, fl)
+    # (a field __init__ may leave unassigned that other code may assign: inserted last then)
+    late = [fl for fl in out if fl in maybe and self.refl_late(fl)]
+    if len(late) > 1 or (len(late) == 1 and late[0] != out[-1]):
+        self.err(f"vars() of {short(c)} is not supported: its attribute {late[0]}, which its __init__ may leave unassigned, may be assigned later, which inserts it last in the __dict__ (#486)")
     for fl in ci.ftypes:
         if fl.startswith(" ") or fl in out:
             continue
@@ -939,6 +994,54 @@ def gen_refl_stored(self, name: str) -> bool:
             if refl_calls(self.inits[m].node, "setattr"):
                 self.reflstores["  setattr"] = True
     return name in self.reflstores or "  setattr" in self.reflstores
+
+
+def gen_refl_late(self, name: str) -> bool:
+    # may code other than an __init__'s (or __post_init__'s) own statements assign an attribute
+    # called name: a field __init__ leaves unassigned is then inserted last in the object's
+    # __dict__ (setattr() with a name that is no literal may assign any)
+    if len(self.refllate) == 0:
+        self.refllate[" "] = True
+        for m in self.inits:
+            refl_late_stores(self.inits[m].node, self.refllate, "")
+    return name in self.refllate or "  any" in self.refllate
+
+
+def refl_late_stores(n: Node, out: dict[str, bool], me: str) -> None:
+    # the attribute names that code n assigns (see refl_late), but those assigned through me, the
+    # first parameter of the __init__ or __post_init__ whose own statements n is in
+    if n.kind == "def":
+        me = n.kids[0].kids[0].s if (n.s == "__init__" or n.s == "__post_init__") and len(n.kids[0].kids) > 0 else ""
+    elif n.kind == "lambda" or n.kind == "class" or n.kind == "subclass":
+        me = ""
+    ts: list[Node] = []
+    if n.kind == "assign":
+        ts = n.kids[:-1]
+    elif n.kind == "annassign" and len(n.kids) == 3:
+        ts = n.kids[:1]
+    elif n.kind == "augassign" or n.kind == "for" or n.kind == "compfor":
+        ts = n.kids[:1]
+    elif (n.kind == "listcomp" or n.kind == "asynccomp") and len(n.kids) > 1:
+        ts = n.kids[1:2]
+    elif n.kind == "withitem" and len(n.kids) == 2:
+        ts = n.kids[1:]
+    for t in ts:
+        refl_late_targets(t, out, me)
+    if n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s == "setattr":
+        if len(n.kids) >= 3 and n.kids[2].kind == "str":
+            out[n.kids[2].s] = True
+        else:
+            out["  any"] = True
+    for k in n.kids:
+        refl_late_stores(k, out, me)
+
+
+def refl_late_targets(t: Node, out: dict[str, bool], me: str) -> None:
+    if t.kind == "attr" and not (me != "" and t.kids[0].kind == "name" and t.kids[0].s == me):
+        out[t.s] = True
+    elif t.kind == "tuple" or t.kind == "list" or t.kind == "starred":
+        for k in t.kids:
+            refl_late_targets(k, out, me)
 
 
 def refl_calls(n: Node, f: str) -> bool:
@@ -1086,6 +1189,8 @@ def gen_refl_dict_operand(self, n: Node, x: Node) -> Val:
     # each class it may have must have a __dict__ whose order is known (refl_dict_order)
     o = self.expr(x, "")
     known = self.knownobj(x)
+    if o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != ""):
+        self.err("vars() and __dict__ of an exception object are not supported (#486)")
     for lf in self.refl_type_of(o, "__name__", known):
         if lf.c == "None":
             msg = "TypeError: vars() argument must have __dict__ attribute" if n.kind == "call" else "AttributeError: 'NoneType' object has no attribute '__dict__'"
@@ -1136,6 +1241,8 @@ def gen_refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
         vn = tgt
     asg: dict[str, bool] = {}
     local_names(body, asg)
+    # (a variable x of vars(x) is narrowed to the exact class of each run of copies)
+    xt = self.ltype.get(x.s, "") if x.kind == "name" and x.s not in asg and self.narrowable(x.s) else ""
     brk = self.elsebrk if n.kids[2].kids is self.elsekids else self.label()
     after = self.forget(body, tgt)
     outer = self.reflcopies
@@ -1147,9 +1254,18 @@ def gen_refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
         self.place(lf.label)
         ci = self.classes[lf.c]
         ov = Val(lf.v.v, lf.c)
-        for fl in orders[li]:
+        # (the fields __init__ may leave unassigned, as the loop starts: where its body assigns
+        # one, CPython's next step raises, see refl_size_check)
+        flagged = [fl for fl in orders[li] if fl in ci.fflag and lf.c + "." + fl not in self.cvars]
+        snap = [self.mem_load(Val(self.fgep(ov, ci.fflag[fl]), "*bool")).v for fl in flagged]
+        for j in range(len(orders[li])):
+            fl = orders[li][j]
+            if j > 0:
+                self.refl_size_check(ov, flagged, snap)
             nxt = self.label()
             self.narrowed = dict(after)
+            if xt in self.classes and self.classes[xt].tag > 0 and lf.c != xt and self.derives(lf.c, xt):
+                self.narrowed[x.s] = lf.c
             if fl in ci.fflag and lf.c + "." + fl not in self.cvars:
                 go = self.label()
                 self.cbr(self.mem_load(Val(self.fgep(ov, ci.fflag[fl]), "*bool")).v, go, nxt)
@@ -1178,6 +1294,8 @@ def gen_refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
             brks.extend(self.brks.pop())
             self.br(nxt)
             self.place(nxt)
+        if len(orders[li]) > 0:
+            self.refl_size_check(ov, flagged, snap)  # (the step that ends the loop)
         self.br(join)
     self.place(join)
     self.reflcopies = outer
@@ -1187,6 +1305,21 @@ def gen_refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
     else:
         self.br(brk)
         self.place(brk)
+
+
+def gen_refl_size_check(self, ov: Val, flagged: list[str], snap: list[str]) -> None:
+    # a step of an iterator over the __dict__ of ov: CPython raises where its size changed since
+    # the loop began, which here means a field __init__ left unassigned then (one of flagged,
+    # whose flags were snap) has been assigned since (no attribute is deleted)
+    if len(flagged) == 0:
+        return
+    ci = self.classes[ov.t]
+    bad = ""
+    for i in range(len(flagged)):
+        now = self.mem_load(Val(self.fgep(ov, ci.fflag[flagged[i]]), "*bool")).v
+        d = self.scalar('xor', [Val(now, 'bool'), Val(snap[i], 'bool')])
+        bad = d if bad == "" else self.scalar('or', [Val(bad, 'bool'), Val(d, 'bool')])
+    self.guard(bad, "RuntimeError: dictionary changed size during iteration")
 
 
 # ---- dir(), copies of __dict__, and formatting with it
@@ -1220,7 +1353,7 @@ def gen_refl_dir(self, x: Node) -> Val:
         names = self.refl_dir_names(lf.c)
         r = self.rt("pys_list_new", "ptr", [f"i64 {len(names)}"])
         for nk in names:
-            if nk[1] == "g":
+            if lf.c in self.classes and not self.refl_listed(lf.c, nk):
                 yes = self.label()
                 no = self.label()
                 self.cbr(self.mem_load(Val(self.fgep(lf.v, self.classes[lf.c].fflag[nk[0]]), "*bool")).v, yes, no)
@@ -1337,7 +1470,7 @@ def gen_refl_percent(self, fmt: str, d: Node) -> Val:
             i += 2
             continue
         if i + 1 >= len(fmt) or fmt[i + 1] != "(":
-            self.err("TypeError: format requires a mapping: a % format with vars() needs %(key) in each of its fields (#486)")
+            self.err("a % format of vars() is supported where each of its fields names a key, %(key)s (#486)")
         j = i + 2
         depth = 1
         while j < len(fmt) and depth > 0:
@@ -1466,6 +1599,8 @@ def gen_refl_dc_names(self, it: Node) -> list[str] | None:
     if c == "":
         c = self.refl_dc_check(self.expr(it.kids[1], "").t, "fields")
     ci = self.classes[c]
+    for fl in self.dc_fields(ci):
+        self.refl_public(c, fl)
     return [fl for fl in self.dc_fields(ci) if not fl.startswith(" ")]
 
 
@@ -1555,6 +1690,9 @@ def gen_refl_dc_type(self, t: str, what: str, seen: list[str]) -> str:
             if not self.is_dc(c):
                 self.err(f"{what}() of a {short(t)}, whose subclass {short(c)} is no dataclass, is not supported (#486)")
             fs = [fl for fl in self.dc_fields(ci) if not fl.startswith(" ")]
+            for fl in fs:
+                if what == "asdict":
+                    self.refl_public(c, fl)
             ts = [self.refl_dc_type(ci.ftypes[fl], what, seen + [t]) for fl in fs]
             if what == "astuple":
                 rs.append(Val("", self.ctype("tuple", ts)))
@@ -1801,8 +1939,9 @@ def gen_refl_otext(self, c: str, name: str) -> str:
         if name == "__dict__":
             return "v"
         if name == "__doc__":
+            # (as CPython 3.13's compiler keeps a docstring: clean_doc)
             body = refl_body(ci.node)
-            return "=" + body[0].kids[0].s if len(body) > 0 and body[0].kind == "expr" and body[0].kids[0].kind == "str" and not self.is_dc(c) else "=None" if not self.is_dc(c) else ""
+            return "=" + clean_doc(body[0].kids[0].s) if len(body) > 0 and body[0].kind == "expr" and body[0].kids[0].kind == "str" and not self.is_dc(c) else "=None" if not self.is_dc(c) else ""
         if name == "__firstlineno__":
             line = ci.node.line
             for k in ci.node.kids:
@@ -1812,10 +1951,8 @@ def gen_refl_otext(self, c: str, name: str) -> str:
         if name == "__static_attributes__":
             out: list[str] = []
             for st in refl_body(ci.node):
-                if st.kind == "def" and len(st.kids[0].kids) > 0:
-                    me = st.kids[0].kids[0].s
-                    for x in st.kids[2].kids:
-                        refl_self_stores(x, me, out)
+                if st.kind == "def":
+                    refl_static_attrs(st, out)
             names = sorted(out)
             return "=(" + ", ".join(["'" + x + "'" for x in names]) + ("," if len(names) == 1 else "") + ")"
         if name == "__hash__" and "__eq__" in ci.methods and self.refl_defines(c, "__eq__") and "__hash__" not in ci.methods:
@@ -1827,6 +1964,30 @@ def gen_refl_otext(self, c: str, name: str) -> str:
     if name in TYPE_BUILTINS:
         return "t"
     return ""
+
+
+def refl_static_attrs(n: Node, out: list[str]) -> None:
+    # the attributes CPython 3.13 lists in a class's __static_attributes__ that code n (in the class
+    # body, not a class nested in it) stores as self.x, the name self as its compiler checks it: by
+    # an assignment, an annotated one with a value, a for loop's, a comprehension's or a with
+    # statement's target, also in nested functions and lambdas; not by += or del
+    if n.kind == "class" or n.kind == "subclass":
+        return
+    ts: list[Node] = []
+    if n.kind == "assign":
+        ts = n.kids[:-1]
+    elif n.kind == "annassign" and len(n.kids) == 3:
+        ts = n.kids[:1]
+    elif n.kind == "for" or n.kind == "compfor":
+        ts = n.kids[:1]
+    elif (n.kind == "listcomp" or n.kind == "asynccomp") and len(n.kids) > 1:
+        ts = n.kids[1:2]
+    elif n.kind == "withitem" and len(n.kids) == 2:
+        ts = n.kids[1:]
+    for t in ts:
+        refl_target_stores(t, "self", out)
+    for k in n.kids:
+        refl_static_attrs(k, out)
 
 
 def gen_refl_lookup(self, n: Node) -> RText:
@@ -1859,6 +2020,8 @@ def gen_refl_lookup(self, n: Node) -> RText:
     for lf in self.refl_split(o, known):
         self.place(lf.label)
         self.narrowed = dict(narrow)
+        if lf.c != "None" and lf.c not in self.classes:
+            self.err(f"the text of getattr(o, name) for a run-time name is not supported where o may be a {typestr(lf.c)}, whose methods are no values (#247, #489)")
         names = self.refl_name_list(lf.c)
         for nk in names:
             if nk[1] == "o" and self.refl_otext(lf.c, nk[0]) == "":

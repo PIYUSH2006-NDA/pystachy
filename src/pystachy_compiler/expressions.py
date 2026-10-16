@@ -273,13 +273,23 @@ def gen_has(self, t: str, a: str) -> int:
         if a in HASATTR["obj"].split():
             return -1
         if a == "__annotations__" or (a == "__replace__" and self.is_dc(t)):
-            # (a dataclass's __replace__, and the annotations of a class body, its or a base's)
+            # (a dataclass's __replace__, and the annotations of a class body, its or a base's: a
+            # dataclass without fields has none)
             c = t
-            while c in self.classes and a == "__annotations__" and not self.is_dc(t):
+            while c in self.classes and a == "__annotations__":
                 if refl_annotated(refl_body(self.classes[c].node)):
                     return -1
                 c = self.classes[c].base
-            return -1 if self.is_dc(t) else 0
+            return -1 if a == "__replace__" else 0
+        if a in ["__class_getitem__", "__orig_bases__", "__parameters__", "__type_params__"]:
+            # (a generic class's, Generic[T] or class C[T], and its subclasses')
+            c = t
+            while c in self.classes:
+                o = self.classes[c].origin if self.classes[c].origin != "" else c
+                if o in self.tparams and (a != "__type_params__" or o in self.pep695):
+                    return -1
+                c = self.classes[c].base
+            return 0
         if self.is_dc(t) and a == "__match_args__":
             # (but for match_args=False, which leaves the one a base dataclass writes, if any)
             c = t

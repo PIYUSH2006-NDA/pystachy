@@ -87,13 +87,17 @@ from src.pystachy_compiler.reflection import (
     gen_refl_percent as reflection_refl_percent,
     gen_refl_format_map as reflection_refl_format_map,
     gen_refl_unroll_dict as reflection_refl_unroll_dict,
+    gen_refl_size_check as reflection_refl_size_check,
     gen_refl_dict_operand as reflection_refl_dict_operand,
     gen_refl_supported as reflection_refl_supported,
     gen_refl_defines as reflection_refl_defines,
     gen_refl_names as reflection_refl_names,
+    gen_refl_listed as reflection_refl_listed,
+    gen_refl_public as reflection_refl_public,
     gen_refl_init_order as reflection_refl_init_order,
     gen_refl_dict_order as reflection_refl_dict_order,
     gen_refl_stored as reflection_refl_stored,
+    gen_refl_late as reflection_refl_late,
     gen_refl_fields_table as reflection_refl_fields_table,
     gen_refl_layout_record as reflection_refl_layout_record,
     gen_refl_dict_of as reflection_refl_dict_of,
@@ -981,6 +985,7 @@ class Gen:
         # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
         # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
+        self.pep695: dict[str, bool] = {}  # the generic classes of PEP 695's syntax, class C[T] (reflection: __type_params__)
         # the type aliases, by qualified name: the statement that binds each (Mod.taliases), and
         # those whose annotation alias_ann is making the type of
         self.taliases: dict[str, Node] = {}
@@ -988,6 +993,7 @@ class Gen:
         self.unaliased = 0  # (the nodes unalias has made of the annotation it expands)
         self.reflrecs: dict[str, Data] = {}  # the reflection records made (refl_record), by global name
         self.reflstores: dict[str, bool] = {}  # the attribute names the program's assignments assign (refl_stored)
+        self.refllate: dict[str, bool] = {}  # those assigned other than by an __init__ through its object (refl_late)
         self.refltexts: list[RText] = []  # the deferred texts of reflective lookups (refl_defer)
         self.reflcopies = 1  # the copies of the code being compiled that unrolled loops make (refl_unroll_for)
 
@@ -1070,14 +1076,23 @@ class Gen:
     def refl_names(self, c: str) -> list[list[str]]:
         return reflection_refl_names(self, c)
 
-    def refl_init_order(self, c: str, f: FnInfo, out: list[str]) -> bool:
-        return reflection_refl_init_order(self, c, f, out)
+    def refl_listed(self, c: str, nk: list[str]) -> bool:
+        return reflection_refl_listed(self, c, nk)
+
+    def refl_public(self, c: str, n: str) -> None:
+        return reflection_refl_public(self, c, n)
+
+    def refl_init_order(self, c: str, f: FnInfo, out: list[str], maybe: dict[str, bool]) -> bool:
+        return reflection_refl_init_order(self, c, f, out, maybe)
 
     def refl_dict_order(self, c: str) -> list[str]:
         return reflection_refl_dict_order(self, c)
 
     def refl_stored(self, name: str) -> bool:
         return reflection_refl_stored(self, name)
+
+    def refl_late(self, name: str) -> bool:
+        return reflection_refl_late(self, name)
 
     def refl_fields_table(self, c: str) -> str:
         return reflection_refl_fields_table(self, c)
@@ -1105,6 +1120,9 @@ class Gen:
 
     def refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
         return reflection_refl_unroll_dict(self, n, d, x, m)
+
+    def refl_size_check(self, ov: Val, flagged: list[str], snap: list[str]) -> None:
+        return reflection_refl_size_check(self, ov, flagged, snap)
 
     def refl_dir_names(self, c: str) -> list[list[str]]:
         return reflection_refl_dir_names(self, c)

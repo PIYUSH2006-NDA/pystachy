@@ -673,13 +673,18 @@ The [reflection rules](semantics.md#reflection) list what is supported; these ar
   `type(e).__name__`, and `type(x).__name__` of a function, file or callable
 - `getattr()` of a name only the run time knows whose value is used (kept, passed on, called,
   compared, a sort key: `attrgetter(input())`), its text with a format spec, and its text for a
-  dataclass or a class with annotated class attributes (#487, #489)
+  dataclass, a generic class, a class with annotated class attributes or a builtin value (#487,
+  #489)
+- reflection over classes with private attributes (`__x`): CPython mangles their names (to
+  `_C__x`), which Pystachy does not (see [functions and object identity](#functions-and-object-identity))
 - `setattr()` of a run-time name on an object whose class does not close its names with
   `__slots__` (it may add an attribute: #489), with a value that does not fit every slot field,
   or that may name a slot no code assigns; `delattr()` and `del o.x` of a field (#489)
 - `vars(x)` and `x.__dict__` other than printed, iterated, formatted or copied; of a class whose
   `__init__` assigns two new attributes in one branch or loop, through a property's setter, or
-  outside `__init__`; and of a class attribute the program may also assign through an object
+  outside `__init__`, whose `__post_init__` adds an attribute, or one of whose fields `__init__`
+  may leave unassigned and other code may assign (unless it is the last); and of a class
+  attribute the program may also assign through an object
 - `getattr`, `setattr`, `hasattr` and `dir()` of exception objects, and `dir()` of files and
   functions
 - a loop over constant names whose body defines a function, lambda or class, or assigns the

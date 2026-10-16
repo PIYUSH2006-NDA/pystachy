@@ -1,0 +1,17 @@
+z True
+q False
+done
+helper 1
+a
+b
+done
+helper 1
+a overridden
+b
+c
+done
+v 1
+v 1
+w 2.5
+{'a': 1, 'b': 2}
+[exit 0]
