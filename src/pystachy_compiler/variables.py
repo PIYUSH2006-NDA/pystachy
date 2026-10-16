@@ -1497,7 +1497,10 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
             self.mem_store(Val(self.lflag[name], "*bool"), Val("true", "bool"))
         if name in self.owned:
             self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (a value others may hold: str_append)
-        held = "" if is_union(unopt(t)) and name in self.nlw else self.holds(t, v.t)
+        # (a local a closure assigns (nonlocal) keeps its declared type: a call may run the
+        # closure, as narrowable says)
+        u = unopt(t)
+        held = "" if name in self.nlw and (is_opt(t) or is_union(u) or (u in self.classes and self.classes[u].tag > 0)) else self.holds(t, v.t)
         if held == "":
             self.narrowed.pop(name, "")
         else:
