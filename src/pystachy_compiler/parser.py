@@ -41,7 +41,7 @@ class Parser:
         self.fend = -1  # (in a field's parser: where its expression ends, see fail())
         self.cutmsg = ""  # the tokenizer's error that cut short the f-string being parsed (see field())
         self.cutline = 0
-        self.incut = ""  # that error, in any parser of a field of that f-string (see limit())
+        self.incut = ""  # that error, in any parser of a field of that f-string (or see limit())
         self.incutline = 0
         self.probe = 0  # (reading an f-string after an expression, see reads(): the line of its error)
         self.fnl: list[int] = []  # where the newlines are in the text of the f-string being parsed
@@ -1596,7 +1596,7 @@ class Parser:
             src = src[:-1]
         # (the line of the expression's first token: a comment holds no newline)
         eline = self.fline(line, i) + text[: len(text) - len(text.lstrip())].count("\n")
-        if src.strip() == "" and ran:
+        if src.strip() == "" and ran and not selfdoc:
             self.cut("f-string: expecting '}'", at)
         if src.strip() == "":
             self.fail("f-string: valid expression required before '" + ("=" if selfdoc else s[j]) + "'", eline if selfdoc else at)
@@ -1658,6 +1658,7 @@ class Parser:
         if ran:
             self.cut("f-string: expecting '}'", at)
         conv = ""
+        convmsg = ""  # (an invalid conversion character's error)
         if s[j] == "!":
             # !r, !s or !a, right after the '!'; then (white space and) ':' or '}'
             k = self.fskip(s, j + 1)
@@ -1675,7 +1676,7 @@ class Parser:
             if k > j + 1:
                 self.fail("f-string: conversion type must come right after the exclamation mark", self.fline(line, j))
             if conv != "r" and conv != "s" and conv != "a":
-                self.fail(f"f-string: invalid conversion character '{conv}': expected 's', 'r', or 'a'", at)
+                convmsg = f"f-string: invalid conversion character '{conv}': expected 's', 'r', or 'a'"
             j = self.fskip(s, m)
             if j >= len(s):
                 self.cut("f-string: expecting ':' or '}'", self.fline(line, j))
@@ -1689,7 +1690,14 @@ class Parser:
         if colon:
             # the spec runs to the field's '}' and may hold fields: {x:>{w}}
             sp = mk("fstr", "", line, [])
+            incut = self.incut
+            incutline = self.incutline
+            if convmsg != "" and incut == "":
+                self.incut = convmsg  # (CPython parses the spec first, see limit())
+                self.incutline = at
             j = self.fparts(s, j + 1, raw, line, sp, 1)
+            self.incut = incut
+            self.incutline = incutline
             if j >= len(s):
                 self.cut("f-string: expecting '}', or format specs", self.fline(line, j))
             plain = True
@@ -1699,6 +1707,8 @@ class Parser:
             spec = sp if not plain else mk("str", "".join([kd.s for kd in sp.kids]), line, [])
         if j >= len(s) or s[j] != "}":
             self.fail("f-string: expecting '}'", self.fline(line, j))
+        if convmsg != "":
+            self.fail(convmsg, at)  # (CPython checks it once it has parsed the whole field)
         if selfdoc and conv == "" and not colon:
             conv = "r"
         if e.kind == "dict" and len(e.kids) == 0 and (conv != "" or (spec.kind == "str" and spec.s == "")):
@@ -1726,7 +1736,8 @@ class Parser:
 
     def limit(self, msg: str, line: int) -> None:
         # a Pystachy limitation; in an f-string cut short, CPython reads on to the tokenizer's
-        # error that cut it (unless an error in a field comes first)
+        # error that cut it (unless an error in a field comes first), and in the spec of a field
+        # with an invalid conversion character to the end of the field and that error
         if self.incut != "":
             fail(self.incut, self.incutline)
         self.fail(msg, line)
