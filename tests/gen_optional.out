@@ -1,0 +1,13 @@
+0 0
+1 1
+2 -1
+[0, 1, 2, -1, -1]
+False 0
+True -5
+truthy [0]
+TypeError: 'NoneType' object is not iterable
+TypeError: 'NoneType' object is not an iterator
+TypeError: 'NoneType' object is not iterable
+TypeError: 'NoneType' object is not iterable
+TypeError: argument of type 'NoneType' is not iterable
+[exit 0]

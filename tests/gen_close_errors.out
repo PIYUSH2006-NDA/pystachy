@@ -1,0 +1,7 @@
+ignoring close
+after break
+caught ValueError('from body')
+7
+after oops
+end
+[exit 0]

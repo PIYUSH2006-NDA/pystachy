@@ -1,0 +1,43 @@
+30 24 3.0
+[0, 1, 4, 9] ['alice', 'bob', 'carol'] ['carol', 'bob', 'alice']
+  produce 0
+  produce 1
+True
+  produce 0
+False
+  produce 0
+  produce 1
+  produce 2
+  produce 3
+  produce 4
+True
+25 alice carol 0.0
+(0, 1, 4) ['alice', 'bob', 'carol'] [0, 1, 4]
+carol, alice, bob
+True False False
+  produce 0
+  produce 1
+  produce 2
+  produce 3
+  produce 4
+True
+[0, 0, 1, 4]
+0 carol
+1 alice
+2 bob
+1 carol
+2 alice
+3 bob
+carol 0
+alice 1
+bob 4
+  produce 0
+zipped 0 10
+  produce 1
+zipped 1 20
+  produce 2
+[1, 2, 5, 10] {0, 1}
+['ALICE', 'BOB', 'CAROL'] 4
+7 [] 0
+332833500
+[exit 0]

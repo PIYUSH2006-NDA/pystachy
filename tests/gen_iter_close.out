@@ -1,0 +1,31 @@
+1
+iter closed
+after for
+3
+reversed closed
+after reversed
+0 1
+iter closed
+after enumerate
+10 1
+iter closed
+after enumerate(r, 10)
+1 7
+iter closed
+after zip
+1 6
+2 5
+iter closed
+after a zip that ends
+iter closed
+True
+after in
+iter closed
+iter closed
+True False
+after any and all
+iter closed
+iter closed
+6 3
+end
+[exit 0]
