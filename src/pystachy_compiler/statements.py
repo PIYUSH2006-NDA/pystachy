@@ -424,7 +424,7 @@ def gen_leave(self, depth: int) -> bool:
                 self.rt("pys_unwind_pop", "void", [])
             self.rt("pys_file_close", "void", [f"ptr {x.v}"])
         elif x.kind == "handler":
-            self.rt("pys_exc_restore", "void", [f"ptr {x.v}"])
+            self.exc_back(x.v)
             self.unbind(x.name)
         elif x.entry != "":
             # a finally block compiled once (try_): it goes on here, by its index in conts; a
@@ -461,6 +461,69 @@ def gen_leave(self, depth: int) -> bool:
     self.handler = here
     self.carried = cv
     return ended
+
+def gen_cm_exits(self) -> bool:
+    # does a class of the program define __exit__, so that a with statement may suppress an
+    # exception (as its context manager's __exit__ returns a true value) and go on from anywhere
+    # in its block (Gen.fl_stmts)
+    if self.cmexit < 0:
+        self.cmexit = 0
+        for c in self.classes.values():
+            for b in [c.node] + c.node.kids:
+                for d in b.kids:
+                    if d.kind == "def" and d.s == "__exit__":
+                        self.cmexit = 1
+    return self.cmexit == 1
+
+def gen_suppress_item(self, e: Node) -> bool:
+    # is e, a with statement's item, a call of contextlib.suppress (lib/contextlib.py) with
+    # exception classes, which the statement compiles as an except clause that catches them
+    if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "contextlib$suppress":
+        return False
+    for a in e.kids[1:]:
+        if a.kind == "kw" or a.kind == "starred" or not self.exc_classes(a):
+            self.err("contextlib.suppress() is supported with exception classes, named, as a with statement's item")
+    return True
+
+def gen_with_cm(self, m: Val, it: Node, body: list[Node]) -> None:
+    # with E as x: body, E an object m of a class of the program (PEP 343): its __enter__() gives
+    # x, then body runs as the body of a try statement whose except clause takes every exception
+    # e to __exit__(type(e), e, tb), which suppresses it if it returns a true value (else e goes
+    # on); its else block, and a break, continue or return out of body (an exit like a finally
+    # block's), call __exit__(None, None, None) instead. type(e) is e itself, as an exctype; tb is
+    # None, or an object of TracebackType (lib/_pystachy_types.py) where __exit__ declares that type
+    c = m.t
+    ms = self.classes[c].methods
+    if "__enter__" not in ms:
+        self.err(f"'{tname(c)}' object does not support the context manager protocol")
+    if "__exit__" not in ms:
+        self.err(f"'{tname(c)}' object does not support the context manager protocol (missed __exit__ method)")
+    f = ms["__exit__"]
+    self.notnone(m, "TypeError: 'NoneType' object does not support the context manager protocol")
+    v = self.protocol(m, "__enter__", [])
+    line = self.line
+    mv = self.vnode(m)
+    tb = mk("None", "", line, [])
+    tt = f.ptypes[3] if len(f.ptypes) > 3 else ""
+    if tt in self.classes and shown(tt) == "_pystachy_types.TracebackType":
+        tb = self.vnode(self.new_obj(tt))
+    exc = mk("call", "", line, [mk("attr", "__exit__", line, [mv]), mk("excinfo", "type", line, []), mk("excinfo", "value", line, []), tb])
+    ok = mk("expr", "", line, [mk("call", "", line, [mk("attr", "__exit__", line, [mv]), mk("None", "", line, []), mk("None", "", line, []), mk("None", "", line, [])])])
+    # (break, continue and return in the body call __exit__(None, None, None) as they leave it,
+    # under the landing block around the statement)
+    fx = Exit("finally", "", self.handler)
+    fx.body = [ok]
+    fx.nloops = len(self.loops)
+    fx.nexcs = len(self.excs)
+    pre: list[Node] = []
+    if len(it.kids) == 2:
+        pre.append(mk("assign", "", line, [it.kids[1], self.vnode(v)]))
+    raise_ = mk("if", "", line, [mk("unary", "not", line, [exc]), mk("block", "", line, [mk("raise", "", line, [])]), mk("block", "", line, [])])
+    tn = mk("try", "", line, [mk("block", "", line, pre + body), mk("except", "", line, [mk("omit", "", line, []), mk("block", "", line, [raise_])]), mk("block", "else", line, [ok])])
+    n0 = len(self.exits)
+    self.exits.append(fx)
+    self.try_(tn)
+    self.exits = self.exits[:n0]
 
 def gen_stmt(self, n: Node) -> None:
     self.line = n.line
@@ -780,10 +843,33 @@ def gen_stmt(self, n: Node) -> None:
         # an unwind action while the block runs (a landing pad runs it, and so does an
         # exception that nothing catches), even in a program without a try statement
         n0 = len(self.exits)
-        for it in n.kids[:-1]:
+        cm = False
+        for i in range(len(n.kids) - 1):
+            it = n.kids[i]
+            if self.suppress_item(it.kids[0]):
+                # with contextlib.suppress(A, B): ... is try: ... except (A, B): pass, as its
+                # __exit__ returns True for an exception whose class derives from one of them
+                if len(it.kids) == 2:
+                    self.err("with suppress(...) as x: is not supported (x would be None, what its __enter__ returns)")
+                rest = n.kids[i + 1 : -1]
+                inner = [mk("with", "", n.line, rest + [n.kids[-1]])] if len(rest) > 0 else n.kids[-1].kids
+                args = it.kids[0].kids[1:]
+                if len(args) == 0:
+                    self.stmts(inner)  # (suppress() suppresses nothing)
+                else:
+                    self.try_(mk("try", "", n.line, [mk("block", "", n.line, inner), mk("except", "", n.line, [mk("tuple", "", n.line, args) if len(args) > 1 else args[0], mk("block", "", n.line, [mk("pass", "", n.line, [])])])]))
+                cm = True
+                break
             v = self.expr(it.kids[0], "")
+            if v.t in self.classes:
+                # a context manager of a class of the program: the items after it, and the body,
+                # are its block (with A() as a, B() as b: is with A() as a: with B() as b:)
+                rest = n.kids[i + 1 : -1]
+                self.with_cm(v, it, [mk("with", "", n.line, rest + [n.kids[-1]])] if len(rest) > 0 else n.kids[-1].kids)
+                cm = True
+                break
             if v.t != "file":
-                self.err(f"'with' is supported for files only (with open(...) as f:), not {v.t}")
+                self.err(f"'{tname(v.t)}' object does not support the context manager protocol ('with' takes files and objects of classes that define __enter__ and __exit__)")
             if not self.open_call(it.kids[0]):
                 # (a file's __enter__ raises if it is closed)
                 c = self.rt("pys_file_closed", "i64", [f"ptr {v.v}"])
@@ -793,7 +879,8 @@ def gen_stmt(self, n: Node) -> None:
             if len(it.kids) == 2:
                 self.assign(it.kids[1], v)
             self.exits.append(Exit("with", v.v, self.handler))
-        self.stmts(n.kids[-1].kids)
+        if not cm:
+            self.stmts(n.kids[-1].kids)
         if not self.term:
             self.leave(n0)
         self.exits = self.exits[:n0]

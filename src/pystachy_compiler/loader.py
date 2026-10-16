@@ -70,6 +70,19 @@ from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_i
 from src.pystachy_compiler.utils import clone, int_fits
 
 
+
+def tb_import(n: Node) -> None:
+    # from types import TracebackType (an __exit__'s annotation) imports lib/_pystachy_types.py's
+    # TracebackType, which is all of types there is: an import of the module, or of any other name
+    # of it, still finds no module (the CPython-only blocks of lib's ports import it)
+    for st in n.kids:
+        if st.kind == "import" and st.s == "from" and len(st.kids) > 0 and len([a for a in st.kids if a.kind != "alias" or len(a.kids) != 2 or a.kids[0].s != "types.TracebackType" or a.kids[1].s != "types"]) == 0:
+            for a in st.kids:
+                a.kids[0].s = "_pystachy_types.TracebackType"
+                a.kids[1].s = "_pystachy_types"
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            tb_import(st)
+
 class Loader:
     def __init__(self, dirs: list[str]):
         self.dirs = dirs  # the module search path
@@ -177,6 +190,7 @@ class Loader:
         m = Mod("", path, "")
         FILES.append(path)
         m.body = Parser(Lexer(src, 1).file()).module()
+        tb_import(m.body)
         self.prescan(m)
         self.simplify(m, m.body, {})
         self.docstring(m)
@@ -444,6 +458,7 @@ class Loader:
         k = len(FILES)
         FILES.append(path[2:] if path.startswith("./") else path)
         self.parsed[path] = Parser(Lexer(src, k * LINES + 1).file()).module()
+        tb_import(self.parsed[path])
         return self.parsed[path]
 
     def bindings(self, m: Mod) -> None:

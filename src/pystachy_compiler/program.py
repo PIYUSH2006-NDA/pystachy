@@ -5,7 +5,7 @@ import sys
 from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, collect, defines, module_ints, module_reads, module_strs, needs_eh, none_assigns, reads_builtin
 from src.pystachy_compiler.diagnostics import fail
-from src.pystachy_compiler.generators import uses_protocol
+from src.pystachy_compiler.generators import reads_cause, reads_handled, uses_protocol
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
@@ -713,6 +713,8 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
         self.gproto = self.gproto or uses_protocol(m.body)  # (generators: send(), throw(), a yield's value)
+        self.excread = self.excread or reads_handled(m.body)  # (sys.exception() in a generator)
+        self.causeread = self.causeread or reads_cause(m.body)  # (e.__cause__: lib/contextlib.py's)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
         self.typevars.extend(m.deftps)
@@ -815,6 +817,7 @@ def gen_program(self, mods: list[Mod]) -> str:
         if ci.tag != 0:
             tag += 1
             ci.tag = tag
+    self.cm_exits()  # (decided while the class templates are classes too: see cm_exits)
     grow = True
     while grow:
         # the class templates: an __init__ parameter without an annotation, or with one that

@@ -1,4 +1,4 @@
-# error: 'with' is supported for files only (with open(...) as f:), not C
+# error: 'C' object does not support the context manager protocol
 class C:
     pass
 

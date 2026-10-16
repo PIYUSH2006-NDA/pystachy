@@ -117,6 +117,14 @@ but it needn't be locked by the same thread that unlocks it."""
         """An obsolete synonym of release()."""
         self.release()
 
+    def __enter__(self):  # (compiled only where a with statement calls it, as __exit__ is)
+        """Lock the lock (with lock: ...), as acquire() does."""
+        return self.acquire()
+
+    def __exit__(self, *args) -> None:
+        """Release the lock, as release() does."""
+        self.release()
+
     def locked(self) -> bool:
         """Return whether the lock is in the locked state."""
         return self._locked
@@ -178,6 +186,14 @@ to be available for other threads."""
         self._count -= 1
         if self._count == 0:
             self._owner = 0
+
+    def __enter__(self):  # (compiled only where a with statement calls it, as __exit__ is)
+        """Lock the lock (with lock: ...), as acquire() does."""
+        return self.acquire()
+
+    def __exit__(self, *args) -> None:
+        """Release the lock, as release() does."""
+        self.release()
 
     def _is_owned(self) -> bool:
         """For internal use by `threading.Condition`."""

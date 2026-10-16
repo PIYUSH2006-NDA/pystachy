@@ -3743,6 +3743,8 @@ struct Exc {                           /* GC-allocated, 16-byte aligned (exc_all
   I code, has_code;                    /* SystemExit: its status (has_code 0: msg is a code's str, status 1) */
   Str *args;                           /* repr(e) is the class's name and (args); NULL: made from msg */
   Str *detail;                         /* uncaught: "kind: detail", even when empty; NULL: msg (pys_exc_detail) */
+  struct Exc *cause;                   /* e.__cause__ (raise ... from c, PEP 479's RuntimeError), or NULL; set
+                                          only in a program that reads it (pys_exc_setcause) */
 };
 _Static_assert(offsetof(Exc, ue) == 0, "a landing pad's pointer is the Exc");
 #define PYS_EXC 0x5059535441434859ULL  /* the header's exception_class: "PYSTACHY" */
@@ -3808,6 +3810,14 @@ Str *pys_exc_ostr(void *obj) { return (*(ExcClass **)obj)->str(obj); }    /* str
 Str *pys_exc_orepr(void *obj) { return (*(ExcClass **)obj)->repr(obj); }  /* and repr(e) */
 Str *pys_exc_errcls(I e) { return cstr(e < 0 || e > 0x7FFFFFFF ? "OSError" : errcls((int)e)); }   /* OSError(e, text)'s class */
 Str *pys_exc_name(Exc *e) { int n; const char *k = exc_name(e, &n); return pys_str(k, n); }   /* type(e).__name__ */
+void pys_exc_setcause(Exc *e, Exc *c) { e->cause = c; }
+Exc *pys_exc_cause(Exc *e) { return e->cause; }
+Str *pys_exc_type(Exc *e) {            /* str(type(e)): "<class 'KeyError'>", "<class '__main__.C'>" */
+  Buf b = {0}; put(&b, "<class '", 8);
+  if (e->obj && !memchr(XCLS(e)->kind->s, '$', XCLS(e)->kind->len)) put(&b, "__main__.", 9);
+  Str *d = e->obj ? XCLS(e)->disp : e->kind;
+  put(&b, d->s, d->len); put(&b, "'>", 2); return done(&b);
+}
 Str *pys_exc_cls(void *obj) {          /* and of a user exception object, which may be None */
   int n; const char *k = obj ? short_name((*(ExcClass **)obj)->disp, &n) : "NoneType";
   return obj ? pys_str(k, n) : cstr(k);

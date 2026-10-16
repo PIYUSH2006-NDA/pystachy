@@ -85,6 +85,58 @@ def uses_protocol(n: Node) -> bool:
     return False
 
 
+def reads_handled(n: Node) -> bool:
+    # does code n call sys.exception() (Gen.excread), which tells a generator's own exception
+    # being handled from its resumer's
+    if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].s == "exception" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "sys":
+        return True
+    for k in n.kids:
+        if reads_handled(k):
+            return True
+    return False
+
+
+def reads_cause(n: Node) -> bool:
+    # does code n read an attribute named __cause__ (Gen.causeread)
+    if n.kind == "attr" and n.s == "__cause__":
+        return True
+    for k in n.kids:
+        if reads_cause(k):
+            return True
+    return False
+
+
+def gen_pep479(self, e: Val) -> None:
+    # PEP 479's RuntimeError, raised for StopIteration e that leaves a generator: its __cause__
+    # is e where the program reads it (Gen.causeread)
+    if not self.causeread:
+        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+        return
+    r = self.exc_value("RuntimeError", [Val(self.sconst("generator raised StopIteration"), "str")])
+    self.rt("pys_exc_setcause", "void", [f"ptr {r.v}", f"ptr {e.v}"])
+    self.throw(r)
+
+
+def gen_exc_mark(self) -> str:
+    # the exception being handled where a try statement starts, which its clauses' ends restore
+    # (exc_back): in a generator of a program that reads it (Gen.excread), null where it is its
+    # resumer's (the generator handles none of its own), as that resumer may differ by then
+    h = self.rt("pys_exc_handled", "ptr", [])
+    if not self.excread or self.fn.gouter == "":
+        return h
+    same = self.ptr_cmp("==", Val(h, "exc"), Val(self.mload("%ptr", self.fn.gouter), "exc")).v
+    return self.select(same, Val("null", "exc"), Val(h, "exc"))
+
+
+def gen_exc_back(self, old: str) -> None:
+    # the exception being handled is old (exc_mark) again: in a generator of a program that reads
+    # it, null is its resumer's now
+    if self.excread and self.fn.gouter != "":
+        none = self.ptr_cmp("==", Val(old, "exc"), Val("null", "exc")).v
+        old = self.select(none, Val(self.mload("%ptr", self.fn.gouter), "exc"), Val(old, "exc"))
+    self.rt("pys_exc_restore", "void", [f"ptr {old}"])
+
+
 def comp_clauses(c: Node, body: list[Node], inline: bool) -> list[Node]:
     # body inside the clauses of comprehension c after its first iterable (c.kids[3:]: if
     # clauses, and for clauses nested in their order): if statements, and for loops of a
@@ -268,7 +320,7 @@ def gen_gen_end(self, f: FnInfo) -> None:
         lo = self.label()
         self.cbr(self.exc_match(e, self.builtin_catch("StopIteration")), ls, lo)
         self.place(ls)
-        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+        self.pep479(e)
         self.place(lo)
         self.throw(e)
     f.noret = False
@@ -875,7 +927,7 @@ def gen_gen_raised(self, e: Val) -> None:
     lo = self.label()
     self.cbr(self.exc_match(e, self.builtin_catch("StopIteration")), ls, lo)
     self.place(ls)
-    self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+    self.pep479(e)
     self.place(lo)
     self.throw(e)
 
