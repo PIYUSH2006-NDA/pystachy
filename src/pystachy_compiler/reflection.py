@@ -246,8 +246,8 @@ def gen_refl_type_attr(self, x: Node, what: str) -> Val:
 
 
 def gen_refl_type_operand(self, n: Node) -> str:
-    # what an operand of a type comparison names statically: "=<record key>" for a class or
-    # builtin type named by its name (C, int, ...), "" for type(x) and x.__class__ (dynamic)
+    # what an operand of a type comparison names statically, as refl_record takes it: a class
+    # or a builtin type named by its name (C, int, list, ...); "" for type(x) and x.__class__
     if self.refl_typeof(n) is not None:
         return ""
     if n.kind == "name" and n.s in self.classes and n.s not in self.ltype and self.classes[n.s].exc == "":
