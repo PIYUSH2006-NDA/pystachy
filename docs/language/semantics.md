@@ -103,7 +103,8 @@ Membership uses `__contains__`, taking its result's truth; without it, membershi
 the supported iterator.
 
 A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and returns
-`iter(xs)` for a list, tuple, string or another object with the same supported protocol.
+`iter(xs)` for a list, tuple, string or another object with the same supported protocol,
+or `reversed(xs)`, whose items it copies when it returns.
 It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
 `list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
 A supported `__reversed__` has the same form; every consumer of `reversed(o)` steps through

@@ -1,6 +1,6 @@
 # reversed(o) calls o.__reversed__, which (as a supported __iter__) is annotated -> Iterator[T]
-# and returns iter(xs); every consumer of reversed() steps through that iterator, and a None
-# object raises CPython's TypeError.
+# and returns iter(xs) or reversed(xs); every consumer of reversed() steps through that
+# iterator, and a None object raises CPython's TypeError.
 from typing import Iterator
 
 
@@ -73,3 +73,42 @@ try:
     print(list(reversed(none)))
 except TypeError as e:
     print("TypeError", e)
+
+
+# returning reversed(xs): of a list, a tuple, a str, a dict, an object
+class Back:
+    def __init__(self) -> None:
+        self.xs = [1, 2, 3]
+        self.word = "abc"
+        self.d = {"x": 1, "é": 2}
+
+    def __iter__(self) -> Iterator[str]:
+        return reversed(self.word)
+
+    def __reversed__(self) -> Iterator[int]:
+        return reversed(self.xs)
+
+
+class Front:
+    def __init__(self) -> None:
+        self.back = Back()
+        self.d = {"x": 1, "é": 2}
+
+    def __iter__(self) -> Iterator[int]:
+        return reversed(self.back)
+
+    def __reversed__(self) -> Iterator[str]:
+        return reversed(self.d)
+
+
+class Pair:
+    def __reversed__(self) -> Iterator[str]:
+        return reversed(("first", "second"))
+
+
+bk = Back()
+print(list(bk), list(reversed(bk)), [x * 2 for x in reversed(bk)], sorted(reversed(bk)))
+bk.xs.append(4)
+print(list(reversed(bk)), list(Front()), list(reversed(Front())), list(reversed(Pair())))
+for p in reversed(Pair()):
+    print(p)

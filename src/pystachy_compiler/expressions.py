@@ -1620,9 +1620,12 @@ def gen_obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") 
 def gen_iter_ret(self, e: Node) -> Val:
     # return iter(x) in an __iter__ that returns an Iterator[T]: the list[T] that iterator steps
     # through, as a for loop over x would: x for a list, a new list of the items of a tuple or
-    # str, the list of an object's own __iter__; an iterator other than iter()'s is not supported
+    # str, the list of an object's own __iter__; reversed(x), as iter(list(reversed(x))): a new
+    # list of its items; an iterator other than these is not supported
+    if e.kind == "call" and e.kids[0].kind == "name" and e.kids[0].s == "reversed" and not self.bound("reversed") and not self.bound("list") and len(e.kids) == 2 and e.kids[1].kind != "kw":
+        e = mk("call", "", e.line, [mk("name", "iter", e.line, []), mk("call", "", e.line, [mk("name", "list", e.line, []), e])])
     if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "iter" or self.bound("iter") or len(e.kids) != 2 or e.kids[1].kind == "kw":
-        self.err(f"{short(self.curfn.cls)}.{self.curfn.name} must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
+        self.err(f"{short(self.curfn.cls)}.{self.curfn.name} must return iter(xs) or reversed(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
     v = self.iterable(self.consume(e.kids[1], self.ret))
     if is_tuple(v.t) and v.t != "tuple[]":
         v = self.as_list(v, "iter")  # (of the items, which share one type)
