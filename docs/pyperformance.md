@@ -1,90 +1,94 @@
 # pyperformance results
 
-Pystachy compiles 19 of the 31 benchmarks tried from pyperformance 1.14.0, after the localized
+Pystachy compiles 19 of the 52 benchmarks tried from pyperformance 1.14.0, after the localized
 adaptations listed in the [port notes](../bench/pyperformance/README.md). CPython runs the same
 adapted files, and every JIT and AOT run must print exactly what CPython printed. These are
-comparisons on that source, not pyperformance scores: some inputs, random number generators and
-data types differ from upstream.
+comparisons on that source, not pyperformance scores: some inputs, random number generators and data
+types differ from upstream.
 
 ## Snapshot
 
-Advisory snapshot of 2026-10-15: commit `da24d12`, with the native compiler built from main
+Advisory snapshot of 2026-10-16: commit `a74faae`, with the native compiler built from main
 `bdc20a2`, CPython 3.13.16 and LLVM 18.1.3 on a 4-core x86-64 VM (Intel Xeon at 2.10 GHz) shared
-with other jobs. The load average was between 1 and 4, and each process used CPU for 85–99% of
-its wall time. Each value is the median of five processes; the fastest and slowest of the five
-differed by up to about 60% of the median, and more for `unpack_sequence`'s 3 ms AOT runs.
-Ratios above 1 mean faster than CPython. The
-[raw samples](benchmarks/pyperformance-2026-10-15-da24d12.json) include each process's wall, CPU
-and timed seconds, the outputs and the source hashes.
+with other jobs. The one-minute load average was 10.2 when the run started and 11.7 when it ended,
+so the processes competed for the cores: each spent 33% or more of its wall time on a CPU, and the
+five processes of a benchmark and mode differed by up to 115% of their median wall time (`richards`
+AOT). `unpack_sequence`'s AOT runs, which take a few milliseconds, are the exception: 12% and 317%.
+Each value is the median of five processes; ratios above 1 mean faster than CPython. The [raw
+samples](benchmarks/pyperformance-2026-10-16-a74faae.json) include each process's wall, CPU and
+timed seconds, the outputs and the source hashes.
 
 Whole-process wall time:
 
 | Benchmark | Arguments | CPython | JIT | AOT | CPython/AOT |
 |---|---|---:|---:|---:|---:|
-| `barnes_hut` | 1 | 0.86 s | 0.19 s | 0.039 s | 22.2× |
-| `chaos` | 10 | 0.68 s | 0.25 s | 0.040 s | 16.9× |
-| `deltablue` | 200 | 0.62 s | 0.50 s | 0.045 s | 13.9× |
-| `fannkuch` | 2 | 0.86 s | 0.33 s | 0.246 s | 3.5× |
-| `float` | 10 | 0.79 s | 0.17 s | 0.055 s | 14.4× |
-| `go` | 4 | 0.65 s | 0.23 s | 0.045 s | 14.5× |
-| `hexiom` | 100 | 0.62 s | 0.34 s | 0.081 s | 7.7× |
-| `meteor_contest` | 6 | 0.69 s | 0.59 s | 0.469 s | 1.5× |
-| `nbody` | 10 | 0.86 s | 0.19 s | 0.062 s | 13.8× |
-| `nqueens` | 10 | 0.70 s | 0.35 s | 0.222 s | 3.1× |
-| `raytrace` | 4 | 0.92 s | 0.26 s | 0.061 s | 15.0× |
-| `regex_dna` | 4 | 0.89 s | 3.36 s | 2.094 s | 0.4× |
-| `regex_effbot` | 20 | 0.49 s | 2.57 s | 1.243 s | 0.4× |
-| `regex_v8` | 4 | 0.31 s | 2.99 s | 0.878 s | 0.4× |
-| `richards` | 20 | 1.02 s | 0.28 s | 0.013 s | 81.0× |
-| `richards_super` | 20 | 1.10 s | 0.28 s | 0.014 s | 79.2× |
-| `scimark` | 2 | 0.84 s | 0.21 s | 0.039 s | 21.6× |
-| `spectral_norm` | 10 | 0.95 s | 0.11 s | 0.019 s | 49.8× |
-| `unpack_sequence` | 100000 | 0.77 s | 1.23 s | 0.003 s | n/a |
+| `barnes_hut` | 1 | 1.25 s | 0.34 s | 0.076 s | 16.4× |
+| `chaos` | 10 | 0.74 s | 0.31 s | 0.048 s | 15.4× |
+| `deltablue` | 200 | 0.75 s | 0.69 s | 0.069 s | 11.0× |
+| `fannkuch` | 2 | 1.22 s | 0.60 s | 0.48 s | 2.5× |
+| `float` | 10 | 1.27 s | 0.33 s | 0.082 s | 15.6× |
+| `go` | 4 | 0.99 s | 0.41 s | 0.073 s | 13.6× |
+| `hexiom` | 100 | 0.96 s | 0.61 s | 0.14 s | 7.0× |
+| `meteor_contest` | 6 | 1.31 s | 1.21 s | 0.85 s | 1.5× |
+| `nbody` | 10 | 1.47 s | 0.38 s | 0.094 s | 15.7× |
+| `nqueens` | 10 | 1.11 s | 0.74 s | 0.44 s | 2.5× |
+| `raytrace` | 4 | 1.57 s | 0.58 s | 0.12 s | 13.5× |
+| `regex_dna` | 4 | 1.37 s | 5.77 s | 3.37 s | 0.41× |
+| `regex_effbot` | 20 | 0.79 s | 4.25 s | 2.03 s | 0.39× |
+| `regex_v8` | 20 | 1.04 s | 6.53 s | 2.81 s | 0.37× |
+| `richards` | 20 | 1.51 s | 0.52 s | 0.018 s | 84.5× |
+| `richards_super` | 20 | 1.59 s | 0.49 s | 0.022 s | 71.4× |
+| `scimark` | 2 | 1.19 s | 0.42 s | 0.050 s | 23.9× |
+| `spectral_norm` | 10 | 1.38 s | 0.15 s | 0.029 s | 48.2× |
+| `unpack_sequence` | 50000 | 1.09 s | 1.09 s | 0.004 s | n/a |
 
-The timed part, which excludes startup and compilation, and the AOT build time:
+The timed part, which pyperf would time (without startup, compilation, setup or checksums), and the
+AOT build time:
 
 | Benchmark | CPython | JIT | AOT | CPython/JIT | CPython/AOT | AOT build |
 |---|---:|---:|---:|---:|---:|---:|
-| `barnes_hut` | 0.842 s | 0.047 s | 0.0353 s | 17.9× | 23.9× | 0.7 s |
-| `chaos` | 0.659 s | 0.060 s | 0.0350 s | 11.0× | 18.8× | 1.3 s |
-| `deltablue` | 0.603 s | 0.044 s | 0.0406 s | 13.7× | 14.9× | 1.3 s |
-| `fannkuch` | 0.845 s | 0.241 s | 0.2421 s | 3.5× | 3.5× | 0.5 s |
-| `float` | 0.767 s | 0.078 s | 0.0512 s | 9.8× | 15.0× | 0.5 s |
-| `go` | 0.625 s | 0.043 s | 0.0415 s | 14.6× | 15.1× | 1.0 s |
-| `hexiom` | 0.599 s | 0.082 s | 0.0772 s | 7.3× | 7.8× | 1.5 s |
-| `meteor_contest` | 0.669 s | 0.466 s | 0.4616 s | 1.4× | 1.4× | 1.3 s |
-| `nbody` | 0.840 s | 0.093 s | 0.0600 s | 9.1× | 14.0× | 0.7 s |
-| `nqueens` | 0.678 s | 0.255 s | 0.2178 s | 2.7× | 3.1× | 0.8 s |
-| `raytrace` | 0.896 s | 0.058 s | 0.0568 s | 15.4× | 15.8× | 0.9 s |
-| `regex_dna` | 0.778 s | 2.354 s | 2.0626 s | 0.3× | 0.4× | 4.4 s |
-| `regex_effbot` | 0.463 s | 1.587 s | 1.2383 s | 0.3× | 0.4× | 3.8 s |
-| `regex_v8` | 0.256 s | 1.119 s | 0.8600 s | 0.2× | 0.3× | 8.3 s |
-| `richards` | 1.001 s | 0.017 s | 0.0108 s | 59.1× | 92.8× | 1.2 s |
-| `richards_super` | 1.075 s | 0.017 s | 0.0119 s | 63.3× | 90.5× | 1.1 s |
-| `scimark` | 0.814 s | 0.047 s | 0.0330 s | 17.3× | 24.7× | 1.0 s |
-| `spectral_norm` | 0.935 s | 0.025 s | 0.0130 s | 37.6× | 72.1× | 0.6 s |
-| `unpack_sequence` | 0.752 s | 0.745 s | 0.0003 s | 1.0× | n/a | 13.6 s |
+| `barnes_hut` | 1.201 s | 0.0837 s | 0.0662 s | 14.4× | 18.1× | 1.1 s |
+| `chaos` | 0.690 s | 0.0634 s | 0.0423 s | 10.9× | 16.3× | 1.8 s |
+| `deltablue` | 0.718 s | 0.0542 s | 0.0504 s | 13.2× | 14.2× | 2.4 s |
+| `fannkuch` | 1.195 s | 0.443 s | 0.474 s | 2.7× | 2.5× | 0.7 s |
+| `float` | 1.250 s | 0.123 s | 0.0761 s | 10.2× | 16.4× | 0.7 s |
+| `go` | 0.952 s | 0.0680 s | 0.0613 s | 14.0× | 15.5× | 1.5 s |
+| `hexiom` | 0.933 s | 0.131 s | 0.121 s | 7.1× | 7.7× | 2.7 s |
+| `meteor_contest` | 1.268 s | 0.930 s | 0.834 s | 1.4× | 1.5× | 2.1 s |
+| `nbody` | 1.448 s | 0.170 s | 0.0918 s | 8.5× | 15.8× | 1.6 s |
+| `nqueens` | 1.071 s | 0.512 s | 0.432 s | 2.1× | 2.5× | 1.4 s |
+| `raytrace` | 1.529 s | 0.130 s | 0.103 s | 11.8× | 14.8× | 1.7 s |
+| `regex_dna` | 1.219 s | 4.304 s | 3.302 s | 0.28× | 0.37× | 6.5 s |
+| `regex_effbot` | 0.733 s | 2.672 s | 1.989 s | 0.27× | 0.37× | 7.1 s |
+| `regex_v8` | 0.657 s | 2.421 s | 2.070 s | 0.27× | 0.32× | 14.0 s |
+| `richards` | 1.482 s | 0.0251 s | 0.0148 s | 59.0× | 100.3× | 1.9 s |
+| `richards_super` | 1.560 s | 0.0239 s | 0.0176 s | 65.2× | 88.6× | 1.8 s |
+| `scimark` | 1.140 s | 0.0966 s | 0.0374 s | 11.8× | 30.5× | 1.4 s |
+| `spectral_norm` | 1.363 s | 0.0428 s | 0.0186 s | 31.9× | 73.2× | 0.9 s |
+| `unpack_sequence` | 1.054 s | 0.469 s | 0.2 µs | 2.2× | n/a | 19.1 s |
 
 ## Reading the results
 
-- AOT ran 15 of the 18 comparable benchmarks faster than CPython, by 1.5× to 81× in
-  whole-process time. Object and numeric code gained most: `richards`, `richards_super` and
-  `spectral_norm`.
-- The three regex benchmarks were 2.4–2.8× slower AOT. `lib/re` is written in the supported
-  subset, while CPython matches in its C `_sre` module. The JIT is slower still, because each run
-  also compiles `lib/re`: about 1.9 of `regex_v8`'s 3.0 wall seconds.
-- `fannkuch`, `nqueens` and `meteor_contest` gained 1.4–3.5× in the timed part. Their inner
-  loops mostly slice and insert into lists, build tuples and sets, or combine frozensets, which
-  are runtime calls; they were not profiled. The `fannkuch` and `nqueens` adaptations also replace
-  slice assignment with new lists.
-- JIT whole-process time includes compiling the program; besides the regex benchmarks, it
-  exceeded CPython's time for `unpack_sequence`.
-- `unpack_sequence` does not measure unpacking under AOT: its timed part took 0.3 ms, far too
-  little for 40 million unpackings, because optimization removed the repeated unpacking of an
-  unchanged list. Its AOT ratios are omitted. The JIT's timed part matched CPython's.
+- AOT ran 15 of the 18 comparable benchmarks faster than CPython, by 1.5× to 84× in whole-process
+  time. Object and numeric code gained most: `richards`, `richards_super` and `spectral_norm`.
+- The three regex benchmarks were 2.5–2.7× slower AOT in whole-process time, and 2.7–3.2× slower in
+  the timed part. `lib/re` is written in the supported subset, while CPython matches in its C `_sre`
+  module. The JIT is slower still, because each run also compiles `lib/re`: 4.1 of `regex_v8`'s 6.5
+  JIT wall seconds fell outside its timed part, against 0.7 s AOT, which also runs the checksum
+  there.
+- `fannkuch`, `nqueens` and `meteor_contest` gained 1.5–2.5× in the timed part. Their inner loops
+  mostly slice and insert into lists, build tuples and sets, or combine frozensets, which are
+  runtime calls; they were not profiled. The `fannkuch` and `nqueens` adaptations also replace slice
+  assignment with new lists.
+- JIT whole-process time includes compiling the program; besides the regex benchmarks, it was within
+  10% of CPython's for `deltablue`, `meteor_contest` and `unpack_sequence`.
+- `unpack_sequence` does not measure unpacking under AOT: its timed part took 0.2 µs, far too little
+  for 40 million unpackings, because optimization removed the repeated unpacking of an unchanged
+  tuple and list. Its AOT ratios are omitted. The JIT's timed part was 2.2× faster than CPython's.
 - The `random` substitutes in `chaos` and `go`, the `str` data of `regex_dna` and the other
-  adaptations make the work differ from upstream pyperformance. Rerun on an idle machine before
-  relying on a difference between two Pystachy revisions.
+  adaptations make the work differ from upstream pyperformance. With the cores this contended, a
+  difference between two runs that is smaller than the spreads above is noise; rerun on an idle
+  machine before relying on one, or on a difference between two Pystachy revisions.
 
 ## Reproduce
 
@@ -95,12 +99,14 @@ make bench-pyperformance
 python3 tools/bench_pyperformance.py --benchmarks regex_v8 richards --runs 9 --json build/pyperformance-two.json
 ```
 
-The check runs small inputs once and compares outputs without keeping timings. A measured run
-starts five processes per mode for each benchmark, rotates the order of the modes, and writes
-the raw samples, outputs, commands and source hashes to `build/pyperformance.json`. Whole-process
-time includes interpreter or executable startup; the JIT's includes compiling the program and its
-library modules with a primed runtime cache. The timed part is what each benchmark's main reports:
-the work that pyperf would time, without startup or compilation. AOT build time is measured once.
+The check runs small inputs once and compares outputs without keeping timings. A measured run starts
+five processes per mode for each benchmark, rotates the order of the modes, and writes the raw
+samples, outputs, commands and source hashes to `build/pyperformance.json`, with the load average at
+its start and end, the spread of each mode's five wall times and the least share of its wall time
+that a process spent on a CPU. Whole-process time includes interpreter or executable startup; the
+JIT's includes compiling the program and its library modules with a primed runtime cache. The timed
+part is what each benchmark's main reports: the part that pyperf would time (`TIMED_PART` in
+`tools/bench_pyperformance.py`). AOT build time is measured once.
 
 The [port notes](../bench/pyperformance/README.md#blocked) list the first compiler error of each
 benchmark that remains blocked, and `--census` reproduces that table from the pinned sdist.

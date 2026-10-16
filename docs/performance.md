@@ -29,9 +29,10 @@ mode once; repeat it to obtain a median. The benchmark gate in `make verify` rej
 mismatches, without imposing timing thresholds.
 
 The [pyperformance results](pyperformance.md) compare CPython, JIT and AOT on 19 benchmarks
-adapted from pyperformance 1.14.0. In that advisory snapshot, AOT ran 15 of 18 comparable
-benchmarks 1.5× to 81× faster and the three regex benchmarks 2.4–2.8× slower than CPython.
-The [port notes](../bench/pyperformance/README.md#blocked) record why 12 more do not compile.
+adapted from pyperformance 1.14.0. In that advisory snapshot, taken on a loaded machine, AOT ran
+15 of 18 comparable benchmarks 1.5× to 84× faster and the three regex benchmarks 2.5–2.7× slower
+than CPython. The [port notes](../bench/pyperformance/README.md#blocked) record why the other 33
+benchmarks tried do not compile.
 
 ## Caching workloads
 
