@@ -252,7 +252,8 @@ def gen_gen_module(self) -> list[str]:
         "  %n = load ptr, ptr %na",
         "  call void @pys_gen_ignored(ptr %n, ptr %p)",
         "  br label %done",
-        "done:",
+        "done:",  # (finished, as close() leaves it, for a yield from's consumer that holds it too)
+        f"  store i64 {GENDONE}, ptr %sa",
         "  call void @llvm.coro.destroy(ptr %h)",
         "  ret void",
         "}"]
