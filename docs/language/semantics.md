@@ -181,7 +181,8 @@ reads must not be bound again (and must be assigned) where it is written: it rea
 then.
 
 A `for` loop over a generator that its iterable expression has just made (a call of a generator
-function, or of an `__iter__` that yields) closes the generator when the loop is left by its
+function, or of an `__iter__` or `__reversed__` that yields, also inside `enumerate()`, `zip()`
+or `reversed()`) closes the generator when the loop is left by its
 end, `break`, `return` or an exception, before the code after the loop runs. Closing raises
 `GeneratorExit` at the suspended `yield`, so `finally` blocks, `with` blocks and
 `except GeneratorExit` run, as in CPython. What the close raises, and a `yield` after

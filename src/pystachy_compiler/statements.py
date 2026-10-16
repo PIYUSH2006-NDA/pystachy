@@ -1227,19 +1227,21 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 self.err(f"zip({a.s}=...) is not supported")
         if ((fn == "enumerate" or fn == "reversed") and len(args) == 1) or (fn == "zip" and len(args) > 0):
             evs: list[Val] = []
-            owned: list[Val] = []
-            close = False
+            ownk: list[int] = []  # (whether the loop owns each argument's generator: owned_gen)
             for a in args:
                 self.gencall = ""
                 v = self.expr(a, "")
-                own = self.owned_gen(v, a)
-                if own > 0:
-                    owned.append(v)
-                    close = close or own == 2
+                ownk.append(self.owned_gen(v, a))
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts and "__reversed__" in self.classes[v.t].methods:
-                    # (CPython calls __reversed__, whose iterator the loop steps through forwards)
+                    # (CPython calls __reversed__, whose iterator the loop steps through forwards;
+                    # a __reversed__ that yields makes a generator the loop owns)
+                    self.gencall = ""
                     seq = self.obj_iter(v, "TypeError: 'NoneType' object is not reversible", "", "__reversed__")
-                    self.for_seq(tgt, [seq], "", body, "0", hide, arg)
+                    own = self.owned_gen(seq, a)
+                    if own > 0:
+                        self.owned_loop([seq], own == 2, tgt, [seq], "", body, "0", hide, arg, None)
+                    else:
+                        self.for_seq(tgt, [seq], "", body, "0", hide, arg)
                     return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts:
                     # (CPython calls __reversed__, or __len__ and __getitem__, never __iter__)
@@ -1247,23 +1249,21 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 evs.append(v if is_opt(v.t) or v.t in self.classes else self.iterable(v))  # (None raises, and __iter__ runs, once all are evaluated)
             notit = "TypeError: 'NoneType' object is not reversible" if fn == "reversed" else "TypeError: 'NoneType' object is not iterable"
             seqs: list[Val] = []
-            if len(evs) == 1:
-                seqs.append(self.iterable(evs[0], notit))
-                if len(owned) > 0:
-                    self.owned_loop(owned, close, tgt, seqs, fn, body, "0", hide, arg, None)
-                else:
-                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
-            else:
-                # zip() makes its iterators in turn, and a dict's or a set's records its size
-                # then, before a later operand's __iter__ runs (which may change it)
-                made = SeqStart()
-                for v in evs:
-                    seqs.append(self.iterable(v, notit))
+            # (zip() makes its iterators in turn, and a dict's or a set's records its size then,
+            # before a later operand's __iter__ runs, which may change it)
+            made = SeqStart() if len(evs) > 1 else None
+            for k in range(len(evs)):
+                self.gencall = ""
+                seqs.append(self.iterable(evs[k], notit))
+                if ownk[k] == 0 and (evs[k].t in self.classes or is_opt(evs[k].t)):
+                    ownk[k] = self.owned_gen(seqs[k], args[k])  # (an __iter__ that yields: the generator it made)
+                if made is not None:
                     self.seq_start(seqs[-1], fn, made)
-                if len(owned) > 0:
-                    self.owned_loop(owned, close, tgt, seqs, fn, body, "0", hide, arg, made)
-                else:
-                    self.for_seq(tgt, seqs, fn, body, "0", hide, arg, made)
+            owned = [seqs[k] for k in range(len(seqs)) if ownk[k] > 0]
+            if len(owned) > 0:
+                self.owned_loop(owned, len([k for k in ownk if k == 2]) > 0, tgt, seqs, fn, body, "0", hide, arg, made)
+            else:
+                self.for_seq(tgt, seqs, fn, body, "0", hide, arg, made)
             for i in range(len(args)):
                 self.close_temp(args[i], seqs[i])
             return
@@ -1272,12 +1272,15 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
             seq = self.expr(args[0], "")
             seq = seq if is_opt(seq.t) or seq.t in self.classes else self.iterable(seq)
             own = self.owned_gen(seq, args[0])
-            owned = [seq] if own > 0 else []
+            obj = is_opt(seq.t) or seq.t in self.classes
             a1 = args[1].kids[0] if args[1].kind == "kw" else args[1]
             st = self.ival(a1).v
+            self.gencall = ""
             seq = self.iterable(seq)
-            if len(owned) > 0:
-                self.owned_loop(owned, own == 2, tgt, [seq], fn, body, st, hide, arg, None)
+            if own == 0 and obj:
+                own = self.owned_gen(seq, args[0])  # (an __iter__ that yields: the generator it made)
+            if own > 0:
+                self.owned_loop([seq], own == 2, tgt, [seq], fn, body, st, hide, arg, None)
             else:
                 self.for_seq(tgt, [seq], fn, body, st, hide, arg)
             self.close_temp(args[0], seq)
