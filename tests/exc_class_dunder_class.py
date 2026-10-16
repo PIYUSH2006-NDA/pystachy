@@ -1,4 +1,4 @@
-# error: e.__class__ of an exception is not supported; type(e).__name__ is
+# self.__class__.__name__ in an exception class's __repr__ (#486): its class's name
 class E(Exception):
     def __init__(self, x: int):
         super().__init__(x)

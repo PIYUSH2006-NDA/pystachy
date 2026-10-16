@@ -5,6 +5,7 @@ from src.pystachy_compiler.ir import Data, Ins, IterArg, Loop, Reduce, Val
 from src.pystachy_compiler.lexer import Lexer
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.parser import Parser
+from src.pystachy_compiler.reflection import VARS_USES
 from src.pystachy_compiler.specs import (
     ARITY,
     CALLS,
@@ -135,11 +136,19 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
     if name.startswith("__pys_dict_") or name.startswith("__pys_set_"):
         return self.walk(name, args)
+    if name == "__pys_asdict" or name == "__pys_astuple" or name == "dataclasses.asdict" or name == "dataclasses.astuple" or name == "dataclasses.is_dataclass":
+        return self.refl_dataclasses(name, args)  # (reflection.py)
+    if name == "dataclasses.fields":
+        self.err("dataclasses.fields() is supported as the iterable of a for loop or a list comprehension that reads each field's .name (#486)")
     if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii" or name == "__pys_hash":
         # compiler-written calls (f"{x!r}", dataclass __repr__, hash_helper): always the builtin
         name = name[6:]
     if name.startswith("builtins."):
         name = name[9:]
+    if (name == "str" or name == "repr" or name == "ascii" or name == "format") and len(args) == 1 and self.refl_textual(args[0]):
+        # str(vars(o)), repr(getattr(o, name)), ...: the text of what it looks up (reflection.py)
+        rtext = self.refl_finish(self.refl_defer(args[0]), "repr" if name == "repr" or name == "ascii" else "str")
+        return Val(self.rt("pys_ascii", "ptr", [f"ptr {rtext.v}"]), "str") if name == "ascii" else rtext
     if name == "bytes":
         return self.bytes_(args)
     if name == "tuple":
@@ -221,10 +230,26 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             pv = Val(self.rt("pys_path_join", "ptr", [f"ptr {pv.v}", f"ptr {b.v}"]), "str")
         return pv
     if name == "getattr":
-        # getattr(o, "name") reads o.name: o, then the attribute, as CPython looks it up
-        if len(args) != 2 or self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)) == "":
-            self.err("getattr() is supported with two arguments, the second a str literal (or, in operator's getters, a constant name)")
+        # getattr(o, "name") reads o.name: o, then the attribute, as CPython looks it up; with a
+        # default, or a name only the run time knows, see refl_getattr
+        if len(args) != 2 or self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)) == "" or self.refl_derived_only(args[0], self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args))):
+            return self.refl_getattr(args, want)
         return self.expr(mk("attr", self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)), args[0].line, [args[0]]), want)
+    if name == "setattr":
+        return self.refl_setattr(args)
+    if name == "dir" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
+        return self.refl_dir(args[0])
+    if name == "vars" and len(args) == 1:
+        self.err(VARS_USES)
+    if name == "dict" and len(args) == 1 and self.refl_dict_of(args[0]) is not None:
+        return self.refl_dict_copy(args[0])
+    if name == "delattr":
+        self.err("delattr() is not supported: deleting an attribute needs an unbound state for each field (#489)")
+    if name == "type" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
+        tv = self.expr(args[0], "")
+        if tv.t == "exc" or (tv.t in self.classes and self.classes[tv.t].exc != ""):
+            self.err(f"unsupported call type({tv.t}): type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
+        self.err("type(x) as a value (a class object) is not supported (#7); type(x).__name__, x.__class__.__name__, type(x) is C and type(a) == type(b) are (#486)")
     if name == "callable" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
         # decided by the static type: an object is callable where its class defines __call__
         # and it is not None
@@ -233,9 +258,14 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if known == -2:
             return Val("true", "bool") if v.v in self.nn else self.ptr_cmp('!=', v, Val('null', 'None'))
         return Val("true" if known == 1 else "false", "bool")
+    if name == "hasattr" and not (len(args) == 2 and args[1].kind == "str"):
+        return self.refl_hasattr(args)  # (a name only the run time knows: reflection.py)
     if name == "hasattr" and len(args) == 2 and args[1].kind == "str":
         # decided by the static type of the object (for an object: is it None)
         hv = self.expr(args[0], "")
+        if self.refl_prop_in(hv.t, args[1].s) or (self.reference_union(hv.t) and "file" not in umembers(unopt(hv.t))):
+            # (a property's getter, and each class of a union of classes: reflection.py)
+            return self.refl_hasattr_lit(hv, args[1].s, self.knownobj(args[0]))
         if hv.t in self.classes and self.classes[hv.t].tag > 0:
             # A derived class may add this attribute, or leave its field unassigned.
             # Read a field's flag only in its concrete class's arm: it may lie beyond
@@ -1488,7 +1518,7 @@ def gen_print_(self, args: list[Node]) -> Val:
     temp: list[Node] = []  # file=open(...): closed after the print, as close_temp does
     for a in args:
         if a.kind != "kw":
-            vals.append(self.expr(a, ""))
+            vals.append(self.refl_defer(a) if self.refl_textual(a) else self.expr(a, ""))  # (vars(o): reflection.py)
             continue
         x = a.kids[0]
         if a.s == "sep" or a.s == "end":
@@ -1522,7 +1552,7 @@ def gen_print_(self, args: list[Node]) -> Val:
     for i in range(len(vals)):
         if i > 0:
             self.pwrite(fd, fv, sep, fo)
-        self.pwrite(fd, fv, self.to_str(vals[i]).v, fo)
+        self.pwrite(fd, fv, (self.refl_finish(vals[i], "str") if vals[i].t == "%refl" else self.to_str(vals[i])).v, fo)
     self.pwrite(fd, fv, end, fo)
     if flush != "" and fo.t != "" and "flush" not in self.classes[fo.t].methods:
         # CPython looks flush() up only where flush is true

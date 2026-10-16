@@ -168,6 +168,12 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
+- The text of `getattr(o, name)` with a run-time name (see [reflection](semantics.md#reflection))
+  shows the addresses CPython shows, but not CPython's: a method wrapper's or builtin method's
+  object address is the object's, a builtin method of the type (`__new__`, `__init_subclass__`)
+  and a static method (`<function C.m at 0x...>`) show the address of the class's reflection
+  record, as no type or function object exists at run time.
+
 - A PEP 695 function's type parameter hides a module-level name of the same name only in the
   function's annotations: its body reads the module's (`T = 5` then
   `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
@@ -531,8 +537,9 @@ supported alternatives.
   it is imported)
 - `@dataclass(slots=True)` and `weakref_slot=`, `@dataclass` and `field()` options that are not
   `True` or `False` literals, `field(metadata=...)`, a `default_factory` that is not a function,
-  a class or a lambda without parameters, `dataclasses.asdict()`, `astuple()`, `fields()` and
-  `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
+  a class or a lambda without parameters, `dataclasses.fields()` other than as a loop's iterable,
+  `asdict()` and `astuple()` with a factory or of fields that join in no type (see
+  [reflection](#reflection)), `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
   `except` clause, `hash()` of a dataclass object, a base dataclass's field declared again with
   another type, and `repr=False` in a dataclass whose base has the `__repr__` `@dataclass` writes
 - a property's `@x.getter`, a second setter or deleter, a setter or deleter of another name than
@@ -699,6 +706,36 @@ supported alternatives.
   a NamedTuple), or of a builtin, a method or a lambda; a required keyword-only parameter or a
   call through the cache that explicitly supplies a keyword-only argument (an optional
   keyword-only parameter's default may be used); and `cache_parameters()`
+
+<a id="reflection"></a>
+
+### Reflection
+
+The [reflection rules](semantics.md#reflection) list what is supported; these are rejected:
+
+- `type(x)` as a value (a class object, #7), `type(e)` of an exception other than
+  `type(e).__name__`, and `type(x).__name__` of a function, file or callable
+- `getattr()` of a name only the run time knows whose value is used (kept, passed on, called,
+  compared, a sort key: `attrgetter(input())`), its text with a format spec, and its text for a
+  dataclass, a generic class, a class with annotated class attributes or a builtin value (#487,
+  #489)
+- reflection over classes with private attributes (`__x`): CPython mangles their names (to
+  `_C__x`), which Pystachy does not (see [functions and object identity](#functions-and-object-identity))
+- `setattr()` of a run-time name on an object whose class does not close its names with
+  `__slots__` (it may add an attribute: #489), with a value that does not fit every slot field,
+  or that may name a slot no code assigns; `delattr()` and `del o.x` of a field (#489)
+- `vars(x)` and `x.__dict__` other than printed, iterated, formatted or copied; of a class whose
+  `__init__` assigns two new attributes in one branch or loop, through a property's setter, or
+  outside `__init__`, whose `__post_init__` adds an attribute, or one of whose fields `__init__`
+  may leave unassigned and other code may assign (unless it is the last); and of a class
+  attribute the program may also assign through an object
+- `getattr`, `setattr`, `hasattr` and `dir()` of exception objects, and `dir()` of files and
+  functions
+- a loop over constant names whose body defines a function, lambda or class, or assigns the
+  loop variable (the name is then a run-time name), and loops that would compile their body more
+  than 256 times
+- `dataclasses.replace(obj, **changes)` of a `dict[str, T]` (which field a key names is known only
+  at run time, #489)
 
 ### Source text
 

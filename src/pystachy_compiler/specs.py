@@ -343,6 +343,10 @@ HASATTR: dict[str, str] = {
     "list": "__add__ __class_getitem__ __contains__ __delitem__ __getitem__ __iadd__ __imul__ __iter__ __len__ __mul__ __reversed__ "
             "__rmul__ __setitem__ append clear copy count extend index insert pop remove reverse sort",
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
+    "bytes": "__add__ __buffer__ __bytes__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mod__ __mul__ __rmod__ __rmul__ "
+             "capitalize center count decode endswith expandtabs find fromhex hex index isalnum isalpha isascii isdigit islower isspace "
+             "istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition "
+             "rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
     "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
@@ -690,6 +694,8 @@ RUNTIME: dict[str, str] = {
     "eq.pair": "bool:*T,*T,%ptr,%ptr|rL rD U|",  # conservative: dict lookup's call graph reaches user equality
     "hash": "int:*T,#|U?|", "hash.id": "int:%ptr||",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
+    # reflection records (reflection.py): a name's index in a record's name table, and repr(vars(o))
+    "refl.find": "int:%ptr,str||", "refl.vars": "str:%ptr,%ptr|A I rO rL rD U|",
     "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "ubox": "%ptr:int,*T|A|", "ubox_opt": "%ptr:int,%ptr,int|A|", "unpack_check": "None:int,int|R|", "unpack_ex_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",

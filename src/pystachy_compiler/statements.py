@@ -174,7 +174,7 @@ def gen_check_import(self, a: Node) -> None:
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
     elif mod == "dataclasses":
-        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace"]:
+        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace", "fields", "asdict", "astuple", "is_dataclass"]:
             self.err(f"dataclasses.{x} is not supported")
     elif not builtin_has(mod, x):
         self.err(f"cannot import name '{x}' from '{mod}': Pystachy's {mod} module has no '{x}'")
@@ -1205,6 +1205,8 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
     tgt = n.kids[0]
     it = n.kids[1]
     body = n.kids[2].kids
+    if arg is None and len(hide) == 0 and self.refl_unroll_for(n):
+        return  # (a loop over constant attribute names: reflection.py)
     names: list[str] = []
     names_in(tgt, names)
     for nm in names:

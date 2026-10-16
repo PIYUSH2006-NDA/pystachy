@@ -41,6 +41,82 @@ from src.pystachy_compiler.unions import (
     gen_isinst_narrow as unions_isinst_narrow,
     gen_holds as unions_holds,
 )
+from src.pystachy_compiler.reflection import (
+    RArm,
+    RLeaf,
+    RText,
+    gen_refl_typeof as reflection_refl_typeof,
+    gen_refl_concrete as reflection_refl_concrete,
+    gen_refl_may_none as reflection_refl_may_none,
+    gen_refl_split as reflection_refl_split,
+    gen_refl_split_class as reflection_refl_split_class,
+    gen_refl_type_name as reflection_refl_type_name,
+    gen_refl_record as reflection_refl_record,
+    gen_refl_type_of as reflection_refl_type_of,
+    gen_refl_class_of as reflection_refl_class_of,
+    gen_refl_type_attr as reflection_refl_type_attr,
+    gen_refl_type_operand as reflection_refl_type_operand,
+    gen_refl_type_cmp as reflection_refl_type_cmp,
+    gen_refl_derived_only as reflection_refl_derived_only,
+    gen_refl_replace_changes as reflection_refl_replace_changes,
+    gen_refl_hasattr_lit as reflection_refl_hasattr_lit,
+    gen_refl_prop_in as reflection_refl_prop_in,
+    gen_refl_name_list as reflection_refl_name_list,
+    gen_refl_names_table as reflection_refl_names_table,
+    gen_refl_runtime_name as reflection_refl_runtime_name,
+    gen_refl_find as reflection_refl_find,
+    gen_refl_hasattr as reflection_refl_hasattr,
+    gen_refl_otext as reflection_refl_otext,
+    gen_refl_lookup as reflection_refl_lookup,
+    gen_refl_lookup_text as reflection_refl_lookup_text,
+    gen_refl_arm_text as reflection_refl_arm_text,
+    gen_refl_setattr_runtime as reflection_refl_setattr_runtime,
+    gen_refl_union_str as reflection_refl_union_str,
+    gen_refl_dc_class as reflection_refl_dc_class,
+    gen_refl_dc_check as reflection_refl_dc_check,
+    gen_refl_dc_names as reflection_refl_dc_names,
+    gen_refl_unroll_fields as reflection_refl_unroll_fields,
+    gen_refl_dc_type as reflection_refl_dc_type,
+    gen_refl_dc_copy as reflection_refl_dc_copy,
+    gen_refl_dataclasses as reflection_refl_dataclasses,
+    gen_refl_dir_names as reflection_refl_dir_names,
+    gen_refl_dir as reflection_refl_dir,
+    gen_refl_dir_of as reflection_refl_dir_of,
+    gen_refl_dict_copy as reflection_refl_dict_copy,
+    gen_refl_dict_format as reflection_refl_dict_format,
+    gen_refl_percent as reflection_refl_percent,
+    gen_refl_format_map as reflection_refl_format_map,
+    gen_refl_unroll_dict as reflection_refl_unroll_dict,
+    gen_refl_size_check as reflection_refl_size_check,
+    gen_refl_dict_operand as reflection_refl_dict_operand,
+    gen_refl_supported as reflection_refl_supported,
+    gen_refl_defines as reflection_refl_defines,
+    gen_refl_names as reflection_refl_names,
+    gen_refl_listed as reflection_refl_listed,
+    gen_refl_public as reflection_refl_public,
+    gen_refl_init_order as reflection_refl_init_order,
+    gen_refl_dict_order as reflection_refl_dict_order,
+    gen_refl_stored as reflection_refl_stored,
+    gen_refl_late as reflection_refl_late,
+    gen_refl_fields_table as reflection_refl_fields_table,
+    gen_refl_layout_record as reflection_refl_layout_record,
+    gen_refl_dict_of as reflection_refl_dict_of,
+    gen_refl_vars_text as reflection_refl_vars_text,
+    gen_refl_textual as reflection_refl_textual,
+    gen_refl_defer as reflection_refl_defer,
+    gen_refl_finish as reflection_refl_finish,
+    gen_refl_bound_once as reflection_refl_bound_once,
+    gen_refl_const_names as reflection_refl_const_names,
+    gen_refl_unroll_for as reflection_refl_unroll_for,
+    gen_refl_name as reflection_refl_name,
+    gen_refl_args as reflection_refl_args,
+    gen_refl_has as reflection_refl_has,
+    gen_refl_join as reflection_refl_join,
+    gen_refl_phi as reflection_refl_phi,
+    gen_refl_catch_attr as reflection_refl_catch_attr,
+    gen_refl_getattr as reflection_refl_getattr,
+    gen_refl_setattr as reflection_refl_setattr,
+)
 from src.pystachy_compiler.builtins import (
     gen_anyall as builtins_anyall,
     gen_as_list as builtins_as_list,
@@ -973,11 +1049,231 @@ class Gen:
         # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
         # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
+        self.pep695: dict[str, bool] = {}  # the generic classes of PEP 695's syntax, class C[T] (reflection: __type_params__)
         # the type aliases, by qualified name: the statement that binds each (Mod.taliases), and
         # those whose annotation alias_ann is making the type of
         self.taliases: dict[str, Node] = {}
         self.resolving: list[str] = []
         self.unaliased = 0  # (the nodes unalias has made of the annotation it expands)
+        self.reflrecs: dict[str, Data] = {}  # the reflection records made (refl_record), by global name
+        self.reflstores: dict[str, bool] = {}  # the attribute names the program's assignments assign (refl_stored)
+        self.refllate: dict[str, bool] = {}  # those assigned other than by an __init__ through its object (refl_late)
+        self.refltexts: list[RText] = []  # the deferred texts of reflective lookups (refl_defer)
+        self.reflcopies = 1  # the copies of the code being compiled that unrolled loops make (refl_unroll_for)
+
+    # ---- reflection (reflection.py)
+    def refl_typeof(self, n: Node) -> Node | None:
+        return reflection_refl_typeof(self, n)
+
+    def refl_concrete(self, t: str) -> list[str]:
+        return reflection_refl_concrete(self, t)
+
+    def refl_may_none(self, v: Val) -> bool:
+        return reflection_refl_may_none(self, v)
+
+    def refl_split(self, v: Val, nonnull: bool = False) -> list[RLeaf]:
+        return reflection_refl_split(self, v, nonnull)
+
+    def refl_split_class(self, v: Val) -> list[RLeaf]:
+        return reflection_refl_split_class(self, v)
+
+    def refl_type_name(self, c: str, what: str) -> str:
+        return reflection_refl_type_name(self, c, what)
+
+    def refl_record(self, c: str) -> str:
+        return reflection_refl_record(self, c)
+
+    def refl_type_of(self, v: Val, what: str, nonnull: bool = False) -> list[RLeaf]:
+        return reflection_refl_type_of(self, v, what, nonnull)
+
+    def refl_class_of(self, v: Val, nonnull: bool = False) -> Val:
+        return reflection_refl_class_of(self, v, nonnull)
+
+    def refl_type_attr(self, x: Node, what: str) -> Val:
+        return reflection_refl_type_attr(self, x, what)
+
+    def refl_type_operand(self, n: Node) -> str:
+        return reflection_refl_type_operand(self, n)
+
+    def refl_type_cmp(self, n: Node) -> Val | None:
+        return reflection_refl_type_cmp(self, n)
+
+    def refl_name(self, n: Node) -> str:
+        return reflection_refl_name(self, n)
+
+    def refl_args(self, name: str, args: list[Node], lo: int, hi: int) -> None:
+        return reflection_refl_args(self, name, args, lo, hi)
+
+    def refl_has(self, c: str, a: str) -> str:
+        return reflection_refl_has(self, c, a)
+
+    def refl_join(self, vals: list[Val], what: str) -> str:
+        return reflection_refl_join(self, vals, what)
+
+    def refl_phi(self, vals: list[Val], blocks: list[str], end: str, what: str) -> Val:
+        return reflection_refl_phi(self, vals, blocks, end, what)
+
+    def refl_catch_attr(self, x: Val, a: str, d: Val, vals: list[Val], blocks: list[str], end: str, truth: bool = False) -> None:
+        return reflection_refl_catch_attr(self, x, a, d, vals, blocks, end, truth)
+
+    def refl_getattr(self, args: list[Node], want: str) -> Val:
+        return reflection_refl_getattr(self, args, want)
+
+    def refl_setattr(self, args: list[Node]) -> Val:
+        return reflection_refl_setattr(self, args)
+
+    def refl_bound_once(self, name: str) -> list[str] | None:
+        return reflection_refl_bound_once(self, name)
+
+    def refl_const_names(self, it: Node) -> list[str] | None:
+        return reflection_refl_const_names(self, it)
+
+    def refl_unroll_for(self, n: Node) -> bool:
+        return reflection_refl_unroll_for(self, n)
+
+    def refl_supported(self, c: str, what: str) -> None:
+        return reflection_refl_supported(self, c, what)
+
+    def refl_defines(self, c: str, m: str) -> bool:
+        return reflection_refl_defines(self, c, m)
+
+    def refl_names(self, c: str) -> list[list[str]]:
+        return reflection_refl_names(self, c)
+
+    def refl_listed(self, c: str, nk: list[str]) -> bool:
+        return reflection_refl_listed(self, c, nk)
+
+    def refl_public(self, c: str, n: str) -> None:
+        return reflection_refl_public(self, c, n)
+
+    def refl_init_order(self, c: str, f: FnInfo, out: list[str], maybe: dict[str, bool]) -> bool:
+        return reflection_refl_init_order(self, c, f, out, maybe)
+
+    def refl_dict_order(self, c: str) -> list[str]:
+        return reflection_refl_dict_order(self, c)
+
+    def refl_stored(self, name: str) -> bool:
+        return reflection_refl_stored(self, name)
+
+    def refl_late(self, name: str) -> bool:
+        return reflection_refl_late(self, name)
+
+    def refl_fields_table(self, c: str) -> str:
+        return reflection_refl_fields_table(self, c)
+
+    def refl_layout_record(self, c: str) -> str:
+        return reflection_refl_layout_record(self, c)
+
+    def refl_dict_of(self, n: Node) -> Node | None:
+        return reflection_refl_dict_of(self, n)
+
+    def refl_vars_text(self, o: Val, known: bool) -> Val:
+        return reflection_refl_vars_text(self, o, known)
+
+    def refl_textual(self, n: Node) -> bool:
+        return reflection_refl_textual(self, n)
+
+    def refl_defer(self, n: Node) -> Val:
+        return reflection_refl_defer(self, n)
+
+    def refl_finish(self, v: Val, conv: str) -> Val:
+        return reflection_refl_finish(self, v, conv)
+
+    def refl_dict_operand(self, n: Node, x: Node) -> Val:
+        return reflection_refl_dict_operand(self, n, x)
+
+    def refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
+        return reflection_refl_unroll_dict(self, n, d, x, m)
+
+    def refl_size_check(self, ov: Val, flagged: list[str], snap: list[str]) -> None:
+        return reflection_refl_size_check(self, ov, flagged, snap)
+
+    def refl_dir_names(self, c: str) -> list[list[str]]:
+        return reflection_refl_dir_names(self, c)
+
+    def refl_dir(self, x: Node) -> Val:
+        return reflection_refl_dir(self, x)
+
+    def refl_dir_of(self, it: Node) -> Node | None:
+        return reflection_refl_dir_of(self, it)
+
+    def refl_dict_copy(self, d: Node) -> Val:
+        return reflection_refl_dict_copy(self, d)
+
+    def refl_dict_format(self, d: Node, keys: list[str], fmt: str, what: str) -> Val:
+        return reflection_refl_dict_format(self, d, keys, fmt, what)
+
+    def refl_percent(self, fmt: str, d: Node) -> Val:
+        return reflection_refl_percent(self, fmt, d)
+
+    def refl_format_map(self, fmt: str, d: Node) -> Val:
+        return reflection_refl_format_map(self, fmt, d)
+
+    def refl_dc_class(self, x: Node, what: str) -> str:
+        return reflection_refl_dc_class(self, x, what)
+
+    def refl_dc_check(self, t: str, what: str) -> str:
+        return reflection_refl_dc_check(self, t, what)
+
+    def refl_dc_names(self, it: Node) -> list[str] | None:
+        return reflection_refl_dc_names(self, it)
+
+    def refl_unroll_fields(self, n: Node, names: list[str]) -> None:
+        return reflection_refl_unroll_fields(self, n, names)
+
+    def refl_dc_type(self, t: str, what: str, seen: list[str]) -> str:
+        return reflection_refl_dc_type(self, t, what, seen)
+
+    def refl_dc_copy(self, v: Val, what: str, seen: list[str], nonnull: bool = False) -> Val:
+        return reflection_refl_dc_copy(self, v, what, seen, nonnull)
+
+    def refl_dataclasses(self, name: str, args: list[Node]) -> Val:
+        return reflection_refl_dataclasses(self, name, args)
+
+    def refl_union_str(self, v: Val, m: str) -> Val:
+        return reflection_refl_union_str(self, v, m)
+
+    def refl_name_list(self, c: str) -> list[list[str]]:
+        return reflection_refl_name_list(self, c)
+
+    def refl_names_table(self, c: str) -> str:
+        return reflection_refl_names_table(self, c)
+
+    def refl_runtime_name(self, a: Node, what: str) -> Val:
+        return reflection_refl_runtime_name(self, a, what)
+
+    def refl_find(self, c: str, name: Val) -> str:
+        return reflection_refl_find(self, c, name)
+
+    def refl_hasattr(self, args: list[Node]) -> Val:
+        return reflection_refl_hasattr(self, args)
+
+    def refl_otext(self, c: str, name: str) -> str:
+        return reflection_refl_otext(self, c, name)
+
+    def refl_lookup(self, n: Node) -> RText:
+        return reflection_refl_lookup(self, n)
+
+    def refl_lookup_text(self, r: RText, conv: str) -> Val:
+        return reflection_refl_lookup_text(self, r, conv)
+
+    def refl_arm_text(self, r: RText, arm: RArm, conv: str) -> Val:
+        return reflection_refl_arm_text(self, r, arm, conv)
+
+    def refl_setattr_runtime(self, args: list[Node]) -> Val:
+        return reflection_refl_setattr_runtime(self, args)
+
+    def refl_replace_changes(self, obj: Node, d: Val) -> None:
+        return reflection_refl_replace_changes(self, obj, d)
+
+    def refl_hasattr_lit(self, o: Val, a: str, known: bool) -> Val:
+        return reflection_refl_hasattr_lit(self, o, a, known)
+
+    def refl_prop_in(self, t: str, a: str) -> bool:
+        return reflection_refl_prop_in(self, t, a)
+
+    def refl_derived_only(self, x: Node, a: str) -> bool:
+        return reflection_refl_derived_only(self, x, a)
 
     # ---- emission helpers
     def err(self, msg: str) -> None:

@@ -15,6 +15,7 @@ remain valid Python and compile together through Pystachy's existing loader.
 | Types | [declarations](pystachy_compiler/declarations.py), [templates](pystachy_compiler/templates.py): annotations, fields and specialization. |
 | Values | [variables](pystachy_compiler/variables.py), [expressions](pystachy_compiler/expressions.py): binding, closures and expression typing. |
 | Calls | [calls](pystachy_compiler/calls.py), [builtins](pystachy_compiler/builtins.py): function dispatch and builtin operations. |
+| Reflection | [reflection](pystachy_compiler/reflection.py): `type()` names and identity, `getattr`/`setattr`/`hasattr`, `vars`, `dir` and `dataclasses`' introspection, and classes' reflection records. |
 | Containers | [containers](pystachy_compiler/containers.py), [conversions](pystachy_compiler/conversions.py): collection operations, coercion and runtime slots. |
 | Control flow | [statements](pystachy_compiler/statements.py), [exceptions](pystachy_compiler/exceptions.py): statements, loops and exceptional cleanup. |
 | Generators | [generators](pystachy_compiler/generators.py): generator functions as LLVM coroutines, `yield`, `yield from`, loops that own generators, generator expressions as values. |

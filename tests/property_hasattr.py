@@ -1,4 +1,4 @@
-# error: hasattr() of property 'value' is not supported
+# hasattr() of a property (#486): its getter runs, and AttributeError means False
 class C:
     @property
     def value(self) -> int:

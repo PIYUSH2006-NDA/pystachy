@@ -47,6 +47,7 @@ COMPILER_SOURCES: list[str] = [
     'src/pystachy_compiler/optimizations.py',
     'src/pystachy_compiler/parser.py',
     'src/pystachy_compiler/program.py',
+    'src/pystachy_compiler/reflection.py',
     'src/pystachy_compiler/scalar_ir.py',
     'src/pystachy_compiler/scope.py',
     'src/pystachy_compiler/specs.py',
