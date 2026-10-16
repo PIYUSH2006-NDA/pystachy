@@ -539,6 +539,13 @@ def gen_wider(self, a: str, b: str) -> str:
         ws.append(w)
     return self.ctype("tuple", ws)
 
+def gen_widens_items(self, a: str, b: str) -> bool:
+    # can the items of list type a be copied as they are into a list of type b (list.extend(),
+    # +=, a slice assignment): wider(a, b) is b, and each item is a value of b's item type, so a
+    # list[str] goes into a list[str | None], but a list[list[str]] not into a list[list[str |
+    # None]], whose items, shared with it, None could then be appended to
+    return self.wider(a, b) == b and self.widens(elem(a), elem(b))
+
 def gen_boxwider(self, a: str, b: str) -> str:
     # wider(a, b) for tuple types whose items differ also where one is an int, float or bool and
     # the other an int | None, float | None or bool | None: the tuple of the latter, which the

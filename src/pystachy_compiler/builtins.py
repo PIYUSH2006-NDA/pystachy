@@ -1167,7 +1167,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 v = Val(v.v, "list[str]")  # (an item that is None raises when it runs, as CPython's error)
             if key == "str.join" and is_list(v.t) and elem(v.t) != "str" and "?" not in v.t:
                 self.err(f"sequence item 0: expected str instance, {tname(elem(v.t))} found")  # (CPython's TypeError)
-            if key == "list.extend" and is_list(v.t) and v.t != pt and self.wider(v.t, pt) == pt:
+            if key == "list.extend" and is_list(v.t) and v.t != pt and self.widens_items(v.t, pt):
                 v = Val(v.v, pt)  # (its items are copied: list[str] extends a list[str | None])
             if span and is_sopt(v.t) and unopt(v.t) != "float":
                 v = Val(self.optint(v, dflt), "int")

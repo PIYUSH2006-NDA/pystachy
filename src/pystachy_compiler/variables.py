@@ -1526,7 +1526,7 @@ def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
         v = self.as_list(v, "list")
     if not is_list(v.t):
         self.err(f"must assign iterable to extended slice, not {typestr(v.t)}")
-    if v.t != o.t and self.wider(v.t, o.t) == o.t:
+    if v.t != o.t and self.widens_items(v.t, o.t):
         v = Val(v.v, o.t)  # (its items are copied: a list[str] into a list[str | None], as extend())
     v = self.coerce(v, o.t)
     self.rt("pys_list_set_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {st}", f"ptr {v.v}"])

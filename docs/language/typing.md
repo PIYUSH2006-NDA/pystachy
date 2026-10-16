@@ -193,7 +193,9 @@ narrowed, because calls can change them: copy to a local and test it.
 Containers are invariant: `list[T]` cannot be passed as `list[T | None]`.
 Some comparisons and concatenations can combine reference-based optional item types,
 such as `list[str]` and `list[str | None]`; numeric optional items need separate storage,
-so a `list[int]` cannot become a `list[int | None]`. Tuples can convert item by item.
+so a `list[int]` cannot become a `list[int | None]`. `+`, `+=`, `extend()` and slice
+assignment copy items that must fit as they are: a `list[list[str]]` cannot extend a
+`list[list[str | None]]`, which would share its inner lists. Tuples can convert item by item.
 `join()` and `writelines()` check optional string items at runtime.
 
 An optional dict lookup key equal to `None` is absent: membership is false, `get()` and

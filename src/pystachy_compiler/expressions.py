@@ -2233,8 +2233,9 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     seq = a.t == "str" or is_list(a.t)
     if op == "+" and seq and a.t == b.t:
         return Val(self.rt("pys_str_add" if a.t == "str" else "pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), a.t)
-    if op == "+" and is_list(a.t) and is_list(b.t) and self.wider(a.t, b.t) != "":
-        return Val(self.rt("pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), self.wider(a.t, b.t))  # (a new list)
+    lw = self.wider(a.t, b.t) if op == "+" and is_list(a.t) and is_list(b.t) else ""
+    if lw != "" and self.widens_items(a.t, lw) and self.widens_items(b.t, lw):
+        return Val(self.rt("pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), lw)  # (a new list of the items of both)
     if op == "*" and seq and b.t == "int":
         return Val(self.rt("pys_str_mul" if a.t == "str" else "pys_list_mul", "ptr", [f"ptr {a.v}", f"i64 {b.v}"]), a.t)
     if op == "+" and is_tuple(a.t) and is_tuple(b.t):

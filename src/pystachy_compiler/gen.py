@@ -211,6 +211,7 @@ from src.pystachy_compiler.declarations import (
     gen_unpack_ann as declarations_unpack_ann,
     gen_vtype as declarations_vtype,
     gen_widens as declarations_widens,
+    gen_widens_items as declarations_widens_items,
     gen_wider as declarations_wider,
 )
 from src.pystachy_compiler.emission import (
@@ -1083,6 +1084,9 @@ class Gen:
 
     def widens(self, a: str, b: str) -> bool:
         return declarations_widens(self, a, b)
+
+    def widens_items(self, a: str, b: str) -> bool:
+        return declarations_widens_items(self, a, b)
 
     def declare_fn(self, d: Node, cls: str, inherited: bool=False) -> FnInfo:
         return declarations_declare_fn(self, d, cls, inherited)

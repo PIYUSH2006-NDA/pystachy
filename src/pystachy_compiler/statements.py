@@ -962,7 +962,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             self.none_operands(op, cur, b, "+=")
             cur = Val(cur.v, unopt(cur.t))
             b = Val(b.v, unopt(b.t))
-        if is_list(b.t) and b.t != cur.t and self.wider(b.t, cur.t) == cur.t:
+        if is_list(b.t) and b.t != cur.t and self.widens_items(b.t, cur.t):
             b = Val(b.v, cur.t)  # (as extend: the items are copied)
         self.rt("pys_list_extend", "void", [f"ptr {cur.v}", f"ptr {self.coerce(b, cur.t).v}"])
         return cur
