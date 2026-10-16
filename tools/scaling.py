@@ -28,6 +28,8 @@ Each shape is a family of programs whose size grows with N:
   gdicts   N global dicts and one function that sets each (Gen.reaching walks back from each load)
   dropped  one function whose if sys.platform == "win32" block, dropped at compile time, binds N
            variables, each read further on where a test that is false guards it
+  nones    N globals assigned None, then an int, then each tested in an if: Gen.none_type types
+           each from the values the module's statements assign it
 Each cell is the median of RUNS runs of "COMMAND ir main.py -o /dev/null" in seconds, startup
 included; "x" is its growth from the previous N (2.0 is linear when N doubles, 4.0 quadratic).
 --ops adds, for each COMMAND that runs a .py file (the CPython-hosted compiler), the number of
@@ -210,10 +212,18 @@ def dropped(n):
     return {"main.py": src}
 
 
+def nones(n):
+    src = [f"v{i} = None" for i in range(n)] + [f"v{i} = {i}" for i in range(n)] + ["total = 0"]
+    for i in range(n):
+        src += [f"if v{i} is not None and v{i} >= 0:", f"    total += v{i} * 2"]
+    src.append("print(total)")
+    return {"main.py": src}
+
+
 SHAPES = {"funcs": funcs, "globals": globals_, "both": both, "long": long, "top": top, "classes": classes, "modules": modules,
           "fields": fields, "calls": calls, "imports": imports, "stdlib": stdlib, "breaks": breaks, "exits": exits, "elifs": elifs,
           "topelifs": topelifs, "comps": comps, "chain": chain,
-          "lookups": lookups, "gdicts": gdicts, "dropped": dropped}
+          "lookups": lookups, "gdicts": gdicts, "dropped": dropped, "nones": nones}
 
 
 def write(d, files):

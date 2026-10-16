@@ -36,6 +36,32 @@ def walrus_values(e: Node, name: str, out: list[Node]) -> None:
         out.append(e.kids[0])
 
 
+def none_sites(body: list[Node], out: dict[str, list[Node]]) -> None:
+    # the statements in body (into blocks, in order, not into the functions and classes it
+    # defines) whose own code may assign each name, as Gen.none_values reads them: a name or a
+    # tuple or list target's name item, and a := in a kid that is no block
+    for st in body:
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
+        names: dict[str, bool] = {}
+        for t in st.kids[:-1] if st.kind == "assign" else st.kids[:0]:
+            for x in t.kids if t.kind == "tuple" or t.kind == "list" else [t]:
+                if x.kind == "name":
+                    names[x.s] = True
+        for kid in st.kids:
+            if kid.kind != "block" and kid.kind != "except":
+                walrus_names(kid, names)
+        for nm in names:
+            if nm not in out:
+                out[nm] = []
+            out[nm].append(st)
+        for kid in st.kids:
+            if kid.kind == "block":
+                none_sites(kid.kids, out)
+            elif kid.kind == "except":
+                none_sites(kid.kids[1].kids, out)
+
+
 def stmt_walrus(st: Node, out: dict[str, bool]) -> None:
     # the names that the := in statement st's own expressions bind (not in its blocks, nor in the
     # body of the class or function it defines)

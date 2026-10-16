@@ -14,6 +14,7 @@ from src.pystachy_compiler.analysis import (
     lambda_flags,
     local_names,
     nested_defs,
+    none_sites,
     only_none,
     scope_binds,
     shows_items,
@@ -516,8 +517,12 @@ def gen_none_type(self, name: str) -> str:
     # the code of its function (or module) assigns it, also by unpacking, that can be typed here
     # (as lookahead does); "" if there is none
     body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
+    if "" not in self.nonesites:
+        none_sites(body, self.nonesites)  # (once for the function: each variable asks for its own)
+        self.nonesites[""] = []
     found: list[Node] = []
-    self.none_values(body, name, found)
+    for st in self.nonesites[name] if name in self.nonesites else []:
+        self.none_values(st, name, found)
     for e in found:
         if e.kind != "None" and not empty_display(e) and self.typed_now(e) and not self.calls_open(e, {}):
             # (typed as where it is assigned, under tests of the optional locals it reads)
@@ -533,33 +538,25 @@ def gen_none_type(self, name: str) -> str:
                 return self.optional(t)
     return ""
 
-def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-    # the values that statements in body (into blocks, in order) assign to variable name: of
-    # a, b = e the item of e (an index node if e is not a display), of name := v v
-    for st in body:
-        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
-            continue
-        if st.kind == "assign":
-            e = st.kids[-1]
-            for t in st.kids[:-1]:
-                if t.kind == "name" and t.s == name:
-                    out.append(e)
-                elif t.kind == "tuple" or t.kind == "list":
-                    for i in range(len(t.kids)):
-                        if t.kids[i].kind == "name" and t.kids[i].s == name:
-                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
-                            # (after a starred target, the item counted from the end)
-                            after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
-                            at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
-                            out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
-        for kid in st.kids:
-            if kid.kind != "block" and kid.kind != "except":
-                walrus_values(kid, name, out)  # (name := v)
-        for kid in st.kids:
-            if kid.kind == "block":
-                self.none_values(kid.kids, name, out)
-            elif kid.kind == "except":
-                self.none_values(kid.kids[1].kids, name, out)
+def gen_none_values(self, st: Node, name: str, out: list[Node]) -> None:
+    # the values that statement st itself (not its blocks: see none_sites) assigns to variable
+    # name: of a, b = e the item of e (an index node if e is not a display), of name := v v
+    if st.kind == "assign":
+        e = st.kids[-1]
+        for t in st.kids[:-1]:
+            if t.kind == "name" and t.s == name:
+                out.append(e)
+            elif t.kind == "tuple" or t.kind == "list":
+                for i in range(len(t.kids)):
+                    if t.kids[i].kind == "name" and t.kids[i].s == name:
+                        disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
+                        # (after a starred target, the item counted from the end)
+                        after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
+                        at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
+                        out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
+    for kid in st.kids:
+        if kid.kind != "block" and kid.kind != "except":
+            walrus_values(kid, name, out)  # (name := v)
 
 def gen_read(self, n: Node) -> Val:
     # a variable read; if flow analysis found it may be unassigned, check at run time
