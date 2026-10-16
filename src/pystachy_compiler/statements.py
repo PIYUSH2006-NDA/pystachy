@@ -1337,7 +1337,21 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 self.hide(hide)
                 return  # nothing to iterate: the body never runs (and its types are unknown), as for ()
             else:
-                self.for_seq(tgt, [self.method(o, m, [])], "", body, "0", hide, arg)
+                v = self.method(o, m, [])
+                own = 0
+                if v.t in self.classes:
+                    # (an object it returns is iterated as any other: iter() calls its __iter__,
+                    # a comprehension's iter() its iterator's again, as below; an __iter__ that
+                    # yields makes a generator the loop owns)
+                    self.gencall = ""
+                    v = self.iterable(v)
+                    own = self.owned_gen(v, it)
+                    if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(v.t):
+                        v = self.obj_iterator(v, "", f"'{tname(v.t)}' object is not iterable")
+                if own > 0:
+                    self.owned_loop([v], own == 2, tgt, [v], "", body, "0", hide, arg, None)
+                else:
+                    self.for_seq(tgt, [v], "", body, "0", hide, arg)
             return
     self.gencall = ""
     if it.kind == "set" and folds(mk("tuple", "", it.line, it.kids)):

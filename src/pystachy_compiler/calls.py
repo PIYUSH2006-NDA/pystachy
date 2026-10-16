@@ -7,7 +7,7 @@ from src.pystachy_compiler.names import short
 from src.pystachy_compiler.reflection import VARS_USES, refl_attr_fields, refl_formatter
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.structs import STRUCT_FNS
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
     codec,
     fbits,
@@ -211,8 +211,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
             elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t)):
                 # print(*xs): its items printed as arguments are, joined by sep (a sole star's
                 # items as they are once the keywords are evaluated, others' as they are now)
-                xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), mk("name", "__pys_item", a.line, []), self.vnode(v)]), "")
-                item = mk("name", "__pys_item", a.line, [])
+                xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), made_var("__pys_item", a.line), self.vnode(v)]), "")
+                item = made_var("__pys_item", a.line)
                 pos.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
             else:
                 self.err(f"unpacking a {typestr(v.t)} into the arguments of {who if who != '' else 'a function'} is not supported (a tuple's items are)")
