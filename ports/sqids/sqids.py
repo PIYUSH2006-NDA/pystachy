@@ -94,7 +94,7 @@ class Sqids:
         offset = (offset + increment) % len(self.__alphabet)
         alphabet = self.__alphabet[offset:] + self.__alphabet[:offset]
         prefix = alphabet[0]
-        alphabet = "".join(reversed(alphabet))  # Pystachy port: no slice steps (M7)
+        alphabet = alphabet[::-1]
 
         ret = [prefix]
 
@@ -134,7 +134,7 @@ class Sqids:
         prefix = id_[0]
         offset = self.__alphabet.index(prefix)
         alphabet = self.__alphabet[offset:] + self.__alphabet[:offset]
-        alphabet = "".join(reversed(alphabet))  # Pystachy port: no slice steps (M7)
+        alphabet = alphabet[::-1]
         id_ = id_[1:]
 
         while id_:
@@ -179,11 +179,7 @@ class Sqids:
 
     def __to_number(self, id_: str, alphabet: str) -> int:
         chars = list(alphabet)
-        # Pystachy port: no slice steps (M7); enumerate() takes reversed() as a list.
-        return sum(
-            chars.index(c) * (len(chars) ** i)
-            for i, c in enumerate(list(reversed(id_)))
-        )
+        return sum(chars.index(c) * (len(chars) ** i) for i, c in enumerate(id_[::-1]))
 
     def __is_blocked_id(self, id_: str) -> bool:
         id_ = id_.lower()

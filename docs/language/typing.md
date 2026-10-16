@@ -11,8 +11,8 @@ unsupported forms, see [compatibility](compatibility.md).
 | `float`, `bool`, `str` | Double-precision floats; strings hold UTF-8 with byte-based indexing |
 | `list[T]`, `dict[K, V]` | One static element type, or one key and value type |
 | `set[T]`, `frozenset[T]` | Elements must use the supported dict key types |
-| `tuple[A, B]` | Fixed shape, up to nine items; indexing requires an integer constant |
-| `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
+| `tuple[A, B]` | Fixed shape, up to nine items; indexing and slicing require integer constants (items of one runtime-length element type also slice by run-time bounds, into a `tuple[T, ...]`) |
+| `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime, and slicing |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
 | `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
@@ -24,13 +24,13 @@ runtime-length tuple; later list mutation does not change it. String conversion 
 the existing UTF-8 byte iteration rules ([compatibility](compatibility.md)). `tuple(t)` returns an
 existing tuple unchanged unless an annotation requests a representation conversion
 ([identity limitations](compatibility.md#functions-and-object-identity)). A fixed tuple literal can initialize `tuple[T, ...]`,
-including `()`. Supported operations are `len`, truth tests, integer indexing,
+including `()`. Supported operations are `len`, truth tests, integer indexing, slicing,
 iteration (also `enumerate`, `zip`, and `reversed`), `list(t)`, representation and
 same-element-type equality and ordering. Bounds errors raise `IndexError` at runtime.
 Optional scalar elements use boxes when needed; widening an immutable tuple to
 optional elements copies its slots rather than reinterpreting numeric bits as pointers.
 
-Runtime-length tuples currently do not support slicing, concatenation, repetition,
+Runtime-length tuples currently do not support concatenation, repetition,
 membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; arbitrary iterators and generators are not yet
 accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
@@ -166,7 +166,7 @@ rules and the compiler's existing unbound-variable checks continue to apply.
 
 Empty `[]` and `{}` take their types from an annotated variable, parameter, field or return
 context. Otherwise their first useful operation determines the type: `append`, `insert`,
-`extend`, item assignment, `+=`, `setdefault`, `get(key, default)`, or reassignment.
+`extend`, item or slice assignment, `+=`, `setdefault`, `get(key, default)`, or reassignment.
 Nested forms such as `d.setdefault(key, []).append(value)` are supported. Empty `set()`
 uses the same principle with `add`, `update`, or set operators.
 
@@ -224,7 +224,9 @@ narrowed, because calls can change them: copy to a local and test it.
 Containers are invariant: `list[T]` cannot be passed as `list[T | None]`.
 Some comparisons and concatenations can combine reference-based optional item types,
 such as `list[str]` and `list[str | None]`; numeric optional items need separate storage,
-so a `list[int]` cannot become a `list[int | None]`. Tuples can convert item by item.
+so a `list[int]` cannot become a `list[int | None]`. `+`, `+=`, `extend()` and slice
+assignment copy items that must fit as they are: a `list[list[str]]` cannot extend a
+`list[list[str | None]]`, which would share its inner lists. Tuples can convert item by item.
 `join()` and `writelines()` check optional string items at runtime.
 
 An optional dict lookup key equal to `None` is absent: membership is false, `get()` and

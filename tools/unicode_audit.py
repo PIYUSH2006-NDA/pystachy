@@ -17,6 +17,7 @@ OPS = [
     ("len(str)", "print(len(s))"),
     ("str.get", "print(repr(s[0]))"),
     ("str.slice", "print(repr(s[:2]))"),
+    ("str.slice_step", "print(repr(s[::2]))"),
     ("str.list", "print(list(s))"),
     ("str.list", "print(tuple(s))"),
     ("str.get", "print([c for c in s])"),

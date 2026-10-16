@@ -1088,15 +1088,15 @@ def aliases(n: Node, name: str) -> bool:
 
 def shows_items(n: Node, name: str) -> bool:
     # does n (outside the functions and classes it defines) assign variable name, or fill the
-    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get,
-    # and a set's add and update
+    # container it holds: name[k] = v, name[a:b] = xs, name += xs, name.append(v), insert,
+    # extend, setdefault, get, and a set's add and update
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "lambda":
         return False
     if stmt_binds(n, name):
         return True
     if n.kind == "assign":
         for t in n.kids[:-1]:
-            if t.kind == "index" and t.kids[0].kind == "name" and t.kids[0].s == name:
+            if (t.kind == "index" or t.kind == "slice") and t.kids[0].kind == "name" and t.kids[0].s == name:
                 return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name:
         if n.kids[0].s in "append insert extend setdefault get add update".split():

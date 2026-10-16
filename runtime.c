@@ -502,10 +502,33 @@ static void span(I *lo, I *hi, I n) {
   if (*hi == NONE) *hi = n; else if (*hi < 0 && (*hi += n) < 0) *hi = 0; else if (*hi > n) *hi = n;
   if (*hi < *lo) *hi = *lo;
 }
+/* lo:hi:st over n items, as CPython's PySlice_Unpack and PySlice_AdjustIndices: the slice's
+   first index goes to *lo, and the number of its items is returned (they are *lo + i * st).
+   NONE is an omitted bound; a step of -2**63 becomes -(2**63 - 1), as in CPython */
+static I sspan(I *lo, I hi, I *st, I n) {
+  I s = *st;
+  if (!s) pys_fail("ValueError: slice step cannot be zero");
+  if (s < -INT64_MAX) *st = s = -INT64_MAX;
+  if (*lo == NONE) *lo = s < 0 ? n - 1 : 0;
+  else if (*lo < 0 && (*lo += n) < 0) *lo = s < 0 ? -1 : 0;
+  else if (*lo >= n) *lo = s < 0 ? n - 1 : n;
+  if (hi == NONE) hi = s < 0 ? -1 : n;
+  else if (hi < 0 && (hi += n) < 0) hi = s < 0 ? -1 : 0;
+  else if (hi >= n) hi = s < 0 ? n - 1 : n;
+  if (s < 0) return hi < *lo ? (*lo - hi - 1) / -s + 1 : 0;
+  return *lo < hi ? (hi - *lo - 1) / s + 1 : 0;
+}
 Str *pys_str_get(Str *s, I i) { return pys_chr((unsigned char)s->s[idx(i, s->len, "IndexError: string index out of range")]); }
 Str *pys_str_slice(Str *s, I lo, I hi) {      /* all of s is s itself, as in CPython: s[:], a strip that strips nothing */
   span(&lo, &hi, s->len);
   return lo == 0 && hi == s->len ? s : pys_str(s->s + lo, hi - lo);
+}
+Str *pys_str_slice_step(Str *s, I lo, I hi, I st) {   /* s[lo:hi:st], over bytes as s[lo:hi] is */
+  I n = sspan(&lo, hi, &st, s->len);
+  if (st == 1) return n == s->len ? s : pys_str(s->s + lo, n);
+  Str *r = pys_alloc_atomic(sizeof(Str) + n + 1); r->len = n;
+  for (I i = 0; i < n; i++) r->s[i] = s->s[lo + i * st];
+  return r;
 }
 Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
@@ -1312,6 +1335,14 @@ I pys_vtuple_get(VTuple *t, I index) {
   if (!t) pys_fail("TypeError: 'NoneType' object is not subscriptable");
   return t->a[idx(index, t->len, "IndexError: tuple index out of range")];
 }
+VTuple *pys_vtuple_slice(VTuple *t, I lo, I hi, I st) {   /* t[lo:hi:st]; all of t is t itself, as in CPython */
+  I n = sspan(&lo, hi, &st, t->len);
+  if (st == 1 && n == t->len) return t;
+  VTuple *r = pys_alloc(sizeof(VTuple) + n * sizeof(I));
+  r->len = n;
+  for (I i = 0; i < n; i++) r->a[i] = t->a[lo + i * st];
+  return r;
+}
 
 /* ---------- lists ---------- */
 static I empty_list[1];                /* valid even for zero-byte copies; distinct from sort's sentinel */
@@ -1367,6 +1398,44 @@ List *pys_list_slice(List *l, I lo, I hi) {
 }
 List *pys_list_copy(List *l) { return pys_list_slice(l, NONE, NONE); }
 void pys_list_clear(List *l) { memset(l->a, 0, l->len * 8); l->len = 0; empty(l); }
+List *pys_list_slice_step(List *l, I lo, I hi, I st) {
+  I n = sspan(&lo, hi, &st, l->len);
+  List *r = pys_list_new(n);
+  for (I i = 0; i < n; i++) r->a[i] = l->a[lo + i * st];
+  r->len = n; return r;
+}
+/* l[lo:hi:st] = v and del l[lo:hi:st], as CPython's list_ass_subscript: with a step of 1, any
+   number of v's items replace the slice's (v == l is copied first); another step needs one of
+   v's for each item. Slots left unused are zeroed, and an emptied list detaches its storage
+   (see pys_list_pop) */
+void pys_list_set_slice(List *l, I lo, I hi, I st, List *v) {
+  I n = l->len, k = sspan(&lo, hi, &st, n), m = v->len;
+  if (v == l) v = pys_list_copy(l);
+  if (st != 1) {
+    if (m != k) failf("ValueError: attempt to assign sequence of size %lld to extended slice of size %lld", (long long)m, (long long)k);
+    for (I i = 0; i < k; i++) l->a[lo + i * st] = v->a[i];
+    return;
+  }
+  if (n + m - k == 0) { pys_list_clear(l); return; }
+  if (m > k) reserve(l, n + m - k);
+  memmove(l->a + lo + m, l->a + lo + k, (n - lo - k) * 8);
+  if (m < k) memset(l->a + n + m - k, 0, (k - m) * 8);
+  memcpy(l->a + lo, v->a, m * 8);
+  l->len = n + m - k;
+}
+void pys_list_del_slice(List *l, I lo, I hi, I st) {
+  I n = l->len, k = sspan(&lo, hi, &st, n), w = n - k;
+  if (st == 1) memmove(l->a + lo, l->a + lo + k, (n - lo - k) * 8);
+  else if (k) {
+    if (st < 0) { lo += st * (k - 1); st = -st; }   /* the same items, first to last */
+    w = lo;
+    for (I i = lo, j = 0; i < n; i++)
+      if (j < k && i == lo + j * st) j++;
+      else l->a[w++] = l->a[i];
+  }
+  memset(l->a + w, 0, k * 8);
+  if (!(l->len = w)) empty(l);
+}
 List *pys_list_add(List *a, List *b) { List *r = pys_list_new(a->len + b->len); pys_list_extend(r, a); pys_list_extend(r, b); return r; }
 void pys_list_imul(List *l, I n) {               /* xs *= n, in place */
   I m = l->len;

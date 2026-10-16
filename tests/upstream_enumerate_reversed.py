@@ -5,8 +5,7 @@
 # Each test class's (seq, res) pair is checked by test_basicfunction's list() assertion.
 # TestBig's seq, range(10,20000,2), is the list of its items (a range is not a value here, and
 # enumerate(range(...)) as list()'s argument is rejected: bug below), and its res zips the list
-# of range(20000). test_simple's loop over its data is written out, and its expected
-# list(data)[::-1] is computed by reversed_copy() (slice steps are not supported).
+# of range(20000). test_simple's loop over its data is written out.
 # EXCLUDED upstream cases:
 # - test_basicfunction's type(...) and iter(e) checks (enumerate objects are not values, nor
 #   iter()), test_pickle and every check_pickle (pickle), test_getitemseqn (G iterates through
@@ -40,20 +39,12 @@ def test_start_basicfunction(name: str, seq, res) -> None:
     check(name + ": list(enumerate(seq, start=11))", list(enumerate(seq, start=11)), res)
 
 
-def reversed_copy(xs):
-    # list(data)[::-1]
-    out = []
-    for i in range(len(xs) - 1, -1, -1):
-        out.append(xs[i])
-    return out
-
-
 def test_simple() -> None:
-    check("'abc'", reversed_copy(list('abc')), list(reversed('abc')))
-    check("range(5)", reversed_copy(list(range(5))), list(reversed(range(5))))
-    check("range(1,17,5)", reversed_copy(list(range(1,17,5))), list(reversed(range(1,17,5))))
+    check("'abc'", list('abc')[::-1], list(reversed('abc')))
+    check("range(5)", list(range(5))[::-1], list(reversed(range(5))))
+    check("range(1,17,5)", list(range(1,17,5))[::-1], list(reversed(range(1,17,5))))
     fromkeys: dict[str, int | None] = dict.fromkeys('abcde')
-    check("dict.fromkeys('abcde')", reversed_copy(list(fromkeys)), list(reversed(fromkeys)))
+    check("dict.fromkeys('abcde')", list(fromkeys)[::-1], list(reversed(fromkeys)))
 
 
 # EnumerateTestCase

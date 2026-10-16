@@ -154,7 +154,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "set" or name == "frozenset":
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
-        self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
+        self.err(f"{name}() is supported as the argument of list(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), and as the value assigned to a list slice, which take its items at once; elsewhere use a list comprehension")
     if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
     if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
@@ -904,6 +904,9 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft
         # The runtime backing is pointer-free: keep list[int] regardless of want.
         # Optional/union item storage needs a fresh scanned allocation, never retyping.
         vs = self.range_args(n.kids[1:])
+        if arg is not None and arg.split != "":
+            self.iterarg(arg)  # (xs[::0] = range(n): the consumer's turn comes before the items are made)
+            return Val(self.rt("pys_range_list", "ptr", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "list[int]")
         r = Val(self.rt("pys_range_list", "ptr", [f"i64 {vs[0]}", f"i64 {vs[1]}", f"i64 {vs[2]}"]), "list[int]")
         self.iterarg(arg)
         return r
@@ -912,12 +915,16 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft
 
 def gen_as_list(self, v: Val, name: str) -> Val:
     # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item
-    # type, as a list, or the list an object's __iter__ steps through (which list() copies)
+    # type, as a list, or the list an object's __iter__ steps through (which list() copies);
+    # name "slice": the value assigned to a list slice, with its errors
     if is_kw(v.t):
         return self.kw_list(v)  # (the names of **kwargs)
     if v.t in self.nts:
-        self.notnone(v, "TypeError: 'NoneType' object is not iterable")
+        self.notnone(v, "TypeError: must assign iterable to extended slice" if name == "slice" else "TypeError: 'NoneType' object is not iterable")
         v = self.ntup(v, True)
+    if v.t in self.classes and name == "slice":
+        # (xs[a:b] = v: CPython's PySequence_Fast iterates v, calling no __len__)
+        return self.obj_iter(v, "TypeError: must assign iterable to extended slice", "must assign iterable to extended slice")
     if v.t in self.classes:
         items = self.obj_iter(v, "TypeError: can only join an iterable" if name == "join" else "TypeError: 'NoneType' object is not iterable",
                               "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")
@@ -936,6 +943,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         if any(x != et for x in ts):
             if (name == "math.fsum" or name == "math.dist") and all(self.isnum(x) for x in ts):
                 et = "float"  # (they make a float of each item: (1, 2.5) too)
+            elif name == "slice":
+                self.err(f"assigning a {typestr(v.t)} to a list slice is not supported: its items have different types")
             else:
                 self.err(f"{name}() of a {v.t} needs items of a single type")
         r = self.rt("pys_list_new", "ptr", [f"i64 {len(ts)}"])
@@ -1192,7 +1201,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 v = Val(v.v, "list[str]")  # (an item that is None raises when it runs, as CPython's error)
             if key == "str.join" and is_list(v.t) and elem(v.t) != "str" and "?" not in v.t:
                 self.err(f"sequence item 0: expected str instance, {tname(elem(v.t))} found")  # (CPython's TypeError)
-            if key == "list.extend" and is_list(v.t) and v.t != pt and self.wider(v.t, pt) == pt:
+            if key == "list.extend" and is_list(v.t) and v.t != pt and self.widens_items(v.t, pt):
                 v = Val(v.v, pt)  # (its items are copied: list[str] extends a list[str | None])
             if span and is_sopt(v.t) and unopt(v.t) != "float":
                 v = Val(self.optint(v, dflt), "int")

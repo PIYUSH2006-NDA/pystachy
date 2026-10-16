@@ -20,7 +20,7 @@ from src.pystachy_compiler.analysis import (
     typed_default,
 )
 from src.pystachy_compiler.diagnostics import MODDUNDERS, where
-from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, Val
+from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
 from src.pystachy_compiler.syntax import Node, mk, name_targets, names_in
@@ -919,7 +919,11 @@ def gen_lookahead(self, name: str, ahead: bool = False) -> str:
             return ""
     if found[0].kind == "omit" and not is_list(t) and not is_set(t):
         return ""  # (d += ... or d.extend(...) on a dict: an error where it is compiled)
+    if found[0].kind == "omit" and not self.bound("list") and (self.iterator_call(e) or self.is_mapcall(e) or (e.kind == "listcomp" and e.s == "gen")):
+        e = mk("call", "", e.line, [mk("name", "list", e.line, []), e])  # (its items, which the fill takes at once)
     it = self.dry(e)
+    if found[0].kind == "omit" and found[0].s == "slice" and not is_list(it) and it != "tuple[]" and not self.bound("list"):
+        it = self.dry(mk("call", "", e.line, [mk("name", "list", e.line, []), e]))  # (xs[a:b] = v: v's items, as list(v) has them)
     if found[0].kind == "omit" and is_list(t):
         if not is_list(it):
             return ""
@@ -1063,6 +1067,9 @@ def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
             return True
         if (k == "assign" or k == "augassign") and st.kids[0].kind == "index" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name and k == "assign":
             found.append(st.kids[0].kids[1])
+            found.append(st.kids[-1])
+        elif k == "assign" and st.kids[0].kind == "slice" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name:
+            found.append(mk("omit", "slice", st.line, []))  # (xs[a:b] = ys, as xs.extend(ys))
             found.append(st.kids[-1])
         elif k == "assign" and len(st.kids) == 2 and st.kids[0].kind == "index" and empty_default(st.kids[0].kids[0], name, "dict"):
             # name.setdefault(k, {})[k2] = v: the item is {k2: v} (see default_want)
@@ -1373,7 +1380,8 @@ def gen_target_type(self, n: Node, base: bool = False) -> str:
             return self.gtypes.get(n.s, "")
         return self.ltype.get(n.s, self.gtypes.get(n.s, "") if self.is_global(n.s) else "")
     if n.kind == "slice":
-        self.err("assignment to a slice is not supported")
+        t = unopt(self.target_type(n.kids[0], True))
+        return t if is_list(t) else ""
     if n.kind == "attr" or n.kind == "index":
         t = self.target_type(n.kids[0], True)
         if n.kind == "attr" and self.is_prop(t, n.s):
@@ -1448,6 +1456,10 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
         else:
             self.err(f"'{o.t}' does not support item assignment")
+    elif k == "slice":
+        bnd: list[str] = []
+        o = self.slice_target(t, bnd, "TypeError: 'NoneType' object does not support item assignment")
+        self.slice_store(o, bnd, v)
     elif k == "tuple" and is_opt(v.t):
         self.assign(t, self.unwrap(v, "TypeError: cannot unpack non-iterable NoneType object"))
     elif k == "tuple" and (is_list(v.t) or v.t == "str"):
@@ -1484,5 +1496,68 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.assign(t.kids[i], self.tget(v, i))
     else:
         self.err("cannot assign to this expression")
+
+def gen_slice_target(self, t: Node, bnd: list[str], nosub: str) -> Val:
+    # the list that slice t (xs[lo:hi:st]) assigns to or deletes from: xs, then the bounds (into
+    # bnd: start, stop and step, see Gen.slice_bound), are evaluated, and xs being None raises
+    # nosub. Strs and tuples cannot change, and Pystachy has no slice objects for __setitem__
+    o = self.expr(t.kids[0], "")
+    bnd.append(self.slice_bound(t.kids[1]))
+    bnd.append(self.slice_bound(t.kids[2]))
+    bnd.append(self.slice_step(t.kids[3]) if len(t.kids) == 4 else "1")
+    o = self.unwrap(o, nosub)
+    if is_list(o.t):
+        return o
+    what = "deletion" if "deletion" in nosub else "assignment"
+    m = "__delitem__" if what == "deletion" else "__setitem__"
+    if o.t in self.classes and o.t not in self.nts and m in self.classes[o.t].methods:
+        self.err(f"slicing an object is not supported: {short(o.t)}.{m} would take a slice object, which Pystachy does not have")
+    if is_dict(o.t):
+        self.err("a slice as a dict key is not supported")
+    self.err(f"'{tname(o.t)}' object does not support item {what}")
+    return o
+
+def gen_slice_check(self, step: str) -> None:
+    # a slice's step that is 0 raises CPython's ValueError, here before code that would run later
+    if step.startswith("%") or step == "0":
+        self.guard(self.num_cmp('==', Val(step, "int"), Val('0', "int")).v, "ValueError: slice step cannot be zero")
+
+def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
+    # o[lo:hi:st] = v for list o and its slice's bounds bnd (slice_target): v's items, taken as
+    # CPython's PySequence_Fast takes them (a list as it is, which the runtime copies first where
+    # it is o itself; any other iterable's by iterating it, see as_list) once the step is checked
+    st = bnd[2]
+    if not is_list(v.t):
+        self.slice_check(st)  # (before None raises, __iter__ runs or a file is consumed)
+    v = self.unwrap(v, "TypeError: must assign iterable to extended slice")  # (CPython 3.13's, for any step)
+    if v.t == "str":
+        v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "tuple[]":
+        v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() and [] have no item to type)
+    elif not is_list(v.t):
+        v = self.as_list(v, "slice")
+    if not is_list(v.t):
+        self.err(f"must assign iterable to extended slice, not {typestr(v.t)}")
+    if v.t != o.t and self.widens_items(v.t, o.t):
+        v = Val(v.v, o.t)  # (its items are copied: a list[str] into a list[str | None], as extend())
+    v = self.coerce(v, o.t)
+    self.rt("pys_list_set_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {st}", f"ptr {v.v}"])
+
+def gen_slice_assign(self, t: Node, g: Node) -> None:
+    # t[lo:hi:st] = g, an iterator call (range(), zip(), ...), map(), filter() or a generator
+    # expression, as CPython runs it: its iterator is made, then the target and the bounds are
+    # evaluated (and None or a step of 0 raises), then its items are taken
+    arg = IterArg(t)
+    arg.split = self.label()
+    v = self.consume(g, self.target_type(t), arg)
+    back = self.label()
+    self.br(back)
+    self.place(arg.split)
+    bnd: list[str] = []
+    o = self.slice_target(t, bnd, "TypeError: 'NoneType' object does not support item assignment")
+    self.slice_check(bnd[2])
+    self.br(arg.trav)
+    self.place(back)
+    self.slice_store(o, bnd, v)
 
 # ---- functions and the module

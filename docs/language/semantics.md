@@ -47,7 +47,8 @@ precisions. A variable format string such as `fmt % value` is rejected.
 
 Supported operations include arithmetic, bitwise operations, chained comparisons,
 `in` / `not in`, boolean operations returning operands, conditional expressions, negative
-indices, and string/list slices without a step. Integer `//` and `%` floor as in Python;
+indices, string, list and tuple slices with optional steps, and assignment to and deletion
+of list slices. Integer `//` and `%` floor as in Python;
 true division is correctly rounded, and int/float comparisons are exact within the
 supported types.
 
@@ -64,12 +65,13 @@ Comparisons with `None` are supported where the static types permit them.
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
 `filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`, `all`,
-`math.fsum`, `math.prod`, `str.join` and `list.extend`.
+`math.fsum`, `math.prod`, `str.join` and `list.extend`, and the value assigned to a list slice.
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.
 `any()` and `all()` stop at the deciding item, including over files.
-`list.extend()` appends each generated item as it is produced.
+`list.extend()` appends each generated item as it is produced; a slice assignment takes the
+items once the list and the slice's bounds are evaluated.
 `x in range(...)` is also supported.
 
 Some consumers materialize input before processing it; see the
@@ -110,7 +112,8 @@ A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and ret
 `iter(xs)` for a list, tuple, string or another object with the same supported protocol,
 or `reversed(xs)`, whose items it copies when it returns.
 It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
-`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
+`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint;
+a slice assignment does not, as in CPython.
 A supported `__reversed__` has the same form; every consumer of `reversed(o)` steps through
 the iterator it returns. Generator implementations, general `__next__` iterator classes, and
 direct calls of `o.__iter__()` are unsupported.

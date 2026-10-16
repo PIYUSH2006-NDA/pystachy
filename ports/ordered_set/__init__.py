@@ -305,7 +305,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
         """
         Remove all items from this OrderedSet.
         """
-        self.items.clear()  # Pystachy port: was 'del self.items[:]' (del of a slice: M7)
+        del self.items[:]
         self.map.clear()
 
     def __iter__(self) -> Iterator[str]:  # Pystachy port: str for T (M2)

@@ -1,0 +1,3 @@
+# error: must assign iterable to extended slice, not int
+xs = [1, 2, 3]
+xs[::2] = 5

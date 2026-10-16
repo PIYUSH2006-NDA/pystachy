@@ -424,7 +424,7 @@ METHODS: dict[str, str] = {
 }
 # Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
 # These are conservative: even a byte-correct delimiter search is a porting audit hit.
-UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace "
+UNICODE_AUDIT: list[str] = ("get slice slice_step list find rfind index rindex count startswith endswith replace "
                             "upper lower swapcase capitalize title casefold isdigit isalpha isalnum "
                             "isupper islower istitle isdecimal isnumeric expandtabs").split()
 
@@ -511,10 +511,13 @@ RUNTIME: dict[str, str] = {
     # homogeneous runtime-length tuples (immutable copied slots)
     "vtuple.new": "%ptr:list[T]|R A rL|", "vtuple.from": "%ptr:%ptr,int|R A|",
     "vtuple.get": "int:%ptr,int|R|", "vtuple.list": "list[T]:%ptr|R A|", "vtuple.box": "%ptr:%ptr|R A|",
+    "vtuple.slice": "%ptr:%ptr,int,int,int|R A|",
     # lists
     "list.new": "list[T]:int|A|", "list.get": "*T:S,int|R rL|", "list.set": "None:S,int,*T|R rL wL|",
     "list.append": "None:S,*T|A rL wL|", "list.pop": "*T:S,int|R rL wL|", "list.del": "None:S,int|R rL wL|",
     "list.insert": "None:S,int,*T|A rL wL|", "list.extend": "None:S,S|A rL wL|", "list.slice": "S:S,int,int|A rL|",
+    "list.slice_step": "S:S,int,int,int|R A rL|", "list.set_slice": "None:S,int,int,int,S|R A rL wL|",
+    "list.del_slice": "None:S,int,int,int|R rL wL|",
     "list.copy": "S:S|A rL|", "list.clear": "None:S|rL wL|", "list.add": "S:S,S|A rL|", "list.mul": "S:S,int|R A rL|",
     "list.imul": "None:S,int|R A rL wL|", "list.reverse": "None:S|rL wL|", "list.find": "int:S,*T,#|rL rD U?|",
     "list.find_pair": "int:S,*T,%ptr,%ptr|rL rD U|",
@@ -555,7 +558,7 @@ RUNTIME: dict[str, str] = {
     "set.key": "*T:S,int|rD|", "set.list": "list[T]:S|A rD|",
     # strings
     "str.audit": "None:str,str|R|",
-    "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.slice_step": "str:S,int,int,int|R A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.split_first": "str:S,str,int|R A|",  # (s.split(sep, n)[0]: Gen.index)

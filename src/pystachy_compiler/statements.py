@@ -463,6 +463,10 @@ def gen_stmt(self, n: Node) -> None:
                 vs.append(self.expr(val.kids[i], self.target_type(t0.kids[i])))
             for i in range(len(vs)):
                 self.assign(t0.kids[i], vs[i])
+        elif len(n.kids) == 2 and t0.kind == "slice" and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
+            self.slice_assign(t0, val)  # (xs[a:b] = range(n), = (f(x) for x in ys), ...)
+        elif len(n.kids) == 2 and t0.kind == "slice" and val.kind == "list" and len(val.kids) == 0 and self.target_type(t0) == "":
+            self.assign(t0, Val("null", "tuple[]"))  # (f()[a:b] = []: no item to type, as ())
         else:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
@@ -672,6 +676,11 @@ def gen_stmt(self, n: Node) -> None:
                 if o.t in self.classes and dt.s in self.classes[o.t].ftypes and self.frozen_store(o, dt.s, True):
                     continue
                 self.err("del of an attribute is only supported for a property (which calls its deleter)")
+            if dt.kind == "slice":
+                bnd: list[str] = []
+                o = self.slice_target(dt, bnd, "TypeError: 'NoneType' object does not support item deletion")
+                self.rt("pys_list_del_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {bnd[2]}"])
+                continue
             o = self.expr(dt.kids[0], "") if dt.kind == "index" else Val("", "")
             nodel = "TypeError: 'NoneType' object does not support item deletion"
             if is_list(unopt(o.t)):
@@ -895,6 +904,15 @@ def gen_augassign(self, n: Node) -> None:
         nv = self.inplace(op, cur, n.kids[1])
         if not self.frozen_store(o, t.s):
             self.setfield(o, p, t.s, nv)
+    elif t.kind == "slice":
+        # xs[a:b] op= v: the slice (a new list, which += extends and *= repeats) stored back
+        bnd: list[str] = []
+        o = self.slice_target(t, bnd, "TypeError: 'NoneType' object is not subscriptable")
+        av = [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]
+        if bnd[2] != "1":
+            av.append(f"i64 {bnd[2]}")
+        cur = Val(self.rt("pys_list_slice" if bnd[2] == "1" else "pys_list_slice_step", "ptr", av), o.t)
+        self.slice_store(o, bnd, self.inplace(op, cur, n.kids[1]))
     elif t.kind == "index":
         o = self.expr(t.kids[0], "")
         sub = "TypeError: 'NoneType' object is not subscriptable"
@@ -971,7 +989,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             self.none_operands(op, cur, b, "+=")
             cur = Val(cur.v, unopt(cur.t))
             b = Val(b.v, unopt(b.t))
-        if is_list(b.t) and b.t != cur.t and self.wider(b.t, cur.t) == cur.t:
+        if is_list(b.t) and b.t != cur.t and self.widens_items(b.t, cur.t):
             b = Val(b.v, cur.t)  # (as extend: the items are copied)
         self.rt("pys_list_extend", "void", [f"ptr {cur.v}", f"ptr {self.coerce(b, cur.t).v}"])
         return cur
