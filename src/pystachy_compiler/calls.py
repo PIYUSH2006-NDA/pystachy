@@ -6,6 +6,7 @@ from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.reflection import VARS_USES, refl_attr_fields, refl_formatter
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
+from src.pystachy_compiler.structs import STRUCT_FNS
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
     codec,
@@ -68,6 +69,11 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
         if sc.startswith("!"):
             self.err(sc[1:])
         return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), want, resultsoft, sc)
+    if f.kind == "name" and f.s in STRUCT_FNS and f.s in self.funcs and f.s not in self.ltype:
+        # (_struct's functions of a format known as the program compiles: see struct_call)
+        r = self.struct_call(f.s, args, want)
+        if r is not None:
+            return r
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
         return self.star_call(n, want, resultsoft, typeargs)
     if f.kind == "name":
