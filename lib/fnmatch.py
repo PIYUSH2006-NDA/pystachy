@@ -26,13 +26,17 @@ def _next_char(s: str, i: int) -> int:
     if not _UTF8 or i >= len(s):
         return i + 1
     b = ord(s[i])
-    # Pystachy port: use re._codes()'s byte fallback for incomplete/invalid UTF-8.
+    # Pystachy port: use re._codes()'s byte fallback for incomplete/invalid UTF-8, an overlong
+    # form or a value past U+10FFFF (re._charat()).
     if b < 0xC2 or b >= 0xF5:
         return i + 1
     width = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
     if i + width > len(s):
         return i + 1
-    for j in range(1, width):
+    x = ord(s[i + 1])
+    if x & 0xC0 != 0x80 or (b == 0xE0 and x < 0xA0) or (b == 0xF0 and x < 0x90) or (b == 0xF4 and x >= 0x90):
+        return i + 1
+    for j in range(2, width):
         if ord(s[i + j]) & 0xC0 != 0x80:
             return i + 1
     return i + width
