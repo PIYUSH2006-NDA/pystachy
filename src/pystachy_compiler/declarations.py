@@ -897,7 +897,7 @@ def gen_bad_class(self, ci: ClassInfo, why: str) -> None:
     if ci.mod == "":
         self.err(why)
     ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
-    ci.out = True
+    ci.excluded = True
     ci.tag = 0
 
 def gen_shadowed(self, ci: ClassInfo, name: str) -> bool:
@@ -958,7 +958,7 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
-    if ci.base in self.classes and self.classes[ci.base].out:
+    if ci.base in self.classes and self.classes[ci.base].excluded:
         why = self.classes[ci.base].bad
         self.bad_class(ci, f"its base {shown(ci.base)} is not supported: {why[why.find(': ') + 2 :]}")
     # Slot names constrain layout; the declaration remains a class attribute. A
