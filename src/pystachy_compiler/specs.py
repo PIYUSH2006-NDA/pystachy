@@ -38,9 +38,14 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
            "_weakref array atexit binascii cmath faulthandler fcntl gc grp itertools marshal posix pwd pyexpat select "
            "syslog unicodedata zlib").split():
     CBUILTIN[_k] = True
+# abc's decorators of abstract methods, which the compiler applies (Gen.abstract_defs): what each
+# deprecated one is, besides (abstractproperty: @property @abstractmethod)
+ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractproperty": "property",
+                                  "abc$abstractclassmethod": "classmethod", "abc$abstractstaticmethod": "staticmethod"}
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
-STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit"}
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
+                            "abc": "_pystachy_abc"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())

@@ -19,7 +19,8 @@ CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython 
 For `binascii`, `_codecs` and `atexit`, Pystachy loads its ports of those C modules,
 `lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py` and `lib/_pystachy_atexit.py` ([library
 reference](../../lib/compatibility.md#binascii)), and the end of the program runs `atexit`'s
-callbacks.
+callbacks. For `abc`, which CPython imports as it starts, it loads `lib/_pystachy_abc.py`
+([abc](../../lib/compatibility.md#abc)).
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's

@@ -1,0 +1,5 @@
+None None None True None None None None None None
+True True D(x=3) P(x=1, y=1) D(x=4)
+None None True None
+None D(x=1) None D(x=2)
+[exit 0]

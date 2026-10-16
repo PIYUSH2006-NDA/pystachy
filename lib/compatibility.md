@@ -659,3 +659,22 @@ CPython.
   exception's last line, where CPython names the function and shows the traceback.
 - In an extension module (`pystachy ext`), `register()` records callbacks that never run:
   CPython's own finalization does not know of them.
+
+## Abc
+
+`abc` is `_pystachy_abc`, which Pystachy loads for `import abc`, as CPython has imported its
+own `abc` before a program runs. A class that derives from `ABC`, or whose class statement
+passes `metaclass=ABCMeta`, has abstract methods: those its body decorates with
+`@abstractmethod` (also under `@property`, `@classmethod` and `@staticmethod`, and through the
+deprecated `abstractproperty`, `abstractclassmethod` and `abstractstaticmethod`), and those of
+its base it does not define again. Making an object of a class that has one evaluates the
+arguments and raises CPython's `TypeError: Can't instantiate abstract class C without an
+implementation for abstract methods 'a', 'b'`. Abstract methods can have bodies, which
+`super()` calls; `isinstance()` of an ABC is decided by the class statements, as for any class.
+
+- `register()`, which makes a virtual subclass, and reading `__abstractmethods__` are
+  compile-time errors, and so is defining `__subclasshook__`, the class method through which
+  CPython's `isinstance()` asks a class.
+- An abstract method is implemented by a `def` (a class attribute that shadows a method of the
+  base is not supported).
+- `update_abstractmethods()` is not supported: class decorators are not compiled.
