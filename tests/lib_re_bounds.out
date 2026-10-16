@@ -1,0 +1,102 @@
+ 0 1 (0, 0):'' (0, 0):'' None
+ 1 2 (1, 1):'' (1, 1):'' None
+ 2 0 (2, 2):'' None None
+ 3 2 (3, 3):'' None None
+ 3 4 (3, 3):'' (3, 3):'' None
+ -5 1 (0, 0):'' (0, 0):'' None
+ 999 999 (140, 140):'' (140, 140):'' (140, 140):''
+ 2 -1 (2, 2):'' None None
+. 0 1 (0, 1):'a' (0, 1):'a' (0, 1):'a'
+. 1 2 (1, 2):'b' (1, 2):'b' (1, 2):'b'
+. 2 0 None None None
+. 3 2 None None None
+. 3 4 (3, 4):'c' (3, 4):'c' (3, 4):'c'
+. -5 1 (0, 1):'a' (0, 1):'a' (0, 1):'a'
+. 999 999 None None None
+. 2 -1 None None None
+^ 0 1 (0, 0):'' (0, 0):'' None
+^ 1 2 None None None
+^ 2 0 None None None
+^ 3 2 None None None
+^ 3 4 None None None
+^ -5 1 (0, 0):'' (0, 0):'' None
+^ 999 999 None None None
+^ 2 -1 None None None
+$ 0 1 None (1, 1):'' None
+$ 1 2 None (2, 2):'' None
+$ 2 0 None None None
+$ 3 2 None None None
+$ 3 4 None (4, 4):'' None
+$ -5 1 None (1, 1):'' None
+$ 999 999 (140, 140):'' (140, 140):'' (140, 140):''
+$ 2 -1 None None None
+(?m)^ 0 1 (0, 0):'' (0, 0):'' None
+(?m)^ 1 2 None None None
+(?m)^ 2 0 None None None
+(?m)^ 3 2 (3, 3):'' None None
+(?m)^ 3 4 (3, 3):'' (3, 3):'' None
+(?m)^ -5 1 (0, 0):'' (0, 0):'' None
+(?m)^ 999 999 None None None
+(?m)^ 2 -1 None None None
+(?m)$ 0 1 None (1, 1):'' None
+(?m)$ 1 2 None (2, 2):'' None
+(?m)$ 2 0 (2, 2):'' None None
+(?m)$ 3 2 None None None
+(?m)$ 3 4 None (4, 4):'' None
+(?m)$ -5 1 None (1, 1):'' None
+(?m)$ 999 999 (140, 140):'' (140, 140):'' (140, 140):''
+(?m)$ 2 -1 (2, 2):'' None None
+\b 0 1 (0, 0):'' (0, 0):'' None
+\b 1 2 None (2, 2):'' None
+\b 2 0 None None None
+\b 3 2 None None None
+\b 3 4 (3, 3):'' (3, 3):'' None
+\b -5 1 (0, 0):'' (0, 0):'' None
+\b 999 999 (140, 140):'' (140, 140):'' (140, 140):''
+\b 2 -1 None None None
+\B 0 1 None None None
+\B 1 2 (1, 1):'' (1, 1):'' None
+\B 2 0 None None None
+\B 3 2 (3, 3):'' None None
+\B 3 4 None None None
+\B -5 1 None None None
+\B 999 999 None None None
+\B 2 -1 None None None
+\Z 0 1 None (1, 1):'' None
+\Z 1 2 None (2, 2):'' None
+\Z 2 0 None None None
+\Z 3 2 None None None
+\Z 3 4 None (4, 4):'' None
+\Z -5 1 None (1, 1):'' None
+\Z 999 999 (140, 140):'' (140, 140):'' (140, 140):''
+\Z 2 -1 None None None
+(?<=ab) 0 1 None None None
+(?<=ab) 1 2 None (2, 2):'' None
+(?<=ab) 2 0 None None None
+(?<=ab) 3 2 None None None
+(?<=ab) 3 4 None None None
+(?<=ab) -5 1 None None None
+(?<=ab) 999 999 None None None
+(?<=ab) 2 -1 None None None
+(?<=b)\nc 0 1 None None None
+(?<=b)\nc 1 2 None None None
+(?<=b)\nc 2 0 None None None
+(?<=b)\nc 3 2 None None None
+(?<=b)\nc 3 4 None None None
+(?<=b)\nc -5 1 None None None
+(?<=b)\nc 999 999 None None None
+(?<=b)\nc 2 -1 None None None
+unicode  True
+é True True True True True
+['é'] ['é']
+unicode a True
+é True True True True True
+['é'] ['é']
+unicode é True
+é True True True True True
+['é'] ['é']
+unicode é☃𝔄 True
+é True True True True True
+['é'] ['é']
+a<é>b<é>c<é>
+[exit 0]
