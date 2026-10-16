@@ -547,8 +547,9 @@ can use the inherited `fromutc()`.
   time zone, `strftime("%s")`, and a `%Z` with flags or a width where `dst()` is not `None`,
   raise `NotImplementedError`.
 - `strptime()`, the deprecated `utcnow()` and `utcfromtimestamp()`, pickling and
-  `copy.replace()` are unsupported. `hash()` of these objects is unsupported, so they are not
-  dict keys or set elements.
+  `copy.replace()` are unsupported. `hash()` of these objects hashes the fields that
+  `_getstate()` packs into bytes upstream (Pystachy has none), so they are dict keys and set
+  elements, equal objects hashing alike; the values differ from CPython's.
 - `timetuple()` returns a NamedTuple with `time.struct_time`'s nine fields and repr, without
   `tm_zone` and `tm_gmtoff`. `isocalendar()`'s result is a NamedTuple: index or unpack it, as
   `tuple()` of it is unsupported.

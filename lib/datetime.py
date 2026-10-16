@@ -1342,7 +1342,7 @@ class timedelta:
         assert isinstance(other, timedelta)
         return _cmp(self._getstate(), other._getstate())
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # Pystachy port: annotated
         if self._hashcode == -1:
             self._hashcode = hash(self._getstate())
         return self._hashcode
@@ -1641,10 +1641,11 @@ class date:
         y2, m2, d2 = other._year, other._month, other._day
         return _cmp((y, m, d), (y2, m2, d2))
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # Pystachy port: annotated
         "Hash."
         if self._hashcode == -1:
-            self._hashcode = hash(self._getstate())
+            # Pystachy port: the hash of the fields that _getstate() packs into bytes
+            self._hashcode = hash((self._year, self._month, self._day))
         return self._hashcode
 
     # Computations
@@ -1940,7 +1941,7 @@ class time:
                 otoff.days * 86400 - otoff.seconds)
         return _cmp((myss, self._microsecond), (otss, other._microsecond))
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # Pystachy port: annotated
         """Hash."""
         if self._hashcode == -1:
             if self.fold:
@@ -1949,16 +1950,17 @@ class time:
                 t = self
             tzoff = t.utcoffset()
             if not tzoff:  # zero or None
-                self._hashcode = hash(t._getstate()[0])
+                # Pystachy port: the hash of the fields that _getstate() packs into bytes
+                self._hashcode = hash((t._hour, t._minute, t._second, t._microsecond))
             else:
                 h, m = divmod(timedelta(hours=self.hour, minutes=self.minute) - tzoff,
                               timedelta(hours=1))
                 assert not m % timedelta(minutes=1), "whole minute"
-                m //= timedelta(minutes=1)
+                mm = m // timedelta(minutes=1)  # Pystachy port: for m //= ... (m is a timedelta)
                 if 0 <= h < 24:
-                    self._hashcode = hash(time(h, m, self.second, self.microsecond))
+                    self._hashcode = hash(time(h, mm, self.second, self.microsecond))
                 else:
-                    self._hashcode = hash((h, m, self.second, self.microsecond))
+                    self._hashcode = hash((h, mm, self.second, self.microsecond))
         return self._hashcode
 
     # Conversion to string
@@ -2654,7 +2656,7 @@ class datetime(date):
             raise TypeError("can't subtract offset-naive and offset-aware datetimes")
         return base + otoff - myoff
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # Pystachy port: annotated
         if self._hashcode == -1:
             if self.fold:
                 t = self.replace(fold=0)
@@ -2662,7 +2664,8 @@ class datetime(date):
                 t = self
             tzoff = t.utcoffset()
             if tzoff is None:
-                self._hashcode = hash(t._getstate()[0])
+                # Pystachy port: the hash of the fields that _getstate() packs into bytes
+                self._hashcode = hash((t._year, t._month, t._day, t._hour, t._minute, t._second, t._microsecond))
             else:
                 days = _ymd2ord(self.year, self.month, self.day)
                 seconds = self.hour * 3600 + self.minute * 60 + self.second
@@ -2727,7 +2730,7 @@ class timezone(tzinfo):
             return self._offset == other._offset
         return False  # Pystachy port: (see timedelta.__eq__)
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # Pystachy port: annotated
         return hash(self._offset)
 
     def __repr__(self):
