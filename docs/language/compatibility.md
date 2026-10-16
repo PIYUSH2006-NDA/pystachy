@@ -428,8 +428,9 @@ supported alternatives.
   `__getitem__` or `__iter__`, compared or added through its own operator method with another type,
   given to `hasattr()` of a name it does not define, `_make()`, `_asdict()` of fields of different
   types, the functional `NamedTuple("P", [...])`, slicing a tuple or a NamedTuple with bounds
-  that are not integer constants, slicing an object (whose `__getitem__` would take a slice
-  object), a tuple `*` a number that is not a constant, and
+  that are not integer literals, slicing a tuple of variable length (`tuple[int, ...]`), slicing
+  an object (whose `__getitem__` would take a slice object), a tuple `*` a number that is not a
+  constant, and
   CPython's class-creation errors of a NamedTuple (a field after a default, an underscored field,
   an overwritten `__init__`) and of a dataclass (a field without a default after one with it)
 

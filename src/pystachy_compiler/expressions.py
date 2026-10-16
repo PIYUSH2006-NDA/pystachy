@@ -680,6 +680,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             self.err(f"'{tname(o.t)}' object is not subscriptable")
         if o.t in self.classes and o.t not in self.nts:
             self.err(f"slicing an object is not supported: {short(o.t)}.__getitem__ would take a slice object, which Pystachy does not have")
+        if is_vtuple(o.t):
+            self.err(f"slicing a tuple of variable length ({typestr(o.t)}) is not supported")
         if o.t != "str" and not is_list(o.t):
             self.err(f"'{o.t}' cannot be sliced")
         fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
@@ -1494,7 +1496,7 @@ def gen_tuple_slice(self, n: Node, o: Val) -> Val:
         if v.t == "bool" and (v.v == "true" or v.v == "false"):
             v = Val("1" if v.v == "true" else "0", "int")
         if v.t != "None" and (v.t != "int" or v.v.startswith("%")):
-            self.err("a tuple's slice bounds must be integer constants (its items' types are known at compile time)")
+            self.err("a tuple's slice bounds must be integer literals (its items' types are known at compile time)")
         bnd.append(int(v.v) if v.t == "int" else len(ts) if len(bnd) == 1 else 0)
     for i in range(2):
         if bnd[i] < 0:
