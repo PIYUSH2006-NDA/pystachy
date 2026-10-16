@@ -387,8 +387,25 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "dict" and npos == 1 and (self.iterator_call(args[0]) or args[0].kind == "listcomp" or args[0].kind == "list"):
         # dict(zip(ks, vs)), dict(enumerate(xs)), dict((k, v) for ...), dict([(k, v), ...]): a new
         # dict of the pairs (taken at once, as list() takes them)
-        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want else ""
-        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft))
+        a = args[0]
+        fn = a.kids[0].s if a.kind == "call" else ""
+        # the tuples that displays (or zip()'s arguments) show the items to be: of other than two
+        # items, none starred, they are not typed by want, whose items are pairs
+        shown = [a.kids[0]] if a.kind == "listcomp" else a.kids if a.kind == "list" else [mk("tuple", "", a.line, a.kids[1:])] if fn == "zip" else []
+        plain = [k for k in shown if k.kind == "tuple" and len([x for x in k.kids if x.kind == "starred" or x.kind == "kw"]) == 0]
+        odd = len([k for k in plain if len(k.kids) != 2]) > 0
+        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want and not odd else ""
+        if (fn != "" or a.s == "gen") and (fn == "reversed" or len(plain) < len(shown) or odd):
+            # an iterator not shown to make pairs is typed first: of tuples of another length, it
+            # is taken only up to its first item, CPython's ValueError (any() of each item's
+            # 1-tuple, which is true, stops there)
+            item = mk("name", "__item", a.line, [])
+            g = a if fn == "" else mk("listcomp", "gen", a.line, [item, item, a])
+            et = elem(self.dry(mk("listcomp", "", a.line, g.kids), pw))
+            if is_tuple(et) and len(targs(et)) != 2:
+                one = mk("listcomp", "gen", a.line, [mk("tuple", "", a.line, [g.kids[0]])] + g.kids[1:])
+                return self.dict_pairs(Val("", self.ctype("list", [et])), want, self.listcomp(one, "", "any").v)
+        return self.dict_pairs(self.consume(a, pw, None, resultsoft), want)
     if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
         # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
@@ -687,7 +704,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
     elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
-        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
+        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v, want)
     elif name == "dict" and is_dict(t):
         # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c),
         # comparing keys hashed by their class (key_fx)
@@ -2013,14 +2030,26 @@ def gen_prod_item(self, s: Val, item: Val) -> Val:
     self.raise_("TypeError", self.sconst(bad))
     return s
 
-def gen_dict_pairs(self, v: Val) -> Val:
+def gen_dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
-    # PyDict_MergeFromSeq2 inserts them
+    # PyDict_MergeFromSeq2 inserts them. Of tuples of another length, an item is CPython's
+    # ValueError, for element #0 (every item has the one tuple type, so the first is bad), and an
+    # empty list makes an empty dict: of the dict type wanted (a union's one dict type), or else,
+    # as it is always empty, dict[int, int] (as gen_load_name takes such a dict, which guessed
+    # explains). found: whether an iterator of them, v being only their list's type, had an item
     et = elem(v.t) if is_list(v.t) else ""
-    if is_tuple(et) and len(targs(et)) != 2:
-        self.err(f"dictionary update sequence element #0 has length {len(targs(et))}; 2 is required (dict() of a {typestr(v.t)})")
     if not is_tuple(et):
         self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
+    if len(targs(et)) != 2:
+        self.guard(found if found != "" else self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v, f"ValueError: dictionary update sequence element #0 has length {len(targs(et))}; 2 is required")
+        t = unopt(want)
+        if is_union(t):
+            ds = [m for m in umembers(t) if is_dict(m)]
+            t = ds[0] if len(ds) == 1 else ""
+        if not is_dict(t) or "?" in t:
+            t = self.ctype("dict", ["int", "int"])
+            self.guessed[self.curfn.ll] = f"dict() at line {self.line} of tuples of {len(targs(et))} items makes only an empty dict, taken as {typestr(t)}: give it a type first, as in d: dict[K, V] = dict(...)"
+        return Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(targs(t)[0])}", "i64 0"]), t)
     kv = targs(et)
     if self.key_problem(kv[0]) != "":
         self.err(self.key_problem(kv[0]))

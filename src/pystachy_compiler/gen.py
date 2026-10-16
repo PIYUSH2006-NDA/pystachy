@@ -1895,8 +1895,8 @@ class Gen:
     def typed_now(self, e: Node, own: str='') -> bool:
         return variables_typed_now(self, e, own)
 
-    def dry(self, e: Node) -> str:
-        return variables_dry(self, e)
+    def dry(self, e: Node, want: str='') -> str:
+        return variables_dry(self, e, want)
 
     def fill(self, n: Node, m: str, args: list[Node], want: str='') -> Val:
         return variables_fill(self, n, m, args, want)
@@ -3139,8 +3139,8 @@ class Gen:
     def tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         return builtins_tmethod(self, o, m, args)
 
-    def dict_pairs(self, v: Val) -> Val:
-        return builtins_dict_pairs(self, v)
+    def dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
+        return builtins_dict_pairs(self, v, want, found)
 
     def isclose(self, args: list[Node]) -> Val:
         return builtins_isclose(self, args)

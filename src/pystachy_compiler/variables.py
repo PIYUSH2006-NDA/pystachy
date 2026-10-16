@@ -1296,8 +1296,9 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
             return False
     return True
 
-def gen_dry(self, e: Node) -> str:
-    # the type of e, compiled into blocks that are dropped (an error after it is still the read's)
+def gen_dry(self, e: Node, want: str = "") -> str:
+    # the type of e (where want is expected), compiled into blocks that are dropped (an error
+    # after it is still the read's)
     blk = self.blk
     blocks = self.fn.blocks
     loops = self.fn.loops
@@ -1308,7 +1309,7 @@ def gen_dry(self, e: Node) -> str:
     self.fn.blocks = []
     self.fn.loops = []
     self.drying += 1
-    t = self.expr(e, "").t
+    t = self.expr(e, want).t
     self.drying -= 1
     self.blk = blk
     self.fn.blocks = blocks
