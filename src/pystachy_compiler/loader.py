@@ -50,6 +50,7 @@ from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.parser import Parser
 from src.pystachy_compiler.specs import (
     ABCS,
+    ABSTRACT_DECOS,
     ANNKINDS,
     CBUILTIN,
     GENERICS,
@@ -58,6 +59,7 @@ from src.pystachy_compiler.specs import (
     MODULES,
     NOCALL,
     PYBUILTINS,
+    STANDINS,
     TYPING,
     VERSIONINFO,
 )
@@ -145,8 +147,9 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
-        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
-        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        # the type parameters of the generic classes and defs (class C[T], def f[T]) it is in, by
+        # name: the names of their own that they are qualified to (<class's or def's name>$$T,
+        # unlike any other)
         self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
@@ -335,6 +338,8 @@ class Loader:
         # the file module name is loaded from: NAME/__init__.py or NAME.py, the first found on the
         # module path or in the parent package, else the directories of a namespace package
         # (separated by ":"); "" if there is none
+        if name in STANDINS and len(self.dirs) > 0:
+            return self.dirs[-1] + "/" + STANDINS[name] + ".py"  # (lib's stand-in for a C module)
         if name in CBUILTIN:
             return ""  # a module built into CPython: no file on the path replaces it (find())
         if name == ITERS:
@@ -2349,6 +2354,13 @@ class Loader:
         # A dotted name's first name that an import in a try statement binds is checked as a read
         # of it is (Node.mchk, which Gen.decorate tests where CPython evaluates the decorator)
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
+        k = self.kind(m, root) if root not in loc else ""
+        q = k[2:] if k.startswith("a:") and root == d.s else "abc$" + d.s[len(root) + 1 :] if k == "m:abc" and "." in d.s else ""
+        if not fn and len(d.kids) == 0 and q in ABSTRACT_DECOS:
+            # (a method's @abstractmethod, or one of the decorators deprecated for it, as abc's:
+            # the compiler applies it, Gen.abstract_defs)
+            d.s = q
+            return
         alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
         if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
             e = mk("name", root, d.line, [])
@@ -2435,6 +2447,14 @@ class Loader:
                 self.qdef = True
                 ren = self.qren
                 self.qren = dict(ren)
+                for nm in st.kids[2].s.split():
+                    # (a generic def's type parameters, in its body as a generic class's are in its
+                    # methods: CPython's TypeVars, not the module's or an enclosing function's
+                    # names, which they hide)
+                    self.qren[nm] = st.s + "$$" + nm
+                    m.deftps.append(self.qren[nm])
+                    if nm not in own:
+                        inner.pop(nm, False)
                 for nm in decl:
                     self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)

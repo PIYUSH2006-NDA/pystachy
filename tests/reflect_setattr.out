@@ -1,0 +1,9 @@
+10 20
+object a
+value a
+setter 21.5
+21.5
+7
+FrozenInstanceError: cannot assign to field 'x'
+1
+[exit 0]

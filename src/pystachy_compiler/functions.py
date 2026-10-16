@@ -49,6 +49,7 @@ def gen_enter(self, f: FnInfo, body: list[Node]) -> None:
     self.lct = []
     self.lcsoft = []
     self.nonevars = {}
+    self.nonesites = {}
     self.narrowed = {}
     self.lkk = {}
     self.branch = 0
@@ -148,6 +149,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             a = self.maddr('%ptr', env, f'{len(c.caps) + len(c.defs) + j}', True)
             self.iflag[c.iflags[j]] = self.mload('%ptr', a)
     self.none_ends()
+    if f.gen:
+        self.gen_begin(f)  # (a generator: a call makes it, and runs none of the code below)
     if f.ll.startswith("@init."):
         # a module's code runs once, when the first import of it runs
         done = f.ll + ".done"
@@ -188,6 +191,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
         self.handler = hm
         self.place(tr.body)
     self.stmts(body)
+    if f.gen:
+        self.gen_end(f)
     if f.ret == "":
         f.ret = "None"  # a template's function without a return statement that has a value
         f.noret = f.infer and self.term
@@ -212,8 +217,9 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
         self.mem_store(Val(f"{f.ll}.done", "*bool"), Val("false", "bool"))
         self.throw(e)
     if not self.term:
-        if f.ret == "None" or (f.infer and f.ret in self.classes) or is_opt(f.ret):
-            # (a template's function that ends without a return, or one returning T | None: None)
+        if f.ret == "None" or (f.infer and f.ret in self.classes) or is_opt(f.ret) or (self.retann and f.ret != "" and self.optional(f.ret) == f.ret and self.ann_none(f.node.kids[1], [])):
+            # (a template's function that ends without a return, or one returning T | None: None;
+            # also C | None for a class C, whose type, C's, includes None without showing it)
             self.ret_(Val("null", f.ret))
             if len(self.fn.cold) > 0:
                 # the jump to the first cold block that follows is a block of its own, which

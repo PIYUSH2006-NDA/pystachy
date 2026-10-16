@@ -1,0 +1,46 @@
+  open
+full 0
+full 1
+  close
+  open
+partial 0
+partial 1
+  close
+after break
+body 1
+generator finally
+caught from body
+generator finally
+20
+layered a
+  inner finally
+layered b
+  outer finally
+layered then break a
+  inner finally
+  GeneratorExit caught
+  outer finally
+  inner finally
+  GeneratorExit caught
+  outer finally
+  open
+enumerate break
+  close
+  open
+  open
+  close
+  open
+  close
+  close
+  open
+  close
+else after the end
+  open
+  close
+done
+  open
+nested 0
+nested 1
+  close
+  nested finally
+[exit 0]

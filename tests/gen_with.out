@@ -1,0 +1,26 @@
+line one
+line two
+line three
+line four
+  finally, file closed: False
+  after with
+first one
+  finally, file closed: False
+inner file x
+handled one
+inner file x
+handled two
+inner file x
+handled three
+  finally, file closed: False
+caught leave
+  finally, file closed: False
+2
+partial one
+consumer caught consumer's own
+resumed two
+resumed three
+resumed four
+  finally, file closed: False
+  after with
+[exit 0]

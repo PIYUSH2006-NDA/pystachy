@@ -27,6 +27,11 @@ complete True True
 complete True True
 complete True True
 trailing byte True True
-values True True
-translated True True
+not utf8 True True
+not utf8 True True
+not utf8 True True
+utf8 True True True
+utf8 True True True
+utf8 True True True
+utf8 True True True
 [exit 0]

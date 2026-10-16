@@ -9,6 +9,7 @@ unsupported forms, see [compatibility](compatibility.md).
 |---|---|
 | `int` | Signed 64-bit; overflow raises `OverflowError` |
 | `float`, `bool`, `str` | Double-precision floats; strings hold UTF-8 with byte-based indexing |
+| `bytes` | Immutable bytes, whose items are ints; also a dict key and set element |
 | `list[T]`, `dict[K, V]` | One static element type, or one key and value type |
 | `set[T]`, `frozenset[T]` | Elements must use the supported dict key types |
 | `tuple[A, B]` | Fixed shape, up to nine items; a constant index gives the item's type, a variable one the union of the items'; slicing requires integer constants (items of one runtime-length element type also slice by run-time bounds, into a `tuple[T, ...]`) |
@@ -16,8 +17,28 @@ unsupported forms, see [compatibility](compatibility.md).
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
 | `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
-| `T \| None` | Optional values, including containers and `Callable` |
+| `T \| None` | Optional values, including containers, `Callable` and generators (`Generator[Y, None, None] \| None`) |
 | `TextIO` | Text files |
+| `Generator[Y, None, R]`; `Iterator[T]` or `Iterable[T]` as a generator function's return | Generator objects that yield `T` (any generator function's); see [generators](semantics.md#generators). Elsewhere `Iterator[T]` and `Iterable[T]` type nothing ([iterators](semantics.md#iterators)) |
+
+A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
+bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)`, `bytes.maketrans(frm, to)` and
+`s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
+`+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
+printing work as in CPython. The methods are `decode`, `hex` (also with `sep` and
+`bytes_per_sep`, by position or name), `translate` (with a table or `None`, and `delete`, by
+position or name), `join`, `split`, `rsplit`,
+`splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
+`startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
+`removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
+`center`, `zfill`, `isalpha`, `isalnum`, `isdigit`, `isspace`, `isupper`, `islower` and
+`isascii`, with CPython's ASCII whitespace and case. `str.encode()`, `bytes.decode()` and
+`bytes(s, encoding)` have CPython's UTF-8, Latin-1 and ASCII codecs, found by their names and
+aliases as `codecs.lookup()` finds them, with the `strict`, `replace`, `ignore`,
+`backslashreplace`, `surrogateescape`, `surrogatepass` and (encoding) `xmlcharrefreplace`
+handlers. Their errors are CPython's `UnicodeDecodeError` and `UnicodeEncodeError`, with its
+messages.
 
 `tuple(xs)` copies a supported homogeneous list or a string into an immutable
 runtime-length tuple; later list mutation does not change it. String conversion follows
@@ -35,11 +56,10 @@ Runtime-length tuples currently do not support concatenation, repetition,
 membership, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
 expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
-`bool`, `str` or optional versions of those types, and the objects of iterator classes.
-Direct `enumerate` and `zip` produce tuple-valued items, which runtime-length tuples cannot
+`bool`, `str` or optional versions of those types, the objects of iterator classes and
+generators. Direct `enumerate` and `zip` produce tuple-valued items, which runtime-length tuples cannot
 hold. Project a scalar first, for example `tuple(value for index, value in enumerate("ab"))`
-or `tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Generators are not yet
-supported. This enables the existing `re.Match.groups()` implementation
+or `tuple(left + right for left, right in zip([1, 2], [3, 4]))`. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, objects of the program's classes, or tuples containing `int`,
@@ -460,6 +480,10 @@ established type, and comparison methods must return `bool`.
 Function annotations mentioning a module-level `TypeVar` or `TypeVarTuple` (also one
 from-imported from another module), or a PEP 695 function type parameter
 (`def identity[T](value: T) -> T`), make those parts of the signature inferred. Generic classes bind their type variables differently, as described below.
+A PEP 695 function's `**P` and `*Ts` are such type parameters too, also in its nested defs:
+`def logged[**P, R](fn: Callable[P, R]) -> Callable[P, R]` may return a nested
+`def wrapper(*args: P.args, **kwargs: P.kwargs) -> R` that forwards them (also with
+`Concatenate[int, P]`). A module-level `ParamSpec` is unsupported.
 
 ### Variadic arguments
 
@@ -579,8 +603,9 @@ PEP 695 syntax declares the same class: `class Box[T]:` is `class Box(Generic[T]
 type variables of its own, which hide a module-level name `T` (but where a method's `global T`
 names it), and `class Row[*Ts, R]:` is `Generic[*Ts, R]`. A bound, constraints or a default
 (`class Num[T: (int, float)]`) is not checked: the arguments' types bind the variable, as for
-a `TypeVar`. A PEP 695 function's type parameters hide a module-level name only in its
-annotations; its body reads the module's ([a deviation](compatibility.md#functions-and-object-identity)).
+a `TypeVar`. A PEP 695 function's type parameters hide a module-level or an enclosing
+function's name in its annotations and body, as a class's do in its methods; a read of one as
+a value is a `TypeVar`'s error.
 
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), `Callable[[A, *Ts], R]`,
@@ -606,6 +631,9 @@ The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 parameter and has no `*args`, `**kwargs` or `TypeVarTuple`. It works in variable, field,
 parameter and return annotations, including nested types such as `list[C[int]]`, and in
 constructor calls such as `C[int]()`. The class statement must precede the annotation.
+A generic class without an `__init__` of its own, or a generic dataclass, binds nothing:
+`C[int]` is `C`, and its methods' parameters annotated with its type variables take each
+call's types. Its fields cannot use the type variables.
 
 Constructor arguments bind first; the named specialization or surrounding annotation fills
 variables the arguments leave unbound. Thus `q: Stack[int] = Stack()` and
@@ -682,7 +710,9 @@ Object methods and supported string, list, dict and file methods bind their obje
 `handler = obj.method`, `key=str.lower`, `write=file.write`. Bound methods compare equal
 when they refer to the same method of the same object; their identity test is rejected.
 Static and class methods, and numeric methods, cannot be stored as method values.
-Function values expose `__name__` and `__qualname__`; printing them is unsupported.
+Function values expose `__name__` and `__qualname__` (those of the function `functools.wraps()`
+wraps, where it does: [functools](../../lib/compatibility.md#functools)); printing them is
+unsupported.
 
 A lambda or nested `def` creates a closure on each execution. Captured variables are shared,
 so later assignments and `nonlocal` updates are visible. Captured variables must already be
@@ -708,8 +738,8 @@ class. In a subclass, `@property def value` starts a new property without the ba
 and deleter, while `@Base.value.setter` keeps the base's getter and deleter; a base-typed
 receiver calls the methods of its object's class. `@value.getter`, `property(fget, fset)`,
 property objects read through the class, `super().value = v`, and replacing a property with a
-field or method are unsupported. `hasattr(obj, "value")` on a property is rejected because it
-must run the getter; read it in `try/except AttributeError` instead.
+field or method are unsupported. `hasattr(obj, "value")` on a property runs the getter, and is
+false where it raises `AttributeError`, as in CPython.
 
 ## Fields, dataclasses and NamedTuples
 
@@ -730,8 +760,10 @@ required. Supported subclasses also inherit their base's fields and class attrib
 A class attribute may hold a function (`encode = enc`, as CPython's `encodings` modules bind
 their codec functions). It is read and called through its class or a subclass
 (`Codec.encode(s)`, `f = Codec.encode`). Through an object, a builtin function that a class
-attribute holds (`size = len`) is read as itself, as in CPython. A Python function is not:
-CPython binds it to the object as a method there, and Pystachy rejects that read.
+attribute holds (`size = len`) is read as itself, as in CPython, and so is a function of a
+module that `lib/` stands in for a C module (`dec = codecs.utf_8_decode`), CPython's builtin. A
+Python function is not: CPython binds it to the object as a method there, and Pystachy rejects
+that read.
 
 A `@dataclass` writes `__init__` (which calls `__post_init__`), `__repr__` and `__eq__` unless
 its `init`, `repr` or `eq` option is false, and with `order=True` the comparisons of the tuples
@@ -742,7 +774,8 @@ in field order, also for `init=False` fields). `_: KW_ONLY` makes the
 following fields keyword-only. `frozen=True` objects raise `dataclasses.FrozenInstanceError`
 (an `AttributeError`) when a field or property is assigned or deleted outside the `__init__`
 that `@dataclass` writes. `dataclasses.replace(obj, **changes)` makes a new object through
-`__init__`. A mutable default (an unhashable value: a list, dict or set, or an object whose
+`__init__`. `dataclasses.fields()`, `asdict()`, `astuple()` and `is_dataclass()` are made for
+each class (see [reflection](semantics.md#reflection)). A mutable default (an unhashable value: a list, dict or set, or an object whose
 class defines `__eq__` without `__hash__`, as a dataclass with `eq=True` does unless it is
 frozen or has `unsafe_hash=True`) is rejected with CPython's message.
 
@@ -783,6 +816,12 @@ joins discard refinements that no longer hold. Globals, fields and locals assign
 `nonlocal` closure are not refined; copy a reference to a stable local and test that local.
 Only a single named derived class refines a base type; tuple/union tests and exception-class
 narrowing retain their existing restrictions.
+
+A class that derives from `abc.ABC`, or whose statement passes `metaclass=abc.ABCMeta`, has
+abstract methods: those decorated with `@abstractmethod` (also under `@property`,
+`@classmethod` or `@staticmethod`) until a subclass defines them again. Making an object of a
+class with an abstract method left raises CPython's `TypeError` once the arguments are
+evaluated ([abc](../../lib/compatibility.md#abc)).
 
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through

@@ -34,6 +34,7 @@ observable contract.
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
 | `random` | `Lib/random.py` | `fb2625eb54412c880e8f1af449785a74e125556159fc7997814e51dd054cc5da` |
 | `datetime` | `Lib/_pydatetime.py` | `9a6652ecbdc8bcb9774136febc36b13f99aa926c7b42c19ac77e6c84128560a4` |
+| `codecs` | `Lib/codecs.py` | `2f278497548b8313580b247a1097a0a304e5087a355ebb11a92ec685fa9e63ff` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
 `datetime` is `_pydatetime`, which CPython's `Lib/datetime.py` re-exports when its C
@@ -64,10 +65,15 @@ CPython runs the source.
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
 | `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
 | `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
-| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
+| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks, and the unchanged `update_wrapper()` and `wraps()`, which the compiler applies |
 | `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
+| `binascii` (`_pystachy_binascii`) | `Modules/binascii.c`, `Python/pystrhex.c` | All twelve functions of the C module, with its errors and messages |
+| `atexit` (`_pystachy_atexit`) | `Modules/atexitmodule.c` (SHA-256 `a61f11e295d38463b36524e51b8eba64d5a84022bb7df7b3c0ccd8aa9fe9521b`) | `register()`, `_clear()`, `_run_exitfuncs()` and `_ncallbacks()`, with the C module's order of callbacks; `unregister()` raises `NotImplementedError` |
+| `abc` (`_pystachy_abc`) | `Lib/abc.py` (SHA-256 `e558702a95cdce3febd289da021715d2b92bc43995b8a1bc58dfa1c3d8010287`), `Modules/_abc.c`, `Objects/typeobject.c` | `ABC`, `ABCMeta`, `abstractmethod()` and the deprecated decorators, which the compiler applies, with `object.__new__`'s `TypeError` for an abstract class; their docstrings |
+| `_codecs` (`_pystachy_codecs`) | `Modules/_codecsmodule.c`, `Objects/unicodeobject.c`, `Objects/stringlib/codecs.h` | The UTF-8, Latin-1, ASCII and charmap codec functions, `encode()`, `decode()` and the error handler registry, with the C module's errors and messages; the other codecs raise `NotImplementedError` |
+| `_struct` (`_pystachy_struct`) | `Modules/_struct.c`, `Objects/floatobject.c` | `calcsize()`, and the packing and unpacking of each item, which the compiler composes into `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` for a format it knows, with the C module's sizes, alignment, errors and messages and `PyFloat_Pack2()`'s rounding; `Struct`; their docstrings |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -100,6 +106,7 @@ Historical upstream-suite checks recorded with the ports:
 | `shlex` | `test_shlex` | 43 of 44 passed; punctuation field is writable |
 | `random` | `test_random` | 106 passed, two memory-limited skips; with `_pyrandom`, 96: nine need over 63 bits, one pickles `_random.Random` |
 | `datetime` | `test_datetime`'s pure-Python cases | 1209 of 1775 passed, 27 skipped; the others need local time, pickling, hashing, subclass construction, `NotImplemented` reflection, the `timezone.utc` singleton or dynamic argument types |
+| `binascii` | `test_binascii`, with `_pystachy_binascii` as `binascii` | 72 of 93 passed and 17 skipped (Hypothesis and big-memory tests); the 4 `test_c_contiguity` cases need non-contiguous `memoryview` buffers |
 
 These counts describe specific recorded checks of the adapted source under
 CPython, not the number of APIs or upstream tests executed by the compiled
@@ -128,6 +135,36 @@ hash with `hash()` and the `lgamma` port with `math.lgamma()`. Its `--upstream D
 runs the pinned `test_random` (SHA-256
 `04ffe61561421e6cf3b85edcea3ebaca995e6a5def1267cf3562acbb3b9b1337`) and its `randv*.pck`
 files from DIR on both generators, as recorded above.
+
+`tools/codecs_check.py` runs `lib/_pystachy_codecs.py` on CPython and compares the results and
+errors of 96,000 calls of its codec functions, with every error handler and on the decoding
+tables of the standard library's table codecs, with those of the C module (`Modules/_codecsmodule.c`,
+SHA-256 `bd2f762ac481caabd817f6b94de19f3788ae7635406d06770b7972aafad03632`, whose codecs are in
+`Objects/unicodeobject.c`, SHA-256
+`68a5618c520f5b348e9e2abe1a77688c4b0c1f377d86f79e3399b41b445c24ab`, and
+`Objects/stringlib/codecs.h`, SHA-256
+`d126faea1dcf3f3b19a256237e5e87bdaa006dbc5b26fb0b5267f9a1dcbab3b4`), and compares the 39
+functions' signatures.
+
+`tools/binascii_check.py` runs `lib/_pystachy_binascii.py` on CPython, compares the results and
+errors of 420,000 calls of its functions, mostly at the edges of their inputs, with those of the C
+module (`Modules/binascii.c`, SHA-256
+`b5919586319f5e28f9a4c1754691908af77489aadcbde97ca1ca998af2fcd1d2`, whose hex separators are
+`Python/pystrhex.c`'s, SHA-256 `7842f6d7d9b58bcbf10cbb24d29f6d1f36668e20f935689e197bbe0abdccd4ed`),
+and compares their signatures. Its `--upstream DIR` option runs the pinned `test_binascii`
+(SHA-256 `95648ecc7cd21319fd515090ef5c0c2e4a501d43409ffc3ce27f5f647e73c7d7`) on the port, as
+recorded above.
+
+`tools/struct_check.py` runs `lib/_pystachy_struct.py` on CPython and composes its functions
+item by item as the compiler composes them, for 20,000 random formats, native and standard,
+with values at the edges of the codes' ranges and beyond, signed zeros, subnormals, infinities,
+NaNs and ties of rounding, cut and padded bytes, and offsets and buffers of every size. It
+compares the bytes, values and errors of 100,000 calls, also of `calcsize()` with invalid
+formats, with those of the C module (`Modules/_struct.c`, SHA-256
+`851f2a21bdbf4432c2e525da31a68a8213f5a4341d90bb2a6857b84c1a73d8e6`, which packs floats with
+`Objects/floatobject.c`'s `PyFloat_Pack2()`, `PyFloat_Pack4()` and `PyFloat_Pack8()`, SHA-256
+`be9a74fef157cf6105de8ce3beedb5325f0b433ebd4c64e604aeb9ebf29394b1`), and compares the functions'
+signatures and docstrings.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of

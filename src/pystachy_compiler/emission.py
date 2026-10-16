@@ -53,6 +53,7 @@ def gen_save(self) -> Frame:
     fr.cells = self.cells
     fr.nlw = self.nlw
     fr.nonevars = self.nonevars
+    fr.nonesites = self.nonesites
     fr.narrowed = self.narrowed
     fr.lkk = self.lkk
     fr.branch = self.branch
@@ -94,6 +95,7 @@ def gen_restore(self, fr: Frame) -> None:
     self.cells = fr.cells
     self.nlw = fr.nlw
     self.nonevars = fr.nonevars
+    self.nonesites = fr.nonesites
     self.narrowed = fr.narrowed
     self.lkk = fr.lkk
     self.branch = fr.branch
@@ -352,6 +354,12 @@ def gen_primitive(self, name: str, vals: list[Val]) -> Val:
         f = self.rt("memmem", "ptr", [f"ptr {p0}", f"i64 {self.scalar('sub', [Val(a[3], 'int'), Val(a[2], 'int')])}", f"ptr {p1}", f"i64 {m}"])
         d = self.scalar('sub', [Val(self.scalar_cast('ptrtoint', Val(f, '%ptr'), 'int'), 'int'), Val(self.scalar_cast('ptrtoint', Val(a[0], '%ptr'), 'int'), 'int')])
         return Val(self.select(self.scalar_cmp('eq', Val(f, '%ptr'), Val('null', '%ptr')), Val('-1', 'int'), Val(self.scalar('sub', [Val(d, 'int'), Val('16', 'int')]), 'int')), "int")
+    if name == "fail":
+        if not a[0].startswith("@s."):
+            self.err("_rt.fail() takes the exception's name as a str literal")
+        self.raise_(self.strvals[int(a[0][3:])], a[1])
+        self.place(self.label())  # (not reached)
+        return Val("null", "None")
     if name == "str_new":
         # a size the allocator cannot serve (negative, or past 2**63 with the header and NUL)
         # is CPython's MemoryError, as in runtime.c
@@ -459,6 +467,19 @@ def gen_sconst(self, s: str) -> str:
     name = f"@s.{len(self.strs)}"
     self.strs[s] = name
     self.strvals.append(s)
+    d = Data("string", name)
+    d.text = s
+    self.consts.append(d)
+    return name
+
+def gen_bconst(self, s: str) -> str:
+    # a bytes constant of s (a character per byte): a Str as a str constant is (sconst), but
+    # named apart, so that no str folding takes its text and a str of the same bytes is another
+    # object
+    if s in self.bstrs:
+        return self.bstrs[s]
+    name = f"@b.{len(self.bstrs)}"
+    self.bstrs[s] = name
     d = Data("string", name)
     d.text = s
     self.consts.append(d)

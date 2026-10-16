@@ -1,0 +1,3 @@
+None
+RuntimeError: f() ended without returning a value
+[exit 1]
