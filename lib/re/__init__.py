@@ -171,9 +171,15 @@ def _charat(s: str, i: int) -> str:
     if not _UTF8:
         return c
     b = ord(c)
-    if b < 0xC0:
+    if b < 0xC2 or b >= 0xF5:
         return c
     n = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
+    # Match _codes(): a truncated sequence or invalid continuation is one standalone byte.
+    if i + n > len(s):
+        return c
+    for j in range(1, n):
+        if ord(s[i + j]) & 0xC0 != 0x80:
+            return c
     return s[i : i + n]
 
 
