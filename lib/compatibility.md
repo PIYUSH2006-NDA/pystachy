@@ -758,3 +758,30 @@ class whose subclasses' `__init__` binds their fields.
   (Linux's signal numbers: those from 65 on are out of range).
 - `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
   `NotImplementedError`: no thread but the main one runs.
+
+## Unicodedata
+
+`unicodedata` is `_pystachy_unicodedata`, a port of CPython's C module `unicodedata`
+(`Modules/unicodedata.c`) that Pystachy loads for `import unicodedata`, on CPython 3.13.16's
+tables of Unicode 15.1.0, which `tools/unicodedata_tables.py` takes from CPython's module and
+writes into `_pystachy_unicodedata_db.py` and `_pystachy_unicodedata_names.py`. Every function
+works as CPython's does, with its errors and messages: `category()`, `bidirectional()`,
+`combining()`, `mirrored()`, `east_asian_width()`, `decomposition()`, `decimal()`, `digit()` and
+`numeric()` (with or without a default), `name()`, `lookup()`, which also takes the aliases,
+named sequences and derived names (Hangul syllables, CJK and Tangut ideographs) in any case,
+`normalize()` and `is_normalized()` in the four forms, and `ucd_3_2_0`, the database of
+Unicode 3.2.0 that `stringprep` and the IDNA codec read. A function's character is the one code
+point that its `str` argument's UTF-8 encodes, and the strs it gives hold the code points' UTF-8
+(their `len()` counts bytes, as for any Pystachy str: see the [language
+reference](../docs/language/compatibility.md#text-and-file-positions)).
+
+- Iterating a str gives its bytes, so `[c for c in s if unicodedata.combining(c) == 0]` raises
+  `TypeError` for a character of more than one byte
+  ([deviation](../tests/deviations/lib_unicodedata_bytes.py)): `re.findall("(?s).", s)` gives
+  the characters, as in CPython ([test](../tests/lib_unicodedata_chars.py)).
+- `lookup()` takes a `str`; `bytes`, which CPython's also takes, is a compile-time error.
+- `unicodedata._ucnhash_CAPI`, the capsule through which CPython's `\N{...}` escapes find
+  names, is not there.
+- The tables, about 850 KB of source, are compiled into each program that imports
+  `unicodedata`: they add about 1 MB of IR and 0.4 s to a `pystachy run`. A function decodes
+  the table it reads the first time it reads it, into a few lists of ints.

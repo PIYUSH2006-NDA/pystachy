@@ -1,0 +1,3 @@
+TypeError: combining() argument must be a unicode character, not str
+[0, 0, 0]
+[exit 0]
