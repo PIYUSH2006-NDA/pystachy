@@ -545,6 +545,7 @@ from src.pystachy_compiler.flow import (
     gen_fl_expr as flow_fl_expr,
     gen_fl_fields as flow_fl_fields,
     gen_fl_nested as flow_fl_nested,
+    gen_fl_super as flow_fl_super,
     gen_fl_stmt as flow_fl_stmt,
     gen_fl_stmts as flow_fl_stmts,
     gen_fl_target as flow_fl_target,
@@ -2232,6 +2233,9 @@ class Gen:
 
     def fl_nested(self, fl: Flow, n: Node) -> None:
         return flow_fl_nested(self, fl, n)
+
+    def fl_super(self, fl: Flow, m: str) -> bool:
+        return flow_fl_super(self, fl, m)
 
     def flow_body(self, d: Node, caps: dict[str, bool]) -> None:
         return flow_flow_body(self, d, caps)

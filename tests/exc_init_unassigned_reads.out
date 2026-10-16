@@ -1,0 +1,14 @@
+NameError: name 'G' is not defined
+NameError: name 'H' is not defined
+3
+E raised
+2
+F raised F
+AttributeError: 'C' object has no attribute 's'
+4 4
+xyz xyz 4
+AttributeError: 'C2' object has no attribute 't'
+3
+5 5
+caught dddd 5
+[exit 0]
