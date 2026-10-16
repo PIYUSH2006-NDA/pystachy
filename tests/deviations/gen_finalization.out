@@ -1,0 +1,8 @@
+acquire a
+got 1
+after del
+acquire b
+release b
+1
+end
+[exit 0]

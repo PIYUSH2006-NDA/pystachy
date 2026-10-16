@@ -37,6 +37,8 @@ def gen_ueq_type(self, t: str) -> bool:
 def gen_uop(self, v: Val, op: str) -> Val:
     # Truth and str select the existing native member operation. Evaluate v once,
     # handle None before loading the tag, and join only the operation's result.
+    if not self.value_union(v.t) and op == "str" and self.reference_union(v.t):
+        return self.refl_union_str(v, "__str__")  # (each class's: reflection.py)
     if not self.value_union(v.t):
         self.err("closed reference union operations require narrowing with isinstance() first")
     t = "bool" if op == "truth" else "str"

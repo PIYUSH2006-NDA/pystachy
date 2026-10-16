@@ -1,0 +1,63 @@
+True False
+True True True
+False False False False
+False True
+False
+error: release unlocked lock
+RuntimeError: release unlocked lock
+True -1.0 True
+True 0.0 True
+True 1.5 True
+True -2.0 ValueError timeout value must be a non-negative number
+True -0.5 ValueError timeout value must be a non-negative number
+True -1e-12 ValueError timeout value must be a non-negative number
+True 9223372036.0 True
+True 9223372036.854776 OverflowError timestamp out of range for C PyTime_t
+True 1e+20 OverflowError timestamp out of range for C PyTime_t
+True inf OverflowError timestamp out of range for C PyTime_t
+True -inf OverflowError timestamp out of range for C PyTime_t
+True nan ValueError Invalid value NaN (not a number)
+True 0 True
+True 1 True
+True -1 True
+True -3 ValueError timeout value must be a non-negative number
+True 9223372036 True
+True 9223372037 OverflowError timestamp out of range for C PyTime_t
+True -9223372037 OverflowError timestamp out of range for C PyTime_t
+False 0.0 ValueError can't specify a timeout for a non-blocking call
+False -1.0 True
+False 0 ValueError can't specify a timeout for a non-blocking call
+False -1 True
+True True True
+<unlocked _thread.RLock object owner=0 count=0 False 0
+True True True True 3
+<locked _thread.RLock object owner=ID count=3
+3 True False 0 <unlocked _thread.RLock object owner=0 count=0
+3 True
+False
+RuntimeError: cannot release un-acquired lock
+RuntimeError: cannot release un-acquired lock
+True True True True
+0 True True 9223372036.0
+<unlocked _thread.lock <unlocked _thread.RLock
+<_thread._ThreadHandle object: ident=ID> False True
+RuntimeError: Cannot join current thread
+True
+32768 0 32768
+1099511627776 0 1099511627776
+32767 ValueError: size not valid: 32767 bytes
+-1 ValueError: size must be 0 or a positive value
+0 0 0
+15 None
+1 None
+64 None
+0 ValueError: signal number out of range
+65 ValueError: signal number out of range
+-1 ValueError: signal number out of range
+KeyboardInterrupt KeyboardInterrupt()
+SystemExit SystemExit()
+SystemExit SystemExit()
+4
+This module provides primitive operations to write multi-threaded programs.
+The 'threading' module provides a more convenient interface.
+[exit 0]

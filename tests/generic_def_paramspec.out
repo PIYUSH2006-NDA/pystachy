@@ -1,0 +1,7 @@
+call add
+call add
+call greet
+call greet
+3 6 hi bo! hi al?
+30 20
+[exit 0]

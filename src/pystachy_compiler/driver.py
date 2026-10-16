@@ -31,6 +31,7 @@ COMPILER_SOURCES: list[str] = [
     'src/pystachy_compiler/expressions.py',
     'src/pystachy_compiler/flow.py',
     'src/pystachy_compiler/functions.py',
+    'src/pystachy_compiler/generators.py',
     'src/pystachy_compiler/gen.py',
     'src/pystachy_compiler/ir.py',
     'src/pystachy_compiler/ircheck.py',
@@ -46,6 +47,7 @@ COMPILER_SOURCES: list[str] = [
     'src/pystachy_compiler/optimizations.py',
     'src/pystachy_compiler/parser.py',
     'src/pystachy_compiler/program.py',
+    'src/pystachy_compiler/reflection.py',
     'src/pystachy_compiler/scalar_ir.py',
     'src/pystachy_compiler/scope.py',
     'src/pystachy_compiler/specs.py',
@@ -627,6 +629,14 @@ def main() -> None:
         if ir.count("\n") <= int(lim):
             clean = f"cgscc(inline,{clean})"
         fast = f"{llvm}opt -passes='globaldce,{clean}'"
+        if "@llvm.coro.id(" in ir:
+            # generators are LLVM coroutines (docs/internals.md#generators), which lli cannot run
+            # before LLVM's coroutine passes lower them: coro-early, then coro-split in the same
+            # bottom-up walk as the inliner (so a generator is split before its callers inline its
+            # ramp, and coro-elide may put a loop's generator frame in the loop's own frame), then
+            # coro-cleanup. A module without them keeps the pipeline above, byte for byte
+            split = clean.replace("simplifycfg)", "simplifycfg,coro-elide),coro-split") if clean.startswith("cgscc(") else f"cgscc({clean},coro-split)"
+            fast = f"{llvm}opt -passes='coro-early,globaldce,{split},coro-cleanup,globaldce'"
         if code == 0:
             code = sh(f"{fast} {q(ll)} -o {q(bc)}")
         if code == 0:

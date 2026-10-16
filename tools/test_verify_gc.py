@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 TIMEOUT = shutil.which("timeout")
 CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/example.py",
          "tests/errors/example.py", "tests/errors/syntax_example.py"]
-GC_STEPS = ["gc-self", "gc-jit", "gc-aot-0", "gc-aot-1"]
-SUITES = [("gc-jit", "jit", 7), ("gc-aot-0", "aot", 4), ("gc-aot-1", "aot", 3)]
+GC_STEPS = ["gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"]
+SUITES = [("gc-jit", "jit", 7), ("gc-aot-0", "aot", 2), ("gc-aot-1", "aot", 4), ("gc-aot-2", "aot", 1)]
 
 
 @unittest.skipUnless(TIMEOUT, "GNU timeout is required by verification")
@@ -84,7 +84,7 @@ case "$mode" in
     set -- tests/example.py tests/syntax_example.py tests/deviations/example.py tests/errors/example.py tests/errors/syntax_example.py ;;
   aot)
     [ "$LC_ALL" = C.UTF-8 ] && [ $# -gt 0 ] || exit 9
-    case "$1" in tests/example.py) group=aot-0 ;; tests/syntax_example.py) group=aot-1 ;; *) exit 9 ;; esac ;;
+    case "$1" in tests/example.py) group=aot-0 ;; tests/syntax_example.py) group=aot-1 ;; tests/deviations/example.py) group=aot-2 ;; *) exit 9 ;; esac ;;
   *) echo "invalid mode: $mode"; exit 9 ;;
 esac
 checks=0
@@ -158,13 +158,14 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
                                    if line.startswith("selected: ")]
                 if mode == "aot":
                     index = int(group[-1])
-                    self.assertEqual((step["shard_index"], step["shard_count"]), (index, 2))
-                    self.assertEqual(observed[group], CASES[index::2])
+                    self.assertEqual((step["shard_index"], step["shard_count"]), (index, 3))
+                    self.assertEqual(observed[group], CASES[index::3])
                 else:
                     self.assertNotIn("shard_index", step)
                     self.assertEqual(observed[group], CASES)
-        self.assertFalse(set(observed["gc-aot-0"]) & set(observed["gc-aot-1"]))
-        self.assertCountEqual(observed["gc-aot-0"] + observed["gc-aot-1"], CASES)
+        shards = [observed[f"gc-aot-{index}"] for index in range(3)]
+        self.assertEqual(sum(map(len, shards)), len(set().union(*shards)))  # disjoint
+        self.assertCountEqual([case for shard in shards for case in shard], CASES)
 
     def test_local_aliases_run_all_selected_gc_checks(self):
         for group, expected in (("gc-stress", GC_STEPS), ("gc-aot", GC_STEPS[2:])):
@@ -205,7 +206,8 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
                     self.assertEqual(report["steps"][-1]["result"], "fail")
 
     def test_local_alias_reports_failure_and_still_runs_remaining_modes(self):
-        for failure in ("failure", "suite-jit-failure", "suite-aot-0-failure", "suite-aot-1-failure"):
+        for failure in ("failure", "suite-jit-failure", "suite-aot-0-failure", "suite-aot-1-failure",
+                        "suite-aot-2-failure"):
             with self.subTest(failure=failure):
                 result, report, logs = self.run_group("gc-stress", failure)
                 self.assertNotEqual(result.returncode, 0)

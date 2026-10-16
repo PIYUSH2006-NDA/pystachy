@@ -2,7 +2,8 @@
 from __future__ import annotations
 import os
 import sys
-from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
+from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
+from src.pystachy_compiler.analysis import all_imports, collect, defines, module_ints, module_reads, module_strs, needs_eh, none_assigns, reads_builtin
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -236,7 +237,7 @@ def gen_template_fix(self, cs: list[Node]) -> str:
     for st in cs:
         for d in st.kids[0].kids:
             if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
-                if calls_iter(d.kids[2], False) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
+                if reads_builtin(d.kids[2], "iter", False, False, {}) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
                     return "an __init__ that calls iter() or takes an Iterator[T] or Iterable[T] makes one (an iterator's type is its class)"
     return "annotate __init__ parameters"
 
@@ -699,11 +700,21 @@ def gen_program(self, mods: list[Mod]) -> str:
         m.body.kids = self.abstract_defs(m.body.kids)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
+    props: dict[str, bool] = {}
+    for m in mods:
+        refl_props(m.body, props)
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
+        self.typevars.extend(m.deftps)
+    if not self.eh and len([m for m in mods if defines(m.body, "__next__")]) > 0:
+        # a __next__ method's StopIteration is caught where a loop (or unpacking, in, a consumer)
+        # takes the items of an object through its __iter__ (obj_iterator, the only way to an
+        # iterator object's), and by next(it, default)
+        self.eh = len([m for m in mods if defines(m.body, "__iter__") or module_reads(m.body, "next")]) > 0
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
@@ -717,6 +728,7 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif st.kind == "subclass" and st.kids[1].kind == "typeparams" and self.class_params(st) == "":
                 m.body.kids[i] = st.kids[0]  # class C[T]: as class C(Generic[T]) (see class_params)
                 self.tparams[st.s] = st.kids[1].s.split()
+                self.pep695[st.s] = True
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])
