@@ -2657,6 +2657,18 @@ def gen_cmp_method(self, t: str, m: str, other: str) -> str:
         return m  # (a method that cannot be compiled: the call reports why; see desc. A template takes any operand)
     return ""
 
+def gen_exc_kinds(self, t: str) -> list[str]:
+    # the exception classes an object of exception class t may be of, where one has a
+    # comparison method, which inherit_cmp tells apart by their ExcClass as it does ordinary
+    # classes by their tag (a subclass's method, or its reflected one first); else []
+    if t not in self.classes or self.classes[t].exc == "":
+        return []
+    cs = [c.name for c in self.classes.values() if c.exc != "" and self.derives(c.name, t)]
+    for c in cs:
+        if any([DUNDER[o] in self.classes[c].methods for o in ICMP]):
+            return cs
+    return []
+
 def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
     # Compare concrete runtime types, including None. Both operands matter: Python gives
     # the right operand's reflected comparison priority when its class is a strict subtype.
@@ -2668,6 +2680,8 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
     cs = [v.t]
     if self.classes[v.t].tag != 0:
         cs = [c.name for c in self.classes.values() if c.tag != 0 and self.derives(c.name, v.t)]
+    elif len(self.exc_kinds(v.t)) > 0:
+        cs = self.exc_kinds(v.t)
     if len(cs) == 1 and v.v in self.nn:
         return self.inherit_cmp(op, a, b, phase + 1)
     end = self.label()
@@ -2682,12 +2696,19 @@ def gen_inherit_cmp(self, op: str, a: Val, b: Val, phase: int = 0) -> Val:
             self.incoming(ph, r.v, self.cur)
             self.br(end)
         self.place(some)
-    tag = self.mload('int', v.v) if len(cs) > 1 else ""
+    xc = self.classes[v.t].exc != ""
+    tag = self.mload('%ptr' if xc else 'int', v.v) if len(cs) > 1 else ""
     for i in range(len(cs)):
         nxt = self.label() if i + 1 < len(cs) else ""
         if nxt != "":
             arm = self.label()
-            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(self.classes[cs[i]].tag), "int")).v, arm, nxt)
+            if xc:
+                # (an exception object's first field is its class's ExcClass, made for the test)
+                self.xcls[cs[i]] = True
+                hit = self.scalar_cmp('eq', Val(tag, '%ptr'), Val(f"@x.{cs[i]}", '%ptr'))
+            else:
+                hit = self.num_cmp('==', Val(tag, "int"), Val(str(self.classes[cs[i]].tag), "int")).v
+            self.cbr(hit, arm, nxt)
             self.place(arm)
         r = self.inherit_cmp(op, Val(v.v, cs[i]) if phase == 0 else a, b if phase == 0 else Val(v.v, cs[i]), phase + 1)
         if not self.term:
@@ -2721,7 +2742,11 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
                 continue  # (what @dataclass writes returns NotImplemented for an object of another class)
             if m in ms:
                 if self.cmp_method(lhs.t, m, rhs.t) == "":
-                    self.err(f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}")
+                    why = f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}"
+                    if not self.lenient:
+                        self.err(why)
+                    self.raise_("TypeError", self.sconst(why))  # (obj_helpers': where it runs)
+                    return Val("false", "bool")
                 r = self.coerce(self.call_fn(ms[m], [lhs, rhs], [], direct=True), "bool")
                 return Val(self.scalar('xor', [Val(r.v, 'bool'), Val('true', 'bool')]), "bool") if invert else r
     if op == "==" or op == "!=":
@@ -3117,6 +3142,8 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             a = self.coerce(a, unopt(b.t))
     if (op == "==" or op == "!=" or op in REFL) and ((a.t in self.classes and self.classes[a.t].tag != 0) or (b.t in self.classes and self.classes[b.t].tag != 0)):
         return self.inherit_cmp(op, a, b)
+    if (op == "==" or op == "!=" or op in REFL) and (len(self.exc_kinds(a.t)) > 0 or len(self.exc_kinds(b.t)) > 0) and a.t != "exc" and b.t != "exc":
+        return self.inherit_cmp(op, a, b)  # (an exception, of a builtin class, stays rejected: exc_eq)
     if (op == "in" or op == "not in") and b.t in self.classes and self.classes[b.t].tag != 0:
         return self.inherit_contains(op, a, b)
     if (is_union(unopt(a.t)) or is_union(unopt(b.t))) and a.t != "None" and b.t != "None":
@@ -3181,7 +3208,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
     xb = b.t == "exc" or (b.t in self.classes and self.classes[b.t].exc != "")
     if xa and xb and a.t != b.t and a.t in self.classes and b.t in self.classes and (op == "==" or op == "!="):
         # objects of exception classes with a base class in common: as objects of that base,
-        # whose __eq__ a class deriving from it cannot define again
+        # by identity (where a class they may be of has __eq__, see exc_kinds)
         cb = a.t
         while cb in self.classes and not self.derives(b.t, cb):
             cb = self.classes[cb].base

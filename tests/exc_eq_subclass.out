@@ -1,0 +1,47 @@
+F.__eq__ f
+F.__eq__ f
+F.__eq__ g
+F.__eq__ g
+True True True False True True
+F.__eq__ f
+F.__eq__ f
+Ne.__ne__ n
+Ne.__ne__ m
+False False True False False
+F.__eq__ f
+F.__eq__ f
+F.__eq__ f
+F.__eq__ f
+True True False False True False
+F.__eq__ f
+F.__eq__ f
+True True True True True
+F.__eq__ g
+F.__eq__ g
+True True
+F.__eq__ f
+F.__eq__ f
+F.__eq__ f
+True True False False
+F.__eq__ g
+F.__eq__ g
+F.__eq__ g
+F.__eq__ g
+F.__eq__ g
+F.__eq__ f
+True 0 3 True 2
+F.__eq__ f
+F.__eq__ f
+F.__eq__ f
+True True False
+True
+TypeError: '<' not supported between instances of 'E' and 'Lt'
+F.__eq__ raised
+F.__eq__ raised
+True False
+P.__eq__ q p
+P.__eq__ q p
+P.__eq__ q p
+False False True
+True False {'k': Sub(1)}
+[exit 0]

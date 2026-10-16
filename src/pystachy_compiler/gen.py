@@ -364,6 +364,7 @@ from src.pystachy_compiler.expressions import (
     gen_comparable as expressions_comparable,
     gen_numeric_comparable as expressions_numeric_comparable,
     gen_compare as expressions_compare,
+    gen_exc_kinds as expressions_exc_kinds,
     gen_inherit_cmp as expressions_inherit_cmp,
     gen_inherit_contains as expressions_inherit_contains,
     gen_member_item as expressions_member_item,
@@ -2274,6 +2275,9 @@ class Gen:
 
     def cmp_method(self, t: str, m: str, other: str) -> str:
         return expressions_cmp_method(self, t, m, other)
+
+    def exc_kinds(self, t: str) -> list[str]:
+        return expressions_exc_kinds(self, t)
 
     def inherit_cmp(self, op: str, a: Val, b: Val, phase: int=0) -> Val:
         return expressions_inherit_cmp(self, op, a, b, phase)

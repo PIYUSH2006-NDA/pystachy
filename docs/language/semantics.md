@@ -256,7 +256,8 @@ exception class in the program. It supports fields, constructors, class-body def
 methods, docstrings and custom `__str__` / `__repr__`.
 
 A subclass inherits fields and methods and can override `__init__`, `__str__` and
-`__repr__`. String conversion and uncaught error output use the object's actual class.
+`__repr__`. String conversion, comparisons and uncaught error output use the object's actual
+class: `x == y` of `E`-typed values runs `__eq__` of a subclass that defines it.
 `super().__init__`, `super().__str__`, `super().__repr__`, explicit base calls and
 `super(E, self)` are supported within the documented restrictions.
 
