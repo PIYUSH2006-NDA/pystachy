@@ -290,6 +290,8 @@ HASATTR: dict[str, str] = {
     "any": "__class__ __delattr__ __dir__ __doc__ __eq__ __format__ __ge__ __getattribute__ __getstate__ __gt__ __hash__ __init__ "
            "__init_subclass__ __le__ __lt__ __ne__ __new__ __reduce__ __reduce_ex__ __repr__ __setattr__ __sizeof__ __str__ __subclasshook__",
     "obj": "__dict__ __firstlineno__ __module__ __static_attributes__ __weakref__",
+    "generator": "__class_getitem__ __del__ __iter__ __name__ __next__ __qualname__ close gi_code gi_frame gi_running "
+                 "gi_suspended gi_yieldfrom send throw",
     "int": "__abs__ __add__ __and__ __bool__ __ceil__ __divmod__ __float__ __floor__ __floordiv__ __getnewargs__ __index__ __int__ "
            "__invert__ __lshift__ __mod__ __mul__ __neg__ __or__ __pos__ __pow__ __radd__ __rand__ __rdivmod__ __rfloordiv__ "
            "__rlshift__ __rmod__ __rmul__ __ror__ __round__ __rpow__ __rrshift__ __rshift__ __rsub__ __rtruediv__ __rxor__ __sub__ "

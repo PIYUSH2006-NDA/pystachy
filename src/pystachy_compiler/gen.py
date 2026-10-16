@@ -409,6 +409,7 @@ from src.pystachy_compiler.generators import (
     gen_gen_promise as generators_gen_promise,
     gen_gen_ret as generators_gen_ret,
     gen_gen_method as generators_gen_method,
+    gen_genexp_value as generators_genexp_value,
     gen_gen_arg as generators_gen_arg,
     gen_gen_next_value as generators_gen_next_value,
     gen_gen_unhandle as generators_gen_unhandle,
@@ -782,6 +783,7 @@ class Gen:
         # function (Gen.call_fn): a loop over that value owns the generator (owned_gen)
         self.gencall = ""
         self.gencallf: FnInfo | None = None
+        self.ngenexp = 0  # the generator expressions made values (genexp_value): each a function of its own
         self.vowned: dict[str, FnInfo] = {}  # val nodes of such generators (owned_node), by the node's text
         self.gendrops = False  # a gen.drop op was lowered: the module defines its helper (lower_module)
         self.coros = False  # a generator function was lowered: the module declares LLVM's coroutine intrinsics
@@ -1444,6 +1446,9 @@ class Gen:
 
     def gen_arg(self, a: Node) -> bool:
         return generators_gen_arg(self, a)
+
+    def genexp_value(self, n: Node) -> Val:
+        return generators_genexp_value(self, n)
 
     def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
         return generators_gen_method(self, o, m, args)

@@ -542,6 +542,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     g.gclose = f.gclose
     g.gwith = f.gwith
     g.gtry = f.gtry
+    g.gfirst = f.gfirst
     g.params = f.params
     g.ptypes = ts
     g.defaults = f.defaults

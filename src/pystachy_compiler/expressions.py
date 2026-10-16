@@ -233,7 +233,7 @@ def gen_has(self, t: str, a: str) -> int:
         if a in HASATTR["obj"].split():
             return -1
         return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__ __match_args__".split() else 0
-    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
+    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else "generator" if is_gen(t) else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:
         return 1 if a in HASATTR[b].split() else 0
@@ -796,7 +796,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
+            return self.genexp_value(n)  # (where no consumer takes its items at once: a generator)
         return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []

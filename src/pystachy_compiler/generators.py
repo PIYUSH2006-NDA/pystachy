@@ -10,6 +10,7 @@ promise (gen.promise): the value yielded, the state, the value returned. See
 docs/internals.md#generators.
 """
 from __future__ import annotations
+from src.pystachy_compiler.analysis import closure_free
 from src.pystachy_compiler.ir import Exit, FnInfo, Ins, IterArg, SeqStart, Try, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
@@ -487,6 +488,8 @@ def gen_owned_gen(self, v: Val, it: Node) -> int:
     if not is_gen(v.t):
         return 0
     f = self.gencallf if self.gencall != "" and v.v == self.gencall else self.vowned[it.s] if it.kind == "val" and it.s in self.vowned else None
+    if it.kind == "name" and it.s == ".0" and self.curfn.gfirst is not None:
+        f = self.curfn.gfirst  # (a generator expression's first iterable, a generator it alone holds)
     if f is None:
         return 0
     return 2 if self.eh and f.gclose else 1
@@ -633,3 +636,115 @@ def gen_gen_arg(self, a: Node) -> bool:
     # (typed by a dry compile: next() and iter() of other values are errors anyway)
     t = self.dry(a)
     return is_gen(unopt(t)) or (t in self.classes and "__iter__" in self.classes[t].methods and self.classes[t].methods["__iter__"].gen)
+
+
+def binds(n: Node, x: str, loop: bool) -> int:
+    # how often code n binds name x as a local of its function: 2 where it may bind it again (in a
+    # loop, a for loop's target, a global or nonlocal declaration), not counting the functions,
+    # lambdas, classes and comprehensions it defines (but a def's or class's own name)
+    k = n.kind
+    if k == "def" or k == "class" or k == "subclass":
+        return (2 if loop else 1) if n.s == x else 0
+    if k == "lambda" or k == "listcomp" or k == "setcomp" or k == "dictcomp" or k == "nestedcomp":
+        return 0
+    if (k == "global" or k == "nonlocal") and len([g for g in n.kids if g.s == x]) > 0:
+        return 2
+    tg: list[Node] = []
+    if k == "assign":
+        tg = n.kids[:-1]
+    elif k == "annassign" or k == "augassign" or k == "for" or k == "walrus":
+        tg = [n.kids[0]]
+    elif k == "with":
+        tg = [it.kids[1] for it in n.kids[:-1] if len(it.kids) == 2]
+    elif k == "del":
+        tg = n.kids
+    names: list[str] = []
+    for t in tg:
+        names_in(t, names)
+    c = len([nm for nm in names if nm == x])
+    if (k == "except" and n.s == x) or (k == "import" and len([a for a in n.kids if a.s == x]) > 0):
+        c += 1
+    if c > 0 and (loop or k == "for"):
+        return 2
+    for kid in n.kids:
+        c += binds(kid, x, loop or k == "for" or k == "while")
+        if c > 1:
+            return 2
+    return c
+
+
+def maybe_unbound(n: Node, x: str) -> bool:
+    # does code n read x where Flow found it may be unassigned (Node.chk)
+    if n.kind == "name" and n.s == x and n.chk:
+        return True
+    for k in n.kids:
+        if maybe_unbound(k, x):
+            return True
+    return False
+
+
+def gen_genexp_value(self, n: Node) -> Val:
+    # a generator expression (e for t in it if c) as a value: an anonymous generator function, as
+    # CPython's (never a list): it is evaluated here, the rest where the generator runs. The
+    # variables of this function it reads are passed to it as they are now, which is what they
+    # hold when it runs: each is a parameter never bound again or a local bound once (outside any
+    # loop), surely assigned here; another (a comprehension's, one bound again) is an error
+    line = n.line
+    noann = mk("noann", "", line, [])
+    yld = mk("expr", "", line, [mk("yield", "", line, [n.kids[0]])])
+    body = [yld]
+    if len(n.kids) == 4:
+        body = [mk("if", "", line, [n.kids[3], mk("block", "", line, body), mk("block", "", line, [])])]
+    # its first iterable: a value made here, or range(), enumerate(), zip() or reversed() of
+    # arguments evaluated here (those are no values: the generator's loop makes them)
+    first = n.kids[2]
+    ps: list[Node] = [mk("param", ".0", line, [noann, noann])]
+    itn = mk("name", ".0", line, [])
+    if self.iterator_call(first):
+        ps = []
+        cargs: list[Node] = []
+        for j in range(len(first.kids) - 1):
+            a = first.kids[j + 1]
+            ps.append(mk("param", f".{j}", line, [noann, noann]))
+            cargs.append(mk("kw", a.s, line, [mk("name", f".{j}", line, [])]) if a.kind == "kw" else mk("name", f".{j}", line, []))
+        itn = mk("call", "", line, [first.kids[0]] + cargs)
+    loop = mk("for", "", line, [n.kids[1], itn, mk("block", "", line, body)])
+    d = mk("def", "<genexpr>", line, [mk("params", "0,-1", line, ps), noann, mk("block", "", line, [loop])])
+    free: dict[str, bool] = {}
+    closure_free(d, free)
+    f = self.curfn
+    fbody = f.node.kids[2].kids if f.node.kind == "def" else f.node.kids
+    caps: list[str] = []
+    for x in free:
+        if x in self.compvars:
+            self.err(f"a generator expression that reads '{x}', a variable of a comprehension around it, is not supported (it would read the variable's last value when it runs)")
+        if not self.modlevel and x in self.ltype and not (x in self.assigned or x in f.params):
+            self.err(f"a generator expression that reads '{x}', a variable of a function around {short(f.name)}(), is not supported")
+        if self.modlevel or not (x in self.assigned or x in f.params):
+            continue  # (a global, read where the generator runs)
+        nb = 0
+        for st in fbody:
+            nb += binds(st, x, False)
+        if nb > (0 if x in f.params and x not in self.assigned else 1) or x in self.nlw or maybe_unbound(n, x):
+            self.err(f"a generator expression that reads '{x}' is not supported where {short(f.name)}() may bind it again, or it may be unbound, before the generator runs (a generator expression reads it then)")
+        caps.append(x)
+    caps.sort()
+    for x in caps:
+        d.kids[0].kids.append(mk("param", x, line, [noann, noann]))
+    firsts: list[Node] = []
+    own: FnInfo | None = None
+    if self.iterator_call(first):
+        for a in first.kids[1:]:
+            firsts.append(self.vnode(self.expr(a.kids[0] if a.kind == "kw" else a, "")))
+    else:
+        self.gencall = ""
+        it = self.iterable(self.expr(first, ""))  # (made here)
+        if self.owned_gen(it, first) > 0:
+            own = self.gencallf  # (a generator it alone holds: its loop owns it)
+        firsts.append(self.vnode(it))
+    g = self.declare_fn(d, "")
+    self.ngenexp += 1
+    g.ll = f"@f.genexpr.{self.ngenexp}"
+    g.mod = f.mod
+    g.gfirst = own
+    return self.call_fn(g, [], firsts + [mk("name", x, line, []) for x in caps])

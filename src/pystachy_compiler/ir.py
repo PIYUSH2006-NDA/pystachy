@@ -127,6 +127,9 @@ class FnInfo:
         self.gclose = False  # closing it while it is suspended may run its code: a yield in try, with or yield from
         self.gwith = False  # a yield inside a with block: its unwind actions are set aside while it is suspended
         self.gtry = False  # a try statement: the exception being handled is its resumer's while it is suspended
+        # a generator expression's (Gen.genexp_value) whose first iterable is a generator that only it
+        # holds, which this function made: its loop over that iterable (.0) owns it
+        self.gfirst: FnInfo | None = None
 
 
 class Closure:
