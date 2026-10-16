@@ -628,7 +628,7 @@ def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
     if "moduleints" in self.opts:
         self.intglobals = module_ints(mods, self.intat)
-    self.strglobals = module_strs(mods)
+    self.strglobals = module_strs(mods, self.strtuples)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
     for m in mods:

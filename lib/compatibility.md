@@ -379,8 +379,17 @@ read-only ones. `repr()` gives the default `<functools.partial object at ...>`
 rather than CPython's call form; pickling, `__dict__` and `partialmethod` are
 unsupported.
 
-`wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
-attributes cannot be assigned, and class decorators are not compiled.
+`@wraps(wrapped)` on a def, and `update_wrapper(wrapper, wrapped)` of a function a def or
+lambda makes in a function (or a decorated def), give the wrapper the wrapped function's
+`__name__` and `__qualname__`, as CPython's do, with `assigned` naming either (a tuple or
+list of str constants, or a module's name that one assignment binds to such a tuple, as
+`WRAPPER_ASSIGNMENTS`). The compiler applies them, where CPython's code sets the attributes:
+a wrapped function's names must be known as it compiles, so a wrapped `Callable` value makes
+the wrapper's names a compile-time error to read, and a wrapped object without them (a
+callable object, a `partial`) leaves the wrapper its own, as in CPython. `__wrapped__`,
+`__doc__`, `__module__` and `__dict__` are not a function's attributes in Pystachy, and
+`wraps(f)` as a value, not a decorator, is a compile-time error. `total_ordering` remains
+unsupported: class decorators are not compiled.
 
 ## Textwrap
 

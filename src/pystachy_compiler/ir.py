@@ -164,6 +164,12 @@ class Closure:
         self.f = f  # its function: a template whose first parameter (.env) is the env
         self.name = name  # its __name__: the def's name, or <lambda>
         self.qual = qual  # its __qualname__: outer.<locals>.name
+        # the __name__ and __qualname__ that functools.wraps() gives it ("": its own), or why
+        # they are not known as Pystachy compiles (wunknown), where reading them is an error;
+        # name and qual stay its code's, which messages and its closures' names show
+        self.wname = ""
+        self.wqual = ""
+        self.wunknown = ""
         self.t = ""  # its type
         self.caps: list[str] = []  # the variables it takes, in the env's order
         self.ctypes: list[str] = []  # their types ("None": a parameter whose argument is None, held by no cell)
