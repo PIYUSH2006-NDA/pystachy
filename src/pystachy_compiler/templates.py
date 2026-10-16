@@ -677,10 +677,13 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
 def gen_literal_class(self, c: str) -> bool:
     # does class template c specialize on its literal constructor arguments: only operator's
     # getters do, whose items and names must be constants (a fixed tuple's index, an attribute's
-    # name). Each literal value makes a specialization of its own (see const_of)
-    if c not in self.classes or self.classes[c].mod != "operator":
+    # name), and _struct's Struct, whose format decides its values' types (Gen.struct_call). Each
+    # literal value makes a specialization of its own (see const_of)
+    if c not in self.classes or (self.classes[c].mod != "operator" and self.classes[c].mod != "_struct"):
         return False
     o = short(self.classes[c].origin if self.classes[c].origin != "" else c)
+    if self.classes[c].mod == "_struct":
+        return o == "Struct"
     return o == "itemgetter" or o == "attrgetter" or o == "methodcaller"
 
 def gen_literal_args(self, f: FnInfo, args: list[Node]) -> dict[str, Node]:

@@ -17,10 +17,10 @@ adaptations, deviations and tests. The [language guide](language.md) explains th
 
 | Approach | Modules and useful APIs |
 |---|---|
-| Unchanged CPython sources | `bisect`, `colorsys`, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this` |
+| Unchanged CPython sources | `bisect`, `colorsys`, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this`, and `struct`, on a port of `_struct` |
 | Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template` / `Formatter`, selected `operator` functions and getters, selected `statistics` operations, `random`, `urllib.parse`, `html`, `keyword`, `shlex`, `datetime` (without the local time zone), `codecs` (without the codec registry) and the incremental `html.parser` probe |
 | Larger port | `re`: CPython's Python parser/compiler plus a matcher adapted from its C engine |
-| Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key` / `partial`, `collections` `deque` / `defaultdict` / `OrderedDict` / `Counter`, `io.StringIO`, `csv`, `_string`'s format parsers, `_pyrandom`, the Mersenne Twister under `random`, `binascii`, `_codecs` and `atexit`, which CPython builds in, and `abc` |
+| Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key` / `partial`, `collections` `deque` / `defaultdict` / `OrderedDict` / `Counter`, `io.StringIO`, `csv`, `_string`'s format parsers, `_pyrandom`, the Mersenne Twister under `random`, `binascii`, `_codecs`, `atexit` and `_struct`, which CPython builds in, and `abc` |
 
 The library reference is the authority for each module's limits. For example, `difflib`
 supports matching strings and lists of strings, while its generator-based diff APIs do not

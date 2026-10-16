@@ -651,6 +651,14 @@ from src.pystachy_compiler.statements import (
     gen_while_ as statements_while_,
 )
 from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.structs import (
+    StructFmt,
+    gen_struct_call as structs_struct_call,
+    gen_struct_format as structs_struct_format,
+    gen_struct_helper as structs_struct_helper,
+    gen_struct_nodes as structs_struct_nodes,
+    gen_struct_pack as structs_struct_pack,
+)
 from src.pystachy_compiler.templates import (
     gen_bind as templates_bind,
     gen_constructor_unions as templates_constructor_unions,
@@ -2766,6 +2774,21 @@ class Gen:
 
     def bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
         return builtins_bytes_method(self, o, m, args)
+
+    def struct_call(self, name: str, args: list[Node], want: str) -> Val | None:
+        return structs_struct_call(self, name, args, want)
+
+    def struct_format(self, a: Node) -> Node | None:
+        return structs_struct_format(self, a)
+
+    def struct_helper(self, f: str, args: list[Node]) -> Node:
+        return structs_struct_helper(self, f, args)
+
+    def struct_nodes(self, sf: StructFmt, bn: Node, base: Node | None) -> list[Node]:
+        return structs_struct_nodes(self, sf, bn, base)
+
+    def struct_pack(self, sf: StructFmt, args: list[Node]) -> Val:
+        return structs_struct_pack(self, sf, args)
 
     def bytes_(self, args: list[Node]) -> Val:
         return builtins_bytes_(self, args)

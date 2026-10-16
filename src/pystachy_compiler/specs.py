@@ -45,7 +45,7 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
-                            "abc": "_pystachy_abc"}
+                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
