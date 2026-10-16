@@ -189,7 +189,7 @@ class Random:
         state.append(self._index)
         return tuple(state)
 
-    def setstate(self, state: tuple[int, ...]) -> None:
+    def setstate(self, state: tuple[int, ...], /) -> None:
         """setstate(state) -> None.  Restores generator state."""
         if len(state) != _N + 1:
             raise ValueError("state vector is the wrong size")
@@ -205,7 +205,7 @@ class Random:
         self._index = index
         self._state = new_state
 
-    def getrandbits(self, k: int) -> int:
+    def getrandbits(self, k: int, /) -> int:
         """getrandbits(k) -> x.  Generates an int with k random bits."""
         if k < 0:
             raise ValueError("number of bits must be non-negative")
