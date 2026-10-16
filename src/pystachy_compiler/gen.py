@@ -924,6 +924,9 @@ class Gen:
         # may hold a value of another type: its first binding (none_ends), once compiled the line
         # that gives it that value (see assign, static_type)
         self.nonevars: dict[str, int] = {}
+        # the statements that may assign each name, for a variable typed from None (none_type):
+        # found once a function needs them (none_sites), then with the key ""
+        self.nonesites: dict[str, list[Node]] = {}
         # optional, union and class locals: the narrower type a read has here (see narrows)
         self.narrowed: dict[str, str] = {}
         self.nonecmp = False  # the read being compiled is compared with None (see none_type)
@@ -1764,8 +1767,8 @@ class Gen:
     def none_type(self, name: str) -> str:
         return variables_none_type(self, name)
 
-    def none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-        return variables_none_values(self, body, name, out)
+    def none_values(self, st: Node, name: str, out: list[Node]) -> None:
+        return variables_none_values(self, st, name, out)
 
     def read(self, n: Node) -> Val:
         return variables_read(self, n)
