@@ -825,8 +825,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     vals: list[Val] = []
     # A surrounding annotation is a storage contract; C[T](...) alone only hints
     # at unbound or conflicting arguments. Keep both through unpacked calls.
-    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, want)) > 0
-    context = want if contract or typeargs == "" else typeargs
+    # C(...) of a generic class that a lambda returns is a forwarding call: the Callable's
+    # result type binds C's type variables, as lambda: defaultdict(int) takes them (see instance)
+    ctx = self.curfn.rctx if want == "?" and f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else want
+    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, ctx)) > 0
+    context = ctx if contract or typeargs == "" else typeargs
     hint = self.want_params(f.cls, context) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))

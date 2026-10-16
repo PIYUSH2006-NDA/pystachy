@@ -56,6 +56,32 @@ s: defaultdict[str, int] = defaultdict(seven)
 print(s["a"], list(s.items()) == [("a", 7)])
 lam: defaultdict[tuple[int, int], str] = defaultdict(lambda: "?")
 print(lam[(1, 2)], list(lam.keys()), len(lam))
+# a lambda making another mapping: its result type is the values' (the annotation's)
+tree: defaultdict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
+tree["a"]["x"] += 1
+tree["a"]["y"] += 2
+tree["b"]["x"] += 3
+print(len(tree), tree["a"], tree["b"]["x"], tree["c"]["z"], sorted(tree), tree["c"])
+deep: defaultdict[int, defaultdict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
+deep[1]["é"].append(1)
+deep[1]["é"].append(2)
+print(deep[1], deep[2]["q"], len(deep))
+tallies: defaultdict[str, Counter[str]] = defaultdict(lambda: Counter())
+tallies["w"].update("hello")
+print(tallies["w"], tallies["v"])
+ods: defaultdict[int, OrderedDict[str, int]] = defaultdict(lambda: OrderedDict())
+ods[1]["k"] = 5
+ods[1]["j"] = 6
+print(ods[1], list(ods))
+
+
+def fresh():
+    return defaultdict(int, {"start": 1})
+
+
+made: defaultdict[str, int] = fresh()
+made["more"] += 1
+print(made)
 k = 0
 
 

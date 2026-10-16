@@ -522,7 +522,7 @@ the direct-scalar union fallback below, but do not implicitly join to `int`. Cal
 matching uses annotated positional parameters and returns, or an existing `Callable`
 signature. A lambda, a builtin such as `int` or `list`, or an unannotated function binds
 nothing; where the other arguments or the context bind its `Callable`'s type variables,
-`__init__` stores it as that `Callable`.
+it is passed as that `Callable`, also to a field that `__init__` assigns it to unannotated.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 `Callable[[*Ts], R]` and `*args: *Ts`. This supports the function wrappers used by
@@ -541,6 +541,9 @@ Nonempty homogeneous displays infer the same types as stored arguments. Empty an
 empty displays use contextual types where their contents do not already determine a type.
 Heterogeneous displays with known item types can use an explicit union context. Opaque
 calls and operations infer normally; their syntax alone does not request a union layout.
+A lambda that returns `C(...)` takes the result type of the `Callable` it becomes as that
+call's context: `defaultdict(lambda: defaultdict(int))` for a
+`defaultdict[str, defaultdict[str, int]]`. A function needs a return annotation for this.
 A variable that neither arguments nor context bind is an error.
 
 When ordinary argument matching cannot bind the type variables consistently,

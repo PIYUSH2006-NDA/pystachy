@@ -10,6 +10,11 @@ defaultdict(<class 'int'>, {'p': 1, 'q': 2}) defaultdict(<class 'int'>, {'o': 5}
 1 0 [('q', 1), ('r', 0)]
 7 True
 ? [(1, 2)] 1
+2 defaultdict(<class 'int'>, {'x': 1, 'y': 2}) 3 0 ['a', 'b', 'c'] defaultdict(<class 'int'>, {'z': 0})
+defaultdict(<class 'list'>, {'é': [1, 2]}) [] 2
+Counter({'l': 2, 'h': 1, 'e': 1, 'o': 1}) Counter()
+OrderedDict({'k': 5, 'j': 6}) [1]
+defaultdict(<class 'int'>, {'start': 1, 'more': 1})
 1 2 1 [1, 2]
 defaultdict(None, {}) True
 KeyError 'missing' KeyError('missing')

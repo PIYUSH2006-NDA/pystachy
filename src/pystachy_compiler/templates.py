@@ -81,6 +81,16 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
         s.tvars = self.bind(c, ts, given)  # (before its fields, which its type variables may type)
     if named:
         fi.ptypes = [name] + self.named_params(c, init.node)
+    elif c in self.tparams:
+        # (an argument whose type bind decided later, a lambda, builtin or unannotated def, is
+        # the Callable its parameter's annotation names, bound now, as call_fn passes it: also
+        # for a field that __init__ stores it in unannotated)
+        ps = init.node.kids[0].kids
+        for i in range(min(len(ts), len(ps) - 1)):
+            a = ps[i + 1].kids[0]
+            if ts[i].startswith("fn[") and self.fn_sig(ts[i])[0].startswith("!") and ps[i + 1].kind == "param" and a.kind != "noann" and self.names_tv(a, self.tparams[c]):
+                pt = self.named_param(a)
+                fi.ptypes[i + 1] = pt if not pt.startswith("!") else fi.ptypes[i + 1]
     self.scan_fields(s, fi, init.node.kids[2].kids)
     self.line = line
     # (a field that holds the specialization itself, self.next: Node | None, is the same in each)
@@ -177,7 +187,7 @@ def gen_bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, st
         # becomes that Callable where __init__ stores it)
         a = ps[i].kids[0]
         if len([x for x in tvs if x not in tv and x not in given and self.names_tv(a, [x])]) > 0:
-            ints = ", ".join(["int" for y in tvs])
+            ints = ", ".join([typestr(tv[y]) if y in tv else typestr(given[y]) if y in given else "int" for y in tvs])  # (int: a placeholder)
             # (a private class, such as functools' cache wrapper, is not one a program names)
             hint = "" if short(c).startswith("_") else f"; or name them where the object goes (q: {short(c)}[{ints}] = {short(c)}(...)) or in the call ({short(c)}[{ints}](...))"
             self.err(f"{short(c)}() cannot bind its type variables from the argument for '{ps[i].s}', a {typestr(ts[i - 1])}: {self.match(a, ts[i - 1], dict(tv), tvs)}{hint}")
@@ -185,7 +195,7 @@ def gen_bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, st
         if x not in tv and x in given:
             tv[x] = given[x]
         if x not in tv:
-            ints = ", ".join(["int" for y in tvs])  # (C[int, int] of a class with two)
+            ints = ", ".join([typestr(tv[y]) if y in tv else typestr(given[y]) if y in given else "int" for y in tvs])  # (C[str, int]: the types bound, int for the others)
             self.err(f"{short(c)}() does not bind its type variable '{short(x)}': no argument's type gives it; name it where the object goes (q: {short(c)}[{ints}] = {short(c)}(...), a field or a parameter annotated so) or in the call ({short(c)}[{ints}](...))")
     return tv
 
@@ -537,8 +547,11 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     # decides what it returns; nnp: the parameters whose objects are known not to be None
     # Only container contexts can type fresh displays. Include the full context
     # in the key and budgets: two callers may require different native storage.
+    # A lambda's Callable result type, a generic class's specialization, types the C(...) it
+    # returns (see call_fn): lambda: defaultdict(int) as a defaultdict[str, int]'s factory.
     body = f.orig.kids[2] if f.pending else f.node.kids[2]
     context = f.ret == "" and "?" not in want and ("list[" in want or "dict[" in want or "set[" in want or "tuple[" in want)
+    context = context or (f.ret == "" and f.node.s == "<lambda>" and unopt(want) in self.classes and self.classes[unopt(want)].origin in self.tparams)
     locals = local_result(body.kids, f.params) if context and not resultsoft else []
     want = want if context and (contextual_result(body) or len(locals) > 0) else ""
     key = ",".join(ts) + (" " + ",".join(nnp) if len(nnp) > 0 else "")
