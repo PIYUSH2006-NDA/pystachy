@@ -143,10 +143,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   CPython makes a new method object at each read.
 
 - A function declared or inferred to return a value that ends without a `return` raises
-  `RuntimeError` there, where CPython returns `None`, also when it is declared to return
-  `C | None` for a class `C` (a dataclass or `NamedTuple` too). A function declared to return
-  `T | None` for an `int`, `float`, `bool`, `str`, `list`, `dict` or `tuple` T, and a template
-  that returns objects or `T | None`, return `None` there, as CPython does.
+  `RuntimeError` there, where CPython returns `None`. A function declared to return `T | None`
+  (or `Optional[T]`) for a class T (a dataclass or `NamedTuple` too) or an `int`, `float`,
+  `bool`, `str`, `list`, `dict` or `tuple` T, and a template that returns objects or `T | None`,
+  return `None` there, as CPython does.
 
 - A left operand of `+ - * / // % @ & | ^ << >>` (or of their in-place forms) whose class
   defines the operator's method, but which is `None` when the code runs, raises CPython's

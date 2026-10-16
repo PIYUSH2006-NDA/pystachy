@@ -201,6 +201,7 @@ from src.pystachy_compiler.declarations import (
     gen_ann as declarations_ann,
     gen_ann_base as declarations_ann_base,
     gen_ann_items as declarations_ann_items,
+    gen_ann_none as declarations_ann_none,
     gen_ann_problem as declarations_ann_problem,
     gen_boxto as declarations_boxto,
     gen_boxwider as declarations_boxwider,
@@ -1115,6 +1116,9 @@ class Gen:
 
     def ann_base(self, b: Node) -> str:
         return declarations_ann_base(self, b)
+
+    def ann_none(self, n: Node, seen: list[str]) -> bool:
+        return declarations_ann_none(self, n, seen)
 
     def ann_items(self, xs: list[Node]) -> list[str]:
         return declarations_ann_items(self, xs)
