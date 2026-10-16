@@ -573,6 +573,8 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
+    if o.t == "fn[b:bytes]" and m == "maketrans":
+        return self.bytes_method(o, m, args)  # (the static method, of the class)
     if o.t == "fn[b:bytes]" and m == "fromhex":
         # bytes.fromhex(s), the class method, of a str
         if len(args) != 1 or args[0].kind in ["kw", "starred", "dstar"]:

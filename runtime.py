@@ -1711,6 +1711,77 @@ def pys_bytes_hex(s: str) -> str:
     return _rt.str_done(r)
 
 
+def pys_bytes_hex_sep(s: str, sep: str, chars: int, per: int) -> str:
+    # s.hex(sep, per) as CPython's (Python/pystrhex.c): sep (null: none), one ASCII character of a
+    # str (chars 1) or byte of a bytes, between the groups of per bytes, which count from the
+    # right where per is positive, from the left where it is negative (no groups where it is 0)
+    if per > 2147483647 or per < -2147483648:
+        raise OverflowError("Python int too large to convert to C int")  # (a C int argument)
+    if _rt.null(sep):
+        return pys_bytes_hex(s)
+    k = len(sep)
+    if chars == 1:
+        k = 0
+        i = 0
+        while i < len(sep):
+            i += u8seq(sep, i, len(sep))
+            k += 1
+    if k != 1:
+        raise ValueError("sep must be length 1.")
+    c = _rt.byte(sep, 0)
+    if c > 127:
+        raise ValueError("sep must be ASCII.")
+    n = len(s)
+    g = per if per >= 0 else -per
+    r = _rt.str_new(2 * n + ((n - 1) // g if g > 0 and n > 0 else 0))
+    j = 0
+    for i in range(n):
+        if g > 0 and i > 0 and ((per > 0 and (n - i) % g == 0) or (per < 0 and i % g == 0)):
+            _rt.str_put(r, j, c)
+            j += 1
+        b = _rt.byte(s, i)
+        _rt.str_put(r, j, (48 if b >> 4 < 10 else 87) + (b >> 4))
+        _rt.str_put(r, j + 1, (48 if b & 15 < 10 else 87) + (b & 15))
+        j += 2
+    return _rt.str_done(r)
+
+
+def pys_bytes_maketrans(frm: str, to: str) -> str:
+    # bytes.maketrans(frm, to): the 256 bytes that map each byte of frm to the byte of to in its
+    # place (the last, for a byte frm holds twice), and every other byte to itself
+    if len(frm) != len(to):
+        raise ValueError("maketrans arguments must have same length")
+    r = _rt.str_new(256)
+    for i in range(256):
+        _rt.str_put(r, i, i)
+    for i in range(len(frm)):
+        _rt.str_put(r, _rt.byte(frm, i), _rt.byte(to, i))
+    return _rt.str_done(r)
+
+
+def pys_bytes_translate(s: str, table: str, delete: str) -> str:
+    # s.translate(table, delete): the bytes of s that delete (null: b"") does not hold, each
+    # mapped by table, 256 bytes (null: None, which maps none)
+    if not _rt.null(table) and len(table) != 256:
+        raise ValueError("translation table must be 256 characters long")
+    n = len(s)
+    keep = n
+    if not _rt.null(delete) and len(delete) > 0:
+        keep = 0
+        for i in range(n):
+            if _rt.find_byte(delete, _rt.byte(s, i), 0, len(delete)) < 0:
+                keep += 1
+    r = _rt.str_new(keep)
+    j = 0
+    for i in range(n):
+        c = _rt.byte(s, i)
+        if keep < n and _rt.find_byte(delete, c, 0, len(delete)) >= 0:
+            continue
+        _rt.str_put(r, j, c if _rt.null(table) else _rt.byte(table, c))
+        j += 1
+    return _rt.str_done(r)
+
+
 def hexval(c: int) -> int:
     return c - 48 if digit(c) else c - 87 if c >= 97 and c <= 102 else c - 55 if c >= 65 and c <= 70 else -1
 
