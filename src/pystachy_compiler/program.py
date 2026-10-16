@@ -21,6 +21,7 @@ from src.pystachy_compiler.specs import (
     PURE,
     PYBUILTINS,
     RAISERS,
+    RANGES,
     RTSYM,
     TYPING,
     UNSUPPORTED,
@@ -693,9 +694,12 @@ def gen_abc_class(self, c: str) -> bool:
 
 def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
+    # (lib's module of range objects, which any program that reads range loads, binds no global
+    # of another module: the names it binds do not keep a global from being constant)
+    own = [m for m in mods if m.name != RANGES]
     if "moduleints" in self.opts:
-        self.intglobals = module_ints(mods, self.intat)
-    self.strglobals = module_strs(mods, self.strtuples)
+        self.intglobals = module_ints(own, self.intat)
+    self.strglobals = module_strs(own, self.strtuples)
     for m in mods:
         m.body.kids = self.abstract_defs(m.body.kids)
     # the modules in the order their code may first run, the main program last
@@ -713,8 +717,9 @@ def gen_program(self, mods: list[Mod]) -> str:
     if not self.eh and len([m for m in mods if defines(m.body, "__next__")]) > 0:
         # a __next__ method's StopIteration is caught where a loop (or unpacking, in, a consumer)
         # takes the items of an object through its __iter__ (obj_iterator, the only way to an
-        # iterator object's), and by next(it, default)
-        self.eh = len([m for m in mods if defines(m.body, "__iter__") or module_reads(m.body, "next")]) > 0
+        # iterator object's), and by next(it, default) (not range's __iter__, which steps through
+        # a list)
+        self.eh = len([m for m in mods if (defines(m.body, "__iter__") and m.name != RANGES) or module_reads(m.body, "next")]) > 0
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
@@ -966,8 +971,9 @@ def gen_program(self, mods: list[Mod]) -> str:
                     self.err(f"cannot infer the initial optional type of '{short(name)}'; annotate its later assignment")
                 self.declare(name, t)
     for i in range(len(mods)):
-        if mods[i].name != ITERS:
-            # (lib's module of iter()'s classes runs no code: nothing imports it, see Loader.program)
+        if mods[i].name != ITERS and mods[i].name != RANGES:
+            # (lib's modules of iter()'s classes and of range's run no code: nothing imports them,
+            # see Loader.program)
             self.function(self.inits[mods[i].name], tops[i])
         self.inited[mods[i].name] = True
     self.modlevel = False

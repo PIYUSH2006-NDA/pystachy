@@ -150,6 +150,8 @@ from src.pystachy_compiler.builtins import (
     gen_next_ as builtins_next_,
     gen_iter_ as builtins_iter_,
     gen_iter_obj as builtins_iter_obj,
+    gen_range_fields as builtins_range_fields,
+    gen_range_prim as builtins_range_prim,
     gen_walk as builtins_walk,
     gen_pwrite as builtins_pwrite,
     gen_reduce as builtins_reduce,
@@ -2489,8 +2491,8 @@ class Gen:
     def range_args(self, args: list[Node]) -> list[str]:
         return statements_range_args(self, args)
 
-    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
-        return statements_for_range(self, tgt, start, stop, step, body, hide, arg)
+    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None, check: bool=True) -> None:
+        return statements_for_range(self, tgt, start, stop, step, body, hide, arg, check)
 
     def for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
         return statements_for_rrange(self, tgt, vs, body, hide, arg)
@@ -3142,6 +3144,12 @@ class Gen:
 
     def walk(self, name: str, args: list[Node]) -> Val:
         return builtins_walk(self, name, args)
+
+    def range_prim(self, name: str, args: list[Node]) -> Val:
+        return builtins_range_prim(self, name, args)
+
+    def range_fields(self, v: Val) -> list[str]:
+        return builtins_range_fields(self, v)
 
     def pwrite(self, fd: str, fv: str, s: str, fo: Val) -> None:
         return builtins_pwrite(self, fd, fv, s, fo)

@@ -20,6 +20,8 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     PATHLIKE,
     PYBUILTINS,
+    RANGEC,
+    RANGES,
     SPECIAL,
     STANDINS,
     STUB,
@@ -119,6 +121,8 @@ def gen_ann(self, n: Node) -> str:
             return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
         if s == "int" or s == "float" or s == "bool" or s == "str" or s == "bytes" or s in self.classes:
             return s
+        if s == "range" and RANGEC in self.classes:
+            return RANGEC  # (the class of range objects, lib/_pystachy_range.py)
         if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
         if self.imported(s) == "ffi.c_buf":
@@ -1658,7 +1662,10 @@ def gen_frozen_store(self, o: Val, name: str, delete: bool = False) -> bool:
     return True
 
 def gen_frozen(self, t: str, name: str) -> None:
-    # a NamedTuple's fields are assigned only by its __init__
+    # a NamedTuple's fields are assigned only by its __init__, a range object's by none (as
+    # CPython's start, stop and step are read-only)
+    if t == RANGEC and self.curfn.mod != RANGES:
+        self.err("readonly attribute")
     if t in self.nts and not (self.curfn.name == "__init__" and self.curfn.cls == t):
         self.err(f"cannot assign to field '{name}' of NamedTuple {short(t)} (AttributeError: can't set attribute); make a new one with _replace({name}=...)")
     if t in self.classes and name in self.classes[t].fconst and not (self.curfn.name == "__init__" and self.curfn.cls == t):
@@ -2019,6 +2026,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             return helper.ret
         if c == "str" or c == "int" or c == "float" or c == "bool":
             return c
+        if c == "range" and RANGEC in self.classes and not self.bound(c):
+            return RANGEC  # (where it is a value)
         if c == "len" or c == "ord":
             return "int"
         if c == "input" or c == "repr" or c == "chr" or c == "ascii" or c == "hex" or c == "oct" or c == "bin":
@@ -2062,7 +2071,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if arg.kind == "call" and arg.kids[0].kind == "name" and arg.kids[0].s == "range" and not self.bound("range"):
             return "list[int]"
         t = self.guess(arg, f)
-        return t if is_list(t) or t.startswith("!") else ""
+        return t if is_list(t) or t.startswith("!") else "list[int]" if t == RANGEC else ""
     if k == "binop":
         a = self.guess(e.kids[0], f)
         b = self.guess(e.kids[1], f)
@@ -2091,6 +2100,9 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
     name = ""
     if t.startswith("!") or t == "file" or is_gen(t):
         return t
+    if t == RANGEC and m == "":
+        c = ITERS + "$range_iterator"
+        return self.specialize(c, ["int", "int", "int"], {}, False, {}) if c in self.tmpl else ""
     if is_dict(t) and (m == "keys" or m == "values" or m == "items"):
         name = "dict_keyiterator" if m == "keys" else "dict_valueiterator" if m == "values" else "dict_itemiterator"
     elif m == "keys" or m == "values" or m == "items":
@@ -2134,6 +2146,9 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
             self.err(f'str.{name} is a method: call it on a string literal, "...".{name}(...) (methods are not values; map() takes "...".{name})')
         self.err(f"type {typestr(o.t)} has no attribute '{name}'")
     ci = self.classes[o.t]
+    if o.t == RANGEC and self.curfn.mod != RANGES and name not in ci.ftypes:
+        # (CPython's range has no other attributes, and its methods cannot be assigned)
+        self.err(f"'range' object attribute '{name}' is read-only" if store and name in ci.methods else f"'range' object has no attribute '{name}'" + (" and no __dict__ for setting new attributes" if store else ""))
     if name in ci.methods and ci.methods[name].prop:
         self.err(f"property '{name}' of '{short(o.t)}' is read-only")
     if store and ci.slotlimit and name not in ci.slots:

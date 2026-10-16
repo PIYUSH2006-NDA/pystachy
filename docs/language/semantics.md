@@ -122,6 +122,27 @@ items once the list and the slice's bounds are evaluated.
 Some consumers materialize input before processing it; see the
 [evaluation-order differences](compatibility.md#containers-and-evaluation-order).
 
+## Range objects
+
+`range()` anywhere else is a range object, CPython's: a value to assign, pass, return or store
+(`r: range` annotates one), as in `codecs.make_identity_dict(range(256))`. It is an object of the
+class in [`lib/_pystachy_range.py`](../../lib/_pystachy_range.py), which the compiler loads for a
+program that reads the builtin `range`. A `for` loop or comprehension over one, and the consumers
+above, step through its numbers as through `range(...)` itself; `enumerate()`, `zip()` and
+generator expressions take them one at a time, and `range()` may be nested in `enumerate()` and
+`zip()`. `len()`, `bool()`, `x in r` of an int (an `int | None` that is None is in no range),
+`r[i]` with negative indices, slices (ranges), `r.start`, `r.stop` and `r.step`, `==` and `!=`
+(as sequences: `range(0) == range(5, 5)`, and never equal to a value of another builtin type),
+`hash()`, `r.index(x)`, `r.count(x)`, `reversed(r)` where `reversed()` is supported, `iter(r)`,
+`repr()` and `str()`, `isinstance(r, range)`, `type(r).__name__` and `type(r) is range` behave
+as in CPython. A range of 2**63 numbers or more is held, but `len()` of it raises CPython's
+`OverflowError`, and an item or slice bound beyond 64 bits raises Pystachy's
+([integers](compatibility.md#numbers)). The compiler rejects the operations that CPython would
+reject at run time (ordering comparisons, assigning an attribute), `in` of other than an int or a
+bool, `r[i]`, `index()` and `count()` of other than an int (also of a bool), `==` with a value
+that may be `None` but is not a range, `type(r)` as a value, and the reflection of `dir()` and
+`vars()`.
+
 ## Iterators
 
 `iter(x)` returns an iterator object that shares its position with every use, as CPython's:
@@ -134,8 +155,8 @@ for line in it:  # the lines after the header
 ```
 
 `iter()` accepts lists, strings, homogeneous tuples, dictionaries and their `keys()`,
-`values()` and `items()`, sets, `range(...)`, files and objects with `__iter__`. A file is its
-own iterator. A builtin container's iterator is an object of a class in
+`values()` and `items()`, sets, `range(...)` and range objects, files and objects with
+`__iter__`. A file is its own iterator. A builtin container's iterator is an object of a class in
 [`lib/_pystachy_iterators.py`](../../lib/_pystachy_iterators.py): it reads a list's current
 length at each step, fails if a dictionary or set changes size, and stays exhausted once
 `StopIteration` is raised. `next(it)` calls `it.__next__()` (a file's next line);

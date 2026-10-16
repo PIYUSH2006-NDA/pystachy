@@ -25,7 +25,7 @@ from src.pystachy_compiler.analysis import (
 from src.pystachy_compiler.diagnostics import FILES, LINES, MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
-from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
+from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, RANGEC, RANGES, UNSUPPORTED
 from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, name_targets, starred_target
 from src.pystachy_compiler.utils import (
     elem,
@@ -1630,6 +1630,11 @@ def gen_assign(self, t: Node, v: Val) -> None:
         self.notnone(v, "TypeError: cannot unpack non-iterable NoneType object")
         for i in range(len(fs)):
             self.assign(t.kids[i], self.getfield(v, self.field(v, fs[i]), fs[i]))
+    elif k == "tuple" and v.t == RANGEC:
+        # a, b = r: a list of r's numbers, if there are as many as targets, else CPython's
+        # ValueError (lib/_pystachy_range.py's _unpack: it takes no more than one too many)
+        self.notnone(v, "TypeError: cannot unpack non-iterable NoneType object")
+        self.assign(t, self.call_fn(self.funcs[RANGES + "$_unpack"], [], [self.vnode(v), self.vnode(Val(str(len(t.kids)), "int"))]))
     elif k == "tuple" and v.t in self.classes:
         # a, b = o: what o's __iter__ steps through, or the items its iterator object gives
         it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
