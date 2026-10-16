@@ -190,7 +190,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
 
     # Pystachy port: the 'key' property dropped (@property: M2)
 
-    def _reset(self, load: int) -> None:  # Pystachy port: annotated (M2)
+    def _reset(self, load):
         """Reset sorted list load factor.
 
         The `load` specifies the load-factor of the list. The default load
@@ -214,7 +214,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         self._update(values)
 
 
-    def clear(self) -> None:  # Pystachy port: annotated (M2)
+    def clear(self):
         """Remove all values from sorted list.
 
         Runtime complexity: `O(n)`
@@ -230,7 +230,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         self.clear()
 
 
-    def add(self, value: int) -> None:  # Pystachy port: annotated (M2)
+    def add(self, value):
         """Add `value` to sorted list.
 
         Runtime complexity: `O(log(n))` -- approximate.
@@ -266,7 +266,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         self._len += 1
 
 
-    def _expand(self, pos: int) -> None:  # Pystachy port: annotated (M2)
+    def _expand(self, pos):
         """Split sublists with length greater than double the load-factor.
 
         Updates the index when the sublist length is less than double the load
@@ -324,8 +324,9 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
                 values.sort()
                 self._clear()
             else:
-                for val in values:  # Pystachy port: bound method as a value (M3)
-                    self.add(val)
+                _add = self.add
+                for val in values:
+                    _add(val)
                 return
 
         _load = self._load
@@ -339,7 +340,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         self.update(iterable)
 
 
-    def __contains__(self, value: int) -> bool:  # Pystachy port: annotated (M2)
+    def __contains__(self, value: int):  # Pystachy port: annotated (M2)
         """Return true if `value` is an element of the sorted list.
 
         ``sl.__contains__(value)`` <==> ``value in sl``
@@ -370,7 +371,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return _lists[pos][idx] == value
 
 
-    def discard(self, value: int) -> None:  # Pystachy port: annotated (M2)
+    def discard(self, value):
         """Remove `value` from sorted list if it is a member.
 
         If `value` is not a member, do nothing.
@@ -403,7 +404,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             self._delete(pos, idx)
 
 
-    def remove(self, value: int) -> None:  # Pystachy port: annotated (M2)
+    def remove(self, value):
         """Remove `value` from sorted list; `value` must be a member.
 
         If `value` is not a member, raise ValueError.
@@ -442,7 +443,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             raise ValueError('%r not in list' % (value,))  # Pystachy port: str.format (M7)
 
 
-    def _delete(self, pos: int, idx: int) -> None:  # Pystachy port: annotated (M2)
+    def _delete(self, pos, idx):
         """Delete value at the given `(pos, idx)`.
 
         Combines lists that are less than half the load level.
@@ -497,7 +498,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             _index.clear()  # Pystachy port: was 'del _index[:]' (del of a slice: M7)
 
 
-    def _loc(self, pos: int, idx: int) -> int:  # Pystachy port: annotated (M2)
+    def _loc(self, pos, idx):
         """Convert an index pair (lists index, sublist index) into a single
         index number that corresponds to the position of the value in the
         sorted list.
@@ -578,7 +579,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return total + idx
 
 
-    def _pos(self, idx: int) -> tuple[int, int]:  # Pystachy port: annotated (M2)
+    def _pos(self, idx):
         """Convert an index into an index pair (lists index, sublist index)
         that can be used to access the corresponding lists position.
 
@@ -708,10 +709,10 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         See the comment and notes on ``SortedList._pos`` for details.
 
         """
-        # Pystachy port: rewritten without map(len, ...), iter() pairing, starmap(add, ...),
-        # repeat(), reduce(iadd, ...) (M3, M6) and slice assignment (M7), in the next line
-        # and the places marked below; it builds the same rows.
-        row0 = [len(sublist) for sublist in self._lists]
+        # Pystachy port: rewritten without iter() pairing, starmap(add, ...), repeat(),
+        # reduce(iadd, ...) (M6; reduce()'s empty list has no type, M4) and slice assignment
+        # (M7), in the places marked below; it builds the same rows.
+        row0 = list(map(len, self._lists))
 
         if len(row0) == 1:
             self._index.clear()  # Pystachy port: was self._index[:] = row0 (M7)
@@ -889,7 +890,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self.__getitem__(index)
 
 
-    def __setitem__(self, index: int, value: int) -> None:  # Pystachy port: annotated (M2)
+    def __setitem__(self, index: int, value: int):  # Pystachy port: annotated (M2)
         """Raise not-implemented error.
 
         ``sl.__setitem__(index, value)`` <==> ``sl[index] = value``
@@ -977,14 +978,15 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         if start >= stop:
             return []  # Pystachy port: a list, not an iterator (M7)
 
-        # Pystachy port: no '_pos = self._pos' (bound methods as values, M3)
-        min_pos, min_idx = self._pos(start)
+        _pos = self._pos
+
+        min_pos, min_idx = _pos(start)
 
         if stop == _len:
             max_pos = len(self._lists) - 1
             max_idx = len(self._lists[-1])
         else:
-            max_pos, max_idx = self._pos(stop)  # Pystachy port: as above (M3)
+            max_pos, max_idx = _pos(stop)
 
         return self._islice(min_pos, min_idx, max_pos, max_idx, reverse)
 
@@ -1102,7 +1104,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self._islice(min_pos, min_idx, max_pos, max_idx, reverse)
 
 
-    def __len__(self) -> int:  # Pystachy port: annotated (M2)
+    def __len__(self):
         """Return the size of the sorted list.
 
         ``sl.__len__()`` <==> ``len(sl)``
@@ -1113,7 +1115,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self._len
 
 
-    def bisect_left(self, value: int) -> int:  # Pystachy port: annotated (M2)
+    def bisect_left(self, value):
         """Return an index to insert `value` in the sorted list.
 
         If the `value` is already present, the insertion point will be before
@@ -1145,7 +1147,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self._loc(pos, idx)
 
 
-    def bisect_right(self, value: int) -> int:  # Pystachy port: annotated (M2)
+    def bisect_right(self, value):
         """Return an index to insert `value` in the sorted list.
 
         Similar to `bisect_left`, but if `value` is already present, the
@@ -1183,7 +1185,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self.bisect_right(value)
 
 
-    def count(self, value: int) -> int:  # Pystachy port: annotated (M2)
+    def count(self, value):
         """Return number of occurrences of `value` in the sorted list.
 
         Runtime complexity: `O(log(n))` -- approximate.
@@ -1223,7 +1225,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return right - left
 
 
-    def copy(self) -> "SortedList":  # Pystachy port: annotated (M2)
+    def copy(self):
         """Return a shallow copy of the sorted list.
 
         Runtime complexity: `O(n)`
@@ -1237,7 +1239,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self.copy()
 
 
-    def append(self, value: int) -> None:  # Pystachy port: annotated (M2)
+    def append(self, value):
         """Raise not-implemented error.
 
         Implemented to override `MutableSequence.append` which provides an
@@ -1261,7 +1263,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         raise NotImplementedError('use ``sl.update(values)`` instead')
 
 
-    def insert(self, index: int, value: int) -> None:  # Pystachy port: annotated (M2)
+    def insert(self, index, value):
         """Raise not-implemented error.
 
         :raises NotImplementedError: use ``sl.add(value)`` instead
@@ -1270,7 +1272,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         raise NotImplementedError('use ``sl.add(value)`` instead')
 
 
-    def pop(self, index: int = -1) -> int:  # Pystachy port: annotated (M2)
+    def pop(self, index=-1):
         """Remove and return value at `index` in sorted list.
 
         Raise :exc:`IndexError` if the sorted list is empty or index is out of
@@ -1330,7 +1332,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return val
 
 
-    def index(self, value: int, start: Optional[int] = None, stop: Optional[int] = None) -> int:  # Pystachy port: annotated (M2)
+    def index(self, value, start=None, stop=None):
         """Return first index of value in sorted list.
 
         Raise ValueError if `value` is not present.
@@ -1455,7 +1457,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self
 
 
-    def __mul__(self, num: int) -> "SortedList":  # Pystachy port: annotated (M2)
+    def __mul__(self, num: int):  # Pystachy port: annotated (M2)
         """Return new sorted list with `num` shallow copies of values.
 
         ``sl.__mul__(num)`` <==> ``sl * num``
@@ -1477,7 +1479,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         return self.__mul__(num)
 
 
-    def __imul__(self, num: int) -> "SortedList":  # Pystachy port: annotated (M2)
+    def __imul__(self, num: int):  # Pystachy port: annotated (M2)
         """Update the sorted list with `num` shallow copies of values.
 
         ``sl.__imul__(num)`` <==> ``sl *= num``
