@@ -24,7 +24,7 @@ from src.pystachy_compiler.specs import (
     exc_derives,
 )
 from src.pystachy_compiler.syntax import Node, has_kind, mk, names_in
-from src.pystachy_compiler.utils import gelem, is_gen, typestr, unopt
+from src.pystachy_compiler.utils import gelem, is_gen, typestr
 
 
 def with_yield(body: list[Node]) -> bool:
