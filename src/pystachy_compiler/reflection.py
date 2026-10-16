@@ -1123,12 +1123,15 @@ def gen_refl_vars_text(self, o: Val, known: bool) -> Val:
         sp = self.refl_split(o, known)
         end = self.label()
         ph = Ins("phi", "%ptr", "")
+        po = Ins("phi", "%ptr", "")  # (the object itself: a union's member, not its box)
         for lf in sp:
             self.place(lf.label)
             self.incoming(ph, self.refl_layout_record(lf.c), self.cur)
+            self.incoming(po, lf.v.v, self.cur)
             self.br(end)
         self.place(end)
         rec = Val(self.phi(ph), "%ptr")
+        o = Val(self.phi(po), "%ptr")
     return Val(self.rt("pys_refl_vars", "ptr", [f"ptr {rec.v}", f"ptr {o.v}"]), "str")
 
 
