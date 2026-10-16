@@ -316,7 +316,9 @@ A partial of a partial is flattened, as in CPython: `func`, `args` (a tuple) and
 not callable raises CPython's `TypeError`. Each call is checked against the
 function's signature where it is compiled, so a wrong call fails compilation
 rather than raising `TypeError`. The attributes can be assigned, unlike C's
-read-only ones; `repr()`, pickling, `__dict__` and `partialmethod` are unsupported.
+read-only ones. `repr()` gives the default `<functools.partial object at ...>`
+rather than CPython's call form; pickling, `__dict__` and `partialmethod` are
+unsupported.
 
 `wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
 attributes cannot be assigned, and class decorators are not compiled.
