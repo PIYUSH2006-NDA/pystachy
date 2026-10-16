@@ -25,6 +25,7 @@ observable contract.
 | `fnmatch` | `Lib/fnmatch.py` | `95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963` |
 | `textwrap` | `Lib/textwrap.py` | `30f3d833950d53e168cc021961574b553f56aed84458712b2eb29c6495843d46` |
 | `string` | `Lib/string.py` | `c000d9c4340c910b869399f0f0acc1b70e39391ad9344c4e08d8d0f80210a916` |
+| `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` |
 | `statistics` | `Lib/statistics.py` | `80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18` |
 | `urllib.parse` | `Lib/urllib/parse.py` | `491b233e8d87a2ab73964afff029717177d53ad8def328ed9b00575db983da27` |
 | `html` | `Lib/html/__init__.py` | `923d82d821e75e8d235392c10c145ab8587927b3faf9c952bbd48081eebd8522` |
@@ -33,6 +34,8 @@ observable contract.
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
+`operator` adapts only its getter classes, whose closures become `__call__` code
+reading constants.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
 weighted means. `urllib.parse` includes codec logic corresponding to CPython's
 `unicodeobject.c`, `stringlib/codecs.h` and `codecs.c`, plus bracketed-host and

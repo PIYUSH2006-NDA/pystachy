@@ -16,9 +16,23 @@ for supported operand types. `call()` forwards a supported callable's arguments.
 In-place functions require a result that keeps its input type: `itruediv(1.0, 2.0)`
 works; rebinding an integer to a float does not.
 
-`attrgetter`, `itemgetter` and `methodcaller` are not supported. `length_hint`
-and `index` are not general substitutes for CPython's versions: for example,
-`length_hint([1, 2])` and `index(2)` fail compilation.
+`itemgetter`, `attrgetter` and `methodcaller` are callable objects: call them
+directly, store them, or pass them as `key=` to `sorted`, `min`, `max`, `list.sort`
+and the library's key parameters. A getter specializes on its literal arguments,
+so `itemgetter(1)` reads a fixed tuple's or NamedTuple's item with its static type
+and `attrgetter("name")` reads `o.name`; each literal value makes a getter type of
+its own, so `itemgetter(0)` and `itemgetter(1)` cannot share a list or variable.
+`itemgetter(i)` of a variable `i` indexes lists, strings and dicts, and a fixed
+tuple at run time with the union of its items' types. Dotted names, several
+items or names (a tuple result) and `methodcaller` arguments work as in CPython,
+and reprs match C's. A literal getter's constants cannot be assigned.
+
+Attribute and method names must be string literals: a missing attribute and a
+name that is not a string fail compilation, rather than raising `AttributeError`
+or `TypeError` when the getter runs (a single non-string literal still raises
+CPython's `TypeError` when the getter is made). Pickling is unsupported.
+`length_hint` and `index` are not general substitutes for CPython's versions:
+for example, `length_hint([1, 2])` and `index(2)` fail compilation.
 
 ## Path modules
 

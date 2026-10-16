@@ -1,0 +1,22 @@
+[(3, 'a'), (1, 'b'), (2, 'c')] [(3, 'a'), (2, 'c'), (1, 'b')]
+[('b', 1), ('c', 2), ('a', 3)] ('a', 3) ('b', 1)
+5 last t
+(2.5, 1) ('x', 'y') ('b', 'b')
+1 (2, 3) why
+[('c', 1), ('b', 2), ('a', 2)] ['c', 'b', 'a'] [1, 2, 2]
+['Bob', 'Ann', 'Ção']
+['Ção', 'Ann', 'Bob']
+('Ann', 31) Ção
+['A', 'b', 'c'] ['a', 'b']
+8 10 ab***
+Ção 75
+operator.itemgetter(1) operator.itemgetter(0, 'k') operator.attrgetter('a', 'b.c')
+operator.methodcaller('f', 1, 'x', y=2.5) operator.methodcaller('strip')
+True True True
+[1, 3] [2, 4] [2, 1]
+[(1, 'y'), (0, 'z')]
+TypeError: attribute name must be a string
+TypeError: method name must be a string
+IndexError: list index out of range
+KeyError: 'x'
+[exit 0]

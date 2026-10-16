@@ -1,5 +1,5 @@
-# CPython's own pure-Python Lib/operator.py (lib/operator.py, unmodified): its functions are
-# templates, compiled for the argument types of each call
+# CPython's own pure-Python Lib/operator.py (lib/operator.py, adapted only for its getters): its
+# functions are templates, compiled for the argument types of each call
 import operator
 from operator import add, itemgetter
 
