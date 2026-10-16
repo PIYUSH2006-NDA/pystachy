@@ -205,6 +205,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   slicing and unpacking work as on CPython's, and its attributes are read as
   `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`.
 
+- A module without a docstring that binds `__doc__` itself, where the first statement that
+  names `__doc__` is a `def` or `class`, has no `__doc__` until its code binds it: a function's
+  earlier read raises `NameError`, where CPython's reads `None`.
+
 - A global (a function or class included) that its module's code has not bound when it is
   read (assigned in a branch that did not run, or read while the module is still being
   imported: a circular import) raises `AttributeError: module 'm' has no attribute 'x'`, read
@@ -288,7 +292,8 @@ supported alternatives.
   the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
-- `del` of another module's attribute, and an assignment of another module's `__doc__`
+- `del` of another module's attribute, an assignment of another module's `__doc__`, and `del`
+  of a module's own `__doc__`
 - an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
   module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time: from
   another module, or from m's own code after it imports itself

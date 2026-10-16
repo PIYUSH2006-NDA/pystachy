@@ -25,8 +25,12 @@ import runs that code again.
 `__name__` and `m.__name__` are the module's name, and `__debug__` is `True`.
 `__doc__`, `m.__doc__` and `from m import __doc__` give the module's docstring, cleaned as
 CPython 3.13 cleans it, or `None`. A module may bind its own `__doc__`, as `datetime` does;
-assigning another module's `__doc__`, and reading `__doc__` in a class body, are not supported.
-A `lib/` subset implementation's docstring differs from CPython's module's.
+until it does, its code reads the docstring. Without a docstring, it reads `None` only where
+the first statement that names `__doc__` is module-level code; where that statement is a `def`
+or `class`, a read before the module binds `__doc__` raises `NameError`. Deleting a module's
+`__doc__`, assigning another module's, and reading `__doc__` in a class body (but in its
+lambdas and comprehensions) are not supported. Some `lib/` modules' docstrings differ from
+CPython's (see the [library reference](../../lib/compatibility.md)).
 `__file__`, `__spec__` and CPython's other module metadata are unsupported.
 An imported module cannot bind `__name__`.
 

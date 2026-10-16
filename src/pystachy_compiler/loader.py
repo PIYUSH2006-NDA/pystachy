@@ -4,6 +4,7 @@ import os
 from src.pystachy_compiler.analysis import (
     accel_try,
     binds,
+    binds_first,
     bound_in,
     builtin_has,
     builtin_import,
@@ -13,6 +14,7 @@ from src.pystachy_compiler.analysis import (
     catches_import,
     clean_doc,
     collect,
+    del_line,
     deleted,
     false_flag,
     fn_globals,
@@ -27,6 +29,7 @@ from src.pystachy_compiler.analysis import (
     local_types,
     mark,
     may_end,
+    names_name,
     own_specials,
     read_names,
     rebound,
@@ -218,22 +221,35 @@ class Loader:
         # m's __doc__ (Mod.doc): its docstring, a string literal alone in its first statement, as
         # CPython 3.13's compiler cleans it; else None. Where m's code binds __doc__ itself (what
         # simplify() left of it), it is a variable, which CPython's code assigns the docstring (or
-        # None) before its first statement (after a docstring and the from __future__ imports here)
+        # None) before its first statement. So does a statement put after the docstring and the
+        # from __future__ imports here, unless the first statement that names __doc__ binds it
+        # (and its value does not read it): with a docstring, __doc__ = <docstring>; without one,
+        # __doc__: str | None = None, where that statement is no def or class (one of whose
+        # functions reads it: such a read before m's code binds it raises NameError)
         b = m.body
         if b.s == "doc" and b.kids[0].kind == "expr" and b.kids[0].kids[0].kind == "str":
             m.doc = mk("str", clean_doc(b.kids[0].kids[0].s), b.kids[0].line, [])
-        if "__doc__" in rebound(b.kids, True):
-            i = 1 if b.s == "doc" else 0
-            while i < len(b.kids) and b.kids[i].kind == "import" and b.kids[i].s == "from" and b.kids[i].kids[0].kids[1].s == "__future__":
-                i += 1
-            line = b.kids[i].line if i < len(b.kids) else 1
-            v = mk(m.doc.kind, m.doc.s, line, [])
-            if m.doc.kind == "str":
-                b.kids.insert(i, mk("assign", "", line, [mk("name", "__doc__", line, []), v]))
-            else:
-                # (__doc__: str | None = None, so that its code can bind it a str)
-                t = mk("binop", "|", line, [mk("name", "str", line, []), mk("None", "", line, [])])
-                b.kids.insert(i, mk("annassign", "", line, [mk("name", "__doc__", line, []), t, v]))
+        if "__doc__" not in rebound(b.kids, True):
+            return
+        at = del_line(b, "__doc__", False)
+        if at > 0:
+            fail("deleting the module's __doc__ is not supported (CPython's code then reads builtins.__doc__)", at)
+        i = 1 if b.s == "doc" else 0
+        while i < len(b.kids) and b.kids[i].kind == "import" and b.kids[i].s == "from" and b.kids[i].kids[0].kids[1].s == "__future__":
+            i += 1
+        j = i
+        while j < len(b.kids) and (not names_name(b.kids[j], "__doc__") or (b.kids[j].kind == "annassign" and len(b.kids[j].kids) == 2)):
+            j += 1  # (__doc__: str neither binds nor reads it)
+        if j == len(b.kids) or binds_first(b.kids[j], "__doc__") or (m.doc.kind != "str" and (b.kids[j].kind == "def" or b.kids[j].kind == "class" or b.kids[j].kind == "subclass")):
+            return
+        line = b.kids[i].line
+        v = mk(m.doc.kind, m.doc.s, line, [])
+        if m.doc.kind == "str":
+            b.kids.insert(i, mk("assign", "", line, [mk("name", "__doc__", line, []), v]))
+        else:
+            # (__doc__: str | None = None, so that its code can bind it a str)
+            t = mk("binop", "|", line, [mk("name", "str", line, []), mk("None", "", line, [])])
+            b.kids.insert(i, mk("annassign", "", line, [mk("name", "__doc__", line, []), t, v]))
 
     def moddoc(self, n: Node, t: Mod) -> None:
         # n, a read of module t's __doc__ where t's code binds none, becomes that constant
@@ -2042,6 +2058,8 @@ class Loader:
             for p in n.kids[0].kids:
                 self.qexpr(m, p.kids[1], loc)
             inner = dict(loc)
+            if not inner.get("__doc__", True):
+                del inner["__doc__"]  # (a class body's: qstmts())
             for p in n.kids[0].kids:
                 inner[p.s] = True
             self.qexpr(m, n.kids[1], inner)
@@ -2051,6 +2069,9 @@ class Loader:
             self.qexpr(m, n.kids[2], loc)
             names: list[str] = []
             names_in(n.kids[1], names)
+            doc = not loc.get("__doc__", True)  # (a class body's: qstmts())
+            if doc:
+                del loc["__doc__"]
             added: list[str] = []
             for nm in names:
                 if nm not in loc:
@@ -2061,9 +2082,18 @@ class Loader:
                     self.qexpr(m, n.kids[i], loc)
             for nm in added:
                 del loc[nm]
+            if doc:
+                loc["__doc__"] = False
         else:
-            for kid in n.kids:
-                self.qexpr(m, kid, loc)
+            # (a comprehension's iterable is qualified where it is, its other parts in its own scope,
+            # where __doc__ is not a class body's: qstmts())
+            doc = (k == "nestedcomp" or k == "asynccomp") and not loc.get("__doc__", True)
+            for i in range(len(n.kids)):
+                if doc and i != 2:
+                    del loc["__doc__"]
+                self.qexpr(m, n.kids[i], loc)
+                if doc and i != 2:
+                    loc["__doc__"] = False
 
     def qstore(self, m: Mod, t: Node, loc: dict[str, bool]) -> None:
         # an assignment target: a package's own name that an import of its submodule may rebind
@@ -2238,9 +2268,11 @@ class Loader:
                 for d in st.kids[1:]:
                     self.qdeco(m, d, loc)
                 # (class scopes do not nest; a class body's __doc__ is the class's docstring, which
-                # cannot be read: it stays unqualified, an error in Gen)
+                # cannot be read: it stays unqualified, an error in Gen. False: not in the lambdas
+                # and comprehensions of the body, which read the module's)
                 cloc: dict[str, bool] = {} if cls else dict(loc)
-                cloc["__doc__"] = True
+                if "__doc__" not in cloc:
+                    cloc["__doc__"] = False
                 self.qstmts(m, st.kids[0].kids, cloc, True)
                 if cls:
                     loc[short(st.s)] = True

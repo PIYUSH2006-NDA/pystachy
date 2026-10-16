@@ -112,6 +112,53 @@ def clean_doc(s: str) -> str:
     return "\n".join(kept)
 
 
+def names_name(n: Node, name: str) -> bool:
+    # does code n name name anywhere: reads, binds or declares it, also in the functions and
+    # classes it defines (an import's alias of that name too)
+    if (n.kind == "name" or n.kind == "alias") and n.s == name:
+        return True
+    for k in n.kids:
+        if names_name(k, name):
+            return True
+    return False
+
+
+def binds_first(st: Node, name: str) -> bool:
+    # does module-level statement st bind name for sure without reading it first: name = v (also
+    # among other names), name: T = v, or an import of that name
+    if st.kind == "import":
+        return True  # (its alias: names_name())
+    if st.kind != "assign" and not (st.kind == "annassign" and len(st.kids) == 3):
+        return False
+    for t in st.kids[:-1] if st.kind == "assign" else st.kids[:1]:
+        if t.kind != "name":
+            return False
+    return not names_name(st.kids[-1], name)
+
+
+def del_line(n: Node, name: str, fn: bool) -> int:
+    # the line of a del statement in code n that deletes the module's name: outside functions and
+    # classes (not fn), or in a function that declares it global; 0 if there is none
+    if n.kind == "def":
+        decl: dict[str, bool] = {}
+        globals_in(n.kids[2].kids, decl)
+        fn = name not in decl
+    elif n.kind == "class" or n.kind == "subclass":
+        fn = True
+    elif n.kind == "del" and not fn:
+        for t in n.kids:
+            names: list[str] = []
+            if t.kind == "name" or t.kind == "tuple" or t.kind == "list":
+                names_in(t, names)
+            if name in names:
+                return n.line
+    for k in n.kids:
+        r = del_line(k, name, fn)
+        if r > 0:
+            return r
+    return 0
+
+
 def builtin_import(st: Node, a: Node) -> bool:
     # does alias a of import statement st bind a builtin module or a name of one: import os.path
     # binds os, a builtin module, but import collections.abc the Python package collections
