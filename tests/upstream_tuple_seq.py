@@ -20,8 +20,9 @@
 # - test_getitem_error (t['a']: a compile-time error worded "tuple index must be an integer
 #   constant" where CPython says "tuple indices must be integers or slices, not str")
 # - test_constructors (TupleTest's and CommonTest's), test_keyword_args, test_tupleresizebug and
-#   test_iadd's u = self.type2test("spam"): tuple() of an iterable (also of a generator) is not
-#   supported, nor tuple(sequence=())
+#   test_iadd's u = self.type2test("spam"): tuple() of an iterator object or of a generator
+#   function's generator is not supported, nor tuple(sequence=()), tuple([]) without a type, or
+#   tuple("spam") += tuple("eggs") (runtime-length tuples are not concatenated)
 # - test_iadd's u += (2, 3) and u += (4, 5), TupleTest.test_iadd's u += (2, 3), and test_imul
 #   (CommonTest's and TupleTest's: u *= 3, u *= 0): a variable has one type here, and these
 #   change the tuple's length, which is part of its type

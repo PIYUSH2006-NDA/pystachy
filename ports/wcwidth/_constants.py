@@ -28,7 +28,7 @@ from .table_ambiguous import AMBIGUOUS_EASTASIAN
 #                               WIDE_OVERRIDES,
 #                               NARROW_OVERRIDES)
 from .unicode_versions import list_versions
-# Pystachy port: not imported: KNOWN_TERMINALS is a frozenset (sets are M7, #12), and only
+# Pystachy port: not imported: table_term_programs is left out of the port, as only
 # list_term_programs() and resolve_terminal() read these.
 # from .table_term_programs import ALIASES, KNOWN_TERMINALS
 
