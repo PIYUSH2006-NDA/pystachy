@@ -109,9 +109,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   share it (`sorted()` gives one). `dict.fromkeys(s)` of a set of objects whose class defines
   `__hash__` calls it again for each element, where CPython takes the hashes the set keeps, and
   a `functools.cache()` or `lru_cache()` function hashes such an argument more than once per
-  call (CPython's, once); `d.update(o)` goes on with what is left of `o` where a key's `__eq__`
-  changes `o`, where CPython raises `RuntimeError: dict mutated during update`. `hash()` of a
-  NaN is 0, where CPython's is its float object's identity hash.
+  call (CPython's, once); `d.update(o)`, and `dict(o)` and `o.copy()` of an `o` with many
+  deleted keys (which merge `o` into a new dict), go on with what is left of `o` where a key's
+  `__eq__` changes `o`, where CPython raises `RuntimeError: dict mutated during update`.
+  `hash()` of a NaN is 0, where CPython's is its float object's identity hash.
 
 - `min()` and `max()` stream generator-expression items of type `int`, `float`, `bool` or
   `str` when called without keyword arguments. Other element types and `key=` calls first

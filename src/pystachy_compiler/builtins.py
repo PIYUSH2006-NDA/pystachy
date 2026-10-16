@@ -506,8 +506,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
     elif name == "dict" and is_dict(t):
-        # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c)
-        return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"]), t)
+        # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c),
+        # comparing keys hashed by their class (key_fx)
+        return Val(self.rt("pys_dict_from", "ptr", [f"ptr {v.v}"], self.key_fx(targs(t)[0])), t)
     elif name == "list" and is_dict(t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(t)[0]]))
     elif name == "range" or name == "enumerate" or name == "zip" or name == "reversed":

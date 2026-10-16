@@ -3,7 +3,8 @@
 # but the __repr__ of a KeyError naming it (Shown: U where the op may raise, getitem, not in);
 # one hashed by its class runs __hash__ and __eq__ at each lookup (Hashed: U), which CPython runs
 # again at the lookup after `in`, so that those two lookups stay apart (dictfuse fuses them only
-# for the others).
+# for the others). A copy of a dict of the latter may run __eq__ (U), and del d[k] of one hashes
+# k where d.pop(k) would not (pys_dict_del); a copy of the others runs no code.
 
 
 class Node:
@@ -62,6 +63,22 @@ def node_hash(n: Node) -> int:
     return hash(n)
 
 
+def node_copy(d: dict[Node, int]) -> int:
+    return len(dict(d)) + len(d.copy())
+
+
+def hashed_copy(d: dict[Hashed, int]) -> int:
+    return len(dict(d)) + len(d.copy())
+
+
+def node_del(d: dict[Node, int], n: Node) -> None:
+    del d[n]
+
+
+def hashed_del(d: dict[Hashed, int], n: Hashed) -> None:
+    del d[n]
+
+
 node_get({Node(): 1}, Node())
 node_in({Node()}, Node())
 node_fused({Node(): 1}, Node())
@@ -70,3 +87,7 @@ shown_in({Shown(): 1}, Shown())
 hashed_in({Hashed(1): 1}, Hashed(1))
 hashed_fused({Hashed(1): 1}, Hashed(1))
 node_hash(Node())
+node_copy({Node(): 1})
+hashed_copy({Hashed(1): 1})
+node_del({Node(): 1}, Node())
+hashed_del({Hashed(1): 1}, Hashed(1))

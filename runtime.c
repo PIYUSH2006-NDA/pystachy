@@ -1801,7 +1801,9 @@ List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s
    CPython's hash of it (khash), 0 included (a hole has no key either: dlive), which is a set's,
    so that a set of a dict's keys and the like (sets) take them without hashing them again, as
    CPython's do: __hash__ runs once for each insertion or lookup, and __eq__ for each key of the
-   same hash that the probes meet. Such a dict's idx has CPython's size slots, not 2*size (KTAG
+   same hash that the probes meet (the key itself is found first, whatever its hash now; a dict
+   copy that inserts the keys compares them too: pys_dict_from). Such a dict's idx has CPython's
+   size slots, not 2*size (KTAG
    on its kind, set by build, says so), so its probes visit CPython's slots in CPython's order,
    a slot again where CPython's do, and __eq__ runs as often; one that changes the table or that
    key makes the lookup start again, as CPython's lookdict does. A lookup
@@ -1895,7 +1897,8 @@ static I dempty(Dict *d, uint64_t h);
    where to insert it (the first hole or empty slot they met; after an __eq__, which may have
    filled that hole, the one dempty finds then, as CPython's insertdict takes find_empty_slot's);
    objs: d's keys may be tuples or objects (kind > 1, compared by keq or dkeyeq), else they are
-   ints or strs */
+   ints or strs; 2: they are hashed by CPython's hash (KTAG), so a key is found as itself before
+   its hash is compared, as compare_generic does, whatever the hash its __hash__ gives now */
 static inline __attribute__((always_inline)) I dlook(Dict *d, I k, uint64_t h, I *free, uint64_t m, int objs) {
   I f = -1; int ran = 0;
   for (uint64_t i = h & m, p = h;; p >>= 5, i = (i * 5 + p + 1) & m) {
@@ -1903,6 +1906,7 @@ static inline __attribute__((always_inline)) I dlook(Dict *d, I k, uint64_t h, I
     int32_t e = d->idx[i];
     if (!e) { if (free) *free = ran ? dempty(d, h) : f < 0 ? (I)i : f; return -1; }
     if (e < 0) { if (f < 0) f = i; }
+    else if (objs == 2 && d->keys[e - 1] == k) return i;
     else if (d->hs[e - 1] == h) {
       I x = d->keys[e - 1];
       if (x == k || (d->kind == 1 && pys_str_eq((Str *)x, (Str *)k))) return i;
@@ -1924,7 +1928,7 @@ static I dfind(Dict *d, I k, uint64_t h, I *free) {
   return dlook(d, k, h, free, d->size * 2 - 1, 1);
 }
 __attribute__((noinline)) static I dfindi(Dict *d, I k, uint64_t h, I *free) { return d->size ? dlook(d, k, h, free, d->size * 2 - 1, 0) : -1; }
-__attribute__((noinline)) static I dfindc(Dict *d, I k, uint64_t h, I *free) { return dlook(d, k, h, free, d->size - 1, 1); }
+__attribute__((noinline)) static I dfindc(Dict *d, I k, uint64_t h, I *free) { return dlook(d, k, h, free, d->size - 1, 2); }
 /* dfind of key k, which it hashes (hsh) into *hp first: one test of the kind for both */
 static inline __attribute__((always_inline)) I dhfind(Dict *d, I k, uint64_t *hp, I *free) {
   if (d->kind == 1) return dfindi(d, k, *hp = hstrd((Str *)k), free);
@@ -1993,16 +1997,25 @@ static I dtake(Dict *d, I i) {                       /* the value of the entry i
   d->idx[i] = -1; d->hs[e] = 0; d->keys[e] = d->vals[e] = 0; d->len--;
   return v;
 }
-static I dpop(Dict *d, I k, I dflt, int has) {
-  uint64_t h; I i = dhfind(d, k, &h, 0);
+/* d.pop(k)'s lookup (dhfind's), as CPython's dict_pop, which does not hash k where d is empty;
+   del d[k] (pys_dict_del) hashes it first, as PyDict_DelItem. Only a class's __hash__ can tell
+   them apart (kind > 1): the compiler calls pys_dict_pop for del of other keys */
+static inline __attribute__((always_inline)) I dpfind(Dict *d, I k) {
+  if (d->kind == 1) return dfindi(d, k, hstrd((Str *)k), 0);
+  if (d->kind > 1) return d->len ? dfind(d, k, hkey(k, kdesc(d->kind)), 0) : -1;
+  return dfindi(d, k, hint1(k), 0);
+}
+static I dpop(Dict *d, I k, I dflt, int has) {   /* d.pop(k) (has: d.pop(k, dflt)) */
+  I i = dpfind(d, k);
   if (i < 0) { if (!has) keyerr(d, k); return dflt; }
   return dtake(d, i);
 }
 I pys_dict_pop(Dict *d, I k) { return dpop(d, k, 0, 0); }
 I pys_dict_pop_default(Dict *d, I k, I dflt) { return dpop(d, k, dflt, 1); }
+I pys_dict_del(Dict *d, I k) { uint64_t h; I i = dhfind(d, k, &h, 0); if (i < 0) keyerr(d, k); return dtake(d, i); }
 /* d.get(k) and d.pop(k, None) of int, float and bool values: the value's box, or dflt (None or a box) */
 LOOKUP I pys_dict_getbox(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : (I)pys_box(d->vals[e]); }
-LOOKUP I pys_dict_popbox(Dict *d, I k, I dflt) { uint64_t h; I i = dhfind(d, k, &h, 0); return i < 0 ? dflt : (I)pys_box(dtake(d, i)); }
+LOOKUP I pys_dict_popbox(Dict *d, I k, I dflt) { I i = dpfind(d, k); return i < 0 ? dflt : (I)pys_box(dtake(d, i)); }
 LOOKUP I pys_dict_setdefault(Dict *d, I k, I v) {   /* one hash and one lookup, as CPython's */
   uint64_t h; I f = -1, i = dhfind(d, k, &h, &f);
   if (i >= 0) return d->vals[d->idx[i] - 1];
@@ -2043,7 +2056,9 @@ List *pys_dict_items(Dict *d) {
    sees: dict(d) merges d into a new empty dict, which clones a table without holes that is not
    sparse (8 slots, or more items than USABLE_FRACTION(size / 2)) and otherwise inserts the items
    into a table sized for them (estimate_log2_keysize); dict.copy() clones a table with at most a
-   third of holes, and otherwise merges the same way */
+   third of holes, and otherwise merges the same way. Keys hashed by their class (KTAG) are
+   inserted one by one (pys_dict_update), as CPython's insertdict, which runs __eq__ for each key
+   of the same hash that its probes meet; other keys compare equal to none of the others */
 static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
   I u = d->size * 2 / 3, x = (I)(dmask(d) + 1) * 4;
   r->kind |= d->kind & KTAG;                         /* (r's descriptor is d's) */
@@ -2053,10 +2068,12 @@ static void retable(Dict *r, Dict *d) {              /* r := d's table, holes in
 }
 static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
 static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }
+void pys_dict_update(Dict *d, Dict *o);
 Dict *pys_dict_from(Dict *d) {
   if (clean(d)) return clone(d);
   Dict *r = pys_dict_new(d->kind, 0);
-  if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
+  if (d->kind & KTAG) pys_dict_update(r, d);
+  else if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
   return r;
 }
 Dict *pys_dict_copy(Dict *d) { return d->len && d->len >= d->n * 2 / 3 ? clone(d) : pys_dict_from(d); }
@@ -2159,14 +2176,18 @@ static I hitem(I k, const char *d) {                 /* the hash of a value k (a
 static I shash(Set *s, I k) { return s->kind == 0 ? hint(k) : s->kind == 1 ? hstr((Str *)k) : hitem(k, ((Str *)s->kind)->s); }
 /* is x, the element in slot j, equal to k (kind > 1; their hashes are): 1 or 0, or -1 where an
    __eq__ changed the table or that slot, after which CPython's set_lookkey and set_add_entry start
-   again; out of their loops, as dkeyeq is out of dfind's */
-__attribute__((noinline)) static int sxeq(Set *s, uint64_t j, I x, I k) {
-  I *keys = s->keys; int eq = eqv(x, k, ((Str *)s->kind)->s);
-  return s->keys != keys || keys[j] != x ? -1 : eq;
+   again; add (set_add_entry's): 1 where x is equal, whatever changed (its found_active comes
+   before that test). A table of 8 slots is CPython's smalltable, which stays the same table when
+   it is rebuilt at that size, cleared or swapped (s &= t): only its slot j tells. Out of their
+   loops, as dkeyeq is out of dfind's */
+__attribute__((noinline)) static int sxeq(Set *s, uint64_t j, I x, I k, int add) {
+  I *keys = s->keys; uint64_t m = s->mask; int eq = eqv(x, k, ((Str *)s->kind)->s);
+  if (eq && add) return 1;
+  return (s->keys != keys && (m != 7 || s->mask != 7)) || s->keys[j] != x ? -1 : eq;
 }
-static int seq(Set *s, uint64_t j, I x, I k) {       /* sxeq's answer, a tuple of ints, bools and strs in place */
+static int seq(Set *s, uint64_t j, I x, I k, int add) {   /* sxeq's answer, a tuple of ints, bools and strs in place */
   const char *d = ((Str *)s->kind)->s; int eq = *d == 'T' ? keq(x, k, d, 1) : 2;
-  return eq == 2 ? sxeq(s, j, x, k) : eq;
+  return eq == 2 ? sxeq(s, j, x, k, add) : eq;
 }
 /* hash(v) of a value of descriptor d (an object's by its class's __hash__: H<id>) */
 I pys_hash(I v, Str *d) { return hitem(v, d->s); }
@@ -2191,7 +2212,7 @@ static I slook(Set *s, I k, I h) {                   /* set_lookkey: k's slot, e
         I x = s->keys[j];
         if (x == k || (s->kind == 1 && pys_str_eq((Str *)x, (Str *)k))) return (I)j;
         if (s->kind > 1) {
-          int eq = seq(s, j, x, k);
+          int eq = seq(s, j, x, k, 0);
           if (eq < 0) return slook(s, k, h);
           if (eq) return (I)j;
         }
@@ -2220,7 +2241,12 @@ static void sresize(Set *s, I minused) {             /* set_table_resize: the fi
   stable(s, size); s->fill = s->len;
   for (I i = 0; i <= m; i++) if (hs[i] != -1) sclean(s, keys[i], hs[i]);
 }
-static void sadd(Set *s, I k, I h) {                 /* set_add_entry: k, whose hash is h, unless an equal element is there */
+/* set_add_entry: k, whose hash is h, unless an equal element is there; into the last dummy its
+   probes passed, else the empty slot that ends them. An __eq__ that changed the table or the slot
+   it compared makes it start again, and so does one that filled that dummy (or dropped it, in a
+   rebuild of the small table), as CPython's does: k would overwrite another element */
+static void sadd(Set *s, I k, I h) {
+restart:;
   uint64_t mask = s->mask, i = (uint64_t)h & mask, perturb = (uint64_t)h;
   I free = -1;
   for (;; perturb >>= 5, i = (i * 5 + 1 + perturb) & mask) {
@@ -2231,13 +2257,14 @@ static void sadd(Set *s, I k, I h) {                 /* set_add_entry: k, whose 
         I x = s->keys[j];
         if (x == k || (s->kind == 1 && pys_str_eq((Str *)x, (Str *)k))) return;
         if (s->kind > 1) {
-          int eq = seq(s, j, x, k);
-          if (eq < 0) { sadd(s, k, h); return; }
+          int eq = seq(s, j, x, k, 1);
+          if (eq < 0) goto restart;
           if (eq) return;
         }
       }
       else if (s->hs[j] == -1 && s->keys[j]) free = (I)j;
       else if (s->hs[j] == -1) {
+        if (free >= 0 && s->kind > 1 && !(s->hs[free] == -1 && s->keys[free])) goto restart;
         if (free >= 0) { s->keys[free] = k; s->hs[free] = h; s->len++; return; }
         s->keys[j] = k; s->hs[j] = h; s->len++;
         if ((uint64_t)++s->fill * 5 >= mask * 3) sresize(s, s->len > 50000 ? s->len * 2 : s->len * 4);

@@ -7,6 +7,10 @@
 @f.hashed_in: R A U I rL wL rD wD rO wO rG wG rF wF
 @f.hashed_fused: R A U I rL wL rD wD rO wO rG wG rF wF
 @f.node_hash:
+@f.node_copy: R A rL rD rO
+@f.hashed_copy: R A U I rL wL rD wD rO wO rG wG rF wF
+@f.node_del: R A I rD wD
+@f.hashed_del: R A U I rL wL rD wD rO wO rG wG rF wF
 @m.Node.__init__:
 @m.Shown.__repr__:
 @m.Shown.__init__:

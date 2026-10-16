@@ -1,4 +1,4 @@
-@main.init: pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_set_new pys_set_add pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc
+@main.init: pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_set_new pys_set_add pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_dict_new pys_dict_set pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc
 @f.node_get: pys_dict_getitem
 @f.node_in: pys_set_has
 @f.node_fused: pys_dict_find pys_dict_val
@@ -7,6 +7,10 @@
 @f.hashed_in: pys_dict_has
 @f.hashed_fused: pys_dict_has pys_dict_getitem
 @f.node_hash: pys_hash_id
+@f.node_copy: pys_dict_from pys_dict_copy pys_raise
+@f.hashed_copy: pys_dict_from pys_dict_copy pys_raise
+@f.node_del: pys_dict_pop
+@f.hashed_del: pys_dict_del
 @m.Node.__init__:
 @m.Shown.__repr__:
 @m.Shown.__init__:

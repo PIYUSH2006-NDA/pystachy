@@ -673,7 +673,9 @@ def gen_stmt(self, n: Node) -> None:
                 self.rt("pys_list_del", "void", [f"ptr {self.unwrap(o, nodel).v}", f"i64 {ix.v}"])
             elif is_dict(unopt(o.t)):
                 # del d[k] looks k up as d[k] does (dkey): a key that may be None raises
-                # KeyError: None (nonekey), and a bool deletes the int key it equals
+                # KeyError: None (nonekey), and a bool deletes the int key it equals. A key
+                # hashed by its class is hashed also where d is empty (pys_dict_del, as CPython's
+                # del, unlike its d.pop(k)); other keys' hashes run no code
                 kt = targs(unopt(o.t))[0]
                 kval = self.expr(dt.kids[1], kt)
                 kx = self.dkey(kval, kt)
@@ -681,7 +683,8 @@ def gen_stmt(self, n: Node) -> None:
                 o = self.unwrap(o, nodel)
                 if bool_for_int(kval.t, kt):
                     self.bool_find(o.v, kval, key)
-                self.nonekey(kx, "", "pys_dict_pop", [f"ptr {o.v}", "i64 " + key], self.key_fx(kt))
+                fx = self.key_fx(kt)
+                self.nonekey(kx, "", "pys_dict_del" if "H" in fx else "pys_dict_pop", [f"ptr {o.v}", "i64 " + key], fx)
             elif o.t in self.classes:
                 # del o[k]: o.__delitem__(k)
                 ik = self.expr(dt.kids[1], self.argtype(o.t, "__delitem__", 1, f"'{tname(o.t)}' object doesn't support item deletion"))
