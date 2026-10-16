@@ -10,15 +10,16 @@ from ._constants import *
 # ---- the characters, as sre.c tests them
 
 # lazily decoded tables of _unicode.py: the boundaries of ALNUM, DECIMAL, SPACE, LINEBREAK, IDSTART
-# and IDCONTINUE (each range a start and an end past it), and the code points LOWER and UPPER map
-# and their maps
+# and IDCONTINUE plus their alphabetic classification delta (each range a start and an end past
+# it), and the code points LOWER and UPPER map and their maps
 _ranges: list[list[int]] = []
 _mapkeys: list[list[int]] = []
 _mapvals: list[list[int]] = []
 
 
 def _decode() -> None:
-    for text in [_unicode.ALNUM, _unicode.DECIMAL, _unicode.SPACE, _unicode.LINEBREAK, _unicode.IDSTART, _unicode.IDCONTINUE]:
+    for text in [_unicode.ALNUM, _unicode.DECIMAL, _unicode.SPACE, _unicode.LINEBREAK, _unicode.IDSTART,
+                 _unicode.IDCONTINUE, _unicode.ALPHA_IDSTART_DELTA]:
         bounds: list[int] = []
         at = 0
         for w in text.split():
@@ -134,6 +135,13 @@ def uni_isidcontinue(ch: int) -> bool:
     if ch < 128:
         return ascii_isalnum(ch) or ch == 95
     return _inranges(5, ch)
+
+
+def uni_isalpha(ch: int) -> bool:
+    # str.isalpha(): some identifier starts are not letters, and some letters cannot start names
+    if ch < 128:
+        return (65 <= ch and ch <= 90) or (97 <= ch and ch <= 122)
+    return uni_isidstart(ch) != _inranges(6, ch)
 
 
 def ascii_iscased(ch: int) -> bool:

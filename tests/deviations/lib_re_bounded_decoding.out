@@ -1,0 +1,40 @@
+bounded 10 a True True
+reuse True
+bounded 10 é True True
+reuse True
+bounded 10 𝔄 True True
+reuse True
+bounded 100 a True True
+reuse True
+bounded 100 é True True
+reuse True
+bounded 100 𝔄 True True
+reuse True
+bounded 1000 a True True
+reuse True
+bounded 1000 é True True
+reuse True
+bounded 1000 𝔄 True True
+reuse True
+bounded 10000 a True True
+reuse True
+bounded 10000 é True True
+reuse True
+bounded 10000 𝔄 True True
+reuse True
+growing a True
+full reuse True
+owned True True True
+growing é True
+full reuse True
+owned True True True
+growing 𝔄 True
+full reuse True
+owned True True True
+inside utf8 2 True
+inside utf8 3 True
+inside utf8 4 True
+split end 2 True
+split end 3 True
+split end 4 True
+[exit 0]
