@@ -574,8 +574,9 @@ can use the inherited `fromutc()`.
 ## Binascii
 
 `binascii` is `_pystachy_binascii`, a port of CPython's C module (`Modules/binascii.c`) to the
-subset. Pystachy loads it for `import binascii`, where CPython imports its C module, and a
-`binascii.py` or package on the module path replaces neither. All twelve functions are there,
+subset. Pystachy loads it for `import binascii`, where CPython imports its C module; as for the
+other modules that Debian's CPython builds in, a `binascii.py` on the module path is never
+imported. All twelve functions are there,
 with the C module's signatures, results and errors (`binascii.Error`, a `ValueError`, with its
 messages): `hexlify` and `b2a_hex` with `sep` and `bytes_per_sep`, `unhexlify` and `a2b_hex`,
 `b2a_base64` and `a2b_base64` (with `strict_mode`), `b2a_uu` and `a2b_uu` (with `backtick`),
