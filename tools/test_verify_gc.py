@@ -14,8 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 TIMEOUT = shutil.which("timeout")
 CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/example.py",
          "tests/errors/example.py", "tests/errors/syntax_example.py"]
-GC_STEPS = ["gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"]
-SUITES = [("gc-jit", "jit", 7), ("gc-aot-0", "aot", 2), ("gc-aot-1", "aot", 4), ("gc-aot-2", "aot", 1)]
+GC_STEPS = ["gc-self", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"]
+SUITES = [("gc-jit-0", "jit", 4), ("gc-jit-1", "jit", 3), ("gc-aot-0", "aot", 2), ("gc-aot-1", "aot", 4),
+          ("gc-aot-2", "aot", 1)]
 
 
 @unittest.skipUnless(TIMEOUT, "GNU timeout is required by verification")
@@ -79,9 +80,8 @@ mode=$2; shift 2
 echo "suite mode: $mode"
 case "$mode" in
   jit)
-    [ $# = 0 ] || exit 9
-    group=jit
-    set -- tests/example.py tests/syntax_example.py tests/deviations/example.py tests/errors/example.py tests/errors/syntax_example.py ;;
+    [ "$LC_ALL" = C.UTF-8 ] && [ $# -gt 0 ] || exit 9
+    case "$1" in tests/example.py) group=jit-0 ;; tests/syntax_example.py) group=jit-1 ;; *) exit 9 ;; esac ;;
   aot)
     [ "$LC_ALL" = C.UTF-8 ] && [ $# -gt 0 ] || exit 9
     case "$1" in tests/example.py) group=aot-0 ;; tests/syntax_example.py) group=aot-1 ;; tests/deviations/example.py) group=aot-2 ;; *) exit 9 ;; esac ;;
@@ -152,23 +152,21 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
                 self.assertEqual((step["passed"], step["failed"], step["expected"]), (count, 0, count))
                 self.assertEqual(step["modes"], [mode])
                 self.assertEqual((step["tests_compiler_interval"], step["tests_interval"]), (1000, 1))
+                self.assertEqual(report["sources"]["mode_checks"], 7)  # (CASES's checks in one mode)
                 self.assertIn(f"suite mode: {mode}", logs[group])
                 self.assertFalse((self.root / "gc-child.pid").exists())
                 observed[group] = [line.removeprefix("selected: ") for line in logs[group].splitlines()
                                    if line.startswith("selected: ")]
-                if mode == "aot":
-                    index = int(group[-1])
-                    self.assertEqual((step["shard_index"], step["shard_count"]), (index, 3))
-                    self.assertEqual(observed[group], CASES[index::3])
-                else:
-                    self.assertNotIn("shard_index", step)
-                    self.assertEqual(observed[group], CASES)
-        shards = [observed[f"gc-aot-{index}"] for index in range(3)]
-        self.assertEqual(sum(map(len, shards)), len(set().union(*shards)))  # disjoint
-        self.assertCountEqual([case for shard in shards for case in shard], CASES)
+                index, shard_count = int(group[-1]), (3 if mode == "aot" else 2)
+                self.assertEqual((step["shard_index"], step["shard_count"]), (index, shard_count))
+                self.assertEqual(observed[group], CASES[index::shard_count])
+        for kind, shard_count in (("gc-jit", 2), ("gc-aot", 3)):
+            shards = [observed[f"{kind}-{index}"] for index in range(shard_count)]
+            self.assertEqual(sum(map(len, shards)), len(set().union(*shards)))  # disjoint
+            self.assertCountEqual([case for shard in shards for case in shard], CASES)
 
     def test_local_aliases_run_all_selected_gc_checks(self):
-        for group, expected in (("gc-stress", GC_STEPS), ("gc-aot", GC_STEPS[2:])):
+        for group, expected in (("gc-stress", GC_STEPS), ("gc-jit", GC_STEPS[1:3]), ("gc-aot", GC_STEPS[3:])):
             with self.subTest(group=group):
                 result, report, logs = self.run_group(group)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -206,8 +204,8 @@ os.execv({TIMEOUT!r}, [{TIMEOUT!r}, "--verbose", "--kill-after=0.2s", limit, *sy
                     self.assertEqual(report["steps"][-1]["result"], "fail")
 
     def test_local_alias_reports_failure_and_still_runs_remaining_modes(self):
-        for failure in ("failure", "suite-jit-failure", "suite-aot-0-failure", "suite-aot-1-failure",
-                        "suite-aot-2-failure"):
+        for failure in ("failure", "suite-jit-0-failure", "suite-jit-1-failure", "suite-aot-0-failure",
+                        "suite-aot-1-failure", "suite-aot-2-failure"):
             with self.subTest(failure=failure):
                 result, report, logs = self.run_group("gc-stress", failure)
                 self.assertNotEqual(result.returncode, 0)

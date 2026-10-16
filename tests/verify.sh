@@ -31,9 +31,10 @@
 #                  runtime.py (types, coverage, and the effects their call graphs show), and no
 #                  function of runtime.py reaches itself through runtime.c
 #   gc-self        the native compiler collecting every 5000 allocations reproduces the IR
-#   gc-jit/gc-aot-* every test passes in each mode with a collection at every program allocation
+#   gc-jit-*/gc-aot-* every test passes in each mode with a collection at every program allocation
 #                  (PYSTACHY_GC_STRESS_PROGRAM=1), compiled by the compiler collecting every 1000;
-#                  gc-aot-0/-1/-2 each take one of three disjoint thirds of the corpus (shard_cases)
+#                  gc-jit-0/-1 each take one of two disjoint halves of the corpus and gc-aot-0/-1/-2
+#                  one of three thirds (shard_cases)
 #   benchmarks     bench/*.py print exactly what CPython prints, JIT and AOT; timings recorded
 #   rtcheck        tools/rtcheck.py: runtime.py, run by CPython, gives what CPython's str methods and
 #                  math functions give on random inputs
@@ -86,7 +87,7 @@ ROOT=$(pwd)
 # --list exposes the same plan to the final CI report gate, which rejects missing groups/steps.
 plan() {
   case $1 in
-    all) echo 'bootstrap tests-cpython-0 tests-cpython-1 tests-native-0 tests-native-1 tests-opt-off-0 tests-opt-off-1 runtime-cache python-free-0 python-free-1 ubsan-0 ubsan-1 check-ir runtime-table gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit scaling-0 scaling-1' ;;
+    all) echo 'bootstrap tests-cpython-0 tests-cpython-1 tests-native-0 tests-native-1 tests-opt-off-0 tests-opt-off-1 runtime-cache python-free-0 python-free-1 ubsan-0 ubsan-1 check-ir runtime-table gc-self gc-jit-0 gc-jit-1 gc-aot-0 gc-aot-1 gc-aot-2 benchmarks rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit scaling-0 scaling-1' ;;
     hosted-0) echo 'bootstrap tests-cpython-0' ;;
     hosted-1) echo 'bootstrap tests-cpython-1' ;;
     hosted) echo 'bootstrap tests-cpython-0 tests-cpython-1' ;; # local alias
@@ -103,12 +104,14 @@ plan() {
     ubsan-1) echo 'bootstrap ubsan-1' ;;
     ubsan) echo 'bootstrap ubsan-0 ubsan-1' ;; # local alias (one sanitized build for both halves)
     gc-self) echo 'bootstrap gc-self' ;;
-    gc-jit) echo 'bootstrap gc-jit' ;;
+    gc-jit-0) echo 'bootstrap gc-jit-0' ;;
+    gc-jit-1) echo 'bootstrap gc-jit-1' ;;
     gc-aot-0) echo 'bootstrap gc-aot-0' ;;
     gc-aot-1) echo 'bootstrap gc-aot-1' ;;
     gc-aot-2) echo 'bootstrap gc-aot-2' ;;
-    gc-aot) echo 'bootstrap gc-aot-0 gc-aot-1 gc-aot-2' ;; # local aliases are not CI groups
-    gc-stress) echo 'bootstrap gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2' ;;
+    gc-jit) echo 'bootstrap gc-jit-0 gc-jit-1' ;; # local aliases are not CI groups
+    gc-aot) echo 'bootstrap gc-aot-0 gc-aot-1 gc-aot-2' ;;
+    gc-stress) echo 'bootstrap gc-self gc-jit-0 gc-jit-1 gc-aot-0 gc-aot-1 gc-aot-2' ;;
     runtime-cache) echo 'bootstrap runtime-cache' ;;
     contracts) echo 'bootstrap check-ir runtime-table rtcheck re-fuzz re-probe rt-abi inherited-ast streaming ffi list-storage container-eq file-buffers dict-probes compile-limits jit-dead-code unicode-audit' ;;
     benchmarks) echo 'bootstrap benchmarks scaling-0' ;;
@@ -117,10 +120,10 @@ plan() {
     *) echo "verify: unknown group: $1" >&2; return 2 ;;
   esac
 }
-[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted-0|hosted-1|hosted|native-0|native-1|native|opt-off-0|opt-off-1|opt-off|python-free-0|python-free-1|python-free|ubsan-0|ubsan-1|ubsan|gc-self|gc-jit|gc-aot-0|gc-aot-1|gc-aot-2|gc-aot|gc-stress|runtime-cache|contracts|benchmarks|scaling-1|scaling|--list]' >&2; exit 2; }
+[ $# -le 1 ] || { echo 'usage: tests/verify.sh [all|hosted-0|hosted-1|hosted|native-0|native-1|native|opt-off-0|opt-off-1|opt-off|python-free-0|python-free-1|python-free|ubsan-0|ubsan-1|ubsan|gc-self|gc-jit-0|gc-jit-1|gc-jit|gc-aot-0|gc-aot-1|gc-aot-2|gc-aot|gc-stress|runtime-cache|contracts|benchmarks|scaling-1|scaling|--list]' >&2; exit 2; }
 GROUP=${1:-all}
 if [ "$GROUP" = --list ]; then
-  for g in all hosted-0 hosted-1 native-0 native-1 opt-off-0 opt-off-1 python-free-0 python-free-1 ubsan-0 ubsan-1 gc-self gc-jit gc-aot-0 gc-aot-1 gc-aot-2 runtime-cache contracts benchmarks scaling-1; do
+  for g in all hosted-0 hosted-1 native-0 native-1 opt-off-0 opt-off-1 python-free-0 python-free-1 ubsan-0 ubsan-1 gc-self gc-jit-0 gc-jit-1 gc-aot-0 gc-aot-1 gc-aot-2 runtime-cache contracts benchmarks scaling-1; do
     printf '%s %s\n' "$g" "$(plan "$g")"
   done
   exit 0
@@ -460,24 +463,21 @@ step gc-self $r "$s" "$L" ", \"compiler_interval\": 5000, \"ir_identical\": $(sa
 fi
 
 # ---- GC-stressed suite: full corpus in both modes, on independent CI runners
-# AOT runs as three disjoint shards (shard_cases), whose union is exactly the full corpus on every
-# runner; rejection/syntax checks still run in both modes.
-for gc_group in gc-jit gc-aot-0 gc-aot-1 gc-aot-2; do
+# JIT runs as two disjoint shards and AOT as three (shard_cases), whose union is exactly the full
+# corpus on every runner; rejection/syntax checks still run in both modes.
+for gc_group in gc-jit-0 gc-jit-1 gc-aot-0 gc-aot-1 gc-aot-2; do
   if want "$gc_group"; then
-    L=$V/$gc_group.log; s=$(now); r=fail; mode=jit; shard_fields=""
+    L=$V/$gc_group.log; s=$(now); r=fail; mode=jit; gc_shards=2; shard=${gc_group##*-}
+    case $gc_group in gc-aot-*) mode=aot; gc_shards=3 ;; esac
+    shard_cases "$shard" "$gc_shards" "$V/$gc_group-cases.log"
     set --
-    if [ "$gc_group" != gc-jit ]; then
-      mode=aot; shard=${gc_group##*-}
-      shard_cases "$shard" 3 "$V/$gc_group-cases.log"
-      while IFS= read -r f; do set -- "$@" "$f"; done < "$V/$gc_group-cases.log"
-      shard_fields=", \"shard_index\": $shard, \"shard_count\": 3"
-      # An empty shard must not silently invoke run.sh's whole-suite default.
-      [ $# != 0 ] || { echo 'empty GC AOT shard' > "$L"; step "$gc_group" fail "$s" "$L" ""; continue; }
-    fi
+    while IFS= read -r f; do set -- "$@" "$f"; done < "$V/$gc_group-cases.log"
+    # An empty shard must not silently invoke run.sh's whole-suite default.
+    [ $# != 0 ] || { echo 'empty GC shard' > "$L"; step "$gc_group" fail "$s" "$L" ""; continue; }
     PYSTACHY_GC_STRESS=1000 PYSTACHY_GC_STRESS_PROGRAM=1 tests/run.sh "$V/pystachy2" "$mode" "$@" > "$L" 2>&1
     suite_status=$?
     x=$(tests "$(checks "$mode" "$@")" "$L" 2>> "$L") && [ "$suite_status" = 0 ] && r=pass
-    step "$gc_group" $r "$s" "$L" ", \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"$mode\"]$shard_fields$x"
+    step "$gc_group" $r "$s" "$L" ", \"tests_interval\": 1, \"tests_compiler_interval\": 1000, \"modes\": [\"$mode\"], \"shard_index\": $shard, \"shard_count\": $gc_shards$x"
   fi
 done
 
@@ -640,7 +640,7 @@ ver() { "$@" 2>&1 | head -1; }
     "$(js "$("${LLVM}opt" --version 2>&1 | sed -n 's/^ *Host CPU: //p')")"
   printf '  "toolchain": {"python": %s, "clang": %s, "llvm": %s, "llvm_dir": %s},\n' "$(js "$(ver $PY --version)")" \
     "$(js "$(ver "${LLVM}clang" --version)")" "$(js "$(ver "${LLVM}opt" --version)")" "$(js "${PYSTACHY_LLVM:-PATH}")"
-  SUITE_CHECKS=$ALL $PY - <<'PY'
+  SUITE_CHECKS=$ALL MODE_CHECKS=$(checks jit) $PY - <<'PY'
 import hashlib
 import json
 import os
@@ -650,10 +650,11 @@ paths += sorted(Path("src").rglob("*.py"))
 sources = {str(p): {"lines": p.read_bytes().count(b"\n"),
                     "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths}
 # (suite_checks: the checks of the whole corpus in JIT and AOT, which the halves of each such suite
-# make together)
+# make together; mode_checks: its checks in one mode, which the shards of each GC suite make, and
+# the UBSan halves once in each mode)
 sources.update(test_programs=len(list(Path("tests").glob("*.py"))),
                rejection_tests=len(list(Path("tests/errors").glob("*.py"))),
-               suite_checks=int(os.environ["SUITE_CHECKS"]))
+               suite_checks=int(os.environ["SUITE_CHECKS"]), mode_checks=int(os.environ["MODE_CHECKS"]))
 print('  "sources": ' + json.dumps(sources, sort_keys=True) + ',')
 PY
   printf '  "steps": [\n'; cat "$V/steps.json"; printf '\n  ]\n}\n'
