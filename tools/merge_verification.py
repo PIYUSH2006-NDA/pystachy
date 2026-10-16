@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 import copy
 from datetime import datetime, timezone
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -12,11 +13,17 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native", "tests-opt-off", "runtime-cache",
-               "python-free", "ubsan-0", "ubsan-1", "gc-jit", "gc-aot-0", "gc-aot-1"}
-# Steps that run one of two disjoint halves of the corpus (tests/verify.sh shard_cases): the name
-# ends in the shard index.
-SHARDED_STEPS = {"tests-cpython-0", "tests-cpython-1", "ubsan-0", "ubsan-1", "gc-aot-0", "gc-aot-1"}
+SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off",
+               "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1", "gc-jit", "gc-aot-0",
+               "gc-aot-1", "gc-aot-2"}
+# Steps that run one of the disjoint shards of the corpus (tests/verify.sh shard_cases), and how many
+# shards their suite has: the name ends in the shard index.
+SHARDED_STEPS = {f"{suite}-{index}": count for suite, count in
+                 (("tests-cpython", 2), ("tests-native", 2), ("python-free", 2), ("ubsan", 2), ("gc-aot", 3))
+                 for index in range(count)}
+GC_STEPS = {"gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+# The halves of tools/scaling.py's check (tests/verify.sh's SCALING_0 and the shapes it leaves)
+SCALING_STEPS = ("scaling-0", "scaling-1")
 
 
 def parse_groups(text):
@@ -39,6 +46,14 @@ def parse_groups(text):
     if covered != Counter(groups["all"][1:]):
         raise ValueError("CI groups must cover every all step exactly once, except bootstrap")
     return groups
+
+
+def scaling_shapes():
+    """The shapes of tools/scaling.py, which scaling-0 and scaling-1 share out."""
+    spec = importlib.util.spec_from_file_location("scaling", ROOT / "tools/scaling.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return list(module.SHAPES)
 
 
 def load_groups():
@@ -100,7 +115,7 @@ def validate_report(report, group, expected):
             if (step.get("ir_identical") is not True or
                     integer(step.get("compiler_interval"), f"{label}.compiler_interval", 1) != 5000):
                 raise ValueError(f"{label}: missing GC-stressed IR identity or wrong interval")
-        if step["name"] in {"gc-jit", "gc-aot-0", "gc-aot-1"}:
+        if step["name"] in GC_STEPS:
             mode = "jit" if step["name"] == "gc-jit" else "aot"
             if (step.get("modes") != [mode] or
                     integer(step.get("tests_compiler_interval"), f"{label}.tests_compiler_interval", 1) != 1000 or
@@ -108,8 +123,12 @@ def validate_report(report, group, expected):
                 raise ValueError(f"{label}: wrong GC stress mode or intervals")
         if step["name"] in SHARDED_STEPS and (
                 integer(step.get("shard_index"), f"{label}.shard_index") != int(step["name"][-1]) or
-                integer(step.get("shard_count"), f"{label}.shard_count", 1) != 2):
+                integer(step.get("shard_count"), f"{label}.shard_count", 1) != SHARDED_STEPS[step["name"]]):
             raise ValueError(f"{label}: wrong shard")
+        if step["name"] in SCALING_STEPS:
+            shapes = step.get("shapes")
+            if not isinstance(shapes, list) or not shapes or not all(isinstance(x, str) for x in shapes):
+                raise ValueError(f"{label}: missing the shapes it checked")
         if step["name"] in SUITE_STEPS:
             expected_checks = integer(step.get("expected"), f"{label}.expected", 1)
             if integer(step.get("passed"), f"{label}.passed") != expected_checks:
@@ -146,16 +165,31 @@ def merge_reports(directory, groups, expected_commit=None):
         raise ValueError(f"missing report groups: {sorted(set(wanted) - set(reports))}")
     # Shards together must make as many checks as an unsharded suite of the same modes (each
     # group's suite is its last step, whose count validate_report checked).
-    for shards, whole, what in ((("gc-aot-0", "gc-aot-1"), ("gc-jit",),
+    # The native shards' sum is checked against the unsharded opt-off suite, one run per PYSTACHY_OPT.
+    native = ("native-0", "native-1")
+    for shards, whole, what in ((("gc-aot-0", "gc-aot-1", "gc-aot-2"), ("gc-jit",),
                                  "GC AOT shards must cover the same full-suite check count as GC JIT"),
-                                (("hosted-0", "hosted-1"), ("native",),
+                                (native, ("opt-off",),
+                                 "native shards must cover the same full-suite check count as the opt-off suite"),
+                                (("hosted-0", "hosted-1"), native,
                                  "CPython-hosted shards must cover the same full-suite check count as the native suite"),
-                                (("ubsan-0", "ubsan-1"), ("gc-jit", "gc-aot-0", "gc-aot-1"),
+                                (("python-free-0", "python-free-1"), native,
+                                 "python-free shards must cover the same full-suite check count as the native suite"),
+                                (("ubsan-0", "ubsan-1"), ("gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"),
                                  "UBSan shards must cover the same full-suite check count as GC JIT and GC AOT")):
         if all(group in reports for group in shards + whole):
             count = {group: reports[group]["steps"][-1]["expected"] for group in shards + whole}
+            if whole == ("opt-off",):
+                runs = reports["opt-off"]["steps"][-1].get("PYSTACHY_OPT")
+                count["opt-off"] //= len(runs) if isinstance(runs, list) and runs else 1
             if sum(count[group] for group in shards) != sum(count[group] for group in whole):
                 raise ValueError(what)
+    halves = {step["name"]: step["shapes"] for report in reports.values() for step in report["steps"]
+              if step["name"] in SCALING_STEPS}
+    if len(halves) == len(SCALING_STEPS):
+        checked = [shape for name in SCALING_STEPS for shape in halves[name]]
+        if sorted(checked) != sorted(scaling_shapes()):
+            raise ValueError("scaling-0 and scaling-1 must check every shape of tools/scaling.py, each once")
     first = reports[wanted[0]]
     commit = first["git"]["commit"]
     if expected_commit is not None and commit != expected_commit:
