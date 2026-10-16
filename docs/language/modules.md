@@ -190,7 +190,7 @@ determine whether a particular call compiles.
 | Conversions | `int` (including `base=`), `float`, `bool`, `ord`, `chr`, `hex`, `oct`, `bin` |
 | Numeric operations | `abs`, `round`, `divmod`, `pow` (including modular powers and inverses), `sum` |
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
-| Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
+| Iteration in supported contexts | `range` (also as a value, a [range object](semantics.md#range-objects)), `reversed`, `enumerate`, `zip`, `map`, `filter` |
 | Iterators | `iter` (one argument), `next` (with or without a default) |
 | Types and attributes | `isinstance`, `callable`, `getattr`, `setattr`, `hasattr`, `vars`, `dir` and `type(x)`'s names and comparisons (see [reflection](semantics.md#reflection)), `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |

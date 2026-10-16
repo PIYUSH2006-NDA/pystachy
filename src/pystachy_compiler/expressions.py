@@ -19,6 +19,8 @@ from src.pystachy_compiler.specs import (
     NONEVAR,
     ORDOP,
     PYBUILTINS,
+    RANGEC,
+    RANGES,
     REFL,
     STUB,
     TYPE_SIZE,
@@ -374,7 +376,7 @@ def gen_isinst(self, t: str, c: Node) -> int:
             return 1 if is_dict(t) else 0
         if is_list(t) or (abc == "Sequence" and (t == "str" or is_tuple(t) or is_vtuple(t))):
             return 1
-        return -2 if abc == "Sequence" and t in self.nts else 0
+        return -2 if abc == "Sequence" and (t in self.nts or t == RANGEC) else 0  # (a range is a Sequence too)
     if c.kind != "name":
         return -1
     while c.s in self.taliases and self.alias_kept(c.s):
@@ -402,6 +404,8 @@ def gen_isinst(self, t: str, c: Node) -> int:
     if c.s == "type" and t.startswith("fn[b:"):
         # a builtin's value: one of CPython's builtin classes (int, list, ...) is a type
         return 1 if t[5:-1] in "bool bytearray bytes classmethod complex dict enumerate filter float frozenset int list map memoryview object property range reversed set slice staticmethod str super tuple type zip".split() else 0
+    if c.s == "range" and RANGEC in self.classes:
+        return -2 if t == RANGEC else 0  # (an object of lib/_pystachy_range.py's class, unless it is None)
     if c.s in "bytearray memoryview complex range slice type".split():
         return 0
     return -1
@@ -760,6 +764,14 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.index(n, want)
     if k == "slice":
         o = self.expr(n.kids[0], "")
+        if o.t == RANGEC:
+            # a range object's slice: the range of those items (lib/_pystachy_range.py's _slice,
+            # of the bounds given, a bool as an int, else None)
+            bs: list[Node] = [self.vnode(o)]
+            for bx in n.kids[1:] + [mk("omit", "", n.line, [])] * (4 - len(n.kids)):
+                bv = self.expr(bx, "int") if bx.kind != "omit" else Val("null", "None")
+                bs.append(self.vnode(self.as_int(bv) if bv.t == "bool" else bv))
+            return self.call_fn(self.funcs[RANGES + "$_slice"], [], bs)
         fold = is_tuple(unopt(o.t)) or o.t in self.nts  # (constant bounds: the items' types)
         bnd = [self.slice_bound(n.kids[1], fold), self.slice_bound(n.kids[2], fold)]
         step = self.slice_step(n.kids[3], fold) if len(n.kids) == 4 else "1"
@@ -1220,6 +1232,9 @@ def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
             fa.rest = self.bmethod(v, "copy", [])
         elif is_vtuple(v.t):
             fa.rest = self.as_list(v, "format")
+        elif v.t == RANGEC:
+            self.notnone(v, f"TypeError: {fa.who} argument after * must be an iterable, not NoneType")
+            fa.rest = self.as_list(v, "format")  # (a new list of its numbers)
         else:
             self.err(f"unpacking a {typestr(v.t)} into the arguments of {fa.who} is not supported (a tuple's or a list's items are)")
     at = 0
@@ -2361,8 +2376,8 @@ def gen_iter_ret(self, e: Node) -> Val:
         # (the iterator object of another object's __iter__, whose items its __next__ gives as
         # the loop asks for them: not a list of them)
         self.err(f"iter() of an object whose __iter__ returns a {short(v.t)} in {short(self.curfn.cls)}.__iter__ -> Iterator[T] is not supported: leave out the return annotation, or annotate -> {short(v.t)}")
-    if is_tuple(v.t) and v.t != "tuple[]":
-        v = self.as_list(v, "iter")  # (of the items, which share one type)
+    if (is_tuple(v.t) and v.t != "tuple[]") or v.t == RANGEC:
+        v = self.as_list(v, "iter")  # (of the items, which share one type; a range's numbers)
     last = self.blk.code[-1] if len(self.blk.code) > 0 else Ins("", "", "")
     if last.op == "rt" and (last.s == "dict.keys" or last.s == "dict.values" or last.s == "dict.items") and v.v == f"%t{last.r[0]}":
         # (keys() is a list here; CPython's view iterator raises if the dict changes size)
@@ -3179,6 +3194,30 @@ def gen_titem_eq(self, item: Val, a: Val, hit: str, ph: Ins | None, value: str) 
     return True
 
 def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
+    if (op == "==" or op == "!=") and (a.t == RANGEC) != (b.t == RANGEC):
+        # a range and a value of a builtin type, which is never equal to a range (CPython compares
+        # them by identity); None, or a value that may be None, may be the same as a range that is
+        o = b.t if a.t == RANGEC else a.t
+        if o in self.classes or o == "None" or is_opt(o) or is_union(o):
+            if o not in self.classes and o != "None":
+                self.err(f"comparing a range with {typestr(o)} is not supported")
+        else:
+            return Val("false" if op == "==" else "true", "bool")
+    if (op == "in" or op == "not in") and b.t == RANGEC:
+        # x in a range object: arithmetic, as x in range(...) (an int | None that is None equals
+        # no item)
+        self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
+        nn = ""
+        if is_sopt(a.t) and unopt(a.t) != "float":
+            nn = self.ptr_cmp('!=', a, Val('null', 'None')).v
+            a = Val(self.optint(a, "0"), "int")
+        if a.t != "int" and a.t != "bool":
+            self.err(f"'in' of a range needs an int, not {typestr(a.t)}")
+        rf = self.range_fields(b)
+        hit = self.rt("pys_range_has", "i64", [f"i64 {self.as_int(a).v}", f"i64 {rf[0]}", f"i64 {rf[1]}", f"i64 {rf[2]}"])
+        if nn != "":
+            hit = self.select(nn, Val(hit, "int"), Val("0", "int"))
+        return self.num_cmp('!=' if op == 'in' else '==', Val(hit, "int"), Val('0', "int"))
     if op in ["==", "!=", "<", "<=", ">", ">="]:
         if is_vtuple(unopt(a.t)) and is_tuple(b.t):
             b = self.coerce(b, unopt(a.t))

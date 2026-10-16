@@ -5,7 +5,7 @@ from src.pystachy_compiler.diagnostics import shown, where
 from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.reflection import VARS_USES, refl_attr_fields, refl_formatter
-from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
+from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS, RANGEC
 from src.pystachy_compiler.structs import STRUCT_FNS
 from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
@@ -205,10 +205,12 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
             v = self.expr(a.kids[0], "")
             self.line = a.line
             v = self.unwrap(v, f"TypeError: {who + ' argument' if who != '' else 'Value'} after * must be an iterable, not NoneType")
+            if v.t == RANGEC:
+                self.notnone(v, f"TypeError: {who + ' argument' if who != '' else 'Value'} after * must be an iterable, not NoneType")
             if is_tuple(v.t):
                 for i in range(len(targs(v.t))):
                     pos.append(self.vnode(self.tget(v, i)))
-            elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t)):
+            elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t) or v.t == RANGEC):
                 # print(*xs): its items printed as arguments are, joined by sep (a sole star's
                 # items as they are once the keywords are evaluated, others' as they are now)
                 xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), made_var("__pys_item", a.line), self.vnode(v)]), "")

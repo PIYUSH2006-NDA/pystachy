@@ -150,6 +150,8 @@ from src.pystachy_compiler.builtins import (
     gen_next_ as builtins_next_,
     gen_iter_ as builtins_iter_,
     gen_iter_obj as builtins_iter_obj,
+    gen_range_fields as builtins_range_fields,
+    gen_range_prim as builtins_range_prim,
     gen_walk as builtins_walk,
     gen_pwrite as builtins_pwrite,
     gen_reduce as builtins_reduce,
@@ -964,6 +966,7 @@ class Gen:
         self.unraised: dict[str, bool] = {}  # the modules where a class left out held an operation that may raise, not evaluated (left_out)
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.intglobals: dict[str, str] = {}  # single-binding module int literals, after normal read checks
+        self.rangeused = False  # code addresses an object of lib's range class (declared then: lower_module)
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
         self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
@@ -2493,8 +2496,8 @@ class Gen:
     def range_args(self, args: list[Node]) -> list[str]:
         return statements_range_args(self, args)
 
-    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
-        return statements_for_range(self, tgt, start, stop, step, body, hide, arg)
+    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None, check: bool=True) -> None:
+        return statements_for_range(self, tgt, start, stop, step, body, hide, arg, check)
 
     def for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
         return statements_for_rrange(self, tgt, vs, body, hide, arg)
@@ -3146,6 +3149,12 @@ class Gen:
 
     def walk(self, name: str, args: list[Node]) -> Val:
         return builtins_walk(self, name, args)
+
+    def range_prim(self, name: str, args: list[Node]) -> Val:
+        return builtins_range_prim(self, name, args)
+
+    def range_fields(self, v: Val) -> list[str]:
+        return builtins_range_fields(self, v)
 
     def pwrite(self, fd: str, fv: str, s: str, fo: Val) -> None:
         return builtins_pwrite(self, fd, fv, s, fo)

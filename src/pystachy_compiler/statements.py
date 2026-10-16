@@ -15,6 +15,7 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     ORDOP,
     PYBUILTINS,
+    RANGEC,
     SPECIAL,
     TYPING,
     UNSUPPORTED,
@@ -1252,7 +1253,7 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
             self.for_rrange(tgt, self.range_args(args[0].kids[1:]), body, hide, arg)
             return
         for a in args:
-            if self.iterator_call(a) and (fn == "enumerate" or fn == "zip" or fn == "reversed"):
+            if self.iterator_call(a) and (fn == "enumerate" or fn == "zip" or fn == "reversed") and not (a.kids[0].s == "range" and RANGEC in self.classes):
                 self.err(f"{a.kids[0].s}() cannot be nested in {fn}() here; make it a list first, list({a.kids[0].s}(...))")
             if a.kind == "kw" and fn == "zip":
                 self.err(f"zip({a.s}=...) is not supported")
@@ -1263,6 +1264,11 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 self.gencall = ""
                 v = self.expr(a, "")
                 ownk.append(self.owned_gen(v, a))
+                if fn == "reversed" and v.t == RANGEC:
+                    # (a range object's numbers from the last, as reversed(range(...)) takes them)
+                    self.notnone(v, "TypeError: 'NoneType' object is not reversible")
+                    self.for_rrange(tgt, self.range_fields(v), body, hide, arg)
+                    return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts and "__reversed__" in self.classes[v.t].methods:
                     # (CPython calls __reversed__, whose iterator the loop steps through forwards;
                     # a __reversed__ that yields makes a generator the loop owns)
@@ -1358,7 +1364,14 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
         # (CPython iterates the frozenset constant it makes of a display of constants)
         seq = self.set_display(it, "", True)
     else:
-        seq = self.iterable(self.expr(it, ""))
+        ev = self.expr(it, "")
+        if ev.t == RANGEC:
+            # a range object: its numbers, as for x in range(start, stop, step) takes them
+            self.notnone(ev, "TypeError: 'NoneType' object is not iterable")
+            rf = self.range_fields(ev)
+            self.for_range(tgt, rf[0], rf[1], rf[2], body, hide, arg, False)
+            return
+        seq = self.iterable(ev)
     if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(seq.t):
         # a comprehension's iterator object (of any of its for clauses): CPython 3.13 takes iter()
         # of it again, its __iter__
@@ -1384,6 +1397,9 @@ def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not i
     if v.t in self.nts:
         self.notnone(v, msg)
         v = self.ntup(v, True)  # (the tuple of its fields)
+    if v.t == RANGEC:
+        self.notnone(v, msg)
+        return v  # (for_seq steps through its numbers)
     if v.t in self.classes:
         return self.obj_iterator(v, msg, f"'{tname(v.t)}' object is not iterable")
     if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
@@ -1420,8 +1436,9 @@ def gen_range_args(self, args: list[Node]) -> list[str]:
         self.err("range() takes 1 to 3 arguments")
     return vs
 
-def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None = None) -> None:
-    if step.startswith("%") or int(step) == 0:
+def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None = None, check: bool = True) -> None:
+    # check: whether step may be 0 (not a range object's)
+    if check and (step.startswith("%") or int(step) == 0):
         self.guard(self.num_cmp('==', Val(step, "int"), Val('0', "int")).v, "ValueError: range() arg 3 must not be zero")
     self.iterarg(arg)
     self.hide(hide)
@@ -1569,6 +1586,10 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
                 j = self.rt("pys_dict_next", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
                 nx = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
+        elif s.t == RANGEC:
+            # (item i of a range object, while i is below its count, which is unsigned)
+            j = i
+            ok = self.int_ucmp('<', Val(i, "int"), Val(st[k], "int")).v
         elif mode == "reversed":
             j = self.scalar('sub', [Val(self.scalar('sub', [Val(st[k], 'int'), Val('1', 'int')]), 'int'), Val(i, 'int')])
             # 0 <= j < the current length, as CPython's reversed iterator checks
@@ -1628,6 +1649,10 @@ def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
         return [self.from_slot(self.mload('int', j), gelem(s.t))]  # (j: its promise, gen_next)
     if is_set(s.t):
         return [self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t))]
+    if s.t == RANGEC:
+        # (start + j * step, which wraps: an item of the range fits)
+        rf = self.range_fields(s)
+        return [Val(self.scalar('add', [Val(rf[0], 'int'), Val(self.scalar('mul', [Val(j, 'int'), Val(rf[2], 'int')]), 'int')]), "int")]
     kv = targs(s.t)
     out: list[Val] = []
     if mode != "values":
@@ -1646,6 +1671,12 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         self.err("'generator' object is not reversible")
     if self.is_iterator(s.t) and mode != "reversed":
         made.st.append("")
+        made.used.append("")
+        return
+    if s.t == RANGEC and mode != "reversed":
+        # (a range object's count of numbers, unsigned: item i is start + i * step)
+        rf = self.range_fields(s)
+        made.st.append(self.rt("pys_range_len", "i64", [f"i64 {rf[0]}", f"i64 {rf[1]}", f"i64 {rf[2]}"]))
         made.used.append("")
         return
     if not (s.t == "str" or s.t == "bytes" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]") or is_gen(s.t)):

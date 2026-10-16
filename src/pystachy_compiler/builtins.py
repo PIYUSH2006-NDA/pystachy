@@ -26,6 +26,8 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     OSCONST,
     PYBUILTINS,
+    RANGEC,
+    RANGES,
     VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, made_var, mk
@@ -137,6 +139,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
     if name.startswith("__pys_dict_") or name.startswith("__pys_set_"):
         return self.walk(name, args)
+    if name.startswith("__pys_range_"):
+        return self.range_prim(name, args)
     if name == "__pys_asdict" or name == "__pys_astuple" or name == "dataclasses.asdict" or name == "dataclasses.astuple" or name == "dataclasses.is_dataclass":
         return self.refl_dataclasses(name, args)  # (reflection.py)
     if name == "dataclasses.fields":
@@ -146,6 +150,24 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         name = name[6:]
     if name.startswith("builtins."):
         name = name[9:]
+    if name == "range" and RANGEC in self.classes:
+        # range() as a value: an object of lib's class (lib/_pystachy_range.py), of its arguments
+        # evaluated in turn, then checked (where a loop or a consumer takes its numbers at once,
+        # range(...) is no value: see for_, consume)
+        for a in args:
+            if a.kind == "kw" or a.kind == "dstar":
+                self.err("range() takes no keyword arguments")
+        vs = self.range_args(args)
+        o = self.new_obj(RANGEC)
+        self.call_fn(self.classes[RANGEC].methods["__init__"], [o], [self.vnode(Val(x, "int")) for x in vs], direct=True)
+        return o
+    if RANGEC in self.classes and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max" or name == "math.fsum" or name == "math.prod") and len(args) > 0 and args[0].kind != "kw" and args[0].kind != "starred":
+        nrest = len([a for a in args[1:] if a.kind != "kw"])  # (sum's start, or max(a, b)'s b)
+        if (nrest == 0 or (nrest == 1 and name == "sum")) and self.probe_type(args[0]) == RANGEC:
+            # of a range object: its numbers as they come, as of a generator expression over it
+            # (any() and all() stop at the deciding one, and no list of them is made)
+            item = made_var("__item", args[0].line)
+            args = [mk("listcomp", "gen", args[0].line, [item, item, args[0]])] + args[1:]
     if (name == "str" or name == "repr" or name == "ascii" or name == "format") and len(args) == 1 and self.refl_textual(args[0]):
         # str(vars(o)), repr(getattr(o, name)), ...: the text of what it looks up (reflection.py)
         rtext = self.refl_finish(self.refl_defer(args[0]), "repr" if name == "repr" or name == "ascii" else "str")
@@ -179,8 +201,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             v = self.gen_list(v, "")
         if v.t == "bytes":
             v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
-        if self.iter_object(v.t):
-            v = self.as_list(v, "tuple")  # (the items of its iterator object)
+        if self.iter_object(v.t) or v.t == RANGEC:
+            v = self.as_list(v, "tuple")  # (the items of its iterator object; a range's numbers)
         if not is_list(v.t):
             self.err(f"tuple() of {typestr(v.t)} is not supported: use a list, string or tuple")
         if unopt(elem(v.t)) not in ["int", "float", "bool", "str"]:
@@ -429,9 +451,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
             return self.num_cmp('!=', Val(self.mload('int', first), "int"), Val('0', "int"))
         kv = [kvals[j] for j in range(len(kws)) if kws[j].s == "key" and kvals[j].t != "None"]
-        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max") and not (len(kv) > 0 and name != "sum" and self.classes[v0.t].methods["__iter__"].gen):
-            # an object whose __iter__ returns an iterator object: its items as they come, as
-            # CPython takes them (any() and all() stop at the deciding one)
+        if (self.iter_object(v0.t) or (v0.t == RANGEC and len(kv) == 0)) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max") and not (len(kv) > 0 and name != "sum" and self.classes[v0.t].methods["__iter__"].gen):
+            # an object whose __iter__ returns an iterator object, or a range object: its items as
+            # they come, as CPython takes them (any() and all() stop at the deciding one)
             if len(kv) > 0 and name != "sum":
                 self.key_check(kv[0], f"{name}()")
                 return self.key_minmax_next(v0, kv[0], name)
@@ -732,7 +754,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(NONEARG[name].replace("NoneType", tname(t)))
     if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
         self.err(f"unsupported call {key}: type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
-    self.err(f"unsupported call {asked if name.startswith('math.') else key}")
+    self.err(f"unsupported call {(asked if name.startswith('math.') else key).replace(RANGEC, 'range')}")
     return v
 
 def gen_callable_type(self, t: str) -> int:
@@ -1269,6 +1291,11 @@ def gen_as_list(self, v: Val, name: str) -> Val:
     if v.t in self.nts:
         self.notnone(v, "TypeError: must assign iterable to extended slice" if name == "slice" else "TypeError: 'NoneType' object is not iterable")
         v = self.ntup(v, True)
+    if v.t == RANGEC:
+        # (a range object's numbers: a new list of them, as list(range(...)) makes)
+        self.notnone(v, "TypeError: must assign iterable to extended slice" if name == "slice" else "TypeError: can only join an iterable" if name == "join" else "TypeError: 'NoneType' object is not iterable")
+        rf = self.range_fields(v)
+        return Val(self.rt("pys_range_list", "ptr", [f"i64 {rf[0]}", f"i64 {rf[1]}", f"i64 {rf[2]}"]), "list[int]")
     if v.t in self.classes and name == "slice":
         # (xs[a:b] = v: CPython's PySequence_Fast iterates v, calling no __len__: list() of iter(v),
         # which calls iter() of an iterator object again)
@@ -1554,6 +1581,12 @@ def gen_iter_(self, args: list[Node]) -> Val:
     if v.t in self.nts:
         self.notnone(v, "TypeError: 'NoneType' object is not iterable")
         v = self.ntup(v, True)  # (the tuple of its fields)
+    if v.t == RANGEC:
+        # (a range object's iterator, as iter(range(...)) makes)
+        self.notnone(v, "TypeError: 'NoneType' object is not iterable")
+        rf = self.range_fields(v)
+        n = Val(self.rt("pys_range_len", "i64", [f"i64 {rf[0]}", f"i64 {rf[1]}", f"i64 {rf[2]}"]), "int")
+        return self.iter_obj("range_iterator", [Val(rf[0], "int"), Val(rf[2], "int"), n])
     if v.t in self.classes:
         it = self.obj_iterator(v, "TypeError: 'NoneType' object is not iterable", f"'{tname(v.t)}' object is not iterable")
         return self.iter_obj("list_iterator", [it]) if is_list(it.t) else it
@@ -1608,6 +1641,33 @@ def gen_walk(self, name: str, args: list[Node]) -> Val:
         return self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {o.v}"] + ns), selem(o.t))
     self.err(f"name '{name}' is not defined")
     return o
+
+def gen_range_prim(self, name: str, args: list[Node]) -> Val:
+    # the compiler primitives lib/_pystachy_range.py calls: __pys_range_len(start, stop, step),
+    # the runtime's count of the numbers (unsigned: one of 2**63 or more is negative);
+    # __pys_range_has(x, start, stop, step), x in range(start, stop, step); __pys_range_list(start,
+    # stop, step), a new list of the numbers; __pys_range_at(start, step, k), start + k * step,
+    # whose 64-bit arithmetic wraps (an item of the range fits in an int, though k * step may not)
+    if self.curfn.mod != RANGES or len([a for a in args if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar"]) > 0:
+        self.err(f"name '{name}' is not defined")
+    ns = [self.coerce(self.as_int(self.expr(a, "int")), "int").v for a in args]
+    if name == "__pys_range_len" and len(ns) == 3:
+        return Val(self.rt("pys_range_len", "i64", [f"i64 {x}" for x in ns]), "int")
+    if name == "__pys_range_has" and len(ns) == 4:
+        return self.num_cmp('!=', Val(self.rt("pys_range_has", "i64", [f"i64 {x}" for x in ns]), "int"), Val('0', "int"))
+    if name == "__pys_range_list" and len(ns) == 3:
+        return Val(self.rt("pys_range_list", "ptr", [f"i64 {x}" for x in ns]), "list[int]")
+    if name == "__pys_range_at" and len(ns) == 3:
+        k = self.scalar('mul', [Val(ns[2], 'int'), Val(ns[1], 'int')])
+        return Val(self.scalar('add', [Val(ns[0], 'int'), Val(k, 'int')]), "int")
+    self.err(f"name '{name}' is not defined")
+    return Val("", "")
+
+def gen_range_fields(self, v: Val) -> list[str]:
+    # start, stop and step of range object v, which is not None (lib/_pystachy_range.py's fields,
+    # which nothing but its __init__ assigns)
+    ci = self.classes[RANGEC]
+    return [self.mload('int', self.fgep(v, ci.fpos[f])) for f in ["start", "stop", "step"]]
 
 def gen_print_(self, args: list[Node]) -> Val:
     # every argument is evaluated in the order written, then each is converted as it is

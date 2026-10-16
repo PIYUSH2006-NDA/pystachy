@@ -8,7 +8,7 @@ from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Data, FnInfo
 from src.pystachy_compiler.llvm_abi import llstr
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.specs import CTYPES, GENCLEAN, GENCMD, GENDONE, GENNAME, GENRUN, GENSTATE, LINKDL, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CTYPES, GENCLEAN, GENCMD, GENDONE, GENNAME, GENRUN, GENSTATE, LINKDL, RANGEC, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import RtFn, lt, runtime_decl, typestr
 
 
@@ -284,6 +284,8 @@ def gen_lower_module(self) -> str:
     for ci in self.classes.values():
         if ci.name in self.tmpl:
             continue  # (a class template's objects are its specializations')
+        if ci.name == RANGEC and not self.rangeused:
+            continue  # (lib's class of range objects, which a program that may make one loads: of no code here)
         ts = [lt(ci.ftypes[x]) for x in ci.fields]
         for _ in range(ci.nflag):
             ts.append("i1")

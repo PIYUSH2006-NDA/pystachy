@@ -1,8 +1,8 @@
 """Analysis component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, TYPING
-from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mentions, mk, names_in, other_return
+from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, RANGE_METHODS, RANGE_TAKERS, TYPING
+from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mentions, mk, names_in, other_return, starred_target
 from src.pystachy_compiler.utils import int_fits
 
 
@@ -714,6 +714,82 @@ def module_reads(body: Node, name: str) -> bool:
     mods: dict[str, bool] = {}
     builtins_names(body, mods)
     return reads_builtin(body, name, False, name in top, mods)
+
+
+def range_values(n: Node, fine: int) -> bool:
+    # may code n use the builtin range as a value, an object of lib's class (Loader.program)? Any
+    # read of the name may, but the callee of a range(...) that the compiler steps through itself:
+    # the iterable of a for loop or of a comprehension's for clause, after a single in or not in,
+    # a consumer's argument (RANGE_TAKERS, RANGE_METHODS), a starred item of a list or tuple
+    # display, the value of a starred target or a list slice, yield from's, and also reversed()'s
+    # there and that of map() or filter() of one iterable there. fine: n is in such a place (2: a
+    # generator expression's first iterable, where a reversed() would be a value); a string
+    # annotation that names range may use it. (A false True only loads the module, a false False
+    # leaves range() its old error.) Only reading the tree, it makes nothing
+    k = n.kind
+    if k == "name":
+        return n.s == "range"
+    kids = n.kids
+    if k == "str":
+        return fine < 0 and "range" in n.s  # (an annotation's text)
+    if k == "call" and kids[0].kind == "name" and kids[0].s == "range":
+        if fine <= 0:
+            return True
+        for i in range(1, len(kids)):
+            if range_values(kids[i], 0):
+                return True
+        return False
+    how = 0  # (the call's arguments where range(...) is no value, as RANGE_TAKERS says, or 4: the
+    # first, 5: the second at level 2)
+    if k == "call" and kids[0].kind == "attr":
+        how = RANGE_METHODS.get(kids[0].s, 0)
+    elif k == "call" and kids[0].kind == "name":
+        f = kids[0].s
+        how = RANGE_TAKERS.get(f, 0)
+        if fine == 1 and f == "reversed" and len(kids) == 2:
+            how = 4
+        elif fine == 1 and (f == "map" or f == "filter") and len(kids) == 3:
+            how = 5
+    if how != 0:
+        npos = 0
+        for i in range(1, len(kids)):
+            if kids[i].kind != "kw" and kids[i].kind != "starred" and kids[i].kind != "dstar":
+                npos += 1
+        if range_values(kids[0], 0):
+            return True
+        at = 0
+        for i in range(1, len(kids)):
+            a = kids[i]
+            ok = 0
+            if a.kind != "kw" and a.kind != "starred" and a.kind != "dstar":
+                at += 1
+                if how == 3 or ((how == 1 or how == 4 or (how == 2 and npos == 1)) and at == 1):
+                    ok = 1
+                elif how == 5 and at == 2:
+                    ok = 2
+            if range_values(a, ok):
+                return True
+        return False
+    for i in range(len(kids)):
+        x = kids[i]
+        ok = -1 if fine < 0 else 0  # (the rest of an annotation)
+        if (k == "for" and i == 1) or (k == "compfor" and n.s == "" and i == 1) or (k == "yield" and n.s == "from"):
+            ok = 1
+        elif k == "listcomp" and n.s != "async" and i == 2:
+            ok = 2 if n.s == "gen" else 1
+        elif k == "cmp" and (n.s == "in" or n.s == "not in") and i == 1:
+            ok = 1
+        elif k == "assign" and len(kids) == 2 and i == 1 and (kids[0].kind == "slice" or starred_target(kids[0])):
+            ok = 1
+        elif ((k == "param" or k == "starparam" or k == "dstarparam") and i == 0) or (k == "def" and i == 1) or (k == "annassign" and i == 1):
+            ok = -1  # (an annotation)
+        elif (k == "list" or k == "tuple") and x.kind == "starred":
+            if range_values(x.kids[0], 1):
+                return True
+            continue
+        if range_values(x, ok):
+            return True
+    return False
 
 
 def builtins_names(n: Node, out: dict[str, bool]) -> None:

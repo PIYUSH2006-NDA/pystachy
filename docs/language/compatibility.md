@@ -686,9 +686,15 @@ supported alternatives.
 
 ### Builtins
 
-- `range()`, `enumerate()`, `zip()` or `reversed()` nested inside `enumerate()`, `zip()` or
-  `reversed()` in supported loops or consumers, and `zip(strict=...)`. Materialize the inner
-  expression as a list first. `reversed(range(...))` is supported.
+- `enumerate()`, `zip()` or `reversed()` nested inside `enumerate()`, `zip()` or `reversed()`
+  in supported loops or consumers, and `zip(strict=...)`. Materialize the inner expression as a
+  list first. `reversed(range(...))` is supported, and a `range()` in `enumerate()` or `zip()` is
+  a [range object](semantics.md#range-objects).
+- of a [range object](semantics.md#range-objects): ordering comparisons and assigning its
+  attributes (CPython's `TypeError` and `AttributeError`); `in` of other than an int or a bool,
+  and indexing, `index()` and `count()` of other than an int (CPython takes a bool as an int, and
+  compares other values with the items); `==` with a value that may be `None` but is not a range;
+  `dir()` and `vars()`
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
 - a `key=` that may be `None` (`Callable | None`) of items that have no order without a key (a
   closed union, functions)
