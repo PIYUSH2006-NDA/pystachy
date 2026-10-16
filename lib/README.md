@@ -96,7 +96,8 @@ loads those files for `import binascii`, `import _codecs`, `import atexit`, `imp
 `tools/unicodedata_tables.py` writes the tables of `unicodedata`, `_pystachy_unicodedata_db.py` and
 `_pystachy_unicodedata_names.py`, from CPython's own module.
 `_pystachy_abc.py` is `abc`, which CPython imports as it starts, so that a program's own `abc.py`
-is never imported there.
+is never imported there. `_collections_abc` has no file here: it is the compiler's builtin
+`collections.abc`, as CPython's `collections` makes it `collections.abc`.
 
 `_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers
 (`list_iterator`, `dict_keyiterator`, ...). The compiler loads it for a program that calls

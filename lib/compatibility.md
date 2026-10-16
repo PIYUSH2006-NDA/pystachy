@@ -154,8 +154,8 @@ arguments, an annotation (`q: deque[int] = deque()`,
 (`Counter[str]()`). Parameters, returns and fields can name them. The compiled
 types are fixed; a deque's items may be an explicitly supported union such as
 `int | str`, and mapping keys are the supported dict key types. The package binds `abc` to
-the builtin `collections.abc`, as CPython's binds it to `_collections_abc`, and its
-`__doc__` is its own docstring.
+the builtin `collections.abc`, as CPython's binds it to `_collections_abc`, which is that builtin
+module too, and its `__doc__` is its own docstring.
 
 `deque` supports both ends, optional `maxlen`, extension, rotation,
 insertion/removal, indexing, containment/search, copies, comparisons, repetition
@@ -166,7 +166,8 @@ containment and `remove`) read live items and detect structural mutations with
 CPython's operation-specific errors; same-size replacements are preserved.
 
 The mappings hold dicts rather than derive from `dict`, so `isinstance(x, dict)`
-is false. They support indexing, assignment, `del`, `in`, `len`, iteration,
+and `isinstance(x, collections.abc.Mapping)` are false. They support indexing,
+assignment, `del`, `in`, `len`, iteration,
 `reversed()`, `keys()`, `values()`, `items()`, `get`, `pop`, `popitem`,
 `setdefault`, `clear`, `update`, `copy` and equality with each other and with a
 dict on the right; any other operand, such as `None`, is unequal, as CPython's

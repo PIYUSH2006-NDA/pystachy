@@ -221,6 +221,18 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
            "Container Callable Collection Set MutableSet Mapping MutableMapping MappingView KeysView ItemsView ValuesView Sequence "
            "MutableSequence ByteString Buffer").split():
     ABCS[_k] = True
+# the other names of CPython's collections.abc, the module _collections_abc (collections binds
+# sys.modules['collections.abc'] to it), that Pystachy lacks: its helpers, the types of the
+# iterators, views and functions it names, its imports, and a module's attributes. An import of
+# one is rejected (ABCSOTHER), not an ImportError that an except clause would handle
+ABCSMORE: dict[str, bool] = {}
+for _k in ("ABCMeta EllipsisType FunctionType GenericAlias _CallableGenericAlias _DeprecateByteStringMeta _check_methods "
+           "_is_param_expr _type_repr abstractmethod sys async_generator coroutine generator bytearray_iterator bytes_iterator "
+           "dict_itemiterator dict_items dict_keyiterator dict_keys dict_valueiterator dict_values framelocalsproxy list_iterator "
+           "list_reverseiterator longrange_iterator mappingproxy range_iterator set_iterator str_iterator tuple_iterator "
+           "zip_iterator __all__ __builtins__ __doc__ __file__ __loader__ __name__ __package__ __spec__").split():
+    ABCSMORE[_k] = True
+ABCSOTHER = "collections.abc.NAME is not supported: Pystachy's collections.abc (which _collections_abc is too) has only the ABCs"
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
 RANGES = "_pystachy_range"  # lib's module of the class of range objects, range() as a value (Loader.program)

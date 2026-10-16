@@ -1,0 +1,6 @@
+True True True False
+True True True False
+False False False
+['a', 'b'] 6 [0, 1, 2] 18
+True False False ['x', 'y'] None
+[exit 0]

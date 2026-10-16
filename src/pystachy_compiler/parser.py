@@ -983,6 +983,11 @@ class Parser:
                 if self.eat("as"):
                     name = self.expect("id").text
                     tgt = path
+                if path == "_collections_abc":
+                    # import collections.abc as _collections_abc (CPython's collections binds
+                    # sys.modules['collections.abc'] to this module: one module, of two names)
+                    path = "collections.abc"
+                    tgt = path
                 n.kids.append(mk("alias", name, line, [mk("str", tgt, line, []), mk("str", path, line, [])]))
                 self.no_debug(name, line)
                 if not self.eat(","):
@@ -1012,6 +1017,11 @@ class Parser:
             # from collections import abc: import collections.abc as abc (a builtin module)
             n.s = ""
             for a in n.kids:
+                a.kids[1].s = "collections.abc"
+        if path == "_collections_abc" and n.s == "from":
+            # from collections.abc import ... (the same module, as for import _collections_abc)
+            for a in n.kids:
+                a.kids[0].s = "collections.abc" + a.kids[0].s[16:]
                 a.kids[1].s = "collections.abc"
         return n
 
