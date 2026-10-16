@@ -1650,7 +1650,11 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
         items = vals[:s] + [rest] + vals[n - after :]
     else:
         if v.t in self.classes:
-            xs = self.obj_iter(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            xs = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            if not is_list(xs.t):
+                # (UNPACK_EX takes list() of the iterator, which calls iter() of it again)
+                xs = self.obj_iterator(xs, "", f"'{tname(xs.t)}' object is not iterable")
+            xs = xs if is_list(xs.t) else self.drain(xs)
         elif v.t == "str":
             xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
         else:

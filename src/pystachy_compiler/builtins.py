@@ -990,8 +990,12 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         self.notnone(v, "TypeError: must assign iterable to extended slice" if name == "slice" else "TypeError: 'NoneType' object is not iterable")
         v = self.ntup(v, True)
     if v.t in self.classes and name == "slice":
-        # (xs[a:b] = v: CPython's PySequence_Fast iterates v, calling no __len__)
-        return self.obj_iter(v, "TypeError: must assign iterable to extended slice", "must assign iterable to extended slice")
+        # (xs[a:b] = v: CPython's PySequence_Fast iterates v, calling no __len__: list() of iter(v),
+        # which calls iter() of an iterator object again)
+        items = self.obj_iterator(v, "TypeError: must assign iterable to extended slice", "must assign iterable to extended slice")
+        if not is_list(items.t):
+            items = self.obj_iterator(items, "", f"'{tname(items.t)}' object is not iterable")
+        return items if is_list(items.t) else self.drain(items)
     if v.t in self.classes:
         items = self.obj_iterator(v, "TypeError: can only join an iterable" if name == "join" else "TypeError: 'NoneType' object is not iterable",
                                   "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")

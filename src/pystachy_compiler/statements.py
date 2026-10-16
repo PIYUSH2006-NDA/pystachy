@@ -1224,8 +1224,9 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
         seq = self.set_display(it, "", True)
     else:
         seq = self.iterable(self.expr(it, ""))
-    if n.s == "comp" and self.is_iterator(seq.t):
-        # a comprehension's iterator object: CPython 3.13 takes iter() of it again, its __iter__
+    if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(seq.t):
+        # a comprehension's iterator object (of any of its for clauses): CPython 3.13 takes iter()
+        # of it again, its __iter__
         seq = self.obj_iterator(seq, "", f"'{tname(seq.t)}' object is not iterable")
     if seq.t == "tuple[]":
         self.iterarg(arg)
