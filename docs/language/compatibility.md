@@ -263,11 +263,21 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   dropped writers can land out of order.
 
 - A suspended generator that the program drops (a variable that goes, `del`, a generator kept
-  only in a container) is never closed: its `finally` blocks and `with` blocks do not run, where
-  CPython closes it as its last reference goes. A generator that a `for` loop's iterable has
-  just made is closed as CPython closes it, where the loop is left, and so is a generator that
-  `yield from` delegates to when its delegating generator is closed so.
-  (`tests/deviations/gen_finalization.py`)
+  only in a container, a temporary such as `next(g())`'s) is never closed: its `finally` blocks
+  and `with` blocks do not run, where CPython closes it as its last reference goes. A generator
+  that a `for` loop's iterable has just made is closed as CPython closes it, where the loop is
+  left, and so is a generator that `yield from` delegates to when its delegating generator is
+  closed so. (`tests/deviations/gen_finalization.py`) Where an exception leaves a consumer's
+  generator expression (`any(f(x) for x in g())`), the generator it iterates is closed before
+  the handler runs; CPython closes it once the handler has finished, as the exception's
+  traceback holds the expression's frame until then. (`tests/deviations/gen_genexp_close_timing.py`)
+
+- In a program without `try` or `with` statements, a `StopIteration` raised by a function that a
+  generator calls ends the program as `StopIteration`, where PEP 479 makes it
+  `RuntimeError: generator raised StopIteration` as it leaves the generator; nothing could catch
+  either, and the exit status is the same. A `raise StopIteration` or a `next()` in the
+  generator's own body is converted, and so is everything in a program with `try` or `with`.
+  (`tests/deviations/gen_pep479_no_try.py`)
 
 - What closing a generator raises (other than `GeneratorExit`) is reported, not propagated, when
   a `yield from` closes the generator it delegates to: CPython raises it in the delegating
