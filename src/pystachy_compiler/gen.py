@@ -76,6 +76,7 @@ from src.pystachy_compiler.builtins import (
     gen_reduce as builtins_reduce,
     gen_reduce_item as builtins_reduce_item,
     gen_reverse_arg as builtins_reverse_arg,
+    gen_bytes_ as builtins_bytes_,
     gen_reverse_val as builtins_reverse_val,
     gen_stream_start as builtins_stream_start,
     gen_update as builtins_update,
@@ -300,6 +301,7 @@ from src.pystachy_compiler.emission import (
     gen_runtime as emission_runtime,
     gen_save as emission_save,
     gen_sconst as emission_sconst,
+    gen_bconst as emission_bconst,
     gen_select as emission_select,
     gen_tmp as emission_tmp,
     gen_unreachable as emission_unreachable,
@@ -729,6 +731,7 @@ class Gen:
         self.consts: list[Data] = []
         self.bconsts: dict[str, Val] = {}  # builtin module singleton values
         self.strs: dict[str, str] = {}
+        self.bstrs: dict[str, str] = {}  # the name of each bytes constant (@b.N), by its bytes
         self.strvals: list[str] = []  # the text of each @s.N
         self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)
         # the runtime functions declared, by RUNTIME key, in the order of their first use (which
@@ -1046,6 +1049,9 @@ class Gen:
 
     def sconst(self, s: str) -> str:
         return emission_sconst(self, s)
+
+    def bconst(self, s: str) -> str:
+        return emission_bconst(self, s)
 
     def alloca(self, t: str, name: str) -> str:
         return emission_alloca(self, t, name)
@@ -2581,6 +2587,9 @@ class Gen:
     def reverse_arg(self, n: Node, name: str) -> str:
         return builtins_reverse_arg(self, n, name)
 
+    def bytes_(self, args: list[Node]) -> Val:
+        return builtins_bytes_(self, args)
+
     def reverse_val(self, r: Val, name: str) -> str:
         return builtins_reverse_val(self, r, name)
 
@@ -2674,8 +2683,8 @@ class Gen:
     def fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) -> Val:
         return containers_fromkeys(self, args, want, resultsoft)
 
-    def affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
-        return containers_affix_any(self, tup, m, av)
+    def affix_any(self, tup: Val, m: str, av: list[str], base: str = "str") -> Val:
+        return containers_affix_any(self, tup, m, av, base)
 
     def optdefault(self, d: Val, t: str) -> str:
         return containers_optdefault(self, d, t)

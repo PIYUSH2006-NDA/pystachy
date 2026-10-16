@@ -28,7 +28,7 @@
 #   #277's)
 # - test_callable (callable() is not supported), test_issubclass (issubclass() is not supported),
 #   test_types (types as values: bool(t) for t in [bool, complex, ...]), test_real_and_imag
-#   (True.real is not supported), test_bool_new (bool.__new__), test_from_bytes (bytes)
+#   (True.real is not supported), test_bool_new (bool.__new__), test_from_bytes (bool.from_bytes)
 # - test_operator's operator.is_ and operator.is_not of bools (`is` between bools is rejected)
 # - test_marshal, test_pickle and test_picklevalues (marshal, pickle)
 # - test_convert_to_bool's Foo and Bar, whose __bool__ returns no bool: compile-time errors with

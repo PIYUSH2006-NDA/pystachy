@@ -152,8 +152,8 @@ for locked installs, the ports wheel and standalone executables.
 Pystachy is experimental and supports a subset of Python. It is a good fit for typed,
 algorithmic code; broad compatibility with arbitrary PyPI packages is still limited.
 
-- Ordinary single inheritance is supported; multiple inheritance, generators, `async` and
-  `bytes` are not. See the [class rules](docs/language/typing.md#single-inheritance).
+- Ordinary single inheritance is supported; multiple inheritance, generators, `async`,
+  `bytearray` and binary files are not. See the [class rules](docs/language/typing.md#single-inheritance).
 - Integers are checked 64-bit values; overflow raises `OverflowError`.
 - Strings store UTF-8 bytes, so indexing and length differ from CPython for non-ASCII text.
   Use the opt-in [Unicode porting audit](docs/language/compatibility.md#text-and-file-positions)

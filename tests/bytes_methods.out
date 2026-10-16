@@ -1,0 +1,26 @@
+b'Hello, World' b'Hello, World  ' b'  Hello, World' b'ello, World' b'hi'
+b'  HELLO, WORLD  ' b'  hello, world  ' b'  hELLO, wORLD  ' b'Hello world'
+[b'a', b'b', b'', b'c'] [b'a', b'b,,c'] [b'a,b,', b'c'] [b'a', b'b', b'c'] [b'a', b'b']
+b'x-y-z' b'' b'p, q'
+1 4 -1 2 4 3 7
+True True True True
+b'a;b;;c' b'ab,c' (b'a', b',', b'b,,c') (b'a,b,', b',', b'c') (b'a,b,,c', b'', b'')
+b'body' b'body'
+True True True True True True False True
+b'x  ' b'**x' b'--x--' b'00042' b'-007'
+[b'l1', b'l2', b'l3', b'l4'] [b'a\n', b'b\n'] [b'x\x0by']
+deadbeef  b'\xde\xad\xbe\xef' b''
+b'' b'\x00\x00\x00' b'ABC' b'copy' b'h\xc3\xa9' b'abc'
+b'h\xc3\xa9llo' b'h\xc3\xa9llo' b'abc' b'h\xe9'
+héllo héllo abc hé
+a�b ab a\xffb
+b'a\xffb'
+b'?' b'' b'\\u20ac' b'&#8364;'
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc3 in position 1: unexpected end of data
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xed in position 0: invalid continuation byte
+UnicodeEncodeError: 'ascii' codec can't encode character '\u20ac' in position 0: ordinal not in range(128)
+ValueError: bytes must be in range(0, 256)
+ValueError: non-hexadecimal number found in fromhex() arg at position 0
+True False 3 122 [97, 98, 99]
+[exit 0]
