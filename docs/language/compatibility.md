@@ -164,11 +164,6 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
-- A PEP 695 function's type parameter hides a module-level name of the same name only in the
-  function's annotations: its body reads the module's (`T = 5` then
-  `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
-  `+` raises `TypeError`). A generic class's type parameters hide it in its methods' bodies too.
-
 ### Errors and control flow
 
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant

@@ -636,6 +636,7 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
+        self.typevars.extend(m.deftps)
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):

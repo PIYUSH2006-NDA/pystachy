@@ -578,7 +578,9 @@ class Parser:
         if self.tp_mentions(ret, tps):
             self.dropped(line, mk("annotation", "", line, [ret]))
             ret = mk("noann", " ".join(tps), line, [ret])
-        return mk("def", name, line, [params, ret, self.scope(True)])
+        body = self.scope(True)
+        body.s = " ".join(tps)  # (which name type variables of their own in it: Loader.qstmts)
+        return mk("def", name, line, [params, ret, body])
 
     def tp_mentions(self, a: Node, tps: list[str]) -> bool:
         # (funcdef) does annotation a mention one of type parameters tps, also in a string, a

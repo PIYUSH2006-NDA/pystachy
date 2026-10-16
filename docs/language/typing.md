@@ -579,8 +579,8 @@ PEP 695 syntax declares the same class: `class Box[T]:` is `class Box(Generic[T]
 type variables of its own, which hide a module-level name `T` (but where a method's `global T`
 names it), and `class Row[*Ts, R]:` is `Generic[*Ts, R]`. A bound, constraints or a default
 (`class Num[T: (int, float)]`) is not checked: the arguments' types bind the variable, as for
-a `TypeVar`. A PEP 695 function's type parameters hide a module-level name only in its
-annotations; its body reads the module's ([a deviation](compatibility.md#functions-and-object-identity)).
+a `TypeVar`. A PEP 695 function's type parameters hide a module-level name in its annotations
+and body, as a class's do in its methods; a read of one as a value is a `TypeVar`'s error.
 
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), `Callable[[A, *Ts], R]`,
