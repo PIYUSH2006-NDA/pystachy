@@ -168,6 +168,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
+- A key object (an instance of a class that defines `__call__`) that is `None` when `sorted()`,
+  `list.sort()`, `min()` or `max()` runs is no key, as in CPython, but where the items have no
+  order without a key here (a closed union, functions): it is called then, raising
+  `TypeError: 'NoneType' object is not callable`, where CPython orders the items.
+
 - A PEP 695 function's type parameter hides a module-level name of the same name only in the
   function's annotations: its body reads the module's (`T = 5` then
   `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
@@ -633,6 +638,8 @@ supported alternatives.
   `reversed()` in supported loops or consumers, and `zip(strict=...)`. Materialize the inner
   expression as a list first. `reversed(range(...))` is supported.
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
+- a `key=` that may be `None` (`Callable | None`) of items that have no order without a key (a
+  closed union, functions)
 - `dict.update()` of a dict of other key or value types, of an iterable other than a list of
   `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without

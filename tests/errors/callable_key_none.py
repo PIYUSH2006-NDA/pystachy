@@ -1,10 +1,11 @@
-# error: callable_key_none.py:10: error: a key that may be None (Callable[[int], int] | None) is not supported (the key of sorted()): test it with 'is not None' first
+# error: callable_key_none.py:11: error: a key that may be None (Callable[[int | str], str] | None) is not supported for items of type int | str (the key of sorted()): test it with 'is not None' first
 from typing import Callable
 
 
-def neg(x: int) -> int:
-    return -x
+def text(x: int | str) -> str:
+    return str(x)
 
 
-k: Callable[[int], int] | None = neg
-print(sorted([3, 1, 2], key=k))
+k: Callable[[int | str], str] | None = text
+xs: list[int | str] = [3, 1, 2]
+print(sorted(xs, key=k))
