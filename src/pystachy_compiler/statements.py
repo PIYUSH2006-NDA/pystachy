@@ -1,7 +1,7 @@
 """Statements component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
-from src.pystachy_compiler.analysis import builtin_has, local_names
+from src.pystachy_compiler.analysis import appends_to, builtin_has, local_names
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, StopCatch, Val
 from src.pystachy_compiler.names import owner, short
@@ -494,6 +494,8 @@ def gen_stmt(self, n: Node) -> None:
         if len(n.kids) == 2 and t0.kind == "name" and t0.s in self.curfn.rlocals and val.kind != "name":
             v = self.expr(val, self.curfn.rctx) if val.kind == "call" and ekind == "" else self.retval(val, self.target_type(t0))
             self.assign(t0, v)
+        elif appends_to(n) and self.owns(t0.s):
+            self.str_append(t0, val.kids[1], "")
         elif len(n.kids) == 2 and t0.kind == "name" and ekind != "" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
             self.assign(t0, self.empty(ekind, t0.s))
         elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "call" and len(val.kids) == 2 and val.kids[0].kind == "name" and val.kids[0].s == "dict" and not self.bound("dict") and val.kids[1].kind == "name" and self.static_type(val.kids[1]) == "kw[]" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
@@ -983,6 +985,8 @@ def gen_augassign(self, n: Node) -> None:
         self.refine(t.s, self.ctype("set", [selem(v.t)]))
         self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"], self.key_fx(selem(self.qtype(t.s))))
         self.store_name(t.s, Val(cur.v, self.qtype(t.s)))
+    elif t.kind == "name" and op == "+" and self.owns(t.s):
+        self.str_append(t, n.kids[1], "+=")
     elif t.kind == "name":
         cur = self.read(t)
         self.store_name(t.s, self.inplace(op, cur, n.kids[1]))
@@ -1070,6 +1074,31 @@ def gen_augassign(self, n: Node) -> None:
             self.err(f"'{o.t}' does not support item assignment")
     else:
         self.err("invalid target for augmented assignment")
+
+def gen_owns(self, name: str) -> bool:
+    # does str_append compile an append to name here: a str local with an owned flag
+    return name in self.owned and self.ltype.get(name, "") == "str" and name not in self.compvars
+
+def gen_str_append(self, t: Node, rhs: Node, shown: str) -> None:
+    # t += rhs, or t = t + rhs (shown ""), of a str local t that has an owned flag (owns). The
+    # flag is 1 where t holds a str that an append made and that nothing else holds, which
+    # pys_str_iadd then writes in place while its memory has room: every other read of t clears
+    # it before it loads t (load_name), as what reads t may keep its str (in a list, a field, a
+    # variable), and so does every other store (store_name). The flag is loaded once rhs has
+    # run, as rhs may read t (t += t copies t). A str is hashed only through a read, so an owned
+    # one's dict_hash is still 0
+    self.appending = True
+    cur = self.read(t)
+    self.appending = False
+    b = self.expr(rhs, "str")
+    own = Val(self.owned[t.s], "*int")
+    if b.t != "str":
+        self.mem_store(own, Val("0", "int"))  # (an optional str, or an error: arith's +, a read of cur as any other)
+        self.store_name(t.s, self.arith("+", cur, b, shown))
+        return
+    r = self.rt("pys_str_iadd", "ptr", [f"ptr {cur.v}", f"ptr {b.v}", f"i64 {self.mem_load(own).v}"])
+    self.store_name(t.s, Val(r, "str"))
+    self.mem_store(own, Val("1", "int"))
 
 def gen_may_change(self, b0: Blk, x0: int, n0: int) -> bool:
     # may an op built since position x0 of block b0, or in a block placed after the first n0
