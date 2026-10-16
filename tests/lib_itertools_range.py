@@ -1,0 +1,41 @@
+# itertools' functions take ranges as values (lib/_pystachy_itertools.py): each calls iter() of a
+# range, or reads it whole (the combinatoric functions, cycle(), tee()), as CPython does.
+import operator
+from itertools import (accumulate, batched, chain, combinations, combinations_with_replacement, compress, count,
+                       cycle, dropwhile, filterfalse, groupby, islice, pairwise, permutations, product, repeat,
+                       starmap, takewhile, tee, zip_longest)
+
+print(list(combinations(range(4), 2)))
+print(list(product(range(2), repeat=3)))
+print(list(islice(range(10), 2, 8, 2)))
+print(list(chain(range(3), range(2))))
+print(list(zip_longest(range(3), range(5))))
+print(list(accumulate(range(5))))
+print(list(batched(range(7), 3)))
+print(list(pairwise(range(4))))
+print(list(islice(cycle(range(3)), 7)))
+print(list(compress(range(5), [1, 0, 1])))
+print([(k, list(g)) for k, g in groupby(range(10), key=lambda x: x // 3)])
+a, b = tee(range(3))
+print(list(a), list(b))
+print(list(permutations(range(3))))
+print(list(combinations_with_replacement(range(3), 2)))
+print(list(starmap(operator.add, [(1, 2), (3, 4)])))
+print(list(takewhile(lambda x: x < 3, range(10))))
+print(list(dropwhile(lambda x: x < 3, range(6))))
+print(list(filterfalse(lambda x: x % 2, range(6))))
+print(list(filterfalse(None, [0, 1, 0, 2])))
+print(list(chain.from_iterable([range(2), range(3)])))
+print(list(product(range(2), "ab")))
+print(list(accumulate(range(1, 6), operator.mul)))
+print(list(accumulate([1, 2, 3], initial=10)))
+e: list[int] = []
+print(list(accumulate(e, initial=10)), list(accumulate(range(0), initial=10)), list(accumulate(range(0))))
+print(list(islice(count(), 3)), list(islice(count(2.5, 0.5), 3)), list(islice(count(1, 2), 3)))
+print(list(repeat(range(2), 2)), list(repeat(1, times=2)))
+print(list(islice(range(1, 100, 7), 3, None)), list(islice(range(10, 0, -1), 4)), list(batched(range(0, 20, 3), 4)))
+print(list(zip_longest(range(2), range(4), fillvalue=-1)), list(product(range(3), range(0))))
+r = range(5)
+print(list(chain(r, r)), list(pairwise(r)), list(combinations(r, 4)), list(compress(r, r)))
+print([list(t) for t in tee(range(4), 3)])
+print(list(islice(cycle(range(0)), 3)), list(permutations(range(3), 0)), list(combinations_with_replacement(range(0), 1)))

@@ -13,8 +13,8 @@
 # Each test method becomes a function of the same name (a class's own tests are prefixed with
 # the class); assertEqual(a, b) prints a and asserts a == b, assertTrue(x) asserts x, and
 # assertRaises(E, f, ...) is a try statement that prints the error. Loops over many cases assert
-# without printing. A range as a value is list(range(...)) (iter(range(...)) where the test
-# reads an iterator); lzip(a, b) is list(zip(a, b)); fact() is math.factorial(); an empty list
+# without printing. Ranges are values, as upstream; lzip(a, b) is list(zip(a, b)); fact() is
+# math.factorial(); a loop over islice()'s argument tuples slices a list of a range; an empty list
 # that nothing types is an annotated variable. A loop over helper classes or functions (G, I,
 # Ig, S, L, R; chain, cycle, ...) is a statement for each, and a loop over test values of
 # different types (("123", "", range(1000), ...)) a call of a function for each; L() is
@@ -150,8 +150,8 @@ def errfunc(x: int) -> bool:
 # --- TestBasicOps ---
 
 def test_accumulate() -> None:
-    check("accumulate(range(10))", list(accumulate(iter(range(10)))), [0, 1, 3, 6, 10, 15, 21, 28, 36, 45])
-    check("iterable=", list(accumulate(iterable=list(range(10)))), [0, 1, 3, 6, 10, 15, 21, 28, 36, 45])
+    check("accumulate(range(10))", list(accumulate(range(10))), [0, 1, 3, 6, 10, 15, 21, 28, 36, 45])
+    check("iterable=", list(accumulate(iterable=range(10))), [0, 1, 3, 6, 10, 15, 21, 28, 36, 45])
     check("abc", list(accumulate('abc')), ['a', 'ab', 'abc'])
     empty: list[int] = []
     check("[]", list(accumulate(empty)), empty)
@@ -229,7 +229,7 @@ def test_chain_from_iterable() -> None:
     check("one", list(chain.from_iterable(['abc'])), list('abc'))
     check_empty("empty", list(chain.from_iterable([''])))
     check("take", take(4, chain.from_iterable(['abc', 'def'])), list('abcd'))
-    check("repeat", list(islice(chain.from_iterable(repeat(list(range(5)))), 2)), [0, 1])
+    check("repeat", list(islice(chain.from_iterable(repeat(range(5))), 2)), [0, 1])
 
 
 def combinations1(iterable, r: int):
@@ -256,7 +256,7 @@ def combinations2(iterable, r: int):
     'Pure python version shown in the docs'
     pool = tuple(iterable)
     n = len(pool)
-    for indices in permutations(list(range(n)), r):
+    for indices in permutations(range(n), r):
         if sorted(indices) == list(indices):
             yield tuple(pool[i] for i in indices)
 
@@ -265,7 +265,7 @@ def combinations3(iterable, r: int):
     'Pure python version from cwr()'
     pool = tuple(iterable)
     n = len(pool)
-    for indices in combinations_with_replacement(list(range(n)), r):
+    for indices in combinations_with_replacement(range(n), r):
         if len(set(indices)) == r:
             yield tuple(pool[i] for i in indices)
 
@@ -280,8 +280,8 @@ def test_combinations() -> None:
     testIntermediate = combinations('ABCD', 2)
     next(testIntermediate)
     check("intermediate", list(testIntermediate), strs([('A', 'C'), ('A', 'D'), ('B', 'C'), ('B', 'D'), ('C', 'D')]))
-    check("range 3", list(combinations(list(range(4)), 3)), ints([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]))
-    testIntermediate2 = combinations(list(range(4)), 3)
+    check("range 3", list(combinations(range(4), 3)), ints([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]))
+    testIntermediate2 = combinations(range(4), 3)
     next(testIntermediate2)
     check("intermediate 2", list(testIntermediate2), ints([(0, 1, 3), (0, 2, 3), (1, 2, 3)]))
     for n in range(7):
@@ -325,7 +325,7 @@ def cwr2(iterable, r: int):
     'Pure python version shown in the docs'
     pool = tuple(iterable)
     n = len(pool)
-    for indices in product(list(range(n)), repeat=r):
+    for indices in product(range(n), repeat=r):
         if sorted(indices) == list(indices):
             yield tuple(pool[i] for i in indices)
 
@@ -399,7 +399,7 @@ def permutations2(iterable, r=None):
     pool = tuple(iterable)
     n = len(pool)
     rr = n if r is None else r
-    for indices in product(list(range(n)), repeat=rr):
+    for indices in product(range(n), repeat=rr):
         if len(set(indices)) == rr:
             yield tuple(pool[i] for i in indices)
 
@@ -414,7 +414,7 @@ def test_permutations() -> None:
         permutations('abc', 's')
     except TypeError as e:
         print("TypeError", e)
-    check("range 2", list(permutations(list(range(3)), 2)), ints([(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]))
+    check("range 2", list(permutations(range(3), 2)), ints([(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]))
     for n in range(7):
         values = [5 * x - 12 for x in range(n)]
         for r in range(n + 2):
@@ -474,7 +474,7 @@ def test_compress() -> None:
     check("short selectors", list(compress('ABCDEF', [1, 0, 1])), list('AC'))
     check("short data", list(compress('ABC', [0, 1, 1, 1, 1, 1])), list('BC'))
     n = 10000
-    data = chain.from_iterable(repeat(list(range(6)), n))
+    data = chain.from_iterable(repeat(range(6), n))
     selectors = chain.from_iterable(repeat([0, 1]))
     check("long", list(compress(data, selectors)) == [1, 3, 5] * n, True)
 
@@ -565,7 +565,7 @@ def test_groupby() -> None:
 
     # Check case where inner iterator is used after advancing the groupby
     # iterator
-    s2 = list(zip('AABBBAAAA', list(range(9))))
+    s2 = list(zip('AABBBAAAA', range(9)))
     it = groupby(s2, lambda r: r[0])
     _, g1 = next(it)
     _, g2 = next(it)
@@ -623,7 +623,7 @@ def test_groupby() -> None:
 
 
 def test_filterfalse() -> None:
-    check("isEven", list(filterfalse(isEven, list(range(6)))), [1, 3, 5])
+    check("isEven", list(filterfalse(isEven, range(6))), [1, 3, 5])
     check("None", list(filterfalse(None, [0, 1, 0, 2, 0])), [0, 0, 0])
     check("bool", list(filterfalse(bool, [0, 1, 0, 2, 0])), [0, 0, 0])
     check("count", take(4, filterfalse(isEven, count())), [1, 3, 5, 7])
@@ -706,7 +706,7 @@ def test_pairwise() -> None:
     check_empty("a", list(pairwise('a')))
     check("ab", list(pairwise('ab')), [('a', 'b')])
     check("abcde", list(pairwise('abcde')), [('a', 'b'), ('b', 'c'), ('c', 'd'), ('d', 'e')])
-    check("10_000", list(pairwise(list(range(10_000)))) == list(zip(list(range(10_000)), list(range(1, 10_000)))), True)
+    check("10_000", list(pairwise(range(10_000))) == list(zip(range(10_000), range(1, 10_000))), True)
 
 
 def product1(pools: list[list[int]]):
@@ -747,16 +747,16 @@ def test_product() -> None:
     no_ints: list[int] = []
     check("zero", list(product()), [()])
     check("one", list(product('ab')), [('a',), ('b',)])
-    check("two", list(product(list(range(2)), list(range(3)))), [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)])
-    check_empty("first empty", list(product(no_ints, list(range(2)), list(range(3)))))
-    check_empty("middle empty", list(product(list(range(2)), no_ints, list(range(3)))))
-    check_empty("last empty", list(product(list(range(2)), list(range(3)), no_ints)))
+    check("two", list(product(range(2), range(3))), [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)])
+    check_empty("first empty", list(product(no_ints, range(2), range(3))))
+    check_empty("middle empty", list(product(range(2), no_ints, range(3))))
+    check_empty("last empty", list(product(range(2), range(3), no_ints)))
     for r in range(4):
-        assert list(product(list(range(2)), list(range(3)), repeat=r)) == list(product2([list(range(2)), list(range(3))], r))
-        assert list(product(no_ints, list(range(2)), repeat=r)) == list(product2([no_ints, list(range(2))], r))
-        assert list(product(list(range(2)), no_ints, repeat=r)) == list(product2([list(range(2)), no_ints], r))
+        assert list(product(range(2), range(3), repeat=r)) == list(product2([list(range(2)), list(range(3))], r))
+        assert list(product(no_ints, range(2), repeat=r)) == list(product2([no_ints, list(range(2))], r))
+        assert list(product(range(2), no_ints, repeat=r)) == list(product2([list(range(2)), no_ints], r))
     print("repeat checked")
-    check("7**6", len(list(product(list(range(7)), repeat=6))), 7 ** 6)
+    check("7**6", len(list(product(range(7), repeat=6))), 7 ** 6)
     random.seed(0)
     argtypes = ['', 'abc', '', 'abcd', 'abcdefg', 'abcdefghijk']
     for i in range(100):
@@ -774,7 +774,7 @@ def test_product() -> None:
 
 def test_repeat() -> None:
     check("keywords", list(repeat(object='a', times=3)), ['a', 'a', 'a'])
-    check("lzip", list(zip(list(range(3)), repeat('a'))), [(0, 'a'), (1, 'a'), (2, 'a')])
+    check("lzip", list(zip(range(3), repeat('a'))), [(0, 'a'), (1, 'a'), (2, 'a')])
     check("3", list(repeat('a', 3)), ['a', 'a', 'a'])
     check("take", take(3, repeat('a')), ['a', 'a', 'a'])
     check_empty("0", list(repeat('a', 0)))
@@ -788,7 +788,7 @@ def test_repeat() -> None:
 
 
 def test_starmap() -> None:
-    check("pow", list(starmap(operator.pow, [(x, y) for x, y in zip(list(range(3)), list(range(1, 7)))])), [0 ** 1, 1 ** 2, 2 ** 3])
+    check("pow", list(starmap(operator.pow, [(x, y) for x, y in zip(range(3), range(1, 7))])), [0 ** 1, 1 ** 2, 2 ** 3])
     check("take", take(3, starmap(operator.pow, ((x, y) for x, y in zip(count(), count(1))))), [0 ** 1, 1 ** 2, 2 ** 3])
     no_pairs: list[tuple[int, int]] = []
     check_empty("empty", list(starmap(operator.pow, no_pairs)))
@@ -933,7 +933,7 @@ def test_tee() -> None:
     check_empty("b", list(b))
 
     a2, b2 = tee(irange(n))  # test 100% interleaved
-    check("interleaved", list(zip(a2, b2)) == list(zip(list(range(n)), list(range(n)))), True)
+    check("interleaved", list(zip(a2, b2)) == list(zip(range(n), range(n))), True)
 
     a3, b3 = tee(irange(n))  # test 0% interleaved
     check("a3", list(a3) == list(range(n)), True)
@@ -968,7 +968,7 @@ def test_tee() -> None:
         print("TypeError", e)
 
     # test long-lagged and multi-way split
-    a6, b6, c6 = tee(list(range(2000)), 3)
+    a6, b6, c6 = tee(range(2000), 3)
     for i in range(100):
         assert next(a6) == i
     check("b6", list(b6) == list(range(2000)), True)
@@ -1002,7 +1002,7 @@ def test_tee() -> None:
     a8, b8 = tee('abc')
     check("copy a", list(a8.__copy__()), ans)
     check("copy b", list(b8.__copy__()), ans)
-    a9, b9 = tee(list(range(10000)))
+    a9, b9 = tee(range(10000))
     check("copy long a", list(a9.__copy__()) == long_ans, True)
     check("copy long b", list(b9.__copy__()) == long_ans, True)
 
@@ -1014,7 +1014,7 @@ def test_tee() -> None:
     check("partial b", list(b10.__copy__()), ans[1:])
     check("a", list(a10), ans[2:])
     check("b", list(b10), ans[1:])
-    a11, b11 = tee(list(range(10000)))
+    a11, b11 = tee(range(10000))
     take(100, a11)
     take(60, b11)
     check("partial long a", list(a11.__copy__()) == long_ans[100:], True)
@@ -1141,7 +1141,7 @@ def TestExamples_test_chain_from_iterable() -> None:
 
 def TestExamples_test_combinations() -> None:
     check("ABCD", list(combinations('ABCD', 2)), strs([('A', 'B'), ('A', 'C'), ('A', 'D'), ('B', 'C'), ('B', 'D'), ('C', 'D')]))
-    check("range", list(combinations(list(range(4)), 3)), ints([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]))
+    check("range", list(combinations(range(4), 3)), ints([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]))
 
 
 def TestExamples_test_combinations_with_replacement() -> None:
@@ -1170,7 +1170,7 @@ def TestExamples_test_groupby() -> None:
 
 
 def TestExamples_test_filterfalse() -> None:
-    check("filterfalse", list(filterfalse(lambda x: x % 2, list(range(10)))), [0, 2, 4, 6, 8])
+    check("filterfalse", list(filterfalse(lambda x: x % 2, range(10))), [0, 2, 4, 6, 8])
 
 
 def TestExamples_test_islice() -> None:
@@ -1186,12 +1186,12 @@ def TestExamples_test_zip_longest() -> None:
 
 def TestExamples_test_permutations() -> None:
     check("ABCD", list(permutations('ABCD', 2)), strs([tuple(t) for t in 'AB AC AD BA BC BD CA CB CD DA DB DC'.split()]))
-    check("range", list(permutations(list(range(3)))), ints([(0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)]))
+    check("range", list(permutations(range(3))), ints([(0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)]))
 
 
 def TestExamples_test_product() -> None:
     check("ABCD xy", list(product('ABCD', 'xy')), [(t[0], t[1]) for t in 'Ax Ay Bx By Cx Cy Dx Dy'.split()])
-    check("repeat", list(product(list(range(2)), repeat=3)),
+    check("repeat", list(product(range(2), repeat=3)),
           ints([(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1)]))
 
 

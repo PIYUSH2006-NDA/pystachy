@@ -62,11 +62,12 @@ except ImportError:
     from collections.abc import Sequence as _Sequence
 # Pystachy port: operator.index() is _operator's in CPython; where that is missing (Pystachy), the
 # lib/operator.py function calls __index__(), which Pystachy's int and bool have not: _index() gives
-# an int or a bool as an int, and calls the method of another type. itertools' accumulate() of
-# bool weights gives a bool and then ints, which a Pystachy list holds as a union that bisect()
-# cannot compare, so itertools is imported with _operator: where they are missing (Pystachy),
-# _accumulate() makes accumulate()'s running totals in a list (of ints for bools), and loops over
-# range(k) take the place of repeat(None, k)
+# an int or a bool as an int, and calls the method of another type. Pystachy's itertools
+# (lib/_pystachy_itertools.py) accumulates bool weights as a bool and then ints, which a list holds
+# as a union that bisect() cannot compare, so itertools is imported with _operator: where they are
+# missing (Pystachy), _accumulate() makes accumulate()'s running totals in a list (of ints for
+# bools), and loops over range(k) take the place of repeat(None, k), so that choices() and sample()
+# compile as before
 try:
     from _operator import index as _index
     from itertools import accumulate as _accumulate, repeat as _repeat
