@@ -71,6 +71,42 @@ from src.pystachy_compiler.utils import clone, int_fits
 
 
 
+def cm_names(body: Node) -> list[str]:
+    # the names module body imports contextlib's contextmanager as (contextmanager,
+    # contextlib.contextmanager, or another as)
+    out: list[str] = []
+    for st in body.kids:
+        for a in st.kids if st.kind == "import" else []:
+            if a.kind == "alias" and len(a.kids) == 2 and a.kids[0].s == "contextlib.contextmanager" and st.s == "from":
+                out.append(a.s)
+            elif a.kind == "alias" and len(a.kids) == 2 and a.kids[0].s == "contextlib" and st.s != "from":
+                out.append(a.s + ".contextmanager")
+    return out
+
+
+def cm_methods(n: Node, names: list[str]) -> None:
+    # a method decorated @contextmanager (names: as the module imports it) is the generator method
+    # _pys_cm_NAME, and NAME(self, /, *args, **kwds) returns contextmanager(self._pys_cm_NAME)(*args,
+    # **kwds): what CPython's helper does, bound to the object (the subset has no decorated methods)
+    for st in n.kids:
+        if st.kind == "class" or st.kind == "subclass":
+            b = st.kids[0] if st.kind == "class" else st.kids[0].kids[0]
+            kept: list[Node] = []
+            for d in b.kids:
+                if d.kind == "def" and len(d.kids) == 4 and d.kids[3].kind == "deco" and len(d.kids[3].kids) == 0 and d.kids[3].s in names and len(d.kids[0].kids) > 0 and d.kids[0].kids[0].kind == "param":
+                    me = d.kids[0].kids[0].s
+                    src = f"def {d.s}({me}, /, *args, **kwds):\n    return {d.kids[3].s}({me}._pys_cm_{d.s})(*args, **kwds)\n"
+                    w = Parser(Lexer(src, d.line).file()).module().kids[0]
+                    d.s = "_pys_cm_" + d.s
+                    d.kids = d.kids[:3]
+                    kept.append(d)
+                    kept.append(w)
+                else:
+                    kept.append(d)
+            b.kids = kept
+            cm_methods(b, names)
+
+
 def tb_import(n: Node) -> None:
     # from types import TracebackType (an __exit__'s annotation) imports lib/_pystachy_types.py's
     # TracebackType, which is all of types there is: an import of the module, or of any other name
@@ -191,6 +227,7 @@ class Loader:
         FILES.append(path)
         m.body = Parser(Lexer(src, 1).file()).module()
         tb_import(m.body)
+        cm_methods(m.body, cm_names(m.body))
         self.prescan(m)
         self.simplify(m, m.body, {})
         self.docstring(m)
@@ -459,6 +496,7 @@ class Loader:
         FILES.append(path[2:] if path.startswith("./") else path)
         self.parsed[path] = Parser(Lexer(src, k * LINES + 1).file()).module()
         tb_import(self.parsed[path])
+        cm_methods(self.parsed[path], cm_names(self.parsed[path]))
         return self.parsed[path]
 
     def bindings(self, m: Mod) -> None:

@@ -84,4 +84,6 @@ kw exit deco
 kw enter deco 2
 kw exit deco
 6 15
+caught 'in method manager' 0
+(x)::!12: 0
 [exit 0]

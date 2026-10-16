@@ -4,7 +4,8 @@
 # raises "generator didn't yield", "generator didn't stop" and "generator didn't stop after
 # throw()", lets StopIteration, GeneratorExit and the exceptions the generator raises instead go
 # on; a manager decorates a function (@cm()), with keyword arguments too; closing(),
-# nullcontext() and suppress(), which a with statement compiles as an except clause.
+# nullcontext() and suppress(), which a with statement compiles as an except clause; and
+# @contextmanager on methods.
 from collections.abc import Generator, Iterator
 import contextlib
 from contextlib import closing, contextmanager, nullcontext, suppress
@@ -256,3 +257,38 @@ def scaled(a: int, b: int = 2) -> int:
 
 
 print(scaled(3), scaled(3, b=5))
+
+
+class Writer:
+    # @contextmanager on methods (ast._Unparser's block() and delimit())
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.depth = 0
+
+    @contextmanager
+    def block(self, *, extra: str = "") -> Iterator[int]:
+        self.parts.append(":" + extra)
+        self.depth += 1
+        try:
+            yield self.depth
+        finally:
+            self.depth -= 1
+
+    @contextlib.contextmanager
+    def delimit(self, start: str, end: str) -> Iterator[None]:
+        self.parts.append(start)
+        yield
+        self.parts.append(end)
+
+
+w = Writer()
+with w.delimit("(", ")"):
+    w.parts.append("x")
+with w.block() as d1, w.block(extra="!") as d2:
+    w.parts.append(str(d1) + str(d2))
+try:
+    with w.block():
+        raise KeyError("in method manager")
+except KeyError as e:
+    print("caught", e, w.depth)
+print("".join(w.parts), w.depth)

@@ -237,7 +237,9 @@ be `None` is `opt[exc]`, both null for `None`. `__enter__` and `__exit__` are me
 (`utils.template_ok`), so an unannotated `__exit__` is compiled once for the exception's
 arguments and once for three `None`s. A program with such a class lets flow analysis end a
 `with` block anywhere (`Gen.cm_exits`). `contextlib.suppress(A, B)` as an item is the except
-clause `except (A, B): pass` (`statements.suppress_item`). A program that reads `__cause__`
+clause `except (A, B): pass` (`statements.suppress_item`), and the loader makes a method decorated
+`@contextmanager` the generator method `_pys_cm_NAME` and a method `NAME` that calls
+`contextmanager()` on it bound (`loader.cm_methods`). A program that reads `__cause__`
 (`Gen.causeread`) records it, `pys_exc_setcause`, for `raise ... from c` and PEP 479's
 `RuntimeError`.
 
