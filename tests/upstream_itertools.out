@@ -128,7 +128,7 @@ first empty []
 middle empty []
 last empty []
 repeat checked
-7**6 117649
+5**4 625
 random products checked
 keywords ['a', 'a', 'a']
 lzip [(0, 'a'), (1, 'a'), (2, 'a')]

@@ -23,6 +23,12 @@
 # of a list of pools, whose number only the run time knows, is product(*pools, repeat=1) of
 # a list of lists, and test_product's random argument lists are lists of strs. E's __next__
 # returns 3 // 0. tee(iterable, n) is a list (tests/deviations/lib_itertools_tee_list.py).
+# Upstream's sizes where a case is about size: make verify runs this program with a collection at
+# every allocation (gc-stress), where each allocation scans the live heap, so the same code runs
+# on smaller inputs: test_combinations_with_replacement and test_permutations for n < 6 (not 7),
+# test_combinatorics for n < 5 and r < 7 (not 6 and 8), test_product's length of a product of
+# 5 ** 4 tuples (not 7 ** 6), and test_long_chain_of_empty_iterables over 10 ** 4 empty
+# iterables (not 10 ** 7).
 # EXCLUDED upstream cases:
 # - pickling, copy and deepcopy (pickletest, the *_reducible and *_pickling tests, setstate),
 #   weak references, sys.getsizeof (SizeofTest), the threading tests, the TestGC cycles and the
@@ -346,7 +352,7 @@ def test_combinations_with_replacement() -> None:
     testIntermediate = cwr('ABC', 2)
     next(testIntermediate)
     check("intermediate", list(testIntermediate), strs([('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')]))
-    for n in range(7):
+    for n in range(6):
         values = [5 * x - 12 for x in range(n)]
         for r in range(n + 2):
             result = list(cwr(values, r))
@@ -415,7 +421,7 @@ def test_permutations() -> None:
     except TypeError as e:
         print("TypeError", e)
     check("range 2", list(permutations(range(3), 2)), ints([(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]))
-    for n in range(7):
+    for n in range(6):
         values = [5 * x - 12 for x in range(n)]
         for r in range(n + 2):
             result = list(permutations(values, r))
@@ -436,9 +442,9 @@ def test_permutations() -> None:
 def test_combinatorics() -> None:
     # Test relationships between product(), permutations(),
     # combinations() and combinations_with_replacement().
-    for n in range(6):
+    for n in range(5):
         s = 'ABCDEFG'[:n]
-        for r in range(8):
+        for r in range(7):
             prd = list(product(s, repeat=r))
             cwr = list(combinations_with_replacement(s, r))
             perm = list(permutations(s, r))
@@ -756,7 +762,7 @@ def test_product() -> None:
         assert list(product(no_ints, range(2), repeat=r)) == list(product2([no_ints, list(range(2))], r))
         assert list(product(range(2), no_ints, repeat=r)) == list(product2([list(range(2)), no_ints], r))
     print("repeat checked")
-    check("7**6", len(list(product(range(7), repeat=6))), 7 ** 6)
+    check("5**4", len(list(product(range(5), repeat=4))), 5 ** 4)
     random.seed(0)
     argtypes = ['', 'abc', '', 'abcd', 'abcdefg', 'abcdefghijk']
     for i in range(100):
@@ -1515,7 +1521,7 @@ def RegressionTests_test_long_chain_of_empty_iterables() -> None:
     # dealing with long chains of empty iterables. Even with a high
     # number this would probably only fail in Py_DEBUG mode.
     no_ints: list[int] = []
-    it = chain.from_iterable(no_ints for unused in range(1000000))
+    it = chain.from_iterable(no_ints for unused in range(10000))
     try:
         next(it)
     except StopIteration:
