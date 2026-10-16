@@ -219,8 +219,10 @@ The common `str`, `list`, `dict` and `tuple` methods are implemented, including:
 `a | b` of two dicts of one type is a new dict, and `a |= b` updates `a` as `a.update(b)` does.
 `dict()` takes a dict, a list or tuple of key/value tuples, or the pairs of a generator
 expression, list comprehension, `zip()`, `enumerate()`, `reversed()`, `map()` or `filter()`.
-Of tuples of another length, an item raises CPython's `ValueError` and none makes an empty
-dict, of the expected dict type or else `dict[int, int]`.
+Of tuples of another length, the first item raises CPython's `ValueError` (an iterator is taken
+only up to it) and none makes an empty dict, of the expected dict type or else `dict[int, int]`.
+Where a dict type is expected, such tuples that a display, comprehension, `map()`, `filter()`
+or `reversed()` makes must be written as tuple displays.
 
 `dict.fromkeys()` can omit `v`, or use `None`, when an annotation provides an optional value
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;
