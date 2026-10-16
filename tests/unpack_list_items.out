@@ -1,0 +1,18 @@
+6
+0.5 -2.25 a  c True False None 7 1 two [1] 2 3 9 (1, 'x') (2, 'y')
+45
+1.5 [2.5, 3.5] 4.5
+['p'] q
+[1, 2] [[3]]
+set f 2
+[99] 2
+set 0 5
+set 1 6
+set 2 7
+[]
+set f 8
+[99] [9, 10] 8
+ValueError: not enough values to unpack (expected 3, got 2)
+ValueError: too many values to unpack (expected 3)
+ValueError: not enough values to unpack (expected at least 2, got 1)
+[exit 0]
