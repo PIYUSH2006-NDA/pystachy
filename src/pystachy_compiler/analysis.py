@@ -505,7 +505,7 @@ def calls_iter(n: Node, listed: bool) -> bool:
         listed = False
     if listed and n.kind == "return" and len(n.kids) == 1 and n.kids[0].kind == "call" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "iter":
         return calls_iter(n.kids[0], False) if len(n.kids[0].kids) != 2 else calls_iter(n.kids[0].kids[1], listed)
-    if (n.kind == "name" and n.s == "iter") or (n.kind == "attr" and n.s == "iter" and n.kids[0].kind == "name" and n.kids[0].s == "builtins"):
+    if (n.kind == "name" and n.s == "iter") or (n.kind == "attr" and n.s == "iter"):
         return True
     for k in n.kids:
         if calls_iter(k, listed):

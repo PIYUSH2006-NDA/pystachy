@@ -132,7 +132,7 @@ an annotation (`q: deque[int] = deque()`), or an explicit constructor
 (`deque[int]()`). Parameters, returns and fields can name `deque[T]`. The compiled
 item type is fixed, and may be an explicitly supported union such as `int | str`.
 
-Iteration is a snapshot, and `maxlen` is writable. Rich comparisons also use
+Iteration reads live items and rejects endpoint mutations; `maxlen` is writable. Rich comparisons use
 snapshots when item comparison callbacks mutate a queue. Searches (`count`,
 `index`, containment and `remove`) read live items and detect structural mutations
 with CPython's operation-specific errors; same-size replacements are preserved.
@@ -146,8 +146,8 @@ quotes, escapes, whitespace splitting, punctuation, token pushback and source
 stacking. Input text is read through `StringIO`; Unicode characters are read whole.
 
 Files are read eagerly. Pushed files are closed on push rather than on source
-pop; constructor files remain the caller's responsibility. Iteration materializes
-remaining tokens. `punctuation_chars` is writable;
+pop; constructor files remain the caller's responsibility. Iteration and `next()` read
+one token at a time from a shared position. `punctuation_chars` is writable;
 its constructor accepts bools or strings, while lists fail compilation. Lexer
 subclasses and arbitrary stream types are outside the compiled surface.
 
@@ -161,7 +161,7 @@ works. Newline translation, NUL padding after seeking past the end, and closed
 stream errors follow CPython's implementation.
 
 - Sizes and positions count bytes rather than Unicode characters.
-- Iteration returns the remaining lines as a batch when the loop starts.
+- Iteration and `next()` read one line at a time from the shared stream position.
 - `with StringIO()` is unsupported; `with` handles files only.
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
@@ -181,10 +181,8 @@ Writer fields may be strings, integers, floats, booleans, `None`, or objects
 converted with `str`. A tuple row may mix types; a list row must be homogeneous.
 `writerow` returns the result of the output object's `write`.
 
-- A reader parses all input when iteration begins. Errors occur before the loop
-  receives a row; `line_num` stays at the final line; rows remain in memory.
-  A second iteration has no rows, even if the first stopped early. `next(reader)`
-  is unsupported; use `list(reader)` or `DictReader` for a header.
+- A reader and `next(reader)` parse one record at a time, update `line_num` as input
+  is consumed, and retain their position after an early loop exit.
 - Reader rows are `list[str]`. `QUOTE_NONNUMERIC` and `QUOTE_STRINGS` raise
   `NotImplementedError` at construction; `QUOTE_NOTNULL` raises it when a row
   would contain `None`. Writers support all six quoting styles.
@@ -197,7 +195,7 @@ converted with `str`. A tuple row may mix types; a list row must be homogeneous.
   them in dict order, rather than CPython's set order.
 - Dialects are objects, rather than classes. Use registered names or keyword
   settings instead of dialect subclasses. Dialect fields are writable: writers
-  snapshot settings at construction; readers use settings at iteration start.
+  snapshot settings at construction; readers use settings when each record starts.
   `dialect=` accepts a registered name, `Dialect`, or `None`.
 - Uncaught errors name `csv.Error`, rather than `_csv.Error`. A missing `write`,
   a format parameter of a user class, an unsupported iterable row type, or a

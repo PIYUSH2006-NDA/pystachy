@@ -1627,14 +1627,20 @@ def gen_is_iterator(self, t: str) -> bool:
 def gen_next_type(self, t: str) -> str:
     # the type of the items of an object of class t: what its __next__ returns, or else its
     # __iter__'s iterator's (the list's items, see iter_ret); "" where that is not known
-    ms = self.classes[t].methods if t in self.classes and t not in self.nts else {}
-    m = "__next__" if "__next__" in ms else "__iter__"
-    if m not in ms or ms[m].bad != "":
-        return ""
-    r = self.instance(ms[m], [t], []).ret if ms[m].generic and ms[m].ret == "" else ms[m].ret
-    if m == "__next__" or r == "" or r == t:
-        return r
-    return elem(r) if ms[m].iters else self.next_type(r)
+    seen: list[str] = []
+    while t not in seen:
+        seen.append(t)
+        ms = self.classes[t].methods if t in self.classes and t not in self.nts else {}
+        m = "__next__" if "__next__" in ms else "__iter__"
+        if m not in ms or ms[m].bad != "":
+            return ""
+        r = self.instance(ms[m], [t], []).ret if ms[m].generic and ms[m].ret == "" else ms[m].ret
+        if m == "__next__" or r == "":
+            return r
+        if ms[m].iters:
+            return elem(r)
+        t = r
+    return ""  # a cycle of non-iterator __iter__ returns cannot supply an item type
 
 def gen_iter_ret(self, e: Node) -> Val:
     # return iter(x) in an __iter__ that returns an Iterator[T]: the list[T] that iterator steps

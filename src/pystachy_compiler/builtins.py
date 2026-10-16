@@ -1138,6 +1138,8 @@ def gen_walk(self, name: str, args: list[Node]) -> Val:
     # entries or a set's slots, which for_seq makes. __pys_dict_next(d, at, used, count) and
     # __pys_set_next(s, at, used): the next entry (slot) from at, -1 at the end;
     # __pys_dict_key(d, j), __pys_dict_val(d, j), __pys_set_key(s, j): what it holds
+    if self.curfn.mod != ITERS:
+        self.err(f"name '{name}' is not defined")
     vals = [self.expr(a, "") for a in args]
     if len(vals) == 0 or (not is_dict(vals[0].t) and not is_set(vals[0].t)) or (name.startswith("__pys_dict_") != is_dict(vals[0].t)):
         self.err(f"name '{name}' is not defined")

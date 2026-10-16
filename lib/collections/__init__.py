@@ -6,7 +6,7 @@ have one type, T, bound by the iterable argument, an annotation such as deque[in
 explicit constructor such as deque[int]().
 """
 
-from typing import Generic, Iterable, Iterator, Self, TypeVar
+from typing import Generic, Iterable, Self, TypeVar
 
 __all__ = ["deque"]
 
@@ -231,10 +231,8 @@ class deque(Generic[_T]):
     def __contains__(self, x: _T) -> bool:
         return self._find(x, 0, len(self)) >= 0
 
-    def __iter__(self) -> Iterator[_T]:
-        # the items when the loop starts (an iterator class, which CPython's deque has, is not
-        # supported: a loop does not see the deque change)
-        return iter(self._items())
+    def __iter__(self):
+        return _deque_iterator(self)
 
     def __eq__(self, other: Self) -> bool:
         return self._items() == other._items()
@@ -291,3 +289,25 @@ class deque(Generic[_T]):
         if self.maxlen is None:
             return f"deque({self._items()!r})"
         return f"deque({self._items()!r}, maxlen={self.maxlen})"
+
+
+class _deque_iterator:
+    def __init__(self, source):
+        self._source = source
+        self._state: int = source._state
+        self._index = 0
+        self._remaining: int = len(source)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._source._state != self._state:
+            self._remaining = 0
+            raise RuntimeError("deque mutated during iteration")
+        if self._remaining == 0:
+            raise StopIteration
+        value = self._source[self._index]
+        self._index += 1
+        self._remaining -= 1
+        return value
