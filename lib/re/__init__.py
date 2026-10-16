@@ -1177,6 +1177,7 @@ def parse_template(source: str, pattern: "Pattern") -> Template:
 # ---- the compiler (CPython's _compiler.py)
 
 _EXTRA: dict[int, list[int]] = {}  # (re._casefix._EXTRA_CASES, decoded when a pattern first ignores case)
+_NO_FIXES: list[int] = []  # shared, read-only: most code points have no extra case equivalents
 
 
 def _fixes() -> dict[int, list[int]]:
@@ -1204,9 +1205,9 @@ class _Case:
     def fixes(self, ch: int) -> list[int]:
         # the other characters that ignore case to the same as lowercase ch (unicode only)
         if not self.uni:
-            return []
+            return _NO_FIXES
         f = _fixes()
-        return f[ch] if ch in f else []
+        return f[ch] if ch in f else _NO_FIXES
 
 
 def _combine_flags(flags: int, add_flags: int, del_flags: int) -> int:
@@ -1420,6 +1421,14 @@ class _Charset:
         self.hascased = hascased
 
 
+def _setbit(charmap: list[int], k: int) -> bool:
+    # a scalar bit must not allocate a temporary singleton list for every range code point
+    if k >= len(charmap):
+        return False
+    charmap[k] = 1
+    return True
+
+
 def _setbits(charmap: list[int], ks: list[int]) -> bool:
     # set charmap[k] for each k, in order, until one is past it (CPython's IndexError): False then
     for k in ks:
@@ -1443,18 +1452,18 @@ def _optimize_charset(charset: list[Item], case: _Case) -> _Charset:
             if op == LITERAL:
                 if case.on:
                     av = case.tolower(av)
-                    fits = _setbits(charmap, [av])
+                    fits = _setbit(charmap, av)
                     if fits:
                         fits = _setbits(charmap, case.fixes(av))
                     if fits and not hascased and case.iscased(av):
                         hascased = True
                 else:
-                    fits = _setbits(charmap, [av])
+                    fits = _setbit(charmap, av)
             elif op == RANGE:
                 if case.on:
                     for i in range(it.arg, it.arg2 + 1):
                         lo = case.tolower(i)
-                        if not _setbits(charmap, [lo]) or not _setbits(charmap, case.fixes(lo)):
+                        if not _setbit(charmap, lo) or not _setbits(charmap, case.fixes(lo)):
                             fits = False
                             break
                     if fits and not hascased:
