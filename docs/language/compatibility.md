@@ -147,10 +147,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   CPython makes a new method object at each read.
 
 - A function declared or inferred to return a value that ends without a `return` raises
-  `RuntimeError` there, where CPython returns `None`, also when it is declared to return
-  `C | None` for a class `C` (a dataclass or `NamedTuple` too). A function declared to return
-  `T | None` for an `int`, `float`, `bool`, `str`, `list`, `dict` or `tuple` T, and a template
-  that returns objects or `T | None`, return `None` there, as CPython does.
+  `RuntimeError` there, where CPython returns `None`. A function declared to return `T | None`
+  (or `Optional[T]`) for a class T (a dataclass or `NamedTuple` too) or an `int`, `float`,
+  `bool`, `str`, `list`, `dict` or `tuple` T, and a template that returns objects or `T | None`,
+  return `None` there, as CPython does.
 
 - A left operand of `+ - * / // % @ & | ^ << >>` (or of their in-place forms) whose class
   defines the operator's method, but which is `None` when the code runs, raises CPython's
@@ -339,7 +339,7 @@ supported alternatives.
   another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass but `abc.ABCMeta`; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,
@@ -638,11 +638,10 @@ supported alternatives.
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
-- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `bytes.translate()`,
-  `maketrans()`, `expandtabs()`, `title()` and `istitle()`, the separator arguments of
-  `bytes.hex()`, `%` formatting of bytes
-  (`b"%d" % 1`), a search of a bytes for an int (`b.find(97)`), keyword arguments to its methods
-  (as to a str's), and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
+- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `expandtabs()`, `title()` and
+  `istitle()`, `%` formatting of bytes (`b"%d" % 1`), a search of a bytes for an int
+  (`b.find(97)`), keyword arguments to its methods (as to a str's) but `hex()`'s and
+  `translate()`'s, and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
 - `str.format()` and `str.format_map()` of a format string other than a literal or a module
   global bound once to one (`fmt.format(x)` of a parameter, also of an f-string; a global whose
   name anything else in the program binds, even a function's local), either method or

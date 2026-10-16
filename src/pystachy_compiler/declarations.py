@@ -728,6 +728,22 @@ def gen_optional(self, t: str) -> str:
         return self.ctype("opt", [t])
     return ""
 
+def gen_ann_none(self, n: Node, seen: list[str]) -> bool:
+    # does annotation n make None one of its members (C | None, Optional[C], Union[C, None]; in
+    # a string or a type alias's value too), which the type of a class C, including None
+    # already, does not tell (see optional). seen: the aliases being looked through
+    k = n.kind
+    if k == "str":
+        return self.ann_none(self.parse_expr(n.s), seen)
+    if k == "binop" and n.s == "|":
+        return self.ann_none(n.kids[0], seen) or self.ann_none(n.kids[1], seen)
+    b = n.kids[0] if k == "index" else n
+    if b.kind == "name" and b.s in self.taliases and b.s not in seen:
+        return self.ann_none(self.alias_value(b.s), seen + [b.s])
+    if k == "index" and (b.kind == "name" or b.kind == "attr") and (self.ann_base(b) == "optional" or self.ann_base(b) == "union"):
+        return self.ann_base(b) == "optional" or len([x for x in (n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]) if self.ann_none(x, seen)]) > 0
+    return k == "None"
+
 def gen_join(self, a: str, b: str) -> str:
     # the type of a value that is an a or a b, where None and optional types meet (T and None
     # make T | None), or ""

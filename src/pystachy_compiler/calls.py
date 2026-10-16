@@ -92,6 +92,15 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
                 return self.exc_object(f.s, args)
             if self.classes[f.s].bad != "":
                 self.err(self.classes[f.s].bad)
+            ab = self.abstract_of(f.s)
+            if len(ab) > 0:
+                # an object of a class with abstract methods (ABCMeta): CPython evaluates the
+                # arguments, and object.__new__ raises its TypeError
+                for a in args:
+                    self.expr(a.kids[0] if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar" else a, "")
+                names = ", ".join([f"'{n}'" for n in ab])
+                self.raise_("TypeError", self.sconst(f"Can't instantiate abstract class {short(f.s)} without an implementation for abstract method{'s' if len(ab) > 1 else ''} {names}"))
+                return Val("null", f.s)
             if f.s in self.tmpl:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])
@@ -573,6 +582,8 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
+    if o.t == "fn[b:bytes]" and m == "maketrans":
+        return self.bytes_method(o, m, args)  # (the static method, of the class)
     if o.t == "fn[b:bytes]" and m == "fromhex":
         # bytes.fromhex(s), the class method, of a str
         if len(args) != 1 or args[0].kind in ["kw", "starred", "dstar"]:

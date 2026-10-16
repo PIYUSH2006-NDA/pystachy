@@ -22,10 +22,12 @@ unsupported forms, see [compatibility](compatibility.md).
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
-`bytes(s, encoding[, errors])`), `bytes.fromhex(s)` and
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)`, `bytes.maketrans(frm, to)` and
 `s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
 `+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
-printing work as in CPython. The methods are `decode`, `hex`, `join`, `split`, `rsplit`,
+printing work as in CPython. The methods are `decode`, `hex` (also with `sep` and
+`bytes_per_sep`, by position or name), `translate` (with a table or `None`, and `delete`, by
+position or name), `join`, `split`, `rsplit`,
 `splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
 `startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
 `removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
@@ -805,6 +807,12 @@ joins discard refinements that no longer hold. Globals, fields and locals assign
 `nonlocal` closure are not refined; copy a reference to a stable local and test that local.
 Only a single named derived class refines a base type; tuple/union tests and exception-class
 narrowing retain their existing restrictions.
+
+A class that derives from `abc.ABC`, or whose statement passes `metaclass=abc.ABCMeta`, has
+abstract methods: those decorated with `@abstractmethod` (also under `@property`,
+`@classmethod` or `@staticmethod`) until a subclass defines them again. Making an object of a
+class with an abstract method left raises CPython's `TypeError` once the arguments are
+evaluated ([abc](../../lib/compatibility.md#abc)).
 
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through
