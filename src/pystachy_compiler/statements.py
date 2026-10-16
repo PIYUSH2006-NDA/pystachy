@@ -69,7 +69,7 @@ def gen_callable_guard(self, st: Node, f: FnInfo) -> str:
     body = f.node.kids[2].kids if f.node.kind == "def" else []
     asg: dict[str, bool] = {}
     local_names(body, asg)
-    if len([x for x in body if x is st]) == 0 or c.kids[1].s in asg or "callable" in asg or "callable" in self.funcs or "callable" in self.classes or "callable" in self.mvars:
+    if len([x for x in body if x is st]) == 0 or c.kids[1].s in asg or "callable" in f.params or "callable" in asg or "callable" in self.funcs or "callable" in self.classes or "callable" in self.mvars:
         return ""
     return c.kids[1].s
 

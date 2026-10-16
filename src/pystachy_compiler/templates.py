@@ -613,7 +613,11 @@ def gen_literal_args(self, f: FnInfo, args: list[Node]) -> dict[str, Node]:
     for a in args:
         c = self.const_of(a.kids[0] if a.kind == "kw" else a, {}, True) if a.kind != "starred" and a.kind != "dstar" else None
         if a.kind == "kw":
-            if c is not None and a.s in f.params:
+            # A positional-only parameter's spelling is an ordinary **kwargs key,
+            # as are the names of *args and **kwargs themselves. It must not replace
+            # the literal constructor argument used to choose a getter's method.
+            j = f.params.index(a.s) if a.s in f.params else -1
+            if c is not None and j >= f.posonly and j != f.vararg and j != f.kwarg:
                 out[a.s] = c
         elif f.vararg >= 0 and pos >= f.vararg:
             if c is None:

@@ -555,11 +555,13 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
     if is_union(o.t):
         return self.umethod(o, m, args)
-    if o.t in self.nts and m == "__init__":
-        # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+    if (o.t in self.nts or self.literal_class(o.t)) and m == "__init__":
+        # p.__init__(args) of a NamedTuple or operator getter (also as a value): object.__init__,
         # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
         # of its own, and does nothing, also on None. The __init__ that makes the object is the
-        # compiler's (see nt_class), which only construction and _replace() call
+        # compiler's (see nt_class), which only construction and _replace() call. Operator's
+        # C getters likewise initialize through __new__; reinitialization must not mutate
+        # fields whose literal values the compiler has specialized.
         for a in args:
             x = a.kids[0] if a.kind == "kw" else a
             if not pure_arg(x):
