@@ -5,7 +5,7 @@ check_division(128589565723112408, 736393718): divmod (174620671, 565767630)
 check_division(609919780285761575, 18613274546784): divmod (32767, 18613211290247)
 check_division(710031681576388032, 26769404391308): divmod (26523, 26768905725948)
 check_division(1933622614268221, 30212853348836): divmod (63, 30212853291553)
-test_bitop_identities: 198 special values, 51884 identities
+test_bitop_identities: 198 special values, 51886 identities
 1 % 0 ZeroDivisionError: integer modulo by zero
 13 % 10 3
 -13 % 10 7

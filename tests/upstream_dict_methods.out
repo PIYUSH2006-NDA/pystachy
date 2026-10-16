@@ -39,26 +39,26 @@ d.copy() {1: 1, 2: 2, 3: 3}
 d.copy() {1: 1, 2: 2, 3: 3}
 copy != d True
 {}.copy() True
-dict_size 7: d2 is not d True
+dict_size 8: d2 is not d True
 d == d2 True
 d != d2 True
-len(d2) == len(d) + 1 8
-dict_size 111: d2 is not d True
+len(d2) == len(d) + 1 9
+dict_size 125: d2 is not d True
 d == d2 True
 d != d2 True
-len(d2) == len(d) + 1 112
-dict_size 1202: d2 is not d True
+len(d2) == len(d) + 1 126
+dict_size 1057: d2 is not d True
 d == d2 True
 d != d2 True
-len(d2) == len(d) + 1 1203
-dict_size 9495: d2 is not d True
+len(d2) == len(d) + 1 1058
+dict_size 7136: d2 is not d True
 d == d2 True
 d != d2 True
-len(d2) == len(d) + 1 9496
-dict_size 61980: d2 is not d True
+len(d2) == len(d) + 1 7137
+dict_size 98490: d2 is not d True
 d == d2 True
 d != d2 True
-len(d2) == len(d) + 1 61981
+len(d2) == len(d) + 1 98491
 d2 == d True
 [(950, 950), (951, 951), (952, 952)]
 d.get('c') is None True

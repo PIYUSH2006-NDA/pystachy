@@ -33,6 +33,7 @@ Imports search builtin modules first, then the program's directory,
 | `textwrap` | Adapted CPython | `TextWrapper`, `wrap`, `fill`, `shorten`, `dedent`, `indent` | Byte widths; no subclassing |
 | `string` | Adapted CPython | Constants, `capwords`, `Template` | No compiled `Formatter` or `Template` subclasses |
 | `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode | Selected numeric types and APIs |
+| `random` | Adapted CPython on a subset `_random` (`_pyrandom`) | Seeded `Random` and module functions, integers, sequences, distributions, state | Int, bool and float seeds; 63-bit `getrandbits`; no subclasses |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
 
 The [compatibility reference](compatibility.md) defines each module's accepted
@@ -91,6 +92,7 @@ to the compiled paths listed here and in the compatibility reference.
 | [Field selection](../examples/cut/README.md) | `getopt` |
 | [Message rendering](../examples/mailmerge/README.md) | `string.Template` |
 | [Latency reports](../examples/latency/README.md) | `statistics` |
+| [Monte Carlo estimates](../examples/montecarlo/README.md) | `random`, `statistics` |
 | [URL reports](../examples/urlstats/README.md) | `urllib.parse` |
 
 See [performance](../docs/performance.md) for the overall benchmark protocol and

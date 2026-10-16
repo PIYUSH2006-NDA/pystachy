@@ -7,8 +7,8 @@
 # round(abs(a - b), 7) == 0, assertRaises a try statement that prints the exception, and a loop
 # over many values asserts each and prints how many it checked. float.fromhex() is not supported
 # (float.hex() is): fromhex() is tests/upstream_math_float_ops.py's. math.isclose() is not
-# supported: isclose() is CPython's math_isclose_impl() with the default tolerances. random's
-# uniform() and random() draw from a fixed linear congruential sequence (no random module),
+# supported: isclose() is CPython's math_isclose_impl() with the default tolerances. random is
+# seeded, so that its uniform() and random() draw the same values on every run,
 # itertools.product(values, repeat=3) is product3(), and a tuple of i items is a list of them (a
 # tuple's length is part of its type). A name that a later loop binds to a value of another type
 # is renamed (iterable to floats, p and q to p3 and q3, p1 and q1, p2 and q2), range(...) bound
@@ -55,6 +55,7 @@
 #   (tuples are limited to 9 items here), int_too_big_for_float, and BadFloat (a descriptor as
 #   __float__)
 import math
+import random
 import sys
 
 NAN = float('nan')
@@ -106,18 +107,7 @@ def isclose(a: float, b: float) -> bool:
             (diff <= abs_tol))
 
 
-def random(state: list[int]) -> float:
-    # stands in for random.random(): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return state[0] / 2147483648
-
-
-RANDOM = [5]
-
-
-def uniform(a, b):
-    # stands in for random.uniform(a, b)
-    return a + (b - a) * random(RANDOM)
+random.seed(5)
 
 
 def product3(values: list[float]) -> list[tuple[float, float, float]]:
@@ -394,8 +384,8 @@ def testDist() -> None:
     # against a straightforward pure python implementation
     for i in range(9):
         for j in range(5):
-            p = [uniform(-5, 5) for k in range(i)]
-            q = [uniform(-5, 5) for k in range(i)]
+            p = [random.uniform(-5, 5) for k in range(i)]
+            q = [random.uniform(-5, 5) for k in range(i)]
             assertAlmostEqual("dist(p, q) of %d dimensions" % i,
                 dist(p, q),
                 sqrt(sum((px - qx) ** 2.0 for px, qx in zip(p, q)))
@@ -443,7 +433,7 @@ def testDist() -> None:
 
     # Verify that the one dimensional case is equivalent to abs()
     for i in range(20):
-        p1, q1 = random(RANDOM), random(RANDOM)
+        p1, q1 = random.random(), random.random()
         check("dist((p,), (q,)) == abs(p - q), %r %r" % (p1, q1), dist((p1,), (q1,)), abs(p1 - q1))
 
     # Test special values

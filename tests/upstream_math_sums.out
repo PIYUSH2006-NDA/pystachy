@@ -125,46 +125,46 @@ dist(p, q) of 0 dimensions 0.0
 dist(p, q) of 0 dimensions 0.0
 dist(p, q) of 0 dimensions 0.0
 dist(p, q) of 0 dimensions 0.0
-dist(p, q) of 1 dimensions 3.1123707396909595
-dist(p, q) of 1 dimensions 6.488266107626259
-dist(p, q) of 1 dimensions 4.813180272467434
-dist(p, q) of 1 dimensions 1.6977413417771459
-dist(p, q) of 1 dimensions 3.971148352138698
-dist(p, q) of 2 dimensions 2.275385279830053
-dist(p, q) of 2 dimensions 7.236636170500873
-dist(p, q) of 2 dimensions 3.6616781747815237
-dist(p, q) of 2 dimensions 6.684154417451815
-dist(p, q) of 2 dimensions 7.45485474792885
-dist(p, q) of 3 dimensions 8.74457464632993
-dist(p, q) of 3 dimensions 3.7739845846290363
-dist(p, q) of 3 dimensions 9.75374178874608
-dist(p, q) of 3 dimensions 7.547625631923011
-dist(p, q) of 3 dimensions 5.18231970104334
-dist(p, q) of 4 dimensions 7.825210845399279
-dist(p, q) of 4 dimensions 8.932130966892752
-dist(p, q) of 4 dimensions 5.355495688462759
-dist(p, q) of 4 dimensions 10.517925689737522
-dist(p, q) of 4 dimensions 4.700334179280388
-dist(p, q) of 5 dimensions 8.118673945733963
-dist(p, q) of 5 dimensions 8.492085397444255
-dist(p, q) of 5 dimensions 6.456334683209014
-dist(p, q) of 5 dimensions 7.915848973454469
-dist(p, q) of 5 dimensions 11.194536662683808
-dist(p, q) of 6 dimensions 8.112713853777347
-dist(p, q) of 6 dimensions 11.256273186302518
-dist(p, q) of 6 dimensions 8.971044576337157
-dist(p, q) of 6 dimensions 13.472388789061888
-dist(p, q) of 6 dimensions 12.915315474199495
-dist(p, q) of 7 dimensions 7.843486021718347
-dist(p, q) of 7 dimensions 11.555161013703804
-dist(p, q) of 7 dimensions 12.235176416591809
-dist(p, q) of 7 dimensions 10.412341380163856
-dist(p, q) of 7 dimensions 14.107454799464346
-dist(p, q) of 8 dimensions 11.301805340244949
-dist(p, q) of 8 dimensions 12.302163024190042
-dist(p, q) of 8 dimensions 7.091571605213812
-dist(p, q) of 8 dimensions 8.955722170460438
-dist(p, q) of 8 dimensions 14.002875747498832
+dist(p, q) of 1 dimensions 1.188852943710275
+dist(p, q) of 1 dimensions 1.4725671821135373
+dist(p, q) of 1 dimensions 1.8242642192548626
+dist(p, q) of 1 dimensions 4.366174260944906
+dist(p, q) of 1 dimensions 2.943821638613895
+dist(p, q) of 2 dimensions 4.519569863063605
+dist(p, q) of 2 dimensions 6.396763739123235
+dist(p, q) of 2 dimensions 8.99494035954576
+dist(p, q) of 2 dimensions 1.8009926153402172
+dist(p, q) of 2 dimensions 6.880169698249835
+dist(p, q) of 3 dimensions 5.122521897202857
+dist(p, q) of 3 dimensions 8.57960352789195
+dist(p, q) of 3 dimensions 5.614284252088178
+dist(p, q) of 3 dimensions 3.6627526715382572
+dist(p, q) of 3 dimensions 8.807656423242792
+dist(p, q) of 4 dimensions 8.759475897764812
+dist(p, q) of 4 dimensions 8.622041401185319
+dist(p, q) of 4 dimensions 3.5413238487445944
+dist(p, q) of 4 dimensions 8.794451459070588
+dist(p, q) of 4 dimensions 9.0930717335794
+dist(p, q) of 5 dimensions 4.10837832353011
+dist(p, q) of 5 dimensions 9.752660780727213
+dist(p, q) of 5 dimensions 7.814479816463496
+dist(p, q) of 5 dimensions 9.39408048361022
+dist(p, q) of 5 dimensions 9.725727593418064
+dist(p, q) of 6 dimensions 8.964068028253044
+dist(p, q) of 6 dimensions 4.1999144736967455
+dist(p, q) of 6 dimensions 9.026093519819979
+dist(p, q) of 6 dimensions 9.433253177880387
+dist(p, q) of 6 dimensions 7.9421270907769035
+dist(p, q) of 7 dimensions 10.66634292602845
+dist(p, q) of 7 dimensions 13.077581272094115
+dist(p, q) of 7 dimensions 10.658307569999028
+dist(p, q) of 7 dimensions 11.970485034036843
+dist(p, q) of 7 dimensions 12.650785187432302
+dist(p, q) of 8 dimensions 6.721352268041658
+dist(p, q) of 8 dimensions 11.02087403781677
+dist(p, q) of 8 dimensions 10.703698284261101
+dist(p, q) of 8 dimensions 6.184721448017185
+dist(p, q) of 8 dimensions 17.468028772171454
 dist([1.0, 2.0, 3.0], [4.0, 2.0, -1.0]) 5.0
 dist((14.0, 1.0), (2.0, -4.0)) 13.0
 dist((14, 1), (2, -4)) 13.0
@@ -177,26 +177,26 @@ copysign(1.0, dist((0.0,), (-0.0,))) 1.0
 dist((1.5, 1.5, 0.5), (0, 0, 0)) 2.179449471770337
 dist((1, 2, 3, 4), (5, 6, 7)) ValueError: both points must have the same number of dimensions
 dist((1, 2, 3), (4, 5, 6, 7)) ValueError: both points must have the same number of dimensions
-dist((p,), (q,)) == abs(p - q), 0.3659517550840974 0.6698134704492986 0.30386171536520123
-dist((p,), (q,)) == abs(p - q), 0.94716377556324 0.8457996067591012 0.1013641688041389
-dist((p,), (q,)) == abs(p - q), 0.27367891278117895 0.48906207038089633 0.21538315759971738
-dist((p,), (q,)) == abs(p - q), 0.4165878053754568 0.11291528725996614 0.3036725181154907
-dist((p,), (q,)) == abs(p - q), 0.8849326567724347 0.5467399484477937 0.338192708324641
-dist((p,), (q,)) == abs(p - q), 0.16266020759940147 0.8408101280219853 0.6781499204225838
-dist((p,), (q,)) == abs(p - q), 0.422668213956058 0.677437539678067 0.25476932572200894
-dist((p,), (q,)) == abs(p - q), 0.5700450409203768 0.9922903538681567 0.4222453129477799
-dist((p,), (q,)) == abs(p - q), 0.959961355663836 0.585915872361511 0.374045483302325
-dist((p,), (q,)) == abs(p - q), 0.4384072795510292 0.5035432321019471 0.06513595255091786
-dist((p,), (q,)) == abs(p - q), 0.1410777335986495 0.7561641852371395 0.61508645163849
-dist((p,), (q,)) == abs(p - q), 0.132193086668849 0.42268687719479203 0.29049379052594304
-dist((p,), (q,)) == abs(p - q), 0.8459015907719731 0.1866294196806848 0.6592721710912883
-dist((p,), (q,)) == abs(p - q), 0.7831444628536701 0.7963669304735959 0.013222467619925737
-dist((p,), (q,)) == abs(p - q), 0.39147384744137526 0.6703675868920982 0.27889373945072293
-dist((p,), (q,)) == abs(p - q), 0.8892982695251703 0.7731501148082316 0.11614815471693873
-dist((p,), (q,)) == abs(p - q), 0.364389562048018 0.8388670100830495 0.47447744803503156
-dist((p,), (q,)) == abs(p - q), 0.1542196273803711 0.892464664299041 0.7382450369186699
-dist((p,), (q,)) == abs(p - q), 0.6778047671541572 0.6882934416644275 0.010488674510270357
-dist((p,), (q,)) == abs(p - q), 0.9102196898311377 0.027837628964334726 0.8823820608668029
+dist((p,), (q,)) == abs(p - q), 0.6224050463224858 0.0435628857874204 0.5788421605350654
+dist((p,), (q,)) == abs(p - q), 0.10821471855202092 0.3791990559214805 0.2709843373694596
+dist((p,), (q,)) == abs(p - q), 0.07200394034289137 0.05756124534534901 0.01444269499754236
+dist((p,), (q,)) == abs(p - q), 0.5752557077881252 0.742337624717731 0.16708191692960583
+dist((p,), (q,)) == abs(p - q), 0.8784571187475307 0.1343328730014629 0.7441242457460678
+dist((p,), (q,)) == abs(p - q), 0.43167050250945815 0.31456961993483035 0.11710088257462781
+dist((p,), (q,)) == abs(p - q), 0.6002176291454119 0.48957976217123034 0.11063786697418154
+dist((p,), (q,)) == abs(p - q), 0.9385380123269165 0.3741982051342341 0.5643398071926824
+dist((p,), (q,)) == abs(p - q), 0.05575122042173419 0.6972962788844425 0.6415450584627083
+dist((p,), (q,)) == abs(p - q), 0.15110920793301008 0.6313459327664014 0.4802367248333913
+dist((p,), (q,)) == abs(p - q), 0.5058441034722071 0.9104225407687644 0.4045784372965573
+dist((p,), (q,)) == abs(p - q), 0.5548908676943454 0.6208778263672488 0.06598695867290338
+dist((p,), (q,)) == abs(p - q), 0.26324672299017104 0.5516752990754864 0.28842857608531536
+dist((p,), (q,)) == abs(p - q), 0.254190257434606 0.7505786142009662 0.4963883567663602
+dist((p,), (q,)) == abs(p - q), 0.5169957054786606 0.13378085052988542 0.38321485494877516
+dist((p,), (q,)) == abs(p - q), 0.23442031341420577 0.37121412495775685 0.13679381154355108
+dist((p,), (q,)) == abs(p - q), 0.736752892947969 0.17932038851963583 0.5574325044283331
+dist((p,), (q,)) == abs(p - q), 0.7132963092527633 0.6550137426078636 0.058282566644899725
+dist((p,), (q,)) == abs(p - q), 0.0852433560283894 0.6679532158072755 0.5827098597788861
+dist((p,), (q,)) == abs(p - q), 0.0911782746269173 0.12479162593533866 0.03361335130842136
 dist(p, q) of special values: 87858 infinite, 25695 NaN
 isclose(dist(p, q), fourthmax * sqrt(0)) True
 isclose(dist(q, p), fourthmax * sqrt(0)) True

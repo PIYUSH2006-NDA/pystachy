@@ -3,4 +3,5 @@
 3
 deque([1, 2, 3, 4])
 2
+False False
 [exit 0]

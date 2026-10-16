@@ -10,9 +10,9 @@
 # that nothing types get an annotation; a variable has one type, so where upstream rebinds `d`
 # to another type the new value has a name of its own. Test-local exception classes are module
 # classes. dict(zip(...)) and dict(items), dict() of pairs (not supported), are the equal
-# displays or a loop. test_copy_fuzz's random sizes come from a fixed linear congruential
-# sequence (no random module), and its new key is -1, an int as the dict's keys, where upstream
-# adds 'key'. test_copy_noncompact's dict comprehension is a loop. test_tuple_keyerror checks
+# displays or a loop. test_copy_fuzz's random sizes come from random.randrange(), seeded here
+# so that they are the same on every run, and its new key is -1, an int as the dict's keys, where
+# upstream adds 'key'. test_copy_noncompact's dict comprehension is a loop. test_tuple_keyerror checks
 # repr() of the KeyError, as its args are not supported. test_hash_collision_remove_add's
 # CustomHash(h) keys are ints that hash to h in CPython (h, and h + 2**61 - 1 for the colliding
 # pair), and its values are strs (str(h) where upstream has h), as a dict holds one value type.
@@ -53,6 +53,7 @@
 #   (OrderedDict): gc, weakref, __del__, instance __dict__, str/int/dict subclasses
 # - the *_pickling tests (pickle), CAPITest (_testinternalcapi), GeneralMappingTests and
 #   SubclassMappingTests (Lib/test/mapping_tests.py: its reference dict holds strs and a tuple)
+import random
 
 
 def check(label: str, got, expected) -> None:
@@ -182,16 +183,10 @@ def test_copy() -> None:
     check("{}.copy()", empty.copy() == {}, True)
 
 
-def randrange(state: list[int], start: int, stop: int) -> int:
-    # stands in for random.randrange(start, stop): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return start + state[0] % (stop - start)
-
-
 def test_copy_fuzz() -> None:
-    state = [3]
+    random.seed(3)
     for dict_size in [10, 100, 1000, 10000, 100000]:
-        dict_size = randrange(state,
+        dict_size = random.randrange(
             dict_size // 2, dict_size + dict_size // 2)
         # with self.subTest(dict_size=dict_size):
         d: dict[int, int] = {}
