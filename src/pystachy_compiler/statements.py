@@ -646,7 +646,9 @@ def gen_stmt(self, n: Node) -> None:
         self.place(l1)
         pre = self.narrowed
         self.narrowed = dict(pre)  # (what a := in the message binds is not bound where the assertion holds)
+        self.branch += 1
         self.assert_fails(n)
+        self.branch -= 1
         self.narrowed = pre
         self.place(l2)
         self.narrow_by(n.kids[0], True)
