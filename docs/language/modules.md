@@ -16,12 +16,12 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
 `ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
 CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
-For `binascii`, `_codecs`, `atexit`, `_struct` and `_thread`, Pystachy loads its ports of those C
-modules, `lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py`, `lib/_pystachy_atexit.py`,
-`lib/_pystachy_struct.py` and `lib/_pystachy_thread.py`
-([library reference](../../lib/compatibility.md#binascii)), and the end
-of the program runs `atexit`'s callbacks. For `abc`, which CPython imports as it starts, it loads
-`lib/_pystachy_abc.py` ([abc](../../lib/compatibility.md#abc)).
+For `binascii`, `_codecs`, `atexit`, `_struct`, `_thread` and `unicodedata`, Pystachy loads its
+ports of those C modules, `lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py`,
+`lib/_pystachy_atexit.py`, `lib/_pystachy_struct.py`, `lib/_pystachy_thread.py` and
+`lib/_pystachy_unicodedata.py` ([library reference](../../lib/compatibility.md#binascii)), and the
+end of the program runs `atexit`'s callbacks. For `abc`, which CPython imports as it starts, it
+loads `lib/_pystachy_abc.py` ([abc](../../lib/compatibility.md#abc)).
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's
