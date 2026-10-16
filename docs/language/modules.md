@@ -190,11 +190,14 @@ determine whether a particular call compiles.
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
 | Iterators | `iter` (one argument), `next` (with or without a default) |
-| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods, `hash` |
+| Types and attributes | `isinstance`, `callable`, `getattr`, `setattr`, `hasattr`, `vars`, `dir` and `type(x)`'s names and comparisons (see [reflection](semantics.md#reflection)), `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |
 
-`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). General `type()`
-calls are unsupported; `type(e).__name__` is supported for an exception `e`. `hash()` takes the
+`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). `type(x)` as a value
+(a class object) is unsupported; `type(x).__name__`, `type(a) is C` and `type(a) == type(b)` are
+supported for the program's classes, builtin values and exceptions (`type(e).__name__`).
+`getattr`, `setattr`, `hasattr`, `vars` and `dir` follow the [reflection rules](semantics.md#reflection);
+`delattr` is unsupported. `hash()` takes the
 values that can be [dict keys](typing.md#supported-types), floats too, and raises CPython's
 `TypeError` for a list, dict, set or unhashable object.
 

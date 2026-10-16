@@ -1507,6 +1507,41 @@ static const char *repr(Buf *b, I v, const char *d) {
   return d;
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
+/* A class's reflection record (the compiler's reflection.py; lowered by lower_module.py): an
+   internal constant per class that reaches a reflective site, whose address is the class's
+   identity (type(x)). Its name table lists the names the class's objects answer to, sorted by
+   their bytes, each with a kind the compiler reads; its field table gives the fields of an
+   object's __dict__ in their order: name, type descriptor, byte offset in the object and that
+   of its "is assigned" flag (-1: always assigned) */
+typedef struct { Str *name; I kind; } ReflName;
+typedef struct { Str *name, *desc; I off, flag; } ReflField;
+typedef struct { Str *name, *qual, *mod; I flags, nnames; ReflName *names; I nfields; ReflField *fields; } ReflRec;
+I pys_refl_find(ReflRec *r, Str *s) {   /* the index of name s in r's name table, or -1 */
+  I lo = 0, hi = r->nnames;
+  while (lo < hi) {
+    I mid = lo + (hi - lo) / 2, c = pys_str_cmp(r->names[mid].name, s);
+    if (c == 0) return mid;
+    if (c < 0) lo = mid + 1; else hi = mid;
+  }
+  return -1;
+}
+Str *pys_refl_vars(ReflRec *r, char *o) {   /* repr(vars(o)): o's assigned fields, each by its descriptor */
+  Buf b = {0};
+  if (!pys_repr_enter(o)) { put(&b, "{...}", 5); return done(&b); }   /* (a field's repr printing o's again) */
+  put(&b, "{", 1);
+  for (I i = 0, k = 0; i < r->nfields; i++) {
+    ReflField *f = &r->fields[i];
+    if (f->flag >= 0 && !*(unsigned char *)(o + f->flag)) continue;
+    if (k++) put(&b, ", ", 2);
+    repr_str(&b, f->name); put(&b, ": ", 2);
+    I v = 0;
+    if (f->desc->s[0] == 'b') v = *(unsigned char *)(o + f->off) & 1; else memcpy(&v, o + f->off, 8);
+    repr(&b, v, f->desc->s);
+  }
+  put(&b, "}", 1);
+  pys_repr_leave(o);
+  return done(&b);
+}
 static I entry(Dict *d, I k);
 static I dfind(Dict *d, I k, uint64_t h, I *free);
 I pys_set_cmp(Set *a, Set *b, I op);
