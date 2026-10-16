@@ -1,0 +1,58 @@
+TypeError can't send non-None value to a just-started generator
+1
+assertIsNone None
+assertIsInstance True
+assertIsInstance True
+assertRaises ValueError ValueError()
+assertIsNone None
+assertIsInstance True
+assertEqual done done
+assertIsNone None
+assertIsNone None
+assertIsInstance True
+assertIsInstance True
+assertIsNone None
+assertEqual done done
+assertIsNone None
+assertEqual doing 100
+assertEqual None None
+assertIsNone None
+assertIsInstance True
+assertIsInstance True
+assertIsInstance True
+assertIsNone None
+assertEqual done done
+assertIsNone None
+assertRaisesRegex RuntimeError generator raised StopIteration
+assertEqual 1 1
+assertRaisesRegex RuntimeError generator raised StopIteration
+closed
+closed
+closed
+assertRaises StopIteration
+closed
+caught GeneratorExit
+closed twice
+assertRaises RuntimeError RuntimeError()
+assertRaises RuntimeError RuntimeError()
+1
+42
+2
+TypeError: can't send non-None value to a just-started generator
+[None]
+[]
+[10]
+[10, 20]
+[10, 20, 30]
+caught ValueError ()
+caught ValueError (xyz)
+1
+TypeError TypeError()
+StopIteration StopIteration()
+ValueError: 6
+ValueError: 7
+exiting
+finally
+RuntimeError: generator ignored GeneratorExit
+TypeError: fie!
+[exit 0]

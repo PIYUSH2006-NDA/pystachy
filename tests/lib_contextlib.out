@@ -1,0 +1,87 @@
+RuntimeError generator didn't yield
+body 1
+RuntimeError generator didn't stop
+body a
+swallowed v
+after yield a
+continued
+RuntimeError generator didn't stop after throw()
+IndexError converted 'k2'
+setup
+StopIteration propagated
+StopIteration propagated b
+setup
+GeneratorExit propagated
+using r1
+closed r1
+closed r2
+OSError io
+null
+null 43
+setup
+teardown
+setup
+teardown
+setup
+teardown
+setup
+teardown
+setup
+teardown
+20
+setup
+decorated 1 2
+teardown
+3
+setup
+decorated 3 4
+teardown
+7
+parsed 12
+12 -1
+after
+caught not suppressed
+nothing to suppress
+unbound name 'v' is not defined
+open a
+a0
+a1
+a2
+close a None
+open b
+b0
+close b GeneratorExit
+closed b
+open c
+c0
+close c ValueError
+came out thrown
+enter outer
+open inner
+outer
+got hello
+hello
+close inner GeneratorExit
+exit outer
+closed nested
+enter outer
+open inner
+outer
+close inner KeyError
+exit outer
+KeyError out 'kk'
+open d
+close d GeneratorExit
+done
+kw enter ab 2
+abab
+kw exit ab
+kw enter c 1
+c
+kw exit c
+kw enter deco 2
+kw exit deco
+kw enter deco 2
+kw exit deco
+6 15
+[exit 0]
