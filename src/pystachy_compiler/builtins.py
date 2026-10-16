@@ -41,7 +41,6 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
-    key_problem,
     kw_names,
     literal_format,
     lt,
@@ -1833,10 +1832,10 @@ def gen_dict_pairs(self, v: Val) -> Val:
     if not is_tuple(et):
         self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
     kv = targs(et)
-    if key_problem(kv[0]) != "":
-        self.err(key_problem(kv[0]))
+    if self.key_problem(kv[0]) != "":
+        self.err(self.key_problem(kv[0]))
     d = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"])
-    self.rt("pys_dict_update_pairs", "void", [f"ptr {d}", f"ptr {v.v}"])
+    self.rt("pys_dict_update_pairs", "void", [f"ptr {d}", f"ptr {v.v}"], self.key_fx(kv[0]))
     return Val(d, self.ctype("dict", kv))
 
 def gen_tmethod(self, o: Val, m: str, args: list[Node]) -> Val:

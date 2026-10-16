@@ -1799,7 +1799,7 @@ def gen_dict_merge(self, n: Node, want: str) -> Val:
             if r.t != "":
                 kv = targs(r.t)
                 key = self.store_key(self.expr(x, kv[0]), kv[0])
-                self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(key), "i64 " + self.to_slot(self.coerce(self.expr(n.kids[i + 1], kv[1]), kv[1]))])
+                self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(key), "i64 " + self.to_slot(self.coerce(self.expr(n.kids[i + 1], kv[1]), kv[1]))], self.key_fx(kv[0]))
             elif kw and x.kind != "str":
                 self.err("a key of a dict display with ** of a **kwargs record must be a str literal")
             elif kw:
@@ -1828,8 +1828,8 @@ def gen_dict_merge(self, n: Node, want: str) -> Val:
                 kv = targs(v.t)
                 r = Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"]), v.t)
                 for j in range(0, len(pairs), 2):
-                    self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(self.store_key(pairs[j], kv[0])), "i64 " + self.to_slot(self.coerce(pairs[j + 1], kv[1]))])
-            self.rt("pys_dict_update", "void", [f"ptr {r.v}", f"ptr {v.v}"])
+                    self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(self.store_key(pairs[j], kv[0])), "i64 " + self.to_slot(self.coerce(pairs[j + 1], kv[1]))], self.key_fx(kv[0]))
+            self.rt("pys_dict_update", "void", [f"ptr {r.v}", f"ptr {v.v}"], self.key_fx(targs(r.t)[0]))
         else:
             self.err(f"** of a {typestr(v.t)} in a dict display is not supported: of a function's **kwargs (with str keys), or of dicts of one type, it is")
         i += 1
@@ -2944,8 +2944,8 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         # a | b: a copy of a, updated with b (dict_or: PyDict_Copy, then dict_update_arg)
         if b.t != a.t:
             self.err(f"unsupported operand types for {shown if shown != '' else op}: {typestr(a.t)} and {typestr(b.t)} (a dict holds keys and values of one type each)")
-        r = self.rt("pys_dict_copy", "ptr", [f"ptr {a.v}"])
-        self.rt("pys_dict_update", "void", [f"ptr {r}", f"ptr {b.v}"])
+        r = self.rt("pys_dict_copy", "ptr", [f"ptr {a.v}"], self.key_fx(targs(a.t)[0]))
+        self.rt("pys_dict_update", "void", [f"ptr {r}", f"ptr {b.v}"], self.key_fx(targs(a.t)[0]))
         return Val(r, a.t)
     if op == "%" and a.t == "str":
         # CPython formats with any str on the left; only a literal format is compiled (percent)

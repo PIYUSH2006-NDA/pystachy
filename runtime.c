@@ -2445,8 +2445,8 @@ I pys_dict_pop_default(Dict *d, I k, I dflt) { return dpop(d, k, dflt, 1); }
 I *pys_dict_popitem(Dict *d) {
   if (!d->len) pys_fail("KeyError: 'popitem(): dictionary is empty'");
   I e = d->n - 1;
-  while (!d->hs[e]) e--;
-  uint64_t h = d->hs[e], m = d->size * 2 - 1, i = h & m, p = h;
+  while (!dlive(d, e)) e--;   /* (a class's key may hash to 0: see dlive) */
+  uint64_t h = d->hs[e], m = dmask(d), i = h & m, p = h;
   DICT_PROBE();
   while (d->idx[i] != e + 1) { p >>= 5; i = (i * 5 + p + 1) & m; DICT_PROBE(); }
   I *t = pys_alloc(16); t[0] = d->keys[e]; t[1] = d->vals[e];

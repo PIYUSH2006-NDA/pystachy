@@ -35,7 +35,6 @@ from src.pystachy_compiler.utils import (
     is_sopt,
     is_tuple,
     is_vtuple,
-    key_problem,
     meet,
     same_kind,
     selem,
@@ -826,10 +825,10 @@ def gen_stmt(self, n: Node) -> None:
         vx = self.expr(n.kids[0].kids[1], kv[1], resultsoft=self.lcsoft[-1])
         if self.lct[-1] == "":
             kv = [self.none_items(kx.t) if is_tuple(kx.t) else kx.t, vx.t]
-            if key_problem(kv[0]) != "":
-                self.err(key_problem(kv[0]))
+            if self.key_problem(kv[0]) != "":
+                self.err(self.key_problem(kv[0]))
             self.lct[-1] = self.ctype("dict", kv)
-        self.rt("pys_dict_set", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_key(kx, kv[0])), "i64 " + self.to_slot(self.coerce(vx, kv[1]))])
+        self.rt("pys_dict_set", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_key(kx, kv[0])), "i64 " + self.to_slot(self.coerce(vx, kv[1]))], self.key_fx(kv[0]))
     elif k == "lcappend":
         et = self.lct[-1]
         v = self.expr(n.kids[0], et, resultsoft=self.lcsoft[-1])
