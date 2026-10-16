@@ -4,7 +4,7 @@ from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
 from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.reflection import VARS_USES
+from src.pystachy_compiler.reflection import VARS_USES, refl_attr_fields, refl_formatter
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
@@ -46,6 +46,11 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
         n = mk("call", n.s, n.line, [f] + args)
     if f.kind == "badattr":
         self.err(f.s)
+    if refl_formatter(f) and len(args) >= 1 and args[0].kind == "str" and refl_attr_fields(args[0].s) and "string$Formatter" in self.classes and len([a for a in args if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar"]) == 0:
+        # string.Formatter().format("...", args) of a constant template: str.format() of it, which
+        # the base Formatter's methods do (#486: its attribute fields, {0.x}, need no run-time names)
+        self.expr(f.kids[0], "")
+        return self.str_format(args[0].s, "format", args[1:])
     f = self.format_of(f)
     if literal_format(f) and f.s == "format_map" and len(args) == 1 and self.refl_dict_of(args[0]) is not None:
         return self.refl_format_map(f.kids[0].s, args[0])  # ("...".format_map(vars(x)): reflection.py)

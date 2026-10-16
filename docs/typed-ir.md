@@ -61,8 +61,9 @@ the current backend; WebAssembly and dynamic `Any` values remain future work.
 summaries remain available after the rest of the function's IR is released.
 
 Module declarations follow the same boundary. Globals retain native types in `Val`
-records; `Data` records retain string bytes, callable code/environment references and
-exception descriptor references. `lower_module.py` alone selects their LLVM layouts,
+records; `Data` records retain string bytes, callable code/environment references,
+exception descriptor references and classes' reflection records with their name and field
+tables (see [reflection](internals.md#reflection)). `lower_module.py` alone selects their LLVM layouts,
 GC root tables and entry points. It also owns native C ABI adapters, CPython extension
 wrappers and object dispatch tables; these backend stubs do not enter the optimization
 IR as opaque instructions. `llvm_abi.py` contains declaration and byte-escaping

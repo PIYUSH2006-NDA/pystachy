@@ -506,6 +506,8 @@ def refl_reflective(n: Node, name: str) -> bool:
         return False
     if n.kind == "call" and len(n.kids) >= 3 and n.kids[0].kind == "name" and n.kids[0].s in ["getattr", "setattr", "hasattr", "delattr"] and n.kids[2].kind == "name" and n.kids[2].s == name:
         return True
+    if n.kind == "call" and len(n.kids) >= 2 and n.kids[1].kind == "name" and n.kids[1].s == name and refl_formatter(n.kids[0]) and len([a for a in n.kids[2:] if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar"]) == 0:
+        return True  # (string.Formatter().format(name, ...): a constant template, see refl_formatter)
     if n.kind == "call" and len(n.kids) >= 2 and n.kids[1].kind == "name" and n.kids[1].s == name and (n.kids[0].kind == "name" or n.kids[0].kind == "attr"):
         f = n.kids[0].s[n.kids[0].s.rfind("$") + 1 :]  # (operator$attrgetter: the loader's name for an import)
         if f == "attrgetter" or f == "methodcaller":
@@ -2109,10 +2111,37 @@ def gen_refl_prop_in(self, t: str, a: str) -> bool:
 def gen_refl_derived_only(self, x: Node, a: str) -> bool:
     # is x a variable of a hierarchy's class that lacks attribute a, which a class derived from it
     # has: getattr(x, "a") then reads it where x's object has it (refl_getattr)
+    if x.kind != "name" or self.whole != 0:
+        return False  # (static_type: a variable's, outside the search for a fill)
     t = self.static_type(x)
     if t not in self.classes or self.classes[t].tag == 0 or a in self.classes[t].ftypes or a in self.classes[t].methods:
         return False
     for c in self.refl_concrete(t):
         if a in self.classes[c].ftypes or a in self.classes[c].methods:
             return True
+    return False
+
+
+def refl_formatter(f: Node) -> bool:
+    # is callee f string.Formatter().format, of the base Formatter itself (lib/string.py's, whose
+    # get_field, get_value, format_field and convert_field are str.format()'s)
+    return f.kind == "attr" and f.s == "format" and f.kids[0].kind == "call" and len(f.kids[0].kids) == 1 and f.kids[0].kids[0].kind == "name" and f.kids[0].kids[0].s == "string$Formatter"
+
+
+def refl_attr_fields(fmt: str) -> bool:
+    # does format string fmt have a replacement field that reads an attribute ({0.x})
+    i = 0
+    while i < len(fmt):
+        if fmt[i] == "{" and i + 1 < len(fmt) and fmt[i + 1] == "{":
+            i += 2
+            continue
+        if fmt[i] == "{":
+            j = i + 1
+            while j < len(fmt) and fmt[j] not in "!:}{":
+                if fmt[j] == ".":
+                    return True
+                j += 1
+            i = j
+            continue
+        i += 1
     return False

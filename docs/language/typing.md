@@ -708,8 +708,8 @@ class. In a subclass, `@property def value` starts a new property without the ba
 and deleter, while `@Base.value.setter` keeps the base's getter and deleter; a base-typed
 receiver calls the methods of its object's class. `@value.getter`, `property(fget, fset)`,
 property objects read through the class, `super().value = v`, and replacing a property with a
-field or method are unsupported. `hasattr(obj, "value")` on a property is rejected because it
-must run the getter; read it in `try/except AttributeError` instead.
+field or method are unsupported. `hasattr(obj, "value")` on a property runs the getter, and is
+false where it raises `AttributeError`, as in CPython.
 
 ## Fields, dataclasses and NamedTuples
 
@@ -736,7 +736,8 @@ in field order, also for `init=False` fields). `_: KW_ONLY` makes the
 following fields keyword-only. `frozen=True` objects raise `dataclasses.FrozenInstanceError`
 (an `AttributeError`) when a field or property is assigned or deleted outside the `__init__`
 that `@dataclass` writes. `dataclasses.replace(obj, **changes)` makes a new object through
-`__init__`. A mutable default (an unhashable value: a list, dict or set, or an object whose
+`__init__`. `dataclasses.fields()`, `asdict()`, `astuple()` and `is_dataclass()` are made for
+each class (see [reflection](semantics.md#reflection)). A mutable default (an unhashable value: a list, dict or set, or an object whose
 class defines `__eq__` without `__hash__`, as a dataclass with `eq=True` does unless it is
 frozen or has `unsafe_hash=True`) is rejected with CPython's message.
 

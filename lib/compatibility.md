@@ -417,8 +417,11 @@ value has their union type, which formats as its value does. When a call has
 both, their types must agree, so `format("{0} {x}", 1, x="s")` is rejected.
 `vformat` takes a tuple and a dict, or a `**kwargs` record; type an empty dict.
 
-Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`,
-and `check_unused_args` receives the keys used as a list in first-use order
+Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`, but
+`Formatter().format()` of the base class with a constant template whose fields read
+attributes, and positional arguments only, formats as `str.format()` of that template does,
+which reads the attributes ([reflection](../docs/language/semantics.md#reflection)); a
+loop over a constant list of such templates unrolls. `check_unused_args` receives the keys used as a list in first-use order
 rather than a set. Overrides compile for every call's argument types in the
 program; an override, like other functions, must return one type for each.
 Field names count UTF-8 bytes, so only ASCII digits make positional ones.
