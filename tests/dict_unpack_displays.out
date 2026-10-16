@@ -1,0 +1,8 @@
+{'begin': '?', 'sep': '-'} x y
+{'x': 1, 'y': 2}
+{'color': 'red'}
+{'sep': '-', 'end': '!\n'}
+{'sep': '-', 'end': '?\n'} x y
+1
+{'sep': '-'} x y
+[exit 0]

@@ -11,7 +11,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `float`, `bool`, `str` | Double-precision floats; strings hold UTF-8 with byte-based indexing |
 | `list[T]`, `dict[K, V]` | One static element type, or one key and value type |
 | `set[T]`, `frozenset[T]` | Elements must use the supported dict key types |
-| `tuple[A, B]` | Fixed shape, up to nine items; indexing requires an integer constant |
+| `tuple[A, B]` | Fixed shape, up to nine items; a constant index gives the item's type, a variable one the union of the items' |
 | `tuple[T, ...]` | Runtime length; `T` is `int`, `float`, `bool`, `str`, or one of these with `None`; integer indexing checked at runtime |
 | Classes, dataclasses, `NamedTuple` | Fields have static types |
 | `Callable[[A, B], R]` | Fixed positional signature; also supports zero arguments |
@@ -386,6 +386,10 @@ and comparisons of fixed tuple or `**kwargs` length with an integer constant can
 branches during compilation. Only reachable branches are compiled. `isinstance()` still
 looks up its class names at runtime, so a class not yet defined can raise `NameError`.
 Tests against `None` respect user-defined equality rather than replacing it with an identity test.
+An object argument is known not to be `None` when it is a new object, or after a statement of
+the function's body `if not callable(p): raise ...` (or `return`) for a parameter `p` it never
+assigns; its class then decides `isinstance(p, C)`, including where a constructor's fields
+get their types.
 
 A parameter passed as `None` can be reinitialized with a statically determined type,
 including `if value is None: value = default` when the specialization resolves that branch.
@@ -413,9 +417,19 @@ Arbitrary runtime list unpacking into other functions is unsupported.
 
 `**kwargs` has a fixed set of keyword names and value types for each call. It supports
 indexing, `get()`, membership, length, truth tests, iteration and `keys()`. If its values
-share one type, it also supports `values()`, `items()` and `dict(kwargs)`. Mutating it is
+share one type, it also supports `values()`, `items()` and `dict(kwargs)`; otherwise indexing
+or `get()` by a variable name gives the union of their types, and a list comprehension or
+`str.join()` over `items()` or `values()` compiles item by item. Mutating it is
 rejected; make a dict copy first. `fn(**kwargs)` forwards it, and a dict display with string
-keys can also supply keyword arguments. Arbitrary runtime dict expansion is unsupported.
+keys can also supply keyword arguments. `{**kwargs, "name": value, **other}` merges records
+as a dict does: a name keeps its first place and takes its last value. Arbitrary runtime
+dict expansion is unsupported.
+
+A fixed tuple indexed by a variable gives the item there, typed as the union of the items'
+types (a tuple of one item type gives that type), and raises CPython's `IndexError` past
+either end. A list comprehension or `str.join()` over a tuple variable or field whose items
+have different types, and `tuple()` of a generator expression over any fixed tuple, compile
+once per item, after evaluating the tuple.
 
 For an empty variadic tuple or kwargs record, loops over items can compile when the
 element type is supplied by the parameter annotation. In particular, an empty

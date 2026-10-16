@@ -1,0 +1,25 @@
+1 2 2
+-6 1
+-5 two
+-4 3.5
+-3 None
+-2 [4]
+-1 True
+0 1
+1 two
+2 3.5
+3 None
+4 [4]
+5 True
+IndexError: tuple index out of range
+IndexError: tuple index out of range
+IndexError: tuple index out of range
+2 a
+IndexError: tuple index out of range
+é 2 3.5
+[1, 2, 3] 2
+1 x y -1 -1
+KeyError: 'c'
+1
+KeyError: 'a'
+[exit 0]

@@ -1,7 +1,7 @@
 """Statements component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
-from src.pystachy_compiler.analysis import builtin_has
+from src.pystachy_compiler.analysis import builtin_has, local_names
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, Val
 from src.pystachy_compiler.names import owner, short
@@ -53,6 +53,25 @@ def gen_stmts(self, body: list[Node]) -> None:
             # static test leaves code for other argument types behind one, it is not compiled
             return
         self.stmt(s)
+
+def gen_callable_guard(self, st: Node, f: FnInfo) -> str:
+    # if not callable(p): ..., ending in raise or return, with no else, a statement of f's body
+    # for its parameter p, which the body never assigns: p, which code after it knows is not
+    # None (callable(None) is false); else ""
+    if st.kind != "if" or len(st.kids[2].kids) > 0 or len(st.kids[1].kids) == 0 or st.kids[1].kids[-1].kind not in ["raise", "return"]:
+        return ""
+    t = st.kids[0]
+    if t.kind != "unary" or t.s != "not" or t.kids[0].kind != "call" or len(t.kids[0].kids) != 2:
+        return ""
+    c = t.kids[0]
+    if c.kids[0].kind != "name" or c.kids[0].s != "callable" or c.kids[1].kind != "name" or c.kids[1].s not in f.params:
+        return ""
+    body = f.node.kids[2].kids if f.node.kind == "def" else []
+    asg: dict[str, bool] = {}
+    local_names(body, asg)
+    if len([x for x in body if x is st]) == 0 or c.kids[1].s in asg or "callable" in asg or "callable" in self.funcs or "callable" in self.classes or "callable" in self.mvars:
+        return ""
+    return c.kids[1].s
 
 def gen_obj_helpers(self, c: str) -> None:
     # @o.eq/cmp/repr.<class>: what the runtime's generic ==, ordering and repr do with objects
@@ -510,6 +529,8 @@ def gen_stmt(self, n: Node) -> None:
             self.narrowed = yes
         elif ygo and ngo and len(yes) + len(self.narrowed) > 0:
             self.narrowed = meet([yes, self.narrowed])
+        if not ygo and self.callable_guard(n, self.curfn) != "":
+            self.curfn.nnp[self.callable_guard(n, self.curfn)] = True  # (its isinstance() tests are static)
     elif k == "while" and self.static(n.kids[0]) == 0:
         # a loop whose test is false from the start (while x: with x None): only its else block runs
         self.static_reads(n.kids[0])

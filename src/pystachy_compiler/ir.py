@@ -387,3 +387,8 @@ class ClassInfo:
         # a specialization of a generic class (Gen.tparams): the types its type variables are bound
         # to, by the call that made it (Gen.bind); a TypeVarTuple's is a tuple type of its types
         self.tvars: dict[str, str] = {}
+        # a specialization of a class that specializes on literal arguments (Gen.literal_class):
+        # its __init__'s parameters given literals, and its fields that hold constants, as the
+        # literal nodes of their values (see Gen.const_of)
+        self.lits: dict[str, Node] = {}
+        self.fconst: dict[str, Node] = {}

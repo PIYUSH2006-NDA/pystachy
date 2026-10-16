@@ -1,5 +1,6 @@
 """Templates component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
 from src.pystachy_compiler.ir import ClassInfo, FnInfo
 from src.pystachy_compiler.names import retoken, short
@@ -28,7 +29,7 @@ from src.pystachy_compiler.utils import (
 )
 
 
-def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bool) -> str:
+def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bool, lits: dict[str, Node]) -> str:
     # the specialization of class template c that c(args) makes an object of, for arguments
     # of types ts (its __init__'s, after self, as call_fn has them): the fields its __init__
     # assigns are typed as for a class whose __init__ annotates its parameters with ts, and the
@@ -41,6 +42,7 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
     ts = [init.ptypes[i + 1] if i + 1 < len(init.ptypes) and init.ptypes[i + 1] != "" else ts[i] for i in range(len(ts))]
     doing = c + ("[" if named else "(") + ",".join(ts) + ")"
     doing += "".join([f";{x}={given[x]}" for x in self.tparams.get(c, []) if x in given])
+    doing += "".join([f";{x}={lit_key(lits[x])}" for x in init.params if x in lits])  # (literal_class)
     if doing in self.specdone:
         # (the same argument types make the same fields: also where templates make objects of
         # each other, A's __init__ making a B whose __init__ makes an A, which gets the A made)
@@ -81,11 +83,15 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
         s.tvars = self.bind(c, ts, given)  # (before its fields, which its type variables may type)
     if named:
         fi.ptypes = [name] + self.named_params(c, init.node)
-    self.scan_fields(s, fi, init.node.kids[2].kids)
+    self.scan_fields(s, fi, init.node.kids[2].kids, {})
+    if len(lits) > 0:
+        s.lits = lits
+        self.const_fields(s, init)
     self.line = line
     # (a field that holds the specialization itself, self.next: Node | None, is the same in each)
     key = ",".join([x + ":" + retoken(s.ftypes[x], name, "@") for x in s.fields])
     key += "".join([f";{x}={retoken(s.tvars[x], name, '@')}" for x in self.tparams.get(c, [])])
+    key += "".join([f";{x}={lit_key(lits[x])}" for x in init.params if x in lits])  # (its __init__ reads them)
     del self.specing[doing]
     if key in t.specs:
         del self.classes[name]
@@ -106,6 +112,16 @@ def gen_specialize(self, c: str, ts: list[str], given: dict[str, str], named: bo
         for x in self.tparams[c]:
             shown_ts.extend([typestr(y) for y in targs(s.tvars[x])] if x in self.tvtuples else [typestr(s.tvars[x])])
     SPECSHOW[name] = f"{short(c)}[{', '.join(shown_ts)}]"
+    if len(lits) > 0:
+        # (one of a class that specializes on literals: its arguments, or their types)
+        shown_args: list[str] = []
+        for j in range(1, len(init.params)):
+            x = init.params[j]
+            if j == init.vararg and x in lits:
+                shown_args.extend([lit_text(y) for y in lits[x].kids])
+            elif j != init.kwarg and (j != init.vararg or ts[j - 1] != "tuple[]"):
+                shown_args.append(lit_text(lits[x]) if x in lits else typestr(ts[j - 1]) if j - 1 < len(ts) else "...")
+        SPECSHOW[name] = f"{short(c)}({', '.join(shown_args)})"
     for d in t.node.kids[0].kids:
         if d.kind == "def":
             self.line = d.line
@@ -298,7 +314,7 @@ def gen_generic_ann(self, c: str, a: Node) -> str:
         if t.startswith("!"):
             return t
         given[tvs[i]] = t
-    return self.specialize(c, [], given, True)
+    return self.specialize(c, [], given, True, {})
 
 def gen_named_params(self, c: str, init: Node) -> list[str]:
     # the types of the parameters (after self) of the __init__ of generic class c, as the
@@ -576,3 +592,180 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     self.making.pop()
     self.template_bytes -= size
     return g
+
+# ---- classes that specialize on literal arguments
+def gen_literal_class(self, c: str) -> bool:
+    # does class template c specialize on its literal constructor arguments: only operator's
+    # getters do, whose items and names must be constants (a fixed tuple's index, an attribute's
+    # name). Each literal value makes a specialization of its own (see const_of)
+    if c not in self.classes or self.classes[c].mod != "operator":
+        return False
+    o = short(self.classes[c].origin if self.classes[c].origin != "" else c)
+    return o == "itemgetter" or o == "attrgetter" or o == "methodcaller"
+
+def gen_literal_args(self, f: FnInfo, args: list[Node]) -> dict[str, Node]:
+    # the parameters of __init__ f (after self) that a call with args gives literal values (see
+    # const_of), *args's as a tuple of them where each extra argument is one
+    out: dict[str, Node] = {}
+    extra: list[Node] = []
+    every = True
+    pos = 1
+    for a in args:
+        c = self.const_of(a.kids[0] if a.kind == "kw" else a, {}, True) if a.kind != "starred" and a.kind != "dstar" else None
+        if a.kind == "kw":
+            if c is not None and a.s in f.params:
+                out[a.s] = c
+        elif f.vararg >= 0 and pos >= f.vararg:
+            if c is None:
+                every = False
+            else:
+                extra.append(c)
+        else:
+            if c is not None and pos < len(f.params):
+                out[f.params[pos]] = c
+            pos += 1
+    if f.vararg >= 0 and every:
+        out[f.params[f.vararg]] = mk("tuple", "", self.line, extra)
+    return out
+
+def lit_key(n: Node) -> str:
+    # a literal node's value, as a specialization's key spells it
+    if n.kind == "str":
+        return f"s{len(n.s)}:{n.s}"
+    if n.kind == "tuple":
+        return "(" + ",".join([lit_key(x) for x in n.kids]) + ")"
+    if n.kind == "unary":
+        return "-" + n.kids[0].s
+    return n.s if n.kind == "int" else n.kind
+
+def lit_text(n: Node) -> str:
+    # a literal node as Python source
+    if n.kind == "str":
+        return "'" + n.s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+    if n.kind == "tuple":
+        return "(" + ", ".join([lit_text(x) for x in n.kids]) + ("," if len(n.kids) == 1 else "") + ")"
+    return "-" + n.kids[0].s if n.kind == "unary" else n.s if n.kind == "int" else n.kind
+
+def lit_int(n: Node) -> int:
+    return -int(n.kids[0].s) if n.kind == "unary" else 1 if n.kind == "True" else 0 if n.kind == "False" else int(n.s)
+
+def lit_same(a: Node, b: Node) -> bool:
+    # do literals a and b have equal values (an int and a bool or each other's equals, as in CPython)
+    num = ["int", "unary", "True", "False"]
+    if a.kind in num and b.kind in num:
+        return lit_int(a) == lit_int(b)
+    if a.kind == "tuple" and b.kind == "tuple":
+        return len(a.kids) == len(b.kids) and all([lit_same(a.kids[i], b.kids[i]) for i in range(len(a.kids))])
+    return a.kind == b.kind and a.s == b.s
+
+def gen_lit_context(self) -> bool:
+    # is the function being compiled a method of a class that specializes on literals
+    return self.curfn.cls in self.classes and self.literal_class(self.curfn.cls)
+
+def gen_const_of(self, n: Node, env: dict[str, Node], live: bool) -> Node | None:
+    # the literal node of n's value, where literal arguments decide it at compile time: literals
+    # and tuples of them, the parameters given literals (env, or live, a literal class's
+    # __init__'s), its fields that hold constants (self.k, live), and their indexing, len(), +,
+    # ==, !=, in, not and str.partition(); else None
+    k = n.kind
+    if k == "int" or k == "str" or k == "True" or k == "False" or k == "None":
+        return n
+    if k == "unary" and n.s == "-" and n.kids[0].kind == "int":
+        return n
+    f = self.curfn
+    c = self.classes[f.cls] if live and f.cls in self.classes else None
+    if k == "name":
+        if n.s in env:
+            return env[n.s]
+        if c is not None and f.name == "__init__" and n.s in c.lits:
+            asg: dict[str, bool] = {}
+            local_names(f.node.kids[2].kids, asg)
+            return c.lits[n.s] if n.s not in asg else None
+        return None
+    if k == "attr" and c is not None and n.kids[0].kind == "name" and takes_self(f) and n.kids[0].s == f.params[0] and n.s in c.fconst:
+        asg = {}
+        local_names(f.node.kids[2].kids, asg)
+        return c.fconst[n.s] if f.params[0] not in asg else None
+    if k == "tuple":
+        items: list[Node] = []
+        for x in n.kids:
+            v = self.const_of(x, env, live) if x.kind != "starred" else None
+            if v is None:
+                return None
+            items.append(v)
+        return mk("tuple", "", n.line, items)
+    if k == "unary" and n.s == "not":
+        v = self.const_of(n.kids[0], env, live)
+        return None if v is None or (v.kind != "True" and v.kind != "False") else mk("False" if v.kind == "True" else "True", "", n.line, [])
+    if k == "index" and len(n.kids) == 2:
+        a = self.const_of(n.kids[0], env, live)
+        i = self.const_of(n.kids[1], env, live)
+        if a is None or i is None or a.kind != "tuple" or i.kind not in ["int", "unary", "True", "False"]:
+            return None
+        j = lit_int(i) + (len(a.kids) if lit_int(i) < 0 else 0)
+        return a.kids[j] if 0 <= j < len(a.kids) else None
+    if k == "binop" and n.s == "+":
+        a = self.const_of(n.kids[0], env, live)
+        b = self.const_of(n.kids[1], env, live)
+        if a is not None and b is not None and a.kind == b.kind and (a.kind == "tuple" or a.kind == "str"):
+            return mk(a.kind, a.s + b.s if a.kind == "str" else "", n.line, a.kids + b.kids)
+        return None
+    if k == "cmp" and n.s in ["==", "!=", "in", "not in", "<", "<=", ">", ">="]:
+        a = self.const_of(n.kids[0], env, live)
+        b = self.const_of(n.kids[1], env, live)
+        if a is None or b is None:
+            return None
+        num = ["int", "unary", "True", "False"]
+        if n.s in ["<", "<=", ">", ">="]:
+            if a.kind not in num or b.kind not in num:
+                return None
+            p = lit_int(a)
+            q = lit_int(b)
+            r = p < q if n.s == "<" else p <= q if n.s == "<=" else p > q if n.s == ">" else p >= q
+        elif n.s == "==" or n.s == "!=":
+            r = lit_same(a, b) == (n.s == "==")
+        elif b.kind == "str" and a.kind == "str":
+            r = (a.s in b.s) == (n.s == "in")
+        elif b.kind == "tuple":
+            r = (len([y for y in b.kids if lit_same(a, y)]) > 0) == (n.s == "in")
+        else:
+            return None
+        return mk("True" if r else "False", "", n.line, [])
+    if k == "call" and len(n.kids) == 2 and n.kids[0].kind == "name" and n.kids[0].s == "len" and not self.bound("len"):
+        a = self.const_of(n.kids[1], env, live)
+        if a is not None and (a.kind == "tuple" or a.kind == "str"):
+            return mk("int", str(len(a.kids) if a.kind == "tuple" else len(a.s)), n.line, [])
+        t = self.iter_static(n.kids[1]) if live and a is None else ""
+        return mk("int", str(len(targs(t))), n.line, []) if is_tuple(t) else None  # (a fixed tuple's length)
+    if k == "call" and len(n.kids) == 2 and n.kids[0].kind == "attr" and n.kids[0].s == "partition":
+        a = self.const_of(n.kids[0].kids[0], env, live)
+        sep = self.const_of(n.kids[1], env, live)
+        if a is not None and sep is not None and a.kind == "str" and sep.kind == "str" and sep.s != "":
+            j = a.s.find(sep.s)
+            parts = [a.s, "", ""] if j < 0 else [a.s[:j], sep.s, a.s[j + len(sep.s) :]]
+            return mk("tuple", "", n.line, [mk("str", x, n.line, []) for x in parts])
+    return None
+
+def self_stores(ns: list[Node], me: str, count: dict[str, int]) -> None:
+    # how many statements of ns (and the blocks in them) assign each attribute of me
+    for n in ns:
+        if (n.kind == "assign" or n.kind == "annassign" or n.kind == "augassign") and len(n.kids) > 0:
+            ts = n.kids[:-1] if n.kind == "assign" else n.kids[:1]
+            for t in ts:
+                xs = t.kids if t.kind == "tuple" or t.kind == "list" else [t]
+                for x in xs:
+                    if x.kind == "attr" and x.kids[0].kind == "name" and x.kids[0].s == me:
+                        count[x.s] = count.get(x.s, 0) + 1
+        self_stores(n.kids, me, count)
+
+def gen_const_fields(self, s: ClassInfo, init: FnInfo) -> None:
+    # the fields of specialization s that hold constants: each assigned once by __init__, in a
+    # statement of its body of its own, a value that s's literal arguments decide (see const_of)
+    count: dict[str, int] = {}
+    me = init.params[0]
+    self_stores(init.node.kids[2].kids, me, count)
+    for st in init.node.kids[2].kids:
+        if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "attr" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == me and count.get(st.kids[0].s, 0) == 1:
+            v = self.const_of(st.kids[1], s.lits, False)
+            if v is not None:
+                s.fconst[st.kids[0].s] = v

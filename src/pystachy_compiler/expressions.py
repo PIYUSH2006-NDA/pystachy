@@ -28,6 +28,7 @@ from src.pystachy_compiler.specs import (
 from src.pystachy_compiler.syntax import Node, mk, names_in
 from src.pystachy_compiler.utils import (
     bool_for_int,
+    clone,
     elem,
     fbits,
     folds,
@@ -46,12 +47,14 @@ from src.pystachy_compiler.utils import (
     is_vtuple,
     key_problem,
     kw_names,
+    kw_types,
     lt,
     nones,
     nonetest,
     plain_args,
     same_kind,
     selem,
+    takes_self,
     targs,
     tname,
     typestr,
@@ -136,6 +139,11 @@ def gen_static(self, n: Node) -> int:
     # x, x == None and x != None for its parameter x (not where x's class defines __eq__ or
     # __ne__). Elsewhere == runs: the branch it would remove may give a list its item type.
     k = n.kind
+    c = self.const_of(n, {}, True) if self.lit_context() and k != "name" else None
+    if c is not None:
+        # (a test of the constants of a class that specializes on literals)
+        held = c.kind == "True" or (c.kind == "tuple" and len(c.kids) > 0) or (c.kind == "str" and c.s != "") or (c.kind == "int" and c.s != "0") or c.kind == "unary"
+        return 1 if held else 0
     x = nonetest(n)
     if x >= 0 and (x == 1 or n.s == "==" or n.s == "!=") and not (self.curfn.inst and n.kids[x].kind == "name" and n.kids[x].s in self.curfn.params and n.kids[x].s not in self.compvars):
         x = -1
@@ -180,6 +188,10 @@ def gen_static(self, n: Node) -> int:
         t = self.static_type(n.kids[1], True)
         r = self.isinst(t, n.kids[2]) if t != "" else -1
         return r if r >= 0 else (1 if r == -2 else 0) if r < -1 and self.knownobj(n.kids[1]) else -1
+    if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "callable" and not self.bound("callable") and len(n.kids) == 2:
+        t = self.static_type(n.kids[1], True)
+        r = self.callable_type(t) if t != "" else -1
+        return r if r >= 0 else 1 if r == -2 and self.knownobj(n.kids[1]) else -1
     return -1
 
 def gen_static_len(self, n: Node) -> int:
@@ -568,6 +580,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         if n.kids[0].kind != "listcomp":
             self.err(UNSUPPORTED[n.kids[0].kind])
         return self.listcomp(n.kids[0], want, "", "", None, "set", resultsoft)
+    if k == "dictstar":
+        return self.dict_merge(n, want)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
@@ -649,7 +663,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             return bm
         return self.getfield(o, self.field(o, n.s), n.s)
     if k == "index":
-        return self.index(n)
+        return self.index(n, want)
     if k == "slice":
         if len(n.kids) == 4:
             self.err("slice steps are not supported")
@@ -792,6 +806,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "listcomp":
         if n.s == "gen":
             self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
+        unrolled = self.unroll(n)
+        if unrolled is not None:
+            return self.expr(mk("list", "", n.line, unrolled), want, resultsoft=resultsoft)
         return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []
@@ -1267,6 +1284,141 @@ def gen_numkey(self, v: Val, t: str) -> list[str]:
         iv = self.scalar_cast('trunc', Val(iv, 'int'), 'bool')
     return [iv, ok]
 
+def bind_names(n: Node, env: dict[str, Node]) -> Node | None:
+    # a copy of expression n whose reads of env's names are env's nodes (a copy of each); None
+    # where n has its own scopes or bindings (a lambda, comprehension or := in it)
+    if n.kind in ["lambda", "listcomp", "setcomp", "dictcomp", "nestedcomp", "asynccomp", "walrus"]:
+        return None
+    if n.kind == "name" and n.s in env:
+        return clone(env[n.s]) if env[n.s].kind != "val" else env[n.s]
+    c = Node(n.kind, n.s, n.line)
+    c.chk = n.chk
+    c.mchk = n.mchk
+    c.depth = n.depth
+    for k in n.kids:
+        x = bind_names(k, env)
+        if x is None:
+            return None
+        c.kids.append(x)
+    return c
+
+def gen_iter_static(self, n: Node) -> str:
+    # the type of a variable or of a field of the method's own object (self.k), which reading
+    # it cannot change, or ""
+    f = self.curfn
+    if n.kind == "attr" and n.kids[0].kind == "name" and takes_self(f) and n.kids[0].s == f.params[0] and n.kids[0].s in self.ltype and f.cls in self.classes:
+        return self.classes[f.cls].ftypes.get(n.s, "")
+    return self.static_type(n) if n.kind == "name" else ""
+
+def gen_unroll(self, g: Node, every: bool = False) -> list[Node] | None:
+    # [e for t in xs], or the generator expression, whose items a fixed tuple xs of items of
+    # different types (or, in a class that specializes on literals, of constants), or a
+    # **kwargs record's items() or values() of different types, supply: an expression e for
+    # each item, with t bound to it (xs evaluated once, first); else None
+    if g.kind != "listcomp" or len(g.kids) != 3:
+        return None
+    it = g.kids[2]
+    c = self.const_of(it, {}, True) if self.lit_context() else None
+    items: list[Node] = []
+    if c is not None and c.kind == "tuple":
+        items = c.kids
+    elif it.kind == "call" and len(it.kids) == 1 and it.kids[0].kind == "attr" and (it.kids[0].s == "items" or it.kids[0].s == "values") and is_kw(self.iter_static(it.kids[0].kids[0])):
+        t = self.iter_static(it.kids[0].kids[0])
+        if not every and len([x for x in kw_types(t) if x != kw_types(t)[0]]) == 0:
+            return None  # (of one type: the loop's)
+        v = self.kw_tuple(self.expr(it.kids[0].kids[0], ""))
+        for j in range(len(kw_names(t))):
+            x = self.vnode(self.tget(v, j))
+            items.append(mk("tuple", "", it.line, [mk("str", kw_names(t)[j], it.line, []), x]) if it.kids[0].s == "items" else x)
+    else:
+        t = self.iter_static(it)
+        if (not every or t != "") and (not is_tuple(t) or (not every and len([x for x in targs(t) if x != targs(t)[0]]) == 0)):
+            return None  # (of one type: the loop's, but for tuple(), whose result is fixed)
+        v = self.expr(it, "")
+        if not is_tuple(v.t):
+            return None
+        items = [self.vnode(self.tget(v, j)) for j in range(len(targs(v.t)))]
+    out: list[Node] = []
+    tgt = g.kids[1]
+    for x in items:
+        env: dict[str, Node] = {}
+        if tgt.kind == "name":
+            env[tgt.s] = x
+        elif tgt.kind == "tuple" and x.kind == "tuple" and len(tgt.kids) == len(x.kids) and len([y for y in tgt.kids if y.kind != "name"]) == 0:
+            for j in range(len(tgt.kids)):
+                env[tgt.kids[j].s] = x.kids[j]
+        else:
+            self.err("a comprehension over a tuple of items of different types needs a name, or names for each pair of items(), as its target")
+        e = bind_names(g.kids[0], env)
+        if e is None:
+            self.err("a comprehension over a tuple of items of different types cannot hold a lambda, comprehension or := expression")
+        out.append(e)
+    return out
+
+def gen_dict_merge(self, n: Node, want: str) -> Val:
+    # {**a, "k": v, **b}, in CPython's order: of **kwargs records and str keys, the record of
+    # the merged keyword arguments, each name where it first appears with the last value given;
+    # of dicts of one type, a new dict that each ** updates once its operand is evaluated
+    names: list[str] = []
+    vals: list[Val] = []
+    pairs: list[Val] = []  # (the keys and values before the first **, and their nodes)
+    keys: list[Node] = []
+    r = Val("", "")  # (the dict, once a ** of a dict decides it)
+    kw = False
+    i = 0
+    while i < len(n.kids):
+        x = n.kids[i]
+        if x.kind != "dstar":
+            if r.t != "":
+                kv = targs(r.t)
+                key = self.store_key(self.expr(x, kv[0]), kv[0])
+                self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(key), "i64 " + self.to_slot(self.coerce(self.expr(n.kids[i + 1], kv[1]), kv[1]))])
+            elif kw and x.kind != "str":
+                self.err("a key of a dict display with ** of a **kwargs record must be a str literal")
+            elif kw:
+                names.append(x.s)
+                vals.append(self.expr(n.kids[i + 1], ""))
+            else:
+                keys.append(x)
+                pairs.append(self.expr(x, ""))
+                pairs.append(self.expr(n.kids[i + 1], ""))
+            i += 2
+            continue
+        v = self.expr(x.kids[0], want if is_dict(want) and r.t == "" else r.t)
+        self.line = x.line
+        if is_kw(v.t) and r.t == "" and len([k for k in keys if k.kind != "str"]) == 0:
+            if not kw:
+                kw = True
+                for j in range(len(keys)):
+                    names.append(keys[j].s)
+                    vals.append(pairs[2 * j + 1])
+            for j in range(len(kw_names(v.t))):
+                names.append(kw_names(v.t)[j])
+                vals.append(self.tget(self.kw_tuple(v), j))
+        elif not kw and is_dict(unopt(v.t)) and (r.t == "" or unopt(v.t) == r.t):
+            v = self.unwrap(v, "TypeError: 'NoneType' object is not a mapping")
+            if r.t == "":
+                kv = targs(v.t)
+                r = Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"]), v.t)
+                for j in range(0, len(pairs), 2):
+                    self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(self.store_key(pairs[j], kv[0])), "i64 " + self.to_slot(self.coerce(pairs[j + 1], kv[1]))])
+            self.rt("pys_dict_update", "void", [f"ptr {r.v}", f"ptr {v.v}"])
+        else:
+            self.err(f"** of a {typestr(v.t)} in a dict display is not supported: of a function's **kwargs (with str keys), or of dicts of one type, it is")
+        i += 1
+    if r.t != "":
+        return r
+    # a name given again keeps its first place and takes its last value, as in a dict
+    out: list[str] = []
+    outv: list[Val] = []
+    for j in range(len(names)):
+        if names[j] in out:
+            outv[out.index(names[j])] = vals[j]
+        else:
+            out.append(names[j])
+            outv.append(vals[j])
+    return self.kw_record(out, outv)
+
 def gen_tuple_(self, vals: list[Val]) -> Val:
     t = self.ctype("tuple", [v.t for v in vals])
     p = self.alloc_fixed(t).v
@@ -1465,7 +1617,7 @@ def gen_tstore(self, v: Val, index: int, slot: str) -> None:
     item.a = [v, Val(slot, "%slot")]
     self.put(item, 1)
 
-def gen_index(self, n: Node) -> Val:
+def gen_index(self, n: Node, want: str = "") -> Val:
     c = n.kids[0]
     f = c.kids[0] if c.kind == "call" else c
     if c.kind == "call" and n.kids[1].kind == "int" and n.kids[1].s == "0" and f.kind == "attr" and f.s == "split" and len(c.kids) <= 3 and plain_args(c.kids[1:]) and self.dotted(f) == "" and (f.kids[0].kind != "name" or self.static_type(f.kids[0]) == "str") and not is_super(f.kids[0]):
@@ -1479,9 +1631,9 @@ def gen_index(self, n: Node) -> Val:
         r = self.method(o, f.s, c.kids[1:])
         self.close_temp(f.kids[0], o)
         return self.subscript(n, r)
-    return self.subscript(n, self.expr(c, ""))
+    return self.subscript(n, self.expr(c, ""), want)
 
-def gen_subscript(self, n: Node, o: Val) -> Val:
+def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
     # o[i], where o is the value of n.kids[0] and n.kids[1] the index
     t = unopt(o.t)
     sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
@@ -1495,6 +1647,14 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
         self.raise_("KeyError", self.repr(Val(self.sconst(n.kids[1].s), "str")).v, self.sconst("KeyError"))
         self.place(self.label())  # (not reached)
         return Val("null", "None")
+    if is_kw(t) and (len(kw_types(t)) == 0 or len([x for x in kw_types(t) if x != kw_types(t)[0]]) > 0):
+        # kwargs[k] of values of different types (or none): the value of the name k is, of
+        # their union, or CPython's KeyError
+        k = self.expr(n.kids[1], "str")
+        o = self.unwrap(o, sub)
+        if k.t != "str":
+            self.err(f"a {typestr(k.t)} key of a {typestr(t)} is not supported: its keys are str")
+        return self.pick(self.kw_tuple(o), [self.cmp2("==", k, Val(self.sconst(x), "str")) for x in kw_names(t)], "KeyError", self.repr(k).v, f"indexing a {typestr(t)} with a variable key", want)
     if is_kw(t):
         o = self.kw_dict(o)  # (another key: looked up in the dict CPython makes)
         t = o.t
@@ -1522,9 +1682,18 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
         return self.from_slot(self.nonekey(kx, "", "pys_dict_getitem", [f"ptr {o.v}", f"i64 {self.to_slot(kx)}"]), kv[1])
     if is_tuple(t) or t in self.nts:
         ts = targs(t) if is_tuple(t) else self.classes[t].fields  # (a NamedTuple's fields)
-        i = self.expr(n.kids[1], "int")
+        c = self.const_of(n.kids[1], {}, True) if self.lit_context() else None
+        i = self.expr(c if c is not None and c.kind in ["int", "unary", "True", "False"] else n.kids[1], "int")
         if i.t == "bool" and (i.v == "true" or i.v == "false"):
             i = Val("1" if i.v == "true" else "0", "int")
+        if is_tuple(t) and (i.t == "int" or i.t == "bool") and i.v.startswith("%"):
+            # t[i] of a variable i: the item there, of the items' type or their union, or
+            # CPython's IndexError past either end
+            o = self.unwrap(o, sub)
+            at = self.as_int(i)
+            at = Val(self.select(self.num_cmp('<', at, Val('0', "int")).v, Val(self.scalar('add', [at, Val(str(len(ts)), "int")]), "int"), at), "int")
+            msg = Val(self.sconst("tuple index out of range"), "str").v
+            return self.pick(o, [self.num_cmp('==', at, Val(str(x), "int")) for x in range(len(ts))], "IndexError", msg, f"indexing a {typestr(t)} with a variable index", want)
         if i.t != "int" or i.v.startswith("%"):
             self.err("tuple index must be an integer constant")
         j = int(i.v)
@@ -1544,6 +1713,40 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
         return self.protocol(o, "__getitem__", [ik])
     self.err(f"'{t}' object is not subscriptable")
     return o
+
+def gen_pick(self, o: Val, tests: list[Val], exc: str, msg: str, what: str, want: str, dflt: Val | None = None) -> Val:
+    # item k of tuple o where tests[k] (computed already) holds, the first that does, as the
+    # type of o's items (and dflt) or their union; where none does, dflt, or else raise
+    # exc(msg). Of no items, the raise, and a value of the type the context expects (which no
+    # return statement then sees)
+    ts = targs(o.t) + ([dflt.t] if dflt is not None else [])
+    if len(ts) == 0:
+        self.raise_(exc, msg)
+        self.place(self.label())  # (not reached)
+        t = want if want != "" and "?" not in want else "None"
+        return Val("0" if t == "int" else fbits("0.0") if t == "float" else "false" if t == "bool" else "null", t)
+    rt = ts[0] if len([x for x in ts if x != ts[0]]) == 0 else self.union_type(ts)
+    if rt.startswith("!"):
+        self.err(f"{what} is not supported: {rt[1:]}")
+    ph = Ins("phi", rt, "")
+    end = self.label()
+    for k in range(len(tests)):
+        arm = self.label()
+        nxt = self.label()
+        self.cbr(tests[k].v, arm, nxt)
+        self.place(arm)
+        v = self.coerce(self.tget(o, k), rt)
+        self.incoming(ph, v.v, self.cur)
+        self.br(end)
+        self.place(nxt)
+    if dflt is not None:
+        v = self.coerce(dflt, rt)
+        self.incoming(ph, v.v, self.cur)
+        self.br(end)
+    else:
+        self.raise_(exc, msg)
+    self.place(end)
+    return Val(self.phi(ph), rt)
 
 def gen_list_read(self, o: Val, i: Val) -> Val:
     # Both operands have run, and o is not None. Check the current length: unsigned

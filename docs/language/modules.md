@@ -169,7 +169,7 @@ determine whether a particular call compiles.
 | Numeric operations | `abs`, `round`, `divmod`, `pow` (including modular powers and inverses), `sum` |
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
-| Types and attributes | `isinstance`, `hasattr` with a literal attribute name, `super` in supported instance methods |
+| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods |
 | Input and files | `input`, `open` |
 
 `iter()` is supported as the return value of a supported `__iter__` method, not as a general
@@ -178,7 +178,8 @@ first-class iterator constructor. General `next()`, `hash()` and `type()` calls 
 
 `print()` accepts `sep`, `end`, `file` and `flush`. Its `file` may be a file or an object with
 `write()`, such as `io.StringIO`; it receives one call for each piece, as in CPython.
-`min()` and `max()` accept `key=`, and `sorted()` and `list.sort()` accept `key=` and `reverse=`.
+`min()` and `max()` accept `key=`, and `sorted()` and `list.sort()` accept `key=` and `reverse=`;
+a key is a function, a `Callable`, or an object whose class defines `__call__`.
 `set()` and `frozenset()` take supported iterables of their element type. Their methods support
 multiple iterable arguments where CPython's do.
 
@@ -197,9 +198,10 @@ The common `str`, `list` and `dict` methods are implemented, including:
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;
 an empty `()` or `{}` takes the expected dict's key type.
 
-Unsupported operations include dict union (`a | b`), dict displays with `**`,
-`str.replace(old, new, count)`, `str.format()`, `dict.popitem()`, `dict()` from pairs, and tuple
-`index()` and `count()`. Supported iteration contexts and other restrictions are in the
+A dict display with `**` merges dicts of one type into a new dict, or `**kwargs` records
+(with string keys) into a record that prints as a dict and can be forwarded.
+Unsupported operations include dict union (`a | b`), `str.replace(old, new, count)`,
+`str.format()`, `dict.popitem()`, `dict()` from pairs, and tuple `index()` and `count()`. Supported iteration contexts and other restrictions are in the
 [language guide](../language.md#expressions).
 
 ## Builtin modules and files

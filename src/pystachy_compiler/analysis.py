@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODULES, NOREF, TYPING
-from src.pystachy_compiler.syntax import Node, mentions, mk, names_in
+from src.pystachy_compiler.syntax import Node, has_kind, mentions, mk, names_in
 from src.pystachy_compiler.utils import int_fits
 
 
@@ -998,6 +998,29 @@ def only_none(body: list[Node], name: str) -> bool:
             if kid.kind == "except" and not only_none(kid.kids[1].kids, name):
                 return False
     return True
+
+
+def bind_count(body: list[Node], name: str) -> int:
+    # how many statements in body (into blocks, not into defs and classes) bind variable name:
+    # an assignment counts once, another binding (a for loop's, an import's, an except clause's,
+    # a def's) twice
+    n = 0
+    for st in body:
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            n += 2 if st.s == name else 0
+            continue
+        if stmt_binds(st, name):
+            n += 1 if st.kind == "assign" else 2
+        if has_kind(st, "walrus"):
+            n += 2
+        for a in st.kids if st.kind == "import" else st.kids[:0]:
+            n += 2 if a.s == name else 0
+        for kid in st.kids:
+            if kid.kind == "block":
+                n += bind_count(kid.kids, name)
+            if kid.kind == "except":
+                n += (2 if kid.s == name else 0) + bind_count(kid.kids[1].kids, name)
+    return n
 
 
 def nonexpr(e: Node) -> bool:
