@@ -65,12 +65,15 @@ CPython runs the source.
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
 | `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
 | `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
-| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
+| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks, and the unchanged `update_wrapper()` and `wraps()`, which the compiler applies |
 | `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
 | `binascii` (`_pystachy_binascii`) | `Modules/binascii.c`, `Python/pystrhex.c` | All twelve functions of the C module, with its errors and messages |
+| `atexit` (`_pystachy_atexit`) | `Modules/atexitmodule.c` (SHA-256 `a61f11e295d38463b36524e51b8eba64d5a84022bb7df7b3c0ccd8aa9fe9521b`) | `register()`, `_clear()`, `_run_exitfuncs()` and `_ncallbacks()`, with the C module's order of callbacks; `unregister()` raises `NotImplementedError` |
+| `abc` (`_pystachy_abc`) | `Lib/abc.py` (SHA-256 `e558702a95cdce3febd289da021715d2b92bc43995b8a1bc58dfa1c3d8010287`), `Modules/_abc.c`, `Objects/typeobject.c` | `ABC`, `ABCMeta`, `abstractmethod()` and the deprecated decorators, which the compiler applies, with `object.__new__`'s `TypeError` for an abstract class; their docstrings |
 | `_codecs` (`_pystachy_codecs`) | `Modules/_codecsmodule.c`, `Objects/unicodeobject.c`, `Objects/stringlib/codecs.h` | The UTF-8, Latin-1, ASCII and charmap codec functions, `encode()`, `decode()` and the error handler registry, with the C module's errors and messages; the other codecs raise `NotImplementedError` |
+| `_struct` (`_pystachy_struct`) | `Modules/_struct.c`, `Objects/floatobject.c` | `calcsize()`, and the packing and unpacking of each item, which the compiler composes into `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` for a format it knows, with the C module's sizes, alignment, errors and messages and `PyFloat_Pack2()`'s rounding; `Struct`; their docstrings |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -151,6 +154,17 @@ module (`Modules/binascii.c`, SHA-256
 and compares their signatures. Its `--upstream DIR` option runs the pinned `test_binascii`
 (SHA-256 `95648ecc7cd21319fd515090ef5c0c2e4a501d43409ffc3ce27f5f647e73c7d7`) on the port, as
 recorded above.
+
+`tools/struct_check.py` runs `lib/_pystachy_struct.py` on CPython and composes its functions
+item by item as the compiler composes them, for 20,000 random formats, native and standard,
+with values at the edges of the codes' ranges and beyond, signed zeros, subnormals, infinities,
+NaNs and ties of rounding, cut and padded bytes, and offsets and buffers of every size. It
+compares the bytes, values and errors of 100,000 calls, also of `calcsize()` with invalid
+formats, with those of the C module (`Modules/_struct.c`, SHA-256
+`851f2a21bdbf4432c2e525da31a68a8213f5a4341d90bb2a6857b84c1a73d8e6`, which packs floats with
+`Objects/floatobject.c`'s `PyFloat_Pack2()`, `PyFloat_Pack4()` and `PyFloat_Pack8()`, SHA-256
+`be9a74fef157cf6105de8ce3beedb5325f0b433ebd4c64e604aeb9ebf29394b1`), and compares the functions'
+signatures and docstrings.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of

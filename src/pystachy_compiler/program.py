@@ -2,16 +2,20 @@
 from __future__ import annotations
 import os
 import sys
+from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
+    ABSTRACT_DECOS,
     EXCBASES,
     EXCEPTIONS,
+    exc_derives,
     INERT,
     INERT_DECOS,
+    is_excname,
     ITERS,
     MODATTRS,
     PURE,
@@ -20,8 +24,6 @@ from src.pystachy_compiler.specs import (
     RTSYM,
     TYPING,
     UNSUPPORTED,
-    exc_derives,
-    is_excname,
 )
 from src.pystachy_compiler.syntax import Node, dc_args, has_kind, mk, names_in
 from src.pystachy_compiler.utils import (
@@ -624,16 +626,87 @@ def gen_partly(self, e: Node, use: int) -> str:
         r = r if r != "" else self.partly(e.kids[i], 2 if e.kind == "set" or (e.kind == "dict" and i % 2 == 0) else use)
     return r if e.kind in ["tuple", "list", "set", "dict"] else self.effect(e, {}, use)
 
+def gen_abstract_defs(self, body: list[Node]) -> list[Node]:
+    # the class statements of a module's body as the compiler applies abc's ABCMeta to them: a
+    # method's @abstractmethod (the loader's qdeco names it abc$abstractmethod) is left out, the
+    # method recorded as one of its class's abstract methods (abstracts), and metaclass=ABCMeta
+    # is left out of a class statement's bases, the class recorded as one that makes such
+    # methods abstract (abcmeta). A class statement that it leaves without a base is a plain one
+    out: list[Node] = []
+    for st in body:
+        if st.kind == "subclass":
+            keep = [st.kids[0]]
+            for b in st.kids[1:]:
+                if b.kind == "kw" and b.s == "metaclass" and b.kids[0].kind == "name" and b.kids[0].s == "abc$ABCMeta":
+                    self.abcmeta[st.s] = True
+                else:
+                    keep.append(b)
+            st.kids = keep
+            if len(keep) == 1:
+                st = keep[0]
+        c = st.kids[0] if st.kind == "subclass" else st
+        if c.kind == "class":
+            for d in c.kids[0].kids:
+                if d.kind == "def" and any(x.kind == "deco" and x.s in ABSTRACT_DECOS for x in d.kids[3:]):
+                    keep = d.kids[:3]
+                    for x in d.kids[3:]:
+                        if x.kind != "deco" or x.s not in ABSTRACT_DECOS:
+                            keep.append(x)
+                        elif ABSTRACT_DECOS[x.s] != "":
+                            keep.append(mk("deco", ABSTRACT_DECOS[x.s], x.line, []))  # (@abstractproperty: @property)
+                    d.kids = keep
+                    if st.s not in self.abstracts:
+                        self.abstracts[st.s] = []
+                    if d.s not in self.abstracts[st.s]:
+                        self.abstracts[st.s].append(d.s)
+        out.append(st)
+    return out
+
+def gen_abstract_of(self, c: str) -> list[str]:
+    # the abstract methods class c leaves without an implementation (sorted), as CPython's
+    # ABCMeta finds them, where c derives from abc.ABC or a class statement passes
+    # metaclass=ABCMeta: those of its own (abstract_defs), and those of its base that it does
+    # not define again
+    ci = self.classes[c]
+    if not self.abc_class(c):
+        return []
+    out = [n for n in self.abstracts.get(c, [])]
+    if ci.base in self.classes:
+        defined: list[str] = []  # (what its body binds: a def, or a class attribute)
+        for st in ci.node.kids[0].kids:
+            if st.kind == "def":
+                defined.append(st.s)
+            elif (st.kind == "assign" or st.kind == "annassign") and st.kids[0].kind == "name":
+                defined.append(st.kids[0].s)
+        for n in self.abstract_of(ci.base):
+            if n not in out and n not in defined:
+                out.append(n)
+    return sorted(out)
+
+def gen_abc_class(self, c: str) -> bool:
+    # does class c derive from abc.ABC, or from a class whose statement passes metaclass=ABCMeta
+    while c in self.classes:
+        if c == "abc$ABC" or c in self.abcmeta:
+            return True
+        c = self.classes[c].base
+    return False
+
 def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
     if "moduleints" in self.opts:
         self.intglobals = module_ints(mods, self.intat)
-    self.strglobals = module_strs(mods)
+    self.strglobals = module_strs(mods, self.strtuples)
+    for m in mods:
+        m.body.kids = self.abstract_defs(m.body.kids)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
+    props: dict[str, bool] = {}
+    for m in mods:
+        refl_props(m.body, props)
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
     for m in mods:
@@ -649,6 +722,7 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif st.kind == "subclass" and st.kids[1].kind == "typeparams" and self.class_params(st) == "":
                 m.body.kids[i] = st.kids[0]  # class C[T]: as class C(Generic[T]) (see class_params)
                 self.tparams[st.s] = st.kids[1].s.split()
+                self.pep695[st.s] = True
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])

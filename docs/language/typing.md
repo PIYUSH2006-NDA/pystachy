@@ -22,10 +22,12 @@ unsupported forms, see [compatibility](compatibility.md).
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
-`bytes(s, encoding[, errors])`), `bytes.fromhex(s)` and
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)`, `bytes.maketrans(frm, to)` and
 `s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
 `+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
-printing work as in CPython. The methods are `decode`, `hex`, `join`, `split`, `rsplit`,
+printing work as in CPython. The methods are `decode`, `hex` (also with `sep` and
+`bytes_per_sep`, by position or name), `translate` (with a table or `None`, and `delete`, by
+position or name), `join`, `split`, `rsplit`,
 `splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
 `startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
 `removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
@@ -624,6 +626,9 @@ The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 parameter and has no `*args`, `**kwargs` or `TypeVarTuple`. It works in variable, field,
 parameter and return annotations, including nested types such as `list[C[int]]`, and in
 constructor calls such as `C[int]()`. The class statement must precede the annotation.
+A generic class without an `__init__` of its own, or a generic dataclass, binds nothing:
+`C[int]` is `C`, and its methods' parameters annotated with its type variables take each
+call's types. Its fields cannot use the type variables.
 
 Constructor arguments bind first; the named specialization or surrounding annotation fills
 variables the arguments leave unbound. Thus `q: Stack[int] = Stack()` and
@@ -700,7 +705,9 @@ Object methods and supported string, list, dict and file methods bind their obje
 `handler = obj.method`, `key=str.lower`, `write=file.write`. Bound methods compare equal
 when they refer to the same method of the same object; their identity test is rejected.
 Static and class methods, and numeric methods, cannot be stored as method values.
-Function values expose `__name__` and `__qualname__`; printing them is unsupported.
+Function values expose `__name__` and `__qualname__` (those of the function `functools.wraps()`
+wraps, where it does: [functools](../../lib/compatibility.md#functools)); printing them is
+unsupported.
 
 A lambda or nested `def` creates a closure on each execution. Captured variables are shared,
 so later assignments and `nonlocal` updates are visible. Captured variables must already be
@@ -726,8 +733,8 @@ class. In a subclass, `@property def value` starts a new property without the ba
 and deleter, while `@Base.value.setter` keeps the base's getter and deleter; a base-typed
 receiver calls the methods of its object's class. `@value.getter`, `property(fget, fset)`,
 property objects read through the class, `super().value = v`, and replacing a property with a
-field or method are unsupported. `hasattr(obj, "value")` on a property is rejected because it
-must run the getter; read it in `try/except AttributeError` instead.
+field or method are unsupported. `hasattr(obj, "value")` on a property runs the getter, and is
+false where it raises `AttributeError`, as in CPython.
 
 ## Fields, dataclasses and NamedTuples
 
@@ -762,7 +769,8 @@ in field order, also for `init=False` fields). `_: KW_ONLY` makes the
 following fields keyword-only. `frozen=True` objects raise `dataclasses.FrozenInstanceError`
 (an `AttributeError`) when a field or property is assigned or deleted outside the `__init__`
 that `@dataclass` writes. `dataclasses.replace(obj, **changes)` makes a new object through
-`__init__`. A mutable default (an unhashable value: a list, dict or set, or an object whose
+`__init__`. `dataclasses.fields()`, `asdict()`, `astuple()` and `is_dataclass()` are made for
+each class (see [reflection](semantics.md#reflection)). A mutable default (an unhashable value: a list, dict or set, or an object whose
 class defines `__eq__` without `__hash__`, as a dataclass with `eq=True` does unless it is
 frozen or has `unsafe_hash=True`) is rejected with CPython's message.
 
@@ -803,6 +811,12 @@ joins discard refinements that no longer hold. Globals, fields and locals assign
 `nonlocal` closure are not refined; copy a reference to a stable local and test that local.
 Only a single named derived class refines a base type; tuple/union tests and exception-class
 narrowing retain their existing restrictions.
+
+A class that derives from `abc.ABC`, or whose statement passes `metaclass=abc.ABCMeta`, has
+abstract methods: those decorated with `@abstractmethod` (also under `@property`,
+`@classmethod` or `@staticmethod`) until a subclass defines them again. Making an object of a
+class with an abstract method left raises CPython's `TypeError` once the arguments are
+evaluated ([abc](../../lib/compatibility.md#abc)).
 
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through

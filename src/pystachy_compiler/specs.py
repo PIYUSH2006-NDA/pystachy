@@ -38,9 +38,14 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
            "_weakref array atexit binascii cmath faulthandler fcntl gc grp itertools marshal posix pwd pyexpat select "
            "syslog unicodedata zlib").split():
     CBUILTIN[_k] = True
+# abc's decorators of abstract methods, which the compiler applies (Gen.abstract_defs): what each
+# deprecated one is, besides (abstractproperty: @property @abstractmethod)
+ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractproperty": "property",
+                                  "abc$abstractclassmethod": "classmethod", "abc$abstractstaticmethod": "staticmethod"}
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
-STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs"}
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
+                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -336,6 +341,10 @@ HASATTR: dict[str, str] = {
     "list": "__add__ __class_getitem__ __contains__ __delitem__ __getitem__ __iadd__ __imul__ __iter__ __len__ __mul__ __reversed__ "
             "__rmul__ __setitem__ append clear copy count extend index insert pop remove reverse sort",
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
+    "bytes": "__add__ __buffer__ __bytes__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mod__ __mul__ __rmod__ __rmul__ "
+             "capitalize center count decode endswith expandtabs find fromhex hex index isalnum isalpha isascii isdigit islower isspace "
+             "istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition "
+             "rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
     "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
@@ -617,7 +626,8 @@ RUNTIME: dict[str, str] = {
     "bytes.slice": "bytes:S,int,int|A|", "bytes.slice_step": "bytes:S,int,int,int|R A|", "bytes.has": "bool:str,int|R|",
     "bytes.contains": "bool:str,str|R|", "bytes.decode": "str:str,str,str|R A|", "str.encode": "str:str,str,str|R A|",
     "unicode_error_str": "str:int,str,str,int,int,str|R A|",
-    "bytes.hex": "str:str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
+    "bytes.hex": "str:str|R A|", "bytes.hex_sep": "str:str,str,int,int|R A|", "bytes.maketrans": "str:str,str|R A|",
+    "bytes.translate": "str:str,str,str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
     "bytes.zeros": "str:int|R A|", "bytes.join": "str:str,list[str]|R A rL|", "bytes.split": "list[str]:str,str,int|R A|",
     "bytes.rsplit": "list[str]:str,str,int|R A|", "bytes.strip": "str:str,str|R A|", "bytes.lstrip": "str:str,str|R A|",
     "bytes.rstrip": "str:str,str|R A|", "bytes.startswith": "bool:str,str,int,int|R|", "bytes.endswith": "bool:str,str,int,int|R|",
@@ -661,6 +671,8 @@ RUNTIME: dict[str, str] = {
     "eq.pair": "bool:*T,*T,%ptr,%ptr|rL rD U|",  # conservative: dict lookup's call graph reaches user equality
     "hash": "int:*T,#|U?|", "hash.id": "int:%ptr||",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
+    # reflection records (reflection.py): a name's index in a record's name table, and repr(vars(o))
+    "refl.find": "int:%ptr,str||", "refl.vars": "str:%ptr,%ptr|A I rO rL rD U|",
     "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "ubox": "%ptr:int,*T|A|", "ubox_opt": "%ptr:int,%ptr,int|A|", "unpack_check": "None:int,int|R|", "unpack_ex_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
@@ -680,7 +692,7 @@ RUNTIME: dict[str, str] = {
     "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
-    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|I rF wF|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
+    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams
     "write": "None:str,int|R I rF wF|", "input": "str:str|R A I rF wF|", "open": "file:str,str,str,str,int|R A I rF|", "std": "file:int||",
     "file.read": "str:S,int|R A I rF wF|", "file.readline": "str:S|R A I rF wF|", "file.readlines": "list[str]:S|R A I rF wF|",

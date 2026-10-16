@@ -1,0 +1,16 @@
+Point Point Point __main__
+Point(x=1) [Point(x=1)]
+Cat Cat meow
+Dog Dog woof
+Animal Animal Animal
+Bird Bird Bird
+Parrot Parrot Parrot
+Box Box
+int float bool str NoneType list dict tuple set frozenset Cat
+builtins NoneType list bytes True ['upper', 'zfill']
+str
+int
+NoneType
+Point
+Err Err Err(7)
+[exit 0]

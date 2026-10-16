@@ -1,0 +1,22 @@
+{'name': 'pen', 'qty': 2, 'price': 1.5}
+('pen', 2, 1.5)
+name
+qty
+price
+['name', 'center', 'tags', 'note', 'weights', 'hidden']
+{'name': 'p', 'points': [{'x': 1, 'y': 2}, {'x': 3, 'y': 4}]}
+('p', [(1, 2), (3, 4)])
+{'name': 'sq', 'center': {'x': 0, 'y': 0}, 'tags': {'a': {'x': 5, 'y': 6}}, 'note': None, 'weights': [], 'hidden': 0}
+sq 6 ('sq', (0, 0), {'a': (5, 6)}, None, [], 0)
+name sq
+center Point(x=0, y=0)
+tags {'a': Point(x=5, y=6)}
+note None
+weights []
+hidden 0
+3 [{'x': 1, 'y': 2}, {'x': 3, 'y': 4}]
+{'a': 1, 'b': 2, 'z': 3} (4, 5, 0) {'a': 6, 'b': 7} {'a': 8, 'b': 9, 'z': 10}
+True True False True
+3
+{'body': b'\x00ab', 'extra': None} (b'c', b'd') True
+[exit 0]

@@ -30,14 +30,17 @@ Imports search builtin modules first, then the program's directory,
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |
 | `re` | Subset port of parser/compiler and C engine | String regex syntax and matching, substitution, caches, runtime-length `Match.groups()` | Byte positions; other selected variable-length result APIs unavailable |
 | `fnmatch` | Adapted CPython | `fnmatch`, `fnmatchcase`, `filter`, `translate` | String patterns; POSIX case handling |
-| `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key`, `partial` | Typed callables and supported value/key types |
+| `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key`, `partial`, `wraps`, `update_wrapper` | Typed callables and supported value/key types |
 | `textwrap` | Adapted CPython | `TextWrapper`, `wrap`, `fill`, `shorten`, `dedent`, `indent` | Byte widths; no subclassing |
 | `string` | Adapted CPython | Constants, `capwords`, `Template`, `Formatter` and its subclasses | No `Template` subclasses; `Formatter` arguments of one union, no attribute or item fields |
 | `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode | Selected numeric types and APIs |
 | `random` | Adapted CPython on a subset `_random` (`_pyrandom`) | Seeded `Random` and module functions, integers, sequences, distributions, state | Int, bool and float seeds; 63-bit `getrandbits`; no subclasses |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
 | `codecs` | Adapted CPython on a subset `_codecs` (`_pystachy_codecs`) | BOM constants, `encode`, `decode`, the UTF-8, Latin-1, ASCII and charmap codec functions, `lookup_error`, `register_error`, the incremental classes | No codec registry (`lookup()`); no UTF-16, UTF-32, UTF-7 or escape codecs |
+| `atexit` | Subset port of CPython's C module (`_pystachy_atexit`) | `register` (also as a decorator, with arguments), callbacks run at the end of the program, also after `sys.exit()` or an uncaught exception; `_run_exitfuncs`, `_clear`, `_ncallbacks` | No `unregister`; a failing callback's report shows the exception's last line |
+| `abc` | Subset implementation (`_pystachy_abc`) | `ABC`, `metaclass=ABCMeta`, `@abstractmethod` (also under `@property`, `@classmethod`, `@staticmethod`) and the deprecated `abstractproperty`, `abstractclassmethod`, `abstractstaticmethod`, with CPython's `TypeError` for a class with abstract methods; `get_cache_token` | No virtual subclasses (`register()`), `__subclasshook__` or `__abstractmethods__` |
 | `binascii` | Subset port of CPython's C module (`_pystachy_binascii`) | Hex with separators, base64 with strict mode, uu, quoted-printable, `crc32`, `crc_hqx`, `Error` and `Incomplete` | Bytes and ASCII-str arguments only; Python functions, not builtins |
+| `struct` | Unchanged CPython on a subset port of the C module `_struct` (`_pystachy_struct`) | `pack`, `unpack`, `unpack_from`, `iter_unpack`, `calcsize` and `Struct` for every code of the native and standard tables, with CPython's bytes, values and errors | The format must be known as the program compiles (`calcsize()` takes any); `bytes` buffers; no `pack_into` |
 | `datetime` | Adapted CPython (`_pydatetime`, following `_datetime`) | `timedelta`, `date`, `time`, `datetime`, fixed-offset `timezone`, `tzinfo` subclasses, ISO 8601, `strftime()` | No local time zone; no `strptime()` or pickling |
 
 The [compatibility reference](compatibility.md) defines each module's accepted
@@ -78,13 +81,17 @@ to the compiled paths listed here and in the compatibility reference.
 | `genericpath` | `Lib/genericpath.py` | `cdac5a68dd738051e0d66fc81d5947d6a1776248fc6fe862253477608d870ec4` | Helpers used by `posixpath`. |
 | `curses.ascii` | `Lib/curses/ascii.py` | `780dd8bbaf0ee7e832f164c1772953e694a9cd1031d1ab1471af65344d3645e6` | ASCII character predicates and conversions. |
 | `urllib` | `Lib/urllib/__init__.py` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Empty package; `urllib.parse` is adapted separately. |
+| `struct` | `Lib/struct.py` | `9c231f9497caf513a22dee8f790b07f969b0e45854a0bdd6dd84b492e08c2856` | Its names, on `_pystachy_struct`; see [limits](compatibility.md#struct). |
 
 `curses/__init__.py` is a Pystachy stand-in for the package that normally imports
 `_curses`; it does not provide terminal control.
 
-`_pystachy_binascii.py` is `binascii` and `_pystachy_codecs.py` is `_codecs`, modules CPython
-builds into its interpreter: Pystachy loads those files for `import binascii` and `import
-_codecs`, where CPython imports its C modules.
+`_pystachy_binascii.py` is `binascii`, `_pystachy_codecs.py` is `_codecs`, `_pystachy_atexit.py` is
+`atexit` and `_pystachy_struct.py` is `_struct`, modules CPython builds into its interpreter:
+Pystachy loads those files for `import binascii`, `import _codecs`, `import atexit` and `import
+_struct`, where CPython imports its C modules.
+`_pystachy_abc.py` is `abc`, which CPython imports as it starts, so that a program's own `abc.py`
+is never imported there.
 
 `_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers
 (`list_iterator`, `dict_keyiterator`, ...). The compiler loads it for a program that calls
