@@ -134,9 +134,12 @@ from src.pystachy_compiler.builtins import (
     gen_is_mapcall as builtins_is_mapcall,
     gen_iterator_call as builtins_iterator_call,
     gen_key_check as builtins_key_check,
+    gen_key_free as builtins_key_free,
     gen_key_minmax as builtins_key_minmax,
     gen_key_minmax2 as builtins_key_minmax2,
     gen_key_minmax_next as builtins_key_minmax_next,
+    gen_key_none as builtins_key_none,
+    gen_key_none_join as builtins_key_none_join,
     gen_iter_object as builtins_iter_object,
     gen_key_sort as builtins_key_sort,
     gen_keys_of as builtins_keys_of,
@@ -3031,6 +3034,15 @@ class Gen:
 
     def key_check(self, key: Val, of: str) -> None:
         return builtins_key_check(self, key, of)
+
+    def key_none(self, key: Val, et: str, use: str, of: str) -> str:
+        return builtins_key_none(self, key, et, use, of)
+
+    def key_free(self, t: str, use: str) -> bool:
+        return builtins_key_free(self, t, use)
+
+    def key_none_join(self, r: Val, lnone: str, xs: Val, vals: list[Val], name: str) -> Val:
+        return builtins_key_none_join(self, r, lnone, xs, vals, name)
 
     def call_key(self, key: Val, x: Val) -> Val:
         return builtins_call_key(self, key, x)

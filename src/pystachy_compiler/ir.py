@@ -436,6 +436,7 @@ class ClassInfo:
         self.slotlimit = False  # every ordinary base and this class omit an instance dict
         self.fglob: dict[str, str] = {}
         self.fflag: dict[str, int] = {}  # field -> index of its "is assigned" flag in the struct
+        self.fsure: dict[str, bool] = {}  # the flagged fields that no read finds unassigned (hasattr tests them)
         self.methods: dict[str, FnInfo] = {}
         self.mod = ""
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used

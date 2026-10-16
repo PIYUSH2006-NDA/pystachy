@@ -20,6 +20,7 @@ from src.pystachy_compiler.specs import (
     MODFUNCS,
     NONEARG,
     NONERET,
+    NONEVAR,
     OPTARG,
     OPTCALLS,
     OPTTYPES,
@@ -756,18 +757,62 @@ def gen_vnode(self, v: Val) -> Node:
     return mk("val", str(len(self.vnodes) - 1), self.line, [])
 
 def gen_key_check(self, key: Val, of: str) -> None:
-    # key= of sorted(), min(), max() or list.sort(): a function value, a Callable, or an object
-    # whose class defines __call__
-    if is_opt(key.t) and is_callable(unopt(key.t)):
-        self.err(f"a key that may be None ({typestr(key.t)}) is not supported (the key of {of}): test it with 'is not None' first")
-    if not is_fn(key.t) and not is_callable(key.t) and not (key.t in self.classes and "__call__" in self.classes[key.t].methods):
+    # key= of sorted(), min(), max() or list.sort(): a function value, a Callable (one that may
+    # be None too, see key_none), or an object whose class defines __call__
+    t = unopt(key.t) if is_opt(key.t) and is_callable(unopt(key.t)) else key.t
+    if not is_fn(t) and not is_callable(t) and not (t in self.classes and "__call__" in self.classes[t].methods):
         self.err(f"'{tname(key.t)}' object is not callable (the key of {of})")
 
+def gen_key_none(self, key: Val, et: str, use: str, of: str) -> str:
+    # a key that may be None where the call runs (an object, or a Callable | None), which CPython
+    # takes as no key, as key=None: a branch to the block returned, where the caller orders the
+    # items (of type et, by desc(et, use)) themselves, and on in a new block where it is not
+    # None (call_key); "" where it never is, or the items are not key_free (an object key is
+    # called then, and raises TypeError for None)
+    if not (is_opt(key.t) and is_callable(unopt(key.t))) and (key.t not in self.classes or key.v in self.nn):
+        return ""
+    if not self.key_free(et, use):
+        if is_opt(key.t):
+            self.err(f"a key that may be None ({typestr(key.t)}) is not supported for items of type {typestr(et)} (the key of {of}): test it with 'is not None' first")
+        return ""
+    lnone = self.label()
+    lkey = self.label()
+    self.cbr(self.ptr_cmp('==', key, Val('null', 'None')).v, lnone, lkey)
+    self.place(lkey)
+    return lnone
+
+def gen_key_free(self, t: str, use: str) -> bool:
+    # does desc(t, use) take t without an error, and without compiling a method the keyed call
+    # does not: the items key_none orders without a key (not a closed union, but for ==, a
+    # function or **kwargs, nor an object, inside a container or not)
+    if is_union(unopt(t)):
+        return use == "==" and self.ueq_type(t)
+    if t == "int" or t == "float" or t == "bool" or t == "str" or t == "bytes" or t == "None" or t == "exc":
+        return True
+    if is_opt(t) and t != NONEVAR:
+        return self.key_free(unopt(t), use)
+    sub = use if use == "==" else "== " + use
+    if is_list(t):
+        return self.key_free(elem(t), sub)
+    if is_vtuple(t):
+        return self.key_free(targs(t)[0], sub)
+    if is_dict(t):
+        return self.key_free(targs(t)[0], use) and self.key_free(targs(t)[1], "==")
+    if is_set(t):
+        return self.key_free(selem(t), "==")
+    if is_tuple(t):
+        return len(targs(t)) <= 9 and all([self.key_free(x, sub) for x in targs(t)])
+    # (nor an object: desc would compile its class's ==, <, ... and repr, which the keyed call
+    # never needs, and which may not compile: a template __eq__ that returns NotImplemented)
+    return False
+
 def gen_call_key(self, key: Val, x: Val) -> Val:
-    # key(x), the key of item x: a call through function value key, of Callable key, or of
-    # object key's __call__
+    # key(x), the key of item x: a call through function value key, of Callable key (not None
+    # here, see key_none), or of object key's __call__
     if key.t in self.classes:
         return self.obj_call(key, [self.vnode(x)], "")
+    if is_opt(key.t):
+        key = Val(key.v, unopt(key.t))
     return self.call_value(key, [self.vnode(x)], "") if is_fn(key.t) else self.call_callable(key, [self.vnode(x)])
 
 def gen_keys_of(self, xs: Val, key: Val) -> Val:
@@ -804,17 +849,26 @@ def gen_key_sort(self, xs: Val, key: Val, rev: str, taken: bool) -> None:
     # sort list xs by key(item) (sorted(xs, key=...) of the copy xs, or xs.sort(key=...) of the
     # items a list gave up, taken: pys_list_take), reversed if rev: runtime.c sorts records of the
     # keys and the items by the keys (K), as CPython sorts its keys and moves the items along
+    lnone = self.key_none(key, elem(xs.t), "<", "sort()" if taken else "sorted()")
     ks = self.keys_of(xs, key)
     p = self.rt("pys_list_keyed", "ptr", [f"ptr {xs.v}", f"ptr {ks.v}", f"i64 {1 if taken else 0}"])
     self.rt("pys_list_sort_r", "void", [f"ptr {p}", f"ptr {self.sconst('K' + self.desc(elem(ks.t), '<'))}", f"i64 {rev}"])
     if not taken:
         self.rt("pys_list_unkey", "void", [f"ptr {xs.v}", f"ptr {p}"])
+    if lnone != "":
+        lend = self.label()
+        self.br(lend)
+        self.place(lnone)
+        self.rt("pys_list_sort_r", "void", [f"ptr {xs.v}", f"ptr {self.sconst(self.desc(elem(xs.t), '<'))}", f"i64 {rev}"])
+        self.br(lend)
+        self.place(lend)
 
 def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     # min(xs, key=...) and max(...): CPython calls the key on each item in turn and compares the
     # key with the best so far (key < best for min, key > best for max), keeping the first best
     # item; the list's length is read again at each step, as its iterator does
     et = elem(xs.t)
+    lnone = self.key_none(key, et, ">" if name == "max" else "<", f"{name}()")
     best = self.alloca(et, "")
     ctr = self.alloca("int", "")
     self.mstore('int', '0', ctr)
@@ -855,7 +909,35 @@ def gen_key_minmax(self, xs: Val, key: Val, name: str) -> Val:
     self.br(lc)
     self.place(le)
     self.guard(self.num_cmp('==', Val(self.mload('int', ctr), "int"), Val('0', "int")).v, f"ValueError: {name}() iterable argument is empty")
-    return Val(self.mload(et, best), et)
+    return self.key_none_join(Val(self.mload(et, best), et), lnone, xs, [], name)
+
+def gen_key_none_join(self, r: Val, lnone: str, xs: Val, vals: list[Val], name: str) -> Val:
+    # r, min() or max() by a key of list xs, of arguments vals or of iterator object xs, or where
+    # lnone (key_none) is a label, joined with what the block there gives: the least (greatest)
+    # of the items themselves, as min() without a key finds it
+    if lnone == "":
+        return r
+    l1 = self.cur
+    lend = self.label()
+    self.br(lend)
+    self.place(lnone)
+    if len(vals) > 0:
+        xs = Val(self.rt("pys_list_new", "ptr", [f"i64 {len(vals)}"]), self.ctype("list", [r.t]))
+        for v in vals:
+            self.rt("pys_list_append", "void", [f"ptr {xs.v}", "i64 " + self.to_slot(self.coerce(v, r.t))])
+    if is_list(xs.t):
+        d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
+        r0 = self.from_slot(self.rt("pys_list_minmax", "i64", [f"ptr {xs.v}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"]), r.t)
+    else:
+        item = made_var("__item", self.line)  # (made: it iterates the iterator itself, as min(o) does)
+        r0 = self.coerce(self.reduce(name, [mk("listcomp", "gen", self.line, [item, item, self.vnode(xs)])], ""), r.t)
+    l0 = self.cur
+    self.br(lend)
+    self.place(lend)
+    ph = Ins("phi", r.t, "")
+    self.incoming(ph, r.v, l1)
+    self.incoming(ph, r0.v, l0)
+    return Val(self.phi(ph), r.t)
 
 def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
     # min(a, b, ..., key=f) and max(...): the key of each argument in turn, compared with the
@@ -863,6 +945,7 @@ def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
     t = vals[0].t
     for b in vals[1:]:
         t = t if self.join(t, b.t) == "" else self.join(t, b.t)
+    lnone = self.key_none(key, t, ">" if name == "max" else "<", f"{name}()")
     best = self.coerce(vals[0], t)
     bk = self.call_key(key, vals[0])
     for b in vals[1:]:
@@ -873,11 +956,12 @@ def gen_key_minmax2(self, vals: list[Val], key: Val, name: str) -> Val:
         c = self.truth(self.cmp2(">" if name == "max" else "<", kb, bk))
         best = Val(self.select(c, self.coerce(b, t), best), t)
         bk = Val(self.select(c, self.coerce(kb, kt), self.coerce(bk, kt)), kt)
-    return best
+    return self.key_none_join(best, lnone, Val("", ""), vals, name)
 
 def gen_key_minmax_next(self, o: Val, key: Val, name: str) -> Val:
     # min(o, key=...) and max(...) of an object whose __iter__ returns an iterator object: each
     # item from __next__, its key computed and compared as it comes (key_minmax)
+    lnone = self.key_none(key, self.next_type(o.t), ">" if name == "max" else "<", f"{name}()")
     it = self.obj_iterator(o, "TypeError: 'NoneType' object is not iterable", f"'{tname(o.t)}' object is not iterable")
     c = self.stop_catch()
     first = self.alloca("bool", "")
@@ -907,7 +991,7 @@ def gen_key_minmax_next(self, o: Val, key: Val, name: str) -> Val:
     self.stop_landing(c, le)
     self.place(le)
     self.guard(self.mload('bool', first), f"ValueError: {name}() iterable argument is empty")
-    return Val(self.mload(item.t, best), item.t)
+    return self.key_none_join(Val(self.mload(item.t, best), item.t), lnone, o, [], name)
 
 def gen_iter_object(self, t: str) -> bool:
     # is t a class whose __iter__ returns an iterator object (obj_iterator), not iter(xs) of a
