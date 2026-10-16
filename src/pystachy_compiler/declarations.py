@@ -1462,10 +1462,21 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
                     ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
                     t = "int"
                 self.add_field(ci, name, t)
-            elif name not in ci.ftypes and f.acc == "" and name + ".setter" in ms and ms[name + ".setter"].cls == (ci.origin if ci.origin != "" else ci.name):
-                # self.x = v of property x in __init__: the fields its setter assigns too
+            elif name not in ci.ftypes and name + ".setter" in ms and ms[name + ".setter"].cls == (ci.origin if ci.origin != "" else ci.name) and ci.name + "." + name not in self.scanning:
+                # self.x = v of property x in __init__ (or in a setter it calls so): the fields
+                # its setter assigns too
                 g = ms[name + ".setter"]
+                if ci.origin != "":
+                    # (a specialization's, whose value has the type of v, unless annotated with
+                    # no type variable, as its __init__'s parameters have the arguments')
+                    h = FnInfo(g.name, g.ll, g.node, ci.name)
+                    h.params = g.params
+                    h.ptypes = [ci.name, g.ptypes[1] if g.ptypes[1] != "" else self.guess(st.kids[-1], f)]
+                    h.acc = g.acc
+                    g = h
+                self.scanning[ci.name + "." + name] = True
                 self.scan_fields(ci, g, g.node.kids[2].kids)
+                del self.scanning[ci.name + "." + name]
                 self.line = st.line
         for kid in st.kids:
             if kid.kind == "block":

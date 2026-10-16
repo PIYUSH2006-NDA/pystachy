@@ -171,6 +171,17 @@ def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
         self.err(f"@{of}.{acc} on method {d.s} is not supported: a property's {acc} takes its name ({of[of.rfind('.') + 1 :]}), and a base's property is named through the base class")
     return "." + acc
 
+def gen_class_ref(self, m: Mod, s: str) -> str:
+    # the class that dotted name s names in module m's code, where the loader leaves a
+    # decorator's name of another module's class as written (see Loader.qdeco), else s
+    root = s[: s.find(".")] if "." in s else s
+    k = m.kinds.get(root[len(m.q) :] if root.startswith(m.q) else root, "")
+    if k.startswith("a:"):
+        return k[2:] + s[len(root) :]
+    if k.startswith("m:"):
+        return (k[2:] + s[len(root) :]).replace(".", "$")
+    return s
+
 def gen_dc_options(self, ci: ClassInfo) -> None:
     # class ci's decorators: @dataclass, whose options (dc_args) it keeps, and no other
     st = ci.node
@@ -729,10 +740,13 @@ def gen_program(self, mods: list[Mod]) -> str:
                             self.err(f"redefinition of method '{st.s}.{d.s}' is not supported")
                         self.lib = m.name != ""
                         self.selfcls = st.s
-                        self.classes[st.s].methods[key] = self.declare_fn(d, st.s)
+                        g = self.declare_fn(d, st.s)
                         self.selfcls = ""
                         self.lib = False
-                        self.classes[st.s].methods[key].mod = m.name
+                        g.mod = m.name
+                        if "." in g.accof:
+                            g.accof = self.class_ref(m, g.accof[: g.accof.rfind(".")]) + g.accof[g.accof.rfind(".") :]  # (@Base.x.setter)
+                        self.classes[st.s].methods[key] = g
                 top.append(mk("cdefaults", st.s, st.line, []))
             else:
                 top.append(st)

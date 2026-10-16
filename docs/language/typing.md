@@ -616,7 +616,8 @@ use the ordinary method dispatch. A callable-valued property can be called as `o
 A setter, defined after the getter under the same name, takes `self` and the value;
 `obj.value = v` and `obj.value += v` call it, and `del obj.value` calls the deleter. Without
 one, they raise CPython's `AttributeError` (`property 'value' of 'C' object has no setter`).
-`self.value = v` in `__init__` calls the setter, and the fields it assigns are fields of the
+`self.value = v` in `__init__` calls the setter, and the fields it assigns (also through
+another property's setter, and typed per specialization in a generic class) are fields of the
 class. In a subclass, `@property def value` starts a new property without the base's setter
 and deleter, while `@Base.value.setter` keeps the base's getter and deleter; a base-typed
 receiver calls the methods of its object's class. `@value.getter`, `property(fget, fset)`,

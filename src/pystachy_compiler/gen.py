@@ -470,6 +470,7 @@ from src.pystachy_compiler.program import (
     gen_hook as program_hook,
     gen_inherit as program_inherit,
     gen_accessor as program_accessor,
+    gen_class_ref as program_class_ref,
     gen_dc_options as program_dc_options,
     gen_init_template as program_init_template,
     gen_left_out as program_left_out,
@@ -797,6 +798,7 @@ class Gen:
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)
         self.hasfrozen = False  # a @dataclass(frozen=True) class: except clauses list dataclasses.FrozenInstanceError
+        self.scanning: dict[str, bool] = {}  # the properties whose setters scan_fields is scanning (C.x)
         # "C.x": class attribute x of plain class C, which the program assigns through the class
         # (C.x = v, cls.x += 1): a global that objects read until they assign x (see cvar_stores)
         self.cvars: dict[str, bool] = {}
@@ -1468,6 +1470,9 @@ class Gen:
 
     def accessor(self, ci: ClassInfo, d: Node) -> str:
         return program_accessor(self, ci, d)
+
+    def class_ref(self, m: Mod, s: str) -> str:
+        return program_class_ref(self, m, s)
 
     def dc_options(self, ci: ClassInfo) -> None:
         return program_dc_options(self, ci)
