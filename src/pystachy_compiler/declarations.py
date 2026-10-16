@@ -1855,6 +1855,12 @@ def gen_guess_varargs(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[s
             ts[i - 1] = t
     return ts
 
+def guess_scope(f: FnInfo) -> list[Node]:
+    # the statements whose bindings hide a function from gen_guess: those of the function f, or
+    # of the class body whose attribute declare_fields types (f.node is then the class's node)
+    return f.node.kids[0].kids if f.node.kind == "class" else f.node.kids[2].kids
+
+
 def gen_guess(self, e: Node, f: FnInfo) -> str:
     k = e.kind
     if k == "int" or k == "float" or k == "str":
@@ -1883,7 +1889,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
     if k == "name" and (e.s in self.funcs or (e.s in PYBUILTINS and e.s[0].islower() and not self.bound(e.s))):
         # a function, which the field then holds (unless a local of the method has its name)
         asg: dict[str, bool] = {}
-        local_names(f.node.kids[2].kids, asg)
+        local_names(guess_scope(f), asg)
         if e.s not in asg:
             return f"fn[f:{e.s}]" if e.s in self.funcs else f"fn[b:{e.s}]"
     p = self.imported_ref(e) if k == "name" or k == "attr" else ""
@@ -1894,7 +1900,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         while root.kind == "attr":
             root = root.kids[0]
         asg = {}
-        local_names(f.node.kids[2].kids, asg)
+        local_names(guess_scope(f), asg)
         if root.s not in asg:
             return f"fn[b:{p}]"
     # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
@@ -1958,7 +1964,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
                 # the existing template; it neither evaluates source nor guesses
                 # the return from one branch of the helper's body.
                 assigned: dict[str, bool] = {}
-                local_names(f.node.kids[2].kids, assigned)
+                local_names(guess_scope(f), assigned)
                 args = e.kids[1:]
                 if c in f.params or c in assigned or len(args) > len(helper.params) or (helper.npos >= 0 and len(args) > helper.npos):
                     return ""
@@ -2129,6 +2135,17 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.class_default(ci, name)
         return Val(ci.fglob[name], ci.ftypes[name])
     return Val(self.fgep(o, ci.fpos[name]), ci.ftypes[name])
+
+def gen_fn_attr_read(self, o: Val, name: str) -> None:
+    # o.name read through object o, where its class binds name to a function in its body
+    # (name = f): CPython binds o to the function's first parameter there, as for a method, which
+    # is not supported. A builtin function (fn[b:...]) or a bound method that a class attribute
+    # holds is read as itself through an object, as in CPython
+    ci = self.classes[o.t]
+    t = ci.ftypes.get(name, "")
+    if name in ci.fdefault and (t.startswith("fn[f:") or t.startswith("fn[c:") or t.startswith("fn[u:")):
+        self.err(f"class attribute '{name}' of '{short(o.t)}' holds a function ({name} = ...): reading it through an object is not supported (CPython binds the object to the function's first parameter, as for a method); read it through the class ({short(o.t)}.{name}), or define {name} with def")
+
 
 def gen_fgep(self, o: Val, i: int) -> str:
     # Keep the declared object layout and member type until lowering. The address

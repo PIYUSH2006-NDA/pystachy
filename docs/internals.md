@@ -235,6 +235,11 @@ program's own functions, performs SSA cleanup, then ORC JIT runs with the cached
 object. The default inlining threshold is 20,000 lines of generated IR; larger programs skip
 that pass. The precompiled runtime is not inlined into JIT code.
 
+`PYSTACHY_JIT_CODEGEN=0` selects MCJIT with `-O0` code generation. This can reduce
+startup for large programs, but the generated code can run slower. The default (`2`)
+keeps ORC and its normal code generation. This choice does not change the IR cleanup
+or inlining pipeline, and does not affect `build` or `ext`.
+
 `build` links the runtime bitcode with the program and applies clang's `-O2` optimization
 pipeline, allowing optimization across that boundary. `ext` builds a shared CPython module
 with its boundary wrappers; see the [FFI guide](ffi.md).
@@ -265,6 +270,7 @@ provide the broader behavior check. See [testing](testing.md) for the commands.
 | `PYSTACHY_IRFX=1` | Print function effect summaries to stderr |
 | `PYSTACHY_OPT` | Disable named optimizations with `-name`, comma-separated, or all with `-all`; see [IR passes](typed-ir.md#optimizations) |
 | `PYSTACHY_JIT_INLINE=N` | IR-line threshold for JIT inlining; `0` disables it |
+| `PYSTACHY_JIT_CODEGEN=0\|2` | `0` selects MCJIT `-O0`; `2` (default) keeps ORC code generation |
 | `PYSTACHY_GC_STRESS=N` | Collect every N allocations |
 | `PYSTACHY_GC_STRESS_PROGRAM=N` | Apply the stress interval to the program run by JIT or the test runner, separately from its compiler |
 | `PYSTACHY_GC` | `off` disables collection; `stats` prints a summary at exit |

@@ -100,6 +100,10 @@ AOT optimizes the program and runtime together. The measured tradeoffs are recor
 JIT execution includes frontend and LLVM work; a built AOT executable starts directly.
 The first JIT run after a runtime rebuild also pays for compiling the runtime cache.
 Separate process startup, first calls and warmed execution when reporting results.
+For startup-sensitive runs, `PYSTACHY_JIT_CODEGEN=0` opts into MCJIT `-O0` code
+generation. It can reduce large-program startup while slowing execution; benchmark
+the complete workload. Unset or `2` retains the default ORC path. See [#430](https://github.com/den-run-ai/pystachy/issues/430)
+for the measured tradeoff; it is independent of `PYSTACHY_JIT_INLINE`.
 
 For `list(range(4194305))`, [#201](https://github.com/den-run-ai/pystachy/pull/201) recorded
 **169 MiB CPython versus 34.2 MiB AOT peak RSS**, approximately a 5× reduction. This used

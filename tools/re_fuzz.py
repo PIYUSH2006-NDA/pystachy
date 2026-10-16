@@ -23,6 +23,8 @@ unbounded, such patterns backtrack exponentially, in _sre too.
 
 Deterministic: the patterns and strings come from random.Random(SEED). Compiled Pystachy runs the
 same port: tests/upstream_re_*.py and tests/lib_re.py check it against CPython's re.
+The inline-flag alphabetic classifier and its identifier-start delta are also checked exhaustively
+against str.isalpha()/str.isidentifier() for every code point U+0000..U+10FFFF, including surrogates.
 
 usage: python3 tools/re_fuzz.py [N] [SEED]   (N random patterns, default 2000; SEED default 1)
 """
@@ -450,6 +452,16 @@ UPSTREAM = [
     # PatternReprTests.test_long_pattern
     ("repr", 'Very %spattern' % ('long ' * 1000), 0, ''), ("repr", 'Very %spattern' % ('long ' * 1000), re.I, ''),
 ]
+# Keep this in the hosted gate: a million-character classification audit needs no native GC-stress
+# loop. The small tests/lib_re_inline_flags.py fixture checks all three parser paths compiled.
+utf8(False)
+for cp in range(0x110000):
+    ch = chr(cp)
+    alpha = ch.isalpha()
+    same("unicode alpha", (port._sre.uni_isalpha(cp), port._isalpha(ch), port._sre._inranges(6, cp)),
+         (alpha, alpha, alpha != ch.isidentifier()), (cp,))
+for token in ["", "aa", r"\w", r"\u2160"]:
+    same("non-character flag token", port._isalpha(token), False, (token,))
 for how, p, f, s in UPSTREAM:
     # (the 2,500,000 ASCII characters of the lookbehind's string only as code points: as UTF-8 the
     # port reads them alike, in another 3 seconds)

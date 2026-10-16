@@ -610,6 +610,7 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         if m not in ci.methods and ci.exc != "" and m in HASATTR["any"].split() + ["add_note", "with_traceback"]:
             self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
         if m not in ci.methods and m in ci.ftypes:
+            self.fn_attr_read(o, m)
             return self.obj_call(self.getfield(o, self.field(o, m), m), args, want, resultsoft)  # (o.f(args) of a field f)
         if m not in ci.methods and not ((m == "_replace" or m == "_asdict" or m == "index" or m == "count") and o.t in self.nts):
             self.err(f"'{shown(o.t)}' object has no method '{m}'")  # (a specialization's is its class's)

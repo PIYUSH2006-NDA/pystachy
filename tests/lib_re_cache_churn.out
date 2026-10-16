@@ -1,0 +1,5 @@
+hot recompiles 0
+distinct flags True
+result ['ABC', 'def']
+purged True
+[exit 0]
