@@ -26,7 +26,7 @@ from src.pystachy_compiler.specs import (
     PYBUILTINS,
     VERSIONINFO,
 )
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
@@ -303,7 +303,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         # these stop at the deciding item, as CPython's iterators do
         g = args[0]
         if g.kind != "listcomp":
-            g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
+            g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), made_var("__item", g.line), g])
         return self.listcomp(g, "", name)
     if name == "sum" or name == "min" or name == "max":
         stt = self.stream_start(name, args)
@@ -378,7 +378,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             if len(kv) > 0 and name != "sum":
                 self.key_check(kv[0], f"{name}()")
                 return self.key_minmax_next(v0, kv[0], name)
-            item = mk("name", "__item", self.line, [])
+            item = made_var("__item", self.line)
             g = mk("listcomp", "gen", self.line, [item, item, self.vnode(v0)])
             return self.listcomp(g, "", name) if name == "any" or name == "all" else self.reduce(name, [g], "")
         vals = [self.as_list(v0, name)]
@@ -391,7 +391,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         # __iter__ and range's step check run before start; reversed keeps its original length.
         it = args[0]
         if self.iterator_call(it):
-            item = mk("name", "__item", it.line, [])
+            item = made_var("__item", it.line)
             it = mk("listcomp", "gen", it.line, [item, item, it])
         st = IterArg(args[1])
         vals = [self.listcomp(it, "", "", "", st), st.value]
@@ -414,7 +414,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
     if name == "sum" and len(vals) == 2 and self.iter_object(vals[0].t) and (vals[1].t == "int" or vals[1].t == "float"):
         # (an iterator object's items, added as they come)
-        item = mk("name", "__item", self.line, [])
+        item = made_var("__item", self.line)
         return self.reduce(name, [mk("listcomp", "gen", self.line, [item, item, self.vnode(vals[0])]), self.vnode(vals[1])], vals[1].t)
     if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
         vals[0] = self.as_list(vals[0], name)  # (sum(o, start) iterates o once start is evaluated)
@@ -914,7 +914,7 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     # and strs collect them for pys_list_minmax, as before
     g = args[0]
     if g.kind != "listcomp":
-        item = mk("name", "__item", g.line, [])
+        item = made_var("__item", g.line)
         g = mk("listcomp", "gen", g.line, [item, item, g])
     key = str(len(self.reds))
     r = Reduce(name, stt)
@@ -1075,9 +1075,9 @@ def gen_mapgen(self, n: Node) -> Node:
     f = args[0] if fn == "filter" and args[0].kind == "None" else fmt if literal_format(fmt) else self.vnode(self.expr(args[0], ""))
     if fn == "filter":
         cond = mk("name", "__item", line, []) if f.kind == "None" else mk("call", "", line, [f, mk("name", "__item", line, [])])
-        return mk("listcomp", "gen", line, [mk("name", "__item", line, []), mk("name", "__item", line, []), args[1], cond])
+        return mk("listcomp", "gen", line, [mk("name", "__item", line, []), made_var("__item", line), args[1], cond])
     if len(args) == 2:
-        return mk("listcomp", "gen", line, [mk("call", "", line, [f, mk("name", "__item", line, [])]), mk("name", "__item", line, []), args[1]])
+        return mk("listcomp", "gen", line, [mk("call", "", line, [f, mk("name", "__item", line, [])]), made_var("__item", line), args[1]])
     if self.bound("zip"):
         self.err("map() of several iterables is not supported where zip is bound")
     items = [mk("name", f"__item{i}", line, []) for i in range(len(args) - 1)]
@@ -1110,7 +1110,7 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft
         self.iterarg(arg)
         return r
     it = mk("name", "__item", n.line, [])
-    return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want, "", "", arg, resultsoft=resultsoft)
+    return self.listcomp(mk("listcomp", "", n.line, [it, made_var("__item", n.line), n]), want, "", "", arg, resultsoft=resultsoft)
 
 def gen_as_list(self, v: Val, name: str) -> Val:
     # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item

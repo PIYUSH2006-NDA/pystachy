@@ -10,7 +10,6 @@ from src.pystachy_compiler.analysis import (
     builtin_import,
     builtin_module,
     builtin_of,
-    calls_iter,
     calls,
     catches_import,
     clean_doc,
@@ -30,6 +29,7 @@ from src.pystachy_compiler.analysis import (
     local_types,
     mark,
     may_end,
+    module_reads,
     names_name,
     own_specials,
     read_names,
@@ -202,7 +202,7 @@ class Loader:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
         self.intry = 0
-        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if calls_iter(x.body, False)]) > 0:
+        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if module_reads(x.body, "iter")]) > 0:
             # iter() makes iterator objects of builtin containers: of lib's classes, whose module
             # nothing imports (it imports nothing either, so it comes first)
             self.load(ITERS, self.dirs[-1] + "/" + ITERS + ".py", "")

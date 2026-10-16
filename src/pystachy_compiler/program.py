@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 import sys
-from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
+from src.pystachy_compiler.analysis import all_imports, collect, defines, module_ints, module_reads, module_strs, needs_eh, none_assigns, reads_builtin
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -235,7 +235,7 @@ def gen_template_fix(self, cs: list[Node]) -> str:
     for st in cs:
         for d in st.kids[0].kids:
             if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
-                if calls_iter(d.kids[2], False) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
+                if reads_builtin(d.kids[2], "iter", False, False, {}) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
                     return "an __init__ that calls iter() or takes an Iterator[T] or Iterable[T] makes one (an iterator's type is its class)"
     return "annotate __init__ parameters"
 
@@ -636,6 +636,11 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
+    if not self.eh and len([m for m in mods if defines(m.body, "__next__")]) > 0:
+        # a __next__ method's StopIteration is caught where a loop (or unpacking, in, a consumer)
+        # takes the items of an object through its __iter__ (obj_iterator, the only way to an
+        # iterator object's), and by next(it, default)
+        self.eh = len([m for m in mods if defines(m.body, "__iter__") or module_reads(m.body, "next")]) > 0
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):

@@ -25,7 +25,7 @@ from src.pystachy_compiler.specs import (
     UNARY,
     UNSUPPORTED,
 )
-from src.pystachy_compiler.syntax import Node, comp_names, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, names_in
 from src.pystachy_compiler.utils import (
     bool_for_int,
     clone,
@@ -1247,7 +1247,7 @@ def gen_format_merge(self, fa: FmtArgs) -> None:
             self.format_dup(fa, nm)
         return
     line = self.line
-    k = mk("name", "__pys_item", line, [])
+    k = made_var("__pys_item", line)
     names = mk("tuple", "", line, [mk("str", nm, line, []) for nm in fa.kwn])
     dups = self.expr(mk("listcomp", "", line, [k, k, self.vnode(fa.kd), mk("cmp", "in", line, [k, names])]), "")
     l1 = self.label()
@@ -2363,9 +2363,9 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     self.compshare = {}
     own: list[str] = []
     names_in(n.kids[1], own)
-    # (a comprehension the program writes, not one the compiler makes of a call, iterates
-    # iter() of its iterable's iterator, as CPython 3.13's does: see for_)
-    written = not (n.kids[1].kind == "name" and (n.kids[1].s.startswith("__item") or n.kids[1].s == "__pys_item"))
+    # (a comprehension the program writes, not one the compiler makes of a call (made_var),
+    # iterates iter() of its iterable's iterator, as CPython 3.13's does: see for_)
+    written = not n.kids[1].made
     self.for_(mk("for", "comp" if written else "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), own, arg)
     self.narrowed = self.forget_walrus(pre, [n])
     self.compshare = share

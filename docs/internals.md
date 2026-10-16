@@ -150,9 +150,11 @@ exponential duplication. The C runtime is compiled with exception support in bot
 Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
 over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
 (and its subclasses), restores the exception being handled and leaves the loop; the loop
-body itself stays outside that handler. `iter()` of a builtin container makes an object of a
-class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that calls
-`iter()` and whose classes compile only when specialized.
+body itself stays outside that handler. Such a handler turns exception handling on for a
+program that defines `__next__` and also `__iter__` or reads the builtin `next`; a `__next__`
+only called directly needs none. `iter()` of a builtin container makes an object of a
+class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that reads
+the builtin `iter` (not a name a scope binds) and whose classes compile only when specialized.
 
 <a id="whole-program-optimization"></a>
 <a id="two-tiers"></a>

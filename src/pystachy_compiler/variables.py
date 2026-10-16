@@ -25,7 +25,7 @@ from src.pystachy_compiler.diagnostics import MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
-from src.pystachy_compiler.syntax import Node, comp_names, mk, name_targets, starred_target
+from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, name_targets, starred_target
 from src.pystachy_compiler.utils import (
     elem,
     empty_ann,
@@ -1272,7 +1272,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
         if (a.kind != "listcomp" or a.s != "gen") and not self.iterator_call(a):
             a = self.vnode(self.consume(a, ""))
-        item = mk("name", "__item", a.line, [])
+        item = made_var("__item", a.line)
         g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
         et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
         et = self.none_items(et) if is_tuple(et) else et
