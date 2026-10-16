@@ -14,8 +14,8 @@
 # - test_negative_zero's complex numbers (rejected: "complex numbers are not supported") 620-623
 # - test_specifier_z_error's "%z.1f" % 0 (a compile-time error here, with CPython's message
 #   "unsupported format character 'z' (0x7a) at index 1": tests/errors/upstream_format_percent_z.py)
-#   644 and b"%z.1f" % 0 (rejected: "bytes
-#   literals are not supported (there is no bytes type)") 646
+#   644 and b"%z.1f" % 0 (rejected: "unsupported operand type(s) for %: 'bytes' and 'int'")
+#   646
 # - testformat()/testcommon() and test_common_format, test_str_format, test_nul, test_non_ascii,
 #   test_precision* (% formatting, which tests/upstream_float_format.py and
 #   tests/upstream_int_format.py adopt from test_float.py and test_long.py), test_locale,

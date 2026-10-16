@@ -49,6 +49,7 @@ q True
 r True
 hash(1) True
 hash(1.0) True
+hash(b'spam') True
 ok
 hex(16) '0x10'
 hex(-16) '-0x10'

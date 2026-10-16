@@ -60,10 +60,13 @@
 #   type of 'test_cases', an empty list so far"): 630 661 1299 1415 2045; ranges as values (1184
 #   1273); date as a value (cls.resolution, rejected: "class 'datetime.date' cannot be used as a
 #   value"): 1574 1575; 1150 (an int and a date in one list)
-# - eval(repr()) (792 1135), copy, pickle, io, support, _time (time.strftime()), bytes (1855
-#   1858), test_backdoor_resistance, test_strftime_trailing_percent, test_strftime_y2k,
+# - eval(repr()) (792 1135), copy, pickle, io, support, _time (time.strftime()),
+#   test_backdoor_resistance (date() of a bytes pickle state, 1855 1858, rejected: "date.__init__()
+#   missing 2 required positional arguments: 'month' and 'day'"), test_strftime_trailing_percent,
+#   test_strftime_y2k,
 #   test_pickling*, test_compat_unpickle, test_isocalendar_pickling, test_subclass_replace,
-#   test_fromisoformat_fails_typeerror (BytesIO, bytes), test_insane_fromtimestamp
+#   test_fromisoformat_fails_typeerror (a list of bytes, None and io.StringIO; fromisoformat(b'...')
+#   is rejected: "expected str, got bytes"), test_insane_fromtimestamp
 # - the other TestDate methods (test_today, test_fromtimestamp, test_insane_*,
 #   test_isocalendar, test_fromisocalendar*, test_mixed_compare, test_subclass_*): as above;
 #   test_harmless_mixed_comparison and test_harmful_mixed_comparison (HarmlessMixedComparison:

@@ -9,7 +9,7 @@
 # test_multiple_vars, test_closure, test_arguments, test_locals, test_missing_format_spec,
 # test_global, test_shadowed_global, test_call, test_nested_fstrings,
 # test_leading_trailing_spaces, test_not_equal, test_equal_equal, test_conversions,
-# test_if_conditional, test_empty_format_specifier, test_loop, test_dict,
+# test_if_conditional, test_empty_format_specifier, test_errors, test_loop, test_dict,
 # test_debug_conversion, test_debug_expressions_are_raw_strings, test_walrus,
 # test_with_two_commas_in_format_specifier and test_raw_fstring_format_spec; commit
 # cbc944f4bc59639a444dd971c737788ba2283a91.
@@ -20,12 +20,13 @@
 # assertRaisesRegex are try statements that print the exception (the regex is not matched).
 # Of a method's other statements, a function keeps the ones that bind what its assertions
 # read, in upstream's order. 271 of these methods' 321 such assertions are adopted, all but
-# these (test_fstring.py line numbers):
+# these (test_fstring.py line numbers). test_errors' assertAllRaise(ValueError, ...) evaluates
+# f'{1000:j}' twice through eval(); here each is a try statement that prints the exception.
 # EXCLUDED upstream cases:
 # - \N{...} escapes (rejected: "\N{...} escapes are not supported"): 972-978, 1003, 1006,
 #   1033-1035, 1069; a non-ASCII identifier (rejected: "non-ASCII identifiers are not
 #   supported", tenπ): 1575
-# - test_str_format_differences' '{a[0]}'.format(a=...) of a dict with int and str keys
+# - test_str_format_differences' f-strings and str.format() of a dict with str and int keys
 #   (rejected: "expected str, got int"): 1506-1510; test_format_specifier_expressions'
 #   decimal.Decimal: 821-825, 831, and its `x != {...}` (rejected: "cannot compare int !=
 #   dict[int,int]"): 830
@@ -35,6 +36,10 @@
 #   <function f> has no attribute '__doc__'"): 572, 576 (test_docstring); test_missing_variable
 #   (a compile-time "name 'value' is not defined", where CPython raises NameError when the code
 #   runs; documented): 1231; 993, 996 (value from eval()), 1260 (unittest)
+# - test_errors' assertAllRaise(TypeError, ...) snippets f'{(lambda: 0):x}' and f'{(0,):x}'
+#   (compile-time errors here, with CPython's messages "unsupported format string passed to
+#   function.__format__" and "... tuple.__format__", where CPython raises TypeError when the
+#   code runs; documented): 1514-1517
 # - test_debug_conversion's x, which upstream rebinds to a str, a float and ints and assigns
 #   through := and through a closure's nonlocal: (x:="5") after x = 9 (rejected: "expected int,
 #   got str"): 1600, and 1601 after it; the nonlocal-assigning f() (rejected: "f() reads 'x',
@@ -50,7 +55,7 @@
 #   "cannot delete f-string expression", Pystachy: "... literal ...")
 # - test_ast* (the ast module), test_docstring, test_literal_eval, test_many_expressions and
 #   test_many_fstrings_in_module (eval(), exec()), test_yield*, test_assignment and test_del
-#   (exec() of SyntaxErrors), test_errors (complex, bytes), test_debug_in_file*,
+#   (exec() of SyntaxErrors), test_debug_in_file*,
 #   test_syntax_warning_infinite_recursion_in_file,
 #   test_expression_in_interactive_after_buffer_resize, test_fstring_without_formatting_bytecode,
 #   test_gh129093, test_newlines_in_format_specifiers (SyntaxErrors), test_gh139516 (no
@@ -475,6 +480,17 @@ def test_empty_format_specifier() -> None:
     eq(f'{x!r:}', "'test'")
 
 
+def test_errors() -> None:
+    try:
+        f'{1000:j}'
+    except ValueError as e:
+        print(type(e).__name__ + ':', e)
+    try:
+        f'{1000:j}'
+    except ValueError as e:
+        print(type(e).__name__ + ':', e)
+
+
 def test_loop() -> None:
     for i in range(1000):
         eq(f'i:{i}', 'i:' + str(i))
@@ -641,6 +657,7 @@ test_equal_equal()
 test_conversions()
 test_if_conditional()
 test_empty_format_specifier()
+test_errors()
 test_loop()
 test_dict()
 test_debug_conversion()

@@ -27,7 +27,8 @@
 #   documented (lib/README.md: int, bool and float seeds; 63-bit getrandbits); also
 #   test_bigrand, test_bigrand_ranges, test_randbelow_logic, test_randrange_bug_1590891,
 #   getrandbits() above 62 bits and its 100-bit repeatability values, test_randbytes
-#   (no bytes), test_pickling, test_bug_1727780, setstate()/getstate() errors
+#   (rejected: "'int' has no method 'to_bytes'"), test_pickling, test_bug_1727780,
+#   setstate()/getstate() errors
 # - a range as a population (rejected: "range() is only supported in a for loop, after 'in', or
 #   as the argument of list(), tuple(), ..."), test_sample_distribution (a dict keyed by
 #   tuple[int, ...], rejected: "dict keys must be int or str, objects, or tuples of int, bool, str,

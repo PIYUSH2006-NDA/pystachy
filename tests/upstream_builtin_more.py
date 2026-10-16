@@ -16,7 +16,7 @@
 #   call it, or read an attribute, C.x)"): callable(C1), test_issubclass; callable(__builtins__),
 #   c.__call__ assignments, test_hash's hash(f) of a function (rejected: "hash() of <function
 #   ...> is not supported"), class X with a 2**100 hash and Z(int)
-# - bytes (rejected: "bytes literals are not supported"): hash(b'spam'), ord(b' ') & co; chr(0xff)
+# - test_ord's ord() of bytes (rejected: "unsupported call ord(bytes)"): ord(b' ') & co; chr(0xff)
 #   and ord(chr(sys.maxunicode)) (chr() of a byte value is that byte, documented;
 #   "unsupported module attribute sys.maxunicode"); test_pow's complex results, its float pow()
 #   with a modulus (rejected: "unsupported call pow(float,int,int)"), keyword arguments to
@@ -119,6 +119,7 @@ def test_hash() -> None:
     check("hash(1)", hash(1) == hash(1), True)
     check("hash(1.0)", hash(1) == hash(1.0), True)
     hash('spam')
+    check("hash(b'spam')", hash('spam') == hash(b'spam'), True)
     hash((0,1,2,3))
     print("ok")
 
