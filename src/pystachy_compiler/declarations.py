@@ -1,7 +1,7 @@
 """Declarations component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.analysis import calls_init, local_names
+from src.pystachy_compiler.analysis import calls_init, local_names, stmt_walrus
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
@@ -1302,6 +1302,13 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
     flines: dict[str, int] = {}  # (a dataclass's fields its body declares, and where)
     for st in ci.node.kids[0].kids:
         self.line = st.line
+        binds: dict[str, bool] = {}
+        stmt_walrus(st, binds)
+        if has_kind(st, "walrus") or len(binds) > 0:
+            why = "an assignment expression (:=) in a class body is not supported (CPython binds a class attribute)"
+            if ci.mod == "":
+                self.err(why)
+            ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
         if st.kind in ["assign", "annassign"] and st.kids[0].kind == "name" and st.kids[0].s == "__slots__":
             continue
         if dc and st.kind == "annassign" and st.kids[0].kind == "name" and self.imported_ref(st.kids[1]) == "dataclasses.KW_ONLY":
@@ -1874,6 +1881,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         return "bool"
     if k == "ifexp":
         return self.guess(e.kids[1], f)
+    if k == "walrus":
+        return self.guess(e.kids[0], f)
     if k == "list" and len(e.kids) > 0:
         t = self.guess(e.kids[0], f)
         return self.ctype("list", [t]) if t != "" and not t.startswith("!") else t

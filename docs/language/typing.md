@@ -24,14 +24,15 @@ runtime-length tuple; later list mutation does not change it. String conversion 
 the existing UTF-8 byte iteration rules ([compatibility](compatibility.md)). `tuple(t)` returns an
 existing tuple unchanged unless an annotation requests a representation conversion
 ([identity limitations](compatibility.md#functions-and-object-identity)). A fixed tuple literal can initialize `tuple[T, ...]`,
-including `()`. Supported operations are `len`, truth tests, integer indexing, slicing,
-iteration (also `enumerate`, `zip`, and `reversed`), `list(t)`, representation and
-same-element-type equality and ordering. Bounds errors raise `IndexError` at runtime.
+including `()`, and a tuple display with a starred list makes one (`(*xs, 0)`). Supported
+operations are `len`, truth tests, integer indexing, slicing, iteration (also `enumerate`,
+`zip`, and `reversed`), unpacking, `list(t)`, representation and same-element-type equality
+and ordering. Bounds errors raise `IndexError` at runtime.
 Optional scalar elements use boxes when needed; widening an immutable tuple to
 optional elements copies its slots rather than reinterpreting numeric bits as pointers.
 
 Runtime-length tuples currently do not support concatenation, repetition,
-membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
+membership, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
 expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
 `bool`, `str` or optional versions of those types. Direct `enumerate` and `zip`

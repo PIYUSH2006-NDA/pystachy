@@ -1,0 +1,26 @@
+w 10
+after 10
+UnboundLocalError: cannot access local variable 'w' where it is not associated with a value
+1
+1
+UnboundLocalError: cannot access local variable 'b' where it is not associated with a value
+2
+UnboundLocalError: cannot access local variable 'a' where it is not associated with a value
+in range
+10
+UnboundLocalError: cannot access local variable 'top' where it is not associated with a value
+[4, 5]
+5
+[]
+UnboundLocalError: cannot access local variable 'seen' where it is not associated with a value
+1 7
+got 3
+NameError: name 'never' is not defined
+UnboundLocalError: cannot access local variable 'msg' where it is not associated with a value
+AssertionError: not positive
+in range 10
+10
+w 3
+None
+w None
+[exit 0]

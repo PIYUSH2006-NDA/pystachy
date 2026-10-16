@@ -136,6 +136,8 @@ from src.pystachy_compiler.containers import (
     gen_siter as containers_siter,
     gen_smethod as containers_smethod,
     gen_stake as containers_stake,
+    gen_star_display as containers_star_display,
+    gen_star_items as containers_star_items,
     gen_store_elem as containers_store_elem,
     gen_store_key as containers_store_key,
     gen_supdate as containers_supdate,
@@ -346,6 +348,7 @@ from src.pystachy_compiler.expressions import (
     gen_fmt_error as expressions_fmt_error,
     gen_foreign_eq as expressions_foreign_eq,
     gen_forget as expressions_forget,
+    gen_forget_walrus as expressions_forget_walrus,
     gen_format_ as expressions_format_,
     gen_has as expressions_has,
     gen_ifexp as expressions_ifexp,
@@ -620,6 +623,7 @@ from src.pystachy_compiler.variables import (
     gen_slice_check as variables_slice_check,
     gen_slice_store as variables_slice_store,
     gen_slice_target as variables_slice_target,
+    gen_star_assign as variables_star_assign,
     gen_static_now as variables_static_now,
     gen_static_whole as variables_static_whole,
     gen_store_name as variables_store_name,
@@ -634,6 +638,7 @@ from src.pystachy_compiler.variables import (
     gen_unfilled as variables_unfilled,
     gen_unpacked as variables_unpacked,
     gen_unready as variables_unready,
+    gen_walrus as variables_walrus,
     gen_where_def as variables_where_def,
 )
 
@@ -1461,6 +1466,11 @@ class Gen:
 
     def slice_assign(self, t: Node, g: Node) -> None:
         return variables_slice_assign(self, t, g)
+    def star_assign(self, t: Node, v: Val) -> None:
+        return variables_star_assign(self, t, v)
+
+    def walrus(self, n: Node, want: str) -> Val:
+        return variables_walrus(self, n, want)
 
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
@@ -1902,6 +1912,9 @@ class Gen:
 
     def narrow_by(self, test: Node, truth: bool) -> dict[str, str]:
         return expressions_narrow_by(self, test, truth)
+
+    def forget_walrus(self, pre: dict[str, str], es: list[Node]) -> dict[str, str]:
+        return expressions_forget_walrus(self, pre, es)
 
     def forget(self, body: list[Node], tgt: Node) -> dict[str, str]:
         return expressions_forget(self, body, tgt)
@@ -2391,6 +2404,12 @@ class Gen:
 
     def set_display(self, n: Node, want: str, folded: bool, returnctx: bool = False, resultsoft: bool = False) -> Val:
         return containers_set_display(self, n, want, folded, returnctx, resultsoft)
+
+    def star_items(self, x: Node) -> Val:
+        return containers_star_items(self, x)
+
+    def star_display(self, n: Node, want: str) -> Val:
+        return containers_star_display(self, n, want)
 
     def iter_elem(self, t: str) -> str:
         return containers_iter_elem(self, t)

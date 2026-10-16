@@ -105,6 +105,80 @@ def gen_set_display(self, n: Node, want: str, folded: bool, returnctx: bool = Fa
             r = m
     return Val(r, self.ctype("frozenset" if folded else "set", [et]))
 
+def gen_star_items(self, x: Node) -> Val:
+    # *x in a list or tuple display, taken where it stands, as CPython's LIST_EXTEND takes it: a
+    # tuple's (or NamedTuple's) items as they are, any other iterable's as a new list (a list's
+    # copied, a str's characters, a dict's keys, what __iter__ steps through, what range(), map()
+    # or a generator expression gives)
+    if self.iterator_call(x) or self.is_mapcall(x) or (x.kind == "listcomp" and x.s == "gen"):
+        return self.consume(x, "")
+    none = "TypeError: Value after * must be an iterable, not NoneType"
+    v = self.unwrap(self.expr(x, ""), none)
+    if v.t in self.nts:
+        self.notnone(v, none)
+        v = self.ntup(v, True)
+    if is_tuple(v.t):
+        return v
+    if v.t in self.classes:
+        v = self.obj_iter(v, none, f"Value after * must be an iterable, not {tname(v.t)}")
+    elif v.t == "str":
+        return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif not is_list(v.t):
+        v = self.as_list(v, "unpack")  # (a new list)
+        if not is_list(v.t):
+            self.err(f"Value after * must be an iterable, not {tname(v.t)}")
+        return v
+    return Val(self.rt("pys_list_copy", "ptr", [f"ptr {v.v}"]), v.t)
+
+def gen_star_display(self, n: Node, want: str) -> Val:
+    # [a, *xs] and (a, *xs): the items in order, each starred one's where it stands (star_items):
+    # a tuple's become items of the display, any other's a list the display's list is extended
+    # with. A tuple display of items alone is a tuple of them; with a list's, a runtime-length one
+    w = unopt(want)
+    ew = elem(w) if n.kind == "list" and is_list(w) and "?" not in w else targs(w)[0] if n.kind == "tuple" and is_vtuple(w) else ""
+    parts: list[Val] = []
+    lists: list[bool] = []
+    for x in n.kids:
+        v = self.star_items(x.kids[0]) if x.kind == "starred" else self.expr(x, ew)
+        if x.kind == "starred" and is_tuple(v.t):
+            for i in range(len(targs(v.t))):
+                parts.append(self.tget(v, i))
+                lists.append(False)
+        else:
+            parts.append(v)
+            lists.append(x.kind == "starred")
+    if n.kind == "tuple" and len([b for b in lists if b]) == 0:
+        return self.tuple_(parts)
+    if len(parts) == 0:
+        return self.expr(mk("list", "", n.line, []), want)  # ([*()]: as [] is)
+    et = ew
+    for i in range(len(parts)):
+        t = elem(parts[i].t) if lists[i] else parts[i].t
+        if ew == "" and t != et:
+            j = self.join(et, t) if et != "" else t
+            if j == "" or "?" in j:
+                both = typestr(et) + " | " + typestr(t)
+                self.err(f"items of types {typestr(et)} and {typestr(t)} in one display need an annotation where it goes ({'list[' + both + ']' if n.kind == 'list' else 'tuple[' + both + ', ...]'})")
+            et = j
+    if et == "" or et == "None":
+        self.err("cannot infer the type of this display's items; annotate it")
+    for i in range(len(parts)):
+        if lists[i] and elem(parts[i].t) != et:
+            # (a list of other items, an int's where they are int | str: each converted)
+            item = mk("name", "__pys_item", n.line, [])
+            parts[i] = self.listcomp(mk("listcomp", "", n.line, [item, item, self.vnode(parts[i])]), self.ctype("list", [et]))
+    r = self.rt("pys_list_new", "ptr", [f"i64 {len([b for b in lists if not b])}"])
+    for i in range(len(parts)):
+        if lists[i]:
+            self.rt("pys_list_extend", "void", [f"ptr {r}", f"ptr {parts[i].v}"])
+        else:
+            self.rt("pys_list_append", "void", [f"ptr {r}", "i64 " + self.to_slot(self.coerce(parts[i], et))])
+    if n.kind == "list":
+        return Val(r, self.ctype("list", [et]))
+    if unopt(et) not in ["int", "float", "bool", "str"]:
+        self.err("runtime-length tuple elements must be int, float, bool, str or their optional types")
+    return Val(self.rt("pys_vtuple_new", "ptr", [f"ptr {r}"]), self.ctype("vtuple", [et]))
+
 def gen_iter_elem(self, t: str) -> str:
     # the type of the items a loop over a value of type t gets, or ""
     if is_list(t):

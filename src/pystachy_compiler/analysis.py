@@ -27,6 +27,31 @@ def walrus_names(e: Node, out: dict[str, bool]) -> None:
             walrus_names(k, out)
 
 
+def walrus_values(e: Node, name: str, out: list[Node]) -> None:
+    # the values that the := of name in expression e assign, in the order they run (as
+    # walrus_names finds them)
+    for k in e.kids if e.kind != "lambda" else [p.kids[1] for p in e.kids[0].kids]:
+        walrus_values(k, name, out)
+    if e.kind == "walrus" and e.s == name:
+        out.append(e.kids[0])
+
+
+def stmt_walrus(st: Node, out: dict[str, bool]) -> None:
+    # the names that the := in statement st's own expressions bind (not in its blocks, nor in the
+    # body of the class or function it defines)
+    if st.kind == "subclass":
+        for x in st.kids[0].kids[1:] + st.kids[1:]:
+            walrus_names(x, out)
+        return
+    for kid in st.kids:
+        if kid.kind == "except":
+            walrus_names(kid.kids[0], out)
+        elif st.kind == "async":
+            stmt_walrus(kid, out)
+        elif kid.kind != "block":
+            walrus_names(kid, out)
+
+
 def scope_binds(body: list[Node], out: dict[str, bool], decl: dict[str, str]) -> None:
     # the names a function's body binds (not those of the functions and classes in it), and in
     # decl those its global and nonlocal statements declare
@@ -243,7 +268,7 @@ def surely_binds(st: Node, out: dict[str, bool], bound: dict[str, bool], deep: b
     # out and bound. Not deep: the statements in st's blocks have been through it already, with
     # the same bound (Loader.imports), so only a with block's are looked at again (for out)
     if st.kind != "for" and not (st.kind == "annassign" and len(st.kids) < 3):
-        targets(st, out)
+        targets(st, out, False)  # (a := may not run: and, or, an if-else's arm)
     gone: dict[str, bool] = {}
     if st.kind == "import":
         for a in st.kids:
@@ -364,8 +389,8 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
         bound_in(k, out)
 
 
-def targets(st: Node, out: dict[str, bool]) -> None:
-    # the names statement st assigns itself (not in its blocks)
+def targets(st: Node, out: dict[str, bool], walrus: bool = True) -> None:
+    # the names statement st assigns itself (not in its blocks), with walrus those its := bind
     k = st.kind
     if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "compfor" or k == "with":
         names: list[str] = []
@@ -377,6 +402,8 @@ def targets(st: Node, out: dict[str, bool]) -> None:
             names_in(st.kids[i], names)
         for nm in names:
             out[nm] = True
+    if walrus:
+        stmt_walrus(st, out)
 
 
 def collect(body: list[Node], out: dict[str, bool]) -> None:
@@ -436,7 +463,7 @@ def constant_writes(n: Node, count: dict[str, int]) -> None:
     # modules. Local bindings with the same spelling as a main-module name conservatively count
     # too. A global declaration or deletion excludes a name even without an accompanying store.
     names: dict[str, bool] = {}
-    targets(n, names)
+    targets(n, names, False)  # (this traversal counts each walrus node itself, once)
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "except" or n.kind == "walrus" or n.kind == "typealias":
         if n.s != "":
             names[n.s] = True
@@ -657,7 +684,7 @@ def deleted(body: list[Node], out: dict[str, bool], defs: bool = False) -> None:
 
 def none_assigns(body: list[Node], out: dict[str, list[Node]]) -> None:
     # every value module-level code (body, not its functions) assigns to each name; a name bound
-    # any other way (for, with, +=, an annotation, unpacking) gets an "omit" node
+    # any other way (for, with, +=, an annotation, unpacking, :=) gets an "omit" node
     for st in body:
         k = st.kind
         if k == "assign":
@@ -675,6 +702,12 @@ def none_assigns(body: list[Node], out: dict[str, list[Node]]) -> None:
                 if nm not in out:
                     out[nm] = []
                 out[nm].append(mk("omit", "", st.line, []))
+        w: dict[str, bool] = {}
+        stmt_walrus(st, w)  # (x := v)
+        for nm in w:
+            if nm not in out:
+                out[nm] = []
+            out[nm].append(mk("omit", "", st.line, []))
         for kid in st.kids:
             if kid.kind == "block" and st.kind != "def" and st.kind != "class":
                 none_assigns(kid.kids, out)
@@ -1053,7 +1086,11 @@ def stmt_binds(st: Node, name: str) -> bool:
         for it in st.kids[:-1]:
             if len(it.kids) == 2:
                 names_in(it.kids[1], names)
-    return name in names
+    if name in names:
+        return True
+    w: dict[str, bool] = {}
+    stmt_walrus(st, w)
+    return name in w
 
 
 def only_none(body: list[Node], name: str) -> bool:

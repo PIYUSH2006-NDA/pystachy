@@ -137,7 +137,8 @@ The usual assignments, `if`, `while`, `for`, loop `else`, `break`, `continue`,
 `return`, `assert`, `global` and `nonlocal` are supported. Loops can consume supported
 containers, ranges, files and iterator-like objects.
 
-Unpacking requires a fixed target shape. File context managers support `with open(...) as f:`;
+Unpacking takes a fixed target shape or one starred target, `first, *rest = xs`, whose name
+gets a new list of the remaining items. File context managers support `with open(...) as f:`;
 arbitrary context managers are not supported. Exceptions use the normal
 `try` / `except` / `else` / `finally` syntax.
 
@@ -146,8 +147,9 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Feature | Scope |
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
+| Assignment expressions | `x := v` in conditions, comprehensions, arguments and other expressions, binding `x` as `x = v` does |
 | Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
-| Containers | List, dictionary, set and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
+| Containers | List, dictionary, set and tuple displays, `*` items in list and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
 | Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
 | Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join` |
@@ -223,7 +225,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 ## Unsupported features
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
-`bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
+`bytes` and binary files, complex and arbitrary-precision numbers, `match`,
 dynamic attribute access, slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.

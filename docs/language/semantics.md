@@ -8,7 +8,7 @@ closures and class fields are described in [typing](typing.md); imports and buil
 
 | Category | Supported statements |
 |---|---|
-| Assignment | Simple, chained, annotated and augmented assignment; fixed-shape tuple/list unpacking and swaps |
+| Assignment | Simple, chained, annotated and augmented assignment; tuple/list unpacking, with one starred target or none, and swaps |
 | Control flow | `if` / `elif` / `else`, `while`, `for`, loop `else`, `break`, `continue`, `return` |
 | Scope and definitions | `global`, `nonlocal`, `def`, nested function definitions, lambdas, supported class definitions |
 | Runtime checks | `assert`, `raise`, `try` / `except` / `else` / `finally` |
@@ -19,6 +19,12 @@ closures and class fields are described in [typing](typing.md); imports and buil
 `+=` on a list extends it in place. Object in-place operators use `__iadd__` and the
 corresponding methods when supported. Deleting a variable makes later reads raise
 `NameError` or `UnboundLocalError`; deleting a global from a function is unsupported.
+
+A starred target, as in `head, *body, tail = xs`, gets a new list of the items the other targets
+leave. It takes what a `for` loop iterates, and `range()`, `enumerate()`, `zip()`, `map()`,
+`filter()` and generator expressions; every item is taken before the first target is assigned.
+Too few items raise CPython's `ValueError`. Of a tuple, the starred list holds its items'
+common type; items of types no one type holds need an annotation (`body: list[int | str]`).
 
 Loops can consume ranges, lists, strings, dictionaries, sets, files, homogeneous tuples and
 NamedTuples, supported objects, and dictionary `items()`, `keys()` and `values()`.
@@ -65,6 +71,19 @@ binds the same variable. A dict comprehension evaluates each key before its valu
 key keeps its first position and takes the last value. A clause or `for` target that reads a
 variable which only its own or a later `for` clause binds is rejected (CPython raises
 `UnboundLocalError`), as is a rebinding to another type that a clause between the two can read.
+A starred item in a list or tuple display, `[a, *xs, *range(n)]`, takes the iterable's items
+where it stands. A tuple display whose starred items are tuples is a tuple of their items;
+with another iterable, it is a runtime-length tuple.
+
+An assignment expression, `x := v`, assigns `v` to `x` as `x = v` would, in the function or
+module code around it, also from a comprehension or generator expression (PEP 572); its value is
+`v`. Tests such as `if (m := pattern.match(s)) is not None:` narrow `x` as a test of the name
+does. Where the expression may not have run (after `and` or `or`, in one arm of a conditional
+expression, in a comprehension over nothing), a later read of `x` raises `UnboundLocalError` or
+`NameError`. This also covers assignment expressions in lambda defaults: the defaults run
+when the lambda is created. A comprehension's filters run before its element. An unannotated
+template parameter specialized to `None` cannot be rebound by a conditional assignment
+expression; annotate that parameter as `T | None` to allow both values.
 
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.
@@ -74,11 +93,12 @@ Comparisons with `None` are supported where the static types permit them.
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
 `filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`,
-`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, and the value assigned to a
-list slice, subject to each consumer's item types. `tuple()` also accepts generator
-expressions and `range`/`map`/`filter`/`reversed` calls producing supported scalar or optional
-scalar items. Direct `enumerate`/`zip` items are tuples; project a scalar in a generator
-expression first ([runtime-length tuples](typing.md)).
+`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, the value assigned to a
+list slice or to a starred target, or a `*` item of a list or tuple display, subject to each
+consumer's item types. `tuple()` also accepts generator expressions and
+`range`/`map`/`filter`/`reversed` calls producing supported scalar or optional scalar items.
+Direct `enumerate`/`zip` items are tuples; project a scalar in a generator expression first
+([runtime-length tuples](typing.md)).
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.

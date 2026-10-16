@@ -264,6 +264,8 @@ supported alternatives.
 - in a comprehension, a later `for` clause that binds an earlier clause's variable to a value of
   another type, where a clause between them reads it after a loop between them (`[y for b in
   [[1, 2]] for y in b if len(b) > 1 for b in [3]]`)
+- an assignment expression (`:=`) in a class body, including a lambda default evaluated there,
+  which CPython makes bind a class attribute
 - calling a builtin whose name the module also binds as a variable (`sum = 0` ... `sum(xs)`,
   which CPython would reject at run time)
 
@@ -392,6 +394,9 @@ supported alternatives.
   tuple, and a dict takes the slice object as a key); and assigning to a list slice a value that
   is not iterable, or whose items are not the list's item type (as for `list.extend()`; a
   tuple's items must share one type)
+- unpacking a value that is not iterable (`a, *b = 5`) or a tuple whose length does not fit the
+  targets (CPython raises `TypeError` or `ValueError` where it runs), and a starred target over
+  tuple items of types no one type holds, unless the target is annotated (`rest: list[int | str]`)
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.
