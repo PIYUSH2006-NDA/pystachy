@@ -10,6 +10,7 @@ for _k in "False None True and as assert async await break class continue def de
     KEYWORDS[_k] = True
 OPS: list[str] = "**= //= >>= <<= -> ** // == != <= >= += -= *= /= %= &= |= ^= @= << >> := ... + - * / % < > = ( ) [ ] { } , : . ; & | ^ ~ @".split()
 ESCAPES: dict[str, str] = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "'": "'", '"': '"', "a": "\a", "b": "\b", "f": "\f", "v": "\v"}
+PREFIXES: list[str] = ["f", "r", "u", "fr", "rf", "b", "br", "rb"]  # a string literal's, in lower case
 
 
 def utf8(c: int) -> str:
@@ -89,12 +90,23 @@ def among(c: int, ranges: list[int]) -> bool:
     return False
 
 
+def prefix_at(s: str, i: int) -> str:
+    # the prefix of the string literal whose opening quote is s[i] in code: the name before it,
+    # if that is a prefix
+    j = i
+    while j > 0 and (s[j - 1].isalnum() or s[j - 1] == "_" or ord(s[j - 1]) >= 128):
+        j -= 1
+    p = s[j:i].lower()
+    return p if p in PREFIXES else ""
+
+
 class Tok:
     def __init__(self, kind: str, text: str, line: int):
         self.kind = kind
         self.text = text
         self.line = line
         self.esc = False  # a string literal (or bytes literal) whose escapes the parser decodes
+        self.part = False  # an f-string that the tokenizer's error (the next token) cut short, or that error
 
 
 class Lexer:
@@ -103,6 +115,10 @@ class Lexer:
         self.i = 0
         self.line = line
         self.toks: list[Tok] = []
+        self.opens: list[str] = []  # the brackets open, and their lines
+        self.openl: list[int] = []
+        self.fdepth = 0  # the f-strings open
+        self.halt = 0  # where the error token is
         self.cut = ""  # the error at the end of src, where CPython stopped reading the file (see file())
         self.cutline = 0
         self.declared = False  # a file declared UTF-8 (by a byte order mark or coding declaration)
@@ -118,6 +134,7 @@ class Lexer:
             msg = self.cut  # (at the end of what CPython could read)
             line = self.cutline
         self.toks.append(Tok("error", msg, line))
+        self.halt = self.i
         self.i = len(self.src)
 
     def stop(self, msg: str, line: int) -> None:
@@ -226,8 +243,7 @@ class Lexer:
         src = self.src
         n = len(src)
         indents = [0]
-        opens: list[str] = []  # the brackets open, and their lines
-        openl: list[int] = []
+        opens = self.opens
         if src.startswith(chr(239) + chr(187) + chr(191)):  # a UTF-8 byte order mark
             self.i = 3
         bol = True
@@ -293,23 +309,13 @@ class Lexer:
             else:
                 self.op()
                 k = self.toks[-1].kind
-                if (k == "(" or k == "[" or k == "{") and len(opens) == 200:
-                    self.bad("too many nested parentheses", self.line)  # (CPython's MAXLEVEL)
-                elif k == "(" or k == "[" or k == "{":
-                    opens.append(k)
-                    openl.append(self.line)
-                elif (k == ")" or k == "]" or k == "}") and len(opens) == 0:
-                    self.bad(f"unmatched '{k}'", self.line)
-                elif k == ")" or k == "]" or k == "}":
-                    o = opens.pop()
-                    ol = openl.pop()
-                    if "([{".find(o) != ")]}".find(k):
-                        self.bad(f"closing parenthesis '{k}' does not match opening parenthesis '{o}'" + (f" on line {ol % LINES}" if ol != self.line else ""), self.line)
+                if k == "(" or k == "[" or k == "{" or k == ")" or k == "]" or k == "}":
+                    self.bracket(k, -1)
         ended = len(self.toks) > 0 and (self.toks[-1].kind == "error" or self.toks[-1].kind == "stop")
         if self.cut != "" and not ended:
             self.bad(self.cut, self.cutline)
         elif len(opens) > 0 and not ended:
-            self.stop(f"'{opens[-1]}' was never closed", openl[-1])
+            self.stop(f"'{opens[-1]}' was never closed", self.openl[-1])
         if not bol:
             self.add("nl", "")
         while len(indents) > 1:
@@ -478,92 +484,26 @@ class Lexer:
             self.stop("non-ASCII identifiers are not supported", self.line)
             return
         self.i = j
-        if j < len(src) and (src[j] == '"' or src[j] == "'") and len(w) <= 2:
-            p = w.lower()
-            if p == "f" or p == "r" or p == "u" or p == "fr" or p == "rf":
-                self.string(p)
-                return
-            if p == "b" or p == "br" or p == "rb":
-                self.string(p)
-                return
+        if j < len(src) and (src[j] == '"' or src[j] == "'") and w.lower() in PREFIXES:
+            self.string(w.lower())
+            return
         self.add(w if w in KEYWORDS else "id", w)
 
     def string(self, prefix: str) -> None:
+        # a string literal, from its opening quote (prefix: its prefix, in lower case)
         src = self.src
-        q = src[self.i]
         line = self.line
-        triple = src.startswith(q + q + q, self.i)
-        self.i += 3 if triple else 1
-        start = self.i
-        # f-strings: one entry per open replacement field, the brackets open in its expression,
-        # or -1 once its format spec began (a top-level ':'), where quotes are plain text
-        fields: list[int] = []
-        while True:
-            if self.i >= len(src):
-                self.unterminated(prefix, triple, len(fields) > 0, line)
-                return
-            c = src[self.i]
-            if c == q and (not triple or src.startswith(q + q + q, self.i)):
-                if len(fields) > 0 and fields[-1] >= 0 and not triple and self.reuses_quote(q):
-                    self.stop("f-string: reusing the string's quote inside a replacement field (PEP 701) is not supported; use the other quote", line)
-                    return
-                break
-            if "f" in prefix and (len(fields) == 0 or fields[-1] < 0):
-                # literal text, or a format spec: {{ and }} are braces, { opens a field, } closes one
-                if c == "{" or c == "}":
-                    if len(fields) == 0 and src[self.i + 1 : self.i + 2] == c:
-                        self.i += 2
-                        continue
-                    if c == "{" and len(fields) == 3:
-                        self.stop("f-string: expressions nested too deeply", self.line)
-                        return
-                    if c == "{":
-                        fields.append(0)
-                    elif len(fields) > 0:
-                        fields.pop()
-            elif "f" in prefix:
-                if c == "'" or c == '"':
-                    # a string inside a field ends at its own quote
-                    j = src.find(c, self.i + 1)
-                    if j > 0 and src.find("\n", self.i, j) < 0:
-                        self.i = j + 1
-                        continue
-                elif c == "(" or c == "[" or c == "{":
-                    fields[-1] += 1
-                elif c == ")" or c == "]":
-                    fields[-1] = max(fields[-1] - 1, 0)
-                elif c == "}" and fields[-1] > 0:
-                    fields[-1] -= 1
-                elif c == "}":
-                    fields.pop()
-                elif c == ":" and fields[-1] == 0:
-                    fields[-1] = -1
-                elif c == "#":
-                    # a comment, to the end of the line, after which the field goes on
-                    j = src.find("\n", self.i)
-                    if j < 0:
-                        self.stop("'{' was never closed", line)
-                        return
-                    self.i = j
-                    continue
-            if c == "\n":
-                # (a field's expression may go on over lines, in any f-string)
-                if not triple and len(fields) > 0 and fields[-1] < 0:
-                    self.stop("f-string: newlines are not allowed in format specifiers for single quoted f-strings", self.line)
-                    return
-                if not triple and len(fields) == 0:
-                    self.unterminated(prefix, triple, False, line)
-                    return
-                self.line += 1
-            if c == "\\":
-                # an escaped character never ends the literal, even in a raw string
-                if src[self.i + 1 : self.i + 2] == "\n":
-                    self.line += 1
-                self.i += 2
-                continue
-            self.i += 1
-        text = src[start : self.i]
-        self.i += 3 if triple else 1
+        q = 3 if src.startswith(src[self.i] + src[self.i] + src[self.i], self.i) else 1
+        start = self.i + q
+        if not self.literal(prefix, ""):
+            if "f" in prefix and self.halt >= start:
+                # the parser reads an f-string up to the error (see Parser.field), which (inside
+                # an f-string) replaces no parser error
+                self.toks.insert(len(self.toks) - 1, Tok("rfstr" if "r" in prefix else "fstr", src[start : self.halt], line))
+                self.toks[-2].part = True
+                self.toks[-1].part = True
+            return
+        text = src[start : self.i - q]
         if self.declared and "b" not in prefix and utf8_error(text) != "":
             # (only a file declared UTF-8 is not checked as CPython reads it)
             self.stop("(unicode error) " + utf8_error(text), line)
@@ -575,29 +515,174 @@ class Lexer:
             self.toks.append(Tok("bytes" if "b" in prefix else "str", text, line))
             self.toks[-1].esc = "r" not in prefix
 
-    def unterminated(self, prefix: str, triple: bool, field: bool, line: int) -> None:
-        # CPython's error for a string literal that the line (or the file) ends in
+    def literal(self, prefix: str, end: str) -> bool:
+        # read the string literal whose opening quote is at self.i to past its closing quote, as
+        # CPython's tokenizer does; end is the closing quote of the f-string whose replacement
+        # field it is in ("" if none). False after an error
+        src = self.src
+        q = src[self.i]
+        line = self.line
+        close = q + q + q if src.startswith(q + q + q, self.i) else q
+        self.i += len(close)
+        if "f" in prefix:
+            if self.fdepth == 149:
+                self.stop("too many nested f-strings", line)  # (CPython's MAXFSTRINGLEVEL)
+                return False
+            self.fdepth += 1
+            ok = self.fstring(close, "r" in prefix, line)
+            self.fdepth -= 1
+            return ok
+        escq = False  # (an escaped quote, which CPython mentions if the literal is unterminated)
+        while not src.startswith(close, self.i):
+            c = src[self.i : self.i + 1]
+            if c == "" or (c == "\n" and close == q):
+                if close == end:
+                    self.stop("f-string: expecting '}'", line)  # (the quote meant to end the f-string)
+                else:
+                    self.unterminated(prefix, close, escq, line, end != "")
+                return False
+            if c == "\\":
+                # an escaped character never ends the literal, even in a raw string
+                self.i += 1
+                c = src[self.i : self.i + 1]
+                escq = escq or c == q
+            if c == "\n":
+                self.line += 1
+            self.i += 1
+        self.i += len(close)
+        return True
+
+    def fstring(self, end: str, raw: bool, line: int) -> bool:
+        # read an f-string's body to past its closing quote end, as CPython 3.12's tokenizer does
+        # (PEP 701): its replacement fields' expressions are code, where strings may use any quote
+        # and nest (line: the f-string's first line). fields holds an entry per field open: the
+        # brackets open in its expression, -1 in its format spec, or -2 in its format spec after a
+        # field there (where CPython reads {{ as a brace and a newline as in literal text)
+        src = self.src
+        fields: list[int] = []
+        named = False  # in a \N{...} escape, whose '}' closes no field
+        while True:
+            c = src[self.i : self.i + 1]
+            if len(fields) > 0 and fields[-1] >= 0:
+                # a field's expression
+                if c == "'" or c == '"':
+                    p = prefix_at(src, self.i)
+                    at = self.i - len(p)
+                    if not self.literal(p, end):
+                        self.halt = at  # (where the parser meets the error)
+                        return False
+                    continue
+                if c == "":
+                    self.stop(f"'{self.opens[-1]}' was never closed", self.openl[-1])
+                    return False
+                if c == "#":
+                    # a comment, to the end of the line (and past the f-string's closing quote)
+                    while self.i < len(src) and src[self.i] != "\n":
+                        self.i += 1
+                    continue
+                if c == "\\" and src[self.i + 1 : self.i + 2] != "\n":
+                    self.stop("unexpected character after line continuation character", self.line)
+                    return False
+                if c == "\\" or c == "\n":
+                    self.line += 1
+                    self.i += 2 if c == "\\" else 1
+                    continue
+                if "([{)]}".find(c) >= 0:
+                    if not self.bracket(c, fields[-1]):
+                        return False
+                    if c == "(" or c == "[" or c == "{":
+                        fields[-1] += 1
+                    elif fields[-1] > 0:
+                        fields[-1] -= 1
+                    else:
+                        fields.pop()  # (the field's '}')
+                        if len(fields) > 0:
+                            fields[-1] = -2
+                elif c == ":" and fields[-1] == 0:
+                    fields[-1] = -1
+                self.i += 1
+                continue
+            # literal text, or a format spec
+            if src.startswith(end, self.i):
+                self.i += len(end)
+                return True  # (even in a format spec, where its field's '{' stays open)
+            if c == "" or (c == "\n" and len(end) == 1):
+                if c == "\n" and len(fields) > 0 and fields[-1] == -1:
+                    self.stop("f-string: newlines are not allowed in format specifiers for single quoted f-strings", self.line)
+                else:
+                    self.unterminated("f", end, False, line, True)
+                return False
+            if c == "{" and (src[self.i + 1 : self.i + 2] != "{" or (len(fields) > 0 and fields[-1] == -1)):
+                if len(fields) == 3:
+                    self.stop("f-string: expressions nested too deeply", self.line)
+                    return False
+                if not self.bracket(c, 0):
+                    return False
+                fields.append(0)
+                named = False
+            elif c == "{":
+                self.i += 1  # ({{, a brace)
+            elif c == "}" and named:
+                named = False
+            elif c == "}" and len(fields) > 0:
+                self.bracket(c, 0)  # (the field's '{')
+                fields.pop()
+                if len(fields) > 0:
+                    fields[-1] = -2
+            elif c == "}" and src[self.i + 1 : self.i + 2] == "}":
+                self.i += 1
+            elif c == "}":
+                self.stop("f-string: single '}' is not allowed", self.line)
+                return False
+            elif c == "\\" and src[self.i + 1 : self.i + 2] != "{" and src[self.i + 1 : self.i + 2] != "}":
+                # an escaped character (not a brace) never ends the literal, even in a raw f-string
+                named = not raw and src[self.i + 1 : self.i + 3] == "N{"
+                self.i += 2 if named else 1
+                if src[self.i : self.i + 1] == "\n":
+                    self.line += 1
+            elif c == "\n":
+                self.line += 1
+            self.i += 1
+
+    def bracket(self, c: str, field: int) -> bool:
+        # an opening or closing bracket, as CPython's tokenizer counts them; field is the number
+        # of brackets open in the expression of the f-string field it is in (-1: in none, where
+        # an error may replace a parser error). False after an error
+        if c == "(" or c == "[" or c == "{":
+            if len(self.opens) < 200:
+                self.opens.append(c)
+                self.openl.append(self.line)
+                return True
+            msg = "too many nested parentheses"  # (CPython's MAXLEVEL)
+        elif len(self.opens) == 0:
+            msg = f"unmatched '{c}'"
+        else:
+            o = self.opens.pop()
+            ol = self.openl.pop()
+            if "([{".find(o) == ")]}".find(c):
+                return True
+            msg = f"closing parenthesis '{c}' does not match opening parenthesis '{o}'" + (f" on line {ol % LINES}" if ol != self.line else "")
+            if field == 0:
+                msg = f"f-string: unmatched '{c}'"  # (closing the field's '{')
+        if field >= 0:
+            self.stop(msg, self.line)
+        else:
+            self.bad(msg, self.line)
+        return False
+
+    def unterminated(self, prefix: str, close: str, escq: bool, line: int, inf: bool) -> None:
+        # CPython's error for a string literal that the line (or the file) ends in: one with an
+        # escaped quote (escq), or an f-string or a string in one (inf), whose error replaces no
+        # parser error
         at = self.line % LINES
         if self.i >= len(self.src) and self.src.endswith("\n"):
             at -= 1
-        kind = ("triple-quoted " if triple else "") + ("f-string" if "f" in prefix else "string")
-        if field or "f" in prefix:
-            self.stop("'{' was never closed" if field else f"unterminated {kind} literal (detected at line {at})", line)
+        kind = ("triple-quoted " if len(close) == 3 else "") + ("f-string" if "f" in prefix else "string")
+        msg = f"unterminated {kind} literal (detected at line {at})" + ("; perhaps you escaped the end quote?" if escq and len(close) == 1 else "")
+        if inf:
+            self.stop(msg, line)
         else:
-            self.bad(f"unterminated {kind} literal (detected at line {at})", line)
-
-    def reuses_quote(self, q: str) -> bool:
-        # f"{d["k"]}": the quote that would end the f-string inside a field starts a string that
-        # closes on this line and is followed by more of the expression (an operator, or a keyword:
-        # f"{f"a" if x else ""}"); otherwise the field is unclosed
-        src = self.src
-        j = src.find(q, self.i + 1)
-        if j < 0 or src.find("\n", self.i, j) >= 0:
-            return False
-        k = j + 1
-        while k < len(src) and src[k] == " ":
-            k += 1
-        return k < len(src) and (src[k] in "])}.,[!:=+*%<>" or (k > j + 1 and src[k].isalpha()))
+            self.bad(msg, line)
 
     def op(self) -> None:
         for o in OPS:
@@ -615,6 +700,43 @@ class Lexer:
             # parser reaches it (see Parser.peek)
             self.add("?", c)
             self.i += 1
+
+
+def string_end(s: str, i: int) -> int:
+    # the end of the string literal whose opening quote is s[i], in an f-string field's
+    # expression that Lexer.fstring() read
+    lx = Lexer(s, 0)
+    lx.i = i
+    lx.literal(prefix_at(s, i), "")
+    return lx.i
+
+
+def debug_text(s: str) -> str:
+    # the text that a self-documenting f-string field prints, whose source (to its '!', ':' or
+    # '}') is s, as CPython 3.13's tokenizer gives it (set_fstring_expr): without comments, which
+    # it finds by taking each quote for the start or end of a string (but one after a backslash),
+    # so that a '#' in a triple-quoted string or in a nested f-string that reuses its quote can
+    # start one
+    out: list[str] = []
+    q = ""
+    k = 0
+    while k < len(s):
+        c = s[k]
+        if c == "\\":
+            out.append(s[k : k + 2])
+            k += 2
+            continue
+        if (c == "'" or c == '"') and q == "":
+            q = c
+        elif c == q:
+            q = ""
+        elif c == "#" and q == "":
+            e = s.find("\n", k)
+            k = len(s) if e < 0 else e  # (the newline stays)
+            continue
+        out.append(c)
+        k += 1
+    return "".join(out)
 
 
 # ---------------------------------------------------------------- parser

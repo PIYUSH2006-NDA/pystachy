@@ -543,11 +543,10 @@ supported alternatives.
 
 ### Source text
 
-- f-strings that reuse their own quote inside a field (PEP 701), `\N{...}` escapes, non-ASCII
-  identifiers and tabs in indentation
+- `\N{...}` escapes (in f-strings too), non-ASCII identifiers and tabs in indentation
 - a source file whose coding declaration names an encoding other than UTF-8, Latin-1 and ASCII
 - source nested more than 5,000 levels deep (expressions, statements and `elif` branches; a `**`
   or `lambda` counts twice), and source whose nesting would overflow CPython's parser stack of
   6,000 levels of its grammar rules (a MemoryError in CPython), counted as measured on CPython
-  3.13 (a bracket 24 to 33 levels, a block 7, a comparison's operand 3, ...) so that Pystachy
-  stops at most a few dozen levels before CPython does
+  3.13 (a bracket 24 to 33 levels, an f-string's replacement field 33, a block 7, a comparison's
+  operand 3, ...) so that Pystachy stops at most a few dozen levels before CPython does

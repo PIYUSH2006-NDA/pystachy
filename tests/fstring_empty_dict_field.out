@@ -1,0 +1,5 @@
+<{}> <a{}b> <{}{>}|<{}1>
+{}|{}|  {}|**{}**| {}={}| {} = {}|{}
+ValueError: Invalid format specifier '{}' for object of type 'int'
+ValueError: Invalid format specifier '{}' for object of type 'str'
+[exit 0]
