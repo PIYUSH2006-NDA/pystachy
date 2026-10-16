@@ -463,7 +463,7 @@ def constant_writes(n: Node, count: dict[str, int]) -> None:
     # modules. Local bindings with the same spelling as a main-module name conservatively count
     # too. A global declaration or deletion excludes a name even without an accompanying store.
     names: dict[str, bool] = {}
-    targets(n, names)
+    targets(n, names, False)  # (this traversal counts each walrus node itself, once)
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "except" or n.kind == "walrus" or n.kind == "typealias":
         if n.s != "":
             names[n.s] = True
