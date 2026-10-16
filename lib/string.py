@@ -18,11 +18,12 @@ __all__ = ["ascii_letters", "ascii_lowercase", "ascii_uppercase", "capwords",
            "digits", "hexdigits", "octdigits", "printable", "punctuation",
            "whitespace", "Formatter", "Template"]
 
-# Pystachy port: an optional import, as Pystachy has no _string (C), which only Formatter uses
+# Pystachy port: an optional import, as Pystachy has no _string (C), which only Formatter uses:
+# lib/_pystachy_string.py implements its parsers
 try:
     import _string
 except ImportError:
-    pass
+    import _pystachy_string as _string
 
 # Some strings for ctype-style character classification
 whitespace = ' \t\n\r\v\f'
@@ -216,13 +217,17 @@ class Formatter:
         return self.vformat(format_string, args, kwargs)
 
     def vformat(self, format_string, args, kwargs):
-        used_args = set()
+        # Pystachy port: a list of the arguments used, in the order of their first use, as a
+        # set's items have one type (positional ones are ints, keyword ones strs)
+        used_args: list[int | str] = []
         result, _ = self._vformat(format_string, args, kwargs, used_args, 2)
         self.check_unused_args(used_args, args, kwargs)
         return result
 
+    # Pystachy port: auto_arg_index annotated, as it may become False, and the result, as the
+    # method calls itself before it returns
     def _vformat(self, format_string, args, kwargs, used_args, recursion_depth,
-                 auto_arg_index=0):
+                 auto_arg_index: int | bool = 0) -> tuple[str, int | bool]:
         if recursion_depth < 0:
             raise ValueError('Max string recursion exceeded')
         result = []
@@ -237,10 +242,11 @@ class Formatter:
             if field_name is not None:
                 # this is some markup, find the object and do
                 #  the formatting
+                assert format_spec is not None  # Pystachy port: a field's is a str, its type says not
 
                 # handle arg indexing when empty field_names are given.
                 if field_name == '':
-                    if auto_arg_index is False:
+                    if isinstance(auto_arg_index, bool):  # Pystachy port: only False is a bool
                         raise ValueError('cannot switch from manual field '
                                          'specification to automatic field '
                                          'numbering')
@@ -258,10 +264,22 @@ class Formatter:
                 # given the field_name, find the object it references
                 #  and the argument it came from
                 obj, arg_used = self.get_field(field_name, args, kwargs)
-                used_args.add(arg_used)
+                if arg_used not in used_args:  # Pystachy port: a list (see vformat)
+                    used_args.append(arg_used)
 
                 # do any conversion on the resulting object
-                obj = self.convert_field(obj, conversion)
+                # Pystachy port: without a conversion the object, else a str, each under a name
+                # of its own, as a name and a call have one type; each expands the format spec
+                # after the conversion and formats the object, as below
+                if conversion is None:
+                    unconverted = self.convert_field(obj, None)
+                    format_spec, auto_arg_index = self._vformat(
+                        format_spec, args, kwargs,
+                        used_args, recursion_depth-1,
+                        auto_arg_index=auto_arg_index)
+                    result.append(self.format_field(unconverted, format_spec))
+                    continue
+                converted = self.convert_field(obj, conversion)
 
                 # expand the format spec, if needed
                 format_spec, auto_arg_index = self._vformat(
@@ -270,7 +288,7 @@ class Formatter:
                     auto_arg_index=auto_arg_index)
 
                 # format the object and append to the result
-                result.append(self.format_field(obj, format_spec))
+                result.append(self.format_field(converted, format_spec))  # Pystachy port: (above)
 
         return ''.join(result), auto_arg_index
 
@@ -300,7 +318,7 @@ class Formatter:
             return repr(value)
         elif conversion == 'a':
             return ascii(value)
-        raise ValueError("Unknown conversion specifier {0!s}".format(conversion))
+        raise ValueError(f"Unknown conversion specifier {conversion!s}")  # Pystachy port: no str.format()
 
 
     # returns an iterable that contains tuples of the form:
@@ -326,10 +344,9 @@ class Formatter:
 
         # loop through the rest of the field_name, doing
         #  getattr or getitem as needed
+        # Pystachy port: no getattr or getitem, whose objects' types only the format string
+        # decides as it runs: a field name with an attribute or an index raises
         for is_attr, i in rest:
-            if is_attr:
-                obj = getattr(obj, i)
-            else:
-                obj = obj[i]
+            raise ValueError(f"Pystachy's string.Formatter does not look up {'attributes' if is_attr else 'items'} of arguments: {field_name!r}")
 
         return obj, first

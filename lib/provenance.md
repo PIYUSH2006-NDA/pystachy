@@ -35,7 +35,8 @@ observable contract.
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
 `operator` adapts only its getter classes, whose closures become `__call__` code
-reading constants.
+reading constants. `string` adapts `Formatter` and takes `_string`'s parsers
+from `_pystachy_string`.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
 weighted means. `urllib.parse` includes codec logic corresponding to CPython's
 `unicodeobject.c`, `stringlib/codecs.h` and `codecs.c`, plus bracketed-host and
@@ -50,6 +51,7 @@ CPython runs the source.
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
 | `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
+| `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`

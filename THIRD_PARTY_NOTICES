@@ -99,6 +99,10 @@ used under the same license and copyright notice.
 
 lib/string.py is CPython 3.13.16's Lib/string.py with the edits lib/README.md lists, each marked
 in the source; it is derived from Python and is used under the same license and copyright notice.
+lib/_pystachy_string.py is Pystachy's own code for the parsers of CPython 3.13.16's C module
+_string, written after Objects/stringlib/unicode_format.h (MarkupIterator_next(), parse_field(),
+field_name_split() and FieldNameIterator_next()), whose behaviour and messages it follows; it is
+derived from Python and is used under the same license and copyright notice.
 
 lib/csv.py is Pystachy's own code, written after CPython 3.13.16's Modules/_csv.c and Lib/csv.py
 (lib/README.md); it keeps the docstrings and comments it copies from them (the module's docstring,
