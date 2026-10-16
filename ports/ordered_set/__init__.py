@@ -72,7 +72,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
             # support as values for `initial`.
             self.update(initial)  # Pystachy port: was 'self |= initial', MutableSet's __ior__ (M2)
 
-    def __len__(self) -> int:  # Pystachy port: annotated (M2)
+    def __len__(self):
         """
         Returns the number of unique elements in the ordered set
 
@@ -474,7 +474,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
         for (idx, item) in enumerate(items):
             self.map[item] = idx
 
-    def difference_update(self, other: List[str]) -> None:  # Pystachy port: one list for *sets (M3, M4)
+    def difference_update(self, *sets: List[str]) -> None:  # Pystachy port: lists of str (M4)
         """
         Update this OrderedSet to remove items from one or more other sets.
 
@@ -489,7 +489,10 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
             >>> print(this)
             OrderedSet([3, 5])
         """
-        items_to_remove = OrderedSet(other)  # Pystachy port: OrderedSet for set() and |= (M7)
+        items_to_remove = set()  # type: Set[T]
+        for other in sets:
+            items_as_set = set(other)  # type: Set[T]
+            items_to_remove |= items_as_set
         self._update_items([item for item in self.items if item not in items_to_remove])
 
     def intersection_update(self, other: List[str]) -> None:  # Pystachy port: a list of str (M4)
@@ -504,7 +507,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
             >>> print(this)
             OrderedSet([1, 3, 7])
         """
-        other_set = OrderedSet(other)  # Pystachy port: OrderedSet for set() (M7)
+        other_set = set(other)  # Pystachy port: other_set for the rebound other (M4)
         self._update_items([item for item in self.items if item in other_set])
 
     def symmetric_difference_update(self, other: List[str]) -> None:  # Pystachy port: a list of str (M4)
@@ -520,7 +523,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
             OrderedSet([4, 5, 9, 2])
         """
         items_to_add = [item for item in other if item not in self]
-        items_to_remove = OrderedSet(other)  # Pystachy port: OrderedSet for set() (M7)
+        items_to_remove = set(other)
         self._update_items(
             [item for item in self.items if item not in items_to_remove] + items_to_add
         )
