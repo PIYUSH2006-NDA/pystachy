@@ -1608,7 +1608,9 @@ def gen_assign(self, t: Node, v: Val) -> None:
     elif k == "tuple" and (is_list(v.t) or v.t == "str"):
         # a, b = xs: the length is checked when it runs, as CPython does. CPython takes every
         # item before it stores the first, so where a store may change the list (xs[1], xs[0] =
-        # xs, or a __setitem__ that empties it), the items are all read first
+        # xs, a __setitem__ that empties it, or a nested target whose item's __iter__ does), the
+        # items are all read first; a store to a plain name runs no code, so with only those
+        # each item is read within the length checked (list_slot)
         self.rt("pys_unpack_check", "void", [f"i64 {self.mload('int', v.v)}", f"i64 {len(t.kids)}"])
         first = v.t != "str" and not name_targets(t)
         items: list[Val] = []
@@ -1616,9 +1618,9 @@ def gen_assign(self, t: Node, v: Val) -> None:
             if v.t == "str":
                 self.assign(t.kids[i], Val(self.rt("pys_str_get", "ptr", [f"ptr {v.v}", f"i64 {i}"]), "str"))
             elif first:
-                items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
+                items.append(self.from_slot(self.list_slot(v, str(i)), elem(v.t)))
             else:
-                self.assign(t.kids[i], self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
+                self.assign(t.kids[i], self.from_slot(self.list_slot(v, str(i)), elem(v.t)))
         for i in range(len(items)):
             self.assign(t.kids[i], items[i])
     elif k == "tuple" and is_gen(v.t):
@@ -1787,14 +1789,24 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
         size = self.mload('int', xs.v)
         self.rt("pys_unpack_ex_check", "void", [f"i64 {size}", f"i64 {s + after}"])
         for i in range(s):
-            items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t)))
+            items.append(self.from_slot(self.list_slot(xs, str(i)), elem(xs.t)))
         end = self.scalar('sub', [Val(size, 'int'), Val(str(after), 'int')])
         items.append(Val(self.rt("pys_list_slice", "ptr", [f"ptr {xs.v}", f"i64 {s}", f"i64 {end}"]), xs.t))
         for i in range(after):
             at = self.scalar('add', [Val(end, 'int'), Val(str(i), 'int')])
-            items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {at}"]), elem(xs.t)))
+            items.append(self.from_slot(self.list_slot(xs, at), elem(xs.t)))
     for i in range(len(t.kids)):
         self.assign(star if i == s else t.kids[i], items[i])
+def gen_list_slot(self, o: Val, i: str) -> str:
+    # the slot of list o at index i, which a check of its length since it last changed keeps in
+    # range (unpacking's: no code runs between, as only plain-name stores or none come before
+    # the read): an inline list.load, as listget makes of a
+    # list.get, without a bounds check (each one an exit from a loop, which costs clang -O2 time)
+    read = Ins("list.load", "int", "")
+    read.a = [o, Val(i, "int")]
+    self.put(read, 4)
+    return f"%t{read.r[0]}"
+
 def gen_unpack_next(self, t: Node, it: Val) -> None:
     # a, b = o of an object whose __iter__ returns iterator object it: an item from __next__ for
     # each target, then one more call, which must raise StopIteration (else there are too many

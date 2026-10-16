@@ -765,6 +765,7 @@ from src.pystachy_compiler.variables import (
     gen_applies as variables_applies,
     gen_assign as variables_assign,
     gen_unpack_next as variables_unpack_next,
+    gen_list_slot as variables_list_slot,
     gen_assigned_to as variables_assigned_to,
     gen_calls_open as variables_calls_open,
     gen_cellvars as variables_cellvars,
@@ -1940,6 +1941,9 @@ class Gen:
         return variables_walrus(self, n, want)
     def unpack_next(self, t: Node, it: Val) -> None:
         return variables_unpack_next(self, t, it)
+
+    def list_slot(self, o: Val, i: str) -> str:
+        return variables_list_slot(self, o, i)
 
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
