@@ -2521,33 +2521,8 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
 
 def gen_member_item(self, item: Val, a: Val, found: str, ph: Ins) -> None:
     # CPython's test of one item in x in s: item is x or item == x, going to found (ph true)
-    # if so, else on in the block placed next
-    if not self.comparable(item.t, a.t):
-        # item == x of types whose values are never equal: CPython still calls the
-        # item's __eq__(x), or where the item's class has none (a builtin type's
-        # declines) x's __eq__(item); with neither, they are not equal
-        c = self.foreign_eq(item, a)
-        if c.t != "":
-            nx = self.label()
-            self.incoming(ph, "true", self.cur)
-            self.cbr(c.v, found, nx)
-            self.place(nx)
-        return
-    u = unopt(item.t)
-    if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
-        # (an object, list, dict, set or tuple, also one that may be None, is found
-        # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
-        # with xs = [nan]; a number has no identity here, see the deviation about NaN,
-        # and a str's is its value)
-        nx = self.label()
-        self.incoming(ph, "true", self.cur)
-        self.cbr(self.ptr_cmp('==', item, a).v, found, nx)
-        self.place(nx)
-    c = self.cmp2("==", item, a)
-    nx = self.label()
-    self.incoming(ph, "true", self.cur)
-    self.cbr(c.v, found, nx)
-    self.place(nx)
+    # if so, else on in the block placed next, as a tuple's item is tested (titem_eq)
+    self.titem_eq(item, a, found, ph, "true")
 
 def gen_iter_in(self, op: str, a: Val, it: Val) -> Val:
     # x in o of an object whose __iter__ returns iterator object it: its items, from __next__,
