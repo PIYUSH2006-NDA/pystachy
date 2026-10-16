@@ -150,6 +150,7 @@ The exact operation table is `IROPS`; its current groups are:
 | Guards and errors | `check`, `raise` |
 | Optimized list reads | `list.len`, `list.load` |
 | Exception handling | `landing`, `throw`, `exc.match` |
+| Generators (LLVM coroutines) | `gen.start`, `gen.yield`, `gen.ret`, `gen.promise`, `gen.resume`, `gen.drop` |
 
 The operation registry is closed: unknown operations, including `raw`, are rejected.
 Operations carry typed operands and finite operators, predicates, flags and metadata;
@@ -255,6 +256,16 @@ types or one of the finite machine types (`%ptr`, `%byte`, `%i32`); addresses ca
 explicit operands and indices. String alias/range metadata and in-bounds addressing are finite
 choices checked before lowering. These operations preserve the existing effects,
 layout and guard order; they do not introduce unchecked Python operations.
+
+The generator operations mark an LLVM switched-resume coroutine's structure (see
+[generators](internals.md#generators)). `gen.start` ends the entry block of a generator function
+(`IFn.coro`, printed `presplitcoroutine`) and holds its name; `gen.yield` (a `%slot` value and a
+flag: whether closing the generator there runs its code) and `gen.ret` (an optional `%slot`)
+end blocks where it suspends; `gen.promise` without an operand is its own promise's address,
+and with a generator operand that generator's. `gen.resume` runs a generator to its next
+suspend and has every effect (user code); the exception passes make it an `invoke` like a
+call. `gen.drop` closes and destroys a generator a loop owns and never raises. The verifier
+checks their places, operands and metadata; lowering alone emits the `llvm.coro.*` calls.
 
 Each block ends with one terminator. Branch labels stay within the function, and phi
 predecessors must branch to their join. Checked operations share cold error blocks per

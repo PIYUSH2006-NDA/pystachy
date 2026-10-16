@@ -19,7 +19,7 @@ Imports search builtin modules first, then the program's directory,
 | `operator`, `stat`, `posixpath`, `genericpath` | Unchanged CPython | Operator functions, mode tests and string path operations | Partial API coverage |
 | `html`, `html.entities` | Adapted CPython | `escape`, `unescape`, HTML4 and HTML5 entity tables | UTF-8 byte indexing; no configurable integer digit limit |
 | `html.parser` | Adapted CPython | Incremental HTMLParser with typed subclass callbacks | Byte columns; ASCII name case conversion; see [probe](../docs/html-parser-probe.md) |
-| `difflib` | Adapted CPython | `SequenceMatcher`, `get_close_matches`, junk predicates and `Match` | String items; generator APIs unavailable |
+| `difflib` | Adapted CPython | `SequenceMatcher` (also the generator `get_grouped_opcodes()`), `get_close_matches`, junk predicates and `Match` | String items; `unified_diff()` and `context_diff()` still need `type(x).__name__` and `str.format()`, `ndiff()` a `Differ` with `None` junk functions |
 | `getopt` | Adapted CPython | `getopt`, `gnu_getopt`, `GetoptError` | `longopts` must be `list[str]`; untranslated messages |
 | `heapq` | Adapted CPython | Heap operations, `nlargest`, `nsmallest`, `key=` | `merge` unavailable; non-list inputs are materialized |
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
@@ -32,7 +32,7 @@ Imports search builtin modules first, then the program's directory,
 | `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key` | Typed callables and supported value/key types |
 | `textwrap` | Adapted CPython | `TextWrapper`, `wrap`, `fill`, `shorten`, `dedent`, `indent` | Byte widths; no subclassing |
 | `string` | Adapted CPython | Constants, `capwords`, `Template` | No compiled `Formatter` or `Template` subclasses |
-| `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode | Selected numeric types and APIs |
+| `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode, `covariance` | Selected numeric types and APIs |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
 
 The [compatibility reference](compatibility.md) defines each module's accepted

@@ -144,11 +144,12 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Containers | List, dictionary, set and tuple displays; list and set comprehensions |
 | Indexing and slicing | Negative indices; string and list slices without a step |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
-| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join` |
+| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join`; a generator expression elsewhere is a generator object |
+| Generators | Functions and methods (including `__iter__`) that `yield` or `yield from`, consumed by `for`, `next()`, `iter()`, `in` and the builtins that take iterables |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
-Generator expressions consumed this way do not provide general generator objects. Functions
-using `yield`, standalone iterators with `__next__`, dict comprehensions and multi-clause
+[Generators](language/semantics.md#generators) do not support `send()`, `throw()` or
+`close()`. Standalone iterators with `__next__`, dict comprehensions and multi-clause
 comprehensions are not supported. See [execution rules](language/semantics.md) for consumer
 restrictions, evaluation order and protocols.
 
@@ -215,7 +216,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 
 ## Unsupported features
 
-The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
+The main gaps are multiple inheritance, general object unions and `Any`, generators' `send()`, `async`,
 `bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
 dynamic attribute access, stepped slices and unrestricted argument expansion.
 

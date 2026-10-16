@@ -18,6 +18,7 @@ unsupported forms, see [compatibility](compatibility.md).
 | `A \| B` | Explicit scalar unions, or up to four non-overlapping native class/file members |
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
+| `Iterator[T]`, `Generator[Y, None, R]` | Generator objects that yield `T` (any generator function's); see [generators](semantics.md#generators) |
 
 `tuple(xs)` copies a supported homogeneous list or a string into an immutable
 runtime-length tuple; later list mutation does not change it. String conversion follows
@@ -32,8 +33,8 @@ optional elements copies its slots rather than reinterpreting numeric bits as po
 
 Runtime-length tuples currently do not support slicing, concatenation, repetition,
 membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
-from the fixed shape used by `*args`; arbitrary iterators and generators are not yet
-accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
+from the fixed shape used by `*args`; arbitrary iterators are not yet accepted by
+`tuple()` (a generator's items are). This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and

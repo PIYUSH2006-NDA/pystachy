@@ -143,6 +143,52 @@ Handlers match exception classes and rethrow unmatched exceptions. `finally` and
 cleanup run on the relevant normal and exceptional exits. Nested `finally` handling avoids
 exponential duplication. The C runtime is compiled with exception support in both tiers.
 
+<a id="generators"></a>
+
+## Generators
+
+A generator function compiles to an LLVM switched-resume coroutine (`presplitcoroutine`), and
+LLVM's coroutine passes do the work a hand-written state machine would: CoroSplit finds the
+values live across each `yield`, lays out the frame and outlines the resume and destroy
+functions, and CoroElide puts the frame of a generator a loop owns into the loop's own frame
+(HALO) once the generator's ramp is inlined. The typed IR marks the coroutine's structure
+with closed operations (`docs/typed-ir.md`): `gen.start` ends the entry block (`coro.id`,
+`coro.alloc`, a frame from `pys_alloc` that the collector scans, the promise, and the initial
+suspend that makes a call run none of the body), `gen.yield` and `gen.ret` suspend it (all
+returns share the one final suspend), `gen.promise` addresses a promise, `gen.resume` resumes
+a handle (an `invoke` in a `try`), and `gen.drop` closes and destroys a generator a loop owns.
+`coro.free` frees nothing: the collector reclaims an unreachable frame, and an elided frame
+lives in a scanned stack frame.
+
+A generator object is the coroutine's handle, so every generator that yields `Y` has the type
+`gen[Y]` (shown as `Generator[Y]`), whatever function made it. The promise holds five words:
+the value yielded last, the value returned (`r = yield from g()`), the state (suspended, suspended
+where closing it runs its code, finished, running), the consumer's command (close) and the
+generator's `__qualname__`. A consumer checks the state before it resumes (a finished generator
+is never resumed; a running one raises `ValueError`) and after (finished: the loop ends).
+`for_seq` takes a generator as one more kind of sequence, so `for`, `enumerate()`, `zip()` and
+comprehensions iterate generators; consumers that take all items read them into a list, and
+`sum()`, `min()`, `max()`, `any()` and `all()` take them as a generator expression would.
+
+With exceptions on (a program with `try` or `with`), a landing block covers a generator's body:
+an exception that leaves it marks the generator finished and goes on (a `StopIteration` as PEP
+479's `RuntimeError`). A loop over a generator its iterable has just made (a call of a generator
+function) owns it: `gen.drop` runs where the loop is left, and when closing may run code of the
+generator (a `yield` in `try`, `with`, `yield from` or a loop of its own), the loop is the body
+of a `try` whose finally block drops it, so an exception in the body closes it too. Closing
+resumes the generator with the close command, and the `yield` raises `GeneratorExit` there,
+which its `finally`, `with` and `except GeneratorExit` see; the generator's landing block ends
+it, and reports anything else, as `pys.gen.drop` reports a `yield` after `GeneratorExit`. A
+suspended generator keeps none of its exception state among its consumer's: it sets its `with`
+blocks' unwind actions aside (`pys_gen_leave`, `pys_gen_enter`), its `try` statements' marks
+are relative to the depth where it was last resumed, and the exception it handles in an
+`except` clause or a `finally` block is its own again when it resumes.
+
+A generator expression that no consumer takes directly becomes an anonymous generator
+function, called with its first iterable (evaluated where it is written) and the values of
+the enclosing function's variables it reads. Programs without `yield` and without such
+generator expressions emit the same typed IR and LLVM IR as before.
+
 <a id="whole-program-optimization"></a>
 <a id="two-tiers"></a>
 
@@ -150,7 +196,10 @@ exponential duplication. The C runtime is compiled with exception support in bot
 
 `run` favors startup latency. LLVM removes unused internal functions, optionally inlines the
 program's own functions, performs SSA cleanup, then ORC JIT runs with the cached runtime
-object. The default inlining threshold is 20,000 lines of generated IR; larger programs skip
+object. A module that holds generators (coroutines, which `lli` cannot run before they are
+lowered) gets LLVM's coroutine passes around that pipeline:
+`coro-early`, `coro-split` in the bottom-up walk that inlines (with `coro-elide` after each
+function's cleanup), and `coro-cleanup`; other modules keep the same `opt` command. The default inlining threshold is 20,000 lines of generated IR; larger programs skip
 that pass. The precompiled runtime is not inlined into JIT code.
 
 `build` links the runtime bitcode with the program and applies clang's `-O2` optimization

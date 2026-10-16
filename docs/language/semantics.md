@@ -73,6 +73,46 @@ These expressions are compiled for their consumer rather than creating a general
 Some consumers materialize input before processing it; see the
 [evaluation-order differences](compatibility.md#containers-and-evaluation-order).
 
+## Generators
+
+A function or method whose body contains `yield` or `yield from` is a generator function.
+Calling one runs none of its body: it makes a generator object, which runs to its next `yield`
+each time a consumer asks for an item. Generator functions that yield one type share one static
+type, written `Iterator[T]`, `Iterable[T]` (on a generator function's return only) or
+`Generator[Y, None, R]`, from `typing` or `collections.abc`. An unannotated generator function
+is a template: its first `yield` gives the type for each call's argument types.
+
+| Use | Behavior |
+|---|---|
+| `for` loops, `enumerate()`, `zip()`, comprehensions | Each item as the generator yields it; a finished generator yields nothing |
+| `next(g)`, `next(g, default)`, `g.__next__()` | The next item; `StopIteration` (or the default) once it has finished |
+| `iter(g)`, `g.__iter__()`, `iter(o)` | `g` itself; the generator `o.__iter__()` makes |
+| `sum`, `min`, `max`, `any`, `all`, `math.fsum`, `math.prod` | The items as they come; `any()` and `all()` stop at the deciding item |
+| `list`, `tuple`, `sorted`, `set`, `frozenset`, `str.join`, `list.extend` | All the items |
+| `x in g` | Iterates until an item equals `x` |
+| `yield from x` | Each item of `x`; for a generator, delegation, and `r = yield from g()` is `g`'s return value |
+
+A generator expression that no consumer takes directly, such as one stored in a variable or
+returned, is an anonymous generator: its first iterable is evaluated where it is written and
+the rest as it runs. Globals are read when it runs. Variables of the enclosing function that it
+reads must not be bound again (and must be assigned) where it is written: it reads their values
+then.
+
+A `for` loop over a generator that its iterable expression has just made (a call of a generator
+function, or of an `__iter__` that yields) closes the generator when the loop is left by its
+end, `break`, `return` or an exception, before the code after the loop runs. Closing raises
+`GeneratorExit` at the suspended `yield`, so `finally` blocks, `with` blocks and
+`except GeneratorExit` run, as in CPython. What the close raises, and a `yield` after
+`GeneratorExit`, are reported on stderr as CPython reports exceptions it ignores, and the loop's
+exit goes on. Exceptions raised in a loop's body never enter the generator. An exception that
+leaves a generator's body finishes the generator; a `StopIteration` becomes
+`RuntimeError: generator raised StopIteration` (PEP 479). A generator that resumes itself raises
+`ValueError: generator already executing`.
+
+`send()`, `throw()`, `close()`, the value of a `yield` expression, `async` generators and frame
+introspection are not supported. A generator the program drops while it is suspended is not
+closed (see [deviations](compatibility.md#memory-and-resource-lifetime)).
+
 ## Object protocols
 
 Object operations use the following methods. In supported ordinary hierarchies, instance-method
