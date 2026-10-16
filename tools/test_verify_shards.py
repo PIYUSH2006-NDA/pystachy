@@ -12,13 +12,14 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/example.py",
          "tests/errors/example.py", "tests/errors/syntax_example.py"]
-# group, its suite step, the modes it reports, the checks of its half (tests/verify.sh's checks), and
+# group, its suite step, the modes it reports, the checks of its shard (tests/verify.sh's checks), and
 # how many tests/run.sh runs make them
 SHARDS = [("hosted-0", "tests-cpython-0", ["jit", "aot"], 6, 1), ("hosted-1", "tests-cpython-1", ["jit", "aot"], 4, 1),
           ("native-0", "tests-native-0", ["jit", "aot"], 6, 1), ("native-1", "tests-native-1", ["jit", "aot"], 4, 1),
           ("opt-off-0", "tests-opt-off-0", ["jit", "aot"], 6, 1), ("opt-off-1", "tests-opt-off-1", ["jit", "aot"], 4, 1),
           ("python-free-0", "python-free-0", None, 6, 1), ("python-free-1", "python-free-1", None, 4, 1),
-          ("ubsan-0", "ubsan-0", ["aot", "jit"], 8, 2), ("ubsan-1", "ubsan-1", ["aot", "jit"], 6, 2)]
+          ("ubsan-0", "ubsan-0", ["aot", "jit"], 4, 2), ("ubsan-1", "ubsan-1", ["aot", "jit"], 8, 2),
+          ("ubsan-2", "ubsan-2", ["aot", "jit"], 2, 2)]
 # the LLVM tools python-free links into its PATH (doubles: only clang is called)
 LLVM_TOOLS = ("clang", "opt", "lli", "llvm-link", "llvm-as")
 
@@ -138,9 +139,9 @@ esac
                 self.assertEqual((step["passed"], step["failed"], step["expected"]), (count, 0, count))
                 if modes:
                     self.assertEqual(step["modes"], modes)
-                index = int(group[-1])
-                self.assertEqual((step["shard_index"], step["shard_count"]), (index, 2))
-                self.assertEqual(self.selected(logs[name]), CASES[index::2] * runs)
+                index, shards = int(group[-1]), (3 if group.startswith("ubsan") else 2)
+                self.assertEqual((step["shard_index"], step["shard_count"]), (index, shards))
+                self.assertEqual(self.selected(logs[name]), CASES[index::shards] * runs)
                 if group.startswith(("ubsan", "python-free")):
                     self.assertTrue(step["ir_identical"])
                 if group.startswith("python-free"):
@@ -150,18 +151,18 @@ esac
                 if group.startswith("opt-off"):
                     self.assertEqual(step["PYSTACHY_OPT"], ["-all"])
                 self.assertEqual(report["sources"]["suite_checks"], 10)  # (CASES's checks in JIT and AOT)
-                observed[group] = CASES[index::2]
-        for kind in ("hosted", "native", "opt-off", "python-free", "ubsan"):
-            first, second = observed[f"{kind}-0"], observed[f"{kind}-1"]
-            self.assertFalse(set(first) & set(second))
-            self.assertCountEqual(first + second, CASES)
+                observed[group] = CASES[index::shards]
+        for kind, shards in (("hosted", 2), ("native", 2), ("opt-off", 2), ("python-free", 2), ("ubsan", 3)):
+            parts = [observed[f"{kind}-{index}"] for index in range(shards)]
+            self.assertEqual(sum(map(len, parts)), len(set().union(*parts)))  # disjoint
+            self.assertCountEqual([case for part in parts for case in part], CASES)
 
     def test_local_aliases_run_both_halves(self):
         for group, steps, total in (("hosted", ["tests-cpython-0", "tests-cpython-1"], 10),
                                     ("native", ["tests-native-0", "tests-native-1"], 10),
                                     ("opt-off", ["tests-opt-off-0", "tests-opt-off-1"], 10),
                                     ("python-free", ["python-free-0", "python-free-1"], 10),
-                                    ("ubsan", ["ubsan-0", "ubsan-1"], 14)):
+                                    ("ubsan", ["ubsan-0", "ubsan-1", "ubsan-2"], 14)):
             with self.subTest(group=group):
                 result, report, _ = self.run_group(group)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -178,7 +179,7 @@ esac
                     self.assertEqual(report["steps"][-1]["result"], "fail")
 
     def test_ubsan_shards_need_an_instrumented_runtime(self):
-        for group in ("ubsan-0", "ubsan-1"):
+        for group in ("ubsan-0", "ubsan-1", "ubsan-2"):
             with self.subTest(group=group):
                 result, report, logs = self.run_group(group, "plain-runtime")
                 self.assertNotEqual(result.returncode, 0)
