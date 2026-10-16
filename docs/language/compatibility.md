@@ -339,7 +339,7 @@ supported alternatives.
   another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass but `abc.ABCMeta`; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,

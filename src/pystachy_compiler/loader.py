@@ -50,6 +50,7 @@ from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.parser import Parser
 from src.pystachy_compiler.specs import (
     ABCS,
+    ABSTRACT_DECOS,
     ANNKINDS,
     CBUILTIN,
     GENERICS,
@@ -2352,6 +2353,13 @@ class Loader:
         # A dotted name's first name that an import in a try statement binds is checked as a read
         # of it is (Node.mchk, which Gen.decorate tests where CPython evaluates the decorator)
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
+        k = self.kind(m, root) if root not in loc else ""
+        q = k[2:] if k.startswith("a:") and root == d.s else "abc$" + d.s[len(root) + 1 :] if k == "m:abc" and "." in d.s else ""
+        if not fn and len(d.kids) == 0 and q in ABSTRACT_DECOS:
+            # (a method's @abstractmethod, or one of the decorators deprecated for it, as abc's:
+            # the compiler applies it, Gen.abstract_defs)
+            d.s = q
+            return
         alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
         if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
             e = mk("name", root, d.line, [])
