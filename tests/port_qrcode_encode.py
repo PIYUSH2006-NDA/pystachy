@@ -2,7 +2,8 @@
 # data mode (numeric, alphanumeric, bytes, also UTF-8 of non-ASCII text), error correction
 # level and mask, at versions 1 to 7; then its errors (the checks of QRCode's arguments and of
 # its version and mask_pattern setters, data too long), get_matrix(), the version fit across
-# the three sizes of the length fields, and the chunk optimizer (util.optimal_data_chunks)
+# the three sizes of the length fields, the chunk optimizer (util.optimal_data_chunks) and
+# util.QRData segments passed to add_data()
 import sys
 
 import qrcode
@@ -151,6 +152,13 @@ try:
     qr.print_ascii(out=sys.stdout, tty=True)
 except OSError as e:
     print("OSError:", e)
+
+# test_add_qrdata: a QRData of the data's chosen mode, added as it is
+qr = qrcode.QRCode(version=1, border=1)
+qr.add_data(util.QRData("a"))
+qr.add_data(util.QRData("12", mode=util.MODE_8BIT_BYTE))
+qr.make(fit=False)
+print("qrdata", [len(d) for d in qr.data_list], [d.mode for d in qr.data_list], sum([row.count(True) for row in qr.modules]))
 
 # get_matrix(): the border is added, its rows are one list, and without it are the modules
 qr = qrcode.QRCode(border=2, mask_pattern=1)

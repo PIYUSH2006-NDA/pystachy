@@ -88,6 +88,7 @@ fit 4:593 version 26
 fit 4:594 version 27
 fit 4:96 version 9
 OSError: Not a tty
+qrdata [1, 2] [4, 4] 236
 matrix 29 29 False True False 320
 aliasing True False False
 no border 25 True
