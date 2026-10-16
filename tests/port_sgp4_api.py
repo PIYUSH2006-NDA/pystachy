@@ -55,6 +55,9 @@ for n, mode in [(5, 'i'), (5, 'a'), (339999, 'i'), (340000, 'i')]:
 a5 = Satrec.twoline2rv(s.replace('25544', 'T0001'), t.replace('25544', 'T0001'))
 print(a5.satnum_str, from_alpha5(a5.satnum_str), from_alpha5('Z9999'), from_alpha5('J0000'),
       from_alpha5('P1234'), from_alpha5('00042'))
+# the properties no and satnum, the slots, and whole Julian days as ints
+print(repr(sat.no), sat.no == sat.no_kozai, sat.satnum, a5.satnum, dec.satnum)
+print(len(Satrec.__slots__), sat.__slots__[0], sat.__slots__[-1], sat.sgp4(2458827, 0) == sat.sgp4(2458827.0, 0.0))
 for n in [99999, 100000, 182345, 339999, 340000, 9223372036854775807]:
     try:
         print(n, to_alpha5(n))

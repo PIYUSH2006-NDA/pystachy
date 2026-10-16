@@ -14,11 +14,6 @@ class EarthGravity(NamedTuple):
     j4: float
     j3oj2: float
 
-# Pystachy port: EarthGravity(*getgravconst(...)) with the eight items passed one by one (star
-# arguments, M3)
-_g = getgravconst('wgs72old')
-wgs72old = EarthGravity(_g[0], _g[1], _g[2], _g[3], _g[4], _g[5], _g[6], _g[7])
-_g = getgravconst('wgs72')
-wgs72 = EarthGravity(_g[0], _g[1], _g[2], _g[3], _g[4], _g[5], _g[6], _g[7])
-_g = getgravconst('wgs84')
-wgs84 = EarthGravity(_g[0], _g[1], _g[2], _g[3], _g[4], _g[5], _g[6], _g[7])
+wgs72old = EarthGravity(*getgravconst('wgs72old'))
+wgs72 = EarthGravity(*getgravconst('wgs72'))
+wgs84 = EarthGravity(*getgravconst('wgs84'))
