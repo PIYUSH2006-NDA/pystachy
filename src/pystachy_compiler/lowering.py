@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENNEW, GENRET, GENSLOTS, GENSLOTSX, GENSTATE, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENNEW, GENRET, GENSLOTS, GENSLOTSX, GENSTATE, ICMP, RANGEC, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
 
 
@@ -71,8 +71,10 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         v = i.a[1]
         o.append(f"  store {'ptr' if v.t == 'None' else lt(v.t)} {v.v}, ptr {i.a[0].v}")
     elif op == "field.addr":
+        self.rangeused = self.rangeused or i.a[0].t == RANGEC
         o.append(f"  %t{i.r[0]} = getelementptr %C.{i.a[0].t}, ptr {i.a[0].v}, i32 0, i32 {i.k}")
     elif op == "alloc.fixed":
+        self.rangeused = self.rangeused or i.t == RANGEC
         size = str(8 * len(targs(i.t))) if is_tuple(i.t) else f"ptrtoint (ptr getelementptr (%C.{i.t}, ptr null, i32 1) to i64)"
         o.append(f"  %t{i.r[0]} = call ptr @{self.rtfns['alloc'].sym}(i64 {size})")
     elif op == "tuple.load" or op == "tuple.store":

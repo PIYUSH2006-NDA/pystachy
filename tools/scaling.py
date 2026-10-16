@@ -1,6 +1,7 @@
 """How compile time grows with the size of the program: generated programs, timed IR generation.
 
-usage: python3 tools/scaling.py [-c LABEL=COMMAND]... [-s SHAPE,...] [-n N,...] [-r RUNS] [--ops] [--check] [--keep DIR]
+usage: python3 tools/scaling.py [-c LABEL=COMMAND]... [-s SHAPE,...] [-x SHAPE,...] [-n N,...] [-r RUNS] [--ops] [--check]
+                                [--keep DIR]
        (defaults: the checkout's -c "hosted=python3 pystachy.py" -c "native=./pystachy", every shape,
        -n 1000,2000,4000, -r 3)
 Each shape is a family of programs whose size grows with N:
@@ -28,6 +29,8 @@ Each shape is a family of programs whose size grows with N:
   gdicts   N global dicts and one function that sets each (Gen.reaching walks back from each load)
   dropped  one function whose if sys.platform == "win32" block, dropped at compile time, binds N
            variables, each read further on where a test that is false guards it
+  nones    N globals assigned None, then an int, then each tested in an if: Gen.none_type types
+           each from the values the module's statements assign it
 Each cell is the median of RUNS runs of "COMMAND ir main.py -o /dev/null" in seconds, startup
 included; "x" is its growth from the previous N (2.0 is linear when N doubles, 4.0 quadratic).
 --ops adds, for each COMMAND that runs a .py file (the CPython-hosted compiler), the number of
@@ -40,6 +43,8 @@ A compiler that fails shows "failed", and its last line of stderr follows the ta
 --check makes the exit status 1 if a compiler fails, or if a count of --ops grows more than 1.1
 times as fast as N (a superlinear pass): tests/verify.sh runs it on N = 500 and 1000.
 --keep DIR writes the generated programs to DIR/SHAPE-N/ instead of a temporary directory.
+-x leaves the shapes it names out of those -s gives (default: all), so that tests/verify.sh's
+scaling-1 checks every shape its scaling-0 does not, a new one too.
 """
 import glob
 import importlib.util
@@ -210,10 +215,18 @@ def dropped(n):
     return {"main.py": src}
 
 
+def nones(n):
+    src = [f"v{i} = None" for i in range(n)] + [f"v{i} = {i}" for i in range(n)] + ["total = 0"]
+    for i in range(n):
+        src += [f"if v{i} is not None and v{i} >= 0:", f"    total += v{i} * 2"]
+    src.append("print(total)")
+    return {"main.py": src}
+
+
 SHAPES = {"funcs": funcs, "globals": globals_, "both": both, "long": long, "top": top, "classes": classes, "modules": modules,
           "fields": fields, "calls": calls, "imports": imports, "stdlib": stdlib, "breaks": breaks, "exits": exits, "elifs": elifs,
           "topelifs": topelifs, "comps": comps, "chain": chain,
-          "lookups": lookups, "gdicts": gdicts, "dropped": dropped}
+          "lookups": lookups, "gdicts": gdicts, "dropped": dropped, "nones": nones}
 
 
 def write(d, files):
@@ -312,7 +325,7 @@ def main():
     argv = sys.argv[1:]
     if argv[:1] == ["--count"]:
         return count(argv[1], argv[2], argv[3:])
-    comps, shapes, sizes, runs, want_ops, check, keep = [], list(SHAPES), [1000, 2000, 4000], 3, False, False, ""
+    comps, shapes, excluded, sizes, runs, want_ops, check, keep = [], list(SHAPES), [], [1000, 2000, 4000], 3, False, False, ""
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -332,6 +345,8 @@ def main():
             comps.append((label, shlex.split(cmd)))
         elif a == "-s":
             shapes = v.split(",")
+        elif a == "-x":
+            excluded = v.split(",")
         elif a == "-n":
             sizes = [int(x) for x in v.split(",")]
         elif a == "-r":
@@ -341,9 +356,10 @@ def main():
         else:
             sys.exit(__doc__)
         i += 2
-    for s in shapes:
+    for s in shapes + excluded:
         if s not in SHAPES:
             sys.exit(f"unknown shape {s}: one of {', '.join(SHAPES)}")
+    shapes = [s for s in shapes if s not in excluded]
     if not comps:
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         comps = [("hosted", [sys.executable, os.path.join(root, "pystachy.py")]), ("native", [os.path.join(root, "pystachy")])]

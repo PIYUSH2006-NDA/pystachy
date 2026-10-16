@@ -168,16 +168,18 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
+- A key object (an instance of a class that defines `__call__`) that is `None` when `sorted()`,
+  `list.sort()`, `min()` or `max()` runs is no key, as in CPython, but where the items are
+  objects (whose comparison methods the keyed call never compiles), or have no order without a
+  key here (a closed union, functions): it is called then, raising
+  `TypeError: 'NoneType' object is not callable`, where CPython orders the items. A
+  `Callable | None` key for such items is a compile-time error.
+
 - The text of `getattr(o, name)` with a run-time name (see [reflection](semantics.md#reflection))
   shows the addresses CPython shows, but not CPython's: a method wrapper's or builtin method's
   object address is the object's, a builtin method of the type (`__new__`, `__init_subclass__`)
   and a static method (`<function C.m at 0x...>`) show the address of the class's reflection
   record, as no type or function object exists at run time.
-
-- A PEP 695 function's type parameter hides a module-level name of the same name only in the
-  function's annotations: its body reads the module's (`T = 5` then
-  `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
-  `+` raises `TypeError`). A generic class's type parameters hide it in its methods' bodies too.
 
 ### Errors and control flow
 
@@ -678,7 +680,10 @@ supported alternatives.
   tested the value (`isinstance()` does not change the type of a value), a call `x.__init__(...)`
   on an object of a class that a class deriving from it defines `__init__` again for,
   `Base.method(self, ...)` naming a base other than the class's own, one whose `__init__` may leave
-  a field of the base unassigned where the base's code reads it (call `super().__init__()` first),
+  a field of the base unassigned where the base's code reads it (a method it calls on `self`, or a
+  method of the base it calls through `super()` that reads the field or uses `self` otherwise than
+  as `self.field`, before the field is assigned), or where a def or lambda that it defines before
+  the field is assigned reads it (call `super().__init__()` first),
   keyword arguments where no class of its line has an `__init__` (but those its builtin base's
   takes, such as `ImportError`'s `name` and `path`), more than three arguments for one deriving
   from `OSError` (or for `OSError` itself); for exception classes, `super()` outside their methods,
@@ -688,10 +693,18 @@ supported alternatives.
 
 ### Builtins
 
-- `range()`, `enumerate()`, `zip()` or `reversed()` nested inside `enumerate()`, `zip()` or
-  `reversed()` in supported loops or consumers, and `zip(strict=...)`. Materialize the inner
-  expression as a list first. `reversed(range(...))` is supported.
+- `enumerate()`, `zip()` or `reversed()` nested inside `enumerate()`, `zip()` or `reversed()`
+  in supported loops or consumers, and `zip(strict=...)`. Materialize the inner expression as a
+  list first. `reversed(range(...))` is supported, and a `range()` in `enumerate()` or `zip()` is
+  a [range object](semantics.md#range-objects).
+- of a [range object](semantics.md#range-objects): ordering comparisons and assigning its
+  attributes (CPython's `TypeError` and `AttributeError`); `in` of other than an int or a bool,
+  and indexing, `index()` and `count()` of other than an int (CPython takes a bool as an int, and
+  compares other values with the items); `==` with a value that may be `None` but is not a range;
+  `dir()` and `vars()`
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
+- a `key=` that may be `None` (`Callable | None`) of items that have no order without a key (a
+  closed union, functions)
 - `dict.update()` of a dict of other key or value types, of an iterable other than a list of
   `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without

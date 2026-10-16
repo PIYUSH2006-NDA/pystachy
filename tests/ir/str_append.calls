@@ -1,0 +1,14 @@
+@main.init: pys_alloc pys_str_int pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_raise pys_raise
+@f.loop: pys_str_int pys_str_iadd
+@f.plus: pys_str_iadd
+@f.prepend: pys_str_add
+@f.glob: pys_str_add
+@c.0.1:
+@f.captured: pys_alloc pys_alloc pys_str_add
+@f.maybe: pys_raise pys_str_add
+@m.Box.__init__:
+@m.Box.add: pys_str_add
+@pys_obj_eq:
+@pys_obj_cmp:
+@pys_obj_repr:
+@main: pys_init pys_finish

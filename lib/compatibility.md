@@ -178,6 +178,8 @@ of these mappings (a `Counter` types only the keys of an `OrderedDict` or
 `defaultdict`: the `int` values need an annotation); other iterable objects of
 pairs need `list(...)` first, and a generator expression a list comprehension.
 Keyword arguments are accepted by `update` and `subtract`, not by constructors.
+Calling `__init__` again updates the items, as CPython's does (`Counter` adds
+the counts; a `defaultdict`'s also replaces `default_factory`).
 `dict(m)` of a mapping is not supported: `{k: v for k, v in m.items()}` copies it.
 
 - `defaultdict(factory)` accepts builtin classes such as `int`, `list`, `set`,
@@ -727,3 +729,61 @@ format.
 - `struct.pack` and the module's other functions as values (`f = struct.pack`) raise
   `NotImplementedError` when called, as the compiler makes the calls by their names. A `Struct`'s
   methods are values, as `Struct("!I").pack` is.
+
+## Thread
+
+`_thread` is `_pystachy_thread`, a port of the C module `_thread` (`Modules/_threadmodule.c`)
+that Pystachy loads for `import _thread`, for the one thread that a Pystachy program runs, as
+CPython's builds without threads had `_dummy_thread` until 3.8. Locks (`allocate_lock()` and
+`LockType`, also through the obsolete `allocate()`, `acquire_lock()`, `release_lock()` and
+`locked_lock()`) and reentrant locks (`RLock`, with the `_is_owned()`, `_recursion_count()`,
+`_release_save()` and `_acquire_restore()` of `threading.Condition`) work as CPython's do in one
+thread: `acquire()` of an unlocked lock takes it, `acquire(False)` of a locked one gives `False`,
+and an `acquire()` with a timeout gives `False` once the timeout has passed. `acquire()` checks
+its arguments as CPython's does, with its `ValueError` and `OverflowError`, and `release()` of a
+lock that is not held raises CPython's `RuntimeError`. `_count()`, `stack_size()`,
+`interrupt_main()`, whose SIGINT raises `KeyboardInterrupt`, `exit()`, `daemon_threads_allowed()`,
+`TIMEOUT_MAX` and `error`, which is `RuntimeError`, work as in CPython, and `_local` is a base
+class whose subclasses' `__init__` binds their fields.
+
+- `start_new_thread()`, the obsolete `start_new()` and `start_joinable_thread()` raise
+  `NotImplementedError` ([deviation](../tests/deviations/lib_thread_start.py)).
+- An `acquire()` of a locked lock that would wait for ever (without a timeout) raises
+  `RuntimeError: deadlock: ...`, where CPython waits for another thread to release the lock, and
+  so do `_acquire_restore()` of a reentrant lock that is held and `join()` of a thread handle that
+  is not done ([deviation](../tests/deviations/lib_thread_deadlock.py)).
+- `with lock:` is a compile-time error, as `with` takes only files
+  ([error test](../tests/errors/lib_thread_with.py)): call `acquire()` and `release()`.
+- `get_ident()` is the process's id, and so is `get_native_id()`, as Linux gives a process's main
+  thread the process's id; CPython's `get_ident()` is the thread's `pthread_t`.
+- `interrupt_main()` of another signal than SIGINT does nothing, as CPython's default handlers do
+  (Linux's signal numbers: those from 65 on are out of range).
+- `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
+  `NotImplementedError`: no thread but the main one runs.
+
+## Unicodedata
+
+`unicodedata` is `_pystachy_unicodedata`, a port of CPython's C module `unicodedata`
+(`Modules/unicodedata.c`) that Pystachy loads for `import unicodedata`, on CPython 3.13.16's
+tables of Unicode 15.1.0, which `tools/unicodedata_tables.py` takes from CPython's module and
+writes into `_pystachy_unicodedata_db.py` and `_pystachy_unicodedata_names.py`. Every function
+works as CPython's does, with its errors and messages: `category()`, `bidirectional()`,
+`combining()`, `mirrored()`, `east_asian_width()`, `decomposition()`, `decimal()`, `digit()` and
+`numeric()` (with or without a default), `name()`, `lookup()`, which also takes the aliases,
+named sequences and derived names (Hangul syllables, CJK and Tangut ideographs) in any case,
+`normalize()` and `is_normalized()` in the four forms, and `ucd_3_2_0`, the database of
+Unicode 3.2.0 that `stringprep` and the IDNA codec read. A function's character is the one code
+point that its `str` argument's UTF-8 encodes, and the strs it gives hold the code points' UTF-8
+(their `len()` counts bytes, as for any Pystachy str: see the [language
+reference](../docs/language/compatibility.md#text-and-file-positions)).
+
+- Iterating a str gives its bytes, so `[c for c in s if unicodedata.combining(c) == 0]` raises
+  `TypeError` for a character of more than one byte
+  ([deviation](../tests/deviations/lib_unicodedata_bytes.py)): `re.findall("(?s).", s)` gives
+  the characters, as in CPython ([test](../tests/lib_unicodedata_chars.py)).
+- `lookup()` takes a `str`; `bytes`, which CPython's also takes, is a compile-time error.
+- `unicodedata._ucnhash_CAPI`, the capsule through which CPython's `\N{...}` escapes find
+  names, is not there.
+- The tables, about 850 KB of source, are compiled into each program that imports
+  `unicodedata`: they add about 1 MB of IR and 0.4 s to a `pystachy run`. A function decodes
+  the table it reads the first time it reads it, into a few lists of ints.
