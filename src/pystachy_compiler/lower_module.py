@@ -28,6 +28,27 @@ def lower_data(d: Data) -> str:
         return f"{d.name} = private constant [{len(slots)} x i64] [{', '.join(slots)}], align 8"
     if d.kind == "callable" or d.kind == "exception":
         return f"{d.name} = private constant {{{', '.join(['ptr' for _ in d.refs])}}} {{{', '.join(['ptr ' + x for x in d.refs])}}}"
+    if d.kind == "classrec":
+        # a class's reflection record (reflection.py): name, qualified name and module, flags,
+        # the sorted name table and the field table with their lengths (null and 0 until a site
+        # needs them). Internal, and its address is the class's identity: never merged
+        r = d.refs
+        return (f"{d.name} = internal constant {{ptr, ptr, ptr, i64, i64, ptr, i64, ptr}} {{ptr {r[0]}, ptr {r[1]}, ptr {r[2]}, "
+                f"i64 {d.items[0].v}, i64 {d.items[1].v}, ptr {r[3]}, i64 {d.items[2].v}, ptr {r[4]}}}, align 8")
+    if d.kind == "classnames":
+        # the names a class's objects answer to, sorted by their bytes, each with its kind
+        es = ["{ptr, i64} {ptr " + d.refs[j] + ", i64 " + d.items[j].v + "}" for j in range(len(d.refs))]
+        return f"{d.name} = internal constant [{len(es)} x {{ptr, i64}}] [{', '.join(es)}], align 8"
+    if d.kind == "classfields":
+        # the fields of an object's __dict__ in their order: name, type descriptor, byte offset in
+        # the class's layout (d.text) and that of its "is assigned" flag (-1: always assigned)
+        es: list[str] = []
+        for j in range(len(d.refs) // 2):
+            off = f"ptrtoint (ptr getelementptr ({d.text}, ptr null, i32 0, i32 {d.items[2 * j].v}) to i64)"
+            fl = d.items[2 * j + 1].v
+            flo = "-1" if fl == "-1" else f"ptrtoint (ptr getelementptr ({d.text}, ptr null, i32 0, i32 {fl}) to i64)"
+            es.append("{ptr, ptr, i64, i64} {ptr " + d.refs[2 * j] + ", ptr " + d.refs[2 * j + 1] + ", i64 " + off + ", i64 " + flo + "}")
+        return f"{d.name} = internal constant [{len(es)} x {{ptr, ptr, i64, i64}}] [{', '.join(es)}], align 8"
     fail(f"internal error: no LLVM lowering for module data {d.kind}", 0)
     return ""
 

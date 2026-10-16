@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 import sys
+from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
@@ -631,9 +632,13 @@ def gen_program(self, mods: list[Mod]) -> str:
     self.strglobals = module_strs(mods)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
+    props: dict[str, bool] = {}
+    for m in mods:
+        refl_props(m.body, props)
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
     for m in mods:

@@ -5,6 +5,7 @@ from src.pystachy_compiler.analysis import collect, comp_shared, comp_unbound, d
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FmtArgs, FnInfo, Ins, IterArg, Loop, Val
 from src.pystachy_compiler.names import short
+from src.pystachy_compiler.reflection import VARS_USES, refl_annotated, refl_body, refl_fold, refl_reflective
 from src.pystachy_compiler.specs import (
     CHECKED,
     DUNDER,
@@ -158,6 +159,8 @@ def gen_static(self, n: Node) -> int:
     # its argument types, can so dispatch on them as unannotated code does, also with None is
     # x, x == None and x != None for its parameter x (not where x's class defines __eq__ or
     # __ne__). Elsewhere == runs: the branch it would remove may give a list its item type.
+    if self.reflcopies > 1 and refl_fold(n) >= 0:
+        return refl_fold(n)  # (a test of the literals an unrolled copy reads: reflection.py)
     k = n.kind
     c = self.const_of(n, {}, True) if self.lit_context() and k != "name" else None
     if c is not None:
@@ -202,6 +205,8 @@ def gen_static(self, n: Node) -> int:
         t = self.static_type(n.kids[1], True)
         if t in self.classes and self.classes[t].tag > 0:
             return -1  # the concrete class may add attributes beyond the static type
+        if t != "" and self.refl_prop_in(t, n.kids[2].s):
+            return -1  # (a property's getter decides: reflection.py)
         h = self.has(t, n.kids[2].s) if t != "" else -1
         return 1 if h == -1 and self.knownobj(n.kids[1]) else max(h, -1)
     if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and not self.bound("isinstance") and len(n.kids) == 3:
@@ -263,8 +268,18 @@ def gen_has(self, t: str, a: str) -> int:
             return -1
         if t in self.nts:
             self.err(f"hasattr() of '{a}' on a NamedTuple is not supported")
+        if (a == "__dict__" or a == "__weakref__") and ci.slotlimit:
+            return 0  # (__slots__ without them: CPython's objects have neither)
         if a in HASATTR["obj"].split():
             return -1
+        if a == "__annotations__" or (a == "__replace__" and self.is_dc(t)):
+            # (a dataclass's __replace__, and the annotations of a class body, its or a base's)
+            c = t
+            while c in self.classes and a == "__annotations__" and not self.is_dc(t):
+                if refl_annotated(refl_body(self.classes[c].node)):
+                    return -1
+                c = self.classes[c].base
+            return -1 if self.is_dc(t) else 0
         if self.is_dc(t) and a == "__match_args__":
             # (but for match_args=False, which leaves the one a base dataclass writes, if any)
             c = t
@@ -607,6 +622,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.read(n)
     if k == "badattr":
         self.err(n.s)  # a module attribute that does not exist, or a module used as a value
+    if k == "dcfield":
+        self.err("a dataclasses.Field object as a value is not supported; its .name is (#486)")
     if k == "lambda":
         return self.closure(n)
     if k == "set":
@@ -621,6 +638,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         self.err(UNSUPPORTED[k])
     if k == "walrus":
         return self.walrus(n, want)
+    if k == "binop" and n.s == "%" and self.refl_dict_of(n.kids[1]) is not None and (n.kids[0].kind == "str" or (n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str")):
+        return self.refl_percent(n.kids[0].s if n.kids[0].kind == "str" else self.strglobals[n.kids[0].s], n.kids[1])  # (fmt % vars(x): reflection.py)
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str":
@@ -650,14 +669,18 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         tc = n.kids[0]
         if is_super(tc) and not self.bound("super"):
             return self.super_call(tc, n.s, [], read=True)
-        if n.s == "__name__" and tc.kind == "call" and len(tc.kids) == 2 and tc.kids[0].kind == "name" and tc.kids[0].s == "type" and not self.bound("type"):
-            # type(e).__name__ of an exception: its class's name
-            v = self.expr(tc.kids[1], "")
-            if v.t == "exc":
-                return Val(self.rt("pys_exc_name", "ptr", [f"ptr {v.v}"]), "str")
-            if v.t in self.classes and self.classes[v.t].exc != "":
-                return Val(self.rt("pys_exc_cls", "ptr", [f"ptr {v.v}"]), "str")
-            self.err("type(x).__name__ is only supported for exceptions")
+        if n.s == "__dict__" and self.refl_dict_of(n) is not None:
+            self.err(VARS_USES)
+        if tc.kind == "dcfield":
+            if n.s != "name":
+                self.err(f"the attribute {n.s} of a dataclasses.Field is not supported; its name is (#486)")
+            return Val(self.sconst(tc.s), "str")
+        if (n.s == "__name__" or n.s == "__qualname__" or n.s == "__module__") and self.refl_typeof(tc) is not None:
+            # type(x).__name__ and x.__class__.__name__: its class's name (an exception's, its
+            # ExcClass's), see refl_type_attr
+            x = self.refl_typeof(tc)
+            if x is not None:
+                return self.refl_type_attr(x, n.s)
         c = n.kids[0].s if n.kids[0].kind == "name" and n.kids[0].s not in self.ltype else ""
         if c in self.classes and ((c in self.nts and n.s == "_fields") or (c not in self.nts and n.s in self.classes[c].fdefault)):
             return self.class_attr(n.kids[0], n.s)
@@ -847,7 +870,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "fstr":
         parts: list[Val] = []
         for part in n.kids:
-            if part.kind == "fmt":
+            if part.kind == "fmt" and self.refl_textual(part.kids[0]) and part.kids[1].kind == "str" and part.kids[1].s == "":
+                parts.append(self.refl_finish(self.refl_defer(part.kids[0]), "str"))  # (f"{vars(o)}": reflection.py)
+            elif part.kind == "fmt":
                 parts.append(self.format_(self.expr(part.kids[0], ""), part.kids[1]))
             elif part.kind == "str":
                 parts.append(Val(self.sconst(part.s), "str"))
@@ -1747,7 +1772,15 @@ def gen_unroll(self, g: Node, every: bool = False) -> list[Node] | None:
     it = g.kids[2]
     c = self.const_of(it, {}, True) if self.lit_context() else None
     items: list[Node] = []
-    if c is not None and c.kind == "tuple":
+    fns = self.refl_dc_names(it)
+    cns = self.refl_const_names(it) if fns is None and g.kids[1].kind == "name" and refl_reflective(g.kids[0], g.kids[1].s) and self.refl_dir_of(it) is None else None
+    if fns is not None:
+        items = [mk("dcfield", x, it.line, []) for x in fns]  # (dataclasses.fields(X): reflection.py)
+    elif cns is not None and len(cns) > 0:
+        if it.kind == "name":
+            self.expr(it, "")  # (its read checks it is assigned)
+        items = [mk("str", x, it.line, []) for x in cns]  # (constant attribute names: reflection.py)
+    elif c is not None and c.kind == "tuple":
         items = c.kids
     elif it.kind == "call" and len(it.kids) == 1 and it.kids[0].kind == "attr" and (it.kids[0].s == "items" or it.kids[0].s == "values") and is_kw(self.iter_static(it.kids[0].kids[0])):
         t = self.iter_static(it.kids[0].kids[0])
@@ -2961,6 +2994,9 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     return a
 
 def gen_compare(self, n: Node) -> Val:
+    tc = self.refl_type_cmp(n)  # (type(a) is C, type(a) == type(b): reflection.py)
+    if tc is not None:
+        return tc
     ops = n.s.split(",")
     if len(ops) == 1 and (n.kids[0].kind == "list" or n.kids[0].kind == "dict") and (len(n.kids[0].kids) == 0 or nones(n.kids[0])):
         # [] == xs, {} in ds, [None] == xs: an empty display, or one of None, takes its type

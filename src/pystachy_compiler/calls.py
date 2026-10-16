@@ -4,6 +4,7 @@ from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
 from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
+from src.pystachy_compiler.reflection import VARS_USES
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
@@ -46,6 +47,8 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
     if f.kind == "badattr":
         self.err(f.s)
     f = self.format_of(f)
+    if literal_format(f) and f.s == "format_map" and len(args) == 1 and self.refl_dict_of(args[0]) is not None:
+        return self.refl_format_map(f.kids[0].s, args[0])  # ("...".format_map(vars(x)): reflection.py)
     if literal_format(f):
         return self.str_format(f.kids[0].s, f.s, args)
     if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0:
@@ -122,6 +125,10 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
             self.err(f"{short(f.kids[0].s)}._make() is not supported: call {short(f.kids[0].s)}(...) with the fields")
         if f.kids[0].kind == "name" and f.kids[0].s in self.classes and f.kids[0].s not in self.ltype:
             return self.class_call(f.kids[0], f.s, args, want, resultsoft)
+        if self.refl_dict_of(f.kids[0]) is not None:
+            if f.s == "copy" and len(args) == 0:
+                return self.refl_dict_copy(f.kids[0])  # (vars(x).copy(): reflection.py)
+            self.err(VARS_USES)
         o = self.expr(f.kids[0], self.default_want(f.kids[0], f.s, args, ""))
         r = self.method(o, f.s, args, want, resultsoft)
         if f.s != "close":
@@ -186,6 +193,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
                 kws.append(mk("kw", d.kids[i].s, a.line, [self.vnode(self.expr(d.kids[i + 1], ""))]))  # (**{"k": v}: its items)
         elif a.kind == "dstar":
             v = self.expr(a.kids[0], "")
+            if not is_kw(v.t) and is_dict(v.t) and targs(v.t)[0] == "str" and n.kids[0].kind == "name" and self.aliases.get(n.kids[0].s, "") == "dataclasses.replace" and len(pos) == 1:
+                self.refl_replace_changes(pos[0], v)  # (#489's named rejection: reflection.py)
             if not is_kw(v.t):
                 self.err(f"** of a {typestr(v.t)} is not supported: of a function's **kwargs, or a dict display with str keys, it is")
             names = kw_names(v.t)
@@ -1143,8 +1152,8 @@ def gen_kw_type(self, f: FnInfo, name: str) -> str:
     return f.ptypes[j] if j >= 0 else ""
 
 def gen_dispatches(self, f: FnInfo, p: str) -> bool:
-    # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
-    # (not) None (or p == None, see static), and never assign it: then an object known not to
+    # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...), getattr(p,
+    # name, default), type(p) or p is (not) None (or p == None, see static), and never assign it: then an object known not to
     # be None decides the tests
     asg: dict[str, bool] = {}
     local_names(f.node.kids[2].kids, asg)
@@ -1155,6 +1164,8 @@ def gen_tests(self, ns: list[Node], p: str) -> bool:
     for n in ns:
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s == "isinstance" or n.kids[0].s == "hasattr") and len(n.kids) == 3 and n.kids[1].kind == "name" and n.kids[1].s == p:
             return True
+        if n.kind == "call" and n.kids[0].kind == "name" and ((n.kids[0].s == "getattr" and len(n.kids) == 4) or (n.kids[0].s == "type" and len(n.kids) == 2)) and n.kids[1].kind == "name" and n.kids[1].s == p:
+            return True  # (getattr(p, name, default) and type(p): reflection.py)
         x = nonetest(n)
         if x >= 0 and n.kids[x].kind == "name" and n.kids[x].s == p:
             return True
@@ -1167,5 +1178,7 @@ def gen_getattr_name(self, n: Node) -> str:
     # specializes on literals): that name; else ""
     if n.kind != "call" or len(n.kids) != 3 or n.kids[0].kind != "name" or n.kids[0].s != "getattr" or self.bound("getattr") or n.kids[1].kind in ["kw", "starred"] or n.kids[2].kind in ["kw", "starred"]:
         return ""
+    if n.kids[2].kind == "attr" and n.kids[2].s == "name" and n.kids[2].kids[0].kind == "dcfield":
+        return n.kids[2].kids[0].s  # (f.name of a dataclasses.Field: reflection.py)
     c = self.const_of(n.kids[2], {}, True) if self.lit_context() else n.kids[2] if n.kids[2].kind == "str" else None
     return c.s if c is not None and c.kind == "str" and c.s != "" else ""
