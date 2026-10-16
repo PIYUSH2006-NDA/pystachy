@@ -1612,9 +1612,15 @@ class Parser:
         cut = -1
         for k in range(len(toks)):
             toks[k].line = min(toks[k].line, last)
-            if self.incut != "" and toks[k].kind == "stop" and toks[k].text == "non-ASCII identifiers are not supported":
+            if toks[k].kind == "stop" and toks[k].text == "non-ASCII identifiers are not supported" and self.incut != "":
                 toks[k].text = self.incut  # (see limit())
                 toks[k].line = self.incutline
+            elif toks[k].kind == "stop" and toks[k].text == "non-ASCII identifiers are not supported":
+                # (a Pystachy limitation: CPython reads on and decodes the f-string's text once it
+                # ends, so an escape error in the text before the field comes first)
+                for ui in range(len(self.undecoded)):
+                    for x in self.pieces[ui]:
+                        self.unescape(x, line)
             if (toks[k].kind == "error" or toks[k].kind == "stop") and ran and self.cutmsg != "" and lx.halt >= len(lx.src) - 1:
                 # a bracket left open in a field cut short: where it ends (instead of the
                 # parenthesis added), CPython's parser meets the error that cut it
