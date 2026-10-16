@@ -129,7 +129,7 @@ when the program first needs them, with the module and the reason, for example:
 m.total() is not supported: parameter 'xs': unsupported type annotation
 ```
 
-This permits a module to keep generators, unsupported annotations or classes with unsupported
+This permits a module to keep unsupported generator forms (such as `send()`), unsupported annotations or classes with unsupported
 inheritance beside functions that compile. An unsupported special method, such as an
 unannotated `__len__`, is rejected when an operation needs it, including implicit use by
 printing, sorting or container comparisons.
@@ -174,7 +174,7 @@ Pystachy. The [library reference](../../lib/README.md) records provenance, avail
 restrictions and tests for each module.
 
 The adapted sources remain valid Python, but that does not imply every upstream API compiles.
-Common limitations include unsupported generators, byte-oriented string positions, lack of
+Common limitations include unsupported generator forms, byte-oriented string positions, lack of
 `bytearray` and binary files, and homogeneous container types. Check the module's reference before choosing an API.
 
 ## Builtins

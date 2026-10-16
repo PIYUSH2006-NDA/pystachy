@@ -1,0 +1,31 @@
+made, nothing run yet
+countdown starts
+got 3
+got 2
+got 1
+countdown ends
+even 0
+even 2
+even 4
+even 6
+1:a
+2:b
+1:x
+pair 1 2
+pair 2 3
+pair p q
+[None, None]
+cell (0, 0)
+cell (1, 0)
+cell (0, 1)
+cell (1, 1)
+diag 0
+diag 10
+countdown starts
+picked 2
+picked 1
+countdown ends
+picked 0
+picked 2
+picked 4
+[exit 0]

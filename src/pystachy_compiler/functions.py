@@ -145,6 +145,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             a = self.maddr('%ptr', env, f'{len(c.caps) + len(c.defs) + j}', True)
             self.iflag[c.iflags[j]] = self.mload('%ptr', a)
     self.none_ends()
+    if f.gen:
+        self.gen_begin(f)  # (a generator: a call makes it, and runs none of the code below)
     if f.ll.startswith("@init."):
         # a module's code runs once, when the first import of it runs
         done = f.ll + ".done"
@@ -185,6 +187,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
         self.handler = hm
         self.place(tr.body)
     self.stmts(body)
+    if f.gen:
+        self.gen_end(f)
     if f.ret == "":
         f.ret = "None"  # a template's function without a return statement that has a value
         f.noret = f.infer and self.term

@@ -12,8 +12,11 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_STEPS = {"tests-cpython", "tests-native", "tests-opt-off", "runtime-cache",
-               "python-free", "ubsan", "gc-jit", "gc-aot-0", "gc-aot-1"}
+SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native", "tests-opt-off", "runtime-cache",
+               "python-free", "ubsan-0", "ubsan-1", "gc-jit", "gc-aot-0", "gc-aot-1"}
+# Steps that run one of two disjoint halves of the corpus (tests/verify.sh shard_cases): the name
+# ends in the shard index.
+SHARDED_STEPS = {"tests-cpython-0", "tests-cpython-1", "ubsan-0", "ubsan-1", "gc-aot-0", "gc-aot-1"}
 
 
 def parse_groups(text):
@@ -103,10 +106,10 @@ def validate_report(report, group, expected):
                     integer(step.get("tests_compiler_interval"), f"{label}.tests_compiler_interval", 1) != 1000 or
                     integer(step.get("tests_interval"), f"{label}.tests_interval", 1) != 1):
                 raise ValueError(f"{label}: wrong GC stress mode or intervals")
-            if mode == "aot" and (
-                    integer(step.get("shard_index"), f"{label}.shard_index") != int(step["name"][-1]) or
-                    integer(step.get("shard_count"), f"{label}.shard_count", 1) != 2):
-                raise ValueError(f"{label}: wrong GC AOT shard")
+        if step["name"] in SHARDED_STEPS and (
+                integer(step.get("shard_index"), f"{label}.shard_index") != int(step["name"][-1]) or
+                integer(step.get("shard_count"), f"{label}.shard_count", 1) != 2):
+            raise ValueError(f"{label}: wrong shard")
         if step["name"] in SUITE_STEPS:
             expected_checks = integer(step.get("expected"), f"{label}.expected", 1)
             if integer(step.get("passed"), f"{label}.passed") != expected_checks:
@@ -141,11 +144,18 @@ def merge_reports(directory, groups, expected_commit=None):
     wanted = [name for name in groups if name != "all"]
     if set(reports) != set(wanted):
         raise ValueError(f"missing report groups: {sorted(set(wanted) - set(reports))}")
-    gc_groups = ("gc-jit", "gc-aot-0", "gc-aot-1")
-    if all(group in reports for group in gc_groups):
-        jit_checks, *aot_checks = [reports[group]["steps"][-1]["expected"] for group in gc_groups]
-        if sum(aot_checks) != jit_checks:
-            raise ValueError("GC AOT shards must cover the same full-suite check count as GC JIT")
+    # Shards together must make as many checks as an unsharded suite of the same modes (each
+    # group's suite is its last step, whose count validate_report checked).
+    for shards, whole, what in ((("gc-aot-0", "gc-aot-1"), ("gc-jit",),
+                                 "GC AOT shards must cover the same full-suite check count as GC JIT"),
+                                (("hosted-0", "hosted-1"), ("native",),
+                                 "CPython-hosted shards must cover the same full-suite check count as the native suite"),
+                                (("ubsan-0", "ubsan-1"), ("gc-jit", "gc-aot-0", "gc-aot-1"),
+                                 "UBSan shards must cover the same full-suite check count as GC JIT and GC AOT")):
+        if all(group in reports for group in shards + whole):
+            count = {group: reports[group]["steps"][-1]["expected"] for group in shards + whole}
+            if sum(count[group] for group in shards) != sum(count[group] for group in whole):
+                raise ValueError(what)
     first = reports[wanted[0]]
     commit = first["git"]["commit"]
     if expected_commit is not None and commit != expected_commit:
