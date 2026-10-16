@@ -32,6 +32,7 @@ from src.pystachy_compiler.analysis import (
     module_reads,
     names_name,
     own_specials,
+    range_values,
     read_names,
     rebound,
     refers,
@@ -206,10 +207,11 @@ class Loader:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
         self.intry = 0
-        if not self.rtmode and len(self.dirs) > 0 and RANGES not in self.mods and len([x for x in self.order if module_reads(x.body, "range")]) > 0:
-            # range() as a value is an object of lib's class, whose module nothing imports (where a
-            # loop or a consumer takes the numbers at once, the compiler steps through them itself,
-            # and the class's methods are compiled only if the program calls them)
+        if not self.rtmode and len(self.dirs) > 0 and RANGES not in self.mods and len([x for x in self.order if range_values(x.body, 0) and module_reads(x.body, "range")]) > 0:
+            # range() as a value is an object of lib's class, whose module nothing imports: loaded
+            # for a program that may use one (where a loop or a consumer takes the numbers at once,
+            # the compiler steps through range(...) itself; the class's methods are compiled only
+            # if the program calls them)
             self.load(RANGES, self.dirs[-1] + "/" + RANGES + ".py", "")
             self.order = [self.order[-1]] + self.order[:-1]
         if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if module_reads(x.body, "iter")]) > 0:

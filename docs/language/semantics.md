@@ -127,7 +127,8 @@ Some consumers materialize input before processing it; see the
 `range()` anywhere else is a range object, CPython's: a value to assign, pass, return or store
 (`r: range` annotates one), as in `codecs.make_identity_dict(range(256))`. It is an object of the
 class in [`lib/_pystachy_range.py`](../../lib/_pystachy_range.py), which the compiler loads for a
-program that reads the builtin `range`. A `for` loop or comprehension over one, and the consumers
+program that may use one: one that reads the builtin `range` other than as a `range(...)` it steps
+through itself, as above. A `for` loop or comprehension over a range object, and the consumers
 above, step through its numbers as through `range(...)` itself; `enumerate()`, `zip()` and
 generator expressions take them one at a time, and `range()` may be nested in `enumerate()` and
 `zip()`. `len()`, `bool()`, `x in r` of an int (an `int | None` that is None is in no range),

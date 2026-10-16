@@ -103,8 +103,9 @@ is never imported there.
 `iter()`; programs do not import it. See [iterators](../docs/language/semantics.md#iterators).
 
 `_pystachy_range.py` holds the class of range objects, `range()` as a value. The compiler loads
-it for a program that reads the builtin `range` (its methods are compiled where a program calls
-them); programs do not import it. See [range objects](../docs/language/semantics.md#range-objects).
+it for a program that may use one, a read of the builtin `range` other than a `range(...)` that a
+loop or a consumer steps through (its methods are compiled where a program calls them); programs
+do not import it. See [range objects](../docs/language/semantics.md#range-objects).
 
 ## Examples and measurements
 

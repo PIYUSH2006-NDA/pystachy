@@ -694,8 +694,8 @@ def gen_abc_class(self, c: str) -> bool:
 
 def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
-    # (lib's module of range objects, which any program that reads range loads, binds no global
-    # of another module: the names it binds do not keep a global from being constant)
+    # (lib's module of range objects binds no global of another module: the names it binds do not
+    # keep a global of the program from being constant)
     own = [m for m in mods if m.name != RANGES]
     if "moduleints" in self.opts:
         self.intglobals = module_ints(own, self.intat)

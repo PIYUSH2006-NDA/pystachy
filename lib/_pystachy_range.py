@@ -5,11 +5,12 @@ as a value (assigns, passes, returns or stores it), the compiler makes an object
 A for loop or a comprehension over one steps through its numbers as it does through range(...)
 itself, x in it is the runtime's arithmetic, iter() of one makes a range_iterator
 (lib/_pystachy_iterators.py) and a slice of one is _slice's. The compiler loads this module for a
-program that reads the builtin range (Loader.program); programs do not import it, it runs no code,
-and its methods are compiled where a program calls them. The __pys_range_* calls
-are compiler primitives: the runtime's count of the numbers (unsigned, in an int: one of 2**63 or
-more is negative), its x in range(start, stop, step) and its list of the numbers, and
-start + k * step in 64-bit arithmetic that wraps (an item fits in an int, though k * step may not).
+program that may use a range object (analysis.range_values, Loader.program); programs do not
+import it, it runs no code, and its methods are compiled where a program calls them. The
+__pys_range_* calls are compiler primitives: the runtime's count of the numbers (unsigned, in an
+int: one of 2**63 or more is negative), its x in range(start, stop, step) and its list of the
+numbers, and start + k * step in 64-bit arithmetic that wraps (an item fits in an int, though
+k * step may not).
 """
 from typing import Iterator
 

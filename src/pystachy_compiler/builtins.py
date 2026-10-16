@@ -161,12 +161,13 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         o = self.new_obj(RANGEC)
         self.call_fn(self.classes[RANGEC].methods["__init__"], [o], [self.vnode(Val(x, "int")) for x in vs], direct=True)
         return o
-    nrest = len([a for a in args[1:] if a.kind != "kw"])  # (sum's start, or max(a, b)'s b)
-    if (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max" or name == "math.fsum" or name == "math.prod") and len(args) > 0 and args[0].kind != "kw" and args[0].kind != "starred" and (nrest == 0 or (nrest == 1 and name == "sum")) and RANGEC in self.classes and self.probe_type(args[0]) == RANGEC:
-        # of a range object: its numbers as they come, as of a generator expression over it
-        # (any() and all() stop at the deciding one, and no list of them is made)
-        item = made_var("__item", args[0].line)
-        args = [mk("listcomp", "gen", args[0].line, [item, item, args[0]])] + args[1:]
+    if RANGEC in self.classes and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max" or name == "math.fsum" or name == "math.prod") and len(args) > 0 and args[0].kind != "kw" and args[0].kind != "starred":
+        nrest = len([a for a in args[1:] if a.kind != "kw"])  # (sum's start, or max(a, b)'s b)
+        if (nrest == 0 or (nrest == 1 and name == "sum")) and self.probe_type(args[0]) == RANGEC:
+            # of a range object: its numbers as they come, as of a generator expression over it
+            # (any() and all() stop at the deciding one, and no list of them is made)
+            item = made_var("__item", args[0].line)
+            args = [mk("listcomp", "gen", args[0].line, [item, item, args[0]])] + args[1:]
     if (name == "str" or name == "repr" or name == "ascii" or name == "format") and len(args) == 1 and self.refl_textual(args[0]):
         # str(vars(o)), repr(getattr(o, name)), ...: the text of what it looks up (reflection.py)
         rtext = self.refl_finish(self.refl_defer(args[0]), "repr" if name == "repr" or name == "ascii" else "str")
