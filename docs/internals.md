@@ -81,7 +81,13 @@ code pointer and an environment pointer for indirect calls.
 
 The preceding `Flow` pass marks reads it cannot prove initialized. Generated checks then
 raise the appropriate error; LLVM can remove checks it proves redundant. Optional-value
-narrowing is a separate typing concern.
+narrowing is a separate typing concern. In `__init__` of a class outside a hierarchy, the
+branch where `hasattr(self, "f")` is true has field `f` assigned: a field made only where
+it is false (`if not hasattr(self, "f"): self.f = ...`) keeps a flag for `hasattr`, and its
+reads have no check unless `self` escapes before it is assigned: to a call, a bound method,
+or a def or lambda that uses `self` other than as `self.f` of its fields. A def or lambda
+that uses it only that way may run later and reads only those fields: the ones not assigned
+where it is defined keep their checks.
 
 <a id="the-typed-ir"></a>
 <a id="ssa-by-delegation"></a>
@@ -221,9 +227,11 @@ exponential duplication. The C runtime is compiled with exception support in bot
 Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
 over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
 (and its subclasses), restores the exception being handled and leaves the loop; the loop
-body itself stays outside that handler. `iter()` of a builtin container makes an object of a
-class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that calls
-`iter()` and whose classes compile only when specialized.
+body itself stays outside that handler. Such a handler turns exception handling on for a
+program that defines `__next__` and also `__iter__` or reads the builtin `next`; a `__next__`
+only called directly needs none. `iter()` of a builtin container makes an object of a
+class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that reads
+the builtin `iter` (not a name a scope binds) and whose classes compile only when specialized.
 
 <a id="generators"></a>
 

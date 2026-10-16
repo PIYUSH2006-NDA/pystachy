@@ -134,9 +134,12 @@ from src.pystachy_compiler.builtins import (
     gen_is_mapcall as builtins_is_mapcall,
     gen_iterator_call as builtins_iterator_call,
     gen_key_check as builtins_key_check,
+    gen_key_free as builtins_key_free,
     gen_key_minmax as builtins_key_minmax,
     gen_key_minmax2 as builtins_key_minmax2,
     gen_key_minmax_next as builtins_key_minmax_next,
+    gen_key_none as builtins_key_none,
+    gen_key_none_join as builtins_key_none_join,
     gen_iter_object as builtins_iter_object,
     gen_key_sort as builtins_key_sort,
     gen_keys_of as builtins_keys_of,
@@ -147,6 +150,8 @@ from src.pystachy_compiler.builtins import (
     gen_next_ as builtins_next_,
     gen_iter_ as builtins_iter_,
     gen_iter_obj as builtins_iter_obj,
+    gen_range_fields as builtins_range_fields,
+    gen_range_prim as builtins_range_prim,
     gen_walk as builtins_walk,
     gen_pwrite as builtins_pwrite,
     gen_reduce as builtins_reduce,
@@ -540,6 +545,7 @@ from src.pystachy_compiler.flow import (
     gen_fl_expr as flow_fl_expr,
     gen_fl_fields as flow_fl_fields,
     gen_fl_nested as flow_fl_nested,
+    gen_fl_super as flow_fl_super,
     gen_fl_stmt as flow_fl_stmt,
     gen_fl_stmts as flow_fl_stmts,
     gen_fl_target as flow_fl_target,
@@ -711,6 +717,7 @@ from src.pystachy_compiler.statements import (
     gen_nonemix as statements_nonemix,
     gen_obj_helpers as statements_obj_helpers,
     gen_objlen as statements_objlen,
+    gen_owns as statements_owns,
     gen_range_args as statements_range_args,
     gen_reopt as statements_reopt,
     gen_scan_imports as statements_scan_imports,
@@ -723,6 +730,7 @@ from src.pystachy_compiler.statements import (
     gen_drain as statements_drain,
     gen_stmt as statements_stmt,
     gen_stmts as statements_stmts,
+    gen_str_append as statements_str_append,
     gen_unhashable as statements_unhashable,
     gen_while_ as statements_while_,
 )
@@ -763,6 +771,7 @@ from src.pystachy_compiler.variables import (
     gen_applies as variables_applies,
     gen_assign as variables_assign,
     gen_unpack_next as variables_unpack_next,
+    gen_list_slot as variables_list_slot,
     gen_assigned_to as variables_assigned_to,
     gen_calls_open as variables_calls_open,
     gen_cellvars as variables_cellvars,
@@ -908,6 +917,12 @@ class Gen:
         self.lenient = False
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        # the names the function appends to (s += t, s = s + t: str_appends), and the "owned" flag
+        # of each that is a str local: the slot of an int that is 1 where its str is one an append
+        # made and that nothing else holds (see str_append); appending: the append's own read of it
+        self.appends: dict[str, bool] = {}
+        self.owned: dict[str, str] = {}
+        self.appending = False
         # the flags of the names that imports in try statements bind (imp_flag): module code's
         # globals defined so far, and the function's own, each name's slot or cell
         self.impg: dict[str, bool] = {}
@@ -924,6 +939,9 @@ class Gen:
         # may hold a value of another type: its first binding (none_ends), once compiled the line
         # that gives it that value (see assign, static_type)
         self.nonevars: dict[str, int] = {}
+        # the statements that may assign each name, for a variable typed from None (none_type):
+        # found once a function needs them (none_sites), then with the key ""
+        self.nonesites: dict[str, list[Node]] = {}
         # optional, union and class locals: the narrower type a read has here (see narrows)
         self.narrowed: dict[str, str] = {}
         self.nonecmp = False  # the read being compiled is compared with None (see none_type)
@@ -948,6 +966,7 @@ class Gen:
         self.unraised: dict[str, bool] = {}  # the modules where a class left out held an operation that may raise, not evaluated (left_out)
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.intglobals: dict[str, str] = {}  # single-binding module int literals, after normal read checks
+        self.rangeused = False  # code addresses an object of lib's range class (declared then: lower_module)
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
         self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
@@ -1764,8 +1783,8 @@ class Gen:
     def none_type(self, name: str) -> str:
         return variables_none_type(self, name)
 
-    def none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-        return variables_none_values(self, body, name, out)
+    def none_values(self, st: Node, name: str, out: list[Node]) -> None:
+        return variables_none_values(self, st, name, out)
 
     def read(self, n: Node) -> Val:
         return variables_read(self, n)
@@ -1884,8 +1903,8 @@ class Gen:
     def typed_now(self, e: Node, own: str='') -> bool:
         return variables_typed_now(self, e, own)
 
-    def dry(self, e: Node) -> str:
-        return variables_dry(self, e)
+    def dry(self, e: Node, want: str='') -> str:
+        return variables_dry(self, e, want)
 
     def fill(self, n: Node, m: str, args: list[Node], want: str='') -> Val:
         return variables_fill(self, n, m, args, want)
@@ -1929,6 +1948,9 @@ class Gen:
         return variables_walrus(self, n, want)
     def unpack_next(self, t: Node, it: Val) -> None:
         return variables_unpack_next(self, t, it)
+
+    def list_slot(self, o: Val, i: str) -> str:
+        return variables_list_slot(self, o, i)
 
     def enter(self, f: FnInfo, body: list[Node]) -> None:
         return functions_enter(self, f, body)
@@ -2213,6 +2235,9 @@ class Gen:
     def fl_nested(self, fl: Flow, n: Node) -> None:
         return flow_fl_nested(self, fl, n)
 
+    def fl_super(self, fl: Flow, m: str) -> bool:
+        return flow_fl_super(self, fl, m)
+
     def flow_body(self, d: Node, caps: dict[str, bool]) -> None:
         return flow_flow_body(self, d, caps)
 
@@ -2432,6 +2457,12 @@ class Gen:
     def augassign(self, n: Node) -> None:
         return statements_augassign(self, n)
 
+    def owns(self, name: str) -> bool:
+        return statements_owns(self, name)
+
+    def str_append(self, t: Node, rhs: Node, shown: str) -> None:
+        return statements_str_append(self, t, rhs, shown)
+
     def may_change(self, b0: Blk, x0: int, n0: int) -> bool:
         return statements_may_change(self, b0, x0, n0)
 
@@ -2465,8 +2496,8 @@ class Gen:
     def range_args(self, args: list[Node]) -> list[str]:
         return statements_range_args(self, args)
 
-    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
-        return statements_for_range(self, tgt, start, stop, step, body, hide, arg)
+    def for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None=None, check: bool=True) -> None:
+        return statements_for_range(self, tgt, start, stop, step, body, hide, arg, check)
 
     def for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[str], arg: IterArg | None=None) -> None:
         return statements_for_rrange(self, tgt, vs, body, hide, arg)
@@ -3011,6 +3042,15 @@ class Gen:
     def key_check(self, key: Val, of: str) -> None:
         return builtins_key_check(self, key, of)
 
+    def key_none(self, key: Val, et: str, use: str, of: str) -> str:
+        return builtins_key_none(self, key, et, use, of)
+
+    def key_free(self, t: str, use: str) -> bool:
+        return builtins_key_free(self, t, use)
+
+    def key_none_join(self, r: Val, lnone: str, xs: Val, vals: list[Val], name: str) -> Val:
+        return builtins_key_none_join(self, r, lnone, xs, vals, name)
+
     def call_key(self, key: Val, x: Val) -> Val:
         return builtins_call_key(self, key, x)
 
@@ -3110,6 +3150,12 @@ class Gen:
     def walk(self, name: str, args: list[Node]) -> Val:
         return builtins_walk(self, name, args)
 
+    def range_prim(self, name: str, args: list[Node]) -> Val:
+        return builtins_range_prim(self, name, args)
+
+    def range_fields(self, v: Val) -> list[str]:
+        return builtins_range_fields(self, v)
+
     def pwrite(self, fd: str, fv: str, s: str, fo: Val) -> None:
         return builtins_pwrite(self, fd, fv, s, fo)
 
@@ -3122,8 +3168,8 @@ class Gen:
     def tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         return builtins_tmethod(self, o, m, args)
 
-    def dict_pairs(self, v: Val) -> Val:
-        return builtins_dict_pairs(self, v)
+    def dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
+        return builtins_dict_pairs(self, v, want, found)
 
     def isclose(self, args: list[Node]) -> Val:
         return builtins_isclose(self, args)

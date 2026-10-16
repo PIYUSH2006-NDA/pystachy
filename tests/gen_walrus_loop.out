@@ -1,0 +1,15 @@
+first a0
+first b0
+321
+closed a
+a1 ['a2', 'a3', 'a4']
+closed b
+b1 ['b2', 'b3', 'b4']
+got c0
+got c1
+got c2
+got c3
+got c4
+closed c
+after done
+[exit 0]

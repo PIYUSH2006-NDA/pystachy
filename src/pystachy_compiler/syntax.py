@@ -17,6 +17,7 @@ class Node:
         # (Loader.trysubs); else ""
         self.mchk = ""
         self.depth = 1  # levels of nodes from this one down, as mk counted them
+        self.made = False  # the variable of a comprehension the compiler makes (made_var)
 
 
 def mk(kind: str, s: str, line: int, kids: list[Node]) -> Node:
@@ -35,6 +36,15 @@ def mk(kind: str, s: str, line: int, kids: list[Node]) -> Node:
                 break
     if n.depth > MAXNEST:
         fail(TOODEEP, d.line)
+    return n
+
+
+def made_var(name: str, line: int) -> Node:
+    # the variable of a comprehension the compiler makes of a call (sum(), print(*xs), ...),
+    # which iterates its iterable once: one the program writes takes iter() of an iterator
+    # object again, as CPython 3.13's does (Gen.listcomp)
+    n = mk("name", name, line, [])
+    n.made = True
     return n
 
 
@@ -93,13 +103,12 @@ def dc_args(d: Node) -> str:
 
 
 def name_targets(t: Node) -> bool:
-    # whether the targets of an assignment are only names, which no store to another can change
-    if t.kind == "tuple":
-        for k in t.kids:
-            if not name_targets(k):
-                return False
-        return True
-    return t.kind == "name"
+    # whether the targets of a tuple assignment are only plain names, whose stores run no code
+    # (a nested tuple target may: its item's __iter__ or __next__)
+    for k in t.kids:
+        if k.kind != "name":
+            return False
+    return True
 
 
 def starred_target(t: Node) -> bool:

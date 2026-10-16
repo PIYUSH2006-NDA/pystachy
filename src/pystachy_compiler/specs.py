@@ -45,7 +45,8 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
-                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "itertools": "_pystachy_itertools"}
+                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "_thread": "_pystachy_thread",
+                            "unicodedata": "_pystachy_unicodedata", "itertools": "_pystachy_itertools"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -222,6 +223,17 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
     ABCS[_k] = True
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
+RANGES = "_pystachy_range"  # lib's module of the class of range objects, range() as a value (Loader.program)
+RANGEC = "_pystachy_range$range"  # (that class)
+# the calls whose positional argument range(...) is no range object (analysis.range_values): the
+# consumers that take the numbers at once (1: the first, 2: the first that is the only one, 3:
+# each), of the builtins (fsum and prod also of math, as imported) and of methods (str.join(),
+# list.extend(), dict.fromkeys(), set.update(), ..., math.fsum() and math.prod())
+RANGE_TAKERS = {"list": 1, "tuple": 1, "sorted": 1, "set": 1, "frozenset": 1, "bytes": 1, "iter": 1, "dict": 1, "any": 1,
+                "all": 1, "sum": 1, "fsum": 1, "prod": 1, "min": 2, "max": 2}
+RANGE_METHODS = {"join": 1, "extend": 1, "fromkeys": 1, "fsum": 1, "prod": 1, "update": 3, "union": 3, "intersection": 3,
+                 "difference": 3, "symmetric_difference": 3, "issubset": 3, "issuperset": 3, "isdisjoint": 3,
+                 "intersection_update": 3, "difference_update": 3, "symmetric_difference_update": 3}
 OPTTYPES = "class types, str, bytes, int, float, bool, list, dict and tuple"
 TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template, and of a generic class (Generic[T]) with an __init__, whose objects bind it"
 STUB = "an @overload stub of 'NAME' must be followed by the def that implements it (calling a stub raises NotImplementedError)"
@@ -628,6 +640,7 @@ RUNTIME: dict[str, str] = {
     # strings
     "str.audit": "None:str,str|R|",
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.slice_step": "str:S,int,int,int|R A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.iadd": "str:S,str,int|A|",  # (s += t of a str local, appending in place to the str it owns: Gen.str_append)
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.split_first": "str:S,str,int|R A|",  # (s.split(sep, n)[0]: Gen.index)

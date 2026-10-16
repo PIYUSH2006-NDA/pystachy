@@ -1,0 +1,4 @@
+no thread
+RuntimeError: deadlock: acquire() would wait for ever, as Pystachy runs no other thread to release the lock
+RuntimeError: deadlock: join() would wait for ever, as Pystachy runs no other thread
+[exit 0]

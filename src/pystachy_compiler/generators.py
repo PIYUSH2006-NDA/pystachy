@@ -23,7 +23,7 @@ from src.pystachy_compiler.specs import (
     GENSTATE,
     exc_derives,
 )
-from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, has_kind, made_var, mk, names_in
 from src.pystachy_compiler.utils import gelem, is_gen, typestr
 
 
@@ -607,14 +607,14 @@ def gen_owned_loop(self, owned: list[Val], close: bool, tgt: Node, seqs: list[Va
 def gen_gen_list(self, v: Val, want: str) -> Val:
     # the items of generator v, as a fresh list (list(g), sorted(g), "".join(g), ...)
     it = mk("name", "__item", self.line, [])
-    return self.listcomp(mk("listcomp", "", self.line, [it, mk("name", "__item", self.line, []), self.vnode(v)]), want if want != "" else self.ctype("list", [gelem(v.t)]))
+    return self.listcomp(mk("listcomp", "", self.line, [it, made_var("__item", self.line), self.vnode(v)]), want if want != "" else self.ctype("list", [gelem(v.t)]))
 
 
 def gen_gen_stream(self, name: str, v: Val, args: list[Node], want: str, resultsoft: bool) -> Val:
     # sum(g), min(g), max(g), any(g), all(g), ... of generator v: of the generator expression
     # (x for x in g), whose items they take as they come (any() and all() stop at the deciding one)
     it = mk("name", "__item", self.line, [])
-    g = mk("listcomp", "gen", self.line, [it, mk("name", "__item", self.line, []), self.owned_node(v)])
+    g = mk("listcomp", "gen", self.line, [it, made_var("__item", self.line), self.owned_node(v)])
     return self.builtin(name, [g] + args, want, resultsoft)
 
 
@@ -651,7 +651,7 @@ def gen_gen_unpack(self, t: Node, g: Val) -> None:
 def gen_gen_contains(self, x: Val, g: Val) -> Val:
     # x in g of generator g: it is iterated until an item equals x (CPython's == of the item and x)
     gn = self.owned_node(g)
-    item = mk("name", "__item", self.line, [])
+    item = made_var("__item", self.line)
     test = mk("cmp", "==", self.line, [mk("name", "__item", self.line, []), self.vnode(x)])
     return self.builtin("any", [mk("listcomp", "gen", self.line, [test, item, gn])], "bool")
 
