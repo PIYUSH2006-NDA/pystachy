@@ -79,4 +79,8 @@ ValueError
 KeyError
 reraised invalid literal for int() with base 10: 'x' True
 TypeError exceptions must derive from BaseException
+exit clean False False
+exit key True False
+exit value False True
+caught goes on
 [exit 0]

@@ -67,11 +67,16 @@ class _GeneratorContextManager:
         self.func = func
         self.args = args
         self.kwds = kwds
+        # Pystachy port: whether __enter__ has deleted func, args and kwds (a field is not
+        # deleted: reading one then raises CPython's AttributeError instead)
+        self._deleted = False
 
     def _recreate_cm(self):
         # _GCMB instances are one-shot context managers, so the
         # CM must be recreated each time a decorated function is
         # called
+        if self._deleted:
+            raise AttributeError("'_GeneratorContextManager' object has no attribute 'func'")
         return _GeneratorContextManager(self.func, self.args, self.kwds, self.func(*self.args, **self.kwds))
 
     def __call__(self, func):
@@ -81,7 +86,13 @@ class _GeneratorContextManager:
         return inner
 
     def __enter__(self):
-        # Pystachy port: func and args stay (a field is not deleted)
+        # do not keep args and kwds alive unnecessarily
+        # they are only needed for recreation, which is not possible anymore
+        # Pystachy port: del self.args, self.kwds, self.func is the flag _deleted (a field is not
+        # deleted); the del raises AttributeError for args when they are gone, a second __enter__
+        if self._deleted:
+            raise AttributeError("'_GeneratorContextManager' object has no attribute 'args'")
+        self._deleted = True
         try:
             return next(self.gen)
         except StopIteration:

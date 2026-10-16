@@ -194,3 +194,28 @@ try:
     reraise(None)
 except TypeError as e:
     print("TypeError", e)
+
+
+# an unannotated __exit__ is compiled for __exit__(None, None, None) too: isinstance() of its
+# None value and an exception class is False there, as in CPython
+class Only:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print("exit", self.name, isinstance(exc_val, KeyError), isinstance(exc_val, (IndexError, ValueError)))
+        return isinstance(exc_val, KeyError)
+
+
+with Only("clean"):
+    pass
+with Only("key"):
+    raise KeyError("swallowed by isinstance")
+try:
+    with Only("value"):
+        raise ValueError("goes on")
+except ValueError as e:
+    print("caught", e)

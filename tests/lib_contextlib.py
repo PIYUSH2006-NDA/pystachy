@@ -292,3 +292,58 @@ try:
 except KeyError as e:
     print("caught", e, w.depth)
 print("".join(w.parts), w.depth)
+
+
+# a class with such a method may have subclasses, which inherit or override it: the method
+# returns one manager type whatever the object's class (its generator is the object's class's)
+class Pretty(Writer):
+    @contextmanager
+    def delimit(self, start: str, end: str) -> Iterator[None]:
+        self.parts.append(start + start)
+        yield
+        self.parts.append(end + end)
+
+
+class Plain(Writer):
+    pass
+
+
+def render(o: Writer) -> str:
+    with o.delimit("[", "]"):
+        with o.block(extra=type(o).__name__) as depth:
+            o.parts.append(str(depth))
+    return "".join(o.parts)
+
+
+for o in [Writer(), Pretty(), Plain()]:
+    print(render(o))
+
+
+# a manager that @contextmanager makes is entered once: CPython's __enter__ deletes func, args
+# and kwds, so that a second with statement raises AttributeError for args, and a decorator of a
+# function made from it (its __call__) for func
+@contextmanager
+def once(tag: str) -> Iterator[str]:
+    print("enter", tag)
+    yield tag
+    print("exit", tag)
+
+
+reused = once("reused")
+with reused as r1:
+    print("first", r1)
+try:
+    with reused as r2:
+        print("second", r2)
+except AttributeError as e:
+    print("AttributeError:", e)
+
+
+def doubled(n: int) -> int:
+    return n * 2
+
+
+try:
+    print(reused(doubled)(4))
+except AttributeError as e:
+    print("AttributeError:", e)

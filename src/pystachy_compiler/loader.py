@@ -84,18 +84,41 @@ def cm_names(body: Node) -> list[str]:
     return out
 
 
+def cm_root(c: str, name: str, bases: dict[str, list[str]], cms: list[str]) -> str:
+    # the first class from c up its bases (classes of the module, by name) that defines the
+    # @contextmanager method name, the furthest up it; "" when none does
+    for b in bases.get(c, []):
+        r = cm_root(b, name, bases, cms)
+        if r != "":
+            return r
+    return c if c + "." + name in cms else ""
+
+
 def cm_methods(n: Node, names: list[str]) -> None:
     # a method decorated @contextmanager (names: as the module imports it) is the generator method
     # _pys_cm_NAME, and NAME(self, /, *args, **kwds) returns contextmanager(self._pys_cm_NAME)(*args,
-    # **kwds): what CPython's helper does, bound to the object (the subset has no decorated methods)
+    # **kwds): what CPython's helper does, bound to the object (the subset has no decorated methods).
+    # The receiver is taken as the class's, or that of the base class whose method NAME it
+    # overrides, so that NAME returns one type whatever subclass self is (_pys_cm_NAME is called
+    # by the object's class, an override included); in a generic class it keeps self's own type
+    bases: dict[str, list[str]] = {}
+    cms: list[str] = []
     for st in n.kids:
         if st.kind == "class" or st.kind == "subclass":
             b = st.kids[0] if st.kind == "class" else st.kids[0].kids[0]
+            generic = st.kind == "subclass" and len([x for x in st.kids[1:] if x.kind == "typeparams"]) > 0
+            bases[st.s] = [x.s for x in st.kids[1:] if x.kind == "name"] if st.kind == "subclass" else []
             kept: list[Node] = []
             for d in b.kids:
                 if d.kind == "def" and len(d.kids) == 4 and d.kids[3].kind == "deco" and len(d.kids[3].kids) == 0 and d.kids[3].s in names and len(d.kids[0].kids) > 0 and d.kids[0].kids[0].kind == "param":
                     me = d.kids[0].kids[0].s
-                    src = f"def {d.s}({me}, /, *args, **kwds):\n    return {d.kids[3].s}({me}._pys_cm_{d.s})(*args, **kwds)\n"
+                    cms.append(st.s + "." + d.s)
+                    recv = me
+                    src0 = ""
+                    if not generic:
+                        recv = "_pys_cm_self"
+                        src0 = f"    {recv}: {cm_root(st.s, d.s, bases, cms)} = {me}\n"
+                    src = f"def {d.s}({me}, /, *args, **kwds):\n{src0}    return {d.kids[3].s}({recv}._pys_cm_{d.s})(*args, **kwds)\n"
                     w = Parser(Lexer(src, d.line).file()).module().kids[0]
                     d.s = "_pys_cm_" + d.s
                     d.kids = d.kids[:3]
@@ -104,7 +127,6 @@ def cm_methods(n: Node, names: list[str]) -> None:
                 else:
                     kept.append(d)
             b.kids = kept
-            cm_methods(b, names)
 
 
 def tb_import(n: Node) -> None:

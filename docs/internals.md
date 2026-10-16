@@ -236,10 +236,12 @@ exception's class is the exception itself under another type (`exctype`); an exc
 be `None` is `opt[exc]`, both null for `None`. `__enter__` and `__exit__` are method templates
 (`utils.template_ok`), so an unannotated `__exit__` is compiled once for the exception's
 arguments and once for three `None`s. A program with such a class lets flow analysis end a
-`with` block anywhere (`Gen.cm_exits`). `contextlib.suppress(A, B)` as an item is the except
+`with` block anywhere (`Gen.cm_exits`), unless each of its items is a call of the builtin
+`open()`. `contextlib.suppress(A, B)` as an item is the except
 clause `except (A, B): pass` (`statements.suppress_item`), and the loader makes a method decorated
 `@contextmanager` the generator method `_pys_cm_NAME` and a method `NAME` that calls
-`contextmanager()` on it bound (`loader.cm_methods`). A program that reads `__cause__`
+`contextmanager()` on it bound (`loader.cm_methods`), to `self` taken as an object of the class
+that first defines `NAME` so (`loader.cm_root`): `NAME` returns one type for every subclass. A program that reads `__cause__`
 (`Gen.causeread`) records it, `pys_exc_setcause`, for `raise ... from c` and PEP 479's
 `RuntimeError`.
 

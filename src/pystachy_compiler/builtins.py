@@ -372,6 +372,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.incoming(ph, "false", e0)
             self.incoming(ph, xin, e1)
             return Val(self.phi(ph), "bool")
+        if v.t == "None" and self.exc_classes(args[1]):
+            # (None is no exception: __exit__(None, None, None) of an unannotated __exit__)
+            return Val("false", "bool")
         if is_union(unopt(v.t)) and self.isinst(v.t, args[1]) == -1:
             return Val(self.uisinst(v, args[1]), "bool")
         known = self.isinst(v.t, args[1])

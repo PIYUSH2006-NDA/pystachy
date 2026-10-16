@@ -776,7 +776,10 @@ arguments. `closing(thing)`, `nullcontext()`, `nullcontext(value)`, `suppress(A,
 - `@contextmanager` (or `@contextlib.contextmanager`, as the module imports it) on a method, its
   only decorator, makes the generator method `_pys_cm_NAME` and a method `NAME(self, /, *args,
   **kwds)` that returns `contextmanager(self._pys_cm_NAME)(*args, **kwds)` (the subset has no
-  other decorated methods): `dir()` and `vars()` of the class show the first.
+  other decorated methods): `dir()` and `vars()` of the class show the first. `self` is taken
+  there as an object of the class, or of the base class whose `@contextmanager` method `NAME`
+  overrides, so that subclasses inherit and override it; an override of a method of a class of
+  another module is rejected as the program compiles (its managers' types differ).
 - `suppress()` takes exception classes, named, as a `with` statement's item, which is compiled
   as an `except` clause that catches them (exception classes are no values of the subset);
   `with suppress(...) as x`, and a `suppress` object elsewhere, are compile-time errors.

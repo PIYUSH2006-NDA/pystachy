@@ -743,14 +743,18 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
     elif k == "with":
         # (in a program with a context manager of its own, whose __exit__ may suppress the
         # exception, the block may end anywhere, and the statement goes on: as a try statement
-        # whose except clause passes)
+        # whose except clause passes; not where each item is a call of the builtin open(),
+        # whose file suppresses nothing)
         mark = len(fl.log)
+        files = True
         for it in n.kids[:-1]:
             self.fl_expr(fl, it.kids[0])
             if len(it.kids) == 2:
                 self.fl_target(fl, it.kids[1])
+            if not self.open_call(it.kids[0]) or "open" in fl.scope:
+                files = False
         self.fl_stmts(fl, n.kids[-1].kids)
-        if self.cm_exits():
+        if not files and self.cm_exits():
             st = fl.since(mark)
             fl.undo(mark)
             bdels: dict[str, bool] = {}
