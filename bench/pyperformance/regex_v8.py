@@ -1770,6 +1770,20 @@ def block11():
         re.search(r'jvaqbjf', strings[63])
 
 
+# Pystachy port: content and match-position checks run outside the upstream timer.
+def checksum_text(text):
+    total = len(text)
+    for i in range(len(text)):
+        total += (i + 1) * ord(text[i])
+    return total
+
+
+def checksum_match(match):
+    if match is None:
+        return 1
+    return 2 + 3 * match.start() + 7 * match.end() + checksum_text(match.group())
+
+
 def bench_regex_v8(loops):
     t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
     for loops in range(loops):
@@ -1786,12 +1800,28 @@ def bench_regex_v8(loops):
         block10()
         block11()
     TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
-    # Pystachy port: the blocks discard their results; a checksum of each regex's
-    # substitution in each string checks them instead, after the timed loops
+    # Pystachy port: the blocks discard their results. Check every operation type
+    # they use after the timed loops, including match contents/positions and split
+    # boundaries, so broken search/split results cannot hide behind a sub checksum.
     total = 0
     for i in range(len(regexs)):
         for string in strings:
-            total += len(regexs[i].sub('', string, count=subcount[i]))
+            total += checksum_text(regexs[i].sub('', string, count=subcount[i]))
+            total += checksum_match(regexs[i].search(string))
+    # These are the four patterns used for split() by the timed blocks.
+    for i in [20, 32, 70, 86]:
+        for string in strings:
+            parts = regexs[i].split(string)
+            total += len(parts)
+            for j in range(len(parts)):
+                total += (j + 1) * checksum_text(parts[j])
+    # Also exercise the module-level entry points with inputs from the blocks.
+    total += checksum_match(re.search(r'jva', 'jva32'))
+    total += checksum_match(re.search(r'znp', 'jva32'))
+    total += checksum_match(re.match(r'\d+', strings[1]))
+    total += checksum_match(re.match(r'\d+', '9.0  e115'))
+    total += checksum_match(re.match(r'zfvr', strings[0], re.IGNORECASE))
+    total += checksum_text(re.sub(r'([a-zA-Z]|\s)+', '', strings[1], count=1))
     return total
 
 

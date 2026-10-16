@@ -18,6 +18,9 @@ Each value is the median of five processes; ratios above 1 mean faster than CPyt
 samples](benchmarks/pyperformance-2026-10-16-a74faae.json) include each process's wall, CPU and
 timed seconds, the outputs and the source hashes. That historical record also includes
 `deltablue`, which is now excluded from the delivered suite pending a licence provenance decision.
+It also predates the expanded `regex_v8` checksum: current runs validate search, split and match
+results as well as substitutions outside the timed loops, so its whole-process figures need a
+fresh run for comparison with the current suite.
 
 Whole-process wall time:
 

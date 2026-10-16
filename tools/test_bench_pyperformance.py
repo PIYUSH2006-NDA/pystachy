@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import re
+import runpy
 import subprocess
 import sys
 import unittest
@@ -58,7 +59,8 @@ class TimingTests(unittest.TestCase):
         text = self.port("regex_v8")
         stop = "    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns\n"
         self.assertIn(stop, text)
-        moved = text.replace(stop, "").replace("    return total\n", stop + "    return total\n")
+        prefix, suffix = text.replace(stop, "").rsplit("    return total\n", 1)
+        moved = prefix + stop + "    return total\n" + suffix
         self.assertEqual(bench.timing_errors("regex_v8", moved), ["bench_regex_v8(): the timer is not around one loop"])
         self.assertIn("the main does not print sum(TIMED), without a timer of its own",
                       bench.timing_errors("regex_v8", text.replace("sum(TIMED)", "time.perf_counter() - t0")))
@@ -91,6 +93,40 @@ class TimingTests(unittest.TestCase):
 
 
 class OutputTests(unittest.TestCase):
+    def test_regex_checksum_detects_broken_operation_results(self):
+        namespace = runpy.run_path(str(bench.BENCH / "regex_v8.py"))
+        run = namespace["bench_regex_v8"]
+        globals_ = run.__globals__
+        patterns = globals_["regexs"]
+        expected = run(0)
+
+        class BrokenPattern:
+            def __init__(self, pattern, operation):
+                self.pattern = pattern
+                self.operation = operation
+
+            def __getattr__(self, name):
+                if name == self.operation:
+                    if name == "search":
+                        return lambda *args, **kwargs: None
+                    if name == "split":
+                        return lambda text: [text]
+                    return lambda repl, text, **kwargs: "!" * len(text)
+                return getattr(self.pattern, name)
+
+        for operation in ("search", "split", "sub"):
+            with self.subTest(entry="Pattern", operation=operation):
+                broken = [BrokenPattern(pattern, operation) for pattern in patterns]
+                with mock.patch.dict(globals_, regexs=broken):
+                    self.assertNotEqual(run(0), expected)
+        for operation, result in (("search", None), ("match", None), ("sub", "broken")):
+            with self.subTest(entry="module", operation=operation):
+                broken = mock.Mock(wraps=re)
+                broken.IGNORECASE = re.IGNORECASE
+                getattr(broken, operation).return_value = result
+                with mock.patch.dict(globals_, re=broken):
+                    self.assertNotEqual(run(0), expected)
+
     def test_one_nonnegative_seconds_line_is_required(self):
         self.assertEqual(bench.seconds("warning\nseconds 0.25\n"), 0.25)
         for stderr in ("", "seconds 1\nseconds 2\n", "seconds -1\n", "seconds nan\n", "seconds x\n"):
