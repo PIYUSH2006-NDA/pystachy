@@ -1,7 +1,7 @@
-# error: expected int, got float (compiling statistics._rank(
-# lib/statistics's correlation() stays uncompiled (lib/README.md): its ranks, for method='ranked',
-# take itertools' count() and groupby(), which compile, but _rank() puts the float ranks in a list
-# of ints ([0] * len(val_pos)); the method is a str, so the ranks are compiled for 'linear' too
+# error: expected list[int], got list[float] (compiling statistics.correlation(
+# lib/statistics's correlation() compiles for floats (tests/lib_statistics_correlation.py): of
+# ints, it rebinds its parameters x and y, lists of ints, to the lists of float ranks or
+# deviations, which a variable of one type cannot hold
 import statistics
 
-print(statistics.correlation([1.0, 2.0, 3.0], [1.0, 3.0, 2.0]))
+print(statistics.correlation([1, 2, 3], [1, 3, 2]))
