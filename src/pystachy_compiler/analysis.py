@@ -111,11 +111,97 @@ def builtin_module(path: str) -> bool:
     return path in MODULES or root in MODULES or path == "collections.abc"
 
 
+def clean_doc(s: str) -> str:
+    # a docstring as CPython 3.13's compiler keeps it (_PyCompile_CleanDoc): tabs expanded (in
+    # columns of characters, which UTF-8 continuation bytes do not start), the first line's leading
+    # spaces and the indentation that the other lines with text share removed
+    out: list[str] = []
+    col = 0
+    for i in range(len(s)):
+        c = s[i]
+        if c == "\t":
+            out.append(" " * (8 - col % 8))
+            col += 8 - col % 8
+        else:
+            out.append(c)
+            col = 0 if c == "\n" or c == "\r" else col if ord(c) & 192 == 128 else col + 1
+    lines = "".join(out).split("\n")
+    margin = -1
+    for ln in lines[1:]:
+        k = len(ln) - len(ln.lstrip(" "))
+        if k < len(ln) and (margin < 0 or k < margin):
+            margin = k
+    kept = [lines[0].lstrip(" ")]
+    for ln in lines[1:]:
+        kept.append(ln[min(margin, len(ln) - len(ln.lstrip(" "))) if margin > 0 else 0 :])
+    return "\n".join(kept)
+
+
+def names_name(n: Node, name: str) -> bool:
+    # does code n name name anywhere: reads, binds or declares it, also in the functions and
+    # classes it defines (an import's alias of that name too)
+    if (n.kind == "name" or n.kind == "alias") and n.s == name:
+        return True
+    for k in n.kids:
+        if names_name(k, name):
+            return True
+    return False
+
+
+def binds_first(st: Node, name: str) -> bool:
+    # does module-level statement st bind name for sure without reading it first: name = v (also
+    # among other names), name: T = v, or an import of that name
+    if st.kind == "import":
+        return True  # (its alias: names_name())
+    if st.kind != "assign" and not (st.kind == "annassign" and len(st.kids) == 3):
+        return False
+    for t in st.kids[:-1] if st.kind == "assign" else st.kids[:1]:
+        if t.kind != "name":
+            return False
+    return not names_name(st.kids[-1], name)
+
+
+def del_line(n: Node, name: str, fn: bool) -> int:
+    # the line of a del statement in code n that deletes the module's name: outside functions and
+    # classes (not fn), or in a function that declares it global; 0 if there is none
+    if n.kind == "def":
+        decl: dict[str, bool] = {}
+        globals_in(n.kids[2].kids, decl)
+        fn = name not in decl
+    elif n.kind == "class" or n.kind == "subclass":
+        fn = True
+    elif n.kind == "del" and not fn:
+        for t in n.kids:
+            names: list[str] = []
+            if t.kind == "name" or t.kind == "tuple" or t.kind == "list":
+                names_in(t, names)
+            if name in names:
+                return n.line
+    for k in n.kids:
+        r = del_line(k, name, fn)
+        if r > 0:
+            return r
+    return 0
+
+
+def builtin_import(st: Node, a: Node) -> bool:
+    # does alias a of import statement st bind a builtin module or a name of one: import os.path
+    # binds os, a builtin module, but import collections.abc the Python package collections
+    return not st.s.startswith("from.") and builtin_module(a.kids[0].s if st.s == "" else a.kids[1].s)
+
+
+def builtin_of(path: str) -> str:
+    # the builtin module that path, a builtin module or a name of one, is in
+    if path == "collections.abc" or path.startswith("collections.abc."):
+        return "collections.abc"
+    return path[: path.find(".")] if "." in path else path
+
+
 def known_path(p: str) -> bool:
     # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
-    # function builtin() handles itself (MODFUNCS), or sys.float_info (whose attributes are
-    # modattr() values)
-    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    # function builtin() handles itself (MODFUNCS), sys.float_info (whose attributes are
+    # modattr() values), or sys.version_info
+    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "sys.version_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):
@@ -220,7 +306,7 @@ def special_import(st: Node, a: Node) -> bool:
     # an import the loader recognizes where the name it binds is read: of a builtin module (import
     # os, import os.path as p), or from typing import TYPE_CHECKING
     if st.s == "":
-        return builtin_module(a.kids[1].s)
+        return builtin_import(st, a)
     return st.s == "from" and (a.kids[0].s == "typing.TYPE_CHECKING" or a.kids[0].s == "typing_extensions.TYPE_CHECKING")
 
 
@@ -258,7 +344,7 @@ def builtin_try(st: Node) -> bool:
     # ImportError: TYPE_CHECKING = False), whose except clauses never run (Loader.optional())
     for x in st.kids[0].kids if accel_try(st) else st.kids[:0]:
         for a in x.kids if x.kind == "import" else x.kids[:0]:
-            if x.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+            if x.s.startswith("from.") or not (builtin_import(x, a) or a.kids[1].s == "typing_extensions"):
                 return False
     return accel_try(st)
 
@@ -693,6 +779,18 @@ def all_imports(body: list[Node], out: list[str]) -> None:
                 all_imports(kid.kids[1].kids, out)
 
 
+def imports_user(n: Node) -> bool:
+    # does code n (also in its functions and classes) import a module that is not builtin, whose
+    # code, or that of the modules it imports, may run there
+    for a in n.kids if n.kind == "import" else n.kids[:0]:
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
+            return True
+    for k in n.kids:
+        if imports_user(k):
+            return True
+    return False
+
+
 def top_imports(body: list[Node]) -> list[str]:
     # the user modules that module-level code (body, not its functions) imports
     out: list[str] = []
@@ -1018,6 +1116,8 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
     # (sure: those an import before n has bound, to which n adds those it surely binds: in both
     # branches of an if, in a with block, not in a loop), and those its imports of Python modules
     # bind (user)
+    if n.kind == "global":
+        return  # (it names them, but reads none)
     if n.kind == "name" and n.s not in sure:
         out[n.s] = True
     if n.kind == "def":
@@ -1031,7 +1131,7 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
                 out[nm] = True
     for a in n.kids if n.kind == "import" else n.kids[:0]:
         sure[a.s] = True
-        if n.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
             user[a.s] = True
     if n.kind == "if":
         import_reads(n.kids[0], sure, out, user)
@@ -1106,6 +1206,15 @@ def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False
     for d in inner:
         if d.kind == "def":
             global_assigns(d.kids[2].kids, out, imports)
+
+
+def fn_globals(n: Node, out: dict[str, bool]) -> None:
+    # the names of the module that the functions code n defines anywhere (in its blocks, classes
+    # and functions too) assign, also by an import, declared global (global_assigns())
+    if n.kind == "def":
+        global_assigns(n.kids[2].kids, out, True)
+    for k in n.kids:
+        fn_globals(k, out)
 
 
 def scope_globals(body: list[Node], out: dict[str, int]) -> None:

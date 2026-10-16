@@ -713,6 +713,7 @@ class Gen:
         self.globs: list[Val] = []
         self.gcroots: list[str] = []
         self.consts: list[Data] = []
+        self.bconsts: dict[str, Val] = {}  # builtin module singleton values
         self.strs: dict[str, str] = {}
         self.strvals: list[str] = []  # the text of each @s.N
         self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)

@@ -267,7 +267,7 @@ class Parser:
         st.tparams = self.tparams
         st.tpx = self.tpx
         st.check(body, doc)
-        return mk("block", "", 1, body)
+        return mk("block", "doc" if doc else "", 1, body)  # (with its docstring: Loader.docstring())
 
     def scope(self, fn: bool) -> Node:
         # the body of a def (fn) or class: no loop around it

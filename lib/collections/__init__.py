@@ -16,6 +16,9 @@ from typing import Callable, Generic, Iterable, Iterator, Self, TypeVar
 
 __all__ = ["deque", "defaultdict", "OrderedDict", "Counter"]
 
+# CPython's binds abc = _collections_abc, the module collections.abc; Pystachy's is builtin
+import collections.abc as abc
+
 _T = TypeVar("_T")
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")

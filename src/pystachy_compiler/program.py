@@ -851,11 +851,20 @@ def gen_program(self, mods: list[Mod]) -> str:
                 self.noneglobals[nm] = True
         if m.falseat >= 0:
             self.falseflags[m.q + "TYPE_CHECKING"] = True
+    docinfer: dict[str, bool] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:
+            if st.kind == "assign" and st.s == "docinit":
+                docinfer[st.kids[0].s] = True
+    for m in mods:
+        for st in m.body.kids if m.name != "" else []:
+            # The loader's implicit __doc__ value exists before a circular import can read
+            # it. Its optional type must precede the later literal's usual predeclaration.
+            if st.kind == "annassign" and st.s == "docinit":
+                self.declare(st.kids[0].s, self.vtype(st.kids[1]))
             # an imported module's constants (NAME = literal) are typed before any module code
             # compiles: a module it imports, which imports it back, may read them first
-            if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s not in self.gtypes and st.kids[0].s not in self.noneglobals:
+            if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s not in self.gtypes and st.kids[0].s not in self.noneglobals and st.kids[0].s not in docinfer:
                 k = st.kids[1].kids[0].kind if st.kids[1].kind == "unary" and is_const(st.kids[1]) else st.kids[1].kind  # (-1, -2.5)
                 if k == "int" or k == "float" or k == "str":
                     self.declare(st.kids[0].s, k)
@@ -865,6 +874,17 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.mfile[m.name] = m.path[2:] if m.path.startswith("./") else m.path
     self.compiling = True
     self.modlevel = True
+    for m in mods:
+        for st in m.body.kids if m.name != "" else []:
+            if st.kind == "assign" and st.s == "docinit" and st.kids[0].s not in self.noneglobals:
+                name = st.kids[0].s
+                fr = self.modframe(m.name, st.line)
+                t = self.none_type(name)
+                self.restore(fr)
+                self.line = st.line
+                if t == "":
+                    self.err(f"cannot infer the initial optional type of '{short(name)}'; annotate its later assignment")
+                self.declare(name, t)
     for i in range(len(mods)):
         if mods[i].name != ITERS:
             # (lib's module of iter()'s classes runs no code: nothing imports it, see Loader.program)

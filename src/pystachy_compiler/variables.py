@@ -148,6 +148,8 @@ def gen_load_name(self, name: str) -> Val:
         return Val("null", f"fn[b:{name}]")  # (a builtin function, or a class such as int: calling it calls it)
     if name in PYBUILTINS:
         self.err(f"the builtin '{name}' cannot be used as a value (not supported)")
+    if name == "__doc__":
+        self.err("reading '__doc__' in a class body is not supported (a class's docstring cannot be read)")  # (Loader.qstmts)
     if name in MODDUNDERS.split():
         self.err(f"'{name}' is not supported")  # (a module attribute that CPython defines)
     if name in self.typevars:

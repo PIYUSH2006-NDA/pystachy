@@ -25,6 +25,7 @@ class Mod:
         self.specat: dict[str, int] = {}  # the top-level statement that first does
         self.falseat = -1  # the top-level TYPE_CHECKING = False, if nothing else binds it (false_flag())
         self.fails = ""  # the exception its top-level code surely raises, ImportError or ModuleNotFoundError
+        self.doc = mk("None", "", 1, [])  # its __doc__ while its code binds none: its docstring (Loader.docstring())
         # a package's names that an import of the submodule of that name rebinds at a time Pystachy
         # cannot tell (Loader.submodules()); True if that may happen while its own code runs
         self.amb: dict[str, bool] = {}

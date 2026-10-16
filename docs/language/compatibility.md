@@ -216,6 +216,15 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 
+- `sys.version_info` is a tuple of its items, CPython 3.13.16's: comparisons, indexing,
+  slicing and unpacking work as on CPython's, and its attributes are read as
+  `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`.
+  Reads share one immutable object (`sys.version_info is sys.version_info` is `True`).
+
+- A module without a docstring that binds `__doc__` itself, where the first statement that
+  names `__doc__` is a `def` or `class`, has no `__doc__` until its code binds it: a function's
+  earlier read raises `NameError`, where CPython's reads `None`.
+
 - A global (a function or class included) that its module's code has not bound when it is
   read (assigned in a branch that did not run, or read while the module is still being
   imported: a circular import) raises `AttributeError: module 'm' has no attribute 'x'`, read
@@ -249,13 +258,15 @@ supported alternatives.
 - a read of a name that nothing binds, and an attribute, operation or format spec that the static
   types rule out (`unicode`, `obj.missing`, `1 + "a"`, `f"{obj:>6}"` of an object without
   `__format__`), where CPython raises `NameError`, `AttributeError` or `TypeError` as it runs, also
-  in a `try` whose clause catches it (a feature test such as `try: unicode / except NameError:`)
+  in a `try` whose clause catches it, but for a module-level feature test such as
+  `try: unicode / except NameError:`, which is [decided at compile time](modules.md#compile-time-branches)
 - a function, class, method or import name bound twice, or a name that is both a variable and a
   function, class or import, also in a function: a parameter or local that an import in it binds
   too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
   which assigns the local
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
-  one named like a builtin or `__name__`, also in an imported module
+  one named like a builtin or `__name__`, also in an imported module, and `__doc__` in a class
+  body (the class's docstring)
 - a local read textually before its first assignment (declare it first: `x: int`), where a name
   that a function deletes, defines with `def` or `class`, or binds with `:=`, a `match` capture
   or a `type` statement is its local too, also where the name is a class's that the read uses
@@ -305,7 +316,8 @@ supported alternatives.
   the alias's assignment has run (CPython raises `ImportError`)
 - `__all__` changed other than by `+=`, `append` and `extend`, for `import *`
 - `from <builtin module> import *`
-- `del` of another module's attribute
+- `del` of another module's attribute, an assignment of another module's `__doc__`, and `del`
+  of a module's own `__doc__`
 - an assignment of anything but the literal `False` to `m.TYPE_CHECKING`, or its `del`, where
   module m's `TYPE_CHECKING = False` makes its tests of it decided at compile time: from
   another module, or from m's own code after it imports itself

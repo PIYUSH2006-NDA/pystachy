@@ -1,0 +1,9 @@
+mods: init mods
+mods.shapes: init mods.shapes
+x 1.5 3 42 1 input
+('ValueError',) 7! utf-8 ascii
+é!
+str is a builtin: 3
+_IncompleteInputError is a builtin
+FileNotFoundError
+[exit 0]

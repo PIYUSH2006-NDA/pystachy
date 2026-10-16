@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
-PYBUILTINS: dict[str, bool] = {}
+PYBUILTINS: dict[str, bool] = {}  # dir(builtins) of CPython 3.13, but the module dunders (MODNAMES)
 for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExceptionGroup BlockingIOError BrokenPipeError "
            "BufferError BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError "
            "ConnectionResetError DeprecationWarning EOFError Ellipsis EncodingWarning EnvironmentError Exception ExceptionGroup "
@@ -14,7 +14,7 @@ for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExce
            "ReferenceError ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError "
            "SyntaxWarning SystemError SystemExit TabError TimeoutError True TypeError UnboundLocalError UnicodeDecodeError "
            "UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning "
-           "ZeroDivisionError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
+           "ZeroDivisionError _IncompleteInputError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
            "compile complex copyright credits delattr dict dir divmod enumerate eval exec exit filter float format frozenset "
            "getattr globals hasattr hash help hex id input int isinstance issubclass iter len license list locals map max "
            "memoryview min next object oct open ord pow print property quit range repr reversed round set setattr slice "
@@ -43,7 +43,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
 NOCALL: dict[str, bool] = {}
 for _k in ("name str int float None True False list tuple dict attr assign annassign expr pass global import alias "
-           "uimport guard bound badimport block raise def params param starparam dstarparam noann class").split():
+           "uimport guard bound badimport block raise def params param starparam dstarparam noann class moddoc").split():
     NOCALL[_k] = True
 
 
@@ -174,6 +174,12 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
 for _k in FLOATINFO:
+    MODATTRS[_k] = True
+# sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which
+# tests/record.sh records with): its items, a value (a tuple) and attributes known at compile time
+VERSIONINFO: dict[str, str] = {"sys.version_info.major": "3", "sys.version_info.minor": "13", "sys.version_info.micro": "16",
+                               "sys.version_info.releaselevel": "'final'", "sys.version_info.serial": "0"}
+for _k in VERSIONINFO:
     MODATTRS[_k] = True
 TYPING: dict[str, bool] = {}
 for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Iterable Iterator Sequence Mapping Final ClassVar NamedTuple "

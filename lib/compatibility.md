@@ -58,6 +58,13 @@ from CPython's accelerated modules:
 - `stat` tests use the module's constants rather than `_stat`'s separate constants.
 - For more than 2,500 items, `heapify` compares in a different order from `_heapq`'s
   cache-friendly loop, with the same result.
+- `operator.__doc__` is the Python module's docstring, which CPython replaces with
+  `_operator`'s.
+
+## Module docstrings
+
+A module's `__doc__` is its docstring, as in CPython, but for the modules written for
+Pystachy: `collections`, `curses`, `functools` and `io` have docstrings of their own.
 
 ## Html and HTMLParser
 
@@ -146,7 +153,9 @@ arguments, an annotation (`q: deque[int] = deque()`,
 `d: defaultdict[str, list[int]] = defaultdict(list)`) or an explicit constructor
 (`Counter[str]()`). Parameters, returns and fields can name them. The compiled
 types are fixed; a deque's items may be an explicitly supported union such as
-`int | str`, and mapping keys are the supported dict key types.
+`int | str`, and mapping keys are the supported dict key types. The package binds `abc` to
+the builtin `collections.abc`, as CPython's binds it to `_collections_abc`, and its
+`__doc__` is its own docstring.
 
 `deque` supports both ends, optional `maxlen`, extension, rotation,
 insertion/removal, indexing, containment/search, copies, comparisons, repetition

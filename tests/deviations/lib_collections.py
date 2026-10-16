@@ -10,3 +10,8 @@ print(d.maxlen)
 # CPython registers deque as a collections.abc.MutableSequence; isinstance() finds Pystachy's no
 # Sequence: CPython prints True True.
 print(isinstance(d, Sequence), isinstance(d, MutableSequence))
+# The package's __doc__ is lib/collections' own docstring; CPython's begins "This module implements
+# specialized container datatypes".
+import collections
+
+print(collections.__doc__.split(":")[0])
