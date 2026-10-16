@@ -1843,10 +1843,10 @@ def gen_prod_item(self, s: Val, item: Val) -> Val:
 def gen_dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
     # PyDict_MergeFromSeq2 inserts them. Of tuples of another length, an item is CPython's
-    # ValueError and an empty list makes an empty dict: of the dict type wanted (a union's one
-    # dict type), or else, as it is always empty, dict[int, int] (as gen_load_name takes such a
-    # dict, which guessed explains). found: whether an iterator of them, v being only their
-    # list's type, had an item
+    # ValueError, for element #0 (every item has the one tuple type, so the first is bad), and an
+    # empty list makes an empty dict: of the dict type wanted (a union's one dict type), or else,
+    # as it is always empty, dict[int, int] (as gen_load_name takes such a dict, which guessed
+    # explains). found: whether an iterator of them, v being only their list's type, had an item
     et = elem(v.t) if is_list(v.t) else ""
     if not is_tuple(et):
         self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")

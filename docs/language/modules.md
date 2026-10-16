@@ -221,8 +221,9 @@ The common `str`, `list`, `dict` and `tuple` methods are implemented, including:
 expression, list comprehension, `zip()`, `enumerate()`, `reversed()`, `map()` or `filter()`.
 Of tuples of another length, the first item raises CPython's `ValueError` (an iterator is taken
 only up to it) and none makes an empty dict, of the expected dict type or else `dict[int, int]`.
-Where a dict type is expected, such tuples that a display, comprehension, `map()`, `filter()`
-or `reversed()` makes must be written as tuple displays.
+Where a dict type is expected, such tuples are a type error at compile time when `map()`,
+`filter()` or `reversed()` makes them, or a display, comprehension or generator expression whose
+items are not tuple displays.
 
 `dict.fromkeys()` can omit `v`, or use `None`, when an annotation provides an optional value
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;

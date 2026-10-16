@@ -67,6 +67,12 @@ except ValueError as ex:
 except KeyError as ex:
     print("KeyError:", ex)
 try:
+    print(dict(three(made(x)) for x in range(3)))
+except ValueError as ex:
+    print("ValueError:", ex)
+except KeyError as ex:
+    print("KeyError:", ex)
+try:
     print(dict(filter(keep, trips)))
 except ValueError as ex:
     print("ValueError:", ex)
