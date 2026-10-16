@@ -468,6 +468,21 @@ products or services of Licensee, or any third party.
 agrees to be bound by the terms and conditions of this License
 Agreement.
 
+CPython's str.format() parser (src/pystachy_compiler/expressions.py)
+--------------------------------------------------------------------
+
+The compile-time reading of a literal str.format() format string (gen_str_fields, gen_str_field
+and gen_format_arg in src/pystachy_compiler/expressions.py, and fmt_index in
+src/pystachy_compiler/utils.py) is written after CPython 3.13.16's
+Objects/stringlib/unicode_format.h (MarkupIterator_next, parse_field, field_name_split,
+FieldNameIterator_next, get_integer, output_markup), whose order of steps and error messages it
+follows. It is derived from Python and is used under the Python Software Foundation License
+Version 2 above.
+
+Summary of changes: the compiler reads the format, over the literal's UTF-8 bytes, and emits for
+each field the lookups, conversion and format() call that CPython makes when the call runs, or
+the exception CPython raises where it reaches an error.
+
 CPython's sum regression tests (tests/upstream_sum_start.py)
 -----------------------------------------------------------
 

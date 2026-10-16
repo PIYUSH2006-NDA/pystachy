@@ -427,12 +427,12 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         _maxes = self._maxes
 
         if not _maxes:
-            raise ValueError('%r not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} not in list'.format(value))
 
         pos = bisect_left(_maxes, value)
 
         if pos == len(_maxes):
-            raise ValueError('%r not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} not in list'.format(value))
 
         _lists = self._lists
         idx = bisect_left(_lists[pos], value)
@@ -440,7 +440,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         if _lists[pos][idx] == value:
             self._delete(pos, idx)
         else:
-            raise ValueError('%r not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} not in list'.format(value))
 
 
     def _delete(self, pos, idx):
@@ -1361,7 +1361,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         _len = self._len
 
         if not _len:
-            raise ValueError('%r is not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} is not in list'.format(value))
 
         if start is None:
             start = 0
@@ -1378,19 +1378,19 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             stop = _len
 
         if stop <= start:
-            raise ValueError('%r is not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} is not in list'.format(value))
 
         _maxes = self._maxes
         pos_left = bisect_left(_maxes, value)
 
         if pos_left == len(_maxes):
-            raise ValueError('%r is not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} is not in list'.format(value))
 
         _lists = self._lists
         idx_left = bisect_left(_lists[pos_left], value)
 
         if _lists[pos_left][idx_left] != value:
-            raise ValueError('%r is not in list' % (value,))  # Pystachy port: str.format (M7)
+            raise ValueError('{0!r} is not in list'.format(value))
 
         stop -= 1
         left = self._loc(pos_left, idx_left)
@@ -1404,7 +1404,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
             if start <= right:
                 return start
 
-        raise ValueError('%r is not in list' % (value,))  # Pystachy port: str.format (M7)
+        raise ValueError('{0!r} is not in list'.format(value))
 
 
     def __add__(self, other: list[int]) -> "SortedList":  # Pystachy port: annotated (M2)
@@ -1541,7 +1541,7 @@ class SortedList:  # Pystachy port: no MutableSequence base (inheritance, M2)
         :return: string representation
 
         """
-        return 'SortedList(%r)' % (list(self),)  # Pystachy port: str.format (M7); type(self).__name__ of an object (M2)
+        return '{0}({1!r})'.format('SortedList', list(self))  # Pystachy port: type(self).__name__ of an object (M2)
 
 
     def _check(self):

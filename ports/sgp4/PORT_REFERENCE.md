@@ -22,9 +22,9 @@ Archive SHA-256: `06d37247c6985739b707b8b39b6b83e06e8af783b2531e31965501ba983985
 | `earth_gravity.py` | `70057a3a1ed33c96b8c191c28c4012b4d2fdbd55b5775ec9bdaaabf78f418879` | 1 |
 | `ext.py` | `31240fe331e03d3427adf8afc113838a6a09ab769d5c484b8c13c7cbf1fc6287` | 2 |
 | `functions.py` | `8947e790097ae705f35244a3233a8b0ec61b214873618a241488686993b79e40` | none |
-| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 6 |
+| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 4 |
 | `model.py` | `8725b573ea25f33497022dcab447a139d3ee3eb71e0894da52658877ce6cc324` | 8 |
-| `propagation.py` | `fa851ca7d8710eb54d684de61bc84cc8a3687241518e4ee4cfe8249e0fb33a92` | 6 |
+| `propagation.py` | `fa851ca7d8710eb54d684de61bc84cc8a3687241518e4ee4cfe8249e0fb33a92` | 1 |
 
 ## Adaptation record
 
@@ -35,8 +35,8 @@ Archive SHA-256: `06d37247c6985739b707b8b39b6b83e06e8af783b2531e31965501ba983985
 - Gravity constants use a typed `NamedTuple` in place of `collections.namedtuple`, and a list of
   gravity models, which a variable indexes.
 - Text temporaries are separated where a variable would take another type in a branch or a
-  field another type after a call. Error messages use f-strings/replacements.
-- The 2,069-line propagator needs six small edits; the remaining adaptation is in model construction and API plumbing.
+  field another type after a call. Error messages keep upstream's `str.format()` calls.
+- The 2,069-line propagator needs one small edit; the remaining adaptation is in model construction and API plumbing.
 - The re-baseline (#262) restored upstream's unannotated `Satrec` methods (specialized for
   their arguments, with `whichconst` rebound to its gravity model), the slots, the two
   properties, `EarthGravity(*getgravconst(...))`, `days2mdhms()`'s rebound `minute` and the

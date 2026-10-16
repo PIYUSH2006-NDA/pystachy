@@ -12,8 +12,9 @@
 # that prints the exception. to_ulps() reads a float's bits with struct (not supported); here it
 # computes the same int from math.frexp(). result_check() converts an int argument to a float,
 # rebinding it (a variable has one type here): ftest converts both before it calls it, and every
-# call passes a float as got, as upstream's do. Its messages use % (str.format() is not
-# supported). test_exceptions runs upstream only in verbose mode.
+# call passes a float as got, as upstream's do. ulp_abs_check()'s fmt and result_check()'s
+# fail_fmt, locals upstream, are written where they are used (a format string is a literal here).
+# test_exceptions runs upstream only in verbose mode.
 # EXCLUDED upstream cases (see also tests/upstream_math_float_ops.py and
 # tests/upstream_math_integer.py):
 # - every assertRaises(TypeError, math.f) of a call without arguments (testAcos, testAcosh,
@@ -81,8 +82,8 @@ def ulp_abs_check(expected: float, got: float, ulp_tol: int, abs_tol: float) -> 
     if abs_error <= abs_tol or ulp_error <= ulp_tol:
         return None
     else:
-        return ("error = %.3g (%d ulps); permitted error = %.3g or %d ulps"
-                % (abs_error, ulp_error, abs_tol, ulp_tol))
+        return ("error = {:.3g} ({:d} ulps); "
+                "permitted error = {:.3g} or {:d} ulps").format(abs_error, ulp_error, abs_tol, ulp_tol)
 
 
 def result_check(expected: float, got: float, ulp_tol: int = 5, abs_tol: float = 0.0) -> str | None:
@@ -120,7 +121,9 @@ def result_check(expected: float, got: float, ulp_tol: int = 5, abs_tol: float =
 
     # arguments are not equal, and if numeric, are too far apart
     if failure is not None:
-        return "expected %r, got %r (%s)" % (expected, got, failure)
+        fail_msg = "expected {!r}, got {!r}".format(expected, got)
+        fail_msg += ' ({})'.format(failure)
+        return fail_msg
     else:
         return None
 
@@ -136,7 +139,7 @@ def ftest(name: str, got, expected, ulp_tol: int = 5, abs_tol: float = 0.0) -> N
     """
     print(name, repr(got))
     failure = result_check(float(expected), float(got), ulp_tol, abs_tol)
-    assert failure is None, "%s: %s" % (name, failure)
+    assert failure is None, "{}: {}".format(name, failure)
 
 
 def check(label: str, got, expected) -> None:

@@ -45,9 +45,21 @@ F-strings support `!r`, `!s`, `!a`, debug `=`, nested format specifications and 
 format-spec mini-language. Replacement fields follow Python 3.12's grammar (PEP 701): they may
 reuse the f-string's quote, nest f-strings, and hold backslashes, newlines and comments.
 
-`%` formatting requires a literal format string. It supports `s r a d i u x X o e E f F g G c`,
-flags, widths and precisions, but not named substitutions, `*` widths or precisions, or integer
+`%` formatting requires a literal format string, or a module global that one module-level
+assignment binds to one (`FMT = "%8.3f"`, also `Final`) where nothing else in the program, not
+even a function's local, binds its name. It supports `s r a d i u x X o e E f F g G c`, flags,
+widths and precisions, but not named substitutions, `*` widths or precisions, or integer
 precisions. A variable format string such as `fmt % value` is rejected.
+
+`str.format()` and `str.format_map()` (also `str.format(FMT, ...)`) also require a literal format
+string or such a module global, compiled like an f-string: automatic and manual numbering, keyword
+fields, `.attr` and `[key]` lookups, `!r`, `!s`, `!a` and nested fields in a spec. The arguments
+are evaluated first, then the fields are formatted left to right; a malformed format, mixed
+numbering, a missing argument or an unknown conversion raises CPython's error when that field is
+reached. `*` unpacks a tuple, or a list after the other positional arguments; `**` unpacks a
+function's `**kwargs`, a dict display with string keys or one `dict[str, T]`. `"...".format` can
+be `map()`'s function, but neither method is otherwise a value, and `fmt.format(value)` of another
+variable format string is rejected.
 
 ## Operators and containers
 

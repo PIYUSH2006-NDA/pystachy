@@ -346,6 +346,14 @@ from src.pystachy_compiler.expressions import (
     gen_exc_id as expressions_exc_id,
     gen_expr as expressions_expr,
     gen_fmt_error as expressions_fmt_error,
+    gen_fmt_raise as expressions_fmt_raise,
+    gen_format_arg as expressions_format_arg,
+    gen_format_args as expressions_format_args,
+    gen_format_of as expressions_format_of,
+    gen_const_str as expressions_const_str,
+    gen_format_dup as expressions_format_dup,
+    gen_format_merge as expressions_format_merge,
+    gen_format_kw as expressions_format_kw,
     gen_foreign_eq as expressions_foreign_eq,
     gen_forget as expressions_forget,
     gen_forget_walrus as expressions_forget_walrus,
@@ -380,6 +388,9 @@ from src.pystachy_compiler.expressions import (
     gen_percent as expressions_percent,
     gen_percent_opt as expressions_percent_opt,
     gen_pformat as expressions_pformat,
+    gen_str_field as expressions_str_field,
+    gen_str_fields as expressions_str_fields,
+    gen_str_format as expressions_str_format,
     gen_probe_type as expressions_probe_type,
     gen_protocol as expressions_protocol,
     gen_puretype as expressions_puretype,
@@ -433,6 +444,7 @@ from src.pystachy_compiler.ir import (
     Closure,
     Data,
     Exit,
+    FmtArgs,
     FnInfo,
     Frame,
     IFn,
@@ -751,6 +763,7 @@ class Gen:
         self.noneglobals: dict[str, bool] = {}  # module globals of imported modules that are always None
         self.intglobals: dict[str, str] = {}  # single-binding module int literals, after normal read checks
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
+        self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
@@ -2005,6 +2018,39 @@ class Gen:
 
     def fmt_error(self, msg: str) -> Val:
         return expressions_fmt_error(self, msg)
+
+    def str_format(self, fmt: str, m: str, args: list[Node]) -> Val:
+        return expressions_str_format(self, fmt, m, args)
+
+    def format_of(self, f: Node) -> Node:
+        return expressions_format_of(self, f)
+
+    def const_str(self, o: Node) -> Node:
+        return expressions_const_str(self, o)
+
+    def format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
+        return expressions_format_args(self, fa, args)
+
+    def format_kw(self, fa: FmtArgs, name: str, v: Val) -> bool:
+        return expressions_format_kw(self, fa, name, v)
+
+    def format_dup(self, fa: FmtArgs, name: str) -> None:
+        return expressions_format_dup(self, fa, name)
+
+    def format_merge(self, fa: FmtArgs) -> None:
+        return expressions_format_merge(self, fa)
+
+    def fmt_raise(self, kind: str, msg: str) -> Val:
+        return expressions_fmt_raise(self, kind, msg)
+
+    def str_fields(self, s: str, depth: int, fa: FmtArgs) -> Val:
+        return expressions_str_fields(self, s, depth, fa)
+
+    def str_field(self, name: str, conv: str, spec: str, expand: bool, depth: int, fa: FmtArgs) -> Val:
+        return expressions_str_field(self, name, conv, spec, expand, depth, fa)
+
+    def format_arg(self, first: str, idx: int, fa: FmtArgs) -> Val:
+        return expressions_format_arg(self, first, idx, fa)
 
     def cat(self, a: Val, b: Val) -> Val:
         return expressions_cat(self, a, b)

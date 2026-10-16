@@ -516,6 +516,33 @@ def module_ints(mods: list[Mod], at: dict[str, int]) -> dict[str, str]:
     return out
 
 
+def module_strs(mods: list[Mod]) -> dict[str, str]:
+    # The module globals that one direct module-level assignment binds to a str literal, or a
+    # from-import of another such name: their text, which str.format() of the name reads as
+    # a literal format (Gen.str_format). The name is still read, with its usual checks.
+    count: dict[str, int] = {}
+    for m in mods:
+        constant_writes(m.body, count)
+    out: dict[str, str] = {}
+    copies: list[Node] = []
+    for m in mods:
+        for st in m.body.kids:
+            if not ((st.kind == "assign" and len(st.kids) == 2) or (st.kind == "annassign" and len(st.kids) == 3)) or st.kids[0].kind != "name" or count.get(st.kids[0].s, 0) != 1:
+                continue
+            if st.kids[-1].kind == "str":
+                out[st.kids[0].s] = st.kids[-1].s
+            elif st.kind == "assign" and st.s == "from" and st.kids[1].kind == "name":
+                copies.append(st)
+    more = True
+    while more:
+        more = False
+        for st in copies:
+            if st.kids[0].s not in out and st.kids[1].s in out:
+                out[st.kids[0].s] = out[st.kids[1].s]
+                more = True
+    return out
+
+
 def needs_eh(body: list[Node]) -> bool:
     # does body need exception handling or with-file cleanup, also in the functions and classes
     # it defines (a class with bases is a subclass node whose first kid is the class)

@@ -1,0 +1,15 @@
+mods: init mods
+mods.shapes: init mods.shapes
+NameError: name 'LATE' is not defined
+<2>
+NameError: name 'LATER' is not defined
+later 1
+key: 'välue'     3| a{sep}b
+ab    |   7 c     |   8 d     |   9 <3>
+== x == == y ==
+e     |  10 == z ==
+IndexError: Replacement index 1 out of range for positional args tuple
+['a: 1', 'b: 2']
+k: 1 f     |  11 == m ==
+== class == c: 'v'
+[exit 0]

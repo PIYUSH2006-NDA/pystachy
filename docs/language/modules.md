@@ -193,13 +193,15 @@ The common `str`, `list` and `dict` methods are implemented, including:
 - `dict.pop()` with a default; `dict.popitem()`; `dict.update()` from a dict of its type, a list
   of key/value tuples, or keyword arguments for string keys; and `dict.fromkeys(xs, v)`.
 - `int.bit_length()` and `int.bit_count()`, including on a `bool`.
+- `str.format()` and `str.format_map()` of a string literal (see
+  [formatting](semantics.md#literals-and-formatting)).
 
 `dict.fromkeys()` can omit `v`, or use `None`, when an annotation provides an optional value
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;
 an empty `()` or `{}` takes the expected dict's key type.
 
 Unsupported operations include dict union (`a | b`), dict displays with `**`,
-`str.replace(old, new, count)`, `str.format()`, `dict()` from pairs, and tuple `index()` and
+`str.replace(old, new, count)`, `dict()` from pairs, and tuple `index()` and
 `count()`. Supported iteration contexts and other restrictions are in the
 [language guide](../language.md#expressions).
 

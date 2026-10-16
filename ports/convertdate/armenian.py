@@ -77,8 +77,7 @@ def _valid_date(year, month, day, method=None):
             day_max = 5
 
     try:
-        # Pystachy port: no str.format() yet (M7, #12)
-        assert year >= year_min, f"Year out of range for Armenian calendar ({method} method)"
+        assert year >= year_min, "Year out of range for Armenian calendar ({} method)".format(method)
     except AssertionError as err:
         raise ValueError from err
 

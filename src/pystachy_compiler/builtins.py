@@ -40,9 +40,11 @@ from src.pystachy_compiler.utils import (
     is_tuple,
     is_vtuple,
     kw_names,
+    literal_format,
     lt,
     nones as only_nones,
     rtt,
+    runtime_format,
     selem,
     targs,
     tname,
@@ -878,7 +880,9 @@ def gen_mapgen(self, n: Node) -> Node:
         self.err("map() must have at least two arguments.")
     if fn == "filter" and len(args) != 2:
         self.err(f"filter expected 2 arguments, got {len(args)}")
-    f = args[0] if fn == "filter" and args[0].kind == "None" else self.vnode(self.expr(args[0], ""))
+    # ("...".format, which evaluates to the same method each time, is called as it is written)
+    fmt = self.format_of(args[0])
+    f = args[0] if fn == "filter" and args[0].kind == "None" else fmt if literal_format(fmt) else self.vnode(self.expr(args[0], ""))
     if fn == "filter":
         cond = mk("name", "__item", line, []) if f.kind == "None" else mk("call", "", line, [f, mk("name", "__item", line, [])])
         return mk("listcomp", "gen", line, [mk("name", "__item", line, []), mk("name", "__item", line, []), args[1], cond])
@@ -1076,6 +1080,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         return Val("null", "None")
     if is_dict(o.t) and m == "update":
         return self.update(o, args)
+    if o.t == "str" and (m == "format" or m == "format_map"):
+        self.err(runtime_format(m))
     for a in args:
         if a.kind == "kw":
             self.err(f"keyword arguments to {tname(o.t)}.{m}() are not supported; pass them by position")

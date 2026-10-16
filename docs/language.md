@@ -148,7 +148,7 @@ arbitrary context managers are not supported. Exceptions use the normal
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
 | Assignment expressions | `x := v` in conditions, comprehensions, arguments and other expressions, binding `x` as `x = v` does |
-| Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
+| Text formatting | F-strings, and `%` formatting and `str.format()` of a literal format string |
 | Containers | List, dictionary, set and tuple displays, `*` items in list and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
 | Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
