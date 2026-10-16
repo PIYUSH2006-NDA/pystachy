@@ -880,6 +880,8 @@ def gen_hashable(self, t: str) -> bool:
 def gen_repr(self, v: Val) -> Val:
     if is_kw(v.t):
         return self.kw_repr(v)
+    if self.reference_union(v.t):
+        return self.refl_union_str(v, "__repr__")  # (each class's: reflection.py)
     if v.t in self.classes:
         return self.obj_str(v, "__repr__")
     if v.t == "None":

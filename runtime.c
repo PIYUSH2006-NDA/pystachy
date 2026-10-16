@@ -1507,6 +1507,41 @@ static const char *repr(Buf *b, I v, const char *d) {
   return d;
 }
 Str *pys_repr(I v, Str *d) { Buf b = {0}; repr(&b, v, d->s); return done(&b); }
+/* A class's reflection record (the compiler's reflection.py; lowered by lower_module.py): an
+   internal constant per class that reaches a reflective site, whose address is the class's
+   identity (type(x)). Its name table lists the names the class's objects answer to, sorted by
+   their bytes, each with a kind the compiler reads; its field table gives the fields of an
+   object's __dict__ in their order: name, type descriptor, byte offset in the object and that
+   of its "is assigned" flag (-1: always assigned) */
+typedef struct { Str *name; I kind; } ReflName;
+typedef struct { Str *name, *desc; I off, flag; } ReflField;
+typedef struct { Str *name, *qual, *mod; I flags, nnames; ReflName *names; I nfields; ReflField *fields; } ReflRec;
+I pys_refl_find(ReflRec *r, Str *s) {   /* the index of name s in r's name table, or -1 */
+  I lo = 0, hi = r->nnames;
+  while (lo < hi) {
+    I mid = lo + (hi - lo) / 2, c = pys_str_cmp(r->names[mid].name, s);
+    if (c == 0) return mid;
+    if (c < 0) lo = mid + 1; else hi = mid;
+  }
+  return -1;
+}
+Str *pys_refl_vars(ReflRec *r, char *o) {   /* repr(vars(o)): o's assigned fields, each by its descriptor */
+  Buf b = {0};
+  if (!pys_repr_enter(o)) { put(&b, "{...}", 5); return done(&b); }   /* (a field's repr printing o's again) */
+  put(&b, "{", 1);
+  for (I i = 0, k = 0; i < r->nfields; i++) {
+    ReflField *f = &r->fields[i];
+    if (f->flag >= 0 && !*(unsigned char *)(o + f->flag)) continue;
+    if (k++) put(&b, ", ", 2);
+    repr_str(&b, f->name); put(&b, ": ", 2);
+    I v = 0;
+    if (f->desc->s[0] == 'b') v = *(unsigned char *)(o + f->off) & 1; else memcpy(&v, o + f->off, 8);
+    repr(&b, v, f->desc->s);
+  }
+  put(&b, "}", 1);
+  pys_repr_leave(o);
+  return done(&b);
+}
 static I entry(Dict *d, I k);
 static I dfind(Dict *d, I k, uint64_t h, I *free);
 I pys_set_cmp(Set *a, Set *b, I op);
@@ -3166,14 +3201,22 @@ void pys_files_exit(void) {            /* the open files closed in the order the
   for (I i = 0; i < nfiles; i++) if (!files[i]->closed && (e = shut(files[i]))) report(files[i], e);
   nfiles = 0;
 }
+static void **exit_hook;               /* the address of atexit's _hook (lib/_pystachy_atexit.py), a Callable */
+void pys_exit_hook(void **hook) { exit_hook = hook; }   /* the program's main gives it, where it imports atexit */
 void pys_finish(void) {                /* at exit, what CPython's shows of its end: stdout flushed after the code (see
-                                          out_flush), the collector's report, stdout flushed in finalization (a
-                                          failure is reported, status 120), the open files closed in the order they
-                                          were opened (a failure is reported), and an uncaught KeyboardInterrupt's
-                                          end by SIGINT */
+                                          out_flush), atexit's callbacks run (once its module has run: CPython's
+                                          finalization runs them first), the collector's report, stdout flushed in
+                                          finalization (a failure is reported, status 120), the open files closed in
+                                          the order they were opened (a failure is reported), and an uncaught
+                                          KeyboardInterrupt's end by SIGINT */
   static int done;
   if (done++) return;
   out_flush();
+  if (exit_hook && *exit_hook) {       /* a Callable: {code, env}, code taking env */
+    void **c = *exit_hook;
+    exit_hook = 0;
+    ((void (*)(void *))c[0])(c[1]);
+  }
   if (gc_stats) gc_report();
   int bad = 0, e;
   if (!std_out.closed && (e = flush1(&std_out))) {
@@ -3778,6 +3821,48 @@ static void close_with(void *p) {      /* __exit__ of a with-file: a close that 
 void pys_unwind_file(File *f) { unwind_push(close_with, f); }   /* with open(...) as f */
 static void unwind_to(I mark) { while (nunw > mark) { Unwind u = unw[--nunw]; u.fn(u.arg); } }
 I pys_try_mark(void) { return nunw; }
+/* Generators (docs/internals.md#generators). A suspended generator leaves none of its unwind
+   actions (its with-files') among the program's: as it suspends it sets those above the depth
+   where it was resumed aside, in a scanned block of its own (pys_gen_leave), and takes them up
+   again where it is resumed next (pys_gen_enter, which returns the depth below them: its try
+   statements' marks are relative to it). So its consumer's try statements and with blocks
+   unwind only their own actions, and a generator resumed from another depth finds its own. */
+typedef struct { I n; Unwind u[]; } Aside;
+I pys_gen_enter(void *aside) {
+  I base = nunw;
+  Aside *a = aside;
+  for (I i = 0; a && i < a->n; i++) unwind_push(a->u[i].fn, a->u[i].arg);
+  return base;
+}
+void *pys_gen_leave(I base) {
+  if (nunw <= base) return 0;
+  Aside *a = pys_alloc(sizeof(Aside) + (size_t)(nunw - base) * sizeof(Unwind));
+  a->n = nunw - base;
+  memcpy(a->u, unw + base, (size_t)a->n * sizeof(Unwind));
+  nunw = base;
+  return a;
+}
+/* What closing a generator that a loop owns raises, and its yield after GeneratorExit, are
+   reported as CPython reports an exception it ignores (unraisable), and the loop goes on: the
+   first line names the generator by its __qualname__ (and its promise's address, where CPython
+   shows the object's), the last is the exception's, as an uncaught one's (no traceback lines) */
+static void gen_ignored_in(Str *name, void *p) {
+  out_flush();
+  fputs("Exception ignored in: <generator object ", stderr);
+  ewrite(name->s, name->len);
+  fprintf(stderr, " at %p>\n", p);
+}
+void pys_gen_ignored(Str *name, void *p) {
+  gen_ignored_in(name, p);
+  fputs("RuntimeError: generator ignored GeneratorExit\n", stderr);
+}
+void pys_gen_unraisable(Exc *e, Str *name, void *p) {
+  gen_ignored_in(name, p);
+  Str *k = e->obj ? XCLS(e)->disp : e->kind, *m = e->obj ? XCLS(e)->str(e->obj) : e->detail ? e->detail : e->msg;
+  fwrite(k->s, 1, k->len, stderr);
+  if (m->len || e->detail) { fputs(": ", stderr); ewrite(m->s, m->len); }
+  fputc('\n', stderr);
+}
 Exc *pys_exc_begin(void *ue, I mark) { /* a landing starts: put right what the raise left, handle the Exc */
   Exc *e = ue;
   xr.cur = e; io_busy = 0;

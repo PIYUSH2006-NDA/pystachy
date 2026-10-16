@@ -16,9 +16,11 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
 `ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
 CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
-For `binascii` and `_codecs`, Pystachy loads its ports of those C modules,
-`lib/_pystachy_binascii.py` and `lib/_pystachy_codecs.py` ([library
-reference](../../lib/compatibility.md#binascii)).
+For `binascii`, `_codecs`, `atexit` and `_struct`, Pystachy loads its ports of those C modules,
+`lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py`, `lib/_pystachy_atexit.py` and
+`lib/_pystachy_struct.py` ([library reference](../../lib/compatibility.md#binascii)), and the end
+of the program runs `atexit`'s callbacks. For `abc`, which CPython imports as it starts, it loads
+`lib/_pystachy_abc.py` ([abc](../../lib/compatibility.md#abc)).
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's
@@ -127,7 +129,7 @@ when the program first needs them, with the module and the reason, for example:
 m.total() is not supported: parameter 'xs': unsupported type annotation
 ```
 
-This permits a module to keep generators, unsupported annotations or classes with unsupported
+This permits a module to keep unsupported generator forms (such as `send()`), unsupported annotations or classes with unsupported
 inheritance beside functions that compile. An unsupported special method, such as an
 unannotated `__len__`, is rejected when an operation needs it, including implicit use by
 printing, sorting or container comparisons.
@@ -172,7 +174,7 @@ Pystachy. The [library reference](../../lib/README.md) records provenance, avail
 restrictions and tests for each module.
 
 The adapted sources remain valid Python, but that does not imply every upstream API compiles.
-Common limitations include unsupported generators, byte-oriented string positions, lack of
+Common limitations include unsupported generator forms, byte-oriented string positions, lack of
 `bytearray` and binary files, and homogeneous container types. Check the module's reference before choosing an API.
 
 ## Builtins
@@ -188,11 +190,14 @@ determine whether a particular call compiles.
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
 | Iterators | `iter` (one argument), `next` (with or without a default) |
-| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods, `hash` |
+| Types and attributes | `isinstance`, `callable`, `getattr`, `setattr`, `hasattr`, `vars`, `dir` and `type(x)`'s names and comparisons (see [reflection](semantics.md#reflection)), `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |
 
-`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). General `type()`
-calls are unsupported; `type(e).__name__` is supported for an exception `e`. `hash()` takes the
+`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). `type(x)` as a value
+(a class object) is unsupported; `type(x).__name__`, `type(a) is C` and `type(a) == type(b)` are
+supported for the program's classes, builtin values and exceptions (`type(e).__name__`).
+`getattr`, `setattr`, `hasattr`, `vars` and `dir` follow the [reflection rules](semantics.md#reflection);
+`delattr` is unsupported. `hash()` takes the
 values that can be [dict keys](typing.md#supported-types), floats too, and raises CPython's
 `TypeError` for a list, dict, set or unhashable object.
 

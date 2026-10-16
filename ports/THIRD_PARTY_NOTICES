@@ -51,7 +51,7 @@ CPython's standard library modules (lib/)
 -----------------------------------------
 
 lib/bisect.py, lib/colorsys.py, lib/genericpath.py,
-lib/posixpath.py, lib/stat.py, lib/this.py and lib/curses/ascii.py are unmodified copies of the files of the same names in CPython 3.13.16's
+lib/posixpath.py, lib/stat.py, lib/struct.py, lib/this.py and lib/curses/ascii.py are unmodified copies of the files of the same names in CPython 3.13.16's
 Lib/ directory (lib/README.md lists their SHA-256 sums). They are part of Python and are used
 under the Python Software Foundation License Version 2, reproduced below, with the copyright
 notice below. lib/curses/__init__.py is Pystachy's own.
@@ -84,10 +84,23 @@ Modules/_codecsmodule.c, Objects/unicodeobject.c and Objects/stringlib/codecs.h 
 subset, following their behaviour and messages and keeping the C module's docstrings; it is
 derived from Python and is used under the same license and copyright notice.
 
+lib/_pystachy_atexit.py ports CPython 3.13.16's Modules/atexitmodule.c to Pystachy's subset,
+following its order of callbacks and keeping the C module's docstrings; it is derived from Python
+and is used under the same license and copyright notice.
+
+lib/_pystachy_abc.py keeps the docstrings of CPython 3.13.16's Lib/abc.py and Modules/_abc.c,
+whose abstract methods the compiler applies with the message of Objects/typeobject.c; it is
+derived from Python and is used under the same license and copyright notice.
+
 lib/_pystachy_binascii.py ports CPython 3.13.16's Modules/binascii.c and the hex separators of
 Python/pystrhex.c to Pystachy's subset, following their behaviour and messages and keeping the C
 module's docstrings; it is derived from Python and is used under the same license and copyright
 notice.
+
+lib/_pystachy_struct.py ports CPython 3.13.16's Modules/_struct.c and the float packing of
+Objects/floatobject.c to Pystachy's subset, following their behaviour and messages and keeping
+the C module's docstrings; it is derived from Python and is used under the same license and
+copyright notice.
 
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
@@ -103,8 +116,9 @@ copyright notice.
 lib/functools.py is Pystachy's own code for cache() and lru_cache(), which follows the C
 wrapper of CPython 3.13.16's Modules/_functoolsmodule.c (_lru_cache_wrapper) and keeps
 docstrings of Lib/functools.py (lib/README.md). Its reduce(), cmp_to_key() and partial adapt
-the Python fallbacks in Lib/functools.py. It is derived from Python and is used under the
-same license and copyright notice.
+the Python fallbacks in Lib/functools.py, and its update_wrapper(), wraps() and their
+constants are that file's, unchanged. It is derived from Python and is used under the same
+license and copyright notice.
 
 lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and
