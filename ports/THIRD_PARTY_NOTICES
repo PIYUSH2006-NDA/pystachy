@@ -140,7 +140,7 @@ convertdate (ports/convertdate/)
 --------------------------------
 
 ports/convertdate/ holds convertdate 2.5.1's modules (its package src/convertdate without bahai.py,
-dublin.py, french_republican.py, persian.py and data/french_republican_days.py), edited where
+french_republican.py, persian.py and data/french_republican_days.py), edited where
 ports/convertdate/PORT.md lists (each edit is marked "Pystachy port:"). convertdate is used under
 the MIT License, whose text and copyright notice ("Copyright (c) 2014-2022 Neil Freeman") are in
 ports/convertdate/LICENSE. ports/convertdate/_calendar.py, which stands in for CPython's calendar

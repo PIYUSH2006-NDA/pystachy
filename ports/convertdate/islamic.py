@@ -42,12 +42,10 @@ def to_jd(year, month, day):
 
 def from_jd(jd):
     '''Calculate Islamic date from Julian day'''
-    # Pystachy port: wjd for the rebound jd, as a parameter keeps its argument's type, an int for an
-    # int Julian day (M4, #9)
-    wjd = floor(jd) + 0.5
-    year = floor(((30 * (wjd - EPOCH)) + 10646) / 10631)
-    month = min(12, ceil((wjd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
-    day = int(wjd - to_jd(year, month, 1)) + 1
+    jd = floor(jd) + 0.5
+    year = floor(((30 * (jd - EPOCH)) + 10646) / 10631)
+    month = min(12, ceil((jd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
+    day = int(jd - to_jd(year, month, 1)) + 1
     return (year, month, day)
 
 

@@ -17,8 +17,8 @@ print(islamic.from_jd(jd))
 ## Coverage
 
 - Calendar conversions, month lengths, leap years, month calendars and selected holiday functions.
-- Julian day counts, ordinal dates, and the tested ISO week helpers.
-- The astronomical Bahá’í, French Republican and Persian calendars and the Dublin module are omitted.
+- Julian day counts, the Dublin day count, ordinal dates, and the tested ISO week helpers.
+- The astronomical Bahá’í, French Republican and Persian calendars are omitted.
 - Date/time objects, calendar formatting, Mayan generators and the `Holidays` convenience class are outside the tested port coverage.
 
 <a id="deviations-it-hits"></a>
