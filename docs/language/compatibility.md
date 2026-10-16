@@ -169,9 +169,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   `center()`).
 
 - A key object (an instance of a class that defines `__call__`) that is `None` when `sorted()`,
-  `list.sort()`, `min()` or `max()` runs is no key, as in CPython, but where the items have no
-  order without a key here (a closed union, functions): it is called then, raising
-  `TypeError: 'NoneType' object is not callable`, where CPython orders the items.
+  `list.sort()`, `min()` or `max()` runs is no key, as in CPython, but where the items are
+  objects (whose comparison methods the keyed call never compiles), or have no order without a
+  key here (a closed union, functions): it is called then, raising
+  `TypeError: 'NoneType' object is not callable`, where CPython orders the items. A
+  `Callable | None` key for such items is a compile-time error.
 
 - The text of `getattr(o, name)` with a run-time name (see [reflection](semantics.md#reflection))
   shows the addresses CPython shows, but not CPython's: a method wrapper's or builtin method's

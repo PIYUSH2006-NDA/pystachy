@@ -1,6 +1,7 @@
 # A key that is None when sorted(), list.sort(), min() or max() runs is no key, as key=None is
 # (#506): a key object (an instance of a class that defines __call__) that may be None, and a
 # Callable | None, order the items themselves then, and are called where they are not None.
+# (Items that are objects keep the call: see tests/deviations/key_object_none_unordered.py.)
 import bisect
 from operator import itemgetter
 from typing import Callable
@@ -20,22 +21,6 @@ class Neg:
     def __call__(self, x: int) -> int:
         print("key", x)
         return -x
-
-
-class Item:
-    def __init__(self, n: int) -> None:
-        self.n = n
-
-    def __lt__(self, other: "Item") -> bool:
-        return self.n < other.n
-
-    def __repr__(self) -> str:
-        return f"Item({self.n})"
-
-
-class ByNeg:
-    def __call__(self, i: Item) -> int:
-        return -i.n
 
 
 class Count:
@@ -73,20 +58,19 @@ getter = None
 print(sorted([(2, "b"), (1, "a")], key=getter))
 
 
-def run(key: Neg | None, by: ByNeg | None) -> None:
+def run(key: Neg | None) -> None:
     zs = [3, 1, 2]
     zs.sort(key=key, reverse=True)
-    print(sorted([3, 1, 2], key=key), zs, sorted([Item(2), Item(1), Item(3)], key=by))
+    print(sorted([3, 1, 2], key=key), zs)
     print(min(Count(4), key=key), max(Count(4), key=key), min(5, 3, 8, key=key), max([7, 9, 8], key=key))
-    print(min([Item(2), Item(1)], key=by), max(Item(2), Item(5), key=by))
     try:
         print(min(zs[:0], key=key))
     except ValueError as e:
         print("ValueError:", e)
 
 
-run(Neg(), ByNeg())
-run(None, None)
+run(Neg())
+run(None)
 
 
 def neg(x: int) -> int:

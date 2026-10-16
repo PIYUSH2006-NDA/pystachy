@@ -10,7 +10,6 @@ from src.pystachy_compiler.specs import (
     ARITY,
     CALLS,
     DEFAULTS,
-    DUNDER,
     ERRNO,
     FLOATINFO,
     FROZENERR,
@@ -27,7 +26,6 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     OSCONST,
     PYBUILTINS,
-    REFL,
     VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, made_var, mk
@@ -769,8 +767,8 @@ def gen_key_none(self, key: Val, et: str, use: str, of: str) -> str:
     # a key that may be None where the call runs (an object, or a Callable | None), which CPython
     # takes as no key, as key=None: a branch to the block returned, where the caller orders the
     # items (of type et, by desc(et, use)) themselves, and on in a new block where it is not
-    # None (call_key); "" where it never is, or the items have no order desc gives (an object
-    # key is called then, and raises TypeError for None)
+    # None (call_key); "" where it never is, or the items are not key_free (an object key is
+    # called then, and raises TypeError for None)
     if not (is_opt(key.t) and is_callable(unopt(key.t))) and (key.t not in self.classes or key.v in self.nn):
         return ""
     if not self.key_free(et, use):
@@ -784,9 +782,9 @@ def gen_key_none(self, key: Val, et: str, use: str, of: str) -> str:
     return lnone
 
 def gen_key_free(self, t: str, use: str) -> bool:
-    # does desc(t, use) take t without an error: the items key_none orders without a key (not a
-    # closed union, but for ==, a function or **kwargs, nor an object whose method that use
-    # calls takes another type)
+    # does desc(t, use) take t without an error, and without compiling a method the keyed call
+    # does not: the items key_none orders without a key (not a closed union, but for ==, a
+    # function or **kwargs, nor an object, inside a container or not)
     if is_union(unopt(t)):
         return use == "==" and self.ueq_type(t)
     if t == "int" or t == "float" or t == "bool" or t == "str" or t == "bytes" or t == "None" or t == "exc":
@@ -804,15 +802,9 @@ def gen_key_free(self, t: str, use: str) -> bool:
         return self.key_free(selem(t), "==")
     if is_tuple(t):
         return len(targs(t)) <= 9 and all([self.key_free(x, sub) for x in targs(t)])
-    if t not in self.classes:
-        return False
-    ms = self.classes[t].methods
-    for op in use.split():
-        m = DUNDER[REFL[op]] if DUNDER[op] not in ms and op in REFL else DUNDER[op]
-        f = ms[m] if m in ms else None
-        if f is not None and (f.bad != "" or not (f.ptypes[1] == t or f.ptypes[1] == "" or (f.ptypes[1] in self.classes and self.derives(t, f.ptypes[1])))):
-            return False
-    return True
+    # (nor an object: desc would compile its class's ==, <, ... and repr, which the keyed call
+    # never needs, and which may not compile: a template __eq__ that returns NotImplemented)
+    return False
 
 def gen_call_key(self, key: Val, x: Val) -> Val:
     # key(x), the key of item x: a call through function value key, of Callable key (not None
@@ -937,7 +929,7 @@ def gen_key_none_join(self, r: Val, lnone: str, xs: Val, vals: list[Val], name: 
         d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
         r0 = self.from_slot(self.rt("pys_list_minmax", "i64", [f"ptr {xs.v}", f"ptr {d}", f"i64 {1 if name == 'max' else 0}"]), r.t)
     else:
-        item = mk("name", "__item", self.line, [])
+        item = made_var("__item", self.line)  # (made: it iterates the iterator itself, as min(o) does)
         r0 = self.coerce(self.reduce(name, [mk("listcomp", "gen", self.line, [item, item, self.vnode(xs)])], ""), r.t)
     l0 = self.cur
     self.br(lend)
