@@ -36,8 +36,16 @@ from the fixed shape used by `*args`; arbitrary iterators and generators are not
 accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
-Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
-nested tuples of these. Floats, objects and frozensets cannot be keys or set elements.
+Dict keys are `int`, `str`, objects of the program's classes, or tuples containing `int`,
+`bool`, `str`, `str | None`, objects and nested tuples of these. An object whose class defines
+neither `__eq__` nor `__hash__` hashes and compares by identity; one whose class defines
+`__hash__` uses it and `__eq__`, which run where CPython calls them (once per insertion or
+lookup, and for each key of the same hash). A class that defines `__eq__` without `__hash__` is
+unhashable, as in CPython: adding or looking up its object raises `TypeError: unhashable type`.
+An object key may be `None`. Floats, frozensets, NamedTuples and exception objects cannot be
+keys or set elements. `hash()` gives CPython's results for ints, floats, `None`, objects with
+`__hash__` and tuples of these; a str's and an object's identity hash differ from CPython's,
+which change from run to run, but are equal for equal strs and for the same object.
 
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
@@ -395,8 +403,10 @@ when it falls through; a template that always raises can use the result type exp
 its caller.
 
 Ordinary methods with unannotated parameters, `*args` or `**kwargs` also specialize, excluding
-`self` or `cls`. The supported binary operator, comparison, `__call__`, `__getitem__` and
-`__contains__` methods can be templates. Other special methods require annotations;
+`self` or `cls`. A parameter annotated `object` is such a parameter too, as in
+`def __eq__(self, other: object) -> bool`, which `isinstance()` narrows; `__init__` and other
+non-template methods cannot take one. The supported binary operator, comparison, `__call__`,
+`__getitem__` and `__contains__` methods can be templates. Other special methods require annotations;
 `__init__` is handled by class specialization below. A template method cannot change a field's
 established type, and comparison methods must return `bool`.
 

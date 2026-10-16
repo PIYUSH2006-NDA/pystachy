@@ -169,12 +169,14 @@ determine whether a particular call compiles.
 | Numeric operations | `abs`, `round`, `divmod`, `pow` (including modular powers and inverses), `sum` |
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
-| Types and attributes | `isinstance`, `hasattr` with a literal attribute name, `super` in supported instance methods |
+| Types and attributes | `isinstance`, `hasattr` with a literal attribute name, `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |
 
 `iter()` is supported as the return value of a supported `__iter__` method, not as a general
-first-class iterator constructor. General `next()`, `hash()` and `type()` calls are unsupported;
-`type(e).__name__` is supported for an exception `e`.
+first-class iterator constructor. General `next()` and `type()` calls are unsupported;
+`type(e).__name__` is supported for an exception `e`. `hash()` takes the values that can be
+[dict keys](typing.md#supported-types), floats too, and raises CPython's `TypeError` for a list,
+dict, set or unhashable object.
 
 `print()` accepts `sep`, `end`, `file` and `flush`. Its `file` may be a file or an object with
 `write()`, such as `io.StringIO`; it receives one call for each piece, as in CPython.

@@ -104,6 +104,15 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   before they test them against the set, where CPython tests each as it is made, which differs
   only where the generator's expressions change the set.
 
+- A set of objects hashed by identity (whose classes define neither `__eq__` nor `__hash__`)
+  iterates in an order that their addresses decide, as CPython's does, so no two runs need
+  share it (`sorted()` gives one). `dict.fromkeys(s)` of a set of objects whose class defines
+  `__hash__` calls it again for each element, where CPython takes the hashes the set keeps, and
+  a `functools.cache()` or `lru_cache()` function hashes such an argument more than once per
+  call (CPython's, once); `d.update(o)` goes on with what is left of `o` where a key's `__eq__`
+  changes `o`, where CPython raises `RuntimeError: dict mutated during update`. `hash()` of a
+  NaN is 0, where CPython's is its float object's identity hash.
+
 - `min()` and `max()` stream generator-expression items of type `int`, `float`, `bool` or
   `str` when called without keyword arguments. Other element types and `key=` calls first
   materialize the items, as do `math.fsum()` and `math.prod()`. Where CPython stops at an item
@@ -167,7 +176,9 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   where CPython computes them from `args` each time: an argument changed afterwards (a list,
   also by the exception's `__init__`) is not seen, and an argument whose `__str__` or
   `__repr__` raises makes the call of the exception class (`raise KeyError(obj)`) raise that
-  exception instead, so that an `except KeyError` does not run.
+  exception instead, so that an `except KeyError` does not run. The `KeyError` of a dict or set
+  lookup that misses an object key runs the key's `__repr__` as it is raised, likewise, where
+  CPython runs it only when the error is printed.
 
 ### Modules and libraries
 
@@ -448,8 +459,10 @@ supported alternatives.
 
 ### Dict keys, set elements and `bool` values
 
-- dict key types that may be `None`, and tuple keys holding other items (a `float`, a `list`, an
-  object, a NamedTuple); set elements of these types too, and frozensets as set elements or keys
+- dict key types that may be `None` (but objects, which may be), tuple keys holding other items
+  (a `float`, a `list`, a NamedTuple), and NamedTuple and exception objects as keys; set
+  elements of these types too, frozensets as set elements or keys, and `hash()` of these types;
+  objects whose class has a `__hash__` or `__eq__` that is no method (`__hash__ = None`) as keys
 - a `bool` added to a set of ints (CPython keeps it as the `bool` it is, which prints as `True`)
 - unpacking in a set display (`{*xs}`), a set operator with an operand that is not a set or
   frozenset (`s | [1]`: CPython's `TypeError`), or with sets of different element types
@@ -537,7 +550,7 @@ supported alternatives.
 - an `encoding=` constant other than UTF-8 and Latin-1
 - `functools.lru_cache()` and `cache()` of a function whose parameters or return are not
   annotated, that returns `None`, that takes `*args` or `**kwargs`, or whose parameter is no dict key type (a `float`,
-  an object), or of a builtin, a method or a lambda; a required keyword-only parameter or a
+  a NamedTuple), or of a builtin, a method or a lambda; a required keyword-only parameter or a
   call through the cache that explicitly supplies a keyword-only argument (an optional
   keyword-only parameter's default may be used); and `cache_parameters()`
 

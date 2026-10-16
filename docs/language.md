@@ -22,8 +22,8 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Generics | Function templates and `Generic` classes with inferred or explicit type arguments |
 
 Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
-have a restricted set of types: integers, strings and supported tuples (whose items may
-include booleans).
+have a restricted set of types: integers, strings, objects (hashed by identity, or by their
+class's `__hash__` and `__eq__`) and supported tuples (whose items may include booleans).
 Fixed-shape tuples have at most nine items and require constant indices. Runtime-length
 `tuple[T, ...]` values support integer indexing checked at runtime; their elements must be
 `int`, `float`, `bool`, `str`, or one of these with `None`.

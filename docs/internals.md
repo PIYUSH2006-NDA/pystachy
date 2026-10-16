@@ -115,9 +115,11 @@ serve multiple static element types. Optional reference values use null for `Non
 numbers use boxes. Integers use checked 64-bit arithmetic rather than CPython's arbitrary
 precision.
 
-Generic operations such as comparison, representation and sorting receive a compact type
-descriptor. The runtime interprets nested container descriptors and calls generated helpers
-for supported object methods. Specialized code still has static types; these descriptors
+Generic operations such as comparison, hashing, representation and sorting receive a compact
+type descriptor. The runtime interprets nested container descriptors and calls generated helpers
+for supported object methods. A dict's or set's descriptor of its keys tells objects hashed by
+identity (their addresses, which the non-moving collector keeps stable) from those hashed by
+their class's `__hash__`. Specialized code still has static types; these descriptors
 do not introduce a dynamic `Any` type.
 
 The collector is conservative, non-moving mark-and-sweep. It scans stack/register roots and

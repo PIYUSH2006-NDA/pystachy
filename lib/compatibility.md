@@ -256,7 +256,9 @@ Bare `@lru_cache` works. Wrappers expose `cache_info`, `cache_clear`, `__wrapped
 `currsize`. Clearing resets entries and statistics.
 
 Each wrapper specializes its argument and result types. Accepted key types are
-`int`, `bool`, `str`, `str | None`, and tuples of supported key types. Defaults
+`int`, `bool`, `str`, `str | None`, objects, and tuples of supported key types. An
+object argument is keyed by identity, or by its class's `__hash__` and `__eq__`, which
+a call may run more than once where CPython's hashes the key once. Defaults
 and keyword arguments bind against the original signature, evaluate arguments
 in source order, and retain defaults evaluated when the function was defined,
 including closure defaults. Functions with nine parameters are supported.
@@ -274,7 +276,7 @@ entry. Cached results retain object identity, including falsy results and option
 `None` values.
 
 Unsupported cases are unannotated parameters/results, a result annotated solely
-`-> None`, float/object keys, variadic functions, builtin/method/lambda targets,
+`-> None`, float and NamedTuple keys, variadic functions, builtin/method/lambda targets,
 and decorators on class-body methods. Required keyword-only parameters and
 explicit keyword-only arguments are unsupported; a keyword-only default may be
 omitted. `cache_parameters` is unavailable.
@@ -290,8 +292,9 @@ exceptions follow CPython; integer results retain checked 64-bit arithmetic.
 
 `cmp_to_key(comparator)` returns a key function for `sorted` and list sorting.
 The comparator accepts two values of one supported type and returns an int.
-Key objects expose writable `obj` and the five comparison methods. Hashing is
-rejected at compile time. The factory is a function rather than CPython's
+Key objects expose writable `obj` and the five comparison methods. `hash()` of one
+raises CPython's `TypeError: unhashable type: 'functools.KeyWrapper'`, also where it is
+used as a dict key or set element. The factory is a function rather than CPython's
 `KeyWrapper`, so factory attributes, reflection and pickling are unavailable.
 `partial`, `wraps`, `update_wrapper` and `total_ordering` remain unsupported.
 
