@@ -644,7 +644,8 @@ A `@dataclass` writes `__init__` (which calls `__post_init__`), `__repr__` and `
 its `init`, `repr` or `eq` option is false, and with `order=True` the comparisons of the tuples
 of its fields. `dataclasses.field()` takes `default`, `default_factory`, `init`, `repr`,
 `compare`, `hash` and `kw_only`; a factory is a function, a class or a lambda without
-parameters, called for each object that is not given the field. `_: KW_ONLY` makes the
+parameters, called for each object that is not given the field (after the call's arguments,
+in field order, also for `init=False` fields). `_: KW_ONLY` makes the
 following fields keyword-only. `frozen=True` objects raise `dataclasses.FrozenInstanceError`
 (an `AttributeError`) when a field or property is assigned or deleted outside the `__init__`
 that `@dataclass` writes. `dataclasses.replace(obj, **changes)` makes a new object through

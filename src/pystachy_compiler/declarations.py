@@ -1193,10 +1193,12 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
     f.defaults.append(noann)
     f.dglob.append("")
     if self.is_dc(ci.name) and "no-init" not in ci.dcopts:
-        # its parameters: the fields with init=True, the keyword-only ones last; its body assigns
-        # each field in turn: from its parameter (whose default_factory a call that leaves it
-        # out calls: dglob "()"), else from its default_factory, or its default (CPython reads
-        # it from the class); a field with neither stays unassigned
+        # its parameters: the fields with init=True, the keyword-only ones last, then for each
+        # init=False field with a default_factory one that no call can name (x.factory). A call
+        # that leaves out such a parameter calls the field's default_factory (dglob "()"), after
+        # it evaluates its arguments, in field order (see call_fn), as the __init__ @dataclass
+        # writes calls each in turn. Its body assigns each field from its parameter, else from
+        # its default (CPython reads it from the class); a field with neither stays unassigned
         plain: dict[str, bool] = {}  # (a NamedTuple's field, which has no options)
         dfs = self.dc_fields(ci)
         for kw in [False, True]:
@@ -1209,6 +1211,13 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
                     f.ptypes.append(ci.ftypes[fl])
                     f.defaults.append(ci.fdefault[fl] if fl in ci.fdefault else mk("None", "", d.line, []) if fl in ci.factory else noann)
                     f.dglob.append("()" if fl in ci.factory else "")
+        for fl in dfs:
+            if fl in ci.factory and "no-init" in ci.fopts[fl]:
+                f.npos = len(f.params) if f.npos < 0 else f.npos
+                f.params.append(fl + ".factory")
+                f.ptypes.append(ci.ftypes[fl])
+                f.defaults.append(mk("None", "", d.line, []))
+                f.dglob.append("()")
         cn = mk("name", ci.name, d.line, [])
         for fl in dfs:
             o = ci.fopts[fl] if fl in ci.fopts else plain
@@ -1216,7 +1225,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             if fl in ci.factory and not (fl in b.factory and b.factory[fl] is ci.factory[fl]):
                 self.dc_factory(ci, fl)  # (else the base's, which it inherits)
             if "no-init" in o and fl in ci.factory:
-                v = mk("call", "", d.line, [mk("attr", fl + ".factory", d.line, [cn])])
+                v = mk("name", fl + ".factory", d.line, [])
             elif "no-init" in o and fl in ci.fdefault:
                 v = mk("attr", fl, d.line, [cn])
             elif "no-init" in o:

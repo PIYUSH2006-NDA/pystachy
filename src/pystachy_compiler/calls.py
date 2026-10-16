@@ -925,6 +925,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             wrapped = self.getfield(cache, self.field(cache, "__wrapped__"), "__wrapped__")
             pre[0] = Val(wrapped.v, "env")
     df = self.dflt_fn(f)
+    facs: list[int] = []  # (the parameters whose default is a dataclass field's default_factory)
     for j in range(np):
         if vals[j].t == "":
             t = f.ptypes[j]
@@ -935,8 +936,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             if df.dglob[j] == "=None":
                 vals[j] = Val("null", "None")
             elif df.dglob[j] == "()":
-                # a dataclass field's default_factory, called for each object (see dc_factory)
-                vals[j] = self.call_fn(self.classes[f.cls].methods[f.params[j] + ".factory"], [], [])
+                facs.append(j)
             elif df.dglob[j].startswith("&"):
                 # a closure's default: in its env (pre[0]), evaluated where it was defined
                 t = t if t != "" else df.dtypes[j]
@@ -947,6 +947,12 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 vals[j] = Val(self.mload(t, df.dglob[j]), t)
             else:
                 vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
+    for fl in self.dc_fields(self.classes[f.cls]) if len(facs) > 0 else []:
+        # a dataclass field's default_factory, called for each object (see dc_factory), after
+        # the other defaults, which only read globals, in field order (see declare_fields)
+        for j in facs:
+            if f.params[j] == fl or f.params[j] == fl + ".factory":
+                vals[j] = self.call_fn(self.classes[f.cls].methods[fl + ".factory"], [], [])
     self.line = line
     if cache is not None:
         # Evaluate and bind as an ordinary call, including def-time closure defaults,

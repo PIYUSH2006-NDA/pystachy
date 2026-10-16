@@ -739,7 +739,7 @@ def gen_program(self, mods: list[Mod]) -> str:
         tops.append(top)
     for ci in self.classes.values():
         self.inherit(ci)
-    for ci in self.classes.values():
+    for ci in [c for c in self.classes.values()]:
         self.selfcls = ci.name
         self.declare_fields(ci)
         self.selfcls = ""

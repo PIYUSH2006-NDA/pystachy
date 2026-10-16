@@ -1,0 +1,9 @@
+Item(id=1, stamp=2) ['id 1', 'id 2']
+Item(id=3, stamp=7) ['arg stamp', 'id 3']
+Record(n=1, a=['a'], b=['b'], c=['c'], d=['d'], m=2) ['arg n', 'arg m', 'a', 'b', 'c', 'd', 'post_init']
+Record(n=1, a=['á'], b=['b'], c=['ç'], d=['d'], m=0) ['arg n', 'b', 'd', 'post_init']
+Extended(n=3, a=['a'], b=['b'], c=['c'], d=['δ'], m=0, e=['e'], f=['f']) ['arg n', 'a', 'b', 'c', 'e', 'f', 'post_init']
+Extended(n=4, a=['a'], b=['b'], c=['c'], d=['δ'], m=0, e=['e'], f=['f']) ['arg replace n', 'b', 'e', 'post_init']
+Manual(id=4, stamp=0) ['arg super', 'id 4']
+1 ['x', 'y'] {2} 0
+[exit 0]
