@@ -140,7 +140,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "set" or name == "frozenset":
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
-        self.err(f"{name}() is supported as the argument of list(), tuple(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
+        self.err(f"{name}() is supported as the argument of list(), tuple() (with scalar or optional scalar items), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), which take its items at once; elsewhere use a list comprehension")
     if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
     if name == "format" and 1 <= len(args) <= 2 and len([a for a in args if a.kind == "kw"]) == 0:
@@ -507,7 +507,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "list" and is_dict(t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(t)[0]]))
     elif name == "range" or name == "enumerate" or name == "zip" or name == "reversed":
-        self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), tuple(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod() or str.join()")
+        tuple_use = "tuple(), " if name == "range" else "tuple() (with scalar or optional scalar items), " if name == "reversed" else ""
+        self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), {tuple_use}sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod() or str.join()")
     if name in self.gtypes or name in self.ltype:
         self.err(f"'{name}' is not callable")
     if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:

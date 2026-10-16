@@ -33,8 +33,12 @@ optional elements copies its slots rather than reinterpreting numeric bits as po
 Runtime-length tuples currently do not support slicing, concatenation, repetition,
 membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
-expression or `range`/`map`/`filter`/`reversed`/`enumerate`/`zip` call, not yet other
-iterables. This enables the existing `re.Match.groups()` implementation
+expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
+`bool`, `str` or optional versions of those types. Direct `enumerate` and `zip`
+produce tuple-valued items, which runtime-length tuples cannot hold. Project a scalar
+first, for example `tuple(value for index, value in enumerate("ab"))` or
+`tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Other iterable
+objects are not yet supported. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
