@@ -56,8 +56,10 @@ from src.pystachy_compiler.specs import (
     NOCALL,
     PYBUILTINS,
     TYPING,
+    VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, has_kind, mk, names_in
+from src.pystachy_compiler.utils import int_fits
 
 
 class Loader:
@@ -1488,7 +1490,9 @@ class Loader:
         # the constant that e is, if it is sys.version_info, a slice, an item or an attribute of it
         # (also, unless own, a literal int or str, or a tuple of those): its items, ints in decimal
         # and strs after a "'", after a "(" for a tuple; [] for anything else
-        v = ["(", "3", "13", "16", "'final", "0"]  # (specs.VERSIONINFO)
+        v = ["("]
+        for c in VERSIONINFO.values():
+            v.append(c[:-1] if c.startswith("'") else c)
         if self.is_version(m, e, scope):
             return v
         b = e.kids[0] if e.kind == "attr" or e.kind == "index" or e.kind == "slice" else e
@@ -1512,9 +1516,9 @@ class Loader:
             return []
         if own:
             return []
-        if e.kind == "int" and e.s.isdigit():
+        if e.kind == "int" and e.s.isdigit() and int_fits(e.s):
             return [str(int(e.s))]
-        if e.kind == "unary" and e.s == "-" and e.kids[0].kind == "int" and e.kids[0].s.isdigit():
+        if e.kind == "unary" and e.s == "-" and e.kids[0].kind == "int" and e.kids[0].s.isdigit() and int_fits(e.kids[0].s):
             return [str(-int(e.kids[0].s))]
         if e.kind == "str":
             return ["'" + e.s]
@@ -1547,7 +1551,7 @@ class Loader:
         if i < len(x) and i < len(y):
             if x[i].startswith("'") != y[i].startswith("'"):
                 return -1 if op != "==" and op != "!=" else 1 if op == "!=" else 0
-            c = (1 if x[i] > y[i] else -1) if x[i].startswith("'") else int(x[i]) - int(y[i])
+            c = (1 if x[i] > y[i] else -1) if x[i].startswith("'") else 1 if int(x[i]) > int(y[i]) else -1
         r = c < 0 if op == "<" else c <= 0 if op == "<=" else c > 0 if op == ">" else c >= 0 if op == ">=" else c == 0 if op == "==" else c != 0
         return 1 if r else 0
 

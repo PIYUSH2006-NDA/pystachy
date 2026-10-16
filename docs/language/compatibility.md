@@ -203,7 +203,8 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
 
 - `sys.version_info` is a tuple of its items, CPython 3.13.16's: comparisons, indexing,
   slicing and unpacking work as on CPython's, and its attributes are read as
-  `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`.
+  `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`,
+  and each read makes a new tuple (`sys.version_info is sys.version_info` is `False`).
 
 - A module without a docstring that binds `__doc__` itself, where the first statement that
   names `__doc__` is a `def` or `class`, has no `__doc__` until its code binds it: a function's
