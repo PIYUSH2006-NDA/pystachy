@@ -1693,6 +1693,11 @@ class Parser:
             self.fail("f-string: expecting '}'", self.fline(line, j))
         if selfdoc and conv == "" and not colon:
             conv = "r"
+        if e.kind == "dict" and len(e.kids) == 0 and (conv != "" or (spec.kind == "str" and spec.s == "")):
+            # an empty dict display (whose type Pystachy does not infer) as the text that str(),
+            # repr(), ascii() and format() with an empty spec give: f"{x:{{}}}" opens such a field
+            e = mk("str", "{}", line, [])
+            conv = ""
         if conv != "":
             fn = "__pys_repr" if conv == "r" else ("__pys_str" if conv == "s" else "__pys_ascii")
             e = mk("call", "", line, [mk("name", fn, line, []), e])
