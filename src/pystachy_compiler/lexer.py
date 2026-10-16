@@ -711,4 +711,32 @@ def string_end(s: str, i: int) -> int:
     return lx.i
 
 
+def debug_text(s: str) -> str:
+    # the text that a self-documenting f-string field prints, whose source (to its '!', ':' or
+    # '}') is s, as CPython 3.13's tokenizer gives it (set_fstring_expr): without comments, which
+    # it finds by taking each quote for the start or end of a string (but one after a backslash),
+    # so that a '#' in a triple-quoted string or in a nested f-string that reuses its quote can
+    # start one
+    out: list[str] = []
+    q = ""
+    k = 0
+    while k < len(s):
+        c = s[k]
+        if c == "\\":
+            out.append(s[k : k + 2])
+            k += 2
+            continue
+        if (c == "'" or c == '"') and q == "":
+            q = c
+        elif c == q:
+            q = ""
+        elif c == "#" and q == "":
+            e = s.find("\n", k)
+            k = len(s) if e < 0 else e  # (the newline stays)
+            continue
+        out.append(c)
+        k += 1
+    return "".join(out)
+
+
 # ---------------------------------------------------------------- parser

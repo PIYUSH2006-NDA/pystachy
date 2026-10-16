@@ -81,11 +81,6 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   early, CPython 3.13 keeps its read-ahead across a write, so the next `read()` returns the
   text from before the write.
 
-- The text a debug field (`f"{expr=}"`) prints is its expression as written, without its
-  comments. CPython 3.13 also takes a `#` after a quote inside a triple-quoted string, or inside
-  a nested f-string that reuses its quote, for a comment, and drops the text from there with
-  the `=`: `f"{'''a'#'''=}"` prints `'''a'#'''="a'#"`, where CPython prints `'''a'"a'#"`.
-
 ### Containers and evaluation order
 
 - `dict.keys()`, `.values()` and `.items()` return list snapshots, so `enumerate()`, `zip()`

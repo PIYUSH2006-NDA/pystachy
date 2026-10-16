@@ -1,7 +1,7 @@
 """Parser component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import CPYSTACK, MAXNEST, TOODEEP, fail
-from src.pystachy_compiler.lexer import ESCAPES, Lexer, Tok, string_end, utf8
+from src.pystachy_compiler.lexer import ESCAPES, Lexer, Tok, debug_text, string_end, utf8
 from src.pystachy_compiler.scope import Symtable
 from src.pystachy_compiler.syntax import (
     AUGOPS,
@@ -1587,10 +1587,12 @@ class Parser:
         ran = j >= len(s)  # (to the end of an f-string cut short, see cut())
         text = "".join(code)
         src = text.rstrip()
+        while src.endswith("\\"):
+            src = src[:-1].rstrip()  # (a line continuation)
         selfdoc = src.endswith("=") and not (src.endswith("==") or src.endswith("!=") or src.endswith("<=") or src.endswith(">="))
         if selfdoc:
             # f"{x=}" prints the expression's text, then its value
-            n.kids.append(mk("str", text, line, []))
+            n.kids.append(mk("str", debug_text(s[i:j]), line, []))
             src = src[:-1]
         # (the line of the expression's first token: a comment holds no newline)
         eline = self.fline(line, i) + text[: len(text) - len(text.lstrip())].count("\n")
