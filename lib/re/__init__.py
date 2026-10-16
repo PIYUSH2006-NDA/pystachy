@@ -73,42 +73,53 @@ def _charat(s: str, i: int) -> str:
 _last = ""
 _last_codes: list[int] = []
 _last_offs: list[int] = []  # (the index in the str of each code point, and its length; [] for ASCII)
+_last_limit = 0  # greatest requested index covered, including a character at/after it if present
 _decoded = 0  # the code points decoded so far (tests/deviations/lib_re_decoding.py counts them)
 
 
-def _codes(string: str) -> list[int]:
-    # string's code points, decoded once for the string matched last (as parsy matches one string
-    # at many positions); _offs then has the index of each in the str, or is [] if those are theirs.
+def _codes(string: str, limit: int) -> list[int]:
+    # Cache the last subject's code points through limit; its decoded prefix grows geometrically.
+    # _last_offs has the index of each in the str, or is [] if those are theirs.
     # An operation keeps what it gets (its State's s and offs): what a function it calls matches,
     # which decodes another string, is no reason to decode its own again
-    global _last, _last_codes, _last_offs, _decoded
-    if string is _last and len(string) == len(_last):
-        return _last_codes
+    global _last, _last_codes, _last_offs, _last_limit, _decoded
+    n = len(string)
+    if string is _last and n == len(_last):
+        if limit <= _last_limit:
+            return _last_codes
+        # Growing bounds must not repeatedly decode almost the same prefix. Replace the lists
+        # rather than extending them: a nested regex call must leave its caller's State intact.
+        limit = min(n, max(limit, 2 * _last_limit + 1))
+    # Keep the prefix for lookbehind and word/line anchors. Include the character at the next
+    # boundary too: for pos > endpos, multiline $ can inspect it. In UTF-8 the character that
+    # contains limit and the next one together need at most seven bytes starting at limit.
+    stop = min(n, limit + (7 if _UTF8 else 1))
+    source = string if stop == n else string[:stop]
     codes: list[int] = []
     offs: list[int] = []
     if not _UTF8:
-        for c in string:
+        for c in source:
             codes.append(ord(c))
     else:
-        n = len(string)
-        bs = [ord(c) for c in string]
+        bs = [ord(c) for c in source]
         ascii = True
         for b in bs:
             if b >= 128:
                 ascii = False
                 break
         if ascii:
-            codes = bs
+            codes = bs if len(bs) <= limit + 1 else bs[:limit + 1]
         else:
             i = 0
-            while i < n:
+            while i < len(bs):
+                last = i >= limit
                 b = bs[i]
                 k = 1
                 cp = b
                 if b >= 0xC2 and b < 0xF5:
                     k = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
                     cp = b & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
-                    if i + k > n:
+                    if i + k > len(bs):
                         k = 1
                     else:
                         for j in range(1, k):
@@ -121,10 +132,13 @@ def _codes(string: str) -> list[int]:
                 offs.append(i)
                 codes.append(cp)
                 i += k
-            offs.append(n)
+                if last:
+                    break
+            offs.append(i)
     _last = string
     _last_codes = codes
     _last_offs = offs
+    _last_limit = limit
     _decoded += len(codes)
     return codes
 
@@ -1788,7 +1802,7 @@ class Pattern:
         n = len(string)
         pos = 0 if pos < 0 else n if pos > n else pos
         endpos = 0 if endpos < 0 else n if endpos > n else endpos
-        codes = _codes(string)
+        codes = _codes(string, max(pos, endpos))
         offs = _last_offs
         st = _sre.State(codes, _to_char(offs, pos), _to_char_floor(offs, endpos), self.groups)
         st.charset_offsets = self._charset_offsets
@@ -2196,7 +2210,7 @@ def compile(pattern, flags: int = 0) -> Pattern:
 
 def purge() -> None:
     "Clear the regular expression caches"
-    global _last, _last_codes, _last_offs
+    global _last, _last_codes, _last_offs, _last_limit
     _cache.clear()
     _tcache.clear()
     # Active operations own these lists too (a sub() callback can call purge()). Drop the
@@ -2204,6 +2218,7 @@ def purge() -> None:
     _last = ""
     _last_codes = []
     _last_offs = []
+    _last_limit = 0
 
 
 def escape(pattern: str) -> str:
