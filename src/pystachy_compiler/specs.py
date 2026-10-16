@@ -40,7 +40,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
     CBUILTIN[_k] = True
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
-STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs"}
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -640,7 +640,8 @@ RUNTIME: dict[str, str] = {
     "bytes.slice": "bytes:S,int,int|A|", "bytes.slice_step": "bytes:S,int,int,int|R A|", "bytes.has": "bool:str,int|R|",
     "bytes.contains": "bool:str,str|R|", "bytes.decode": "str:str,str,str|R A|", "str.encode": "str:str,str,str|R A|",
     "unicode_error_str": "str:int,str,str,int,int,str|R A|",
-    "bytes.hex": "str:str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
+    "bytes.hex": "str:str|R A|", "bytes.hex_sep": "str:str,str,int,int|R A|", "bytes.maketrans": "str:str,str|R A|",
+    "bytes.translate": "str:str,str,str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
     "bytes.zeros": "str:int|R A|", "bytes.join": "str:str,list[str]|R A rL|", "bytes.split": "list[str]:str,str,int|R A|",
     "bytes.rsplit": "list[str]:str,str,int|R A|", "bytes.strip": "str:str,str|R A|", "bytes.lstrip": "str:str,str|R A|",
     "bytes.rstrip": "str:str,str|R A|", "bytes.startswith": "bool:str,str,int,int|R|", "bytes.endswith": "bool:str,str,int,int|R|",
@@ -708,7 +709,7 @@ RUNTIME: dict[str, str] = {
     "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
     "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
-    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|I rF wF|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
+    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams
     "write": "None:str,int|R I rF wF|", "input": "str:str|R A I rF wF|", "open": "file:str,str,str,str,int|R A I rF|", "std": "file:int||",
     "file.read": "str:S,int|R A I rF wF|", "file.readline": "str:S|R A I rF wF|", "file.readlines": "list[str]:S|R A I rF wF|",

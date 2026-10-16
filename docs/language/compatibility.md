@@ -682,11 +682,10 @@ supported alternatives.
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
-- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `bytes.translate()`,
-  `maketrans()`, `expandtabs()`, `title()` and `istitle()`, the separator arguments of
-  `bytes.hex()`, `%` formatting of bytes
-  (`b"%d" % 1`), a search of a bytes for an int (`b.find(97)`), keyword arguments to its methods
-  (as to a str's), and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
+- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `expandtabs()`, `title()` and
+  `istitle()`, `%` formatting of bytes (`b"%d" % 1`), a search of a bytes for an int
+  (`b.find(97)`), keyword arguments to its methods (as to a str's) but `hex()`'s and
+  `translate()`'s, and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
 - `str.format()` and `str.format_map()` of a format string other than a literal or a module
   global bound once to one (`fmt.format(x)` of a parameter, also of an f-string; a global whose
   name anything else in the program binds, even a function's local), either method or

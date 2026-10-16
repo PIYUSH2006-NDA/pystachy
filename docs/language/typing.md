@@ -23,10 +23,12 @@ unsupported forms, see [compatibility](compatibility.md).
 
 A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
 bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
-`bytes(s, encoding[, errors])`), `bytes.fromhex(s)` and
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)`, `bytes.maketrans(frm, to)` and
 `s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
 `+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
-printing work as in CPython. The methods are `decode`, `hex`, `join`, `split`, `rsplit`,
+printing work as in CPython. The methods are `decode`, `hex` (also with `sep` and
+`bytes_per_sep`, by position or name), `translate` (with a table or `None`, and `delete`, by
+position or name), `join`, `split`, `rsplit`,
 `splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
 `startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
 `removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
