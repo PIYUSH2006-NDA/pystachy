@@ -655,6 +655,18 @@ def all_imports(body: list[Node], out: list[str]) -> None:
                 all_imports(kid.kids[1].kids, out)
 
 
+def imports_user(n: Node) -> bool:
+    # does code n (also in its functions and classes) import a module that is not builtin, whose
+    # code, or that of the modules it imports, may run there
+    for a in n.kids if n.kind == "import" else n.kids[:0]:
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
+            return True
+    for k in n.kids:
+        if imports_user(k):
+            return True
+    return False
+
+
 def top_imports(body: list[Node]) -> list[str]:
     # the user modules that module-level code (body, not its functions) imports
     out: list[str] = []
@@ -987,6 +999,15 @@ def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False
     for d in inner:
         if d.kind == "def":
             global_assigns(d.kids[2].kids, out, imports)
+
+
+def fn_globals(n: Node, out: dict[str, bool]) -> None:
+    # the names of the module that the functions code n defines anywhere (in its blocks, classes
+    # and functions too) assign, also by an import, declared global (global_assigns())
+    if n.kind == "def":
+        global_assigns(n.kids[2].kids, out, True)
+    for k in n.kids:
+        fn_globals(k, out)
 
 
 def scope_globals(body: list[Node], out: dict[str, int]) -> None:

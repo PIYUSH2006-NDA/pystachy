@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
-PYBUILTINS: dict[str, bool] = {}
+PYBUILTINS: dict[str, bool] = {}  # dir(builtins) of CPython 3.13, but the module dunders (MODNAMES)
 for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExceptionGroup BlockingIOError BrokenPipeError "
            "BufferError BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError "
            "ConnectionResetError DeprecationWarning EOFError Ellipsis EncodingWarning EnvironmentError Exception ExceptionGroup "
@@ -14,7 +14,7 @@ for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExce
            "ReferenceError ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError "
            "SyntaxWarning SystemError SystemExit TabError TimeoutError True TypeError UnboundLocalError UnicodeDecodeError "
            "UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning "
-           "ZeroDivisionError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
+           "ZeroDivisionError _IncompleteInputError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
            "compile complex copyright credits delattr dict dir divmod enumerate eval exec exit filter float format frozenset "
            "getattr globals hasattr hash help hex id input int isinstance issubclass iter len license list locals map max "
            "memoryview min next object oct open ord pow print property quit range repr reversed round set setattr slice "
