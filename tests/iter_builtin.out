@@ -1,0 +1,45 @@
+1 True
+x 2
+x 3
+[4] -1 []
+-2 []
+1
+[2, 3, 4, 5, 6] True False
+True [5, 6]
+[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+[(1, 2), (3, 4), (5, 6)]
+é ü ß
+h e llo ?
+1 [2, 3] []
+5 [6]
+a ['b'] []
+1 2 0
+('a', 1) [('b', 2)]
+RuntimeError: dictionary changed size during iteration
+RuntimeError again: dictionary changed size during iteration
+0
+1
+RuntimeError: dictionary keys changed during iteration
+[] -1
+[1] -1
+7 None
+RuntimeError: Set changed size during iteration
+[4]
+10 [7, 4, 1] []
+10 [] 3
+[9223372036854775806]
+ValueError: range() arg 3 must not be zero
+p ['q', 'r']
+[3, 4] 3 [3, 4]
+p
+q
+r
+[(1, 2), (3, 4), (5, 5)] [('a', 'b'), ('c', 'c')]
+10 20
+ValueError: too many values to unpack (expected 2)
+empty
+True 'first\n'
+line 'third\n'
+['fourth'] 'eof' None
+ValueError: I/O operation on closed file.
+[exit 1]

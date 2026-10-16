@@ -5,7 +5,7 @@ CPython 3.13.16: the same reads, writes, seeks, newline translation and errors, 
 (lib/README.md). Positions and sizes count a str's bytes past ASCII, as len() and slicing do.
 """
 
-from typing import Iterator
+from typing import Self
 
 __all__ = ["StringIO", "SEEK_SET", "SEEK_CUR", "SEEK_END"]
 
@@ -167,11 +167,15 @@ class StringIO:
                 break
         return lines
 
-    def __iter__(self) -> Iterator[str]:
-        # the lines from the position on, read when the loop starts (an iterator class, which
-        # would read each line as the loop asks for it, is not supported)
+    def __iter__(self) -> Self:
         self._check_base()
-        return iter(self.readlines())
+        return self
+
+    def __next__(self) -> str:
+        line = self.readline()
+        if line == "":
+            raise StopIteration
+        return line
 
     def tell(self) -> int:
         """Tell the current file position."""

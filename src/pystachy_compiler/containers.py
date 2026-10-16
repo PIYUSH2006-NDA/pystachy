@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Ins, IterArg, SetArg, Val
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.specs import OPTTYPES
+from src.pystachy_compiler.specs import ITERS, OPTTYPES
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
     bool_for_int,
@@ -706,7 +706,8 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
         r = self.call_fn(ms[m], [v], [])
     else:
         # object.__repr__: <__main__.Name object at 0x...>, <module.Name object at 0x...>
-        qn = shown(v.t) if "$" in v.t and not v.t.startswith("__main__$") else "__main__." + short(v.t)
+        # (<list_iterator object at 0x...> of a builtin type's, whose module is builtins)
+        qn = short(v.t) if v.t.startswith(ITERS + "$") else shown(v.t) if "$" in v.t and not v.t.startswith("__main__$") else "__main__." + short(v.t)
         r = Val(self.rt("pys_default_repr", "ptr", [f"ptr {self.sconst(qn)}", f"ptr {v.v}"]), "str")
     e2 = self.cur
     self.br(l3)

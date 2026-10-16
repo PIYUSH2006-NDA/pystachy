@@ -239,10 +239,8 @@ class deque(Generic[_T]):
     def __contains__(self, x: _T) -> bool:
         return self._find(x, 0, len(self)) >= 0
 
-    def __iter__(self) -> Iterator[_T]:
-        # the items when the loop starts (an iterator class, which CPython's deque has, is not
-        # supported: a loop does not see the deque change)
-        return iter(self._items())
+    def __iter__(self):
+        return _deque_iterator(self)
 
     def __reversed__(self) -> Iterator[_T]:
         """Return a reverse iterator over the deque."""
@@ -1241,3 +1239,23 @@ class Counter(Generic[_T]):
 def _count(item: tuple[_T, int]) -> int:
     # (operator.itemgetter(1), most_common's key)
     return item[1]
+class _deque_iterator:
+    def __init__(self, source):
+        self._source = source
+        self._state: int = source._state
+        self._index = 0
+        self._remaining: int = len(source)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._source._state != self._state:
+            self._remaining = 0
+            raise RuntimeError("deque mutated during iteration")
+        if self._remaining == 0:
+            raise StopIteration
+        value = self._source[self._index]
+        self._index += 1
+        self._remaining -= 1
+        return value

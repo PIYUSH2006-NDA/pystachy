@@ -35,11 +35,11 @@ Runtime-length tuples currently do not support concatenation, repetition,
 membership, dictionary keys, or set elements. Their annotation is distinct
 from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
 expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
-`bool`, `str` or optional versions of those types. Direct `enumerate` and `zip`
-produce tuple-valued items, which runtime-length tuples cannot hold. Project a scalar
-first, for example `tuple(value for index, value in enumerate("ab"))` or
-`tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Other iterable
-objects are not yet supported. This enables the existing `re.Match.groups()` implementation
+`bool`, `str` or optional versions of those types, and the objects of iterator classes.
+Direct `enumerate` and `zip` produce tuple-valued items, which runtime-length tuples cannot
+hold. Project a scalar first, for example `tuple(value for index, value in enumerate("ab"))`
+or `tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Generators are not yet
+supported. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
@@ -404,7 +404,9 @@ boxing and dispatch have costs, so no performance improvement is claimed.
 
 A module-level function with an unannotated parameter is a template, compiled once for
 each argument type combination that calls it. Annotated parameters keep their declared
-types; the first value-returning statement determines an inferred return type.
+types; the first value-returning statement determines an inferred return type. An
+`Iterator[T]` or `Iterable[T]` annotation counts as none, an iterator's type being its class
+([iterators](semantics.md#iterators)).
 An ordinary function or method with fully annotated parameters, including one with no
 arguments, uses the same inference when it has no return annotation and returns a value.
 Its recursive calls can retain the existing `None` signature; value-returning recursion
@@ -513,7 +515,8 @@ The annotation preserves the individual values' types; it does not convert integ
 ## Class templates and generic classes
 
 A class specializes when its `__init__` has an unannotated parameter, variadic parameters,
-or a parameter or constructed field using another class template. Calls whose fields have
+a parameter or constructed field using another class template, an `Iterator[T]` or
+`Iterable[T]` parameter, or an `iter()` call. Calls whose fields have
 the same types share a specialization: `Box(1)` and `Box(2)` share one, while `Box("s")`
 uses another. Methods compile when needed; non-template special methods compile when the
 specialization is created.
@@ -558,17 +561,18 @@ annotations; its body reads the module's ([a deviation](compatibility.md#functio
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), `Callable[[A, *Ts], R]`,
 a generic class's `C[K, V]`, and unions of these. Iterable matching uses the item type of a
-supported list, set, dict, string or homogeneous tuple, or of an object's supported
-`__iter__`; an empty tuple binds nothing. `C[K, V]` matches an object of a specialization of
-`C`. In a union such as `Iterable[tuple[K, V]] | dict[K, V]`, the first member that fits
-binds, trying `Iterable[...]` members last; a named specialization types such a parameter as
-its first member. A direct `None` argument binds no type variable on its own. Repeated
-bindings must preserve the values' types: mixed `int` and `bool` constructor arguments can use
-the direct-scalar union fallback below, but do not implicitly join to `int`. Callable
-matching uses annotated positional parameters and returns, or an existing `Callable`
-signature. A lambda, a builtin such as `int` or `list`, or an unannotated function binds
-nothing; where the other arguments or the context bind its `Callable`'s type variables,
-it is passed as that `Callable`, also to a field that `__init__` assigns it to unannotated.
+supported list, set, dict, string or homogeneous tuple, or of an object's iterator (what its
+`__next__` returns, or the items of its supported `__iter__`); an empty tuple binds nothing.
+`C[K, V]` matches an object of a specialization of `C`. In a union such as
+`Iterable[tuple[K, V]] | dict[K, V]`, the first member that fits binds, trying
+`Iterable[...]` members last; a named specialization types such a parameter as its first
+member. A direct `None` argument binds no type variable on its own. Repeated bindings must
+preserve the values' types: mixed `int` and `bool` constructor arguments can use the
+direct-scalar union fallback below, but do not implicitly join to `int`. Callable matching
+uses annotated positional parameters and returns, or an existing `Callable` signature. A
+lambda, a builtin such as `int` or `list`, or an unannotated function binds nothing; where
+the other arguments or the context bind its `Callable`'s type variables, it is passed as that
+`Callable`, also to a field that `__init__` assigns it to unannotated.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 `Callable[[*Ts], R]` and `*args: *Ts`. This supports the function wrappers used by

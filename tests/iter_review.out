@@ -1,0 +1,19 @@
+10 30
+True 0 one 4
+two three end
+one
+I/O operation on closed file
+True one two three end
+one ['two']
+True 0 ['a', 'b'] 1
+['cd', 'e'] 3
+unexpected end of data 4
+['end']
+['a', 'b'] 1
+[['c', 'd'], ['e', 'f']]
+1
+7
+1 -1
+deque mutated during iteration
+deque mutated during iteration
+[exit 0]

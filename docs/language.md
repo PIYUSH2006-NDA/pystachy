@@ -153,12 +153,12 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
 | Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join` |
+| Iterators | Classes with `__iter__` and `__next__`; `iter()` and `next()` values that share their position |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
 Generator expressions consumed this way do not provide general generator objects. Functions
-using `yield` and standalone iterators with `__next__` are not supported. See
-[execution rules](language/semantics.md) for consumer restrictions, evaluation order and
-protocols.
+using `yield` are not supported. See [execution rules](language/semantics.md) for consumer
+restrictions, evaluation order, protocols and [iterators](language/semantics.md#iterators).
 
 <a id="exception-classes"></a>
 

@@ -1517,8 +1517,12 @@ def gen_assign(self, t: Node, v: Val) -> None:
         for i in range(len(fs)):
             self.assign(t.kids[i], self.getfield(v, self.field(v, fs[i]), fs[i]))
     elif k == "tuple" and v.t in self.classes:
-        # a, b = o: what o's __iter__ steps through
-        self.assign(t, self.obj_iter(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object"))
+        # a, b = o: what o's __iter__ steps through, or the items its iterator object gives
+        it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+        if is_list(it.t):
+            self.assign(t, it)
+        else:
+            self.unpack_next(t, it)
     elif k == "tuple":
         if not is_tuple(v.t) or len(targs(v.t)) != len(t.kids):
             self.err(f"cannot unpack {v.t} into {len(t.kids)} targets")
@@ -1664,5 +1668,39 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
             items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {at}"]), elem(xs.t)))
     for i in range(len(t.kids)):
         self.assign(star if i == s else t.kids[i], items[i])
+def gen_unpack_next(self, t: Node, it: Val) -> None:
+    # a, b = o of an object whose __iter__ returns iterator object it: an item from __next__ for
+    # each target, then one more call, which must raise StopIteration (else there are too many
+    # values); CPython takes them all before it stores the first
+    n = len(t.kids)
+    c = self.stop_catch()
+    got = self.alloca("int", "")
+    items: list[Val] = []
+    for i in range(n + 1):
+        self.mstore('int', str(i), got)
+        v = self.next_in(it, c)
+        self.place(self.label())
+        if i == n:
+            self.raise_("ValueError", self.sconst(f"too many values to unpack (expected {n})"))
+        elif v.t == "None":
+            items.append(v)
+        else:
+            # (in a slot: the landing block, where they are stored, follows every call)
+            sl = self.alloca(v.t, "")
+            self.mstore(v.t, v.v, sl)
+            items.append(Val(sl, v.t))
+    stop = self.label()
+    self.stop_landing(c, stop)
+    self.place(stop)
+    g = Val(self.mload('int', got), "int")
+    few = self.label()
+    ok = self.label()
+    self.cbr(self.num_cmp('<', g, Val(str(n), "int")).v, few, ok)
+    self.place(few)
+    msg = self.cat(self.cat(Val(self.sconst(f"not enough values to unpack (expected {n}, got "), "str"), self.to_str(g)), Val(self.sconst(")"), "str"))
+    self.raise_("ValueError", msg.v)
+    self.place(ok)
+    for i in range(n):
+        self.assign(t.kids[i], items[i] if items[i].t == "None" else Val(self.mload(items[i].t, items[i].v), items[i].t))
 
 # ---- functions and the module

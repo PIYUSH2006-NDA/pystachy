@@ -247,6 +247,19 @@ class Try:
         self.exit = ""  # where the normal path goes on: the copy of its finally block starts there
 
 
+class StopCatch:
+    # The handler of the StopIteration that a loop's __next__ calls (or next(it, default)'s)
+    # raise at the end of the items (Gen.stop_catch): the try's mark and the exception being
+    # handled, taken before the first call, the slot its landing block stores the exception in,
+    # that block's label, and its try's shape (whose body is the first call's block)
+    def __init__(self, mark: Val, old: str, slot: str, landing: str):
+        self.mark = mark
+        self.old = old
+        self.slot = slot
+        self.landing = landing
+        self.tr = Try("")
+
+
 class IFn:
     # one compiled function: a function, a method, a module's code, a helper or a template's function
     def __init__(self, f: FnInfo):

@@ -14,6 +14,7 @@ from src.pystachy_compiler.specs import (
     EXCINIT,
     FROZENERR,
     IOPS,
+    ITERS,
     METHODS,
     MODFUNCS,
     OPTTYPES,
@@ -31,7 +32,7 @@ from src.pystachy_compiler.specs import (
     exc_derives,
     is_excname,
 )
-from src.pystachy_compiler.syntax import Node, has_kind, has_value_return, mentions, mk
+from src.pystachy_compiler.syntax import Node, has_kind, has_value_return, mentions, mk, other_return
 from src.pystachy_compiler.utils import (
     clone,
     elem,
@@ -961,7 +962,12 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.generic = True  # (-> Box: what it returns is one of the class's specializations)
     if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
         f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
-    if d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
+    # an __iter__ annotated -> Iterator[T] (or Iterable[T]) that returns something other than
+    # iter(x), its own object or another iterator object: its return is inferred, as an
+    # unannotated one's is (an iterator class's __next__ gives the items)
+    selfiter = cls != "" and d.s == "__iter__" and d.kids[1].kind != "noann" and self.iter_item(d.kids[1]) is not None and other_return(d.kids[2])
+    protocol = cls != "" and (d.s == "__iter__" or d.s == "__next__") and d.kids[1].kind == "noann" and d not in held
+    if ((d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s))) or selfiter or protocol) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
         # The declared parameter types still coerce every call. Reuse return
         # inference even when all parameter types are already concrete.
         # Initializers and other implicit special methods keep their contracts.
@@ -1085,6 +1091,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
     f.bad = bad
     if bad != "" and self.lib:
         f.ret = "None"
+    elif selfiter:
+        f.ret = ""  # (its iterator object's class, decided by its first return)
     elif d.kids[1].kind != "noann" and cls != "" and (d.s == "__iter__" or d.s == "__reversed__") and self.iter_ann(d.kids[1]) != "":
         f.ret = self.iter_ann(d.kids[1])
         f.iters = True
@@ -1708,6 +1716,8 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
             ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods  # (a specialization's are declared after its fields)
             if name not in ci.ftypes and not (name in ms and ms[name].prop):  # (a property's setter takes it)
                 self.exc_attr(ci, name)
+                # (Iterator[T] or Iterable[T] types nothing: the field's is its value's, see tmpl_ann)
+                k = "assign" if k == "annassign" and len(st.kids) == 3 and self.iter_item(st.kids[1]) is not None else k
                 why = self.ann_problem(st.kids[1], False) if k == "annassign" and ci.mod != "" else ""
                 t = "" if why != "" else self.vtype(st.kids[1]) if k == "annassign" else self.guess(st.kids[-1], f)
                 if t.startswith("!"):
@@ -1883,6 +1893,13 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             return "str"
         if c == "open":
             return "file"
+        if c == "iter" and len(e.kids) == 2 and not self.bound(c) and self.compiling:
+            return self.guess_iter(e.kids[1], f)
+        if c == "next" and (len(e.kids) == 2 or len(e.kids) == 3) and not self.bound(c) and self.compiling:
+            # (what the iterator's __next__ returns, or a file's line; with a default, both's)
+            t = unopt(self.guess(e.kids[1], f))
+            r = "str" if t == "file" else self.next_type(t) if self.is_iterator(t) else ""
+            return r if r == "" or len(e.kids) == 2 else self.join(r, self.guess(e.kids[2], f))
     if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s in self.classes:
         ms = self.classes[e.kids[0].kids[0].s].methods  # C.m(...): a static or class method
         return ms[e.kids[0].s].ret if e.kids[0].s in ms and ms[e.kids[0].s].deco != "" else ""
@@ -1928,6 +1945,43 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if e.s == "*" and (is_list(b) or b == "str") and (a == "int" or a == "bool"):
             return b
     return ""
+
+def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
+    # the type of iter(a) (guess, see iter_): a file itself, an object's iterator object, or the
+    # specialization of lib/_pystachy_iterators.py's class for a builtin container
+    if a.kind == "call" and a.kids[0].kind == "name" and a.kids[0].s == "range" and not self.bound("range"):
+        c = ITERS + "$range_iterator"
+        return self.specialize(c, ["int", "int", "int"], {}, False) if c in self.tmpl else ""
+    m = a.kids[0].s if a.kind == "call" and len(a.kids) == 1 and a.kids[0].kind == "attr" else ""
+    t = unopt(self.guess(a.kids[0].kids[0] if m == "keys" or m == "values" or m == "items" else a, f))
+    name = ""
+    if t.startswith("!") or t == "file":
+        return t
+    if is_dict(t) and (m == "keys" or m == "values" or m == "items"):
+        name = "dict_keyiterator" if m == "keys" else "dict_valueiterator" if m == "values" else "dict_itemiterator"
+    elif m == "keys" or m == "values" or m == "items":
+        return ""
+    elif t in self.classes and t not in self.nts and "__iter__" in self.classes[t].methods:
+        it = self.classes[t].methods["__iter__"]
+        if it.iters and it.bad == "":
+            name = "list_iterator"
+            t = it.ret
+        else:
+            r = self.instance(it, [t], []).ret if it.bad == "" and it.generic and it.ret == "" else it.ret
+            return r if it.bad == "" and self.is_iterator(r) else ""
+    elif is_list(t):
+        name = "list_iterator"
+    elif t == "str":
+        name = "str_ascii_iterator"
+    elif is_tuple(t) and t != "tuple[]" and len([x for x in targs(t) if x != targs(t)[0]]) == 0:
+        name = "tuple_iterator"
+        t = self.ctype("list", [targs(t)[0]])
+    elif is_dict(t):
+        name = "dict_keyiterator"
+    elif is_set(t):
+        name = "set_iterator"
+    c = ITERS + "$" + name
+    return self.specialize(c, [t], {}, False) if name != "" and c in self.tmpl else ""
 
 def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
     if name == "__class__" and (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")):
