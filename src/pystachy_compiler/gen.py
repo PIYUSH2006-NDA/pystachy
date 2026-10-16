@@ -77,6 +77,7 @@ from src.pystachy_compiler.builtins import (
     gen_reduce_item as builtins_reduce_item,
     gen_reverse_arg as builtins_reverse_arg,
     gen_bytes_ as builtins_bytes_,
+    gen_bytes_method as builtins_bytes_method,
     gen_reverse_val as builtins_reverse_val,
     gen_stream_start as builtins_stream_start,
     gen_update as builtins_update,
@@ -2604,6 +2605,9 @@ class Gen:
 
     def reverse_arg(self, n: Node, name: str) -> str:
         return builtins_reverse_arg(self, n, name)
+
+    def bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        return builtins_bytes_method(self, o, m, args)
 
     def bytes_(self, args: list[Node]) -> Val:
         return builtins_bytes_(self, args)
