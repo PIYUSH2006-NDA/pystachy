@@ -124,6 +124,85 @@ def fuzz_str():
         same("zfill", outcome(rt.pys_str_zfill, b(z), width), ("ok", b(z.zfill(width))), (z, width))
 
 
+BYTES = b"ab AB-+0\t\n\r\x0b\x0c\x1c\x85_.,lL\x80\xa0\xc3\xa9\xe2\x82\xac\xed\xa0\xf0\xff"
+
+
+def bt(s):
+    # the Pystachy str of a bytes: a character per byte
+    return s.decode("latin-1")
+
+
+def bref(f):
+    # CPython's outcome, its bytes (and those in a list or tuple) as Pystachy strs, a str as the
+    # UTF-8 a Pystachy str holds (surrogates too), a bool as an int
+    r = outcome(f)
+    v = r[1]
+    if isinstance(v, bytes):
+        v = bt(v)
+    elif isinstance(v, (list, tuple)) and all(isinstance(x, bytes) for x in v):
+        v = type(v)(bt(x) for x in v)
+    elif isinstance(v, str) and r[0] == "ok":
+        v = v.encode("utf-8", "surrogatepass").decode("latin-1")
+    elif isinstance(v, bool):
+        v = int(v)
+    return (r[0], v)
+
+
+def data(n=12):
+    alpha = b"ab" if R.randrange(3) == 0 else BYTES
+    return bytes(R.choice(alpha) for _ in range(R.randrange(n + 1)))
+
+
+def fuzz_bytes():
+    # runtime.py's bytes operations against CPython's bytes methods and codecs
+    for _ in range(N):
+        s = data()
+        n = data(3)
+        st, en = idx(), idx()
+        for name in "find rfind index rindex count startswith endswith".split():
+            same("bytes." + name, outcome(getattr(rt, "pys_bytes_" + name), bt(s), bt(n), st, en), bref(lambda: getattr(s, name)(n, st, en)), (s, n, st, en))
+        same("bytes.contains", outcome(rt.pys_bytes_contains, bt(s), bt(n)), bref(lambda: n in s), (s, n))
+        x = R.choice([0, 97, 255, 256, -1, R.randrange(256)])
+        same("bytes.has", outcome(rt.pys_bytes_has, bt(s), x), bref(lambda: x in s), (s, x))
+        r = data(3)
+        same("bytes.replace", outcome(rt.pys_bytes_replace, bt(s), bt(n), bt(r)), bref(lambda: s.replace(n, r)), (s, n, r))
+        k = R.choice([-1, 0, 1, 2])
+        same("bytes.replace_count", outcome(rt.pys_bytes_replace_count, bt(s), bt(n), bt(r), k), bref(lambda: s.replace(n, r, k)), (s, n, r, k))
+        cs = R.choice([None, data(3)])
+        for name in "strip lstrip rstrip".split():
+            same("bytes." + name, outcome(getattr(rt, "pys_bytes_" + name), bt(s), None if cs is None else bt(cs)), bref(lambda: getattr(s, name)(cs)), (s, cs))
+        for name in "isdigit isalpha isalnum isspace isupper islower isascii upper lower swapcase capitalize hex".split():
+            same("bytes." + name, outcome(getattr(rt, "pys_bytes_" + name), bt(s)), bref(getattr(s, name)), (s,))
+        sep = R.choice([None, None, data(2)])
+        m = R.choice([-1, -1, 0, 1, 2, 5])
+        same("bytes.split", outcome(rt.pys_bytes_split, bt(s), None if sep is None else bt(sep), m), bref(lambda: s.split(sep, m)), (s, sep, m))
+        same("bytes.rsplit", outcome(rt.pys_bytes_rsplit, bt(s), None if sep is None else bt(sep), m), bref(lambda: s.rsplit(sep, m)), (s, sep, m))
+        keep = R.randrange(2)
+        same("bytes.splitlines", outcome(rt.pys_bytes_splitlines, bt(s), keep), bref(lambda: s.splitlines(bool(keep))), (s, keep))
+        for name in "partition rpartition removeprefix removesuffix".split():
+            same("bytes." + name, outcome(getattr(rt, "pys_bytes_" + name), bt(s), bt(n)), bref(lambda: getattr(s, name)(n)), (s, n))
+        parts = [data(4) for _ in range(R.randrange(4))]
+        same("bytes.join", outcome(rt.pys_bytes_join, bt(n), [bt(p) for p in parts]), bref(lambda: n.join(parts)), (n, parts))
+        width = R.randrange(-2, 16)
+        fill = R.choice([None, data(1) or b"*", b"ab"])
+        for name in "ljust rjust center".split():
+            same("bytes." + name, outcome(getattr(rt, "pys_bytes_" + name), bt(s), width, None if fill is None else bt(fill)),
+                 bref(lambda: getattr(s, name)(width) if fill is None else getattr(s, name)(width, fill)), (s, width, fill))
+        z = R.choice([b"", b"+", b"-"]) + s
+        same("bytes.zfill", outcome(rt.pys_bytes_zfill, bt(z), width), bref(lambda: z.zfill(width)), (z, width))
+        h = "".join(R.choice("0123456789abcdefABCDEF  \tgx") for _ in range(R.randrange(9)))
+        same("bytes.fromhex", outcome(rt.pys_bytes_fromhex, h), bref(lambda: bytes.fromhex(h)), (h,))
+        xs = [R.choice([0, 65, 255, 256, -1, R.randrange(256)]) for _ in range(R.randrange(4))]
+        same("bytes.from_list", outcome(rt.pys_bytes_from_list, xs), bref(lambda: bytes(xs)), (xs,))
+        c = R.choice([-1, 0, 3])
+        same("bytes.zeros", outcome(rt.pys_bytes_zeros, c), bref(lambda: bytes(c)), (c,))
+        enc = R.choice(["utf-8", "UTF8", "latin-1", "iso-8859-1", "ascii", "us-ascii", "nope"])
+        errs = R.choice(["strict", "replace", "ignore", "backslashreplace", "surrogateescape", "surrogatepass", "xmlcharrefreplace", "nope"])
+        same("bytes.decode", outcome(rt.pys_bytes_decode, bt(s), enc, errs), bref(lambda: s.decode(enc, errs)), (s, enc, errs))
+        t = "".join(R.choice("aé€\U0001d11e \udc80\udcff\ud800") for _ in range(R.randrange(6)))
+        same("str.encode", outcome(rt.pys_str_encode, t.encode("utf-8", "surrogatepass").decode("latin-1"), enc, errs), bref(lambda: t.encode(enc, errs)), (t, enc, errs))
+
+
 def num():
     k = R.randrange(4)
     if k == 0:
@@ -330,6 +409,7 @@ def fuzz_search():
 
 
 fuzz_str()
+fuzz_bytes()
 fuzz_search()
 fuzz_math()
 fuzz_hash()

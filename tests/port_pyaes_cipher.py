@@ -5,7 +5,7 @@
 # 0..255 (up to the edges of a 64-bit int), a key changed after use, counter mode and
 # Telethon's AES-IGE built on the cipher, and the errors for wrong key and block sizes.
 # One program, as each AOT build of pyaes's tables takes seconds.
-# The key is a list of ints here, where upstream takes bytes (Pystachy has no bytes yet).
+# The key is a list of ints here, where upstream takes bytes (ports/pyaes predates Pystachy's bytes).
 import pyaes
 from pyaes import AES
 

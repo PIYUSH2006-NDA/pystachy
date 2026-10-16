@@ -1522,6 +1522,8 @@ def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
         return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0])]
     if s.t == "str":
         return [Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str")]
+    if s.t == "bytes":
+        return [Val(self.rt("pys_bytes_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), "int")]
     if s.t == "file":
         return [Val(j, "str")]
     if is_set(s.t):
@@ -1544,7 +1546,7 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         made.st.append("")
         made.used.append("")
         return
-    if not (s.t == "str" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+    if not (s.t == "str" or s.t == "bytes" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
     if s.t == "file":
         made.st.append("")

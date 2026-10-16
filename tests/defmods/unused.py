@@ -37,9 +37,9 @@ def later(cb=lambda v: v, x=note("later")):
     return cb(x)
 
 
-def raw(data: bytes = note("raw")) -> int:
-    # a function Pystachy cannot compile (bytes), whose default still runs now
-    return len(data)
+def raw(data: complex = note("raw")) -> int:
+    # a function Pystachy cannot compile (complex), whose default still runs now
+    return int(data.real)
 
 
 class Point:
