@@ -1,7 +1,7 @@
 # An append in place (#112) must not change a str that anything else holds: every read of the
 # local but len() lets the str escape, and the next append copies it. Aliases, s += s, reads in
 # the loop (print, comparisons, slicing, strip, f-strings, dict keys, sets, calls that keep it),
-# closures, comprehensions, rebinding, and operands that are no str.
+# closures, comprehensions, rebinding, stores while s owns its str, and operands that are no str.
 kept: list[str] = []
 
 
@@ -166,6 +166,37 @@ def rebinding() -> None:
     print(s)
 
 
+def stores() -> None:
+    # stores to s while it owns its str: for targets and unpacking must clear the flag
+    lst = ["one" + str(i) for i in range(3)]
+    s = ""
+    s += "a"
+    for s in lst:
+        s += "!"
+    print(lst, s)
+    s += "b"
+    for i, s in enumerate(lst):
+        s += "?"
+    print(lst, s, i)
+    s += "c"
+    for s, n in zip(lst, [1, 2]):
+        s += "#"
+    print(lst, s, n)
+    pair = ("left" + str(n), 3)
+    s += "d"
+    s, n = pair
+    s += "!"
+    print(pair, s, n)
+    s += "e"
+    s, *rest = lst
+    s += "!"
+    print(lst, s, rest)
+    s += "f"
+    *rest, s = lst
+    s += "!"
+    print(lst, s, rest)
+
+
 def walrus() -> None:
     s = "w"
     s += "1"
@@ -207,6 +238,7 @@ caller()
 closure()
 comprehension()
 rebinding()
+stores()
 walrus()
 print(through(4))
 params()

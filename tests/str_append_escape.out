@@ -25,6 +25,12 @@ two! fresh? xyz
 back.
 caught ValueError
 after!
+['one0', 'one1', 'one2'] one2!
+['one0', 'one1', 'one2'] one2? 2
+['one0', 'one1', 'one2'] one1# 2
+('left2', 3) left2! 3
+['one0', 'one1', 'one2'] one0! ['one1', 'one2']
+['one0', 'one1', 'one2'] one2! ['one0', 'one1']
 w1w1 w1
 w1w12 w1
 ['t.', 't.-.', 't.-.-.', 't.-.-.-.']

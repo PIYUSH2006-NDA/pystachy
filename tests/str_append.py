@@ -1,6 +1,7 @@
 # s += t and s = s + t of a str local append in place to a str that only the local holds (#112):
 # appending in a loop is linear. Loops, both branches, try statements, a parameter or a constant
-# as the first value, and strs past the allocator's largest size class (8200 bytes).
+# as the first value, strs kept between appends as they grow through size classes and past the
+# allocator's largest (8200 bytes), where a copy leaves room.
 
 
 def build(n: int) -> str:
@@ -86,6 +87,16 @@ def until(limit: int) -> str:
     return s
 
 
+def around(start: int, n: int) -> list[str]:
+    out: list[str] = []
+    s = "a" * start
+    for i in range(n):
+        s += str(i % 10) * 3
+        if i % 4 == 3:
+            out.append(s)
+    return out
+
+
 b = build(2000)
 print(len(b), checksum(b), b[:30], b[-15:])
 print(plus(25))
@@ -100,3 +111,5 @@ print(len(g), checksum(g), g[8190:8215], g[-20:])
 print(until(30), len(until(20000)))
 lines = [build(i) for i in range(4)]
 print(lines)
+print([(len(x), x[-7:]) for x in around(240, 40)])
+print([(len(x), x[-7:]) for x in around(8170, 40)])

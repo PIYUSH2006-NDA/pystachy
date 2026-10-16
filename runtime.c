@@ -540,15 +540,18 @@ Str *pys_str_add(Str *a, Str *b) {
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
 }
 /* s += t of a str local (Gen.str_append). owned: an append made s and nothing else holds it (nor
-   hashed it: dict_hash is 0), so t goes into s's own memory while it has room. Else a new str, with
-   room for as much again where s was owned: appending in a loop is linear, as CPython's resizing in
-   place of a str that one reference holds makes it, and a single append takes no more memory */
+   hashed it: dict_hash is 0), so t goes into s's own memory while it has room. Else a new str of
+   the size needed, which a small object's slot rounds up. Each copy of an owned str then takes a
+   larger size class, and past 136 bytes they grow by a seventh to a quarter: appending in a loop is
+   linear, as CPython's resizing in place of a str that one reference holds makes it, and a str that
+   appends build and a program keeps takes no more memory. A large object has no slack, so an owned
+   one's copy gets room for as much again */
 Str *pys_str_iadd(Str *s, Str *t, I owned) {
-  I n = s->len + t->len;
-  if (owned && (I)sizeof(Str) + n + 1 <= gc_room(s)) {
+  I n = s->len + t->len, m = (I)sizeof(Str) + n + 1;
+  if (owned && m <= gc_room(s)) {
     memcpy(s->s + s->len, t->s, t->len); s->s[n] = 0; s->len = n; return s;
   }
-  Str *r = pys_alloc_atomic(sizeof(Str) + (owned ? 2 * n : n) + 1);
+  Str *r = pys_alloc_atomic(owned && m >= SMALL ? m + n : m);
   r->len = n; memcpy(r->s, s->s, s->len); memcpy(r->s + s->len, t->s, t->len); return r;
 }
 /* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
