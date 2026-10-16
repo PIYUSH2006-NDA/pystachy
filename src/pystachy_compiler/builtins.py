@@ -348,7 +348,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         # dict(zip(ks, vs)), dict(enumerate(xs)), dict((k, v) for ...), dict([(k, v), ...]): a new
         # dict of the pairs (taken at once, as list() takes them)
         pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want else ""
-        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft))
+        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft), want)
     if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
         # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
@@ -638,7 +638,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
     elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
-        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
+        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v, want)
     elif name == "dict" and is_dict(t):
         # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c),
         # comparing keys hashed by their class (key_fx)
@@ -1823,14 +1823,18 @@ def gen_prod_item(self, s: Val, item: Val) -> Val:
     self.raise_("TypeError", self.sconst(bad))
     return s
 
-def gen_dict_pairs(self, v: Val) -> Val:
+def gen_dict_pairs(self, v: Val, want: str) -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
-    # PyDict_MergeFromSeq2 inserts them
+    # PyDict_MergeFromSeq2 inserts them. Of tuples of another length, an item is CPython's
+    # ValueError and an empty list makes an empty dict: of the dict type wanted, or else, as it
+    # is always empty, dict[int, int] (as gen_load_name takes such a dict)
     et = elem(v.t) if is_list(v.t) else ""
-    if is_tuple(et) and len(targs(et)) != 2:
-        self.err(f"dictionary update sequence element #0 has length {len(targs(et))}; 2 is required (dict() of a {typestr(v.t)})")
     if not is_tuple(et):
         self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
+    if len(targs(et)) != 2:
+        self.guard(self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v, f"ValueError: dictionary update sequence element #0 has length {len(targs(et))}; 2 is required")
+        t = unopt(want) if is_dict(unopt(want)) and "?" not in want else self.ctype("dict", ["int", "int"])
+        return Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(targs(t)[0])}", "i64 0"]), t)
     kv = targs(et)
     if self.key_problem(kv[0]) != "":
         self.err(self.key_problem(kv[0]))

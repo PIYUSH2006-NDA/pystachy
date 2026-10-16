@@ -2614,8 +2614,8 @@ class Gen:
     def tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         return builtins_tmethod(self, o, m, args)
 
-    def dict_pairs(self, v: Val) -> Val:
-        return builtins_dict_pairs(self, v)
+    def dict_pairs(self, v: Val, want: str) -> Val:
+        return builtins_dict_pairs(self, v, want)
 
     def isclose(self, args: list[Node]) -> Val:
         return builtins_isclose(self, args)
