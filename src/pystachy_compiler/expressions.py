@@ -957,6 +957,8 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str, resultso
     ci = self.class_ready(cn)
     if m not in ci.methods and m in ci.fdefault and cn.s not in self.nts:
         return self.obj_call(self.class_attr(cn, m), args, want, resultsoft)  # (C.k(args) of a class attribute k)
+    if m not in ci.methods and m == "register" and self.abc_class(cn.s):
+        self.err(f"{short(cn.s)}.register() is not supported: isinstance() and issubclass() of an ABC are decided by the class statements, so no class can become a virtual subclass")
     if m not in ci.methods:
         self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
     f = ci.methods[m]

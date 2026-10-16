@@ -18,7 +18,8 @@ Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A pr
 CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
 For `binascii` and `_codecs`, Pystachy loads its ports of those C modules,
 `lib/_pystachy_binascii.py` and `lib/_pystachy_codecs.py` ([library
-reference](../../lib/compatibility.md#binascii)).
+reference](../../lib/compatibility.md#binascii)), and for `abc`, which CPython imports as it
+starts, `lib/_pystachy_abc.py` ([abc](../../lib/compatibility.md#abc)).
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's
