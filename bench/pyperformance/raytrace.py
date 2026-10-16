@@ -12,6 +12,11 @@ From http://www.lshift.net/blog/2008/10/29/toy-raytracer-in-python
 import math
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 DEFAULT_WIDTH = 100
@@ -373,7 +378,7 @@ class CheckerboardSurface(SimpleSurface):
 
 def bench_raytrace(loops, width, height, filename):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for i in range_it:
         canvas = Canvas(width, height)
@@ -391,11 +396,12 @@ def bench_raytrace(loops, width, height, filename):
                     CheckerboardSurface())
         s.render(canvas)
 
-    # dt = pyperf.perf_counter() - t0  # Pystachy port: (see above)
+    dt = time.perf_counter() - t0  # Pystachy port: (see above)
 
     # Pystachy port: the image is not written (no bytes or binary files)
     # if filename:
     #     canvas.write_ppm(filename)
+    TIMED.append(dt)  # Pystachy port: the seconds, which upstream returns
     return sum(canvas.bytes)  # Pystachy port: a checksum of the image
 
 
@@ -411,11 +417,9 @@ if __name__ == "__main__":
     # number of loops, argv[2] and argv[3] the width and height; a checksum of the
     # image is printed, and the time goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     width = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_WIDTH
     height = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_HEIGHT
-    t0 = time.perf_counter()
     result = bench_raytrace(loops, width, height, None)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("raytrace", loops, width, height, result)

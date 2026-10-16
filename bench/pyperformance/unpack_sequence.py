@@ -1,11 +1,16 @@
 """Microbenchmark for Python's sequence unpacking."""
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 def do_unpacking(loops, to_unpack):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         # 400 unpackings
@@ -410,7 +415,8 @@ def do_unpacking(loops, to_unpack):
         a, b, c, d, e, f, g, h, i, j = to_unpack
         a, b, c, d, e, f, g, h, i, j = to_unpack
 
-    # Pystachy port: the values, for the checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    # Pystachy port: the values, for the checksum
     return a + b + c + d + e + f + g + h + i + j
 
 
@@ -443,9 +449,7 @@ if __name__ == "__main__":
     # ten items is not supported, so bench_tuple_unpacking() and bench_all() are
     # left uncompiled.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    t0 = time.perf_counter()
     result = bench_list_unpacking(loops)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("unpack_sequence", loops, result)

@@ -11,6 +11,11 @@ Source: https://github.com/slowfrog/hexiom : hexiom2.py, level36.txt
 import io
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 # 2016-07-07: CPython 3.6 takes ~25 ms to solve the board level 25
 DEFAULT_LEVEL = 25
@@ -632,7 +637,7 @@ def main(loops, level):
     expected = solution.rstrip()
 
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         stream = io.StringIO()
@@ -640,14 +645,15 @@ def main(loops, level):
         output = stream.getvalue()
         stream = None
 
-    # dt = pyperf.perf_counter() - t0  # Pystachy port: (see above)
+    dt = time.perf_counter() - t0  # Pystachy port: (see above)
 
     output = '\n'.join(line.rstrip() for line in output.splitlines())
     if output != expected:
         raise AssertionError("got a wrong answer:\n%s\nexpected: %s"
                              % (output, expected))
 
-    return output  # Pystachy port: the solution, for the checksum; the main times the loops
+    TIMED.append(dt)  # Pystachy port: the seconds, which upstream returns
+    return output  # Pystachy port: the solution, for the checksum
 
 
 def add_cmdline_args(cmd, args):
@@ -659,11 +665,9 @@ if __name__ == "__main__":
     # number of loops, argv[2] the level; the solution is printed, and the time
     # goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     level = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_LEVEL
-    t0 = time.perf_counter()
     result = main(loops, level)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("hexiom", loops, level)
     print(result)

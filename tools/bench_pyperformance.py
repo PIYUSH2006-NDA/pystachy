@@ -1,12 +1,14 @@
 """Ported pyperformance 1.14.0 benchmarks; see bench/pyperformance/README.md.
 
 The controller runs on CPython. Each benchmark is an adapted upstream file whose main prints
-deterministic results to stdout and the seconds of its timed part to stderr. Every JIT and
-AOT run must print exactly what CPython printed, or the run fails. Timings are advisory:
-there are no thresholds. --census reads the pinned sdist, replaces each upstream file's
-pyperf runner with a direct call of its benchmark, and reports the first compiler error.
+deterministic results to stdout and, to stderr, the seconds of the part that pyperf would time
+(TIMED_PART). Every JIT and AOT run must print exactly what CPython printed, or the run fails.
+Timings are advisory: there are no thresholds. --census reads the pinned sdist, replaces each
+upstream file's pyperf runner with a direct call of its benchmark, reports the first compiler
+error, and checks each port's notes and timed part against the upstream file.
 """
 import argparse
+import ast
 import difflib
 import hashlib
 import json
@@ -131,6 +133,33 @@ CENSUS_CALLS = {
     "unpack_sequence": "bench_all(1)",
 }
 
+# What pyperf times in each ported benchmark, which --census reads from the upstream main: the
+# function that runner.bench_func() calls, whose calls the port's main times in one loop; or the
+# functions that time themselves for runner.bench_time_func(), each around one loop. The ports
+# keep those timers in place with time.perf_counter(), which is pyperf.perf_counter(), and add
+# their seconds to a list TIMED, whose sum the main prints.
+TIMED_PART = {
+    "barnes_hut": ["bench_quadtree_nbody"],
+    "chaos": "create_image_chaos",
+    "deltablue": "delta_blue",
+    "fannkuch": "fannkuch",
+    "float": "benchmark",
+    "go": "versus_cpu",
+    "hexiom": ["main"],
+    "meteor_contest": ["bench_meteor_contest"],
+    "nbody": ["bench_nbody"],
+    "nqueens": "bench_n_queens",
+    "raytrace": ["bench_raytrace"],
+    "regex_dna": ["bench_regex_dna"],
+    "regex_effbot": ["bench_regex_effbot"],
+    "regex_v8": ["bench_regex_v8"],
+    "richards": "run",
+    "richards_super": "run",
+    "scimark": ["SparseCompRow_matmult", "bench_FFT", "bench_LU", "bench_MonteCarlo", "bench_SOR"],
+    "spectral_norm": ["bench_spectral_norm"],
+    "unpack_sequence": ["do_unpacking"],
+}
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -172,6 +201,72 @@ def unmarked_hunks(upstream, port):
     return out
 
 
+def called(node):
+    """The names of the functions and methods that NODE calls."""
+    return {n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+            for n in ast.walk(node) if isinstance(n, ast.Call)}
+
+
+def timers(tree, clock):
+    """{function: (timer statements, statements between the first and the last)} for each function
+    whose body calls CLOCK.perf_counter()."""
+    out = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            marks = [i for i, s in enumerate(node.body) if f"{clock}.perf_counter()" in ast.unparse(s)]
+            if marks:
+                out[node.name] = (len(marks), node.body[marks[0] + 1:marks[-1]])
+    return out
+
+
+def upstream_timed_part(text):
+    """TIMED_PART's entry for an upstream file, and what keeps its timers from fitting the rule."""
+    tree = ast.parse(text)
+    targets = {ast.unparse(n.args[1]).split(".")[-1] for n in ast.walk(tree) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute) and n.func.attr == "bench_func" and len(n.args) > 1}
+    own = timers(tree, "pyperf")
+    problems = [f"{name}(): its timer is not around one loop" for name, (count, between) in sorted(own.items())
+                if count != 2 or len(between) != 1 or not isinstance(between[0], ast.For)]
+    if targets and own or len(targets) > 1:
+        problems.append("both bench_func() and its own timers, or several bench_func() targets")
+    return (min(targets) if targets else sorted(own)), problems
+
+
+def timing_errors(name, text):
+    """How port NAME's printed seconds differ from what pyperf times (TIMED_PART); empty if not."""
+    spec, tree, errors = TIMED_PART[name], ast.parse(text), []
+    own = timers(tree, "time")
+    value, region = None, None
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        for k, stmt in enumerate(body if isinstance(body, list) else []):
+            if isinstance(stmt, ast.Expr) and ast.unparse(stmt).startswith("print('seconds', "):
+                value = ast.unparse(stmt.value.args[1])
+                starts = [i for i in range(k) if ast.unparse(body[i]) == "t0 = time.perf_counter()"]
+                region = body[starts[-1] + 1:k] if starts else None
+    if isinstance(spec, str):
+        if own:
+            errors.append(f"functions with their own timer: {', '.join(sorted(own))}")
+        if value != "time.perf_counter() - t0" or region is None:
+            errors.append("the main does not print the seconds since its t0 = time.perf_counter()")
+        elif len(region) != 1 or not isinstance(region[0], ast.For) or len(region[0].body) != 1:
+            errors.append("the main times more than one loop of one statement")
+        elif spec not in called(region[0].body[0]):
+            errors.append(f"the main's timed loop does not call {spec}()")
+    else:
+        if sorted(own) != sorted(spec):
+            errors.append(f"functions with their own timer: {', '.join(sorted(own)) or 'none'}; "
+                          f"expected {', '.join(spec)}")
+        for function, (count, between) in sorted(own.items()):
+            if count != 2 or len(between) != 1 or not isinstance(between[0], ast.For):
+                errors.append(f"{function}(): the timer is not around one loop")
+        if value != "sum(TIMED)" or region is not None:
+            errors.append("the main does not print sum(TIMED), without a timer of its own")
+        if "TIMED.append(" not in text:
+            errors.append("no function adds its seconds to TIMED")
+    return errors
+
+
 def census(args, compiler, env):
     data = Path(args.census).read_bytes()
     if digest(data) != SDIST_SHA256:
@@ -193,7 +288,12 @@ def census(args, compiler, env):
                    "first_error": first_error(output) if result.returncode else "",
                    "returncode": result.returncode}
             if name in BENCHMARKS:
-                row["unmarked_hunks"] = unmarked_hunks(source, (BENCH / f"{name}.py").read_text())
+                port = (BENCH / f"{name}.py").read_text()
+                row["unmarked_hunks"] = unmarked_hunks(source, port)
+                spec, problems = upstream_timed_part(source)
+                if spec != TIMED_PART[name]:
+                    problems.append(f"pyperf times {spec}, not {TIMED_PART[name]} (TIMED_PART)")
+                row["timing"] = problems + timing_errors(name, port)
             rows.append(row)
     print("| Benchmark | Status | First compiler error of the upstream file |")
     print("|---|---|---|")
@@ -202,6 +302,7 @@ def census(args, compiler, env):
         print(f"| `{row['name']}` | {'ported' if row['ported'] else 'blocked'} | `{error}` |")
     failures = [f"{r['name']}: hunks without a 'Pystachy port' note at lines {', '.join(r['unmarked_hunks'])}"
                 for r in rows if r.get("unmarked_hunks")]
+    failures += [f"{r['name']}: {problem}" for r in rows for problem in r.get("timing", [])]
     for failure in failures:
         print(failure, file=sys.stderr)
     return {"sdist_sha256": SDIST_SHA256, "benchmarks": rows}, not failures

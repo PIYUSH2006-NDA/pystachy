@@ -19,6 +19,11 @@ import bisect
 import re
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 # Pystachy port: there are no bytes or bytearray: the sequence is a str (ASCII), the
@@ -191,16 +196,17 @@ def run_benchmarks(seq):
 
 def bench_regex_dna(loops, seq, expected_res):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for i in range_it:
         res = run_benchmarks(seq)
 
-    # dt = pyperf.perf_counter() - t0  # Pystachy port: (see above)
+    dt = time.perf_counter() - t0  # Pystachy port: (see above)
     if (expected_res is not None) and (res != expected_res):
         raise Exception("run_benchmarks() error")
 
-    return res  # Pystachy port: the results, for the checksum; the main times the loops
+    TIMED.append(dt)  # Pystachy port: the seconds, which upstream returns
+    return res  # Pystachy port: the results, for the checksum
 
 
 def add_cmdline_args(cmd, args):
@@ -213,7 +219,6 @@ if __name__ == '__main__':
     # number of loops, argv[2] the fasta length; the results are printed, and the
     # time of the loops goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     fasta_length = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_INIT_LEN
     expected_len: int | None = None
@@ -227,7 +232,6 @@ if __name__ == '__main__':
     if (expected_len is not None) and (len(seq) != expected_len):
         raise Exception("init_benchmarks() error")
 
-    t0 = time.perf_counter()
     result = bench_regex_dna(loops, seq, expected_res)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("regex_dna", loops, fasta_length, result)

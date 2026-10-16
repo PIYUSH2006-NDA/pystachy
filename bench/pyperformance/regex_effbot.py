@@ -16,6 +16,11 @@ import re
 
 # Local imports
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 USE_BYTES = False
 
@@ -141,7 +146,7 @@ def bench_regex_effbot(loops):
 
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
     search = re.search
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         # Runs all of the benchmarks for a given value of n.
@@ -158,7 +163,8 @@ def bench_regex_effbot(loops):
             search(regex, string)
             search(regex, string)
 
-    # Pystachy port: the match positions, for the checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    # Pystachy port: the match positions, for the checksum
     total = 0
     for regex, string in data:
         m = search(regex, string)
@@ -181,9 +187,7 @@ if __name__ == '__main__':
     # number of loops; a checksum of the matches is printed, and the time goes to
     # stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    t0 = time.perf_counter()
     result = bench_regex_effbot(loops)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("regex_effbot", loops, result)

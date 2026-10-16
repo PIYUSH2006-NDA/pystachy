@@ -40,6 +40,48 @@ class CensusTests(unittest.TestCase):
         self.assertEqual(bench.unmarked_hunks(upstream, main), [])
 
 
+class TimingTests(unittest.TestCase):
+    """The seconds a port prints are for what pyperf would time (TIMED_PART)."""
+
+    def port(self, name):
+        return (bench.BENCH / f"{name}.py").read_text()
+
+    def test_every_port_times_what_pyperf_times(self):
+        self.assertEqual(set(bench.TIMED_PART), set(bench.BENCHMARKS))
+        for name in sorted(bench.BENCHMARKS):
+            with self.subTest(name=name):
+                self.assertEqual(bench.timing_errors(name, self.port(name)), [])
+
+    def test_work_inside_a_functions_timer_is_reported(self):
+        # regex_v8's checksum belongs after the timed loops, as upstream times only the blocks
+        text = self.port("regex_v8")
+        stop = "    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns\n"
+        self.assertIn(stop, text)
+        moved = text.replace(stop, "").replace("    return total\n", stop + "    return total\n")
+        self.assertEqual(bench.timing_errors("regex_v8", moved), ["bench_regex_v8(): the timer is not around one loop"])
+        self.assertIn("the main does not print sum(TIMED), without a timer of its own",
+                      bench.timing_errors("regex_v8", text.replace("sum(TIMED)", "time.perf_counter() - t0")))
+
+    def test_setup_inside_the_mains_timer_is_reported(self):
+        # chaos builds its game once, outside the timed loop, as upstream's runner does
+        text = self.port("chaos")
+        setup = "    chaos = main()\n    t0 = time.perf_counter()\n"
+        self.assertIn(setup, text)
+        timed = text.replace(setup, "    t0 = time.perf_counter()\n    chaos = main()\n")
+        self.assertEqual(bench.timing_errors("chaos", timed), ["the main times more than one loop of one statement"])
+        other = text.replace("im = chaos.create_image_chaos(", "im = chaos.create_image(")
+        self.assertEqual(bench.timing_errors("chaos", other), ["the main's timed loop does not call create_image_chaos()"])
+
+    def test_upstream_timed_part(self):
+        time_func = CensusTests.UPSTREAM.replace("    return pyperf", "    for _ in range(loops):\n        pass\n"
+                                                 "    return pyperf")
+        self.assertEqual(bench.upstream_timed_part(time_func), (["bench_x"], []))
+        self.assertEqual(bench.upstream_timed_part(CensusTests.UPSTREAM),
+                         (["bench_x"], ["bench_x(): its timer is not around one loop"]))
+        func = "import pyperf\n\n\ndef f(n):\n    return n\n\n\nrunner = pyperf.Runner()\nrunner.bench_func('f', game.f, 1)\n"
+        self.assertEqual(bench.upstream_timed_part(func), ("f", []))
+
+
 class OutputTests(unittest.TestCase):
     def test_one_nonnegative_seconds_line_is_required(self):
         self.assertEqual(bench.seconds("warning\nseconds 0.25\n"), 0.25)

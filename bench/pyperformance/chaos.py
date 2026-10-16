@@ -262,7 +262,7 @@ class Chaosgame(object):
         return im  # Pystachy port: the image, for the checksum
 
 
-def main(iterations):  # Pystachy port: was main(runner, args)
+def main():  # Pystachy port: was main(runner, args)
     splines = [
         Spline([
             GVector(1.597350, 3.304460, 0.000000),
@@ -287,10 +287,10 @@ def main(iterations):  # Pystachy port: was main(runner, args)
             3, [0, 0, 0, 1, 1, 1])
     ]
 
-    # Pystachy port: one run with the default arguments, without pyperf's runner
+    # Pystachy port: the game with the default thickness, for the main below,
+    # which times its create_image_chaos() as pyperf's runner would
     chaos = Chaosgame(splines, DEFAULT_THICKNESS)
-    return chaos.create_image_chaos(DEFAULT_WIDTH, DEFAULT_HEIGHT, iterations,
-                                    None, DEFAULT_RNG_SEED)
+    return chaos
 
 
 def add_cmdline_args(cmd, args):
@@ -310,8 +310,10 @@ if __name__ == "__main__":
     import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     iterations = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_ITERATIONS
+    chaos = main()
     t0 = time.perf_counter()
     for _ in range(loops):
-        im = main(iterations)
+        im = chaos.create_image_chaos(DEFAULT_WIDTH, DEFAULT_HEIGHT, iterations,
+                                      None, DEFAULT_RNG_SEED)
     print("seconds", time.perf_counter() - t0, file=sys.stderr)
     print("chaos", loops, iterations, sum([sum(column) for column in im]))

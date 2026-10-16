@@ -13,6 +13,11 @@ Concurrency by Jason Stitt
 """
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 DEFAULT_N = 130
@@ -48,7 +53,7 @@ def part_At_times_u(i_u):
 
 def bench_spectral_norm(loops):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         u = [1.0] * DEFAULT_N  # Pystachy port: floats; u keeps its type in the loop
@@ -63,16 +68,15 @@ def bench_spectral_norm(loops):
             vBv += ue * ve
             vv += ve * ve
 
-    return vBv / vv  # Pystachy port: the result, for the checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return vBv / vv  # Pystachy port: the result, for the checksum
 
 
 if __name__ == "__main__":
     # Pystachy port: a deterministic main replaces pyperf.Runner: argv[1] is the
     # number of loops; the result is printed, and the time to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    t0 = time.perf_counter()
     result = bench_spectral_norm(loops)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("spectral_norm", loops, result)

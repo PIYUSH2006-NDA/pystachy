@@ -7,7 +7,12 @@ No visualization, pure Python implementation without dependencies.
 """
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
 import math
+
+TIMED = []  # Pystachy port: (see above)
 
 DEFAULT_ITERATIONS = 100
 DEFAULT_PARTICLES = 200
@@ -342,7 +347,7 @@ def bench_quadtree_nbody(loops, num_particles, iterations, theta):
     initial_energy = calculate_system_energy(particles)
     
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
     
     for _ in range_it:
         # Run simulation for specified iterations
@@ -352,7 +357,8 @@ def bench_quadtree_nbody(loops, num_particles, iterations, theta):
         # Calculate final energy
         final_energy = calculate_system_energy(particles)
     
-    return final_energy  # Pystachy port: the energy, for the checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return final_energy  # Pystachy port: the energy, for the checksum
 
 def add_cmdline_args(cmd, args):
     cmd.extend(("--iterations", str(args.iterations)))
@@ -364,11 +370,9 @@ if __name__ == '__main__':
     # number of loops, argv[2] the simulation steps and argv[3] the particles; the
     # final energy is printed, and the time goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     iterations = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_ITERATIONS
     particles = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_PARTICLES
-    t0 = time.perf_counter()
     result = bench_quadtree_nbody(loops, particles, iterations, DEFAULT_THETA)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("barnes_hut", loops, iterations, particles, result)

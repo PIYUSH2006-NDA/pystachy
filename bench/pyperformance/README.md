@@ -34,8 +34,9 @@ The sources are `pyperformance/data-files/benchmarks/bm_NAME/run_benchmark.py` f
 pyperformance 1.14.0 sdist, `pyperformance-1.14.0.tar.gz`, SHA-256
 `91f74393997b604375ad5b79bf569a24076d70181c076a53abad5383a238a8aa`. Given that sdist,
 `python3 tools/bench_pyperformance.py --census pyperformance-1.14.0.tar.gz` checks these hashes,
-checks that each changed hunk of a port carries a `# Pystachy port:` note, and compiles each
-upstream file with only pyperf's runner replaced, reporting the first compiler error.
+checks that each changed hunk of a port carries a `# Pystachy port:` note and that each port
+times what pyperf times, and compiles each upstream file with only pyperf's runner replaced,
+reporting the first compiler error.
 
 | Benchmark | Upstream SHA-256 | Status |
 |---|---|---|
@@ -85,15 +86,21 @@ pyperformance distributes this Python port under its MIT License. See
 Each edit is marked `# Pystachy port:` in the source. Every port has these changes:
 
 - `import pyperf` is removed. A main that reads the loop count and sizes from `sys.argv`
-  replaces `pyperf.Runner`; it times what the runner would time and prints a checksum.
-- The `pyperf.perf_counter()` calls inside a benchmark function are commented out. Instead of
-  the elapsed time, the function returns its result, or a checksum when it discards its result.
+  replaces `pyperf.Runner` and prints the results, or a checksum.
+- The seconds the main prints are for the part that pyperf would time. Where the runner calls
+  `bench_func()`, the main times a loop of calls of that function and nothing else. Where it
+  calls `bench_time_func()`, each benchmark function keeps its own timer around the same loop,
+  with `time.perf_counter()`, which is `pyperf.perf_counter()`. Instead of returning the
+  seconds, it appends them to a list `TIMED`, whose sum the main prints, and returns its result,
+  or a checksum when it discards its result. `TIMED_PART` in `tools/bench_pyperformance.py`
+  records which function each port times; the unit tests check the ports against it, and
+  `--census` checks it against the upstream files.
 - `range_it = range(loops)` becomes a list: a `range` object is not a value.
 
 | Benchmark | Other adaptations |
 |---|---|
 | `barnes_hut` | Integer zeros that become floats are float literals. Constructors, the particle list and the child nodes are annotated. |
-| `chaos` | A Park–Miller generator replaces `random.seed()` and `randrange()`, so the points differ from upstream. `GVector` has float parameters and defaults; `__rmul__ = __mul__` becomes a method; fields are annotated; loops replace two-clause comprehensions; `length` starts as `0.0`; `x` and `y` are converted to int in one assignment each; an impossible `type()` message is a literal; `main()` runs one game. |
+| `chaos` | A Park–Miller generator replaces `random.seed()` and `randrange()`, so the points differ from upstream. `GVector` has float parameters and defaults; `__rmul__ = __mul__` becomes a method; fields are annotated; loops replace two-clause comprehensions; `length` starts as `0.0`; `x` and `y` are converted to int in one assignment each; an impossible `type()` message is a literal. `main()` returns the game, whose `create_image_chaos()` the main times with the default arguments. |
 | `deltablue` | `OrderedCollection(list)` uses become annotated lists. `super(C, self).__init__()` calls of `object` are commented out, and `Strength` replaces `self.__class__`. `Constraint` declares the methods its subclasses define. `Variable.value` is `int \| float`, and other fields, parameters and recursive methods are annotated. |
 | `fannkuch` | The reversing slice assignment uses a slice, `reverse()` and concatenation. |
 | `float` | `self.x = x = sin(i)` is split so that fields can be annotated, and so are `__init__` and `points`. |
@@ -105,7 +112,7 @@ Each edit is marked `# Pystachy port:` in the source. Every port has these chang
 | `raytrace` | A list replaces `array.array('B')`. `Vector` and `Point` have float coordinates, and the scene uses float literals. Class attributes are declared. Unreachable `Point` and `Vector` results are commented out of `Vector.__add__()` and `Point.__sub__()`. Raising a string becomes the `TypeError` it raises. Keyword parameters replace `**kwargs`, and the image is not written. |
 | `regex_dna` | The sequence is an ASCII `str`, not bytes. The generator builds lists of strings, and the patterns are strings. |
 | `regex_effbot` | A global replaces the function attribute `bench_regex_effbot.data`, and a loop replaces a dict comprehension. The `USE_BYTES` branches, never taken, are commented out. |
-| `regex_v8` | None besides the checksum: each regex's substitution in each string. |
+| `regex_v8` | None besides the checksum, computed after the timed loops because the blocks discard their results: each regex's substitution in each string. |
 | `richards`, `richards_super` | Constructors, fields and the `Task` methods that inference needs are annotated. `BUFSIZE_RANGE` is a list. |
 | `scimark` | Lists replace `array('d')` and `array('i')`. `Random`'s class constants are written out, and fields set by `initialize()` are declared. `ArrayList` no longer derives from `Array2D`, because its rows have a different type; its items are rows, and the inherited methods are copied. `indexes()` returns a list. `Array2D` is passed as `None` because classes are not values, and the `BENCHMARKS` table is replaced by the main. |
 | `spectral_norm` | Accumulators and `u` start as floats. |

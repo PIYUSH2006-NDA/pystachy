@@ -3,6 +3,11 @@
 import math
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 class Array2D(object):
@@ -183,18 +188,19 @@ def SOR_execute(omega, G, cycles, Array):
 
 def bench_SOR(loops, n, cycles, Array):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         G = Array2D(n, n)  # Pystachy port: Array is always Array2D (classes are not values)
         SOR_execute(1.25, G, cycles, Array)
 
-    return sum(G.data)  # Pystachy port: a checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return sum(G.data)  # Pystachy port: a checksum
 
 
 def SparseCompRow_matmult(M, y, val, row, col, x, num_iterations):
     range_it = list(range(num_iterations))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         for r in range(M):
@@ -203,7 +209,8 @@ def SparseCompRow_matmult(M, y, val, row, col, x, num_iterations):
                 sa += x[col[i]] * val[i]
             y[r] = sa
 
-    return sum(y)  # Pystachy port: a checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return sum(y)  # Pystachy port: a checksum
 
 
 def bench_SparseMatMult(cycles, N, nz):
@@ -242,12 +249,13 @@ def MonteCarlo(Num_samples):
 
 def bench_MonteCarlo(loops, Num_samples):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         result = MonteCarlo(Num_samples)  # Pystachy port: the result, for the checksum
 
-    return result  # Pystachy port: a checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return result  # Pystachy port: a checksum
 
 
 def LU_factor(A, pivot):
@@ -291,12 +299,13 @@ def bench_LU(cycles, N):
     lu = ArrayList(N, N)
     pivot = [0] * N  # Pystachy port: a list
     range_it = list(range(cycles))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         LU(lu, A, pivot)
 
-    return sum([sum(row) for row in lu.data]) + sum(pivot)  # Pystachy port: a checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return sum([sum(row) for row in lu.data]) + sum(pivot)  # Pystachy port: a checksum
 
 
 def int_log2(n):
@@ -403,7 +412,7 @@ def bench_FFT(loops, N, cycles):
     twoN = 2 * N
     init_vec = Random(7).RandomVector(twoN)
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         x = copy_vector(init_vec)
@@ -411,7 +420,8 @@ def bench_FFT(loops, N, cycles):
             FFT_transform(twoN, x)
             FFT_inverse(twoN, x)
 
-    return sum(x)  # Pystachy port: a checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return sum(x)  # Pystachy port: a checksum
 
 
 def add_cmdline_args(cmd, args):
@@ -436,13 +446,11 @@ if __name__ == "__main__":
     # number of loops of each benchmark, in BENCHMARKS' sorted order; their
     # checksums are printed, and the time goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    t0 = time.perf_counter()
     fft = bench_FFT(loops, 1024, 50)
     lu = bench_LU(loops, 100)
     monte_carlo = bench_MonteCarlo(loops, 100 * 1000)
     sor = bench_SOR(loops, 100, 10, None)  # (Array2D, see bench_SOR())
     sparse_mat_mult = bench_SparseMatMult(loops, 1000, 50 * 1000)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("scimark", loops, fft, lu, monte_carlo, sor, sparse_mat_mult)

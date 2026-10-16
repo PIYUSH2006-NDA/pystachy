@@ -11,6 +11,11 @@ contributed by Daniel Nanz, 2008-08-21
 from bisect import bisect
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 SOLVE_ARG = 60
@@ -196,7 +201,7 @@ def solve(n, i_min, free, curr_board, pieces_left, solutions, fps, se_nh,
 
 def bench_meteor_contest(loops, board, pieces, solve_arg, fps, se_nh):
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         free = frozenset(range(len(board)))
@@ -206,12 +211,13 @@ def bench_meteor_contest(loops, board, pieces, solve_arg, fps, se_nh):
         solve(solve_arg, 0, free, curr_board, pieces_left,
               solutions, fps, se_nh)
 
-    # dt = pyperf.perf_counter() - t0  # Pystachy port: (see above)
+    dt = time.perf_counter() - t0  # Pystachy port: (see above)
 
     if solutions != SOLUTIONS:
         raise ValueError("unexpected solutions")
 
-    return solutions  # Pystachy port: the solutions, for the checksum; the main times the loops
+    TIMED.append(dt)  # Pystachy port: the seconds, which upstream returns
+    return solutions  # Pystachy port: the solutions, for the checksum
 
 
 def main():
@@ -219,7 +225,6 @@ def main():
     # number of loops; the solutions' count, first and last are printed, and the
     # time of the loops goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
 
     board, cti, pieces = get_puzzle(WIDTH, HEIGHT)
@@ -227,9 +232,8 @@ def main():
     se_nh = get_senh(board, cti)
 
     solve_arg = SOLVE_ARG
-    t0 = time.perf_counter()
     solutions = bench_meteor_contest(loops, board, pieces, solve_arg, fps, se_nh)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("meteor_contest", loops, len(solutions), solutions[0], solutions[-1])
 
 

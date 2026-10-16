@@ -15,6 +15,11 @@ Modified by Tupteq, Fredrik Johansson, and Daniel Nanz.
 """
 
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 __contact__ = "collinwinter@google.com (Collin Winter)"
 DEFAULT_ITERATIONS = 20000
@@ -125,14 +130,15 @@ def bench_nbody(loops, reference, iterations):
     offset_momentum(BODIES[reference])
 
     range_it = list(range(loops))  # Pystachy port: a list; a range is not a value
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
 
     for _ in range_it:
         report_energy()
         advance(0.01, iterations)
         report_energy()
 
-    return report_energy()  # Pystachy port: the energy, for the checksum; the main times the loops
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
+    return report_energy()  # Pystachy port: the energy, for the checksum
 
 
 def add_cmdline_args(cmd, args):
@@ -144,10 +150,8 @@ if __name__ == '__main__':
     # number of loops, argv[2] the advance() iterations; the final energy is printed,
     # and the time to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     iterations = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_ITERATIONS
-    t0 = time.perf_counter()
     result = bench_nbody(loops, DEFAULT_REFERENCE, iterations)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("nbody", loops, iterations, result)

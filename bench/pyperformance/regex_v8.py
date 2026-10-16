@@ -44,6 +44,11 @@ import re
 
 # Third party imports
 # Pystachy port: pyperf is not imported; the main below replaces pyperf.Runner.
+# The benchmark times what pyperf would time with time.perf_counter(), which is
+# pyperf.perf_counter(), and appends the seconds to TIMED; the main prints their sum.
+import time
+
+TIMED = []
 
 
 # The precompiled regexs that were in vars in the V8 code, split into
@@ -1766,7 +1771,7 @@ def block11():
 
 
 def bench_regex_v8(loops):
-    # t0 = pyperf.perf_counter()  # Pystachy port: the main times the loops
+    t0 = time.perf_counter()  # Pystachy port: time.perf_counter() is pyperf.perf_counter()
     for loops in range(loops):
         block0()
         block1()
@@ -1780,8 +1785,9 @@ def bench_regex_v8(loops):
         block9()
         block10()
         block11()
+    TIMED.append(time.perf_counter() - t0)  # Pystachy port: the seconds, which upstream returns
     # Pystachy port: the blocks discard their results; a checksum of each regex's
-    # substitution in each string checks them instead (the main times the loops)
+    # substitution in each string checks them instead, after the timed loops
     total = 0
     for i in range(len(regexs)):
         for string in strings:
@@ -1793,9 +1799,7 @@ if __name__ == '__main__':
     # Pystachy port: a deterministic main replaces pyperf.Runner: argv[1] is the
     # number of loops; the checksum is printed, and the time goes to stderr.
     import sys
-    import time
     loops = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    t0 = time.perf_counter()
     result = bench_regex_v8(loops)
-    print("seconds", time.perf_counter() - t0, file=sys.stderr)
+    print("seconds", sum(TIMED), file=sys.stderr)
     print("regex_v8", loops, result)
