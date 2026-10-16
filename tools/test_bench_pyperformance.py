@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import re
+import subprocess
 import sys
 import unittest
 from unittest import mock
@@ -80,6 +81,13 @@ class TimingTests(unittest.TestCase):
                          (["bench_x"], ["bench_x(): its timer is not around one loop"]))
         func = "import pyperf\n\n\ndef f(n):\n    return n\n\n\nrunner = pyperf.Runner()\nrunner.bench_func('f', game.f, 1)\n"
         self.assertEqual(bench.upstream_timed_part(func), ("f", []))
+
+    def test_unpack_sequence_runs_upstreams_default_both_variants(self):
+        # bench_all(): 400 unpackings of a tuple and of a list of 0..9 per loop
+        result = subprocess.run([sys.executable, str(bench.BENCH / "unpack_sequence.py"), "1"],
+                                capture_output=True, text=True, check=True, timeout=60)
+        self.assertEqual(result.stdout, "unpack_sequence 1 90\n")
+        self.assertGreaterEqual(bench.seconds(result.stderr), 0)
 
 
 class OutputTests(unittest.TestCase):

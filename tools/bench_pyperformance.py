@@ -54,7 +54,7 @@ BENCHMARKS = {
     "richards_super": (["20"], ["1"]),
     "scimark": (["2"], ["1"]),
     "spectral_norm": (["10"], ["1"]),
-    "unpack_sequence": (["100000"], ["1"]),
+    "unpack_sequence": (["50000"], ["1"]),
 }
 
 # SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not.

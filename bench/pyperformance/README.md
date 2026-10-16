@@ -116,7 +116,7 @@ Each edit is marked `# Pystachy port:` in the source. Every port has these chang
 | `richards`, `richards_super` | Constructors, fields and the `Task` methods that inference needs are annotated. `BUFSIZE_RANGE` is a list. |
 | `scimark` | Lists replace `array('d')` and `array('i')`. `Random`'s class constants are written out, and fields set by `initialize()` are declared. `ArrayList` no longer derives from `Array2D`, because its rows have a different type; its items are rows, and the inherited methods are copied. `indexes()` returns a list. `Array2D` is passed as `None` because classes are not values, and the `BENCHMARKS` table is replaced by the main. |
 | `spectral_norm` | Accumulators and `u` start as floats. |
-| `unpack_sequence` | Only the list variant runs, because a ten-item tuple is not supported. |
+| `unpack_sequence` | A tuple literal replaces `tuple(range(10))`. The main runs upstream's default, `bench_all()`: the tuple and the list variants. |
 
 The `random` substitutes produce 31-bit values, including `go`'s Zobrist hash strings.
 Results within a benchmark are checked against CPython, not against upstream pyperformance.
