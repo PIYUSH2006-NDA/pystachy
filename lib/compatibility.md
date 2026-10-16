@@ -293,7 +293,19 @@ The comparator accepts two values of one supported type and returns an int.
 Key objects expose writable `obj` and the five comparison methods. Hashing is
 rejected at compile time. The factory is a function rather than CPython's
 `KeyWrapper`, so factory attributes, reflection and pickling are unavailable.
-`partial`, `wraps`, `update_wrapper` and `total_ordering` remain unsupported.
+
+`partial(func, *args, **keywords)` stores a function, bound method, builtin,
+closure or callable object with positional and keyword arguments. A call passes
+the stored positional arguments first, and its own keywords replace stored ones.
+A partial of a partial is flattened, as in CPython: `func`, `args` (a tuple) and
+`keywords` (printing as a dict) hold the merged values. A first argument that is
+not callable raises CPython's `TypeError`. Each call is checked against the
+function's signature where it is compiled, so a wrong call fails compilation
+rather than raising `TypeError`. The attributes can be assigned, unlike C's
+read-only ones; `repr()`, pickling, `__dict__` and `partialmethod` are unsupported.
+
+`wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
+attributes cannot be assigned, and class decorators are not compiled.
 
 ## Textwrap
 

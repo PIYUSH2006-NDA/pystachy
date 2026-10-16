@@ -46,7 +46,7 @@ CPython runs the source.
 | `io` | `Modules/_io/stringio.c` | Typed `StringIO`, with append chunks joined when read |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
-| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction and comparison-key fallbacks |
+| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
