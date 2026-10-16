@@ -2095,7 +2095,12 @@ class Match:
 
 _cache: dict[tuple[str, int], Pattern] = {}
 _MAXCACHE = 512
+# A small FIFO front keeps repeated hits read-only. Its misses refresh the larger cache's
+# insertion order, as CPython's two-level pattern cache does; hot keys survive cold churn.
+_MAXCACHE_FRONT = 256
+_cache_front: dict[tuple[str, int], Pattern] = {}
 _tcache: dict[tuple[str, int, str], Template] = {}
+_tcache_front: dict[tuple[str, int, str], Template] = {}
 
 
 def _compile(pattern, flags: int) -> Pattern:
@@ -2107,21 +2112,30 @@ def _compile(pattern, flags: int) -> Pattern:
     if not isinstance(pattern, str):
         raise TypeError("first argument must be string or compiled pattern")
     key = (pattern, flags)
-    if key in _cache:
-        return _cache[key]
-    p = parse(pattern, flags)
-    code = _code(p, flags)
-    compiled = Pattern(pattern, flags | p.state.flags, code, p.state.groups() - 1, p.state.groupdict)
-    if flags & SRE_FLAG_DEBUG != 0:
-        return compiled
+    if key in _cache_front:
+        return _cache_front[key]
+    compiled = _cache.pop(key, None)
+    if compiled is None:
+        p = parse(pattern, flags)
+        code = _code(p, flags)
+        compiled = Pattern(pattern, flags | p.state.flags, code, p.state.groups() - 1, p.state.groupdict)
+        if flags & SRE_FLAG_DEBUG != 0:
+            return compiled
     if len(_cache) >= _MAXCACHE:
-        # drop the oldest item (the first key)
+        # The first key has gone longest without a front-cache miss refreshing it.
         oldest = key
         for k in _cache:
             oldest = k
             break
         del _cache[oldest]
     _cache[key] = compiled
+    if len(_cache_front) >= _MAXCACHE_FRONT:
+        oldest = key
+        for k in _cache_front:
+            oldest = k
+            break
+        del _cache_front[oldest]
+    _cache_front[key] = compiled
     return compiled
 
 
@@ -2129,9 +2143,11 @@ def _compile_template(pattern: Pattern, repl: str) -> Template:
     # internal: compile replacement pattern
     # Keep the immutable components: a hit needs no formatted or concatenated key string.
     key = (pattern.pattern, pattern.flags, repl)
-    if key in _tcache:
-        return _tcache[key]
-    t = parse_template(repl, pattern)
+    if key in _tcache_front:
+        return _tcache_front[key]
+    t = _tcache.pop(key, None)
+    if t is None:
+        t = parse_template(repl, pattern)
     if len(_tcache) >= _MAXCACHE:
         oldest = key
         for k in _tcache:
@@ -2139,6 +2155,13 @@ def _compile_template(pattern: Pattern, repl: str) -> Template:
             break
         del _tcache[oldest]
     _tcache[key] = t
+    if len(_tcache_front) >= _MAXCACHE_FRONT:
+        oldest = key
+        for k in _tcache_front:
+            oldest = k
+            break
+        del _tcache_front[oldest]
+    _tcache_front[key] = t
     return t
 
 
@@ -2198,7 +2221,9 @@ def purge() -> None:
     "Clear the regular expression caches"
     global _last, _last_codes, _last_offs
     _cache.clear()
+    _cache_front.clear()
     _tcache.clear()
+    _tcache_front.clear()
     # Active operations own these lists too (a sub() callback can call purge()). Drop the
     # cache's references without changing their state or resetting the lifetime work counter.
     _last = ""
