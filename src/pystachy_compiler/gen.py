@@ -52,6 +52,7 @@ from src.pystachy_compiler.builtins import (
     gen_prod_item as builtins_prod_item,
     gen_builtin as builtins_builtin,
     gen_call_key as builtins_call_key,
+    gen_callable_type as builtins_callable_type,
     gen_consume as builtins_consume,
     gen_dotted as builtins_dotted,
     gen_is_mapcall as builtins_is_mapcall,
@@ -88,6 +89,7 @@ from src.pystachy_compiler.calls import (
     gen_dc_replace as calls_dc_replace,
     gen_bound as calls_bound,
     gen_cached_wrapper as calls_cached_wrapper,
+    gen_getattr_name as calls_getattr_name,
     gen_call as calls_call,
     gen_call_cache as calls_call_cache,
     gen_call_callable as calls_call_callable,
@@ -226,6 +228,7 @@ from src.pystachy_compiler.declarations import (
     gen_path_union as declarations_path_union,
     gen_pathlike as declarations_pathlike,
     gen_scan_fields as declarations_scan_fields,
+    gen_guess_varargs as declarations_guess_varargs,
     gen_self_type as declarations_self_type,
     gen_setfield as declarations_setfield,
     gen_shadowed as declarations_shadowed,
@@ -429,6 +432,10 @@ from src.pystachy_compiler.expressions import (
     gen_tstore as expressions_tstore,
     gen_truth as expressions_truth,
     gen_tuple_ as expressions_tuple_,
+    gen_dict_merge as expressions_dict_merge,
+    gen_unroll as expressions_unroll,
+    gen_pick as expressions_pick,
+    gen_iter_static as expressions_iter_static,
     gen_tuple_order as expressions_tuple_order,
     gen_unary as expressions_unary,
 )
@@ -542,6 +549,7 @@ from src.pystachy_compiler.program import (
 from src.pystachy_compiler.specs import IROPS
 from src.pystachy_compiler.statements import (
     gen_augassign as statements_augassign,
+    gen_callable_guard as statements_callable_guard,
     gen_check_import as statements_check_import,
     gen_check_special as statements_check_special,
     gen_class_default as statements_class_default,
@@ -602,6 +610,11 @@ from src.pystachy_compiler.templates import (
     gen_match_items as templates_match_items,
     gen_names_tv as templates_names_tv,
     gen_specialize as templates_specialize,
+    gen_literal_class as templates_literal_class,
+    gen_literal_args as templates_literal_args,
+    gen_lit_context as templates_lit_context,
+    gen_const_of as templates_const_of,
+    gen_const_fields as templates_const_fields,
 )
 from src.pystachy_compiler.utils import RtFn, fxmask
 from src.pystachy_compiler.variables import (
@@ -1273,8 +1286,11 @@ class Gen:
     def dc_methods(self, ci: ClassInfo) -> None:
         return declarations_dc_methods(self, ci)
 
-    def scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
-        return declarations_scan_fields(self, ci, f, body)
+    def guess_varargs(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
+        return declarations_guess_varargs(self, init, args, f)
+
+    def scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node], known: dict[str, bool]) -> None:
+        return declarations_scan_fields(self, ci, f, body, known)
 
     def guess_args(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
         return declarations_guess_args(self, init, args, f)
@@ -2138,6 +2154,18 @@ class Gen:
     def tuple_(self, vals: list[Val]) -> Val:
         return expressions_tuple_(self, vals)
 
+    def dict_merge(self, n: Node, want: str) -> Val:
+        return expressions_dict_merge(self, n, want)
+
+    def unroll(self, g: Node, every: bool = False) -> list[Node] | None:
+        return expressions_unroll(self, g, every)
+
+    def pick(self, o: Val, tests: list[Val], exc: str, msg: str, what: str, want: str, dflt: Val | None = None) -> Val:
+        return expressions_pick(self, o, tests, exc, msg, what, want, dflt)
+
+    def iter_static(self, n: Node) -> str:
+        return expressions_iter_static(self, n)
+
     def stack_tuple(self, vals: list[Val]) -> Val:
         return expressions_stack_tuple(self, vals)
 
@@ -2165,11 +2193,11 @@ class Gen:
     def tstore(self, v: Val, index: int, slot: str) -> None:
         expressions_tstore(self, v, index, slot)
 
-    def index(self, n: Node) -> Val:
-        return expressions_index(self, n)
+    def index(self, n: Node, want: str = "") -> Val:
+        return expressions_index(self, n, want)
 
-    def subscript(self, n: Node, o: Val) -> Val:
-        return expressions_subscript(self, n, o)
+    def subscript(self, n: Node, o: Val, want: str = "") -> Val:
+        return expressions_subscript(self, n, o, want)
 
     def list_read(self, o: Val, i: Val) -> Val:
         return expressions_list_read(self, o, i)
@@ -2399,8 +2427,26 @@ class Gen:
     def tests(self, ns: list[Node], p: str) -> bool:
         return calls_tests(self, ns, p)
 
-    def specialize(self, c: str, ts: list[str], given: dict[str, str], named: bool) -> str:
-        return templates_specialize(self, c, ts, given, named)
+    def specialize(self, c: str, ts: list[str], given: dict[str, str], named: bool, lits: dict[str, Node]) -> str:
+        return templates_specialize(self, c, ts, given, named, lits)
+
+    def getattr_name(self, n: Node) -> str:
+        return calls_getattr_name(self, n)
+
+    def literal_class(self, c: str) -> bool:
+        return templates_literal_class(self, c)
+
+    def literal_args(self, f: FnInfo, args: list[Node]) -> dict[str, Node]:
+        return templates_literal_args(self, f, args)
+
+    def lit_context(self) -> bool:
+        return templates_lit_context(self)
+
+    def const_of(self, n: Node, env: dict[str, Node], live: bool) -> Node | None:
+        return templates_const_of(self, n, env, live)
+
+    def const_fields(self, s: ClassInfo, init: FnInfo) -> None:
+        return templates_const_fields(self, s, init)
 
     def names_tv(self, a: Node, tvs: list[str]) -> bool:
         return templates_names_tv(self, a, tvs)
@@ -2458,6 +2504,12 @@ class Gen:
 
     def call_key(self, key: Val, x: Val) -> Val:
         return builtins_call_key(self, key, x)
+
+    def callable_type(self, t: str) -> int:
+        return builtins_callable_type(self, t)
+
+    def callable_guard(self, st: Node, f: FnInfo) -> str:
+        return statements_callable_guard(self, st, f)
 
     def keys_of(self, xs: Val, key: Val) -> Val:
         return builtins_keys_of(self, xs, key)

@@ -25,6 +25,7 @@ observable contract.
 | `fnmatch` | `Lib/fnmatch.py` | `95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963` |
 | `textwrap` | `Lib/textwrap.py` | `30f3d833950d53e168cc021961574b553f56aed84458712b2eb29c6495843d46` |
 | `string` | `Lib/string.py` | `c000d9c4340c910b869399f0f0acc1b70e39391ad9344c4e08d8d0f80210a916` |
+| `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` |
 | `statistics` | `Lib/statistics.py` | `80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18` |
 | `urllib.parse` | `Lib/urllib/parse.py` | `491b233e8d87a2ab73964afff029717177d53ad8def328ed9b00575db983da27` |
 | `html` | `Lib/html/__init__.py` | `923d82d821e75e8d235392c10c145ab8587927b3faf9c952bbd48081eebd8522` |
@@ -43,6 +44,9 @@ accelerator is missing. Where CPython's accelerator behaves differently, the edi
 Its `strftime()` reproduces `Modules/timemodule.c` (SHA-256
 `695d4f627d2ff472c0bf4df4583bf97ea832b96b0cc9a7eb1f13ddd51ee19deb`) on glibc: ASCII runs
 formatted as glibc 2.39's C-locale `wcsftime()` formats them, within its growing buffer.
+`operator` adapts only its getter classes, whose closures become `__call__` code
+reading constants. `string` adapts `Formatter` and takes `_string`'s parsers
+from `_pystachy_string`.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
 weighted means, and `random` ports its `m_lgamma`, `lanczos_sum` and `m_sinpi`
 for `binomialvariate`. `urllib.parse` includes codec logic corresponding to CPython's
@@ -60,7 +64,8 @@ CPython runs the source.
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
 | `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
 | `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
-| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction and comparison-key fallbacks |
+| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
+| `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |

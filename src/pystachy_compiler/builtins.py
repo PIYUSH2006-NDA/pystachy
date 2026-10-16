@@ -128,6 +128,19 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.err("tuple() takes zero or one positional iterable argument")
         if len(args) == 0:
             return self.coerce(self.tuple_([]), want) if is_vtuple(unopt(want)) else self.tuple_([])
+        if self.is_mapcall(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen"):
+            # tuple(e for t in xs) of a fixed tuple xs: the tuple of each item's e (its items are
+            # typed one by one); of anything else, a runtime-length tuple of the items (below).
+            # Where xs is no variable, field or display, dry() types it, so that it runs once
+            g = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
+            src = g.kids[2] if len(g.kids) == 3 else g
+            fixed = src.kind == "tuple" or is_tuple(self.iter_static(src)) or (self.lit_context() and self.const_of(src, {}, True) is not None)
+            if not fixed and src is not g and src.kind != "listcomp" and not self.iterator_call(src) and not self.is_mapcall(src) and self.iter_static(src) == "":
+                kwsrc = src.kind == "call" and len(src.kids) == 1 and src.kids[0].kind == "attr" and (src.kids[0].s == "items" or src.kids[0].s == "values") and is_kw(self.iter_static(src.kids[0].kids[0]))
+                fixed = kwsrc or is_tuple(self.dry(src))
+            unrolled = self.unroll(g, True) if fixed and src is not g else None
+            if unrolled is not None:
+                return self.expr(mk("tuple", "", g.line, unrolled), "")
         v = self.unwrap(self.consume(args[0], self.ctype("list", [targs(unopt(want))[0]]) if is_vtuple(unopt(want)) else "", resultsoft=resultsoft), "TypeError: 'NoneType' object is not iterable")
         if is_vtuple(v.t) or is_tuple(v.t):
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
@@ -180,6 +193,19 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             b = self.coerce(self.expr(args[k], "str"), "str", f"argument {k + 1} of os.path.join()")
             pv = Val(self.rt("pys_path_join", "ptr", [f"ptr {pv.v}", f"ptr {b.v}"]), "str")
         return pv
+    if name == "getattr":
+        # getattr(o, "name") reads o.name: o, then the attribute, as CPython looks it up
+        if len(args) != 2 or self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)) == "":
+            self.err("getattr() is supported with two arguments, the second a str literal (or, in operator's getters, a constant name)")
+        return self.expr(mk("attr", self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)), args[0].line, [args[0]]), want)
+    if name == "callable" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
+        # decided by the static type: an object is callable where its class defines __call__
+        # and it is not None
+        v = self.expr(args[0], "")
+        known = self.callable_type(v.t)
+        if known == -2:
+            return Val("true", "bool") if v.v in self.nn else self.ptr_cmp('!=', v, Val('null', 'None'))
+        return Val("true" if known == 1 else "false", "bool")
     if name == "hasattr" and len(args) == 2 and args[1].kind == "str":
         # decided by the static type of the object (for an object: is it None)
         hv = self.expr(args[0], "")
@@ -620,6 +646,21 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     self.err(f"unsupported call {asked if name.startswith('math.') else key}")
     return v
 
+def gen_callable_type(self, t: str) -> int:
+    # callable(x) for x of static type t: 1 (a function or Callable), 0, or -2 (an object whose
+    # class defines __call__: callable unless it is None)
+    if is_fn(t) or is_callable(t):
+        return 1
+    if is_opt(t) and is_callable(unopt(t)):
+        return -2
+    cs = [t] if t in self.classes else umembers(unopt(t)) if self.reference_union(t) else []
+    calls = [c for c in cs if c in self.classes and "__call__" in self.classes[c].methods]
+    if len(calls) > 0 and (len(cs) > 1 or self.classes[t].exc != "" or t in self.nts):
+        self.err(f"callable() of a {typestr(t)} is not supported")
+    if len(calls) == 0 and len([d for d in self.classes.values() if d.tag > 0 and "__call__" in d.methods and len(cs) == 1 and self.derives(d.name, t)]) > 0:
+        self.err(f"callable() of a {typestr(t)} is not supported: a derived class defines __call__")
+    return -2 if len(calls) > 0 else 0
+
 def gen_vnode(self, v: Val) -> Node:
     # a node whose value is v, computed already: an argument of a call the compiler makes (the
     # key function's, key(item))
@@ -627,14 +668,18 @@ def gen_vnode(self, v: Val) -> Node:
     return mk("val", str(len(self.vnodes) - 1), self.line, [])
 
 def gen_key_check(self, key: Val, of: str) -> None:
-    # key= of sorted(), min(), max() or list.sort(): a function value or a Callable
+    # key= of sorted(), min(), max() or list.sort(): a function value, a Callable, or an object
+    # whose class defines __call__
     if is_opt(key.t) and is_callable(unopt(key.t)):
         self.err(f"a key that may be None ({typestr(key.t)}) is not supported (the key of {of}): test it with 'is not None' first")
-    if not is_fn(key.t) and not is_callable(key.t):
+    if not is_fn(key.t) and not is_callable(key.t) and not (key.t in self.classes and "__call__" in self.classes[key.t].methods):
         self.err(f"'{tname(key.t)}' object is not callable (the key of {of})")
 
 def gen_call_key(self, key: Val, x: Val) -> Val:
-    # key(x), the key of item x: a call through function value key, or of Callable key
+    # key(x), the key of item x: a call through function value key, of Callable key, or of
+    # object key's __call__
+    if key.t in self.classes:
+        return self.obj_call(key, [self.vnode(x)], "")
     return self.call_value(key, [self.vnode(x)], "") if is_fn(key.t) else self.call_callable(key, [self.vnode(x)])
 
 def gen_keys_of(self, xs: Val, key: Val) -> Val:
@@ -1022,6 +1067,10 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft
     # differently. arg: evaluated once the iterator is made, before it is iterated
     if self.is_mapcall(n):
         n = self.mapgen(n)
+    if n.kind == "listcomp" and n.s != "gen" and arg is None:
+        unrolled = self.unroll(n)  # (a list display, made before its consumer runs)
+        if unrolled is not None:
+            return self.expr(mk("list", "", n.line, unrolled), want, resultsoft=resultsoft)
     if n.kind == "listcomp":
         return self.listcomp(n, want, "", "", arg, resultsoft=resultsoft)
     if not self.iterator_call(n):
@@ -1484,7 +1533,12 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     pending.extend(query.kids)
                 if not contextual:
                     want_arg = ""
-            v = self.consume(args[i], pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
+            g = self.mapgen(args[i]) if key == "str.join" and self.is_mapcall(args[i]) else args[i]
+            unrolled = self.unroll(g) if key == "str.join" else None
+            if unrolled is not None:
+                v = self.expr(mk("list", "", g.line, unrolled), pt)  # (strs of items of different types)
+            else:
+                v = self.consume(g, pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
             self.stkkey = self.nokey
             if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)

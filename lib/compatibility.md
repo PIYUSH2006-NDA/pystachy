@@ -16,9 +16,23 @@ for supported operand types. `call()` forwards a supported callable's arguments.
 In-place functions require a result that keeps its input type: `itruediv(1.0, 2.0)`
 works; rebinding an integer to a float does not.
 
-`attrgetter`, `itemgetter` and `methodcaller` are not supported. `length_hint`
-and `index` are not general substitutes for CPython's versions: for example,
-`length_hint([1, 2])` and `index(2)` fail compilation.
+`itemgetter`, `attrgetter` and `methodcaller` are callable objects: call them
+directly, store them, or pass them as `key=` to `sorted`, `min`, `max`, `list.sort`
+and the library's key parameters. A getter specializes on its literal arguments,
+so `itemgetter(1)` reads a fixed tuple's or NamedTuple's item with its static type
+and `attrgetter("name")` reads `o.name`; each literal value makes a getter type of
+its own, so `itemgetter(0)` and `itemgetter(1)` cannot share a list or variable.
+`itemgetter(i)` of a variable `i` indexes lists, strings and dicts, and a fixed
+tuple at run time with the union of its items' types. Dotted names, several
+items or names (a tuple result) and `methodcaller` arguments work as in CPython,
+and reprs match C's. A literal getter's constants cannot be assigned.
+
+Attribute and method names must be string literals: a missing attribute and a
+name that is not a string fail compilation, rather than raising `AttributeError`
+or `TypeError` when the getter runs (a single non-string literal still raises
+CPython's `TypeError` when the getter is made). Pickling is unsupported.
+`length_hint` and `index` are not general substitutes for CPython's versions:
+for example, `length_hint([1, 2])` and `index(2)` fail compilation.
 
 ## Path modules
 
@@ -340,7 +354,21 @@ The comparator accepts two values of one supported type and returns an int.
 Key objects expose writable `obj` and the five comparison methods. Hashing is
 rejected at compile time. The factory is a function rather than CPython's
 `KeyWrapper`, so factory attributes, reflection and pickling are unavailable.
-`partial`, `wraps`, `update_wrapper` and `total_ordering` remain unsupported.
+
+`partial(func, *args, **keywords)` stores a function, bound method, builtin,
+closure or callable object with positional and keyword arguments. A call passes
+the stored positional arguments first, and its own keywords replace stored ones.
+A partial of a partial is flattened, as in CPython: `func`, `args` (a tuple) and
+`keywords` (printing as a dict) hold the merged values. A first argument that is
+not callable raises CPython's `TypeError`. Each call is checked against the
+function's signature where it is compiled, so a wrong call fails compilation
+rather than raising `TypeError`. The attributes can be assigned, unlike C's
+read-only ones. `repr()` gives the default `<functools.partial object at ...>`
+rather than CPython's call form; pickling, `__dict__` and `partialmethod` are
+unsupported.
+
+`wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
+attributes cannot be assigned, and class decorators are not compiled.
 
 ## Textwrap
 
@@ -361,10 +389,27 @@ Constants, `capwords` and `Template` work. Templates support mapping inputs
 precedence. `substitute`, `safe_substitute`, `is_valid` and `get_identifiers`,
 plus the template and pattern attributes, are available.
 
-`Formatter` and template subclasses are unsupported. Keyword values accessed by
-computed names must share a type, so `substitute(name="Ann", count=3)` is rejected.
+Template subclasses are unsupported. Keyword values of different types, as in
+`substitute(name="Ann", count=3)`, are looked up as values of their union type.
 `Template.flags` is an int, invalid-placeholder columns count bytes, and
 `capwords` capitalizes ASCII letters only.
+
+`Formatter` supports `format`, `vformat`, `parse`, `get_field`, `get_value`,
+`check_unused_args`, `format_field` and `convert_field`, and subclasses that
+override them. `lib/_pystachy_string.py` implements the parsers of CPython's
+`_string`, with its errors; `parse()` returns a list, so a malformed format string
+raises before its first field is looked up. Automatic and manual numbering,
+conversions, nested format specs and recursion limits follow CPython.
+Positional arguments may have different types (as may keyword ones): a field's
+value has their union type, which formats as its value does. When a call has
+both, their types must agree, so `format("{0} {x}", 1, x="s")` is rejected.
+`vformat` takes a tuple and a dict, or a `**kwargs` record; type an empty dict.
+
+Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`,
+and `check_unused_args` receives the keys used as a list in first-use order
+rather than a set. Overrides compile for every call's argument types in the
+program; an override, like other functions, must return one type for each.
+Field names count UTF-8 bytes, so only ASCII digits make positional ones.
 
 ## Statistics
 

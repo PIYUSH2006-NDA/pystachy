@@ -5,6 +5,7 @@ import os
 from src.pystachy_compiler.analysis import (
     aliases,
     assigns,
+    bind_count,
     chk_names,
     closure_free,
     deleted,
@@ -400,6 +401,10 @@ def gen_none_read(self, name: str) -> str:
     if only_none(body, name):
         return "None"  # (it is None wherever it is assigned)
     if not self.nonecmp:
+        gone: dict[str, bool] = {}
+        deleted(body, gone)
+        if bind_count(body, name) == 1 and name not in gone and name not in self.nlw and name not in self.curfn.params:
+            return "None"  # (its one assignment, compiled already, gave it a value of type None)
         self.err(f"cannot infer the type of '{name}' from None here, before a value of another type is assigned to it; annotate it ({name}: T | None)")
     return NONEVAR
 

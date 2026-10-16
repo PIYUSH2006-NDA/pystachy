@@ -1,9 +1,9 @@
-"""functools for Pystachy: caching, reduction and comparison keys.
+"""functools for Pystachy: caching, reduction, comparison keys and partial application.
 
-reduce() and cmp_to_key() adapt the Python fallback algorithms from CPython
+reduce(), cmp_to_key() and partial adapt the Python fallbacks from CPython
 3.13.16 Lib/functools.py, commit cbc944f4bc59639a444dd971c737788ba2283a91,
 SHA-256 c95756a4d9bfb159e9cbda243f9d62b0d10860bb68f9a5a37880d3cae44b2175.
-Their subset specializations require fixed accumulator/key types. Both adapted
+Their subset specializations require fixed accumulator/key types. The adapted
 algorithms also run under CPython; tests compare compiled execution separately
 with CPython's native public implementations.
 
@@ -26,7 +26,7 @@ When this module runs under CPython, the public decorators use its native _funct
 
 from typing import Callable, Generic, NamedTuple, TypeVar, TypeVarTuple
 
-__all__ = ["cache", "lru_cache", "reduce", "cmp_to_key"]
+__all__ = ["cache", "lru_cache", "reduce", "cmp_to_key", "partial"]
 
 _Ts = TypeVarTuple("_Ts")  # the decorated function's parameter types
 _R = TypeVar("_R")  # and its return type
@@ -307,3 +307,47 @@ def lru_cache(maxsize=128, typed=False):
 def cache(user_function, /):
     'Simple lightweight unbounded cache.  Sometimes called "memoize".'
     return lru_cache(maxsize=None)(user_function)
+
+
+################################################################################
+### partial() argument application
+################################################################################
+
+# Purely functional, no descriptor behaviour
+class partial:
+    """New function with partial application of the given arguments
+    and keywords.
+    """
+
+    # Pystachy port: no "__dict__" or "__weakref__" slot, which the subset does not support
+    __slots__ = "func", "args", "keywords"
+
+    # Pystachy port: __init__ rather than __new__, which the subset does not compile, so
+    # without self = super(partial, cls).__new__(cls) and return self
+    def __init__(self, func, /, *args, **keywords):
+        if not callable(func):
+            raise TypeError("the first argument must be callable")
+
+        if isinstance(func, partial):
+            # Pystachy port: the flattened fields assigned directly, as the parameters keep
+            # their types; after the callable() test the type of func decides this test
+            self.func = func.func
+            self.args = func.args + args
+            self.keywords = {**func.keywords, **keywords}
+        else:
+            self.func = func
+            self.args = args
+            self.keywords = keywords
+
+    def __call__(self, /, *args, **keywords):
+        # Pystachy port: the merged keywords passed directly, as the parameter keeps its type
+        return self.func(*self.args, *args, **{**self.keywords, **keywords})
+
+    # Pystachy port: no __repr__ (function values have no repr), __get__, __reduce__,
+    # __setstate__ or __class_getitem__: descriptors, pickling and GenericAlias are unsupported
+
+
+try:
+    from _functools import partial
+except ImportError:
+    pass

@@ -39,6 +39,10 @@ from src.pystachy_compiler.utils import (
 def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str = "") -> Val:
     f = n.kids[0]
     args = n.kids[1:]
+    if self.getattr_name(f) != "":
+        # getattr(o, "m")(args) is o.m(args): o, then the method, then the arguments
+        f = mk("attr", self.getattr_name(f), f.line, [f.kids[1]])
+        n = mk("call", n.s, n.line, [f] + args)
     if f.kind == "badattr":
         self.err(f.s)
     f = self.format_of(f)
@@ -564,11 +568,13 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
     if is_union(o.t):
         return self.umethod(o, m, args)
-    if o.t in self.nts and m == "__init__":
-        # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+    if (o.t in self.nts or self.literal_class(o.t)) and m == "__init__":
+        # p.__init__(args) of a NamedTuple or operator getter (also as a value): object.__init__,
         # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
         # of its own, and does nothing, also on None. The __init__ that makes the object is the
-        # compiler's (see nt_class), which only construction and _replace() call
+        # compiler's (see nt_class), which only construction and _replace() call. Operator's
+        # C getters likewise initialize through __new__; reinitialization must not mutate
+        # fields whose literal values the compiler has specialized.
         for a in args:
             x = a.kids[0] if a.kind == "kw" else a
             if not pure_arg(x):
@@ -642,6 +648,14 @@ def gen_kw_method(self, o: Val, m: str, args: list[Node]) -> Val:
         if args[0].s in names:
             return self.tget(self.kw_tuple(o), names.index(args[0].s))
         return dv
+    if m == "get" and 1 <= len(args) <= 2 and len([a for a in args if a.kind != "kw" and a.kind != "starred"]) == len(args) and (len(names) == 0 or len([x for x in kw_types(o.t) if x != kw_types(o.t)[0]]) > 0):
+        # get(k, default) of values of different types (or none): the value of the name k is,
+        # of their union with the default's, or the default
+        k = self.expr(args[0], "str")
+        dv = self.expr(args[1], "") if len(args) == 2 else Val("null", "None")
+        if k.t != "str":
+            self.err(f"get() of a {typestr(k.t)} key of a {typestr(o.t)} is not supported: its keys are str")
+        return self.pick(self.kw_tuple(o), [self.cmp2("==", k, Val(self.sconst(x), "str")) for x in names], "", "", f"get() of a {typestr(o.t)} with a variable key", "", dv)
     if m == "keys" and len(args) == 0:
         return self.expr(mk("list", "", self.line, [mk("str", x, self.line, []) for x in names]), "list[str]")
     if m == "pop" or m == "popitem" or m == "setdefault" or m == "update" or m == "clear":
@@ -1019,7 +1033,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             union_args = self.constructor_unions(f.cls, [v.t for v in vals[1:]])
             for j in range(len(union_args)):
                 vals[j + 1] = self.pcoerce(vals[j + 1], union_args[j], f, j + 1)
-        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False)
+        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False, self.literal_args(f, args) if self.literal_class(f.cls) else {})
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
         f = self.classes[sc].methods["__init__"]
@@ -1147,3 +1161,11 @@ def gen_tests(self, ns: list[Node], p: str) -> bool:
         if self.tests(n.kids, p):
             return True
     return False
+
+def gen_getattr_name(self, n: Node) -> str:
+    # n is getattr(o, name) with a str literal name (or a constant one, in a class that
+    # specializes on literals): that name; else ""
+    if n.kind != "call" or len(n.kids) != 3 or n.kids[0].kind != "name" or n.kids[0].s != "getattr" or self.bound("getattr") or n.kids[1].kind in ["kw", "starred"] or n.kids[2].kind in ["kw", "starred"]:
+        return ""
+    c = self.const_of(n.kids[2], {}, True) if self.lit_context() else n.kids[2] if n.kids[2].kind == "str" else None
+    return c.s if c is not None and c.kind == "str" and c.s != "" else ""

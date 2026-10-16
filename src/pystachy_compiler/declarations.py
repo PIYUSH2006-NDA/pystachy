@@ -48,6 +48,8 @@ from src.pystachy_compiler.utils import (
     is_tuple,
     is_vtuple,
     key_problem,
+    kw_names,
+    kw_types,
     literal_format,
     rename,
     selem,
@@ -1442,7 +1444,7 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         # (an exception class without __init__ of its own takes its base's, or none)
         if "__init__" in ci.methods and ci.methods["__init__"].cls == ci.name and ci.name not in self.tmpl:
             f = ci.methods["__init__"]
-            self.scan_fields(ci, f, f.node.kids[2].kids)
+            self.scan_fields(ci, f, f.node.kids[2].kids, {})
     if ci.tag > 0:
         for name in ci.ftypes:
             if name in ci.methods:
@@ -1627,6 +1629,8 @@ def gen_frozen(self, t: str, name: str) -> None:
     # a NamedTuple's fields are assigned only by its __init__
     if t in self.nts and not (self.curfn.name == "__init__" and self.curfn.cls == t):
         self.err(f"cannot assign to field '{name}' of NamedTuple {short(t)} (AttributeError: can't set attribute); make a new one with _replace({name}=...)")
+    if t in self.classes and name in self.classes[t].fconst and not (self.curfn.name == "__init__" and self.curfn.cls == t):
+        self.err(f"cannot assign to field '{name}' of {short(t)}: it holds a constant of the literal arguments the object was made with")
 
 def gen_synth(self, ci: ClassInfo, name: str, ret: str, body: list[Node]) -> None:
     # a method the compiler writes for a dataclass, generated only if the program calls it
@@ -1706,11 +1710,24 @@ def gen_dc_methods(self, ci: ClassInfo) -> None:
         bad = mk("block", "", line, [mk("raise", "", line, [mk("call", "", line, [mk("name", "TypeError", line, []), msg])])])
         self.synth(ci, m, "bool", [mk("if", "", line, [isnone, bad, mk("block", "", line, [])]), mk("return", "", line, [mk("cmp", op, line, [mine, theirs])])])
 
-def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
-    # fields are the attributes assigned on self inside __init__
+def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node], known: dict[str, bool]) -> None:
+    # fields are the attributes assigned on self inside __init__; after a guard that exits where
+    # a parameter is not callable (known), the parameter's type decides its isinstance() tests,
+    # and only the branch that runs gives fields their types
     for st in body:
         self.line = st.line
         k = st.kind
+        if k == "if" and self.callable_guard(st, f) != "":
+            known[self.callable_guard(st, f)] = True
+        x = st.kids[0] if k == "if" else st
+        neg = x.kind == "unary" and x.s == "not"
+        x = x.kids[0] if neg else x
+        if k == "if" and x.kind == "call" and len(x.kids) == 3 and x.kids[0].kind == "name" and x.kids[0].s == "isinstance" and x.kids[1].kind == "name" and x.kids[1].s in known:
+            r = self.isinst(f.ptypes[f.params.index(x.kids[1].s)], x.kids[2])
+            r = 1 if r == -2 else 0 if r == -3 else r
+            if r >= 0:
+                self.scan_fields(ci, f, st.kids[1].kids if (r == 1) != neg else st.kids[2].kids, known)
+                continue
         if (k == "assign" or k == "annassign") and st.kids[0].kind == "attr" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == f.params[0]:
             name = st.kids[0].s
             ms = self.classes[ci.origin].methods if ci.origin != "" else ci.methods  # (a specialization's are declared after its fields)
@@ -1750,15 +1767,17 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node]) -> None:
                 self.line = st.line
         for kid in st.kids:
             if kid.kind == "block":
-                self.scan_fields(ci, f, kid.kids)
+                self.scan_fields(ci, f, kid.kids, known)
             elif kid.kind == "except":
-                self.scan_fields(ci, f, kid.kids[1].kids)
+                self.scan_fields(ci, f, kid.kids[1].kids, known)
 
 def gen_guess_args(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
     # the types of the arguments (but self) that the call of class template __init__ init with
     # args passes, as guess infers them ([] for none); ["!"] where it cannot (a keyword or
     # star argument, *args, a type it cannot infer)
     ts: list[str] = []
+    if (init.vararg >= 0 or init.kwarg >= 0) and init.vartup == "":
+        return self.guess_varargs(init, args, f)
     if init.vararg >= 0 or init.kwarg >= 0 or len(args) > len(init.params) - 1:
         return ["!"]
     for i in range(1, len(init.params)):
@@ -1774,6 +1793,53 @@ def gen_guess_args(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]
         if t == "" or t.startswith("!"):
             return ["!"]
         ts.append(t)
+    return ts
+
+def gen_guess_varargs(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[str]:
+    # guess_args for an __init__ that takes *args or **kwargs: the types call_fn binds, the extra
+    # positional arguments' a tuple, the extra keyword arguments' a record (kw[...])
+    np = len(init.params)
+    ts = [""] * (np - 1)
+    extra: list[str] = []
+    names: list[str] = []
+    types: list[str] = []
+    pos = 1
+    for a in args:
+        if a.kind == "starred" or a.kind == "dstar":
+            return ["!"]
+        t = self.guess(a.kids[0] if a.kind == "kw" else a, f)
+        if t == "" or t.startswith("!"):
+            return ["!"]
+        if a.kind == "kw":
+            j = init.params.index(a.s) if a.s in init.params else -1
+            if init.kwarg >= 0 and (j < 0 or j < init.posonly or j == init.kwarg or j == init.vararg):
+                if a.s in names:
+                    return ["!"]
+                names.append(a.s)
+                types.append(init.kwelem if init.kwelem != "" else t)
+            elif j < 1 or ts[j - 1] != "":
+                return ["!"]
+            else:
+                ts[j - 1] = t
+        elif init.vararg >= 0 and pos >= init.vararg:
+            extra.append(init.varelem if init.varelem != "" else t)
+        elif pos >= np or pos == init.kwarg or (init.npos >= 0 and pos >= init.npos):
+            return ["!"]
+        else:
+            ts[pos - 1] = t
+            pos += 1
+    for i in range(1, np):
+        if i == init.vararg:
+            ts[i - 1] = self.ctype("tuple", extra)
+        elif i == init.kwarg:
+            ts[i - 1] = "kw[" + ",".join([names[j] + ":" + types[j] for j in range(len(names))]) + "]"
+        elif ts[i - 1] == "" and init.defaults[i].kind == "noann":
+            return ["!"]
+        elif ts[i - 1] == "":
+            t = "None" if init.defaults[i].kind == "None" else self.guess(init.defaults[i], FnInfo("", "", init.node, ""))
+            if t == "" or t.startswith("!"):
+                return ["!"]
+            ts[i - 1] = t
     return ts
 
 def gen_guess(self, e: Node, f: FnInfo) -> str:
@@ -1828,6 +1894,26 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if e.s not in ci.ftypes and e.s in ci.methods and ci.methods[e.s].deco == "":
             return f"fn[m:{f.cls}.{e.s}]"  # (self.m: the method bound to the object)
         return ci.ftypes.get(e.s, "")
+    if k == "attr" and e.kids[0].kind == "name" and e.kids[0].s in f.params and e.kids[0].s != me:
+        # p.k of a parameter p holding an object: the type of its field k
+        t = self.guess(e.kids[0], f)
+        if t in self.classes and e.s in self.classes[t].ftypes and e.s not in self.classes[t].methods:
+            return self.classes[t].ftypes[e.s]
+    if k == "dictstar":
+        # {**a, **b} of **kwargs records: their record, each name with its last value's type
+        names: list[str] = []
+        types: list[str] = []
+        for x in e.kids:
+            t = self.guess(x.kids[0], f) if x.kind == "dstar" else ""
+            if not t.startswith("kw["):
+                return t if t.startswith("!") else ""
+            for j in range(len(kw_names(t))):
+                if kw_names(t)[j] in names:
+                    types[names.index(kw_names(t)[j])] = kw_types(t)[j]
+                else:
+                    names.append(kw_names(t)[j])
+                    types.append(kw_types(t)[j])
+        return "kw[" + ",".join([names[j] + ":" + types[j] for j in range(len(names))]) + "]"
     if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s == me:
         ms = self.classes[f.cls].methods
         m = e.kids[0].s
@@ -1845,7 +1931,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             # a class template's object: of the specialization its arguments' types pick, once
             # code is being compiled (a specialization compiles its special methods)
             ts = self.guess_args(self.classes[c].methods["__init__"], e.kids[1:], f) if self.compiling else ["!"]
-            return self.specialize(c, ts, {}, False) if "!" not in ts else ""
+            lits = self.literal_args(self.classes[c].methods["__init__"], e.kids[1:]) if self.literal_class(c) and "!" not in ts else {}
+            return self.specialize(c, ts, {}, False, lits) if "!" not in ts else ""
         if c in self.classes or c in self.unsupported:
             return c if c in self.classes else "!" + self.unsupported[c]
         if c in self.funcs:
@@ -1940,6 +2027,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             return "bool" if a == "bool" and b == "bool" and e.s in IOPS else "int"
         if a == b and (a == "str" or is_list(a)):
             return a
+        if e.s == "+" and a.startswith("tuple[") and b.startswith("tuple["):
+            return self.ctype("tuple", targs(a) + targs(b))
         if e.s == "*" and (is_list(a) or a == "str") and (b == "int" or b == "bool"):
             return a  # [n] * n
         if e.s == "*" and (is_list(b) or b == "str") and (a == "int" or a == "bool"):

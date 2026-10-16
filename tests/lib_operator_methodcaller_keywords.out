@@ -1,0 +1,8 @@
+expected:wrongak
+operator.methodcaller('expected', name='wrong', args='a', kwargs='k')
+argument 1
+argument 2
+10 operator.itemgetter(0)
+ABC operator.methodcaller('upper')
+3 operator.attrgetter('x')
+[exit 0]

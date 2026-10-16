@@ -1502,7 +1502,7 @@ class Parser:
                     if d.kind == "set":
                         self.invalid(at)
                     d.kind = "dictstar"
-                    d.kids.append(self.binary(0))
+                    d.kids.append(mk("dstar", "", at, [self.binary(0)]))  # (keys and values stay pairs)
                     if self.peek() == ":":
                         self.invalid(self.line())
                 else:
