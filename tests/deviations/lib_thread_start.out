@@ -1,0 +1,2 @@
+NotImplementedError: _thread.start_new_thread() is not supported: a Pystachy program runs one thread
+[exit 0]

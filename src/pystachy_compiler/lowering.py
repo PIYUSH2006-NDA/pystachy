@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
-from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENRET, GENSLOTS, GENSTATE, ICMP, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
 
 
@@ -11,8 +11,12 @@ def gen_lower(self, fn: IFn) -> None:
     f = fn.f
     # a method's receiver is never None (callers check it)
     ps = [f"{lt(f.ptypes[j])}{' nonnull' if j == 0 and takes_self(f) else ''} %a{j}" for j in fn.ps]
-    o.append(f"define {'' if f.export else 'internal '}{lt(f.ret)} {f.ll}({', '.join(ps)}){' personality ptr @pys_personality' if fn.pads else ''} {{")
+    # (a generator function is a coroutine that LLVM's coroutine passes split: see gen.start)
+    o.append(f"define {'' if f.export else 'internal '}{lt(f.ret)} {f.ll}({', '.join(ps)}){' presplitcoroutine' if fn.coro else ''}{' personality ptr @pys_personality' if fn.pads else ''} {{")
     o.append("entry:")
+    if fn.coro:
+        o.append(f"  %coro.promise = alloca [{GENSLOTS} x i64], align 8")
+        self.coros = True
     for i in fn.slots:
         if i.k == 1:
             o.append(f"  %{i.s}.def.{i.r[0]} = alloca i1")
@@ -26,8 +30,23 @@ def gen_lower(self, fn: IFn) -> None:
     for b in fn.blocks:
         if b.label != "entry" and b.label != "":
             o.append(b.label + ":")
+        self.lowblk = b.label
         for i in b.code:
             self.lower_ins(fn, i)
+    if fn.coro:
+        # where a generator's suspends go when it is destroyed (coro.free: nothing to free, the
+        # collector reclaims the frame) and when it suspends (its caller or resumer goes on)
+        o.append("coro.final:")  # (resuming a generator there is never done: coro.unreach)
+        o.append("  %coro.last = call i8 @llvm.coro.suspend(token none, i1 true)")
+        o.append("  switch i8 %coro.last, label %coro.ret [i8 0, label %coro.unreach i8 1, label %coro.cleanup]")
+        o.append("coro.cleanup:")
+        o.append("  %coro.free = call ptr @llvm.coro.free(token %coro.id, ptr %coro.hdl)")
+        o.append("  br label %coro.ret")
+        o.append("coro.ret:")
+        o.append("  %coro.end = call i1 @llvm.coro.end(ptr %coro.hdl, i1 false, token none)")
+        o.append("  ret ptr %coro.hdl")
+        o.append("coro.unreach:")
+        o.append("  unreachable")
     o.append("}")
 
 def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
@@ -162,6 +181,50 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
     elif op == "exc.match":
         o.append(f"  %t{i.r[0]} = call i64 @pys_exc_in(ptr {i.a[0].v}, ptr {i.a[1].v})")
         o.append(f"  %t{i.r[1]} = icmp ne i64 %t{i.r[0]}, 0")
+    elif op == "gen.start":
+        # a switched-resume coroutine: its frame (coro.size bytes, from pys_alloc unless
+        # CoroElide puts it in its caller's frame: coro.alloc false) and promise, zeroed but for
+        # its name; then the initial suspend, so that a call runs none of the generator's body
+        o.append("  %coro.id = call token @llvm.coro.id(i32 8, ptr %coro.promise, ptr null, ptr null)")
+        o.append("  %coro.need = call i1 @llvm.coro.alloc(token %coro.id)")
+        o.append("  br i1 %coro.need, label %coro.alloc, label %coro.begin")
+        o.append("coro.alloc:")
+        o.append("  %coro.size = call i64 @llvm.coro.size.i64()")
+        o.append(f"  %coro.mem = call ptr @{self.rtfns['alloc'].sym}(i64 %coro.size)")
+        o.append("  br label %coro.begin")
+        o.append("coro.begin:")
+        o.append(f"  %coro.frame = phi ptr [null, %{self.lowblk}], [%coro.mem, %coro.alloc]")
+        o.append("  %coro.hdl = call ptr @llvm.coro.begin(token %coro.id, ptr %coro.frame)")
+        o.append(f"  store [{GENSLOTS} x i64] zeroinitializer, ptr %coro.promise")
+        o.append(f"  %coro.name = getelementptr i64, ptr %coro.promise, i64 {GENNAME}")
+        o.append(f"  store ptr {i.a[0].v}, ptr %coro.name")
+        o.append("  %coro.first = call i8 @llvm.coro.suspend(token none, i1 false)")
+        o.append(f"  switch i8 %coro.first, label %coro.ret [i8 0, label %{i.b[0]} i8 1, label %coro.cleanup]")
+    elif op == "gen.yield":
+        # the value in the promise, the state (k: whether closing it here runs code of its), suspend
+        o.append(f"  store i64 {i.a[0].v}, ptr %coro.promise")
+        o.append(f"  %t{i.r[0]} = getelementptr i64, ptr %coro.promise, i64 {GENSTATE}")
+        o.append(f"  store i64 {i.k}, ptr %t{i.r[0]}")
+        o.append(f"  %t{i.r[1]} = call i8 @llvm.coro.suspend(token none, i1 false)")
+        o.append(f"  switch i8 %t{i.r[1]}, label %coro.ret [i8 0, label %{i.b[0]} i8 1, label %coro.cleanup]")
+    elif op == "gen.ret":
+        # the value returned, finished; then the final suspend, which LLVM requires to be one
+        o.append(f"  %t{i.r[0]} = getelementptr i64, ptr %coro.promise, i64 {GENRET}")
+        if len(i.a) > 0:
+            o.append(f"  store i64 {i.a[0].v}, ptr %t{i.r[0]}")
+        o.append(f"  %t{i.r[1]} = getelementptr i64, ptr %coro.promise, i64 {GENSTATE}")
+        o.append(f"  store i64 {GENDONE}, ptr %t{i.r[1]}")
+        o.append("  br label %coro.final")
+    elif op == "gen.promise":
+        if len(i.a) == 0:
+            o.append(f"  %t{i.r[0]} = getelementptr i64, ptr %coro.promise, i64 0")
+        else:
+            o.append(f"  %t{i.r[0]} = call ptr @llvm.coro.promise(ptr {i.a[0].v}, i32 8, i1 false)")
+    elif op == "gen.resume":
+        o.append("  " + self.invoke(f"call void @llvm.coro.resume(ptr {i.a[0].v})", i))
+    elif op == "gen.drop":
+        o.append(f"  call void @pys.gen.drop(ptr {i.a[0].v})")
+        self.gendrops = True
     else:
         fail(f"internal error: no lowering for IR op {op}", 0)
 
@@ -218,7 +281,7 @@ def gen_eh_ir(self, fn: IFn) -> None:
         for j in range(len(code)):
             i = code[j]
             cur.code.append(i)
-            if j < len(code) - 1 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init") and self.opfx(i, fn.fa) & raises != 0:
+            if j < len(code) - 1 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init" or i.op == "gen.resume") and self.opfx(i, fn.fa) & raises != 0:
                 fn.n += 1
                 i.b = [f"L{fn.n}", b.handler]
                 used[b.handler] = True

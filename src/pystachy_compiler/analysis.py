@@ -36,6 +36,32 @@ def walrus_values(e: Node, name: str, out: list[Node]) -> None:
         out.append(e.kids[0])
 
 
+def none_sites(body: list[Node], out: dict[str, list[Node]]) -> None:
+    # the statements in body (into blocks, in order, not into the functions and classes it
+    # defines) whose own code may assign each name, as Gen.none_values reads them: a name or a
+    # tuple or list target's name item, and a := in a kid that is no block
+    for st in body:
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            continue
+        names: dict[str, bool] = {}
+        for t in st.kids[:-1] if st.kind == "assign" else st.kids[:0]:
+            for x in t.kids if t.kind == "tuple" or t.kind == "list" else [t]:
+                if x.kind == "name":
+                    names[x.s] = True
+        for kid in st.kids:
+            if kid.kind != "block" and kid.kind != "except":
+                walrus_names(kid, names)
+        for nm in names:
+            if nm not in out:
+                out[nm] = []
+            out[nm].append(st)
+        for kid in st.kids:
+            if kid.kind == "block":
+                none_sites(kid.kids, out)
+            elif kid.kind == "except":
+                none_sites(kid.kids[1].kids, out)
+
+
 def stmt_walrus(st: Node, out: dict[str, bool]) -> None:
     # the names that the := in statement st's own expressions bind (not in its blocks, nor in the
     # body of the class or function it defines)
@@ -603,10 +629,12 @@ def module_ints(mods: list[Mod], at: dict[str, int]) -> dict[str, str]:
     return out
 
 
-def module_strs(mods: list[Mod]) -> dict[str, str]:
+def module_strs(mods: list[Mod], tuples: dict[str, list[str]]) -> dict[str, str]:
     # The module globals that one direct module-level assignment binds to a str literal, or a
     # from-import of another such name: their text, which str.format() of the name reads as
-    # a literal format (Gen.str_format). The name is still read, with its usual checks.
+    # a literal format (Gen.str_format). The name is still read, with its usual checks. Those
+    # bound so to a tuple of str literals go to tuples, with its items: the attribute names
+    # functools.wraps()'s assigned gives (Gen.wrap_names: WRAPPER_ASSIGNMENTS)
     count: dict[str, int] = {}
     for m in mods:
         constant_writes(m.body, count)
@@ -618,6 +646,8 @@ def module_strs(mods: list[Mod]) -> dict[str, str]:
                 continue
             if st.kids[-1].kind == "str":
                 out[st.kids[0].s] = st.kids[-1].s
+            elif st.kids[-1].kind == "tuple" and all(x.kind == "str" for x in st.kids[-1].kids):
+                tuples[st.kids[0].s] = [x.s for x in st.kids[-1].kids]
             elif st.kind == "assign" and st.s == "from" and st.kids[1].kind == "name":
                 copies.append(st)
     more = True
@@ -627,12 +657,24 @@ def module_strs(mods: list[Mod]) -> dict[str, str]:
             if st.kids[0].s not in out and st.kids[1].s in out:
                 out[st.kids[0].s] = out[st.kids[1].s]
                 more = True
+            if st.kids[0].s not in tuples and st.kids[1].s in tuples:
+                tuples[st.kids[0].s] = tuples[st.kids[1].s]
+                more = True
     return out
-def calls_iter(n: Node, listed: bool) -> bool:
-    # may n call iter() (it names it, or builtins.iter), which then makes an iterator object of
-    # a builtin container (lib/_pystachy_iterators.py)? Not where an __iter__ annotated
-    # -> Iterator[T] returns iter(x) (listed, see Gen.iter_ret), which steps through a list
-    if n.kind == "def" and n.s == "__iter__":
+def reads_builtin(n: Node, name: str, listed: bool, hidden: bool, mods: dict[str, bool]) -> bool:
+    # may code n read builtin name (iter or next): a name node that no scope around it binds
+    # (hidden: one does; a class body's or a comprehension's own names do not hide it here),
+    # name of the builtins module (mods: the names that import it) or from builtins import name.
+    # Not iter where an __iter__ annotated -> Iterator[T] returns iter(x) (listed, see
+    # Gen.iter_ret), which steps through a list rather than making an iterator object
+    k = n.kind
+    if k == "name":
+        return n.s == name and not hidden
+    if k == "attr" and n.s == name and n.kids[0].kind == "name" and n.kids[0].s in mods:
+        return True
+    if k == "import":
+        return len([a for a in n.kids if a.kids[0].s == "builtins." + name]) > 0
+    if k == "def" and n.s == "__iter__" and name == "iter":
         a = n.kids[1]
         t = a.s if a.kind == "str" else ""
         if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr"):
@@ -640,28 +682,68 @@ def calls_iter(n: Node, listed: bool) -> bool:
         t = t[: t.find("[")] if "[" in t else ""
         t = t[t.rfind(".") + 1 :]
         listed = (t == "Iterator" or t == "Iterable") and not other_return(n.kids[2])
-    elif n.kind == "def" or n.kind == "lambda":
+    elif k == "def" or k == "lambda":
         listed = False
-    if listed and n.kind == "return" and len(n.kids) == 1 and n.kids[0].kind == "call" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "iter":
-        return calls_iter(n.kids[0], False) if len(n.kids[0].kids) != 2 else calls_iter(n.kids[0].kids[1], listed)
-    if (n.kind == "name" and n.s == "iter") or (n.kind == "attr" and n.s == "iter"):
-        return True
-    for k in n.kids:
-        if calls_iter(k, listed):
+    if listed and k == "return" and len(n.kids) == 1 and n.kids[0].kind == "call" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "iter":
+        c = n.kids[0]
+        return reads_builtin(c, name, False, hidden, mods) if len(c.kids) != 2 else reads_builtin(c.kids[1], name, listed, hidden, mods)
+    inner = hidden  # (of a function's body; its defaults, annotations and decorators run outside)
+    if k == "def" and hidden:
+        decl: dict[str, bool] = {}
+        globals_in(n.kids[2].kids, decl)
+        inner = name not in decl  # (global name: the module's, which may not bind it)
+    elif k == "def":
+        inner = name in scope_names(n)
+    elif k == "lambda" and not hidden:
+        inner = len([p for p in n.kids[0].kids if p.s == name]) > 0
+    for i in range(len(n.kids)):
+        body = (k == "def" and i == 2) or (k == "lambda" and i == 1)
+        if reads_builtin(n.kids[i], name, listed, inner if body else hidden, mods):
             return True
     return False
 
 
+def module_reads(body: Node, name: str) -> bool:
+    # may a module's code read builtin name (reads_builtin)? A module-level binding of the name,
+    # also by a function's global statement, is what the module's code reads (Gen.bound)
+    top: dict[str, bool] = {name: True}  # (where no name node is the name: no scope reads it so)
+    if mentions(body, [name]):
+        top = {}
+        binds(body.kids, top, True)
+        fn_globals(body, top)
+    mods: dict[str, bool] = {}
+    builtins_names(body, mods)
+    return reads_builtin(body, name, False, name in top, mods)
+
+
+def builtins_names(n: Node, out: dict[str, bool]) -> None:
+    # the names that an import of the builtins module in n binds (import builtins as b)
+    for a in n.kids if n.kind == "import" and n.s == "" else n.kids[:0]:
+        if a.kids[0].s == "builtins":
+            out[a.s] = True
+    for k in n.kids:
+        builtins_names(k, out)
+
+
 def needs_eh(body: list[Node]) -> bool:
     # does body need exception handling or with-file cleanup, also in the functions and classes
-    # it defines (a class with bases is a subclass node whose first kid is the class); a
-    # __next__ method too, whose StopIteration a loop over its object catches
+    # it defines (a class with bases is a subclass node whose first kid is the class)
     for st in body:
-        if st.kind == "try" or st.kind == "with" or (st.kind == "def" and st.s == "__next__"):
+        if st.kind == "try" or st.kind == "with":
             return True
         for kid in st.kids if st.kind != "subclass" else st.kids[0].kids:
             if kid.kind == "block" and needs_eh(kid.kids):
                 return True
+    return False
+
+
+def defines(n: Node, name: str) -> bool:
+    # does code n define a function name anywhere (also in the functions and classes it defines)
+    if n.kind == "def" and n.s == name:
+        return True
+    for k in n.kids:
+        if defines(k, name):
+            return True
     return False
 
 
@@ -1025,6 +1107,29 @@ def nested_defs(n: Node, out: list[Node]) -> None:
         return
     for k in n.kids:
         nested_defs(k, out)
+
+
+def appends_to(st: Node) -> bool:
+    # is statement st x = x + e
+    if st.kind != "assign" or len(st.kids) != 2 or st.kids[0].kind != "name":
+        return False
+    v = st.kids[1]
+    return v.kind == "binop" and v.s == "+" and v.kids[0].kind == "name" and v.kids[0].s == st.kids[0].s
+
+
+def str_appends(body: list[Node], out: dict[str, bool]) -> None:
+    # the names that the statements of a function's body append to: x += e, x = x + e
+    # (Gen.str_append, where x is a str local), also in its blocks (not in its defs and classes):
+    # statements alone, which only blocks and except clauses hold, as for globals_in
+    for st in body:
+        if (st.kind == "augassign" and st.s == "+" and st.kids[0].kind == "name") or appends_to(st):
+            out[st.kids[0].s] = True
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            for kid in st.kids:
+                if kid.kind == "block":
+                    str_appends(kid.kids, out)
+                elif kid.kind == "except":
+                    str_appends(kid.kids[1].kids, out)
 
 
 def lambda_flags(n: Node, inlam: bool, out: dict[str, bool]) -> None:

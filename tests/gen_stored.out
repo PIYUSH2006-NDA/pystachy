@@ -1,0 +1,19 @@
+  produce 0
+first loop 0
+  produce 1
+first loop 1
+  produce 2
+  produce 0
+  produce 1
+  produce 2
+resumed at 2
+  produce 3
+  produce 4
+  produce 5
+  produce 6
+  produce 7
+12 13
+adfbec
+x y z '' 3
+['q'] [] 0
+[exit 0]

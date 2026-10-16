@@ -1,0 +1,7 @@
+mods: init mods
+mods.shapes: init mods.shapes
+error: RuntimeError('from excalias') True True
+Missing: KeyError('k') True True True
+RuntimeError('raised here')
+KeyError('m') 'm' False
+[exit 0]

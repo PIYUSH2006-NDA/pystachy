@@ -4,8 +4,10 @@ from src.pystachy_compiler.analysis import local_names
 from src.pystachy_compiler.diagnostics import shown, where
 from src.pystachy_compiler.ir import Data, FnInfo, Ins, Val
 from src.pystachy_compiler.names import short
+from src.pystachy_compiler.reflection import VARS_USES, refl_attr_fields, refl_formatter
 from src.pystachy_compiler.specs import EXCEPTIONS, HASATTR, MODATTRS, PYBUILTINS
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.structs import STRUCT_FNS
+from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
     codec,
     fbits,
@@ -15,6 +17,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fn,
+    is_gen,
     is_fset,
     is_kw,
     is_list,
@@ -45,7 +48,14 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
         n = mk("call", n.s, n.line, [f] + args)
     if f.kind == "badattr":
         self.err(f.s)
+    if refl_formatter(f) and len(args) >= 1 and args[0].kind == "str" and refl_attr_fields(args[0].s) and "string$Formatter" in self.classes and len([a for a in args if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar"]) == 0:
+        # string.Formatter().format("...", args) of a constant template: str.format() of it, which
+        # the base Formatter's methods do (#486: its attribute fields, {0.x}, need no run-time names)
+        self.expr(f.kids[0], "")
+        return self.str_format(args[0].s, "format", args[1:])
     f = self.format_of(f)
+    if literal_format(f) and f.s == "format_map" and len(args) == 1 and self.refl_dict_of(args[0]) is not None:
+        return self.refl_format_map(f.kids[0].s, args[0])  # ("...".format_map(vars(x)): reflection.py)
     if literal_format(f):
         return self.str_format(f.kids[0].s, f.s, args)
     if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0:
@@ -60,6 +70,11 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
         if sc.startswith("!"):
             self.err(sc[1:])
         return self.call(mk("call", n.s, n.line, [f.kids[0]] + args), want, resultsoft, sc)
+    if f.kind == "name" and f.s in STRUCT_FNS and f.s in self.funcs and f.s not in self.ltype:
+        # (_struct's functions of a format known as the program compiles: see struct_call)
+        r = self.struct_call(f.s, args, want)
+        if r is not None:
+            return r
     if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
         return self.star_call(n, want, resultsoft, typeargs)
     if f.kind == "name":
@@ -70,6 +85,19 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
             # a call that may run before the def or class statement
             bad = self.scalar('xor', [Val(self.mload('bool', f'@g.{f.s}.def'), 'bool'), Val('true', 'bool')])
             self.guard(bad, self.unbound(f.s))
+        if self.lib_fn(f, "functools$wraps"):
+            self.err("functools.wraps() is supported as the decorator of a def, @wraps(wrapped): call update_wrapper(wrapper, wrapped) to name another function")
+        if self.lib_fn(f, "functools$update_wrapper"):
+            # (CPython's update_wrapper() of a function: the compiler gives wrapper the names, as
+            # wrap_names says, and the call gives wrapper)
+            if len(args) == 0 or args[0].kind == "kw":
+                self.err("update_wrapper() missing 1 required positional argument: 'wrapper'" if len(args) == 0 or args[0].s != "wrapper" else "update_wrapper() of keyword argument wrapper is not supported")
+            if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+                self.err("update_wrapper() of unpacked arguments is not supported")
+            w = self.expr(args[0], "")
+            vals = [self.expr(a.kids[0] if a.kind == "kw" else a, "") for a in args[1:]]
+            self.wrap_names(w, args[1:], vals, "update_wrapper")
+            return w
         if f.s in self.funcs:
             return self.call_fn(self.funcs[f.s], [], args, want, resultsoft=resultsoft)
         if f.s in self.aliases and f.s not in self.gtypes:
@@ -79,6 +107,15 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
                 return self.exc_object(f.s, args)
             if self.classes[f.s].bad != "":
                 self.err(self.classes[f.s].bad)
+            ab = self.abstract_of(f.s)
+            if len(ab) > 0:
+                # an object of a class with abstract methods (ABCMeta): CPython evaluates the
+                # arguments, and object.__new__ raises its TypeError
+                for a in args:
+                    self.expr(a.kids[0] if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar" else a, "")
+                names = ", ".join([f"'{n}'" for n in ab])
+                self.raise_("TypeError", self.sconst(f"Can't instantiate abstract class {short(f.s)} without an implementation for abstract method{'s' if len(ab) > 1 else ''} {names}"))
+                return Val("null", f.s)
             if f.s in self.tmpl:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])
@@ -122,6 +159,10 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
             self.err(f"{short(f.kids[0].s)}._make() is not supported: call {short(f.kids[0].s)}(...) with the fields")
         if f.kids[0].kind == "name" and f.kids[0].s in self.classes and f.kids[0].s not in self.ltype:
             return self.class_call(f.kids[0], f.s, args, want, resultsoft)
+        if self.refl_dict_of(f.kids[0]) is not None:
+            if f.s == "copy" and len(args) == 0:
+                return self.refl_dict_copy(f.kids[0])  # (vars(x).copy(): reflection.py)
+            self.err(VARS_USES)
         o = self.expr(f.kids[0], self.default_want(f.kids[0], f.s, args, ""))
         r = self.method(o, f.s, args, want, resultsoft)
         if f.s != "close":
@@ -170,8 +211,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
             elif printing and (is_list(v.t) or v.t == "str" or is_dict(v.t)):
                 # print(*xs): its items printed as arguments are, joined by sep (a sole star's
                 # items as they are once the keywords are evaluated, others' as they are now)
-                xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), mk("name", "__pys_item", a.line, []), self.vnode(v)]), "")
-                item = mk("name", "__pys_item", a.line, [])
+                xs = v if sole else self.as_list(v, "print") if not is_list(v.t) else self.expr(mk("listcomp", "", a.line, [mk("name", "__pys_item", a.line, []), made_var("__pys_item", a.line), self.vnode(v)]), "")
+                item = made_var("__pys_item", a.line)
                 pos.append(mk("starred", "", a.line, [mk("listcomp", "", a.line, [mk("call", "", a.line, [mk("name", "str", a.line, []), item]), item, self.vnode(xs)])]))
             else:
                 self.err(f"unpacking a {typestr(v.t)} into the arguments of {who if who != '' else 'a function'} is not supported (a tuple's items are)")
@@ -186,6 +227,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
                 kws.append(mk("kw", d.kids[i].s, a.line, [self.vnode(self.expr(d.kids[i + 1], ""))]))  # (**{"k": v}: its items)
         elif a.kind == "dstar":
             v = self.expr(a.kids[0], "")
+            if not is_kw(v.t) and is_dict(v.t) and targs(v.t)[0] == "str" and n.kids[0].kind == "name" and self.aliases.get(n.kids[0].s, "") == "dataclasses.replace" and len(pos) == 1:
+                self.refl_replace_changes(pos[0], v)  # (#489's named rejection: reflection.py)
             if not is_kw(v.t):
                 self.err(f"** of a {typestr(v.t)} is not supported: of a function's **kwargs, or a dict display with str keys, it is")
             names = kw_names(v.t)
@@ -560,6 +603,8 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
+    if o.t == "fn[b:bytes]" and m == "maketrans":
+        return self.bytes_method(o, m, args)  # (the static method, of the class)
     if o.t == "fn[b:bytes]" and m == "fromhex":
         # bytes.fromhex(s), the class method, of a str
         if len(args) != 1 or args[0].kind in ["kw", "starred", "dstar"]:
@@ -592,6 +637,8 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         # e.__str__() is str(e): that of the class of e's object, which may derive from o.t's
         # (but for the ExcClass's own functions, see exc_helpers)
         return self.to_str(o) if m == "__str__" else self.repr(o)
+    if is_gen(o.t):
+        return self.gen_method(o, m, args)
     if o.t in self.classes and m == "__init__" and self.classes[o.t].exc != "":
         for c in self.classes.values():
             if c.name != o.t and self.derives(c.name, o.t) and "__init__" in c.methods and c.methods["__init__"].cls == c.name:
@@ -1069,6 +1116,8 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     if f.ll in self.guessed and f.ll != self.curfn.ll:
         self.guessed[self.curfn.ll] = self.guessed[f.ll]  # (what it returns may hold a guess)
     self.put(c, 1)
+    self.gencall = f"%t{c.r[0]}" if f.gen else ""  # (a new generator: a loop over it owns it, see owned_gen)
+    self.gencallf = f if f.gen else None
     if "?" in f.ret:
         v = self.typed_empty(Val(f"%t{c.r[0]}", f.ret), want, f)
         if f.ll in self.building:
@@ -1152,8 +1201,8 @@ def gen_kw_type(self, f: FnInfo, name: str) -> str:
     return f.ptypes[j] if j >= 0 else ""
 
 def gen_dispatches(self, f: FnInfo, p: str) -> bool:
-    # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...) or p is
-    # (not) None (or p == None, see static), and never assign it: then an object known not to
+    # does template f test its parameter p with isinstance(p, ...), hasattr(p, ...), getattr(p,
+    # name, default), type(p) or p is (not) None (or p == None, see static), and never assign it: then an object known not to
     # be None decides the tests
     asg: dict[str, bool] = {}
     local_names(f.node.kids[2].kids, asg)
@@ -1164,6 +1213,8 @@ def gen_tests(self, ns: list[Node], p: str) -> bool:
     for n in ns:
         if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s == "isinstance" or n.kids[0].s == "hasattr") and len(n.kids) == 3 and n.kids[1].kind == "name" and n.kids[1].s == p:
             return True
+        if n.kind == "call" and n.kids[0].kind == "name" and ((n.kids[0].s == "getattr" and len(n.kids) == 4) or (n.kids[0].s == "type" and len(n.kids) == 2)) and n.kids[1].kind == "name" and n.kids[1].s == p:
+            return True  # (getattr(p, name, default) and type(p): reflection.py)
         x = nonetest(n)
         if x >= 0 and n.kids[x].kind == "name" and n.kids[x].s == p:
             return True
@@ -1176,5 +1227,7 @@ def gen_getattr_name(self, n: Node) -> str:
     # specializes on literals): that name; else ""
     if n.kind != "call" or len(n.kids) != 3 or n.kids[0].kind != "name" or n.kids[0].s != "getattr" or self.bound("getattr") or n.kids[1].kind in ["kw", "starred"] or n.kids[2].kind in ["kw", "starred"]:
         return ""
+    if n.kids[2].kind == "attr" and n.kids[2].s == "name" and n.kids[2].kids[0].kind == "dcfield":
+        return n.kids[2].kids[0].s  # (f.name of a dataclasses.Field: reflection.py)
     c = self.const_of(n.kids[2], {}, True) if self.lit_context() else n.kids[2] if n.kids[2].kind == "str" else None
     return c.s if c is not None and c.kind == "str" and c.s != "" else ""

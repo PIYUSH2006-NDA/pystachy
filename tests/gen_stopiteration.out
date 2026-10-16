@@ -1,0 +1,7 @@
+got 1
+RuntimeError: generator raised StopIteration
+body 1
+StopIteration: from the body
+list: generator raised StopIteration
+last 1
+[exit 1]

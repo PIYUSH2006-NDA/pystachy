@@ -1,0 +1,58 @@
+ints < ff ff fe ff ff ff fd ff ff ff ff ff ff ff fc ff ff ff ff ff ff ff fb ff ff ff ff ff ff ff ff ff ff ff ff ff ff 7f
+ints > 80 00 80 00 00 01 80 00 00 00 00 00 00 02 80 00 00 00 00 00 00 03 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04
+ints native 01 00 02 00 03 00 00 00 04 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 fa ff ff ff ff ff ff ff 07 00 00 00 00 00 00 00 08 00 00 00 00 00 00 00
+ints = 01 00 02 00 00 00 03 00 00 00 00 00 00 00
+-1 255 -2 65535 -3 4294967295 -4 4294967295 -5 9223372036854775807
+(1, 2, 3, 4, 5, -6, 7, 8)
+(-2,) (-1,) (72057594037927935,)
+8 16 5 8 5 9 0 10
+aligned 01 00 00 00 02 00 00 00 03 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00
+pads 00 00 00 07 00 00 00
+(7,)
+bytes 78 61 62 63 02 61 62 00 00 79 00 00
+(b'x', b'abc', b'ab', b'', b'', b'y\x00', b'')
+(b'abcd',) (b'a\x00b',) b'\xffqq'
+bools 01 00 01
+(False, True, True)
+0000 0100 0001
+0.0 0000 00000000 0000000000000000 0.0 0.0 0.0
+-0.0 0080 00000080 8000000000000000 -0.0 -0.0 -0.0
+1.5 003e 0000c03f 3ff8000000000000 1.5 1.5 1.5
+-2.25 80c0 000010c0 c002000000000000 -2.25 -2.25 -2.25
+1e-310 0000 00000000 000012688b70e62b 0.0 0.0 1e-310
+3.4028234663852886e+38  ffff7f7f 47efffffe0000000 - 3.4028234663852886e+38 3.4028234663852886e+38
+65504.0 ff7b 00e07f47 40effc0000000000 65504.0 65504.0 65504.0
+65519.0 ff7b 00ef7f47 40effde000000000 65504.0 65519.0 65519.0
+5.960464477539063e-08 0100 00008033 3e70000000000000 5.960464477539063e-08 5.960464477539063e-08 5.960464477539063e-08
+2.9802322387695312e-08 0000 00000033 3e60000000000000 0.0 2.9802322387695312e-08 2.9802322387695312e-08
+8.940696716308594e-08 0200 0000c033 3e78000000000000 1.1920928955078125e-07 8.940696716308594e-08 8.940696716308594e-08
+0.3333333333333333 5535 abaaaa3e 3fd5555555555555 0.333251953125 0.3333333432674408 0.3333333333333333
+0.1 662e cdcccc3d 3fb999999999999a 0.0999755859375 0.10000000149011612 0.1
+007c000080ff000000000000f87f (inf, -inf, nan) 0000000000000840 0000803f
+(nan,) (inf,) (-inf,) (-0.0,)
+504b03041400080040e20100 (b'PK\x03\x04', 20, 8, 123456) 12
+6 !IH 000001020003 (258, 3) (9, 1)
+[(1, 2), (3, 4)]
+00000007 ['00000000', '00000001', '00000002']
+0100000000000000000004407a 0500 (5,)
+(25185,) (25699,) (25699,)
+[(97, 98), (99, 100)] []
+struct.error: 'h' format requires -32768 <= number <= 32767
+struct.error: 'B' format requires 0 <= number <= 255
+struct.error: 'Q' format requires 0 <= number <= 18446744073709551615
+struct.error: 'i' format requires -2147483648 <= number <= 2147483647
+struct.error: char format requires a bytes object of length 1
+struct.error: unpack requires a buffer of 4 bytes
+struct.error: unpack_from requires a buffer of at least 8 bytes for unpacking 4 bytes at offset 4 (actual buffer size is 6)
+struct.error: offset -5 out of range for 4-byte buffer
+struct.error: not enough data to unpack 4 bytes at offset -2
+struct.error: iterative unpacking requires a buffer of a multiple of 2 bytes
+struct.error: cannot iteratively unpack with a struct of length 0
+OverflowError: float too large to pack with f format
+OverflowError: float too large to pack with e format
+struct.error: unpack requires a buffer of 4 bytes
+struct.error: bad char in struct format
+struct.error: repeat count given without format specifier
+struct.error: total struct size too long
+struct.error: 'l' format requires -2147483648 <= number <= 2147483647
+[exit 0]
