@@ -12,9 +12,8 @@
 # result_check()'s comparison of names is check_result(). to_ulps() reads a float's bits with
 # struct upstream (not supported); here it computes the same int from math.frexp(), as in
 # tests/upstream_math_functions.py. parse_testfile() and parse_mtestfile() return lists of
-# tuples, not generators (generator functions are not supported). Messages use % where
-# upstream's use str.format(), and fail_fmt is written where it is used (a format string is a
-# literal here).
+# tuples, not generators (generator functions are not supported). fmt and fail_fmt, locals
+# upstream, are written where they are used (a format string is a literal here).
 # TESTFILE holds the 505 of cmath_testcases.txt's 2097 cases that test_testfile checks,
 # those whose argument and expected value are real and whose function is neither rect nor polar;
 # its tests that skip the others are kept, and skip none here.
@@ -118,8 +117,8 @@ def ulp_abs_check(expected: float, got: float, ulp_tol: int, abs_tol: float) -> 
     if abs_error <= abs_tol or ulp_error <= ulp_tol:
         return None
     else:
-        return ("error = %.3g (%d ulps); permitted error = %.3g or %d ulps"
-                % (abs_error, ulp_error, abs_tol, ulp_tol))
+        return ("error = {:.3g} ({:d} ulps); "
+                "permitted error = {:.3g} or {:d} ulps").format(abs_error, ulp_error, abs_tol, ulp_tol)
 
 
 def result_check(expected: float, got: float, ulp_tol: int = 5, abs_tol: float = 0.0) -> str | None:
@@ -156,7 +155,9 @@ def result_check(expected: float, got: float, ulp_tol: int = 5, abs_tol: float =
 
     # arguments are not equal, and if numeric, are too far apart
     if failure is not None:
-        return "expected %r, got %r (%s)" % (expected, got, failure)
+        fail_msg = "expected {!r}, got {!r}".format(expected, got)
+        fail_msg += ' ({})'.format(failure)
+        return fail_msg
     else:
         return None
 
@@ -276,7 +277,7 @@ def test_testfile() -> None:
         if failure is None:
             continue
 
-        msg = "%s: %s(%r): %s" % (id, fn, ar, failure)
+        msg = "{}: {}({!r}): {}".format(id, fn, ar, failure)
         failures.append(msg)
 
     print("test_testfile: %d cases, %d failures" % (checked, len(failures)))
@@ -352,7 +353,7 @@ def test_mtestfile() -> None:
         if failure is None:
             continue
 
-        msg = "%s: %s(%r): %s" % (id, fn, arg, failure)
+        msg = "{}: {}({!r}): {}".format(id, fn, arg, failure)
         failures.append(msg)
 
     print("test_mtestfile: %d cases, %d failures" % (checked, len(failures)))
