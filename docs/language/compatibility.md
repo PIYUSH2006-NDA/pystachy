@@ -296,7 +296,8 @@ supported alternatives.
   of its function that may be bound again (or not yet be bound) where it is written: CPython
   reads such a variable when the generator runs (late binding), and Pystachy passes its value
   where the expression is
-- `reversed()` of a generator, `len()` of one, and a generator where a list is expected
+- `reversed()` of a generator, `len()` of one, `dict()` of one (a dict comprehension over it
+  works), and a generator where a list is expected
 
 ### Names and scopes
 

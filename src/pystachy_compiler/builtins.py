@@ -666,6 +666,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"dict() of an object ('{tname(t)}') is not supported: make the dict with a comprehension ({{k: v for k, v in x.items()}})")
     if t in self.classes and name in NONEARG:
         self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
+    if is_gen(t) and name == "len":
+        self.err("object of type 'generator' has no len()")
+    if is_gen(t) and name == "dict":
+        self.err("dict() of a generator is not supported: make the dict with a comprehension ({k: v for k, v in g})")
     if name == "hex" or name == "oct" or name == "bin":
         self.err(NONEARG[name].replace("NoneType", tname(t)))
     if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
