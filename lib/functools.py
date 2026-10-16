@@ -2,10 +2,10 @@
 
 reduce(), cmp_to_key() and partial adapt the Python fallbacks from CPython
 3.13.16 Lib/functools.py, commit cbc944f4bc59639a444dd971c737788ba2283a91,
-SHA-256 c95756a4d9bfb159e9cbda243f9d62b0d10860bb68f9a5a37880d3cae44b2175.
-Their subset specializations require fixed accumulator/key types. The adapted
-algorithms also run under CPython; tests compare compiled execution separately
-with CPython's native public implementations.
+SHA-256 c95756a4d9bfb159e9cbda243f9d62b0d10860bb68f9a5a37880d3cae44b2175,
+whose update_wrapper() and wraps() are copied unchanged. Their subset specializations
+require fixed accumulator/key types. The adapted algorithms also run under CPython;
+tests compare compiled execution separately with CPython's native public implementations.
 
 Pystachy's own stand-in for CPython 3.13's Lib/functools.py, whose lru_cache() wraps the C type
 _functools._lru_cache_wrapper (Modules/_functoolsmodule.c). The wrapper below follows that C code:
@@ -26,12 +26,66 @@ When this module runs under CPython, the public decorators use its native _funct
 
 from typing import Callable, Generic, NamedTuple, TypeVar, TypeVarTuple
 
-__all__ = ["cache", "lru_cache", "reduce", "cmp_to_key", "partial"]
+__all__ = ["cache", "lru_cache", "reduce", "cmp_to_key", "partial", "update_wrapper", "wraps",
+           "WRAPPER_ASSIGNMENTS", "WRAPPER_UPDATES"]
 
 _Ts = TypeVarTuple("_Ts")  # the decorated function's parameter types
 _R = TypeVar("_R")  # and its return type
 _T = TypeVar("_T")
 _F = TypeVar("_F")
+
+
+# CPython's update_wrapper() and wraps(), as they run there. Pystachy applies them itself where it
+# compiles @wraps(wrapped) on a def and a call update_wrapper(wrapper, wrapped) of a function:
+# the wrapper's __name__ and __qualname__ are then the wrapped function's (Gen.wrap_names). It
+# compiles their code only for another use of them, which their getattr() and setattr() of
+# attribute names that are no constants reject
+WRAPPER_ASSIGNMENTS = ('__module__', '__name__', '__qualname__', '__doc__',
+                       '__annotations__', '__type_params__')
+WRAPPER_UPDATES = ('__dict__',)
+def update_wrapper(wrapper,
+                   wrapped,
+                   assigned = WRAPPER_ASSIGNMENTS,
+                   updated = WRAPPER_UPDATES):
+    """Update a wrapper function to look like the wrapped function
+
+       wrapper is the function to be updated
+       wrapped is the original function
+       assigned is a tuple naming the attributes assigned directly
+       from the wrapped function to the wrapper function (defaults to
+       functools.WRAPPER_ASSIGNMENTS)
+       updated is a tuple naming the attributes of the wrapper that
+       are updated with the corresponding attribute from the wrapped
+       function (defaults to functools.WRAPPER_UPDATES)
+    """
+    for attr in assigned:
+        try:
+            value = getattr(wrapped, attr)
+        except AttributeError:
+            pass
+        else:
+            setattr(wrapper, attr, value)
+    for attr in updated:
+        getattr(wrapper, attr).update(getattr(wrapped, attr, {}))
+    # Issue #17482: set __wrapped__ last so we don't inadvertently copy it
+    # from the wrapped function when updating __dict__
+    wrapper.__wrapped__ = wrapped
+    # Return the wrapper so this can be used as a decorator via partial()
+    return wrapper
+
+def wraps(wrapped,
+          assigned = WRAPPER_ASSIGNMENTS,
+          updated = WRAPPER_UPDATES):
+    """Decorator factory to apply update_wrapper() to a wrapper function
+
+       Returns a decorator that invokes update_wrapper() with the decorated
+       function as the wrapper argument and the arguments to wraps() as the
+       remaining arguments. Default arguments are as for update_wrapper().
+       This is a convenience function to simplify applying partial() to
+       update_wrapper().
+    """
+    return partial(update_wrapper, wrapped=wrapped,
+                   assigned=assigned, updated=updated)
 
 
 class _CmpKey(Generic[_T, _F]):
