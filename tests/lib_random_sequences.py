@@ -74,6 +74,13 @@ for s in [0, 1, 5, 77]:
     print(r.sample(list(range(5000)), k=20)[:5], len(r.sample(list(range(5000)), k=4000)))
 nothing: list[int] = []
 print(Random(1).sample(nothing, 0), Random(1).sample(nothing, k=0, counts=nothing))
+# counts sample range(total): its pool where total is small, else a set of k selections, and no
+# list of total ints
+r = Random(9)
+print(r.sample(["a", "b"], counts=[30, 40], k=10), r.sample(["a", "b"], counts=[300, 400], k=10),
+      r.sample(["a", "b"], counts=[5, 0], k=5))
+print(r.sample(["red", "blue"], counts=[10**15, 10**15], k=5),
+      r.sample(["x", "y", "z"], counts=[3 * 10**18, 1, 6 * 10**18], k=40))
 
 print("choices")
 for s in [0, 1, 8, 2024]:

@@ -53,7 +53,8 @@ def calls(module, seed):
     xs = list(range(30))
     r.shuffle(xs)
     out += [xs, r.sample(xs, 7), r.sample(list(range(1000)), 40),
-            r.sample(["a", "b", "c"], k=5, counts=[3, 0, 4]), r.choices(xs, k=6),
+            r.sample(["a", "b", "c"], k=5, counts=[3, 0, 4]),
+            r.sample(["a", "b", "c"], k=9, counts=[10**17, 3, 2 * 10**18]), r.choices(xs, k=6),
             r.choices(xs[:4], [1, 0, 2.5, 3], k=6), r.choices(xs[:4], cum_weights=[1, 1, 3, 9], k=6),
             r.choice(xs), r.choice("abcdef"), r.uniform(-2.0, 3.0), r.triangular(),
             r.triangular(1.0, 5.0, 4.0), r.normalvariate(1.0, 2.0), r.gauss(), r.gauss(),

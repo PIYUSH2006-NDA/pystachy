@@ -562,8 +562,9 @@ class Random(_random.Random):
                 raise TypeError('Counts must be integers')
             if total < 0:
                 raise ValueError('Counts must be non-negative')
-            # Pystachy port: range(total)'s ints in a list, as a range is not a value in Pystachy
-            selections = self.sample(list(range(total)), k=k)
+            # Pystachy port: _sample_range() is sample() of range(total), as a range is not a value
+            # in Pystachy
+            selections = self._sample_range(total, k)
             bisect = _bisect
             return [population[bisect(cum_counts, s)] for s in selections]
         randbelow = self._randbelow
@@ -592,6 +593,34 @@ class Random(_random.Random):
                     j = randbelow(n)
                 selected_add(j)
                 result.append(population[j])
+        return result
+
+    # Pystachy port: sample(range(n), k), for sample()'s counts: sample()'s code with j in place of
+    # population[j], which makes a pool only where n is no larger than a set of k items (not a list
+    # of n ints, which list(range(n)) would make)
+    def _sample_range(self, n, k):
+        randbelow = self._randbelow
+        if not 0 <= k <= n:
+            raise ValueError("Sample larger than population or is negative")
+        result = []
+        setsize = 21        # size of a small set minus size of an empty list
+        if k > 5:
+            setsize += 4 ** _ceil(_log(k * 3, 4))  # table size for big sets
+        if n <= setsize:
+            pool = list(range(n))
+            for i in range(k):
+                j = randbelow(n - i)
+                result.append(pool[j])
+                pool[j] = pool[n - i - 1]  # move non-selected item into vacancy
+        else:
+            selected: set[int] = set()
+            selected_add = selected.add
+            for i in range(k):
+                j = randbelow(n)
+                while j in selected:
+                    j = randbelow(n)
+                selected_add(j)
+                result.append(j)
         return result
 
     def choices(self, population, weights=None, *, cum_weights=None, k=1):
