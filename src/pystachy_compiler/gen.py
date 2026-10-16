@@ -279,6 +279,7 @@ from src.pystachy_compiler.declarations import (
     gen_ann as declarations_ann,
     gen_ann_base as declarations_ann_base,
     gen_ann_items as declarations_ann_items,
+    gen_ann_none as declarations_ann_none,
     gen_ann_problem as declarations_ann_problem,
     gen_boxto as declarations_boxto,
     gen_boxwider as declarations_boxwider,
@@ -613,6 +614,9 @@ from src.pystachy_compiler.program import (
     gen_body_effect as program_body_effect,
     gen_body_names as program_body_names,
     gen_class_effect as program_class_effect,
+    gen_abc_class as program_abc_class,
+    gen_abstract_defs as program_abstract_defs,
+    gen_abstract_of as program_abstract_of,
     gen_class_problem as program_class_problem,
     gen_decorators as program_decorators,
     gen_derives as program_derives,
@@ -905,6 +909,8 @@ class Gen:
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
         self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
+        self.abstracts: dict[str, list[str]] = {}  # each class's own @abstractmethod methods (abstract_defs)
+        self.abcmeta: dict[str, bool] = {}  # the classes whose statements pass metaclass=ABCMeta
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
@@ -1424,6 +1430,9 @@ class Gen:
 
     def ann_base(self, b: Node) -> str:
         return declarations_ann_base(self, b)
+
+    def ann_none(self, n: Node, seen: list[str]) -> bool:
+        return declarations_ann_none(self, n, seen)
 
     def ann_items(self, xs: list[Node]) -> list[str]:
         return declarations_ann_items(self, xs)
@@ -1992,6 +2001,15 @@ class Gen:
 
     def class_problem(self, m: Mod, st: Node, exc: bool) -> str:
         return program_class_problem(self, m, st, exc)
+
+    def abstract_defs(self, body: list[Node]) -> list[Node]:
+        return program_abstract_defs(self, body)
+
+    def abstract_of(self, c: str) -> list[str]:
+        return program_abstract_of(self, c)
+
+    def abc_class(self, c: str) -> bool:
+        return program_abc_class(self, c)
 
     def eager(self, e: str, why: str, does: str) -> None:
         return program_eager(self, e, why, does)

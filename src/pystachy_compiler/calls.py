@@ -100,6 +100,15 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
                 return self.exc_object(f.s, args)
             if self.classes[f.s].bad != "":
                 self.err(self.classes[f.s].bad)
+            ab = self.abstract_of(f.s)
+            if len(ab) > 0:
+                # an object of a class with abstract methods (ABCMeta): CPython evaluates the
+                # arguments, and object.__new__ raises its TypeError
+                for a in args:
+                    self.expr(a.kids[0] if a.kind == "kw" or a.kind == "starred" or a.kind == "dstar" else a, "")
+                names = ", ".join([f"'{n}'" for n in ab])
+                self.raise_("TypeError", self.sconst(f"Can't instantiate abstract class {short(f.s)} without an implementation for abstract method{'s' if len(ab) > 1 else ''} {names}"))
+                return Val("null", f.s)
             if f.s in self.tmpl:
                 # a class template: the types of the arguments pick the specialization, whose
                 # object call_fn makes once it has them (in made[0])

@@ -147,10 +147,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   CPython makes a new method object at each read.
 
 - A function declared or inferred to return a value that ends without a `return` raises
-  `RuntimeError` there, where CPython returns `None`, also when it is declared to return
-  `C | None` for a class `C` (a dataclass or `NamedTuple` too). A function declared to return
-  `T | None` for an `int`, `float`, `bool`, `str`, `list`, `dict` or `tuple` T, and a template
-  that returns objects or `T | None`, return `None` there, as CPython does.
+  `RuntimeError` there, where CPython returns `None`. A function declared to return `T | None`
+  (or `Optional[T]`) for a class T (a dataclass or `NamedTuple` too) or an `int`, `float`,
+  `bool`, `str`, `list`, `dict` or `tuple` T, and a template that returns objects or `T | None`,
+  return `None` there, as CPython does.
 
 - A left operand of `+ - * / // % @ & | ^ << >>` (or of their in-place forms) whose class
   defines the operator's method, but which is `None` when the code runs, raises CPython's
@@ -345,7 +345,7 @@ supported alternatives.
   another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass but `abc.ABCMeta`; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,

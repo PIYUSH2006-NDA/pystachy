@@ -809,6 +809,12 @@ joins discard refinements that no longer hold. Globals, fields and locals assign
 Only a single named derived class refines a base type; tuple/union tests and exception-class
 narrowing retain their existing restrictions.
 
+A class that derives from `abc.ABC`, or whose statement passes `metaclass=abc.ABCMeta`, has
+abstract methods: those decorated with `@abstractmethod` (also under `@property`,
+`@classmethod` or `@staticmethod`) until a subclass defines them again. Making an object of a
+class with an abstract method left raises CPython's `TypeError` once the arguments are
+evaluated ([abc](../../lib/compatibility.md#abc)).
+
 Instance reads of class attributes honor subclass defaults and instance assignments. A class
 attribute may be rebound through its defining class; assigning an inherited attribute through
 a subclass that has not declared its own default is unsupported.
