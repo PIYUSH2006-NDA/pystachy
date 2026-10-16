@@ -86,6 +86,7 @@ and fields are available. See [single inheritance](typing.md#single-inheritance)
 | Binary operators `+ - * / // % @ & \| ^ << >>` | `__add__` and the corresponding methods |
 | In-place operators | `__iadd__` and counterparts, otherwise the binary method |
 | Unary `-`, `+`, `~` | `__neg__`, `__pos__`, `__invert__` |
+| `abs(o)`, `divmod(o, x)` | `__abs__`, `__divmod__` |
 | Equality and ordering | `__eq__`, `__ne__` and rich comparisons |
 | Truth and length | `__bool__`, `__len__` |
 | Representation | `__str__`, `__repr__`, `__format__` |
@@ -93,7 +94,8 @@ and fields are available. See [single inheritance](typing.md#single-inheritance)
 | Membership and iteration | `__contains__`, or supported `__iter__` |
 
 Rich comparisons use reflection, such as trying `b.__gt__(a)` for `a < b`.
-Reflected arithmetic methods such as `__radd__` and object `__pow__` are unsupported.
+Reflected arithmetic methods such as `__radd__` and `__rdivmod__`, and object `__pow__`, are
+unsupported.
 Objects in containers compare, sort and print through their methods.
 Lists and tuples test items with equality before ordering them, then compare length if all
 common items are equal. Sorting and `min()` use `<`; `max()` uses `>`.

@@ -415,3 +415,56 @@ CPython error for `None`.
   Sets use Pystachy's iteration order. `allow_fragments` must be a bool.
 - Deprecated splitting functions, `to_bytes` and `Quoter` are unsupported.
 
+
+## Datetime
+
+`timedelta`, `date`, `time`, `datetime`, `timezone`, `tzinfo` subclasses, `MINYEAR`,
+`MAXYEAR` and `UTC` are supported. The module is CPython's `_pydatetime`; where CPython's
+`_datetime` accelerator behaves differently, the port follows it: error messages, float
+`timedelta` arguments (each unit added exactly, fractions rounded once), exact `timedelta`
+products and quotients with floats, ISO 8601 parsing, aware `time` comparisons, `repr()` with
+`fold` and the `strftime()` format scan.
+
+Supported operations include construction with keywords and range checks; `+`, `-`, unary
+operators, `abs()`, `*` and `/` by ints and floats, `//`, `%` and `divmod()` of timedeltas;
+comparisons, sorting, `min()` and `max()`; `str()`, `repr()` and `format()`;
+`total_seconds()`, `toordinal()`, `fromordinal()`, `weekday()`, `isoweekday()`,
+`isocalendar()`, `fromisocalendar()`, `fromisoformat()`, `isoformat()` with `sep` and
+`timespec`, `ctime()`, `replace()`, `combine()`, `date()`, `time()`, `timetz()`,
+`timetuple()`, `utctimetuple()`, `utcoffset()`, `tzname()` and `dst()`. Aware datetimes
+support `timestamp()`, `astimezone(tz)`, `fromtimestamp(t, tz)` and `now(tz)`.
+`strftime()` gives CPython's result on Linux: glibc's C-locale directives with flags, widths
+and `E`/`O` modifiers, and datetime's `%f`, `%z`, `%:z` and `%Z`. A `tzinfo` subclass
+overrides `utcoffset()`, `dst()` and `tzname()`, whose `dt` is a `datetime` or `None`, and
+can use the inherited `fromutc()`.
+
+- Pystachy's `time` module has no `localtime()` or `mktime()`. `date.today()`,
+  `date.fromtimestamp()`, `datetime.today()`, `now()` and `fromtimestamp()` without a time
+  zone, `timestamp()` of a naive datetime, `astimezone()` of a naive datetime or without a
+  time zone, `strftime("%s")`, and a `%Z` with flags or a width where `dst()` is not `None`,
+  raise `NotImplementedError`.
+- `strptime()`, the deprecated `utcnow()` and `utcfromtimestamp()`, pickling and
+  `copy.replace()` are unsupported. `hash()` of these objects is unsupported, so they are not
+  dict keys or set elements.
+- `timetuple()` returns a NamedTuple with `time.struct_time`'s nine fields and repr, without
+  `tm_zone` and `tm_gmtoff`. `isocalendar()`'s result is a NamedTuple: index or unpack it, as
+  `tuple()` of it is unsupported.
+- Reflected operators are unsupported: write `timedelta * 2` and `date + timedelta`, not
+  `2 * timedelta` or `timedelta + date`.
+- `datetime.min` and `datetime.max` are typed `date` (a subclass's class attribute keeps its
+  base's type). `fromisoformat()` and `fromtimestamp()` must be called through their class,
+  not a `date` object.
+- Integers are 64-bit: `total_seconds()`, division, `%` and `divmod()` raise `OverflowError`
+  beyond about 106,751,991 days, as does a float count of microseconds of `2**63` or more.
+- `timezone(timedelta(0))` is a new object equal to `timezone.utc`, and a `name` of `None`
+  means no name. Subclasses of `timezone` are rejected.
+- The Python fallback's replacement sentinels remain: an explicit `None` for a numeric
+  field in `date.replace()`, `time.replace()` or `datetime.replace()` preserves that field;
+  explicit `tzinfo=True` in `time.replace()`, `datetime.replace()` or `datetime.combine()`
+  preserves the original time zone. CPython's C implementations reject those explicit
+  values with `TypeError`; `tzinfo=None` still removes the time zone.
+- Objects of subclasses of `date`, `time` and `datetime` print as their base class, and
+  arithmetic and `replace()` return objects of the base class.
+- Ordering a `date` with a `datetime` raises the `TypeError` of the reflected comparison.
+- Strings are UTF-8 bytes: `fromisoformat()` rejects a non-ASCII separator, and its length
+  checks count bytes, as `_datetime`'s parser does.

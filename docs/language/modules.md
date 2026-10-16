@@ -148,8 +148,8 @@ the builtin at that point. Class creation checks that Pystachy skips are listed 
 ## Library code
 
 Pystachy reuses CPython library code in several ways. Some files, such as `bisect` and
-`colorsys`, are unchanged upstream sources. Others, such as `textwrap`, `fnmatch`, `difflib`
-and `urllib.parse`, are adapted sources with marked edits. `re` substantially ports Python
+`colorsys`, are unchanged upstream sources. Others, such as `textwrap`, `fnmatch`, `difflib`,
+`urllib.parse` and `datetime`, are adapted sources with marked edits. `re` substantially ports Python
 and C components to the subset; `functools`, `io` and `csv` have implementations written for
 Pystachy. The [library reference](../../lib/README.md) records provenance, available APIs,
 restrictions and tests for each module.

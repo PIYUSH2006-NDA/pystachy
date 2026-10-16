@@ -1,0 +1,17 @@
+Money.__abs__ -250
+first
+arg parts
+Money(250) (Money(-84), Money(2))
+Debt.__abs__
+first
+arg parts
+Money(-75) (Money(25), Money(0))
+Money.__abs__ 0
+first
+arg parts
+Money(0) (Money(0), Money(0))
+arg cond
+TypeError: bad operand type for abs(): 'NoneType'
+arg x
+TypeError: unsupported operand type(s) for divmod(): 'NoneType' and 'int'
+[exit 0]

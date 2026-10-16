@@ -116,12 +116,13 @@ errors rather than catchable exceptions. Repeated slot declarations and
 class variables or methods shadowing inherited slots are also unsupported, as are
 new slots shadowing inherited methods, properties or class variables.
 
-Ordinary classes support single inheritance, inherited fields and constructors, instance-method
-overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
-class's override. Constructors in these hierarchies need annotated parameters; inheritance
-involving class templates, dataclasses, NamedTuples or builtin types is unsupported. Exception
-classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
-parameters (`class Box[T]`) declare a generic class, which has no other base.
+Ordinary classes support single inheritance, inherited fields and constructors, overrides of
+instance, static and class methods, `super()` and runtime `isinstance()` checks. A base-typed
+receiver calls its concrete class's instance-method override. Constructors in these
+hierarchies need annotated parameters; inheritance involving class templates, dataclasses,
+NamedTuples or builtin types is unsupported. Exception classes retain their separate
+inheritance rules, and `Generic[...]` or PEP 695 type parameters (`class Box[T]`) declare a
+generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.
 
@@ -207,8 +208,9 @@ provide selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile`.
 An imported module name does not imply every CPython API is available.
 
 The shipped libraries include unchanged upstream modules, localized ports such as
-`fnmatch`, `textwrap`, `difflib` and `random`, and implementations such as `functools.cache` /
-`lru_cache`, `io.StringIO` and `csv`. Each has its own supported operations and deviations.
+`fnmatch`, `textwrap`, `difflib`, `random` and `datetime`, and implementations such as
+`functools.cache` / `lru_cache`, `io.StringIO` and `csv`. Each has its own supported
+operations and deviations.
 
 Use the [builtin API reference](language/modules.md#builtins) and
 [library port notes](../lib/README.md) for current coverage. C calls and experimental

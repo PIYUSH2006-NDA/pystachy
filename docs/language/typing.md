@@ -714,8 +714,13 @@ Instance reads of class attributes honor subclass defaults and instance assignme
 attribute may be rebound through its defining class; assigning an inherited attribute through
 a subclass that has not declared its own default is unsupported.
 
+A subclass may override a static or class method with one of the same kind. A call through
+a class name uses that class's method, and an inherited class method's `cls.m()` calls the
+method of the class it was called through. Calls are not dispatched on an object's class, so
+calling an overridden static or class method through a base-typed object is rejected.
+
 Multiple inheritance, builtin subclasses, dataclass and NamedTuple inheritance, decorated
-subclasses, field/method name collisions, and overriding static or class methods are
-unsupported. Inherited class methods
+subclasses, field/method name collisions, and overriding a method with another kind of method
+are unsupported. Inherited class methods
 using `cls` retain restrictions on default values, imports and calls through a base-typed
 object. Exception classes follow the [exception rules](semantics.md#user-exception-classes).

@@ -924,7 +924,13 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str, resultso
 def gen_cls_bound(self, f: FnInfo, c: str, obj: bool) -> None:
     # a class method that uses cls, called through class c (obj: through an object of c, which
     # may be of a class deriving from c): it is compiled for each class that has it, whose
-    # name its cls reads (see inherit), so the call's class must be f's
+    # name its cls reads (see inherit), so the call's class must be f's. A static or class
+    # method that a class deriving from c overrides is called through c alone, as calls are
+    # not dispatched on an object's class.
+    if f.deco != "" and obj:
+        for x in self.classes.values():
+            if x.name != c and self.derives(x.name, c) and f.name in x.methods and x.methods[f.name].orig is not f.orig:
+                self.err(f"calling {'static' if f.deco == 'staticmethod' else 'class'} method {f.name}() on an object of {short(c)}, which may be one of {short(x.name)}, is not supported: {short(x.name)} overrides it (calls are not dispatched on the object's class; call {short(c)}.{f.name}() or {short(x.name)}.{f.name}())")
     if f.deco != "classmethod" or not f.clsuse:
         return
     subs = [x.name for x in self.classes.values() if obj and x.name != c and self.derives(x.name, c)]

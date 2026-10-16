@@ -422,6 +422,14 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"unsupported call {name}()")
     v = vals[0]
     t = v.t
+    if name == "abs" and len(vals) == 1 and t in self.classes and "__abs__" in self.classes[t].methods:
+        # abs(o) is o.__abs__(), and divmod(o, x) is o.__divmod__(x) (reflected methods
+        # are not supported); for None, CPython's TypeError
+        self.notnone(v, "TypeError: bad operand type for abs(): 'NoneType'")
+        return self.method(v, "__abs__", [], want, resultsoft)
+    if name == "divmod" and len(vals) == 2 and t in self.classes and "__divmod__" in self.classes[t].methods:
+        self.none_operand("divmod()", v, vals[1])
+        return self.method(v, "__divmod__", [self.vnode(vals[1])], want, resultsoft)
     if is_kw(t) and name == "len":
         return Val(str(len(kw_names(t))), "int")
     if is_kw(t) and name == "dict" and len(vals) == 1:

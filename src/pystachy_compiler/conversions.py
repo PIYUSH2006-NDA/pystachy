@@ -206,14 +206,16 @@ def gen_desc(self, t: str, use: str) -> str:
     if t in self.classes:
         # O<id>: the runtime calls back into pys_obj_eq/cmp/repr, which dispatch on the id, and
         # so the methods of use (a < b: __lt__, else the reflected __gt__) with objects of
-        # class t (see obj_helpers): one that cannot take them is an error here. The id has
-        # three digits or more, which runtime.c reads up to the next descriptor's letter
+        # class t (see obj_helpers): one that cannot take them (an object of t, or of a base
+        # of t) is an error here. The id has three digits or more, which runtime.c reads up to
+        # the next descriptor's letter
         ms = self.classes[t].methods
         for op in use.split():
             m = "__repr__" if op == "repr" else DUNDER[op]
             m = DUNDER[REFL[op]] if m not in ms and op in REFL else m
             f = ms[m] if m in ms else None
-            if f is not None and (f.bad != "" or (op != "repr" and f.ptypes[1] != t and f.ptypes[1] != "")):
+            takes = f is None or op == "repr" or f.ptypes[1] == t or f.ptypes[1] == "" or (f.ptypes[1] in self.classes and self.derives(t, f.ptypes[1]))
+            if f is not None and (f.bad != "" or not takes):
                 self.err(f.bad if f.bad != "" else f"comparing {shown(t)} objects (in a list, tuple, in, count, index, sort, min or max) calls {m}() with a {shown(t)}, but it takes a {typestr(f.ptypes[1])}")
         if t not in self.ocls:
             self.ocls[t] = len(self.ocls)
