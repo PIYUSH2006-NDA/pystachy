@@ -103,13 +103,12 @@ def dc_args(d: Node) -> str:
 
 
 def name_targets(t: Node) -> bool:
-    # whether the targets of an assignment are only names, which no store to another can change
-    if t.kind == "tuple":
-        for k in t.kids:
-            if not name_targets(k):
-                return False
-        return True
-    return t.kind == "name"
+    # whether the targets of a tuple assignment are only plain names, whose stores run no code
+    # (a nested tuple target may: its item's __iter__ or __next__)
+    for k in t.kids:
+        if k.kind != "name":
+            return False
+    return True
 
 
 def starred_target(t: Node) -> bool:
