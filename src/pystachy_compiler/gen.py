@@ -327,6 +327,7 @@ from src.pystachy_compiler.expressions import (
     gen_format_of as expressions_format_of,
     gen_const_str as expressions_const_str,
     gen_format_dup as expressions_format_dup,
+    gen_format_merge as expressions_format_merge,
     gen_format_kw as expressions_format_kw,
     gen_foreign_eq as expressions_foreign_eq,
     gen_forget as expressions_forget,
@@ -1892,6 +1893,9 @@ class Gen:
 
     def format_dup(self, fa: FmtArgs, name: str) -> None:
         return expressions_format_dup(self, fa, name)
+
+    def format_merge(self, fa: FmtArgs) -> None:
+        return expressions_format_merge(self, fa)
 
     def fmt_raise(self, kind: str, msg: str) -> Val:
         return expressions_fmt_raise(self, kind, msg)

@@ -54,6 +54,7 @@ print("no fields".format(1, 2, k=3))
 print("".format())
 print("{0:}|{0!s:}|{0!r:}".format(7))
 print("{!r}".format("it's"))
+print("{!\x00:>3}|{!\x00}".format(1, "nul: no conversion"))
 
 # specs, including nested fields, which take arguments in order too
 print("{:{w}.{p}f}".format(3.14159, w=10, p=3))
@@ -82,10 +83,12 @@ print("{0} {0:spec} {0!s} {0!r} {0!s:>4} {0!r:.5}".format(p))
 print("{!a} {!r} {!s:^5}|".format("é", "ü", "ö"))
 print("{0!a:>8}|".format("ñ"))
 
-# non-ASCII text around and in fields
+# non-ASCII text around and in fields; any Unicode decimal digits number an argument or an item
 print("ä{}ö{name}ü".format("€", name="名前"))
 print("{名}".format(**{"名": "value"}))
 print("{:é^7}".format("x"))
+print("{0}|{٣}|{𝟏}{１}".format("zero", "one", "two", "three"))
+print("{0[٣]}{0[١٢]} {1[𝟎]}".format({3: "three", 12: "twelve"}, ["a"]), "{٣a}{x٣}".format(**{"٣a": "A", "x٣": "B"}))
 
 # arguments are evaluated first, in order, then the fields formatted left to right
 print("{1}{0}{2:{3}}".format(arg("a"), arg("b"), Point(1, 2), arg(">3")))
@@ -111,6 +114,7 @@ print("{a}{b}".format(b=1, **{"a": 0, "a": 2}))
 d = {"a": 1, "b": 2}
 print("{a}+{b}={c}".format(c=3, **d))
 print("{a}".format(**d))
+print("{a}{b}{x}{y}".format(x=3, y=4, **d), "{a}{b}{c}{e}".format(**d, c=arg("c"), e=arg("e")))
 
 
 def kw(**kwargs: int) -> str:

@@ -280,6 +280,39 @@ try:
     print("{a}".format(a=arg("5"), **d))
 except TypeError as e:
     report(e)
+# (the keywords after a ** are evaluated before a name it gave is reported; of a dict merged
+# after keywords, the first of its keys, in its order, that one of them has)
+try:
+    print("{a}".format(**d, a=arg("6"), c=arg("7")))
+except TypeError as e:
+    report(e)
+try:
+    print("{a}".format(**{"a": "x"}, a=arg("8"), c=arg("9")))
+except TypeError as e:
+    report(e)
+
+
+def given(**kwargs: str) -> None:
+    try:
+        print("{a}".format(**kwargs, a=arg("10"), c=arg("11")))
+    except TypeError as e:
+        report(e)
+
+
+given(a="x")
+try:
+    print("{a}{c}".format(arg("p1"), c=arg("k1"), *(arg("p2"),), **{"b": arg("d1")}, a=arg("k2"), e=arg("k3")))
+except TypeError as e:
+    report(e)
+ba = {"b": "3", "a": "4"}
+try:
+    print("{a}{b}".format(a=1, b=2, **ba))
+except TypeError as e:
+    report(e)
+try:
+    print("{a}{b}".format(**{"x": 1, "a": 2, "z": 3}, **ba))
+except TypeError as e:
+    report(e)
 none: tuple[int, int] | None = None
 try:
     print("{}".format(*none))

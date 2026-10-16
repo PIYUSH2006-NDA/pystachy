@@ -56,8 +56,8 @@ In these cases a program can compile but behave differently from CPython.
   spec or a `%` format, raises `ValueError: Too many decimal digits in format string`. CPython
   accepts it up to 2**63 - 1 (2**31 - 1 for a float's precision, above which it raises
   `precision too big`), and its `%` formats report `width too big` or `precision too big`.
-  A `str.format()` field name of non-ASCII decimal digits (`"{٠}"`) names a keyword argument,
-  where CPython reads it as an argument number.
+  A format spec's width or precision written in non-ASCII decimal digits (`f"{x:٣}"`) is an
+  invalid spec (`ValueError`), where CPython reads the digits as a number.
 
 To find byte-oriented operations while porting, compile with
 `PYSTACHY_UNICODE_AUDIT=1 ./pystachy run app.py` or

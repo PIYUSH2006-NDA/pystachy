@@ -82,6 +82,24 @@ keywords
   TypeError "str.format() got multiple values for keyword argument 'a'"
   arg 5
   TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 6
+  arg 7
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 8
+  arg 9
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 10
+  arg 11
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg p1
+  arg p2
+  arg k1
+  arg d1
+  arg k2
+  arg k3
+k2k1
+  TypeError "str.format() got multiple values for keyword argument 'b'"
+  TypeError "str.format() got multiple values for keyword argument 'a'"
   TypeError 'str.format() argument after * must be an iterable, not NoneType'
   TypeError 'str.format() argument after ** must be a mapping, not NoneType'
 [exit 0]

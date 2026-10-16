@@ -1113,10 +1113,22 @@ def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
             fa.rest = self.as_list(v, "format")
         else:
             self.err(f"unpacking a {typestr(v.t)} into the arguments of {fa.who} is not supported (a tuple's or a list's items are)")
-    for a in args:
+    at = 0
+    while at < len(args):
+        a = args[at]
+        at += 1
         if a.kind == "kw":
-            if not self.format_kw(fa, a.s, self.expr(a.kids[0], "")):
-                return False
+            # (the keywords up to the next ** are all evaluated, then each name checked in turn,
+            # as CPython builds a dict of them and merges it)
+            run = [a]
+            while at < len(args) and args[at].kind != "dstar":
+                if args[at].kind == "kw":
+                    run.append(args[at])
+                at += 1
+            vals = [self.expr(k.kids[0], "") for k in run]
+            for j in range(len(run)):
+                if not self.format_kw(fa, run[j].s, vals[j]):
+                    return False
         elif a.kind == "dstar" and a.kids[0].kind == "dict" and len([i for i in range(0, len(a.kids[0].kids), 2) if a.kids[0].kids[i].kind != "str"]) == 0:
             # (**{"k": v}: its items, a later key's value replacing an earlier one's, as in the dict)
             d = a.kids[0]
@@ -1147,8 +1159,7 @@ def gen_format_args(self, fa: FmtArgs, args: list[Node]) -> bool:
             if fa.kd.t != "":
                 self.err(f"** of more than one dict into the arguments of {fa.who} is not supported")
             fa.kd = self.bmethod(v, "copy", [])
-            for nm in fa.kwn:
-                self.format_dup(fa, nm)
+            self.format_merge(fa)
     self.line = line
     return True
 
@@ -1168,6 +1179,26 @@ def gen_format_dup(self, fa: FmtArgs, name: str) -> None:
     line = self.line
     has = self.expr(mk("cmp", "in", line, [mk("str", name, line, []), self.vnode(fa.kd)]), "bool")
     self.guard(has.v, f"TypeError: {fa.who} got multiple values for keyword argument '{name}'")
+
+def gen_format_merge(self, fa: FmtArgs) -> None:
+    # the keywords before a ** of a dict (fa.kd, its copy): CPython's TypeError, once it runs,
+    # for the first of the dict's keys, in its order, that one of them has
+    if len(fa.kwn) < 2:
+        for nm in fa.kwn:
+            self.format_dup(fa, nm)
+        return
+    line = self.line
+    k = mk("name", "__pys_item", line, [])
+    names = mk("tuple", "", line, [mk("str", nm, line, []) for nm in fa.kwn])
+    dups = self.expr(mk("listcomp", "", line, [k, k, self.vnode(fa.kd), mk("cmp", "in", line, [k, names])]), "")
+    l1 = self.label()
+    l2 = self.label()
+    self.cbr(self.num_cmp('!=', Val(self.mload('int', dups.v), "int"), Val("0", "int")).v, l1, l2)
+    self.place(l1)
+    key = self.expr(mk("index", "", line, [self.vnode(dups), mk("int", "0", line, [])]), "")
+    msg = self.concat([Val(self.sconst(f"{fa.who} got multiple values for keyword argument '"), "str"), key, Val(self.sconst("'"), "str")])
+    self.raise_("TypeError", msg.v)
+    self.place(l2)
 
 def gen_fmt_raise(self, kind: str, msg: str) -> Val:
     # raise kind(msg) (a KeyError's msg is the key, shown by its repr): Val("", "")
@@ -1311,7 +1342,7 @@ def gen_str_field(self, name: str, conv: str, spec: str, expand: bool, depth: in
         v = self.expr(mk("attr", key, line, [self.vnode(v)]) if c == "." else mk("index", "", line, [self.vnode(v), x]), "")
     if v.t == "":
         return v
-    if conv != "":
+    if conv != "" and conv != "\x00":  # (CPython's NUL, as no conversion)
         if conv != "r" and conv != "s" and conv != "a":
             cp = ord(conv[0]) if len(conv) == 1 else ord(conv[0]) & (0x3F >> (len(conv) - 1))
             for b in conv[1:]:
