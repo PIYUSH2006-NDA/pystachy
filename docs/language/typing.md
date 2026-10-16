@@ -135,7 +135,7 @@ rules and the compiler's existing unbound-variable checks continue to apply.
 
 Empty `[]` and `{}` take their types from an annotated variable, parameter, field or return
 context. Otherwise their first useful operation determines the type: `append`, `insert`,
-`extend`, item assignment, `+=`, `setdefault`, `get(key, default)`, or reassignment.
+`extend`, item or slice assignment, `+=`, `setdefault`, `get(key, default)`, or reassignment.
 Nested forms such as `d.setdefault(key, []).append(value)` are supported. Empty `set()`
 uses the same principle with `add`, `update`, or set operators.
 

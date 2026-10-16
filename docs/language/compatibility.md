@@ -368,11 +368,12 @@ supported alternatives.
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class, which CPython calls anyway
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
-- slicing a fixed-shape tuple or NamedTuple by bounds or a step that are not integer constants,
+- slicing a fixed-shape tuple or NamedTuple by bounds or a step that are not integer literals,
   unless its items have one type a `tuple[T, ...]` can hold (the result is then one); assigning
   to or deleting a slice of anything but a list (CPython raises `TypeError` for a `str` or a
   tuple, and a dict takes the slice object as a key); and assigning to a list slice a value that
-  is not iterable, or whose items are not the list's item type (as for `list.extend()`)
+  is not iterable, or whose items are not the list's item type (as for `list.extend()`; a
+  tuple's items must share one type)
 - `sum(iterable, start)` with a `bool` start: its result is the original bool when the iterable
   is empty, and an `int` or `float` otherwise, which cannot share one static type here. Use
   `sum(iterable, int(start))` for a numeric result, including on empty inputs.

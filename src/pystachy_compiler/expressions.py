@@ -781,7 +781,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend()")
+            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend(), or as the value assigned to a list slice")
         return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []
@@ -1250,7 +1250,7 @@ def gen_slice_tuple(self, o: Val, bnd: list[str], step: str) -> Val:
         self.slice_check(step)  # (*args of a call without extra arguments)
         return o
     if any(x != ts[0] for x in ts) or unopt(ts[0]) not in ["int", "float", "bool", "str"]:
-        self.err(f"slicing a {typestr(o.t)} by bounds or a step computed at run time is not supported: the types of the items it selects would not be known (use constants, or a tuple[T, ...] of int, float, bool or str items)")
+        self.err(f"slicing a {typestr(o.t)} by bounds or a step other than integer literals is not supported: the types of the items it selects would not be known (use literals, or a tuple[T, ...] of int, float, bool or str items)")
     vt = self.coerce(o, self.ctype("vtuple", [ts[0]]))
     return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {vt.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), vt.t)
 

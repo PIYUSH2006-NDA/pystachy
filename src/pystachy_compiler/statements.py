@@ -454,6 +454,8 @@ def gen_stmt(self, n: Node) -> None:
                 self.assign(t0.kids[i], vs[i])
         elif len(n.kids) == 2 and t0.kind == "slice" and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
             self.slice_assign(t0, val)  # (xs[a:b] = range(n), = (f(x) for x in ys), ...)
+        elif len(n.kids) == 2 and t0.kind == "slice" and val.kind == "list" and len(val.kids) == 0 and self.target_type(t0) == "":
+            self.assign(t0, Val("null", "tuple[]"))  # (f()[a:b] = []: no item to type, as ())
         else:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)

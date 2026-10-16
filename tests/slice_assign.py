@@ -4,7 +4,7 @@
 # list's length, and a list assigned to a slice of itself is copied first. The value is evaluated
 # before the list and the bounds, an iterator call or generator expression runs after them, and
 # a step of 0 raises before any item is taken.
-from typing import TypeVar
+from typing import Iterator, NamedTuple, TypeVar
 
 T = TypeVar("T")
 
@@ -104,13 +104,56 @@ def counted(items: list[int]) -> tuple[int, ...]:
 ns[1:3] = counted([10, 20, 30])
 print(ns)
 
-# the value's items widen as list.extend() takes them; float lists take ints as floats
+# the value's items widen as list.extend() takes them: a list[str]'s into a list[str | None], and
+# objects into a list of their base class's
 os: list[str | None] = [None, "a"]
 plain = ["b", "c"]
 os[:1] = plain
 print(os)
 os[::2] = [None, None]
 print(os, plain)
+
+
+class Shape:
+    def name(self) -> str:
+        return "shape"
+
+
+class Square(Shape):
+    def name(self) -> str:
+        return "square"
+
+
+shapes = [Shape()]
+squares = [Square(), Square()]
+shapes[1:] = squares
+print([s.name() for s in shapes])
+
+# an object's items are taken by iterating it, as CPython's PySequence_Fast does: its __len__
+# is not called (list() and list.extend() call it as a length hint)
+
+
+class Bag:
+    def __init__(self, items: list[int], fail: bool) -> None:
+        self.items = items
+        self.fail = fail
+
+    def __iter__(self) -> Iterator[int]:
+        print("iter")
+        return iter(self.items)
+
+    def __len__(self) -> int:
+        print("len")
+        if self.fail:
+            raise RuntimeError("no len")
+        return len(self.items)
+
+
+bs = [1, 2, 3]
+bs[1:] = Bag([5, 6], False)
+print(bs)
+bs[::2] = Bag([7, 8], True)
+print(bs)
 
 # a generator that changes the list: the bounds are clamped to the length it leaves
 gs = [1, 2, 3, 4]
@@ -169,6 +212,43 @@ for step in [1, 2, 0]:
         order[::step] = nothing
     except (TypeError, ValueError) as e:
         print(type(e).__name__, e)
+
+
+class Point(NamedTuple):
+    x: int
+    y: int
+
+
+def no_point() -> Point | None:
+    return None
+
+
+def no_bag() -> Bag | None:
+    return None
+
+
+for step in [1, 2, 0]:
+    try:
+        order[::step] = no_point()
+    except (TypeError, ValueError) as e:
+        print(type(e).__name__, e)
+    try:
+        order[::step] = no_bag()
+    except (TypeError, ValueError) as e:
+        print(type(e).__name__, e)
+
+# range(): its arguments are evaluated first, its items made once the list and the bounds are
+# (a step of 0 raises before a huge range would be)
+try:
+    order[::0] = range(2**60)
+except ValueError as e:
+    print("ValueError", e)
+try:
+    maybe[0:1] = range(say(2**60))
+except TypeError as e:
+    print("TypeError", e)
+order[say(0) : say(2)] = range(say(3))
+print(order)
 
 # xs[a:b] op= v: the slice, extended or repeated, stored back
 ag = [1, 2, 3, 4]
@@ -276,3 +356,60 @@ def fill(ys: list[int]) -> None:
 
 
 fill([1, 2])
+
+# ... where a function fills a global list that another reads first, where a loop over the empty
+# *args or a branch the types remove would fill it, and from a tuple, set, str, dict or object
+LOADED = []
+
+
+def show() -> None:
+    print(LOADED)
+
+
+def load() -> None:
+    LOADED[:] = [1, 2]
+
+
+show()
+load()
+show()
+
+
+def gather(*args: int) -> list[int]:
+    ys = []
+    for x in args:
+        ys[:0] = [x]
+    return ys
+
+
+def pick(x: int | str) -> list[int]:
+    zs = []
+    if isinstance(x, str):
+        zs[:] = [len(x)]
+    return zs
+
+
+print(gather(), gather(1, 2), pick(3), pick("ab"))
+t1 = []
+t1[:] = (1, 2)
+t2 = []
+t2[:] = {3}
+t3 = []
+t3[:] = "ab"
+t4 = []
+t4[:] = {"k": 1}
+t5 = []
+t5[:] = Point(4, 5)
+print(t1, t2, t3, t4, t5)
+
+# an empty list assigned to a slice of a call's result, whose type is not known before it
+held = [[1, 2, 3], [4, 5]]
+
+
+def row(i: int) -> list[int]:
+    return held[i]
+
+
+row(0)[:1] = []
+row(1)[:] = []
+print(held)

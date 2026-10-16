@@ -920,6 +920,8 @@ def gen_lookahead(self, name: str, ahead: bool = False) -> str:
     if found[0].kind == "omit" and not self.bound("list") and (self.iterator_call(e) or self.is_mapcall(e) or (e.kind == "listcomp" and e.s == "gen")):
         e = mk("call", "", e.line, [mk("name", "list", e.line, []), e])  # (its items, which the fill takes at once)
     it = self.dry(e)
+    if found[0].kind == "omit" and found[0].s == "slice" and not is_list(it) and it != "tuple[]" and not self.bound("list"):
+        it = self.dry(mk("call", "", e.line, [mk("name", "list", e.line, []), e]))  # (xs[a:b] = v: v's items, as list(v) has them)
     if found[0].kind == "omit" and is_list(t):
         if not is_list(it):
             return ""
@@ -1065,7 +1067,7 @@ def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
             found.append(st.kids[0].kids[1])
             found.append(st.kids[-1])
         elif k == "assign" and st.kids[0].kind == "slice" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name:
-            found.append(mk("omit", "", st.line, []))  # (xs[a:b] = ys, as xs.extend(ys))
+            found.append(mk("omit", "slice", st.line, []))  # (xs[a:b] = ys, as xs.extend(ys))
             found.append(st.kids[-1])
         elif k == "assign" and len(st.kids) == 2 and st.kids[0].kind == "index" and empty_default(st.kids[0].kids[0], name, "dict"):
             # name.setdefault(k, {})[k2] = v: the item is {k2: v} (see default_want)
@@ -1497,8 +1499,8 @@ def gen_slice_target(self, t: Node, bnd: list[str], nosub: str) -> Val:
     if is_list(o.t):
         return o
     what = "deletion" if "deletion" in nosub else "assignment"
-    if o.t in self.classes and o.t not in self.nts:
-        m = "__delitem__" if what == "deletion" else "__setitem__"
+    m = "__delitem__" if what == "deletion" else "__setitem__"
+    if o.t in self.classes and o.t not in self.nts and m in self.classes[o.t].methods:
         self.err(f"slicing an object is not supported: {short(o.t)}.{m} would take a slice object, which Pystachy does not have")
     if is_dict(o.t):
         self.err("a slice as a dict key is not supported")
@@ -1513,7 +1515,7 @@ def gen_slice_check(self, step: str) -> None:
 def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
     # o[lo:hi:st] = v for list o and its slice's bounds bnd (slice_target): v's items, taken as
     # CPython's PySequence_Fast takes them (a list as it is, which the runtime copies first where
-    # it is o itself; any other iterable as list() would take its items) once the step is checked
+    # it is o itself; any other iterable's by iterating it, see as_list) once the step is checked
     st = bnd[2]
     if is_opt(v.t) or v.t in self.classes:
         self.slice_check(st)  # (before None raises or __iter__ runs)
@@ -1521,9 +1523,9 @@ def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
     elif v.t == "tuple[]":
-        v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() has no item to type)
+        v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() and [] have no item to type)
     elif not is_list(v.t):
-        v = self.as_list(v, "list")
+        v = self.as_list(v, "slice")
     if not is_list(v.t):
         self.err(f"must assign iterable to extended slice, not {typestr(v.t)}")
     if v.t != o.t and self.widens_items(v.t, o.t):

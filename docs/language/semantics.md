@@ -106,7 +106,8 @@ the supported iterator.
 A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and returns
 `iter(xs)` for a list, tuple, string or another object with the same supported protocol.
 It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
-`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
+`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint;
+a slice assignment does not, as in CPython.
 Generator implementations, general `__next__` iterator classes, and direct calls of
 `o.__iter__()` are unsupported.
 
