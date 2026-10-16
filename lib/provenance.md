@@ -34,6 +34,7 @@ observable contract.
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
 | `random` | `Lib/random.py` | `fb2625eb54412c880e8f1af449785a74e125556159fc7997814e51dd054cc5da` |
 | `datetime` | `Lib/_pydatetime.py` | `9a6652ecbdc8bcb9774136febc36b13f99aa926c7b42c19ac77e6c84128560a4` |
+| `codecs` | `Lib/codecs.py` | `2f278497548b8313580b247a1097a0a304e5087a355ebb11a92ec685fa9e63ff` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
 `datetime` is `_pydatetime`, which CPython's `Lib/datetime.py` re-exports when its C
@@ -69,6 +70,7 @@ CPython runs the source.
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
 | `binascii` (`_pystachy_binascii`) | `Modules/binascii.c`, `Python/pystrhex.c` | All twelve functions of the C module, with its errors and messages |
+| `_codecs` (`_pystachy_codecs`) | `Modules/_codecsmodule.c`, `Objects/unicodeobject.c`, `Objects/stringlib/codecs.h` | The UTF-8, Latin-1, ASCII and charmap codec functions, `encode()`, `decode()` and the error handler registry, with the C module's errors and messages; the other codecs raise `NotImplementedError` |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -130,6 +132,16 @@ hash with `hash()` and the `lgamma` port with `math.lgamma()`. Its `--upstream D
 runs the pinned `test_random` (SHA-256
 `04ffe61561421e6cf3b85edcea3ebaca995e6a5def1267cf3562acbb3b9b1337`) and its `randv*.pck`
 files from DIR on both generators, as recorded above.
+
+`tools/codecs_check.py` runs `lib/_pystachy_codecs.py` on CPython and compares the results and
+errors of 96,000 calls of its codec functions, with every error handler and on the decoding
+tables of the standard library's table codecs, with those of the C module (`Modules/_codecsmodule.c`,
+SHA-256 `bd2f762ac481caabd817f6b94de19f3788ae7635406d06770b7972aafad03632`, whose codecs are in
+`Objects/unicodeobject.c`, SHA-256
+`68a5618c520f5b348e9e2abe1a77688c4b0c1f377d86f79e3399b41b445c24ab`, and
+`Objects/stringlib/codecs.h`, SHA-256
+`d126faea1dcf3f3b19a256237e5e87bdaa006dbc5b26fb0b5267f9a1dcbab3b4`), and compares the 39
+functions' signatures.
 
 `tools/binascii_check.py` runs `lib/_pystachy_binascii.py` on CPython, compares the results and
 errors of 420,000 calls of its functions, mostly at the edges of their inputs, with those of the C

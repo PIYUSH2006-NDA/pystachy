@@ -28,9 +28,9 @@
 #   test_yield_in_nested_try_excepts, test_generator_doesnt_retain_old_exc2 and
 #   test_raise_in_generator (generator functions, sys.exception())
 # - test_unicode_change_attributes, test_unicode_errors_no_object and
-#   test_unicode_error_str_does_not_crash (UnicodeEncodeError(), UnicodeDecodeError() and
-#   UnicodeTranslateError() of several arguments, klass.__new__ and setting their attributes are
-#   not supported)
+#   test_unicode_error_str_does_not_crash (the attributes of UnicodeEncodeError and
+#   UnicodeDecodeError, which they set, klass.__new__ and UnicodeTranslateError() are not
+#   supported)
 # - test_oserror_reinit_leak (a subclass of OSError that assigns strerror, filename and
 #   filename2, the base's own attributes: rejected at compile time), test_errno_ENOTDIR
 #   (os.listdir() and e.errno are not supported), test_assert_shadowing (`AssertionError =

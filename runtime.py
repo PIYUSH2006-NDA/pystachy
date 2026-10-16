@@ -1886,6 +1886,29 @@ def pys_str_encode(s: str, encoding: str, errors: str) -> str:
     return "".join(out)
 
 
+def pys_unicode_error_str(dec: int, encoding: str, obj: str, start: int, end: int, reason: str) -> str:
+    # str() of UnicodeDecodeError(encoding, obj, start, end, reason) (dec 1: obj a bytes) or of
+    # UnicodeEncodeError(...) (obj a str, whose characters start and end count), as CPython's
+    # (Objects/exceptions.c): the one byte or character at start, or the range to end
+    n = len(obj)
+    if dec == 1:
+        if start >= 0 and start < n and end >= 0 and end <= n and end == start + 1:
+            return "'" + encoding + "' codec can't decode byte 0x" + hexpart(_rt.byte(obj, start), 2) + " in position " + str(start) + ": " + reason
+        return "'" + encoding + "' codec can't decode bytes in position " + str(start) + "-" + str(end - 1) + ": " + reason
+    i = 0
+    chars = 0
+    bad = 0
+    while i < n:
+        m = u8seq(obj, i, n)
+        if chars == start:
+            bad = u8cp(obj, i, m)
+        i += m
+        chars += 1
+    if start >= 0 and start < chars and end >= 0 and end <= chars and end == start + 1:
+        return "'" + encoding + "' codec can't encode character '" + escaped(bad) + "' in position " + str(start) + ": " + reason
+    return "'" + encoding + "' codec can't encode characters in position " + str(start) + "-" + str(end - 1) + ": " + reason
+
+
 def encode_error(cps: list[int], pos: int, k: int, errors: str) -> str:
     # the bytes error handler errors makes of code points cps, from character pos of the str on,
     # which codec k cannot encode, as CPython's handlers make them

@@ -227,8 +227,11 @@ with `isinstance()` or `type(e).__name__`. An annotation such as `Exception` nam
 builtin exception value type; it does not accept arbitrary user exception objects.
 
 `OSError(errno, strerror[, filename])` selects the subclass associated with the errno.
-`ImportError`, `AttributeError` and `NameError` accept their supported keyword arguments.
-Exception attributes such as `args` are unsupported.
+`UnicodeDecodeError(encoding, object, start, end, reason)` (of a bytes object) and
+`UnicodeEncodeError(...)` (of a str, whose characters `start` and `end` count) take CPython's
+five arguments and give its message, which names the byte or character at `start` or the range
+to `end`. `ImportError`, `AttributeError` and `NameError` accept their supported keyword
+arguments. Exception attributes such as `args` are unsupported.
 
 ### Control flow
 

@@ -77,6 +77,13 @@ lib/_pystachy_iterators.py is Pystachy's own, written after the iterator types o
 setobject.c, whose behaviour and messages it follows; it is derived from Python and is used under
 the same license and copyright notice.
 
+lib/codecs.py is CPython 3.13.16's Lib/codecs.py with the edits lib/compatibility.md lists,
+each marked in the source; it is derived from Python and is used under the same license and
+copyright notice. lib/_pystachy_codecs.py ports the codec functions of CPython 3.13.16's
+Modules/_codecsmodule.c, Objects/unicodeobject.c and Objects/stringlib/codecs.h to Pystachy's
+subset, following their behaviour and messages and keeping the C module's docstrings; it is
+derived from Python and is used under the same license and copyright notice.
+
 lib/_pystachy_binascii.py ports CPython 3.13.16's Modules/binascii.c and the hex separators of
 Python/pystrhex.c to Pystachy's subset, following their behaviour and messages and keeping the C
 module's docstrings; it is derived from Python and is used under the same license and copyright
