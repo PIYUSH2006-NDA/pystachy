@@ -122,7 +122,9 @@ Other code can use an alias of `int`, `float`, `str` or `bool` (`Pos = int`) as 
 to call it or pass it to `isinstance()`; using another alias as a value (`print(Row)`,
 `Row.__value__`, `isinstance(x, Num)`) is rejected.
 Recursive aliases (`type Json = int | list[Json]`) and `type` statements outside a module's
-top level, or for a name that another statement also binds, are unsupported.
+top level, or for a name that another statement also binds, are unsupported, as is an
+annotation whose aliases expand to more than 65,536 nodes (aliases that each name the one
+before twice).
 
 ## Variables and empty containers
 

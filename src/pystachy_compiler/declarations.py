@@ -383,7 +383,8 @@ def gen_alias_tvars(self, a: Node, out: list[str], seen: list[str]) -> None:
     if a.kind == "name" and a.s in self.typevars and a.s not in out:
         out.append(a.s)
     if a.kind == "name" and a.s in self.taliases and a.s not in seen and self.taliases[a.s].kind == "assign":
-        self.alias_tvars(self.taliases[a.s].kids[1], out, seen + [a.s])
+        seen.append(a.s)  # (once: what it names again adds no TypeVar)
+        self.alias_tvars(self.taliases[a.s].kids[1], out, seen)
     if a.kind == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.taliases:
         self.alias_tvars(a.kids[1], out, seen)  # (its type arguments, not its own parameters)
         return
@@ -408,6 +409,9 @@ def gen_unalias(self, a: Node, seen: list[str]) -> Node:
     k = a.kind
     if k == "noann":
         return a  # (a generic def's, which types nothing)
+    self.unaliased += 1  # (the nodes it has made of the annotation, which aliases of aliases can double)
+    if self.unaliased > TYPE_SIZE:
+        self.err(f"the type aliases this annotation names expand to more than {TYPE_SIZE} nodes (not supported: simplify them)")
     if k == "name" and a.s in self.taliases and a.s not in seen and (self.taliases[a.s].kind == "assign" or self.taliases[a.s].kids[0].s == ""):
         return self.unalias(clone(self.alias_value(a.s)), seen + [a.s])
     if k == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.taliases and a.kids[0].s not in seen:
@@ -448,6 +452,7 @@ def gen_alias_ann(self, n: Node) -> str:
     if n.kind == "name" and len(tps) > 0 and self.taliases[name].kind == "typealias":
         return f"!generic type alias '{short(name)}' needs its type arguments here ({short(name)}[{', '.join([short(x) for x in tps])}])"
     self.resolving.append(name)
+    self.unaliased = 0
     t = self.ann(self.unalias(clone(n), []))
     self.resolving.pop()
     if t.startswith("!") and not t.startswith("!type alias") and not t.startswith("!recursive type aliases") and not t.startswith("!generic type alias"):
@@ -457,11 +462,16 @@ def gen_alias_ann(self, n: Node) -> str:
 def gen_unalias_all(self, n: Node) -> None:
     # replace the type aliases that the annotations in code n name (unalias): its defs'
     # parameters and returns and its annotated assignments, at any depth
+    if n.kind == "def" or n.kind == "annassign":
+        self.line = n.line
     if n.kind == "def":
         for p in n.kids[0].kids:
+            self.unaliased = 0
             p.kids[0] = self.unalias(p.kids[0], [])
+        self.unaliased = 0
         n.kids[1] = self.unalias(n.kids[1], [])
     elif n.kind == "annassign":
+        self.unaliased = 0
         n.kids[1] = self.unalias(n.kids[1], [])
     for k in n.kids:
         self.unalias_all(k)

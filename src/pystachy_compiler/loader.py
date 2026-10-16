@@ -520,12 +520,13 @@ class Loader:
 
     def used_before(self, m: Mod, al: Node) -> None:
         # an alias (name = f) binds name for all of the module's code; module-level code that runs
-        # before it would see name unbound in CPython
+        # before it would see name unbound in CPython (but not a type statement's value, which is
+        # evaluated lazily)
         nm = al.kids[0].s
         for st in m.body.kids:
             if st is al:
                 return
-            if st.kind != "def" and st.kind != "class" and st.kind != "subclass" and refers(st, nm):
+            if st.kind != "def" and st.kind != "class" and st.kind != "subclass" and st.kind != "typealias" and refers(st, nm):
                 fail(f"name '{nm}' is used before '{nm} = {al.kids[-1].s}' binds it (not supported for an alias of a function or class)", st.line)
 
     def deftime(self, m: Mod, body: list[Node], env: list[dict[str, bool]], cls: str, added: list[str], top: bool) -> None:

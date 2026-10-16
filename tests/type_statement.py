@@ -6,6 +6,7 @@
 from typing import TypeAlias
 
 type Tree = list[Leaf]  # (Leaf is defined below)
+type Twigs = list[Twig]  # (and Twig, an alias of it, bound below)
 type Never = dict[str, Missing]  # (never evaluated: Missing is never defined)
 type Labels = dict[str, Label]
 Label: TypeAlias = "Text"  # (a forward reference to the alias below)
@@ -31,6 +32,13 @@ class Leaf:
         return self.v == other.v
 
 
+Twig = Leaf
+
+
+def twigs(ts: Twigs) -> int:
+    return sum(x.v * 10 for x in ts)
+
+
 def total(t: Tree) -> int:
     acc: int = 0
     for leaf in t:
@@ -50,7 +58,7 @@ def trace(m: Ints) -> int:
 
 
 t: Tree = [Leaf(1), Leaf(2), Leaf(3)]
-print(early(t), total(t), t[0].same(Leaf(1)), first(t))
+print(early(t), total(t), t[0].same(Leaf(1)), first(t), twigs([Twig(4), Leaf(5)]))
 print(names({"b": "β", "a": "α"}))
 print(trace([[1, 2], [3, 4]]))
 fm: Matrix[float] = [[0.5]]

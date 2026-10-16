@@ -808,6 +808,7 @@ class Gen:
         # those whose annotation alias_ann is making the type of
         self.taliases: dict[str, Node] = {}
         self.resolving: list[str] = []
+        self.unaliased = 0  # (the nodes unalias has made of the annotation it expands)
 
     # ---- emission helpers
     def err(self, msg: str) -> None:
