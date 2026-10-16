@@ -119,7 +119,9 @@ Generic operations such as comparison, hashing, representation and sorting recei
 type descriptor. The runtime interprets nested container descriptors and calls generated helpers
 for supported object methods. A dict's or set's descriptor of its keys tells objects hashed by
 identity (their addresses, which the non-moving collector keeps stable) from those hashed by
-their class's `__hash__`. Specialized code still has static types; these descriptors
+their class's `__hash__`; a dict of the latter keeps CPython's hashes and an index of CPython's
+size (other dicts' have twice the slots), so that its lookups probe CPython's slots in CPython's
+order and call `__eq__` as often. Specialized code still has static types; these descriptors
 do not introduce a dynamic `Any` type.
 
 The collector is conservative, non-moving mark-and-sweep. It scans stack/register roots and

@@ -19,10 +19,11 @@
    The string-cache check counts calls/bytes through the real runtime.py hash, so repeated
    lookups must not rescan bytes. The storage check reads the kinds of the tables from the page
    map: the collector never scans the key arrays of dicts and sets of ints, and scans those of
-   strs, tuples and objects (P000: hashed by identity) and every dict's values, and the 8 slots of
-   a new set whatever its kind (the compiler may change the kind of an empty set); so ints that
-   are the addresses of strs nothing else holds keep none of them alive (#210), and objects that
-   are keys or elements stay. --hash-cache runs only these two checks, also under GC stress.
+   strs, tuples and objects (P000: hashed by identity; H000: by their class, whose dicts have
+   CPython's index, KTAG) and every dict's values, and the 8 slots of a new set whatever its kind
+   (the compiler may change the kind of an empty set); so ints that are the addresses of strs
+   nothing else holds keep none of them alive (#210), and objects that are keys or elements stay.
+   --hash-cache runs only these two checks, also under GC stress.
    runtime.c's dict hash functions are in runtime.py, so the build links its IR (pystachy rt).
    usage: make dictprobe   (build/dictprobe [N...] or build/dictprobe --hash-cache) */
 #include <time.h>
@@ -42,7 +43,9 @@ I counted_hash_str(Str *s) {
 }
 
 #define LIMIT 3.0
-I pys_obj_eq(I c, I a, I b) { (void)c; return a == b; }   /* the programs' callbacks, which objects hashed by identity (P000) never call */
+/* the programs' callbacks, which objects hashed by identity (P000) never call; an H000 object of
+   the storage check (skey) hashes as its int field, which its __eq__ compares (c < 0: hash(a)) */
+I pys_obj_eq(I c, I a, I b) { return c < 0 ? ((I *)a)[1] * 7 : a == b || ((I *)a)[1] == ((I *)b)[1]; }
 I pys_obj_cmp(I c, I op, I a, I b) { (void)c; (void)op; return a < b ? -1 : a > b; }
 Str *pys_obj_repr(I c, I a, I b) { (void)c; (void)a; (void)b; return cstr("<object>"); }
 
@@ -137,7 +140,7 @@ static void dict_kinds(Dict *d, int ints, const char *how) {
 static void set_kinds(Set *s, int ints, const char *how) {
   if (atomic(s->keys) != ints || !atomic(s->hs)) storage_bad(how);
 }
-static I skey(I kind, I i) {           /* key i of a dict or set of kind 0 (ints), 1 (strs), 2 (T2si) or 3 (P000) */
+static I skey(I kind, I i) {           /* key i of a dict or set of kind 0 (ints), 1 (strs), 2 (T2si), 3 (P000) or 4 (H000) */
   char b[24]; Str *s = pys_str(b, snprintf(b, sizeof b, "k%lld", (long long)i));
   if (kind < 2) return kind ? (I)s : i;
   I *t = pys_alloc(16); t[0] = (I)s; t[1] = i; return (I)t;   /* (a tuple, or an object of two fields) */
@@ -178,8 +181,8 @@ __attribute__((noinline)) static void scrub_collect(void) {
 }
 static void big_ok(Str *s, I i) { if (s->len != MIB || s->s[0] != 'a' + i || s->s[MIB - 1] != 'x') storage_bad("a kept str changed"); }
 static void storage(void) {
-  for (I kind = 0; kind < 4; kind++) { /* every path that makes a table: of ints, strs, tuples, then objects */
-    I k2 = kind < 2 ? kind : (I)cstr(kind == 2 ? "T2si" : "P000"); int ints = kind == 0;
+  for (I kind = 0; kind < 5; kind++) { /* every path that makes a table: of ints, strs, tuples, then objects */
+    I k2 = kind < 2 ? kind : (I)cstr(kind == 2 ? "T2si" : kind == 3 ? "P000" : "H000"); int ints = kind == 0;
     keys = pys_list_new(4);
     dict = pys_dict_new(k2, 10); keys->a[0] = (I)dict; keys->len = 1;
     dict_kinds(dict, ints, "a presized dict");
@@ -187,8 +190,11 @@ static void storage(void) {
     dict_kinds(dict, ints, "a dict that grew");
     dict_kinds(pys_dict_copy(dict), ints, "dict.copy()");
     dict_kinds(pys_dict_from(dict), ints, "dict(d)");
-    for (I i = 0; i < 100; i += 2) pys_dict_pop(dict, kind == 3 ? dict->keys[i] : skey(kind, i));   /* (an object is found as itself) */
-    dict_kinds(pys_dict_copy(dict), ints, "dict.copy() of a dict with holes");
+    for (I i = 0; i < 100; i += 2) pys_dict_pop(dict, kind == 3 ? dict->keys[i] : skey(kind, i));   /* (P000: an object is found as itself) */
+    Dict *c = pys_dict_copy(dict);
+    dict_kinds(c, ints, "dict.copy() of a dict with holes");
+    if ((kind == 4) != ((dict->kind & KTAG) != 0) || (c->kind & KTAG) != (dict->kind & KTAG)) storage_bad("KTAG");
+    for (I i = 1; i < 100; i += 2) if (pys_dict_get(c, kind == 3 ? dict->keys[i] : skey(kind, i), -1) != i) storage_bad("a key of a copy not found");
     pys_dict_clear(dict); pys_dict_set(dict, skey(kind, 1), 1);
     dict_kinds(dict, ints, "a dict filled again after clear()");
     Set *s = pys_set_new(k2); keys->a[1] = (I)s; keys->len = 2;
