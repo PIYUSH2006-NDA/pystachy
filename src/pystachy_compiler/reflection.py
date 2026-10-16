@@ -807,6 +807,9 @@ def gen_refl_names(self, c: str) -> list[list[str]]:
             for n in ["__class_getitem__", "__orig_bases__", "__parameters__"] + (["__type_params__"] if o in self.pep695 else []):
                 out[n] = "o"
         k = self.classes[k].base
+    if self.abc_class(c):
+        for n in ["__abstractmethods__", "_abc_impl"]:
+            out[n] = "o"  # (ABCMeta's, which it sets on each class it makes)
     if self.is_dc(c):
         for n in ["__dataclass_fields__", "__dataclass_params__", "__replace__"]:
             out[n] = "o"

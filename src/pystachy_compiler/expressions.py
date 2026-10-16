@@ -281,6 +281,8 @@ def gen_has(self, t: str, a: str) -> int:
                     return -1
                 c = self.classes[c].base
             return -1 if a == "__replace__" else 0
+        if a == "__abstractmethods__" or a == "_abc_impl":
+            return -1 if self.abc_class(t) else 0  # (ABCMeta's, on each class it makes)
         if a in ["__class_getitem__", "__orig_bases__", "__parameters__", "__type_params__"]:
             # (a generic class's, Generic[T] or class C[T], and its subclasses')
             c = t
