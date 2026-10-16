@@ -574,9 +574,12 @@ def main() -> None:
         target = rtb[:-3] + ".target"
         layout = ""
         if trusted and os.path.exists(target):
-            f = open(target, "r", encoding=RAW)
-            layout = f.read()
-            f.close()
+            try:
+                f = open(target, "r", encoding=RAW)
+                layout = f.read()
+                f.close()
+            except OSError:
+                pass  # (optional metadata: unreadable means derive it from the bitcode)
         if layout == "":
             code = sh(f"{tc[3]} -S -passes=verify {q(usebc)} -o {q(rsl)}")
             if code == 0:
@@ -585,10 +588,18 @@ def main() -> None:
                 f.close()
                 if pub:
                     tp = f"{target}.{os.getpid()}.{own}"
-                    f = open(tp, "w", encoding=RAW)
-                    f.write(layout)
-                    f.close()
-                    sh(f"mv -f {q(tp)} {q(target)}")
+                    try:
+                        f = open(tp, "w", encoding=RAW)
+                        f.write(layout)
+                        f.close()
+                        sh(f"mv -f {q(tp)} {q(target)} 2> /dev/null")
+                    except OSError:
+                        pass  # (a read-only cache still supplies its runtime)
+                    if os.path.exists(tp):
+                        try:
+                            os.remove(tp)
+                        except OSError:
+                            pass
         if code == 0:
             f = open(ll, "w", encoding=RAW)
             f.write(layout + ir)
