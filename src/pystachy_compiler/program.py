@@ -567,6 +567,13 @@ def gen_program(self, mods: list[Mod]) -> str:
                 m.body.kids[i] = mk("pass", "", st.line, [])  # (a type alias, which only annotations name)
             elif st.kind == "assign" and st.kids[0].kind == "name" and st.kids[0].s in self.taliases and self.taliases[st.kids[0].s] is st and not self.alias_kept(st.kids[0].s):
                 m.body.kids[i] = mk("pass", "", st.line, [])
+    for q in self.taliases:
+        # (CPython evaluates an assigned alias's value where it assigns it, a type statement's
+        # only where its __value__ is read)
+        why = self.alias_problem(self.taliases[q].kids[1]) if self.taliases[q].kind == "assign" else ""
+        if why != "":
+            self.line = self.taliases[q].line
+            self.err(why[1:] if why.startswith("!") else f"{why} (CPython evaluates this type alias's value when the assignment runs)")
     if len(self.taliases) > 0:
         # an annotation that names a type alias is its value (unalias)
         for m in mods:

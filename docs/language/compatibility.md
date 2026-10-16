@@ -487,7 +487,12 @@ supported alternatives.
   `isinstance(x, Num)`), but an alias of `int`, `float`, `str` or `bool`; a recursive type alias;
   a `type` statement other than at a module's top level, or for a name that another statement
   binds too; a generic `type` statement's alias named without its type arguments, and type
-  arguments for a type alias with a `TypeVarTuple` or `ParamSpec` parameter
+  arguments for a type alias with a `TypeVarTuple` or `ParamSpec` parameter; in an assigned
+  alias's value, a subscript of a typing name other than its generic aliases, `Optional`,
+  `Union`, `Callable`, `Tuple`, `Literal`, `Annotated` and the single-type forms
+  (`Generic[T]`, `Concatenate[...]`), also where no annotation names the alias; a `type`
+  statement's string value that is not an expression, also where nothing evaluates it; an
+  annotation whose type aliases expand to more than 65,536 nodes
 
 ### Exceptions and exception classes
 

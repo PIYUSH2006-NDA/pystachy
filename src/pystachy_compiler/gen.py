@@ -161,11 +161,15 @@ from src.pystachy_compiler.conversions import (
 from src.pystachy_compiler.declarations import (
     gen_add_field as declarations_add_field,
     gen_alias_ann as declarations_alias_ann,
+    gen_alias_args as declarations_alias_args,
+    gen_alias_arity as declarations_alias_arity,
     gen_alias_kept as declarations_alias_kept,
     gen_alias_params as declarations_alias_params,
+    gen_alias_problem as declarations_alias_problem,
     gen_alias_tvars as declarations_alias_tvars,
     gen_alias_value as declarations_alias_value,
     gen_alias_variadic as declarations_alias_variadic,
+    gen_alias_whole as declarations_alias_whole,
     gen_ann as declarations_ann,
     gen_ann_base as declarations_ann_base,
     gen_ann_items as declarations_ann_items,
@@ -801,6 +805,7 @@ class Gen:
         self.cvars: dict[str, bool] = {}
         self.typevars: list[str] = []  # module globals bound to typing.TypeVar(...) or TypeVarTuple(...), which only annotations may name
         self.tvtuples: dict[str, bool] = {}  # those bound to a TypeVarTuple, which an annotation unpacks (*Ts)
+        self.tvdefaults: dict[str, bool] = {}  # and those with a default (TypeVar("T", default=...), class C[T = int])
         # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
         # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
@@ -1058,6 +1063,18 @@ class Gen:
 
     def alias_params(self, name: str) -> list[str]:
         return declarations_alias_params(self, name)
+
+    def alias_whole(self, name: str) -> Node:
+        return declarations_alias_whole(self, name)
+
+    def alias_problem(self, e: Node) -> str:
+        return declarations_alias_problem(self, e)
+
+    def alias_args(self, name: str, n: int) -> str:
+        return declarations_alias_args(self, name, n)
+
+    def alias_arity(self, name: str, tps: list[str], n: int) -> str:
+        return declarations_alias_arity(self, name, tps, n)
 
     def alias_tvars(self, a: Node, out: list[str], seen: list[str]) -> None:
         return declarations_alias_tvars(self, a, out, seen)

@@ -222,7 +222,7 @@ class Parser:
                 tpk: list[str] = []
                 self.typeparams(tps, line, tpk)
                 # class C[T, *Ts]: a generic class; a kid per type parameter tells its kind (s: "",
-                # "*" for a TypeVarTuple or "**" for a ParamSpec)
+                # "*" for a TypeVarTuple or "**" for a ParamSpec, then "=" for a default)
                 bases.append(mk("typeparams", " ".join(tps), line, [mk("str", x, line, []) for x in tpk]))
                 self.tparams[line] = " ".join(tps)
             if self.eat("("):
@@ -575,7 +575,8 @@ class Parser:
 
     def typeparams(self, out: list[str], line: int, kinds: list[str]) -> None:
         # [T, U: bound, *Ts, **P, V = default] after the name of a def, a class or a type alias (on
-        # line): their names, and in kinds "", "*" or "**" for each
+        # line): their names, and in kinds "", "*" or "**" for each, with "=" after it if it has a
+        # default
         if self.toks[self.p + 1].kind == "]":
             self.fail("Type parameter list cannot be empty", self.line())
         self.expect("[")
@@ -600,6 +601,7 @@ class Parser:
                 b = self.item()
                 self.scoped(b, f"a {kind} default")
                 self.dropped(line, b)
+                kinds[len(kinds) - 1] = kinds[len(kinds) - 1] + "="
             if not self.eat(","):
                 self.expect("]")
                 break

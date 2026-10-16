@@ -107,9 +107,14 @@ too. An annotation that names an alias uses its value, also in another module (`
 Row`, `m.Row`, `import *`).
 
 An assignment evaluates its value when it runs, so the names in it must be bound by then, and
-an annotation that CPython evaluates can name the alias only after the assignment. A `type`
-statement's value is evaluated lazily and may name classes defined further down; so may a
-string value, `Label: TypeAlias = "Text"`.
+an annotation that CPython evaluates can name the alias only after the assignment. Its
+subscripts are checked there as CPython's `typing` checks them, even if no annotation names
+the alias: `Box[int, str]` for a class with one type parameter, `Iterable[int, str]` or
+`Union[()]` is an error. A subscript of a typing name other than its generic aliases
+(`List`, `Iterable`, `Generator`, ...), `Optional`, `Union`, `Callable`, `Tuple`, `Literal`,
+`Annotated` and the single-type forms (`ClassVar`, `Final`, ...) is unsupported there. A
+`type` statement's value is evaluated lazily and may name classes defined further down; so
+may a string value, `Label: TypeAlias = "Text"`.
 
 Generic aliases take type arguments: `type Pair[T] = tuple[T, T]`, or an assignment whose
 value mentions `TypeVar`s, `Pair = tuple[T, T]`, whose parameters are those variables in the

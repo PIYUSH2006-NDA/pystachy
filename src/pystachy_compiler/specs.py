@@ -187,6 +187,15 @@ for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Ite
            "TypeAliasType TypeIs assert_type clear_overloads get_args get_origin get_overloads get_protocol_members is_protocol "
            "is_typeddict no_type_check_decorator").split():
     TYPING[_k] = True
+# how many type arguments a subscript of typing's generic aliases takes, which CPython checks
+# where it evaluates one ("1", or "1-3" where the others have defaults: Generator[int])
+TYPEARGS: dict[str, str] = {"Coroutine": "3", "Generator": "1-3", "AsyncGenerator": "1-2", "ContextManager": "1-2", "AsyncContextManager": "1-2"}
+for _k in ("List Set FrozenSet Type Deque Counter Iterable Iterator Reversible Container Collection Sequence MutableSequence "
+           "AbstractSet MutableSet MappingView KeysView ValuesView Awaitable AsyncIterable AsyncIterator Pattern Match IO "
+           "SupportsAbs SupportsRound").split():
+    TYPEARGS[_k] = "1"
+for _k in "Dict DefaultDict OrderedDict ChainMap Mapping MutableMapping ItemsView".split():
+    TYPEARGS[_k] = "2"
 # collections.abc: imported as typing's names are (Mapping[K, V] is dict[K, V], see typeof)
 ABCS: dict[str, bool] = {}
 for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hashable Iterable Iterator Generator Reversible Sized "
