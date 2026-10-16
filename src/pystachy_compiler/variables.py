@@ -1517,8 +1517,8 @@ def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
     # CPython's PySequence_Fast takes them (a list as it is, which the runtime copies first where
     # it is o itself; any other iterable's by iterating it, see as_list) once the step is checked
     st = bnd[2]
-    if is_opt(v.t) or v.t in self.classes:
-        self.slice_check(st)  # (before None raises or __iter__ runs)
+    if not is_list(v.t):
+        self.slice_check(st)  # (before None raises, __iter__ runs or a file is consumed)
     v = self.unwrap(v, "TypeError: must assign iterable to extended slice")  # (CPython 3.13's, for any step)
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
