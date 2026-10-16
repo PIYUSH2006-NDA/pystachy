@@ -175,7 +175,7 @@ def gen_bind(self, c: str, ts: list[str], given: dict[str, str]) -> dict[str, st
     # parameter whose annotation mentions them matches its argument's type (see match)
     tvs = self.tparams[c]
     tv: dict[str, str] = {}
-    init = [d for d in self.classes[c].node.kids[0].kids if d.kind == "def" and d.s == "__init__"][0]
+    init = self.classes[c].methods["__init__"].node  # (as specialize's: a template has its own)
     ps = init.kids[0].kids
     later: list[int] = []
     for i in range(1, min(len(ps), len(ts) + 1)):
@@ -330,8 +330,8 @@ def gen_generic_ann(self, c: str, a: Node) -> str:
     # __init__'s annotations (see named_params)
     tvs = self.tparams[c]
     xs = a.kids if a.kind == "tuple" else [a]
-    if "__init__" not in self.classes[c].methods:
-        return f"!{short(c)}[...] names a generic class that is declared further down: Pystachy needs its class statement before the annotation (or a generic class with an __init__)"
+    if c in self.tmpl and "__init__" not in self.classes[c].methods:
+        return f"!{short(c)}[...] names a generic class that is declared further down: Pystachy needs its class statement before the annotation"
     if "__class_getitem__" in self.body_names(self.classes[c].node):
         return f"!{short(c)}[...] with a custom __class_getitem__ is not supported"
     if len([x for x in tvs if x in self.tvtuples]) > 0:
@@ -344,6 +344,11 @@ def gen_generic_ann(self, c: str, a: Node) -> str:
         if t.startswith("!"):
             return t
         given[tvs[i]] = t
+    if c not in self.tmpl:
+        # (no class template: without an __init__ of its own, or a dataclass, its objects bind
+        # nothing and are all c's, as c() makes them; its methods' parameters that name its
+        # type variables take each call's types, see declare_fn)
+        return c
     return self.specialize(c, [], given, True, {})
 
 def gen_named_params(self, c: str, init: Node) -> list[str]:
@@ -664,10 +669,13 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
 def gen_literal_class(self, c: str) -> bool:
     # does class template c specialize on its literal constructor arguments: only operator's
     # getters do, whose items and names must be constants (a fixed tuple's index, an attribute's
-    # name). Each literal value makes a specialization of its own (see const_of)
-    if c not in self.classes or self.classes[c].mod != "operator":
+    # name), and _struct's Struct, whose format decides its values' types (Gen.struct_call). Each
+    # literal value makes a specialization of its own (see const_of)
+    if c not in self.classes or (self.classes[c].mod != "operator" and self.classes[c].mod != "_struct"):
         return False
     o = short(self.classes[c].origin if self.classes[c].origin != "" else c)
+    if self.classes[c].mod == "_struct":
+        return o == "Struct"
     return o == "itemgetter" or o == "attrgetter" or o == "methodcaller"
 
 def gen_literal_args(self, f: FnInfo, args: list[Node]) -> dict[str, Node]:

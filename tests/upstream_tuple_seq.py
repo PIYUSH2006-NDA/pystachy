@@ -35,8 +35,8 @@
 #   special methods are not supported)
 # - test_contains' u.__contains__() and test_getitem's u.__getitem__() (TypeError; tuple's
 #   special methods are not supported), test_subscript (a.__getitem__(), slice objects)
-# - test_getslice's extended slices (not adapted here, from before slice steps were supported)
-#   and its extreme cases with long ints (-pow(2,128) and pow(2,145) overflow)
+# - test_getslice's extended slices (tests/upstream_slice_steps.py adopts them for tuples, lists
+#   and strs) and its extreme cases with long ints (-pow(2,128) and pow(2,145) overflow)
 # - test_count's a.count() and test_index's u.index() (TypeError: a compile-time error here, as
 #   tests/errors/tuple_count_arity.py's); test_index's a.index(0, -4*sys.maxsize, 4*sys.maxsize)
 #   and a.index(0, 4*sys.maxsize, -4*sys.maxsize) (ints are 64-bit: 4*sys.maxsize overflows)

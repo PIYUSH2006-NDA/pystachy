@@ -171,9 +171,21 @@ def _charat(s: str, i: int) -> str:
     if not _UTF8:
         return c
     b = ord(c)
-    if b < 0xC0:
+    if b < 0xC2 or b >= 0xF5:
         return c
     n = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
+    # Match _codes(): a truncated sequence or invalid continuation is one standalone byte. So is
+    # an overlong form or a value past U+10FFFF, as runtime.c's u8char (ord(), repr()) reads them.
+    # The second byte tells: below A0 after E0 (under U+0800), below 90 after F0 (under U+10000)
+    # or from 90 after F4 (past U+10FFFF); every other lead from C2 decodes in range.
+    if i + n > len(s):
+        return c
+    x = ord(s[i + 1])
+    if x & 0xC0 != 0x80 or (b == 0xE0 and x < 0xA0) or (b == 0xF0 and x < 0x90) or (b == 0xF4 and x >= 0x90):
+        return c
+    for j in range(2, n):
+        if ord(s[i + j]) & 0xC0 != 0x80:
+            return c
     return s[i : i + n]
 
 
@@ -182,43 +194,56 @@ def _charat(s: str, i: int) -> str:
 _last = ""
 _last_codes: list[int] = []
 _last_offs: list[int] = []  # (the index in the str of each code point, and its length; [] for ASCII)
+_last_limit = 0  # greatest requested index covered, including a character at/after it if present
 _decoded = 0  # the code points decoded so far (tests/deviations/lib_re_decoding.py counts them)
 
 
-def _codes(string: str) -> list[int]:
-    # string's code points, decoded once for the string matched last (as parsy matches one string
-    # at many positions); _offs then has the index of each in the str, or is [] if those are theirs.
+def _codes(string: str, limit: int) -> list[int]:
+    # Cache the last subject's code points through limit; its decoded prefix grows geometrically.
+    # _last_offs has the index of each in the str, or is [] if those are theirs.
     # An operation keeps what it gets (its State's s and offs): what a function it calls matches,
     # which decodes another string, is no reason to decode its own again
-    global _last, _last_codes, _last_offs, _decoded
-    if string is _last and len(string) == len(_last):
-        return _last_codes
+    global _last, _last_codes, _last_offs, _last_limit, _decoded
+    n = len(string)
+    if string is _last and n == len(_last):
+        if limit <= _last_limit:
+            return _last_codes
+        # Growing bounds must not repeatedly decode almost the same prefix. Replace the lists
+        # rather than extending them: a nested regex call must leave its caller's State intact.
+        limit = min(n, max(limit, 2 * _last_limit + 1))
+    # Keep the prefix for lookbehind and word/line anchors. Include the character at the next
+    # boundary too: for pos > endpos, multiline $ can inspect it. In UTF-8 the character that
+    # contains limit and the next one together need at most seven bytes starting at limit.
+    stop = min(n, limit + (7 if _UTF8 else 1))
+    source = string if stop == n else string[:stop]
     codes: list[int] = []
     offs: list[int] = []
     if not _UTF8:
-        for c in string:
+        for c in source:
             codes.append(ord(c))
     else:
-        n = len(string)
-        bs = [ord(c) for c in string]
+        bs = [ord(c) for c in source]
         ascii = True
         for b in bs:
             if b >= 128:
                 ascii = False
                 break
         if ascii:
-            codes = bs
+            codes = bs if len(bs) <= limit + 1 else bs[:limit + 1]
         else:
             i = 0
-            while i < n:
+            while i < len(bs):
+                last = i >= limit
                 b = bs[i]
                 k = 1
                 cp = b
                 if b >= 0xC2 and b < 0xF5:
                     k = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
                     cp = b & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
-                    if i + k > n:
+                    if i + k > len(bs):
                         k = 1
+                    elif (b == 0xE0 and bs[i + 1] < 0xA0) or (b == 0xF0 and bs[i + 1] < 0x90) or (b == 0xF4 and bs[i + 1] >= 0x90):
+                        k = 1  # (an overlong form or a value past U+10FFFF: see _charat())
                     else:
                         for j in range(1, k):
                             if bs[i + j] & 0xC0 != 0x80:
@@ -230,10 +255,13 @@ def _codes(string: str) -> list[int]:
                 offs.append(i)
                 codes.append(cp)
                 i += k
-            offs.append(n)
+                if last:
+                    break
+            offs.append(i)
     _last = string
     _last_codes = codes
     _last_offs = offs
+    _last_limit = limit
     _decoded += len(codes)
     return codes
 
@@ -1146,16 +1174,11 @@ def _parse_flags(source: Tokenizer, state: State, char: str) -> tuple[int, int]:
 
 
 def _isalpha(c: str) -> bool:
-    # str.isalpha() of a token (False for an escape's two characters). Past ASCII, a character an
-    # identifier may begin with stands for a letter: the two differ for 263 rare code points,
-    # where the message of a bad inline flag differs from CPython's
+    # str.isalpha() of a token (False for an escape's two characters)
     codes = _codes_of(c)
     if len(codes) != 1:
         return False
-    cp = codes[0]
-    if cp < 128:
-        return (65 <= cp and cp <= 90) or (97 <= cp and cp <= 122)
-    return _sre.uni_isidstart(cp)
+    return _sre.uni_isalpha(codes[0])
 
 
 def fix_flags(src: str, flags: int) -> int:
@@ -1286,6 +1309,7 @@ def parse_template(source: str, pattern: "Pattern") -> Template:
 # ---- the compiler (CPython's _compiler.py)
 
 _EXTRA: dict[int, list[int]] = {}  # (re._casefix._EXTRA_CASES, decoded when a pattern first ignores case)
+_NO_FIXES: list[int] = []  # shared, read-only: most code points have no extra case equivalents
 
 
 def _fixes() -> dict[int, list[int]]:
@@ -1313,9 +1337,9 @@ class _Case:
     def fixes(self, ch: int) -> list[int]:
         # the other characters that ignore case to the same as lowercase ch (unicode only)
         if not self.uni:
-            return []
+            return _NO_FIXES
         f = _fixes()
-        return f[ch] if ch in f else []
+        return f[ch] if ch in f else _NO_FIXES
 
 
 def _combine_flags(flags: int, add_flags: int, del_flags: int) -> int:
@@ -1529,6 +1553,14 @@ class _Charset:
         self.hascased = hascased
 
 
+def _setbit(charmap: list[int], k: int) -> bool:
+    # a scalar bit must not allocate a temporary singleton list for every range code point
+    if k >= len(charmap):
+        return False
+    charmap[k] = 1
+    return True
+
+
 def _setbits(charmap: list[int], ks: list[int]) -> bool:
     # set charmap[k] for each k, in order, until one is past it (CPython's IndexError): False then
     for k in ks:
@@ -1552,18 +1584,18 @@ def _optimize_charset(charset: list[Item], case: _Case) -> _Charset:
             if op == LITERAL:
                 if case.on:
                     av = case.tolower(av)
-                    fits = _setbits(charmap, [av])
+                    fits = _setbit(charmap, av)
                     if fits:
                         fits = _setbits(charmap, case.fixes(av))
                     if fits and not hascased and case.iscased(av):
                         hascased = True
                 else:
-                    fits = _setbits(charmap, [av])
+                    fits = _setbit(charmap, av)
             elif op == RANGE:
                 if case.on:
                     for i in range(it.arg, it.arg2 + 1):
                         lo = case.tolower(i)
-                        if not _setbits(charmap, [lo]) or not _setbits(charmap, case.fixes(lo)):
+                        if not _setbit(charmap, lo) or not _setbits(charmap, case.fixes(lo)):
                             fits = False
                             break
                     if fits and not hascased:
@@ -1897,7 +1929,7 @@ class Pattern:
         n = len(string)
         pos = 0 if pos < 0 else n if pos > n else pos
         endpos = 0 if endpos < 0 else n if endpos > n else endpos
-        codes = _codes(string)
+        codes = _codes(string, max(pos, endpos))
         offs = _last_offs
         st = _sre.State(codes, _to_char(offs, pos), _to_char_floor(offs, endpos), self.groups)
         st.charset_offsets = self._charset_offsets
@@ -2204,7 +2236,12 @@ class Match:
 
 _cache: dict[tuple[str, int], Pattern] = {}
 _MAXCACHE = 512
+# A small FIFO front keeps repeated hits read-only. Its misses refresh the larger cache's
+# insertion order, as CPython's two-level pattern cache does; hot keys survive cold churn.
+_MAXCACHE_FRONT = 256
+_cache_front: dict[tuple[str, int], Pattern] = {}
 _tcache: dict[tuple[str, int, str], Template] = {}
+_tcache_front: dict[tuple[str, int, str], Template] = {}
 
 
 def _compile(pattern, flags: int) -> Pattern:
@@ -2216,21 +2253,30 @@ def _compile(pattern, flags: int) -> Pattern:
     if not isinstance(pattern, str):
         raise TypeError("first argument must be string or compiled pattern")
     key = (pattern, flags)
-    if key in _cache:
-        return _cache[key]
-    p = parse(pattern, flags)
-    code = _code(p, flags)
-    compiled = Pattern(pattern, flags | p.state.flags, code, p.state.groups() - 1, p.state.groupdict)
-    if flags & SRE_FLAG_DEBUG != 0:
-        return compiled
+    if key in _cache_front:
+        return _cache_front[key]
+    compiled = _cache.pop(key, None)
+    if compiled is None:
+        p = parse(pattern, flags)
+        code = _code(p, flags)
+        compiled = Pattern(pattern, flags | p.state.flags, code, p.state.groups() - 1, p.state.groupdict)
+        if flags & SRE_FLAG_DEBUG != 0:
+            return compiled
     if len(_cache) >= _MAXCACHE:
-        # drop the oldest item (the first key)
+        # The first key has gone longest without a front-cache miss refreshing it.
         oldest = key
         for k in _cache:
             oldest = k
             break
         del _cache[oldest]
     _cache[key] = compiled
+    if len(_cache_front) >= _MAXCACHE_FRONT:
+        oldest = key
+        for k in _cache_front:
+            oldest = k
+            break
+        del _cache_front[oldest]
+    _cache_front[key] = compiled
     return compiled
 
 
@@ -2238,9 +2284,11 @@ def _compile_template(pattern: Pattern, repl: str) -> Template:
     # internal: compile replacement pattern
     # Keep the immutable components: a hit needs no formatted or concatenated key string.
     key = (pattern.pattern, pattern.flags, repl)
-    if key in _tcache:
-        return _tcache[key]
-    t = parse_template(repl, pattern)
+    if key in _tcache_front:
+        return _tcache_front[key]
+    t = _tcache.pop(key, None)
+    if t is None:
+        t = parse_template(repl, pattern)
     if len(_tcache) >= _MAXCACHE:
         oldest = key
         for k in _tcache:
@@ -2248,6 +2296,13 @@ def _compile_template(pattern: Pattern, repl: str) -> Template:
             break
         del _tcache[oldest]
     _tcache[key] = t
+    if len(_tcache_front) >= _MAXCACHE_FRONT:
+        oldest = key
+        for k in _tcache_front:
+            oldest = k
+            break
+        del _tcache_front[oldest]
+    _tcache_front[key] = t
     return t
 
 
@@ -2305,14 +2360,17 @@ def compile(pattern, flags: int = 0) -> Pattern:
 
 def purge() -> None:
     "Clear the regular expression caches"
-    global _last, _last_codes, _last_offs
+    global _last, _last_codes, _last_offs, _last_limit
     _cache.clear()
+    _cache_front.clear()
     _tcache.clear()
+    _tcache_front.clear()
     # Active operations own these lists too (a sub() callback can call purge()). Drop the
     # cache's references without changing their state or resetting the lifetime work counter.
     _last = ""
     _last_codes = []
     _last_offs = []
+    _last_limit = 0
 
 
 def escape(pattern: str) -> str:

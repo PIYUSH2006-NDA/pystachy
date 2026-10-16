@@ -1,0 +1,174 @@
+ok
+same True
+[] []
+[37] [37]
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+len True
+set True
+lst != shuffled_lst True
+lst != shuffled_lst True
+IndexError: Cannot choose from an empty sequence
+choice([50]) 50
+in True
+sample([], 0) []
+ValueError: Sample larger than population or is negative
+ValueError: Sample larger than population or is negative
+ok
+sum 700
+brown False
+sum 736
+brown False
+summary Counter({'x': 8})
+summary True
+ValueError: Counts must be non-negative
+ValueError: Sample larger than population or is negative
+ValueError: The number of counts does not match the population
+ValueError: The number of counts does not match the population
+zero counts []
+empty []
+ValueError: Sample larger than population or is negative
+ValueError: Sample larger than population or is negative
+len 5
+subset True
+len 5
+subset True
+len 5
+subset True
+len 5
+subset True
+k=0 []
+k=-1 []
+str True
+None True
+weights=None True
+ValueError: The number of weights does not match the population
+int weights True
+int weights True
+float weights True
+ValueError: The number of weights does not match the population
+TypeError: Cannot specify both weights and cumulative weights
+int cum True
+float cum True
+a ['a']
+b ['b']
+c ['c']
+d ['d']
+IndexError: list index out of range
+IndexError: list index out of range
+IndexError: list index out of range
+bool weights True
+ok
+ValueError: Total of weights must be greater than zero
+ValueError: Total of weights must be greater than zero
+ValueError: Total of weights must be finite
+ValueError: Total of weights must be finite
+ValueError: Total of weights must be finite
+ValueError: Total of weights must be finite
+x 0.13436424411240122
+y 0.9762429492718849
+x 0.4745706786885481
+y -0.8137479626073119
+x 0.052363598850944326
+y 0.8730545726473723
+x 0.9664535356921388
+y -0.11422973880358983
+x 0.41661987254534116
+y 1.8638879649284623
+x 0.8056271362589
+y 0.066798529969549
+x 0.06577992047446024
+y 2.4072460952014954
+getrandbits(0) 0
+cum 1
+cpl_cum 1
+cum 3
+cpl_cum 3
+cum 7
+cpl_cum 7
+cum 15
+cpl_cum 15
+cum 2147483647
+cpl_cum 2147483647
+cum 4294967295
+cpl_cum 4294967295
+cum 4294967295
+cpl_cum 4294967295
+cum 4503599627370495
+cpl_cum 4503599627370495
+cum 9007199254740991
+cpl_cum 9007199254740991
+cum 18014398509481983
+cpl_cum 18014398509481983
+ValueError: number of bits must be non-negative
+ok True
+normalvariate True
+gauss True
+v1 ['0x1.ac362300d90d2p-1', '0x1.9d16f74365005p-1', '0x1.1ebb4352e4c4dp-1', '0x1.1a7422abf9c11p-1']
+cum 9007199254740991
+set True
+set True
+set True
+in True
+rint 0
+ValueError: empty range in randrange(3, 3)
+ValueError: empty range for randrange()
+ValueError: empty range in randrange(0, 100, -12)
+ValueError: zero step for randrange()
+a == b True
+a == c True
+a == b True
+a == c True
+[42126, 53437, 69513, 90141, 29422] ['Red', 'Black', 'Black', 'Black', 'Red']
+len 736
+s1 == s2 True
+s1 'cbdfhbfgfbgcaadcdafchabaedadeg'
+ok
+ValueError: n must be non-negative
+ValueError: p must be in the range 0.0 <= p <= 1.0
+ValueError: p must be in the range 0.0 <= p <= 1.0
+B(0, 0.5) 0
+B(10, 0.0) 0
+B(10, 1.0) 10
+B(1, 0.3) True
+B(1, 0.9) True
+B(1, 0.0) True
+B(1, 1.0) True
+B(5, 1e-18) 0
+B(5, 0.25) True
+B(5, 0.75) True
+B(100, 0.25) True
+B(100, 0.75) True
+c[0] True
+c[1] True
+c[2] True
+c[3] True
+set(c) {0, 1, 2, 3, 4}
+sum True
+set(c) True
+total 100000
+huge 0.2 True
+huge 0.9 True
+ok
+ok
+ValueError: gammavariate: alpha and beta must be > 0.0
+ValueError: gammavariate: alpha and beta must be > 0.0
+ValueError: gammavariate: alpha and beta must be > 0.0
+ValueError: gammavariate: alpha and beta must be > 0.0
+[exit 0]

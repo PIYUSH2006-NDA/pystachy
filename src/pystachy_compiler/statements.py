@@ -172,7 +172,7 @@ def gen_check_import(self, a: Node) -> None:
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
     elif mod == "dataclasses":
-        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace"]:
+        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace", "fields", "asdict", "astuple", "is_dataclass"]:
             self.err(f"dataclasses.{x} is not supported")
     elif not builtin_has(mod, x):
         self.err(f"cannot import name '{x}' from '{mod}': Pystachy's {mod} module has no '{x}'")
@@ -1186,6 +1186,8 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
     tgt = n.kids[0]
     it = n.kids[1]
     body = n.kids[2].kids
+    if arg is None and len(hide) == 0 and self.refl_unroll_for(n):
+        return  # (a loop over constant attribute names: reflection.py)
     names: list[str] = []
     names_in(tgt, names)
     for nm in names:
@@ -1522,6 +1524,8 @@ def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
         return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0])]
     if s.t == "str":
         return [Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str")]
+    if s.t == "bytes":
+        return [Val(self.rt("pys_bytes_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), "int")]
     if s.t == "file":
         return [Val(j, "str")]
     if is_set(s.t):
@@ -1544,7 +1548,7 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         made.st.append("")
         made.used.append("")
         return
-    if not (s.t == "str" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+    if not (s.t == "str" or s.t == "bytes" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
     if s.t == "file":
         made.st.append("")

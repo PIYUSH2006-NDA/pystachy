@@ -1,0 +1,36 @@
+x 1 1
+z -1 None
+norm <bound method Point.norm of Point(1, 2)> <bound method Point.norm of Point(1, 2)>
+scaled 10 10
+kind pt 'pt'
+__class__ <class '__main__.Point'> <class '__main__.Point'>
+__module__ __main__ '__main__'
+__doc__ A point. 'A point.'
+__dict__ {'x': 1, 'y': 2} {'x': 1, 'y': 2}
+__weakref__ None None
+__static_attributes__ ('x', 'y', 'z') ('x', 'y', 'z')
+__firstlineno__ 5 5
+origin <bound method Point.origin of <class '__main__.Point'>> <bound method Point.origin of <class '__main__.Point'>>
+missing -1 None
+9 [1]
+arg after
+<bound method Point.norm of Point(1, 2)> after
+a aa
+b None
+f <bound method Base.f of Base()>
+__module__ __main__
+__doc__ None
+__class__ <class '__main__.Base'>
+__dict__ {'a': 'aa'}
+zz None
+a aa
+b 2.5
+f <bound method Base.f of Base()>
+__module__ __main__
+__doc__ None
+__class__ <class '__main__.Derived'>
+__dict__ {'a': 'aa', 'b': 2.5}
+zz None
+AttributeError: 'Point' object has no attribute 'missing'
+AttributeError: too big
+[exit 0]

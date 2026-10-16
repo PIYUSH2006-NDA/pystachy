@@ -133,6 +133,77 @@ against CPython; the [compatibility reference](language/compatibility.md) lists 
 `runtime.c`. This reuses the compiler for string methods, formatting and numeric helpers.
 The [runtime guide](runtime-in-subset.md) covers those primitives and their constraints.
 
+<a id="reflection"></a>
+
+## Reflection
+
+Reflection (`reflection.py`; the language rules are in [reflection](language/semantics.md#reflection))
+is decided at compile time wherever the static types decide it, and costs nothing where it is not
+used. `getattr`, `setattr` and `hasattr` with a literal name become the attribute access they name;
+a loop over a constant set of names (a display, a variable bound once and only iterated, `dir(x)`,
+`dataclasses.fields(X)`, `vars(x).items()`) is unrolled, its body compiled once per name with the
+name substituted as a literal, under a budget of 256 copies; `dataclasses.asdict()`/`astuple()`
+are synthesized per class; `type(x).__name__` of a value whose class is fixed is a constant. A
+program that uses none of these constructs compiles to the IR it compiled to before.
+
+Where a run-time choice remains, the code dispatches on the value's exact type, the way method
+calls already do: None first (where it may be), then a union's member tag, then an object's class
+tag (`refl_split`). Each concrete class's arm then reads the class's **reflection record**, an
+internal constant global that is emitted only for classes that reach such a site:
+
+| Word | Contents |
+|---|---|
+| 0, 1, 2 | the class's `__name__`, `__qualname__` and `__module__` (string constants) |
+| 3 | flags: has an instance `__dict__`, dataclass, frozen, in a hierarchy, builtin type |
+| 4, 5 | the number of names and the **name table**: `{name, kind}` pairs sorted by their bytes, every name `dir()` lists (a field, a field that may be unassigned, a class attribute, a property, a method, a static or class method, an attribute of the object or its type, a slot never assigned) |
+| 6, 7 | the number of fields and the **field table**: `{name, type descriptor, byte offset, offset of the "is assigned" flag or -1}` in the order CPython inserts them into the instance `__dict__` |
+
+`@pys.refl.c.<Class>` is a class's record and `@pys.refl.b.<type>` a builtin type's
+(`int`, `list`, `NoneType`, ...); a specialization of a class template has its own record for its
+layout, while its identity is its template's (the class CPython has). The tables are separate
+internal constants (`<record>.names`, `<record>.fields`), null until a site needs them: a record
+made for `type(x).__name__` carries only its names. They are `Data` records (`classrec`,
+`classnames`, `classfields`) that `lower_module.py` alone lays out, and the field table's offsets
+are LLVM constant expressions over the class's `%C.<Class>` layout, so the compiler holds no
+layout arithmetic. No new IR operation is needed: a site uses `phi`/`select` of record addresses
+(`%ptr`), `mach.load` of a word, `scalar.cmp` of two addresses and two runtime calls.
+
+| Construct | Lowering |
+|---|---|
+| `type(x).__name__` in a hierarchy or union | the dispatch's `phi` of record addresses, then a load of word 0, 1 or 2 |
+| `type(a) == type(b)`, `type(a) is C` | a comparison of record addresses: the record is the class's identity |
+| `str(vars(x))` | `pys_refl_vars(record, object)`: the runtime walks the field table, formatting each assigned field by its descriptor through the generic `repr` |
+| `hasattr(o, name)`, the text of `getattr(o, name)`, `setattr(o, name, v)` with a run-time name | `pys_refl_find(record, name)`, a binary search of the name table, then a switch on the index at the site, whose arms do what CPython's lookup does for that name |
+
+LLVM does the rest: `simplifycfg` turns the tag and index chains into `switch` instructions and,
+where every arm yields a constant (most of `hasattr()`'s, the names of `type(x)`), into lookup
+tables; a load from a record selected among constants folds into a select of the strings; string
+constants are shared (`sconst`); and since records and tables are internal, `globaldce` (JIT) and
+`llvm-link --only-needed` with `-O2` (AOT) drop those no code references, so a binary holds records
+only for classes that reach a reflective site. `RUNTIME` declares `refl.find` without effects
+and `refl.vars` with `A I rO rL rD U` (a field's `__repr__` may run user code).
+
+**The extension path.** The record is the one per-class table format that #485's later steps
+reuse instead of inventing their own:
+
+- **Interface values (#488)**: an erased `{table, data}` pair for a `Protocol`-typed slot. Its
+  table is a constant per (class, protocol) pair that flows into the slot; it starts with the
+  address of the class's reflection record (so `type(x)`, `isinstance()` against a class and
+  `type(x).__name__` of an erased value read it as here) and continues with the protocol's
+  method specializations. Emission on demand, internal linkage and the "which classes reach this
+  site" decision are `refl_record`'s; #488 adds the whole-program flow of classes into slots.
+- **Object boxes (#487)**: a box `{descriptor, payload}` whose descriptor is the record of the
+  payload's exact type (`@pys.refl.b.int`, `@pys.refl.c.Point`, ...), extended with the existing
+  type descriptor string for builtin containers. `type(v).__name__` is word 0, `isinstance()`
+  compares records (and a hierarchy's class tag), `repr()` uses the descriptor, and a run-time
+  `getattr()` whose value is used becomes `pys_refl_find` plus a load through the field table's
+  offset and descriptor into a new box: the value-free consumers of #489's first version are the
+  same lookup with the value formatted at once.
+- **`Any` and dynamic values**: a dynamic value is such a box; attribute access, method calls by
+  name and `vars()` dispatch through the name table, whose method entries #488's tables supply,
+  and properties through getter and setter thunks added to the name table's entries. As now,
+  only classes whose values reach such a site get records, never every class of the program.
+
 <a id="checked-arithmetic-cheap-errors"></a>
 <a id="exceptions-by-table-driven-unwinding"></a>
 
@@ -164,6 +235,11 @@ program's own functions, performs SSA cleanup, then ORC JIT runs with the cached
 object. The default inlining threshold is 20,000 lines of generated IR; larger programs skip
 that pass. The precompiled runtime is not inlined into JIT code.
 
+`PYSTACHY_JIT_CODEGEN=0` selects MCJIT with `-O0` code generation. This can reduce
+startup for large programs, but the generated code can run slower. The default (`2`)
+keeps ORC and its normal code generation. This choice does not change the IR cleanup
+or inlining pipeline, and does not affect `build` or `ext`.
+
 `build` links the runtime bitcode with the program and applies clang's `-O2` optimization
 pipeline, allowing optimization across that boundary. `ext` builds a shared CPython module
 with its boundary wrappers; see the [FFI guide](ffi.md).
@@ -194,6 +270,7 @@ provide the broader behavior check. See [testing](testing.md) for the commands.
 | `PYSTACHY_IRFX=1` | Print function effect summaries to stderr |
 | `PYSTACHY_OPT` | Disable named optimizations with `-name`, comma-separated, or all with `-all`; see [IR passes](typed-ir.md#optimizations) |
 | `PYSTACHY_JIT_INLINE=N` | IR-line threshold for JIT inlining; `0` disables it |
+| `PYSTACHY_JIT_CODEGEN=0\|2` | `0` selects MCJIT `-O0`; `2` (default) keeps ORC code generation |
 | `PYSTACHY_GC_STRESS=N` | Collect every N allocations |
 | `PYSTACHY_GC_STRESS_PROGRAM=N` | Apply the stress interval to the program run by JIT or the test runner, separately from its compiler |
 | `PYSTACHY_GC` | `off` disables collection; `stats` prints a summary at exit |

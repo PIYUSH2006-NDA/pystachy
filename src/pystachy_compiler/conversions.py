@@ -181,6 +181,8 @@ def gen_desc(self, t: str, use: str) -> str:
         return "b"
     if t == "str":
         return "s"
+    if t == "bytes":
+        return "y" if use == "repr" else "s"  # (a bytes compares, orders and hashes as a str of its bytes)
     if is_opt(t) and t != NONEVAR:
         return "?" + self.desc(unopt(t), use)  # None or the value
     if t == "None":

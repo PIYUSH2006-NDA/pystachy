@@ -1,0 +1,112 @@
+o.x 42
+o.x 32
+(o.x, o.y) (3, 0)
+C0() == C0() True
+C() <= C() True
+C() >= C() True
+C0_2 == True
+C0_2 != True
+C1_2 == True
+C1_2 != True
+< True
+<= True
+<= True
+> True
+>= True
+>= True
+== True
+== True
+!= True
+!= True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+fn True
+== False
+!= True
+TypeError: '<' not supported between instances of 'B_2' and 'C_5'
+C_6(5).x 5
+== True
+== True
+!= True
+!= True
+repr 'C_8()'
+repr 'D(y=20)'
+C1_3 True
+C2_2 True
+C3 True
+C4 True
+C5 True
+C6 True
+CustomError
+CustomError
+C4_2().x 0
+C4_2(2).x 4
+FrozenInstanceError cannot assign to field 'x'
+c0.x 3
+c0.y []
+c0 == c1 True
+is not True
+c0.x 3
+c0.y []
+c0 == c1 True
+is True
+repr 'C3_3()'
+C3_3().x []
+hash True
+C5_3().x []
+C6_2 True
+repr 'C_9(x=4, y=10)'
+repr 'D_2(x=20, y=10)'
+unsafe_hash True
+F0 True
+U0 True
+F1 True
+F1 True
+U1 True
+U1 True
+c.i 10
+FrozenInstanceError cannot assign to field 'i'
+c.i 10
+FrozenInstanceError cannot delete field 'i'
+c.i 10
+FrozenInstanceError cannot assign to field 'i'
+FrozenInstanceError cannot assign to field 'j'
+d.i 0
+d.j 10
+c1.x 3
+c1.y 2
+d (1, 2, 10, 100)
+d1 (3, 2, 10, 100)
+FrozenInstanceError cannot assign to field 'x'
+c.a 1
+c.b 3
+c.c 2
+c.a 1
+c.b 3
+c.c 2
+c.a 1
+c.b 3
+c.c 2
+a.a 0
+a.b 3
+a.c 1
+a.d 4
+[exit 0]

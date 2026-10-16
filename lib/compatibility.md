@@ -289,7 +289,9 @@ per `group` call), runtime-length `groups(default=None)` tuples, indexing,
 dictionaries, positions, spans and expansion.
 
 - Matches decode code points, but positions (`pos`, `endpos`, group spans and
-  pattern-error positions) are byte indices.
+  pattern-error positions) are byte indices. A byte that `ord()` reads as no
+  character's part (a truncated, overlong or above-U+10FFFF sequence) is its own
+  character, as `chr()` made it.
 - `findall` with two or more groups still raises `NotImplementedError`; its
   ported result contract remains `list[str]`. `Match.regs` remains unsupported
   because its runtime-length tuple contains tuple elements.
@@ -297,8 +299,6 @@ dictionaries, positions, spans and expansion.
   capturing group would add `None`.
 - `finditer` eagerly returns a list of matches.
 - `\N{...}` is a pattern error; character-name lookup is unavailable.
-- For 262 identifier characters where CPython's `str.isalpha` differs, an invalid
-  inline flag can receive a different error message (for example, `(?iⅠ)`).
 - Flags are ints, `groupindex` is a dict, and `re.error` is the base of
   `PatternError` rather than the same class. Replacement callbacks must return
   strings. Bytes patterns, warnings, `DEBUG` output, `Scanner` and `__index__`
@@ -379,8 +379,17 @@ read-only ones. `repr()` gives the default `<functools.partial object at ...>`
 rather than CPython's call form; pickling, `__dict__` and `partialmethod` are
 unsupported.
 
-`wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
-attributes cannot be assigned, and class decorators are not compiled.
+`@wraps(wrapped)` on a def, and `update_wrapper(wrapper, wrapped)` of a function a def or
+lambda makes in a function (or a decorated def), give the wrapper the wrapped function's
+`__name__` and `__qualname__`, as CPython's do, with `assigned` naming either (a tuple or
+list of str constants, or a module's name that one assignment binds to such a tuple, as
+`WRAPPER_ASSIGNMENTS`). The compiler applies them, where CPython's code sets the attributes:
+a wrapped function's names must be known as it compiles, so a wrapped `Callable` value makes
+the wrapper's names a compile-time error to read, and a wrapped object without them (a
+callable object, a `partial`) leaves the wrapper its own, as in CPython. `__wrapped__`,
+`__doc__`, `__module__` and `__dict__` are not a function's attributes in Pystachy, and
+`wraps(f)` as a value, not a decorator, is a compile-time error. `total_ordering` remains
+unsupported: class decorators are not compiled.
 
 ## Textwrap
 
@@ -417,8 +426,11 @@ value has their union type, which formats as its value does. When a call has
 both, their types must agree, so `format("{0} {x}", 1, x="s")` is rejected.
 `vformat` takes a tuple and a dict, or a `**kwargs` record; type an empty dict.
 
-Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`,
-and `check_unused_args` receives the keys used as a list in first-use order
+Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`, but
+`Formatter().format()` of the base class with a constant template whose fields read
+attributes, and positional arguments only, formats as `str.format()` of that template does,
+which reads the attributes ([reflection](../docs/language/semantics.md#reflection)); a
+loop over a constant list of such templates unrolls. `check_unused_args` receives the keys used as a list in first-use order
 rather than a set. Overrides compile for every call's argument types in the
 program; an override, like other functions, must return one type for each.
 Field names count UTF-8 bytes, so only ASCII digits make positional ones.
@@ -572,3 +584,146 @@ can use the inherited `fromutc()`.
 - Ordering a `date` with a `datetime` raises the `TypeError` of the reflected comparison.
 - Strings are UTF-8 bytes: `fromisoformat()` rejects a non-ASCII separator, and its length
   checks count bytes, as `_datetime`'s parser does.
+
+## Binascii
+
+`binascii` is `_pystachy_binascii`, a port of CPython's C module (`Modules/binascii.c`) to the
+subset. Pystachy loads it for `import binascii`, where CPython imports its C module; as for the
+other modules that Debian's CPython builds in, a `binascii.py` on the module path is never
+imported. All twelve functions are there,
+with the C module's signatures, results and errors (`binascii.Error`, a `ValueError`, with its
+messages): `hexlify` and `b2a_hex` with `sep` and `bytes_per_sep`, `unhexlify` and `a2b_hex`,
+`b2a_base64` and `a2b_base64` (with `strict_mode`), `b2a_uu` and `a2b_uu` (with `backtick`),
+`b2a_qp` and `a2b_qp` (with `quotetabs`, `istext` and `header`), `crc32` and `crc_hqx`.
+`binascii.Incomplete` exists, as in CPython, where no function raises it.
+
+- Binary data is `bytes`, as Pystachy has no `bytearray`, `memoryview` or `array`. The `a2b_*()`
+  functions also take a `str` of ASCII characters, as CPython's do. Another type of argument
+  is a compile-time error, where CPython raises `TypeError`.
+- `hexlify(data, None)` and `b2a_hex(data, None, n)` separate nothing, as without a `sep`, where
+  CPython raises `TypeError` ([deviation](../tests/deviations/lib_binascii_sep_none.py)).
+- The functions are Python functions, whose reprs are `<function hexlify at ...>`, not
+  `<built-in function hexlify>`. `a2b_base64.__doc__` is CPython's docstring without the
+  indentation of its option's description, which CPython 3.13 removes from a Python function's
+  docstring.
+
+## Codecs
+
+`codecs` is CPython 3.13.16's `Lib/codecs.py` with three marked edits, on `_pystachy_codecs`,
+a subset port of the C module `_codecs` that Pystachy loads for `import _codecs`. The BOM
+constants, `encode()`, `decode()`, `lookup_error()`, `register_error()`, `strict_errors()` and
+the incremental classes (derived from with methods) work as in CPython, and so do the codec
+functions of UTF-8, Latin-1, ASCII and charmap (`utf_8_encode()`, `utf_8_decode()` that is not
+final, `charmap_build()`, `charmap_encode()`, `charmap_decode()`, ...) with every builtin error
+handler but `namereplace`, raising CPython's `UnicodeDecodeError` and `UnicodeEncodeError` with
+its messages.
+
+- Encoding with `namereplace`, which needs the characters' names, raises `LookupError: unknown
+  error handler name 'namereplace'`, as `str.encode()` does
+  ([language reference](../docs/language/compatibility.md)), where CPython writes `\N{...}`.
+- `codecs.lookup()`, which Pystachy has no codec registry for, raises `NotImplementedError`
+  ([deviation](../tests/deviations/lib_codecs_lookup.py)); reading its result's attributes, as
+  `getencoder()` and the other functions built on it do, is a compile-time error. `register()`
+  and `unregister()` do nothing.
+- The UTF-16, UTF-32, UTF-7 and escape codec functions raise `NotImplementedError`, and so do the
+  error handler functions but `strict_errors()` (`ignore_errors()`, ...), which read attributes
+  that Pystachy's `UnicodeError` does not have. A handler `register_error()` registers is one that
+  `lookup_error()` gives; `str.encode()`, `bytes.decode()` and the charmap codec take only the
+  builtin handlers' names.
+- `charmap_build()` gives a dict of code points to bytes, where CPython's is an `EncodingMap`
+  object (but a dict where the table does not start with U+0000 or leaves the BMP), and
+  `charmap_decode()` takes a decoding table, a str, not a dict.
+- A class attribute that binds a function of a subclass's codec (`_buffer_decode =
+  codecs.utf_8_decode`, as the `encodings` modules bind them) over a method of its base is not
+  supported: define the method with `def`.
+- `codecs.strict_errors.__name__` and the other handlers' are unsupported: the handlers are
+  `Callable` values.
+
+The edits: the error handlers are bound without the `except LookupError` clause for builds
+without them, which binds them to `None`; the four incremental classes' `errors` parameters
+are annotated, so that the classes are no templates; and the `import encodings`, which never
+runs, is left out.
+
+## Atexit
+
+`atexit` is `_pystachy_atexit`, a port of the C module `atexit` that Pystachy loads for
+`import atexit`. `register(func, *args, **kwargs)` (also as a decorator) records a callback
+that calls `func` with those arguments, and the end of the program runs the callbacks, the last
+registered first, as CPython's finalization does: after the program's code, and also where it
+ends with `sys.exit()` or with an exception that nothing catches, whose message is shown first.
+A callback that raises, also `SystemExit`, is reported on stderr and the next one runs; the exit
+status stays the program's. `_run_exitfuncs()`, `_clear()` and `_ncallbacks()` work as in
+CPython.
+
+- `atexit.unregister()` raises `NotImplementedError`
+  ([deviation](../tests/deviations/lib_atexit_unregister.py)): a callback is a closure that calls
+  the function, and Pystachy cannot compare it with another function.
+- The report of a callback that raises is `Exception ignored in atexit callback:` and the
+  exception's last line, where CPython names the function and shows the traceback.
+- In an extension module (`pystachy ext`), `register()` records callbacks that never run:
+  CPython's own finalization does not know of them.
+
+## Abc
+
+`abc` is `_pystachy_abc`, which Pystachy loads for `import abc`, as CPython has imported its
+own `abc` before a program runs. A class that derives from `ABC`, or whose class statement
+passes `metaclass=ABCMeta`, has abstract methods: those its body decorates with
+`@abstractmethod` (also under `@property`, `@classmethod` and `@staticmethod`, and through the
+deprecated `abstractproperty`, `abstractclassmethod` and `abstractstaticmethod`), and those of
+its base it does not define again. Making an object of a class that has one evaluates the
+arguments and raises CPython's `TypeError: Can't instantiate abstract class C without an
+implementation for abstract methods 'a', 'b'`. Abstract methods can have bodies, which
+`super()` calls; `isinstance()` of an ABC is decided by the class statements, as for any class.
+
+- `register()`, which makes a virtual subclass, and reading `__abstractmethods__` are
+  compile-time errors, and so is defining `__subclasshook__`, the class method through which
+  CPython's `isinstance()` asks a class.
+- An abstract method is implemented by a `def` (a class attribute that shadows a method of the
+  base is not supported).
+- `update_abstractmethods()` is not supported: class decorators are not compiled.
+
+## Struct
+
+`struct` is CPython 3.13.16's `Lib/struct.py`, unchanged, on `_pystachy_struct`, a port of the C
+module `_struct` (`Modules/_struct.c`) that Pystachy loads for `import _struct`. The types of the
+values `unpack()` gives depend on its format, so the compiler parses a format it knows as the
+program compiles: a literal (a `str` or a `bytes`), a module's global bound once to a `str`
+literal, as `zipfile`'s `structCentralDir` is, or the format of a `Struct` made of a literal. A
+call of `pack()`, `unpack()`, `unpack_from()`, `iter_unpack()` or `calcsize()` with such a
+format, by its name (`struct.pack(...)`, `pack(...)` after `from struct import pack`) or through a
+`Struct`'s method, packs or unpacks each item with the port's functions. Every code of the native
+and standard tables works, with the byte orders `@`, `=`, `<`, `>` and `!`, repeat counts,
+whitespace, pad bytes and native alignment, and the values have the items' types: `int` for the
+integer codes, `float` for `e`, `f` and `d`, `bool` for `?` and `bytes` for `c`, `s` and `p`. The
+bytes, the values and the errors are the C module's on x86-64 Linux: `struct.error` with its
+messages for a value out of its code's range, a buffer of the wrong size or an offset out of its
+range, and `OverflowError` for a float too large for `e` or `f`. `calcsize()` and `Struct()`
+also take a `str` the program makes as it runs, raising CPython's `struct.error` for an invalid
+format.
+
+- `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` of a format not known as the program
+  compiles are compile-time errors ([error test](../tests/errors/lib_struct_dynamic.py)), and so
+  are the methods of a `Struct` made of one, and `Struct()` of a `bytes` format.
+- What CPython checks as `pack()` runs, the number of values for the format and the type of a
+  value for its code (a `str` for `s`, a `float` for an integer code), is checked as the program
+  compiles, with CPython's message ([error test](../tests/errors/lib_struct_arity.py),
+  [another](../tests/errors/lib_struct_str.py)), and a value that may be `None` is a compile-time
+  error but for `?`. So is a format CPython rejects in `unpack()`, `unpack_from()` and
+  `iter_unpack()`; `pack()` and `calcsize()` of one raise CPython's `struct.error` as the
+  program runs.
+- `iter_unpack()` gives a list of the tuples, where CPython gives an iterator of them
+  ([deviation](../tests/deviations/lib_struct_iter_unpack.py)); a `for` loop and `list()` see the
+  same tuples.
+- An unsigned 8-byte value from 2\*\*63 on (`Q`, and the native `L`, `N` and `P`) raises
+  `OverflowError: integer result does not fit in 64 bits` as it is unpacked, since Pystachy's ints
+  are 64-bit ([deviation](../tests/deviations/lib_struct_unsigned64.py)).
+- Buffers are `bytes`: Pystachy has no `bytearray`, `memoryview` or `array`, and `pack_into()`,
+  which writes into one, raises `NotImplementedError`.
+- A format of more than nine values gives a tuple of more than nine items, which can be unpacked
+  into names and indexed, but not printed, compared or hashed
+  ([tuples](../docs/language/typing.md)).
+- A NaN's payload is not kept: unpacking a NaN gives a NaN of its sign, which packs as the quiet
+  NaN, where CPython keeps the bits of a NaN it unpacks with `f` or `d`.
+- `struct.pack` and the module's other functions as values (`f = struct.pack`) raise
+  `NotImplementedError` when called, as the compiler makes the calls by their names. A `Struct`'s
+  methods are values, as `Struct("!I").pack` is.

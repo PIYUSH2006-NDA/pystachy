@@ -11,7 +11,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 
 | Kind | Supported forms |
 |---|---|
-| Scalars | `int`, `float`, `bool`, `str` |
+| Scalars | `int`, `float`, `bool`, `str`, `bytes` |
 | Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B]`, runtime-length `tuple[T, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
 | Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
@@ -21,8 +21,9 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
 | Generics | Function templates and `Generic` or PEP 695 (`class Box[T]`) classes with inferred or explicit type arguments; module-level type aliases |
 
-Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
-have a restricted set of types: integers, strings, objects (hashed by identity, or by their
+Integers are checked 64-bit values. Strings hold UTF-8 bytes; a `bytes` holds its bytes, and its
+items are ints. Dictionary keys and set elements
+have a restricted set of types: integers, strings, `bytes`, objects (hashed by identity, or by their
 class's `__hash__` and `__eq__`) and supported tuples (whose items may include booleans).
 Fixed-shape tuples have at most nine items; a variable index gives an item of their union
 type, and a constant index the item's own type. Runtime-length
@@ -104,8 +105,9 @@ Classes support fields, methods, class attributes, `@property` with `@x.setter` 
 `@x.deleter`, `@staticmethod`, `@classmethod` and supported operator and container methods.
 Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`,
 the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
-`kw_only`, and inheritance from another dataclass; `slots=True`, `asdict()`, `astuple()` and
-`fields()` are not supported.
+`kw_only`, inheritance from another dataclass, and `fields()`, `asdict()`, `astuple()` and
+`is_dataclass()` (see [reflection](language/semantics.md#reflection)); `slots=True` is not
+supported.
 
 Literal `__slots__` strings, tuples and lists restrict instance field writes when every
 base also declares slots. A subclass without slots, or with an unslotted base, may add
@@ -127,7 +129,10 @@ builtin types, or between a dataclass and a class that is not one, is unsupporte
 classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
 parameters (`class Box[T]`) declare a generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
-decorators remain outside the supported subset.
+decorators remain outside the supported subset. Reflection (`getattr`, `setattr`, `hasattr`,
+`vars`, `dir`, `type(x).__name__`) works on objects whose classes the compiler knows; an
+attribute name computed at run time is supported where only its text or a test is needed
+(see [reflection](language/semantics.md#reflection)).
 
 See [functions and classes](language/typing.md) and
 [object protocols](language/semantics.md#object-protocols) for the detailed rules.
@@ -227,8 +232,9 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 ## Unsupported features
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
-`bytes` and binary files, complex and arbitrary-precision numbers, `match`,
-dynamic attribute access, slice objects and unrestricted argument expansion.
+`bytearray`, `memoryview` and binary files, complex and arbitrary-precision numbers, `match`,
+attribute values looked up by names only the run time knows (their text and `hasattr()` are
+supported), slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.
 An unsupported feature that the program needs produces a compile-time error.

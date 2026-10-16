@@ -1,0 +1,18 @@
+Base.value runs full
+12 10 made help help
+True True True
+arg 1
+TypeError: Can't instantiate abstract class Base without an implementation for abstract methods 'helper', 'make', 'size', 'value'
+arg 2
+TypeError: Can't instantiate abstract class Partial without an implementation for abstract methods 'helper', 'value'
+TypeError: Can't instantiate abstract class Meta without an implementation for abstract method 'run'
+TypeError: Can't instantiate abstract class Attr without an implementation for abstract method 'limit'
+MetaImpl.run
+5 True
+Base.value runs full
+Base.value runs other
+2 2
+1 2 3
+TypeError: Can't instantiate abstract class Old without an implementation for abstract methods 'c', 'p', 's'
+TypeError: Can't instantiate abstract class ModMeta without an implementation for abstract method 'go'
+[exit 0]

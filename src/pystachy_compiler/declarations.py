@@ -5,7 +5,7 @@ from src.pystachy_compiler.analysis import calls_init, local_names, stmt_walrus
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.names import short
+from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     CLASSVAR,
     CTYPES,
@@ -21,6 +21,7 @@ from src.pystachy_compiler.specs import (
     PATHLIKE,
     PYBUILTINS,
     SPECIAL,
+    STANDINS,
     STUB,
     TYPEARGS,
     TYPEVAR,
@@ -115,7 +116,7 @@ def gen_ann(self, n: Node) -> str:
             return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)
         if s in self.tmpl:
             return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
-        if s == "int" or s == "float" or s == "bool" or s == "str" or s in self.classes:
+        if s == "int" or s == "float" or s == "bool" or s == "str" or s == "bytes" or s in self.classes:
             return s
         if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
@@ -666,7 +667,7 @@ def gen_typing_forms(self, m: Mod, body: list[Node], cls: bool) -> list[Node]:
         elif a is not st and len(st.kids) == 3 and self.typing_ref(a) == "Final":
             # (a field, typed by its constant)
             v = st.kids[2]
-            if v.kind == "int" or v.kind == "float" or v.kind == "str":
+            if v.kind == "int" or v.kind == "float" or v.kind == "str" or v.kind == "bytes":
                 st.kids[1] = mk("name", v.kind, v.line, [])
             elif v.kind == "True" or v.kind == "False":
                 st.kids[1] = mk("name", "bool", v.line, [])
@@ -723,9 +724,25 @@ def gen_optional(self, t: str) -> str:
     if is_union(t):
         # (a union that holds a class's objects may be None, as the class's objects may)
         return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
-    if (t == "str" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
+    if (t == "str" or t == "bytes" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
+
+def gen_ann_none(self, n: Node, seen: list[str]) -> bool:
+    # does annotation n make None one of its members (C | None, Optional[C], Union[C, None]; in
+    # a string or a type alias's value too), which the type of a class C, including None
+    # already, does not tell (see optional). seen: the aliases being looked through
+    k = n.kind
+    if k == "str":
+        return self.ann_none(self.parse_expr(n.s), seen)
+    if k == "binop" and n.s == "|":
+        return self.ann_none(n.kids[0], seen) or self.ann_none(n.kids[1], seen)
+    b = n.kids[0] if k == "index" else n
+    if b.kind == "name" and b.s in self.taliases and b.s not in seen:
+        return self.ann_none(self.alias_value(b.s), seen + [b.s])
+    if k == "index" and (b.kind == "name" or b.kind == "attr") and (self.ann_base(b) == "optional" or self.ann_base(b) == "union"):
+        return self.ann_base(b) == "optional" or len([x for x in (n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]) if self.ann_none(x, seen)]) > 0
+    return k == "None"
 
 def gen_join(self, a: str, b: str) -> str:
     # the type of a value that is an a or a b, where None and optional types meet (T and None
@@ -1855,9 +1872,15 @@ def gen_guess_varargs(self, init: FnInfo, args: list[Node], f: FnInfo) -> list[s
             ts[i - 1] = t
     return ts
 
+def guess_scope(f: FnInfo) -> list[Node]:
+    # the statements whose bindings hide a function from gen_guess: those of the function f, or
+    # of the class body whose attribute declare_fields types (f.node is then the class's node)
+    return f.node.kids[0].kids if f.node.kind == "class" else f.node.kids[2].kids
+
+
 def gen_guess(self, e: Node, f: FnInfo) -> str:
     k = e.kind
-    if k == "int" or k == "float" or k == "str":
+    if k == "int" or k == "float" or k == "str" or k == "bytes":
         return k
     if k == "True" or k == "False":
         return "bool"
@@ -1883,7 +1906,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
     if k == "name" and (e.s in self.funcs or (e.s in PYBUILTINS and e.s[0].islower() and not self.bound(e.s))):
         # a function, which the field then holds (unless a local of the method has its name)
         asg: dict[str, bool] = {}
-        local_names(f.node.kids[2].kids, asg)
+        local_names(guess_scope(f), asg)
         if e.s not in asg:
             return f"fn[f:{e.s}]" if e.s in self.funcs else f"fn[b:{e.s}]"
     p = self.imported_ref(e) if k == "name" or k == "attr" else ""
@@ -1894,7 +1917,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         while root.kind == "attr":
             root = root.kids[0]
         asg = {}
-        local_names(f.node.kids[2].kids, asg)
+        local_names(guess_scope(f), asg)
         if root.s not in asg:
             return f"fn[b:{p}]"
     # self.k, self.m(...) and self(...) before the names below: self shadows a function, class,
@@ -1958,7 +1981,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
                 # the existing template; it neither evaluates source nor guesses
                 # the return from one branch of the helper's body.
                 assigned: dict[str, bool] = {}
-                local_names(f.node.kids[2].kids, assigned)
+                local_names(guess_scope(f), assigned)
                 args = e.kids[1:]
                 if c in f.params or c in assigned or len(args) > len(helper.params) or (helper.npos >= 0 and len(args) > helper.npos):
                     return ""
@@ -2129,6 +2152,21 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.class_default(ci, name)
         return Val(ci.fglob[name], ci.ftypes[name])
     return Val(self.fgep(o, ci.fpos[name]), ci.ftypes[name])
+
+def gen_fn_attr_read(self, o: Val, name: str) -> None:
+    # o.name read through object o, where its class binds name to a function in its body
+    # (name = f): CPython binds o to the function's first parameter there, as for a method, which
+    # is not supported. A builtin function (fn[b:...]) or a bound method that a class attribute
+    # holds is read as itself through an object, as in CPython, and so is a function of a
+    # stand-in for a C module (STANDINS: encodings.utf_8's _buffer_decode = codecs.utf_8_decode),
+    # which is CPython's builtin
+    ci = self.classes[o.t]
+    t = ci.ftypes.get(name, "")
+    if t.startswith("fn[f:") and owner(t[5:-1]) in STANDINS:
+        return
+    if name in ci.fdefault and (t.startswith("fn[f:") or t.startswith("fn[c:") or t.startswith("fn[u:")):
+        self.err(f"class attribute '{name}' of '{short(o.t)}' holds a function ({name} = ...): reading it through an object is not supported (CPython binds the object to the function's first parameter, as for a method); read it through the class ({short(o.t)}.{name}), or define {name} with def")
+
 
 def gen_fgep(self, o: Val, i: int) -> str:
     # Keep the declared object layout and member type until lowering. The address

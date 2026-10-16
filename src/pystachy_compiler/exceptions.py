@@ -31,6 +31,7 @@ from src.pystachy_compiler.utils import (
     meet,
     pure_arg,
     targs,
+    tname,
     typestr,
     unopt,
 )
@@ -485,8 +486,10 @@ def gen_exc_args(self, e: Node) -> list[Node]:
     npos = 0
     for a in args:
         npos += 1 if a.kind != "kw" else 0
+    if EXCEPTIONS[name] == "u" and (npos != 5 or len([a for a in args if a.kind == "starred"]) > 0):
+        self.err(f"function takes exactly 5 arguments ({npos} given)")  # (CPython's TypeError)
     oe = exc_base_of(name, "OSError")
-    if npos > 1 and EXCEPTIONS[name] != "" and not (oe and npos <= 3):
+    if npos > 1 and EXCEPTIONS[name] != "" and EXCEPTIONS[name] != "u" and not (oe and npos <= 3):
         self.err(f"{name}() with more than {'three arguments' if oe else 'one argument'} is not supported")
     return args
 
@@ -627,6 +630,9 @@ def gen_raise_stmt(self, n: Node) -> None:
         oe = self.os_error(name, vals)
         self.raise_(name, oe[1], oe[0])
         return
+    if EXCEPTIONS[name] == "u":
+        self.raise_(name, self.unicode_error(name, vals)[0])
+        return
     if len(vals) > 1:
         msg = self.repr(self.tuple_(vals)).v
     elif len(vals) == 1:
@@ -677,6 +683,27 @@ def gen_os_error(self, name: str, vals: list[Val]) -> list[str]:
         msg = self.cat(self.cat(msg, Val(self.sconst(": "), "str")), self.repr(vals[2]))
     return [kind, msg.v, args.v]
 
+def gen_unicode_error(self, name: str, vals: list[Val]) -> list[str]:
+    # UnicodeDecodeError(encoding, object, start, end, reason) or UnicodeEncodeError(...) of the
+    # types CPython's constructor takes (a bytes object, or a str): str(e), which names the byte or
+    # character at start, or the range to end, as CPython's does, and what repr(e) shows between
+    # its parentheses
+    dec = name == "UnicodeDecodeError"
+    want = ["str", "bytes" if dec else "str", "int", "int", "str"]
+    for i in range(5):
+        # (CPython's TypeErrors)
+        if (vals[i].t if vals[i].t != "bool" else "int") == want[i]:
+            continue
+        if i == 1 and dec:
+            self.err(f"a bytes-like object is required, not '{tname(vals[i].t)}'")
+        if i == 2 or i == 3:
+            self.err(f"'{tname(vals[i].t)}' object cannot be interpreted as an integer")
+        self.err(f"argument {i + 1} must be {want[i]}, not {tname(vals[i].t)}")
+    msg = self.rt("pys_unicode_error_str", "ptr", [f"i64 {1 if dec else 0}", f"ptr {vals[0].v}", f"ptr {vals[1].v}",
+                                                   f"i64 {self.as_int(vals[2]).v}", f"i64 {self.as_int(vals[3]).v}", f"ptr {vals[4].v}"])
+    args = self.rt("pys_str_slice", "ptr", [f"ptr {self.repr(self.tuple_(vals)).v}", "i64 1", "i64 -1"])
+    return [msg, args]
+
 def gen_exc_value(self, name: str, vals: list[Val]) -> Val:
     # the exception name(*vals) of a builtin class name (pys_exc_new): str(e), and what repr(e)
     # shows between its parentheses (null: the repr of str(e), as for one str argument)
@@ -695,6 +722,9 @@ def gen_exc_value(self, name: str, vals: list[Val]) -> Val:
     elif len(vals) > 1 and exc_base_of(name, "OSError"):
         oe = self.os_error(name, vals)
         return Val(self.rt("pys_exc_new", "ptr", [f"ptr {oe[0]}", f"ptr {oe[1]}", f"ptr {oe[2]}"]), "exc")
+    elif EXCEPTIONS.get(name, "") == "u":
+        ue = self.unicode_error(name, vals)
+        return Val(self.rt("pys_exc_new", "ptr", [f"ptr {self.sconst(name)}", f"ptr {ue[0]}", f"ptr {ue[1]}"]), "exc")
     elif len(vals) > 1:
         msg = self.repr(self.tuple_(vals)).v
         args = self.rt("pys_str_slice", "ptr", [f"ptr {msg}", "i64 1", "i64 -1"])

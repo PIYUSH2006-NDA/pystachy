@@ -1,0 +1,37 @@
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+byte True True True True
+truncated True True
+truncated True True
+truncated True True
+truncated True True
+complete True True
+complete True True
+complete True True
+complete True True
+trailing byte True True
+complete True True
+complete True True
+complete True True
+complete True True
+trailing byte True True
+complete True True
+complete True True
+complete True True
+complete True True
+trailing byte True True
+not utf8 True True
+not utf8 True True
+not utf8 True True
+utf8 True True True
+utf8 True True True
+utf8 True True True
+utf8 True True True
+[exit 0]

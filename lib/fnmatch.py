@@ -26,15 +26,41 @@ def _next_char(s: str, i: int) -> int:
     if not _UTF8 or i >= len(s):
         return i + 1
     b = ord(s[i])
-    return i + (1 if b < 0xC0 else 2 if b < 0xE0 else 3 if b < 0xF0 else 4)
+    # Pystachy port: use re._codes()'s byte fallback for incomplete/invalid UTF-8, an overlong
+    # form or a value past U+10FFFF (re._charat()).
+    if b < 0xC2 or b >= 0xF5:
+        return i + 1
+    width = 2 if b < 0xE0 else 3 if b < 0xF0 else 4
+    if i + width > len(s):
+        return i + 1
+    x = ord(s[i + 1])
+    if x & 0xC0 != 0x80 or (b == 0xE0 and x < 0xA0) or (b == 0xF0 and x < 0x90) or (b == 0xF4 and x >= 0x90):
+        return i + 1
+    for j in range(2, width):
+        if ord(s[i + j]) & 0xC0 != 0x80:
+            return i + 1
+    return i + width
 
 
 def _last_char(s: str) -> int:
     i = len(s) - 1
     if _UTF8:
-        while i > 0 and ord(s[i]) & 0xC0 == 0x80:
-            i -= 1
+        # A trailing continuation belongs to a character only when its complete sequence
+        # reaches the end; otherwise it is one standalone byte, just as in _next_char().
+        for start in range(max(0, i - 3), i):
+            if _next_char(s, start) == len(s):
+                return start
     return i
+
+
+def _char_value(s: str) -> int:
+    # Pystachy port: raw bytes and UTF-8 endpoints compare by re._codes()'s value, not bytes.
+    value = ord(s[0])
+    if _UTF8 and len(s) > 1:
+        value &= 0x1F if len(s) == 2 else 0x0F if len(s) == 3 else 0x07
+        for i in range(1, len(s)):
+            value = (value << 6) | (ord(s[i]) & 0x3F)
+    return value
 
 
 def fnmatch(name, pat):
@@ -151,7 +177,7 @@ def _translate(pat, STAR, QUESTION_MARK):
                         # Pystachy port: compare and remove complete range endpoints.
                         left, right = chunks[k-1], chunks[k]
                         last, first = _last_char(left), _next_char(right, 0)
-                        if left[last:] > right[:first]:
+                        if _char_value(left[last:]) > _char_value(right[:first]):
                             chunks[k-1] = left[:last] + right[first:]
                             del chunks[k]
                     # Escape backslashes and hyphens for set difference (--).

@@ -101,6 +101,9 @@ print(wrap("IDSTART", ranges(lambda c: chr(c).isidentifier()), "str.isidentifier
 print()
 print(wrap("IDCONTINUE", ranges(lambda c: ("a" + chr(c)).isidentifier()), "XID_Continue: the characters an identifier goes on with"))
 print()
+print(wrap("ALPHA_IDSTART_DELTA", ranges(lambda c: bool(isalpha(c)) != chr(c).isidentifier()),
+           "str.isalpha() differs from single-character str.isidentifier(), over U+0000..U+10FFFF"))
+print()
 print(wrap("LOWER", mapping(lower), "Py_UNICODE_TOLOWER"))
 print()
 print(wrap("UPPER", mapping(upper), "Py_UNICODE_TOUPPER"))

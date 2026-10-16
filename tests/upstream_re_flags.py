@@ -30,11 +30,6 @@
 #   CPython): documented deviations.
 # - test_pattern_compare's pattern1 < pattern2 (TypeError) and hash(pattern): an order of Patterns
 #   and hash() of an object are compile-time errors in Pystachy; test_pattern_compare_bytes: bytes.
-# - test_ignore_case_range's [N-\uffff], [n-\uffff], [N-\U00010000] and [n-\U00010000] with
-#   IGNORECASE|ASCII: the port's compiler case-folds such a range code point by code point, with
-#   two lists for each (lib/re/__init__.py, _optimize_charset), 250,000 allocations, which take
-#   over a minute in make verify's run with a collection at each (gc-stress). tools/re_fuzz.py
-#   checks them against CPython's re (the code they compile to and their matches).
 # - PatternReprTests.test_long_pattern's 1,000 longs: 100 here (its repr is cut at 200 characters
 #   either way), as compiling 5,000 characters' items takes 80,000 allocations, 17 seconds in make
 #   verify's gc-stress; tools/re_fuzz.py checks the 1,000.
@@ -119,6 +114,8 @@ CASES = [
     (M, r'[\U00010428-\U0001044f]', '\U00010428', IA), (M, r'[\U00010428-\U0001044f]', '\U00010400', IA),
     (M, r'[\U00010400-\U00010427]', '\U00010428', IA), (M, r'[\U00010400-\U00010427]', '\U00010400', IA),
     (M, r'[N-\x7f]', 'A', IA), (M, r'[n-\x7f]', 'Z', IA),
+    (M, r'[N-\uffff]', 'A', IA), (M, r'[n-\uffff]', 'Z', IA),
+    (M, r'[N-\U00010000]', 'A', IA), (M, r'[n-\U00010000]', 'Z', IA),
     (M, r'[J-M]', '\u212a', I), (M, r'[j-m]', '\u212a', I), (M, r'[\u2129-\u212b]', 'K', I),
     (M, r'[\u2129-\u212b]', 'k', I), (M, r'[R-T]', '\u017f', I), (M, r'[r-t]', '\u017f', I),
     (M, r'[\u017e-\u0180]', 'S', I), (M, r'[\u017e-\u0180]', 's', I), (M, r'[\u0411-\u0413]', '\u0432', I),
