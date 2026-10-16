@@ -1,0 +1,152 @@
+binascii Conversion between binary data and ASCII
+Error('x') Incomplete() bad
+hex
+b'0102030405' b'b901ef' b''
+1 b'01-02-03-04-05' b'01:02:03:04:05'
+2 b'01-0203-0405' b'01:0203:0405'
+3 b'0102-030405' b'0102:030405'
+-1 b'01-02-03-04-05' b'01:02:03:04:05'
+-2 b'0102-0304-05' b'0102:0304:05'
+-3 b'010203-0405' b'010203:0405'
+0 b'0102030405' b'0102030405'
+5 b'0102030405' b'0102030405'
+6 b'0102030405' b'0102030405'
+100 b'0102030405' b'0102030405'
+-100 b'0102030405' b'0102030405'
+b'61 62' b''
+ValueError: sep must be length 1.
+ValueError: sep must be length 1.
+b'61\xe962\xe963'
+ValueError: sep must be ASCII.
+b'61?62?63'
+OverflowError: Python int too large to convert to C int
+b'\x01\x02\xff'
+b'\x01\x02\xff'
+b''
+Error: Odd-length string
+Error: Non-hexadecimal digit found
+Error: Non-hexadecimal digit found
+Error: Non-hexadecimal digit found
+b'AB' b'\xff\xff'
+ValueError: string argument should contain only ASCII characters
+base64
+b'\n' b''
+b'aA==\n' b'/w=='
+b'aGU=\n' b'//4='
+b'aGVs\n' b'//79'
+b'aGVsbA==\n' b''
+b'aGVsbG8=\n' b'/w=='
+b'aGVsbG8h\n' b'//4='
+b'hello'
+b'hello'
+Error: Incorrect padding
+Error: Incorrect padding
+b'hello'
+Error: Excess padding not allowed
+b'hello'
+Error: Only base64 data is allowed
+b'hel'
+Error: Only base64 data is allowed
+b'hel'
+Error: Leading padding not allowed
+b'hell'
+b'hell'
+Error: Incorrect padding
+Error: Incorrect padding
+Error: Incorrect padding
+Error: Incorrect padding
+Error: Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4
+Error: Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4
+Error: Incorrect padding
+Error: Excess data after padding
+b'hell'
+Error: Excess data after padding
+b'hel'
+Error: Excess data after padding
+b'a\x06\x10'
+Error: Excess data after padding
+b''
+b''
+b''
+Error: Leading padding not allowed
+Error: Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4
+Error: Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4
+Error: Incorrect padding
+Error: Discontinuous padding not allowed
+b'i\xb7'
+b'i\xb7'
+b'i\xb7\x1d'
+Error: Excess padding not allowed
+b'i'
+b'i'
+b'i'
+Error: Excess padding not allowed
+b'hello' b'hello'
+crc
+0 907060870 191926070 222957957 222957957
+899311407 871334697 899311407
+0 50018 53870 15332 15332 20810 51333
+uu
+b' \n' b'`\n'
+b'!80  \n' b'!80``\n'
+b'"86( \n' b'"86(`\n'
+b'#86)C\n' b'#86)C\n'
+b'#    \n' b'#````\n'
+b"M>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX\n" b"M>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX\n"
+Error: At most 45 bytes at once
+b'abc'
+b'abc'
+b'abc'
+b'a`\x00'
+Error: Missing length byte
+b''
+b''
+b'\x00'
+Error: Trailing garbage
+Error: Illegal char
+b'abc\x00'
+b'abc'
+b'abc'
+qp
+b'' b'' b'' b''
+b'hello' b'hello' b'hello' b'hello'
+b'a=3Db' b'a=3Db' b'a=3Db' b'a=3Db'
+b'tab\tand space=20\nnext' b'tab=09and=20space=20\nnext' b'tab\tand space =0Anext' b'tab\tand_space_\nnext'
+b'end space=20' b'end=20space=20' b'end space=20' b'end_space=20'
+b'end tab=09' b'end=20tab=09' b'end tab=09' b'end_tab=09'
+b'=2E\n' b'=2E\n' b'=2E=0A' b'=2E\n'
+b'..\n' b'..\n' b'..=0A' b'..\n'
+b'a.\n.b' b'a.\n.b' b'a.=0A.b' b'a.\n.b'
+b'under_score' b'under_score' b'under_score' b'under=5Fscore'
+b'=00=7F=80=FF' b'=00=7F=80=FF' b'=00=7F=80=FF' b'=00=7F=80=FF'
+b'crlf\r\nline\r\n' b'crlf\r\nline\r\n' b'crlf=0D=0Aline=0D=0A' b'crlf\r\nline\r\n'
+b'lf\nthen\ncrlf' b'lf\nthen\ncrlf' b'lf=0Athen=0D=0Acrlf' b'lf\nthen\ncrlf'
+b'cr\ronly' b'cr\ronly' b'cr=0Donly' b'cr\ronly'
+b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\nxxxxx' b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\nxxxxx' b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\nxxxxx' b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\nxxxxx'
+b'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' b'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' b'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy=\n=0Azzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz=\nzzzz' b'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\nzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'
+b'=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=\n=3D=3D=3D=3D=3D' b'=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=\n=3D=3D=3D=3D=3D' b'=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=\n=3D=3D=3D=3D=3D' b'=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=\n=3D=3D=3D=3D=3D'
+b'a ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba b=\na ba ba ba ba b' b'a=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20b=\na=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20ba=20b' b'a ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba ba b=\na ba ba ba ba b' b'a_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_ba_b=\na_ba_ba_ba_ba_b'
+b'line=20\r\n' b'line=20\r\n' b'line =0D=0A' b'line_\r\n'
+b'lone\r' b'lone\r' b'lone=0D' b'lone\r'
+b'a=b' b'a=b'
+b'a=b' b'a=b'
+b'softbreak' b'softbreak'
+b'softbreak' b'softbreak'
+b'soft=  \nbreak' b'soft=  \nbreak'
+b'bad=xy' b'bad=xy'
+b'end' b'end'
+b'=41' b'=41'
+b'=4' b'=4'
+b'a_b' b'a b'
+b'' b''
+b'xy' b'xy'
+b'a=b' b'a b'
+round trips
+True True True
+True 590 688229491 32341
+b'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==\n'
+b'=00=01=02=03=04=05=06=07=08=09\n=0B=0C\r=0E=0F=10=11=12=13=14=15=16=17=18=19=1A=1B=1C=1D=1E=1F !"#$%&\'()*+,-=\n./0123456789:;<=3D>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuv=\nwxyz{|}~=7F=80=81=82=83=84=85=86=87=88=89=8A=8B=8C=8D=8E=8F=90=91=92=93=94=\n=95=96=97=98=99=9A=9B=9C=9D=9E=9F=A0=A1=A2=A3=A4=A5=A6=A7=A8=A9=AA=AB=AC=AD=\n=AE=AF=B0=B1=B2=B3=B4=B5=B6=B7=B8=B9=BA=BB=BC=BD=BE=BF=C0=C1=C2=C3=C4=C5=C6=\n=C7=C8=C9=CA=CB=CC=CD=CE=CF=D0=D1=D2=D3=D4=D5=D6=D7=D8=D9=DA=DB=DC=DD=DE=DF=\n=E0=E1=E2=E3=E4=E5=E6=E7=E8=E9=EA=EB=EC=ED=EE=EF=F0=F1=F2=F3=F4=F5=F6=F7=F8=\n=F9=FA=FB=FC=FD=FE=FF'
+Incomplete: more
+ValueError: Error Incorrect padding
+Exception: Error Odd-length string
+[exit 0]
