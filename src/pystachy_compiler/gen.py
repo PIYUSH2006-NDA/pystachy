@@ -2276,8 +2276,8 @@ class Gen:
     def stmts(self, body: list[Node]) -> None:
         return statements_stmts(self, body)
 
-    def obj_helpers(self, c: str, compares: bool) -> None:
-        return statements_obj_helpers(self, c, compares)
+    def obj_helpers(self, c: str, which: list[int]) -> None:
+        return statements_obj_helpers(self, c, which)
 
     def hash_helper(self, c: str) -> None:
         return statements_hash_helper(self, c)
