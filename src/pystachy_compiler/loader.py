@@ -59,7 +59,7 @@ from src.pystachy_compiler.specs import (
     VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, has_kind, mk, names_in
-from src.pystachy_compiler.utils import int_fits
+from src.pystachy_compiler.utils import clone, int_fits
 
 
 class Loader:
@@ -203,6 +203,7 @@ class Loader:
                 self.late_aliases(x)
             more = self.late_takes(False)
         self.late_takes(True)
+        self.doccycles()
         for x in self.order:
             self.lazyann = False
             self.called = 0
@@ -225,7 +226,8 @@ class Loader:
         # simplify() left of it), it is a variable, which CPython's code assigns the docstring (or
         # None) before its first statement. So does a statement put after the docstring and the
         # from __future__ imports here, unless the first statement that names __doc__ binds it
-        # (and its value does not read it): with a docstring, __doc__ = <docstring>; without one,
+        # before a user import can expose this module (and its value does not read it).
+        # With a docstring, __doc__ = <docstring>; without one,
         # __doc__: str | None = None, where that statement is no def or class (one of whose
         # functions reads it: such a read before m's code binds it raises NameError)
         b = m.body
@@ -242,16 +244,56 @@ class Loader:
         j = i
         while j < len(b.kids) and (not names_name(b.kids[j], "__doc__") or (b.kids[j].kind == "annassign" and len(b.kids[j].kids) == 2)):
             j += 1  # (__doc__: str neither binds nor reads it)
-        if j == len(b.kids) or binds_first(b.kids[j], "__doc__") or (m.doc.kind != "str" and (b.kids[j].kind == "def" or b.kids[j].kind == "class" or b.kids[j].kind == "subclass")):
+        if j == len(b.kids):
+            return
+        first = b.kids[j]
+        direct = binds_first(first, "__doc__")
+        exposed = imports_user(mk("block", "", first.line, b.kids[i : j + 1]))
+        if (direct and not exposed) or (m.doc.kind != "str" and (first.kind == "def" or first.kind == "class" or first.kind == "subclass")):
             return
         line = b.kids[i].line
         v = mk(m.doc.kind, m.doc.s, line, [])
+        ann = mk("name", "str", line, [])
+        hasann = False
+        for st in b.kids[i : j + 1]:
+            if st.kind == "annassign" and st.kids[0].kind == "name" and st.kids[0].s == "__doc__":
+                ann = clone(st.kids[1])
+                hasann = True
         if m.doc.kind == "str":
-            b.kids.insert(i, mk("assign", "", line, [mk("name", "__doc__", line, []), v]))
+            b.kids.insert(i, mk("assign", "doccycle" if direct else "", line, [mk("name", "__doc__", line, []), v]))
+        elif direct and first.kind == "assign" and not hasann:
+            # Infer the optional type from its later value in the owning module's frame before
+            # a circular importer compiles; no frontend type guess is needed.
+            b.kids.insert(i, mk("assign", "doccycle", line, [mk("name", "__doc__", line, []), v]))
         else:
-            # (__doc__: str | None = None, so that its code can bind it a str)
-            t = mk("binop", "|", line, [mk("name", "str", line, []), mk("None", "", line, [])])
-            b.kids.insert(i, mk("annassign", "", line, [mk("name", "__doc__", line, []), t, v]))
+            t = mk("binop", "|", line, [ann, mk("None", "", line, [])])
+            b.kids.insert(i, mk("annassign", "doccycle" if direct else "docinit", line, [mk("name", "__doc__", line, []), t, v]))
+
+    def doccycles(self) -> None:
+        # A direct rebinding needs the initial __doc__ only if a preceding import can observe
+        # it through a cycle. Drop the provisional assignment otherwise, retaining support for
+        # a different type after an unrelated import. The resolved imports are available now;
+        # imports_mod also follows imported functions conservatively.
+        for m in self.order:
+            for i in range(len(m.body.kids)):
+                st = m.body.kids[i]
+                if (st.kind == "assign" or st.kind == "annassign") and st.s == "doccycle":
+                    j = i + 1
+                    while j < len(m.body.kids) and (not names_name(m.body.kids[j], "__doc__") or (m.body.kids[j].kind == "annassign" and len(m.body.kids[j].kids) == 2)):
+                        j += 1
+                    prefix = mk("block", "", st.line, m.body.kids[i + 1 : j + 1])
+                    if not self.imports_mod(prefix, m.name, {}, True):
+                        m.body.kids = m.body.kids[:i] + m.body.kids[i + 1 :]
+                    elif m.doc.kind != "str":
+                        # An annotation, with or without a value, describes the same storage as
+                        # the implicit initial None; preserve its check on the later value.
+                        for a in m.body.kids[i + 1 : j + 1]:
+                            if a.kind == "annassign" and a.kids[0].kind == "name" and a.kids[0].s == "__doc__":
+                                a.kids[1] = mk("binop", "|", a.line, [a.kids[1], mk("None", "", a.line, [])])
+                        st.s = "docinit"
+                    else:
+                        st.s = ""
+                    break
 
     def moddoc(self, n: Node, t: Mod) -> None:
         # n, a read of module t's __doc__ where t's code binds none, becomes that constant
