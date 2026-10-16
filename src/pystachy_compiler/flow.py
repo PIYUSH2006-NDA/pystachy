@@ -44,6 +44,10 @@ class Flow:
         self.me = ""
         self.fields: list[str] = []
         self.unsafe: dict[str, bool] = {}
+        # hasattr(self, "f") is the builtin (probes): it reads f's flag (probed: where f may be
+        # unassigned), and f is assigned where it is true
+        self.probes = False
+        self.probed: dict[str, bool] = {}
         # in an exception class's __init__: the fields super().__init__() surely assigns, whether it
         # lets self escape, and whether this __init__ does
         self.sup: list[str] = []
@@ -157,6 +161,12 @@ class Flow:
         while len(self.log) > n:
             self.log.pop()
             self.was.pop()
+
+    def probe(self, e: Node) -> str:
+        # the field that test e, hasattr(self, "f") (probes), finds assigned when true, or ""
+        if self.probes and e.kind == "call" and len(e.kids) == 3 and e.kids[0].kind == "name" and e.kids[0].s == "hasattr" and e.kids[1].kind == "name" and e.kids[1].s == self.me and e.kids[2].kind == "str" and e.kids[2].s in self.fields:
+            return e.kids[2].s
+        return ""
 
 
 # ---------------------------------------------------------------- code generator
@@ -420,6 +430,8 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         if init.params[0] not in asg:
             # (if __init__ rebinds self, no assignment is known to reach the new object)
             fl.me = init.params[0]
+            # (outside a hierarchy, whose reads keep their flags' tests; the builtin hasattr)
+            fl.probes = ci.exc == "" and ci.tag == 0 and "hasattr" not in asg and "hasattr" not in init.params and not self.bound("hasattr")
             self.fl_stmts(fl, init.node.kids[2].kids)
         fl.exposed()
         ci.leak = fl.escaped
@@ -428,13 +440,15 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         # assigning its own fields. Keep assignment bits in the root layout so base-typed
         # reads remain safe for every ordinary subclass, including future call paths.
         checked = ci.tag > 0 and not f.startswith(" ")
-        if (checked or f in fl.unsafe or ci.name + "." + f in self.cvars) and f not in ci.fflag:
+        if (checked or f in fl.unsafe or f in fl.probed or ci.name + "." + f in self.cvars) and f not in ci.fflag:
             if ci.fpos[f] < nb and f in fl.unsafe:
                 # (the base's code, which reads it with no flag to test)
                 self.line = ci.node.line
                 self.err(f"{short(ci.name)}.__init__ may leave field '{f}' of {short(ci.base)} unassigned where it is read: assign it, or call super().__init__(...) first")
             ci.fflag[f] = len(ci.fields) + ci.nflag
             ci.nflag += 1
+            if not checked and f not in fl.unsafe and ci.name + "." + f not in self.cvars:
+                ci.fsure[f] = True  # (only hasattr tests its flag: no read finds it unassigned)
 
 def gen_default_home(self, ci: ClassInfo, fl: str) -> ClassInfo:
     # the class whose class body binds class attribute fl of ci: ci's, or the base's that an
@@ -571,10 +585,16 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
         self.fl_target(fl, n.kids[0])
     elif k == "if":
         self.fl_expr(fl, n.kids[0])
+        neg = n.kids[0].kind == "unary" and n.kids[0].s == "not"
+        f = fl.probe(n.kids[0].kids[0] if neg else n.kids[0])  # (the branch where hasattr(self, "f") is true has f)
         mark = len(fl.log)
+        if f != "" and not neg:
+            fl.put("." + f)
         self.fl_stmts(fl, n.kids[1].kids)
         then = fl.since(mark)
         fl.undo(mark)
+        if f != "" and neg:
+            fl.put("." + f)
         self.fl_stmts(fl, n.kids[2].kids)
         fl.join(then, mark)
     elif k == "while" or k == "for":
@@ -794,6 +814,10 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
             for c in e.kids[n:]:
                 self.fl_expr(fl, c)
             fl.undo(mark)
+    elif fl.probe(e) != "":
+        # (hasattr(self, "f") reads f's flag and lets self escape no further)
+        if "." + e.kids[2].s not in fl.defd and " dead" not in fl.defd:
+            fl.probed[e.kids[2].s] = True
     elif k == "call":
         c = e.kids[0]
         if c.kind == "attr":

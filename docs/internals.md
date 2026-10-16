@@ -81,7 +81,10 @@ code pointer and an environment pointer for indirect calls.
 
 The preceding `Flow` pass marks reads it cannot prove initialized. Generated checks then
 raise the appropriate error; LLVM can remove checks it proves redundant. Optional-value
-narrowing is a separate typing concern.
+narrowing is a separate typing concern. In `__init__` of a class outside a hierarchy, the
+branch where `hasattr(self, "f")` is true has field `f` assigned: a field made only where
+it is false (`if not hasattr(self, "f"): self.f = ...`) keeps a flag for `hasattr`, and its
+reads have no check.
 
 <a id="the-typed-ir"></a>
 <a id="ssa-by-delegation"></a>
