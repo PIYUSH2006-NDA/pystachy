@@ -916,6 +916,8 @@ class Gen:
         self.called: dict[str, bool] = {}
         self.gflag: dict[str, bool] = {}
         self.ocls: dict[str, int] = {}  # classes that appear inside containers: id in descriptors
+        self.ocmp: dict[str, bool] = {}  # those of ocls a descriptor compares, not only prints (obj_helpers)
+        self.fchk: dict[str, bool] = {}  # the records whose fields desc is checking
         self.hcls: dict[str, bool] = {}  # those of them that keys hash through the program (H<id>: obj_hash)
         self.lenient = False
         self.uflags: dict[str, bool] = {}
@@ -2274,8 +2276,8 @@ class Gen:
     def stmts(self, body: list[Node]) -> None:
         return statements_stmts(self, body)
 
-    def obj_helpers(self, c: str) -> None:
-        return statements_obj_helpers(self, c)
+    def obj_helpers(self, c: str, compares: bool) -> None:
+        return statements_obj_helpers(self, c, compares)
 
     def hash_helper(self, c: str) -> None:
         return statements_hash_helper(self, c)

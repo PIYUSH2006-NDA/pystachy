@@ -484,7 +484,9 @@ supported alternatives.
   CPython calls anyway; this includes the method of a subclass whose objects the container may
   hold, for objects of ordinary and exception classes (`Base() in xs`, `xs.count(x)`,
   `xs.index(x)`, `xs == ys`, `sorted(xs)` or `<` of tuples holding them, where `Sub(Base)` defines
-  `__eq__(self, other: "Sub")` or `__lt__(self, other: "Sub")`); printing such a container works
+  `__eq__(self, other: "Sub")` or `__lt__(self, other: "Sub")`), and comparing dataclass or
+  NamedTuple objects there whose fields hold such objects (`[NT(Sub(1))] == [NT(Base(1))]`);
+  printing such a container works, also one of those dataclass or NamedTuple objects
 - `x == y`, `!=` or an ordering of values typed by a class (ordinary or exception) when the
   method CPython calls for a subclass whose objects they may be is annotated to take only that
   subclass (`x == y` of `E`-typed values where `F(E)` defines `__eq__(self, other: "F")`; CPython

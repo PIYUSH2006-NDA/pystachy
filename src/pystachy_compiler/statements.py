@@ -75,10 +75,12 @@ def gen_callable_guard(self, st: Node, f: FnInfo) -> str:
         return ""
     return c.kids[1].s
 
-def gen_obj_helpers(self, c: str) -> None:
+def gen_obj_helpers(self, c: str, compares: bool) -> None:
     # @o.eq/cmp/repr.<class>: what the runtime's generic ==, ordering and repr do with objects
-    # of class c. They are compiled leniently: an operation the class does not support
-    # raises TypeError when it runs rather than failing the compilation.
+    # of class c: @o.repr, or (compares) @o.eq and @o.cmp, which only a class that
+    # a descriptor compares needs (ocmp): printing a container compiles no comparison. They are
+    # compiled leniently: an operation the class does not support raises TypeError when it
+    # runs rather than failing the compilation.
     line = self.classes[c].node.line
     a = mk("name", "a", line, [])
     b = mk("name", "b", line, [])
@@ -92,7 +94,7 @@ def gen_obj_helpers(self, c: str) -> None:
               [mk("return", "", line, [mk("call", "", line, [mk("name", "__pys_repr", line, []), a])])]]
     ops = ["eq", "cmp", "repr"]
     self.lenient = True
-    for i in range(3):
+    for i in [0, 1] if compares else [2]:
         f = FnInfo(ops[i], f"@o.{ops[i]}.{c}", self.classes[c].node, "")
         f.params = ["op", "a", "b"] if i == 1 else ["a", "b"]
         f.ptypes = ["int", c, c] if i == 1 else [c, c]

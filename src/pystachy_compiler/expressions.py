@@ -2838,8 +2838,8 @@ def gen_concrete_cmp(self, op: str, a: Val, b: Val) -> Val:
             why = f"{m}() of {shown(lhs.t)} cannot compare an operand of type {typestr(rhs.t)}"
             if not self.lenient or not self.curfn.ll.startswith("@o."):
                 self.err(why)
-            # (in obj_helpers' bodies, which a container that is only printed compiles too, it
-            # raises where it runs; desc rejects the operations that run it)
+            # (in obj_helpers' bodies, which compile every ordering of a class that a descriptor
+            # compares, it raises where it runs; desc rejects the operations that run it)
             self.raise_("TypeError", self.sconst(why))
             return Val("false", "bool")
         r = self.coerce(self.call_fn(self.classes[lhs.t].methods[m], [lhs, rhs], [], direct=True), "bool")

@@ -456,7 +456,8 @@ A subclass inherits fields and methods and can override `__init__`, `__str__` an
 class: `x == y` of `E`-typed values runs `__eq__` of a subclass that defines it. Where that
 method is annotated to take only its subclass (`__eq__(self, other: "F")`), CPython would call
 it with an `E`, so the comparison, and `in`, `count()`, `index()`, `==` and sorting of
-containers of `E`, are rejected at compile time, as for ordinary classes.
+containers of `E` (or of dataclass or NamedTuple objects with an `E` field), are rejected at
+compile time, as for ordinary classes. Printing such a container compiles and works.
 `super().__init__`, `super().__str__`, `super().__repr__`, explicit base calls and
 `super(E, self)` are supported within the documented restrictions.
 

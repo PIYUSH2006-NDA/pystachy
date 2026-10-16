@@ -231,8 +231,25 @@ def gen_desc(self, t: str, use: str) -> str:
                         g = self.classes[lt].methods[p[1]]
                         if self.cmp_method(lt, p[1], rt) == "":
                             self.err(g.bad if g.bad != "" else f"comparing {shown(t)} objects (in a list, tuple, in, count, index, sort, min or max) calls {p[1]}() of {shown(lt)} with a {shown(rt)}, but it takes a {typestr(g.ptypes[1])}")
+            # (a NamedTuple, or a dataclass by the method @dataclass writes, compares its fields:
+            # those of a class are checked here as well, so that the error is the operation's
+            # rather than its helper's, which compiles their comparison; what the check adds to
+            # ocls and ocmp is not kept)
+            if op != "repr" and t not in self.fchk and ((f is None and t in self.nts) or (f is not None and f.synthetic and self.is_dc(t))):
+                ci = self.classes[t]
+                oc = dict(self.ocls)
+                om = dict(self.ocmp)
+                self.fchk[t] = True
+                for x in [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-compare" not in ci.fopts[x]]:
+                    if unopt(ci.ftypes[x]) in self.classes:
+                        self.desc(unopt(ci.ftypes[x]), "==" if op == "==" else "== " + op)
+                del self.fchk[t]
+                self.ocls = oc
+                self.ocmp = om
         if t not in self.ocls:
             self.ocls[t] = len(self.ocls)
+        if use != "repr":
+            self.ocmp[t] = True
         return f"O{self.ocls[t]:03d}"
     if is_fn(t) or is_callable(t):
         self.err(f"printing a function, or comparing containers of functions, is not supported: {typestr(t)}")
