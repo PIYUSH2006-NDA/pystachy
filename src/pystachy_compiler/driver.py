@@ -221,6 +221,15 @@ def main() -> None:
     diagnostics.SRC = argv[2]
     if not os.path.exists(diagnostics.SRC):
         fail("file not found", 0)
+    jitflags = ""
+    if cmd == "run":
+        codegen = os.getenv("PYSTACHY_JIT_CODEGEN", "2")
+        if codegen != "0" and codegen != "2":
+            fail(f"PYSTACHY_JIT_CODEGEN: {codegen} is not 0 (MCJIT) or 2 (default ORC)", 0)
+        if codegen == "0":
+            # lli's default ORC path ignores -O0 in LLVM 18. MCJIT honors it; keep this
+            # startup/execution tradeoff opt-in, independently of the IR inlining budget.
+            jitflags = " -jit-kind=mcjit -O0"
     if cmd == "check":
         f = open(diagnostics.SRC, "r", encoding=RAW)
         Parser(Lexer(f.read(), 1).file()).module()
@@ -592,7 +601,7 @@ def main() -> None:
                     os.remove(p)
             gsp = os.getenv("PYSTACHY_GC_STRESS_PROGRAM", "")
             env = f"PYSTACHY_GC_STRESS={q(gsp)} " if gsp != "" else ""
-            run = f"{env}PYSTACHY_ARGV0={q(diagnostics.SRC)} exec {llvm}lli -extra-object=/dev/fd/8 /dev/fd/9 {' '.join([q(a) for a in rest])}"
+            run = f"{env}PYSTACHY_ARGV0={q(diagnostics.SRC)} exec {llvm}lli{jitflags} -extra-object=/dev/fd/8 /dev/fd/9 {' '.join([q(a) for a in rest])}"
             os.execv("/bin/sh", ["sh", "-c", f"exec 9< {q(bc)} 8< {q(useo)} && rm -f {q(bc)} {q(parto)} && rmdir {q(tmp)} && {run}"])
     for p in [ll, bc, obj, rcc, rll, rsl, rcb, rpl, lnk, part, parto, hp, tmp + "/pyembed.c", tmp + "/pyext.c"] + [g[3] for g in glue]:
         if os.path.exists(p):
