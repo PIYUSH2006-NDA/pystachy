@@ -21,9 +21,29 @@ class Satrec(object):
     # against this class and adding extra attributes, then moving to a
     # computer where the C-accelerated class is used and having their
     # code suddenly produce errors.
-    # Pystachy port: __slots__ (a class attribute, M2) as one annotated field per slot but
-    # epoch (see io.py): Pystachy types a field from the class body or __init__ only, and
-    # the module functions twoline2rv() and sgp4init() assign these (M2).
+    __slots__ = (
+        'Om', 'a', 'alta', 'altp', 'am', 'argpdot', 'argpo', 'atime', 'aycof',
+        'bstar', 'cc1', 'cc4', 'cc5', 'classification', 'con41', 'd2', 'd2201',
+        'd2211', 'd3', 'd3210', 'd3222', 'd4', 'd4410', 'd4422', 'd5220',
+        'd5232', 'd5421', 'd5433', 'dedt', 'del1', 'del2', 'del3', 'delmo',
+        'didt', 'dmdt', 'dnodt', 'domdt', 'e3', 'ecco', 'ee2', 'elnum', 'em',
+        'ephtype', 'epoch', 'epochdays', 'epochyr', 'error', 'error_message',
+        'eta', 'gsto', 'im', 'inclo', 'init', 'intldesg', 'irez', 'isimp',
+        'j2', 'j3', 'j3oj2', 'j4', 'jdsatepoch', 'mdot', 'method', 'mm', 'mo',
+        'mu', 'nddot', 'ndot', 'nm', 'no_kozai', 'no_unkozai', 'nodecf',
+        'nodedot', 'nodeo', 'om', 'omgcof', 'operationmode', 'peo', 'pgho',
+        'pho', 'pinco', 'plo', 'radiusearthkm', 'revnum', 'satnum_str', 'se2',
+        'se3', 'sgh2', 'sgh3', 'sgh4', 'sh2', 'sh3', 'si2', 'si3', 'sinmao',
+        'sl2', 'sl3', 'sl4', 't', 't2cof', 't3cof', 't4cof', 't5cof', 'tumin',
+        'x1mth2', 'x7thm1', 'xfact', 'xgh2', 'xgh3', 'xgh4',
+        'xh2', 'xh3', 'xi2', 'xi3', 'xke', 'xl2', 'xl3', 'xl4', 'xlamo',
+        'xlcof', 'xli', 'xmcof', 'xni', 'zmol', 'zmos',
+        'jdsatepochF'
+    )
+
+    # Pystachy port: the slots' types are annotated, but epoch's (see io.py): Pystachy types a
+    # field from the class body or __init__ only, and the module functions twoline2rv() and
+    # sgp4init() assign these (M2).
     Om: float
     a: float
     alta: float
@@ -157,23 +177,20 @@ class Satrec(object):
     def __init__(self):
         self.revnum = 0  # for consistency, since sgp4init() leaves this unset
 
-    # Pystachy port: the properties no and satnum are left out (@property, M2): no is
-    # self.no_kozai and satnum is from_alpha5(self.satnum_str)
-    # @property
-    # def no(self):
-    #     return self.no_kozai
-    #
-    # @property
-    # def satnum(self):
-    #     return from_alpha5(self.satnum_str)
+    # Pystachy port: the properties' return types are annotated (a property needs one, M2)
+    @property
+    def no(self) -> float:
+        return self.no_kozai
+
+    @property
+    def satnum(self) -> int:
+        return from_alpha5(self.satnum_str)
 
     @classmethod
-    # Pystachy port: the methods' parameters are annotated (unannotated methods, M2), and the
-    # int whichconst is not rebound to the EarthGravity it selects (a variable has one type, M4)
-    def twoline2rv(cls, line1: str, line2: str, whichconst: int = WGS72) -> 'Satrec':
-        gravity = gravity_constants[whichconst]
+    def twoline2rv(cls, line1, line2, whichconst=WGS72):
+        whichconst = gravity_constants[whichconst]
         self = cls()
-        twoline2rv(line1, line2, gravity, 'i', self)  # Pystachy port: gravity, as above
+        twoline2rv(line1, line2, whichconst, 'i', self)
 
         # Expose the same attribute types as the C++ code.
         # Pystachy port: io.twoline2rv() ends with these two conversions (a field has one type, M4)
@@ -196,11 +213,9 @@ class Satrec(object):
         self.epochyr %= 100
         return self
 
-    # Pystachy port: annotated, and whichconst not rebound, as in twoline2rv()
-    def sgp4init(self, whichconst: int, opsmode: str, satnum: int, epoch: float, bstar: float,
-                 ndot: float, nddot: float, ecco: float, argpo: float, inclo: float,
-                 mo: float, no_kozai: float, nodeo: float):
-        gravity = gravity_constants[whichconst]
+    def sgp4init(self, whichconst, opsmode, satnum, epoch, bstar,
+                 ndot, nddot, ecco, argpo, inclo, mo, no_kozai, nodeo):
+        whichconst = gravity_constants[whichconst]
         whole, fraction = divmod(epoch, 1.0)
         whole_jd = whole + 2433281.5
 
@@ -220,18 +235,16 @@ class Satrec(object):
 
         self.classification = 'U'
 
-        sgp4init(gravity, opsmode, satnum, epoch, bstar, ndot, nddot,  # Pystachy port: gravity
+        sgp4init(whichconst, opsmode, satnum, epoch, bstar, ndot, nddot,
                  ecco, argpo, inclo, mo, no_kozai, nodeo, self)
 
-    # Pystachy port: annotated (M2)
-    def sgp4(self, jd: float, fr: float) -> tuple[int, tuple[float, float, float], tuple[float, float, float]]:
+    def sgp4(self, jd, fr):
         tsince = ((jd - self.jdsatepoch) * minutes_per_day +
                   (fr - self.jdsatepochF) * minutes_per_day)
         r, v = sgp4(self, tsince)
         return self.error, r, v
 
-    # Pystachy port: annotated (M2)
-    def sgp4_tsince(self, tsince: float) -> tuple[int, tuple[float, float, float], tuple[float, float, float]]:
+    def sgp4_tsince(self, tsince):
         r, v = sgp4(self, tsince)
         return self.error, r, v
 

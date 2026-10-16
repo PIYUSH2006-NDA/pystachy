@@ -21,7 +21,8 @@ print(wcwidth("中"), wcswidth("中文"))
 - `wcwidth` retains upstream's 1,024-entry LRU cache, including `cache_info`, `cache_clear`
   and `__wrapped__`. Default and keyword calls keep their upstream cache-key forms.
   The private `_wcmatch_version` helper also retains its eight-entry cache; the legacy
-  variable-length-tuple parser `_wcversion_value` remains outside the compiled API.
+  parser `_wcversion_value`, whose `tuple(map(...))` Pystachy rejects, remains outside the
+  compiled API.
 
 <a id="deviations-it-hits"></a>
 

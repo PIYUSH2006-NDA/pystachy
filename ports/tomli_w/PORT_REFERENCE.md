@@ -17,14 +17,18 @@ Archive SHA-256: `2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae250
 | file | upstream SHA-256 | edits |
 |---|---|---|
 | `__init__.py` | `b85ea5a4b65f3f974a6a0327ece2d7d5702256eff8847315b8fba162afa3f410` | none |
-| `_writer.py` | `76c89f152db161fd62efa9a64727f3f72d76e710bb67f1d0f38e592a126c617b` | 14 edits in 27 regions |
+| `_writer.py` | `76c89f152db161fd62efa9a64727f3f72d76e710bb67f1d0f38e592a126c617b` | 11 edits, 26 markers |
 
 ## Adaptation record
 
 - Document/value functions become templates instead of accepting dynamic `Any`; temporary table/literal lists hold keys and look up typed values when rendered.
-- Type tests guard statically specialized branches. Chunk generators return lists and character sets become string membership tables.
+- Type tests guard statically specialized branches. Chunk generators return lists.
 - Date/time imports and branches are omitted, and identity-keyed inline-table caching is removed.
-- `_writer.py` has fourteen logical edits in twenty-seven regions; `__init__.py` is unchanged.
+- `format_key_part()` has no `try` for the `TypeError` of a key that is no `str`: its message
+  names `type(part)`, and keys are strings.
+- `_writer.py` has eleven logical edits; `__init__.py` is unchanged. The re-baseline (#262)
+  restored upstream's `TYPE_CHECKING = False` flag, its frozensets of characters and their
+  `issuperset()`, and `hex()`, where earlier versions of the port used strings and loops.
 
 ## Validation snapshot
 

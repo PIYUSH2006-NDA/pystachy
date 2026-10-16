@@ -18,10 +18,10 @@ qr.print_ascii()
 
 ## Coverage
 
-- `QRCode`, `add_data(str)`, `make()`, `get_matrix()`, `print_ascii()` and the underlying encoder utilities.
+- `QRCode`, `add_data()`, `make()`, `get_matrix()`, `print_ascii()` and the underlying encoder utilities.
 - Numeric, alphanumeric and UTF-8 byte modes; all four correction levels and QR versions 1–40.
 - PIL/PyPNG/SVG images, styled images/logos, `make_image()`, the `qr` CLI and `print_tty()` are outside this port’s API.
-- Input is `str`, rather than upstream’s bytes, coercible values or prebuilt `QRData` objects.
+- Input is a `str` or a prebuilt `util.QRData`, rather than also upstream’s bytes or coercible values.
 
 <a id="deviations-it-hits"></a>
 

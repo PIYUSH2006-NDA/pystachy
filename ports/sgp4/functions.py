@@ -61,13 +61,11 @@ def days2mdhms(year, days, round_to_microsecond=6):
     if round_to_microsecond:
         second = round(second, round_to_microsecond)
 
-    # Pystachy port: the float minute is named minute_f, as the int below may not rebind it (a
-    # variable has one type, M4)
-    minute_f, second = divmod(second, 60.0)
+    minute, second = divmod(second, 60.0)
     if round_to_microsecond:
         second = round(second, round_to_microsecond)
 
-    minute = int(minute_f)  # Pystachy port: minute_f, as above
+    minute = int(minute)
     hour, minute = divmod(minute, 60)
     day_of_year, hour = divmod(hour, 24)
 

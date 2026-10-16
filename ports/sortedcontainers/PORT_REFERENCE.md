@@ -17,14 +17,19 @@ Archive SHA-256: `25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb
 | file | upstream SHA-256 | edits |
 |---|---|---|
 | `__init__.py` | `5ff5f92ee463bdeefb2b0b8942b0d44aed13f39e7d61ca28c106c09e3b8ced31` | 1 (the imports of `SortedSet` and `SortedDict`) |
-| `sortedlist.py` | `af003574cf1c7b4f5e6f60cc8cb39f1e88a4842c7f45f9399ee13f352b1faf72` | 97 marked edits in 48 diff hunks |
+| `sortedlist.py` | `af003574cf1c7b4f5e6f60cc8cb39f1e88a4842c7f45f9399ee13f352b1faf72` | 73 marked edits |
 
 ## Adaptation record
 
 - `SortedList` is specialized to `int` and drops its ABC base, `__new__` key dispatch and key property. Sublist/index-tree algorithms are retained.
 - Typed forwarding methods replace aliases; direct comparison methods replace generated operator closures.
+- The constructor, `__setitem__`, `__iter__()` and the methods that take lists keep
+  annotations. List annotations give empty list arguments a type; `__contains__`, `__mul__`
+  and `__imul__` specialize for their arguments, as the other unannotated methods do.
 - `_concat()`, comprehensions and list operations replace reduce/itertools paths. Iteration, `irange()` and `islice()` materialize their values.
-- Ninety-seven marked edits in forty-eight hunks adapt `sortedlist.py`; the package omits imports of SortedDict and SortedSet.
+- Seventy-three marked edits adapt `sortedlist.py`; the package omits
+  imports of SortedDict and SortedSet. The re-baseline (#262) restored 21 unannotated methods,
+  the bound-method locals `_add` and `_pos`, and `map(len, ...)`.
 
 ## Validation snapshot
 

@@ -18,14 +18,17 @@ Archive SHA-256: `e07bbc54a0d798fe6010a12398422e62a8bfbba95c394fd0956ef58cb4d3e2
 |---|---|---|
 | `__init__.py` | `b7deb373e5cfeb67267dde276350bebfc4b35221949145806090706cec3f681a` | 2 |
 | `among.py` | `4b8b17bf3f97d46a1a536c288defe193147b15bd8edb01bbd3f64c57b8b5e2af` | 2 lines |
-| `basestemmer.py` | `e60fd08f93826b9c428f038ace77500a68ba594d504cd64b1501a6fab2becbc1` | 26: 22 signatures, the fields, an import, 2 branches |
-| `english_stemmer.py` | `350d71588d33ce8e2dd5084efa48c50cbaec90bec9ac3f7e97623fd640856dea` | 20: 15 return types, 4 groupings, 1 tuple |
-| `porter_stemmer.py` | `b7e27d0486805a9ce69be3362dc3f995b988c4d607de438df189c21e4482b8b0` | 17: 12 return types, 2 groupings, 3 tuples |
+| `basestemmer.py` | `e60fd08f93826b9c428f038ace77500a68ba594d504cd64b1501a6fab2becbc1` | 4: a signature, the fields, 2 branches |
+| `english_stemmer.py` | `350d71588d33ce8e2dd5084efa48c50cbaec90bec9ac3f7e97623fd640856dea` | 4: 3 groupings, 1 tuple |
+| `porter_stemmer.py` | `b7e27d0486805a9ce69be3362dc3f995b988c4d607de438df189c21e4482b8b0` | 5: 2 groupings, 3 tuples |
 
 ## Adaptation record
 
 - The generated stemmers retain upstream's `BaseStemmer` inheritance. The typed base body is shared, with no copy in either subclass.
-- Methods and fields receive types; groupings and variable-index replacement tables become lists.
+- The fields that `set_current()` assigns are declared, and `stemWords()`'s list parameter is
+  annotated, so that an empty list has a type. The other methods are specialized for their
+  arguments and infer their results. Set groupings, whose type a class attribute does not
+  infer, and variable-index replacement tables become lists.
 - `Among` method callbacks and the class-valued language factory are removed; only the two English modules are imported.
 - List groupings retain exact membership semantics. The rejected faster string-grouping experiment and its timing remain in the benchmark snapshot.
 
@@ -37,7 +40,8 @@ The initial port flattened `BaseStemmer` into each generated class because ordin
 inheritance was unsupported. The hierarchy now matches upstream: `EnglishStemmer` and
 `PorterStemmer` derive from `BaseStemmer`. Removing the two copied bodies deletes 568 lines
 and 56 duplicated or flattening-related `Pystachy port:` markers. The remaining source has
-67 markers.
+67 markers. The re-baseline (#262) restored the unannotated methods and the string grouping
+`g_aeo`, which removed 50 more, leaving 17.
 
 Inherited `stemWord()` calls the concrete subclass's `_stem()`; `stemWords()` uses the same
 path. The inherited constructor and cursor operations share the base fields. The existing

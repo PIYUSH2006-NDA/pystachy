@@ -9,8 +9,7 @@ from .constants import (
     _match_anywhere,
 )
 
-# Pystachy port: a str for a set (M7); the blocklist filter looks for its characters.
-DIGITS = "0123456789"
+DIGITS = set("0123456789")
 
 
 class Sqids:
@@ -26,8 +25,7 @@ class Sqids:
         if len(alphabet) < 3:
             raise ValueError("Alphabet length must be at least 3")
 
-        # Pystachy port: no set (M7): a character the alphabet holds more than once.
-        if any(alphabet.count(c) > 1 for c in alphabet):
+        if len(set(alphabet)) != len(alphabet):
             raise ValueError("Alphabet must contain unique characters")
 
         if not isinstance(min_length, int) or isinstance(min_length, bool):
@@ -41,36 +39,33 @@ class Sqids:
 
         # When the blocklist and alphabet are defaults, use pre-filtered blocklists.
         if blocklist is DEFAULT_BLOCKLIST and alphabet is DEFAULT_ALPHABET:
-            # Pystachy port: lists for the sets and the tuple, here and below (M7; a
-            # Pystachy tuple has a fixed length); they are only searched or looped over.
-            self.__blocklist_exact_match: List[str] = _exact_match
-            self.__blocklist_match_at_ends: List[str] = list(_match_at_ends)
-            self.__blocklist_match_anywhere: List[str] = _match_anywhere
+            self.__blocklist_exact_match: Set[str] = _exact_match
+            self.__blocklist_match_at_ends: Tuple[str, ...] = _match_at_ends
+            self.__blocklist_match_anywhere: Set[str] = _match_anywhere
         else:
-            # Pystachy port: a str and lists for the sets (M7). A word may then be in a
-            # list twice, which changes no result.
-            alphabet_lower = alphabet.lower()
-            exact_match: List[str] = []
-            match_at_ends: List[str] = []
-            match_anywhere: List[str] = []
+            alphabet_lower = set(alphabet.lower())
+            exact_match: Set[str] = set()
+            match_at_ends: Set[str] = set()
+            match_anywhere: Set[str] = set()
             for word in blocklist:
                 if len(word) < 3:
                     continue
                 word_lower = word.lower()
-                # Pystachy port: all() and any() for set operations, append() for add().
-                if not all(c in alphabet_lower for c in word_lower):
+                word_lower_set = set(word_lower)
+                if word_lower_set & alphabet_lower != word_lower_set:
                     continue
 
                 if len(word) == 3:
-                    exact_match.append(word.lower())  # Pystachy port: append()
-                elif any(c in DIGITS for c in word_lower):
-                    match_at_ends.append(word_lower)
+                    exact_match.add(word.lower())
+                elif word_lower_set & DIGITS:
+                    match_at_ends.add(word_lower)
                 else:
-                    match_anywhere.append(word_lower)  # Pystachy port: append()
+                    match_anywhere.add(word_lower)
 
             self.__blocklist_exact_match = exact_match
             # When matching at the ends, `.startswith()` and `.endswith()` need a tuple.
-            self.__blocklist_match_at_ends = match_at_ends  # Pystachy port: a list
+            # Pystachy port: tuple() of a list, as tuple() takes no set (M7)
+            self.__blocklist_match_at_ends = tuple(list(match_at_ends))
             self.__blocklist_match_anywhere = match_anywhere
 
         self.__alphabet = self.__shuffle(alphabet)

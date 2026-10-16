@@ -83,16 +83,14 @@ def from_jd(jd):
     start = 80
     # Day offset between Saka and Gregorian
 
-    # Pystachy port: wjd for the rebound jd, as a parameter keeps its argument's type, an int for an
-    # int Julian day (M4, #9)
-    wjd = floor(jd) + 0.5
-    gyear, _, _ = gregorian.from_jd(wjd)  # Gregorian date for Julian day
+    jd = floor(jd) + 0.5
+    gyear, _, _ = gregorian.from_jd(jd)  # Gregorian date for Julian day
     leap = isleap(gyear)  # Is this a leap year?
     # Tentative year in Saka era
     year = gyear - SAKA_EPOCH
     # JD at start of Gregorian year
     greg0 = gregorian.to_jd(gyear, 1, 1)
-    yday = wjd - greg0  # Day number (0 based) in Gregorian year
+    yday = jd - greg0  # Day number (0 based) in Gregorian year
 
     if leap:
         caitra = 31  # Days in Caitra this year.

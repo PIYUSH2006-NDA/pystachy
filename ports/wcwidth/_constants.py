@@ -4,9 +4,7 @@ from __future__ import annotations
 # std imports
 import os
 from operator import index as _index
-# Pystachy port: no functools (#11), so no @lru_cache below (decorators are M3, #8): the caches
-# only save time.
-# from functools import lru_cache
+from functools import lru_cache
 
 from typing import Tuple, NamedTuple
 
@@ -50,11 +48,11 @@ __all__ = (
     "list_term_programs",
 )
 
-# Pystachy port: the three frozensets of code points are dicts that map each to True, filled by
-# loops: sets, a generator with two for clauses and a starred tuple display are M7 (#12).
-_REGIONAL_INDICATOR_SET: dict[int, bool] = {}
-for _cp in range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1):
-    _REGIONAL_INDICATOR_SET[_cp] = True
+_REGIONAL_INDICATOR_SET = frozenset(
+    range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1)
+)
+# Pystachy port: this frozenset and _EMOJI_ZWJ_SET below are dicts that map each code point to
+# True, filled by loops: a generator with two for clauses (nested comprehensions) is M7 (#12).
 _ISC_VIRAMA_SET: dict[int, bool] = {}
 for _lo, _hi in ISC_VIRAMA:
     for _cp in range(_lo, _hi + 1):
@@ -125,7 +123,9 @@ def list_term_programs() -> tuple[str, ...]:
 # _EMPTY_OVERRIDES = TerminalOverrides((), (), (), (), (), ())
 
 
-# @lru_cache(maxsize=32)  # Pystachy port
+# Pystachy port: no @lru_cache here and on resolve_terminal(), which read tables left out above:
+# applied at import, it would compile the function; the caches only save time.
+# @lru_cache(maxsize=32)
 def get_term_overrides(term_canonical: str) -> TerminalOverrides:
     """Return a TerminalOverrides, with all empty tuples when there are no overrides."""
     # wide, sri, sfz: all narrow characters Unicode expects wide (no 'wider' data exists)
@@ -155,7 +155,7 @@ def get_term_overrides(term_canonical: str) -> TerminalOverrides:
                              narrow_wider, narrow_zeroer)
 
 
-# @lru_cache(maxsize=32)  # Pystachy port
+# @lru_cache(maxsize=32)  # Pystachy port: (see get_term_overrides())
 def resolve_terminal(term_program: bool | str = False) -> str | None:
     """
     Resolve a terminal identifier to its canonical name.

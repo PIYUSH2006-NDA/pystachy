@@ -257,16 +257,16 @@ class Polynomial:
 
         self.num: list[int] = num[offset:] + [0] * shift  # Pystachy port: annotated (M2)
 
-    def __getitem__(self, index: int) -> int:  # Pystachy port: annotated (M2)
+    def __getitem__(self, index):
         return self.num[index]
 
     def __iter__(self) -> Iterator[int]:  # Pystachy port: annotated (M2)
         return iter(self.num)
 
-    def __len__(self) -> int:  # Pystachy port: annotated (M2)
+    def __len__(self):
         return len(self.num)
 
-    def __mul__(self, other: "Polynomial") -> "Polynomial":  # Pystachy port: annotated (M2)
+    def __mul__(self, other):
         num = [0] * (len(self) + len(other) - 1)
 
         for i, item in enumerate(self):
@@ -275,7 +275,7 @@ class Polynomial:
 
         return Polynomial(num, 0)
 
-    def __mod__(self, other: "Polynomial") -> "Polynomial":  # Pystachy port: annotated (M2)
+    def __mod__(self, other):
         difference = len(self) - len(other)
         if difference < 0:
             return self

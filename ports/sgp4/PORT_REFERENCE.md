@@ -19,19 +19,29 @@ Archive SHA-256: `06d37247c6985739b707b8b39b6b83e06e8af783b2531e31965501ba983985
 | `__init__.py` | `8f01018363382658c82ae05408e8fb00e077c02be3b6a857478205f887da6b0e` | none |
 | `alpha5.py` | `98b6a004d971f25f837a0efa1f073e6bc6a36314fd1448b3078473db9ab4267a` | none |
 | `api.py` | `e61f7a4b1ddd026a0cfd147ef18cf2eaf1aee9e05eae9098677cbd811f519bf3` | none |
-| `earth_gravity.py` | `70057a3a1ed33c96b8c191c28c4012b4d2fdbd55b5775ec9bdaaabf78f418879` | 2 |
+| `earth_gravity.py` | `70057a3a1ed33c96b8c191c28c4012b4d2fdbd55b5775ec9bdaaabf78f418879` | 1 |
 | `ext.py` | `31240fe331e03d3427adf8afc113838a6a09ab769d5c484b8c13c7cbf1fc6287` | 2 |
-| `functions.py` | `8947e790097ae705f35244a3233a8b0ec61b214873618a241488686993b79e40` | 1 |
-| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 7 |
-| `model.py` | `8725b573ea25f33497022dcab447a139d3ee3eb71e0894da52658877ce6cc324` | 10 |
+| `functions.py` | `8947e790097ae705f35244a3233a8b0ec61b214873618a241488686993b79e40` | none |
+| `io.py` | `8adb8030c909d0bce36c2ea22dd96fbe8eaff19415afb3da22872df62ff8302e` | 6 |
+| `model.py` | `8725b573ea25f33497022dcab447a139d3ee3eb71e0894da52658877ce6cc324` | 8 |
 | `propagation.py` | `fa851ca7d8710eb54d684de61bc84cc8a3687241518e4ee4cfe8249e0fb33a92` | 6 |
 
 ## Adaptation record
 
-- Satrec’s slots become declared typed fields; exposed methods are annotated, and datetime validation is retained through `_check_datetime()` without constructing the omitted epoch object.
-- Gravity constants use a typed `NamedTuple` and a list of gravity models; fixed tuple items are passed explicitly.
-- Numeric/text temporaries are separated instead of rebinding one variable to unrelated types. Error messages use f-strings/replacements.
+- Satrec keeps its `__slots__`, and declares each slot's type but `epoch`'s in the class body,
+  as the module functions assign them. Its `no` and `satnum` properties annotate their result
+  types. Datetime validation is retained through `_check_datetime()` without constructing the
+  omitted epoch object.
+- Gravity constants use a typed `NamedTuple` in place of `collections.namedtuple`, and a list of
+  gravity models, which a variable indexes.
+- Text temporaries are separated where a variable would take another type in a branch or a
+  field another type after a call. Error messages use f-strings/replacements.
 - The 2,069-line propagator needs six small edits; the remaining adaptation is in model construction and API plumbing.
+- The re-baseline (#262) restored upstream's unannotated `Satrec` methods (specialized for
+  their arguments, with `whichconst` rebound to its gravity model), the slots, the two
+  properties, `EarthGravity(*getgravconst(...))`, `days2mdhms()`'s rebound `minute` and the
+  `re` patterns of `io.py`. Compiling the two patterns, which nothing in sgp4 uses, makes each
+  AOT build about 3 s longer and the executable about 150 KB larger.
 
 ## Validation snapshot
 

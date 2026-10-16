@@ -21,7 +21,9 @@ Archive SHA-256: `02c1b1405c38d3c370b085fb952dd8bea3fadcee6411ad99f312cc129c536d
 
 ## Adaptation record
 
-- AES methods and round-key fields are annotated; key bytes are represented as integer lists.
+- The key and block parameters of `AES` and its round-key fields are annotated, so that an
+  empty list argument and a field made by a comprehension have a type; key bytes are
+  represented as integer lists. The methods' results are inferred.
 - The Python 2 compatibility shim is removed and twenty-one `xrange()` calls become `range()`.
 - `list(a)` replaces shallow copying; signed big-endian key words are constructed with the module’s own word helper in place of `struct.unpack()`.
 - The blockfeeder import and class-valued mode registry are omitted; unused mode code remains in `aes.py` and is outside the supported API.

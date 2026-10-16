@@ -77,8 +77,8 @@ from ._constants import (_LATEST_VERSION,
                          _clamp_ambiguous_width)
 
 
-# Pystachy port: this legacy helper returns a variable-length tuple, so it remains
-# outside the compiled API and is not decorated by the typed cache.
+# Pystachy port: no @lru_cache(maxsize=128): applied at import, it would compile tuple(map(...))
+# (M3: map() only as the argument of a consumer such as list()); nothing calls this helper.
 def _wcversion_value(ver_string: str) -> tuple[int, ...]:  # pragma: no cover
     """
     Integer-mapped value of given dotted version string.

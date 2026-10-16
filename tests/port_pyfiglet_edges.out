@@ -85,6 +85,10 @@ small 5 $ 0 22415 441 102 32 252 646 3230
 '                    \\___/_\\_\\'
 '                             '
 ''
+properties: left-to-right left
+properties: right-to-left right
+properties: sideways None
+properties: left-to-right center
 == rtl wrap: 18 lines, 810 characters
 '                      __                    '
 '       ____ _      __/ /_   ___  ____  ____ '

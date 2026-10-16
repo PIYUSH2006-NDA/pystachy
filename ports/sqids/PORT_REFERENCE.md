@@ -17,15 +17,19 @@ Archive SHA-256: `5ac08f0c5c9b6814bc2e7c79ee5931e0849d25d95c50e415771b022a44f58a
 | file | upstream SHA-256 | edits |
 |---|---|---|
 | `__init__.py` | `dec511d0fd42c1fb20907eba8161abdadf6278c31d1d0b341038e242a204eaa1` | none |
-| `constants.py` | `9b0e801cfcd48c0d028669d84a73a174a99f51da57ecc250e464a92eaf8ac1ae` | 2 set displays made lists (4 lines) |
-| `sqids.py` | `7e9765b179f1b25e4b9fdf71d606d2048b2a037ed089933d8a2243e67ffb761e` | 12 regions |
+| `constants.py` | `9b0e801cfcd48c0d028669d84a73a174a99f51da57ecc250e464a92eaf8ac1ae` | none |
+| `sqids.py` | `7e9765b179f1b25e4b9fdf71d606d2048b2a037ed089933d8a2243e67ffb761e` | 5 regions |
 
 ## Adaptation record
 
-- Blocklists are lists rather than sets/variable-length tuples; character-membership operations use strings plus `all()`/`any()`.
-- Uniqueness checks use character counts; reversed slices become `reversed()` consumers.
-- Prefix/suffix tuple checks become per-word loops. This loop is a measured cost when the adapted package runs under CPython.
-- The encode/decode/shuffle algorithms and defaults are retained, with marked changes in `constants.py` and `sqids.py`.
+- Blocklists and character sets are upstream's sets and tuples. A custom blocklist's
+  `tuple()` of its match-at-ends set takes a list of it, as `tuple()` takes no set.
+- Reversed slices become `reversed()` consumers, as slices have no step.
+- Prefix/suffix tuple checks become per-word loops, as `str.startswith()` takes no
+  runtime-length tuple. This loop is a measured cost when the adapted package runs under CPython.
+- The encode/decode/shuffle algorithms and defaults are retained, with marked changes in `sqids.py`.
+- Until the re-baseline (#262), the sets were lists and strings, tested with `all()`, `any()`
+  and character counts; the benchmark and validation snapshots below come from that port.
 
 ## Validation snapshot
 
@@ -54,8 +58,7 @@ Archive SHA-256: `5ac08f0c5c9b6814bc2e7c79ee5931e0849d25d95c50e415771b022a44f58a
 - the filter, on a lowercase word in an uppercase alphabet, on words with characters outside
   the alphabet, and on words shorter than three characters;
 - the verifier's words: upper case, with digits, and non-ASCII;
-- words given twice or in other cases, which the adapted lists hold as often as given, and
-  words of spaces or of nothing;
+- words given twice or in other cases, and words of spaces or of nothing;
 - five ids that the default blocklist blocks, by a word at an end and by a word anywhere. Each
   is encoded with both ways of filtering the default blocklist: the prefiltered default lists, and the custom-list filter on a copy of `DEFAULT_BLOCKLIST` or with a copy of
   `DEFAULT_ALPHABET`. They agree.
@@ -104,3 +107,8 @@ with the tuple and C loops over it. With the upstream tuple checks restored, CPy
 takes 4.970 s. Each id of 8 or more characters is tested against 358 words at each end and 195
 words anywhere. With an empty blocklist, the executable takes 0.769 s of CPU time, so the
 default blocklist's check costs it 0.29 s.
+
+With upstream's sets restored (the re-baseline of #262), the executable took a median of 1.645 s
+of CPU time, against 1.533 s for the list-based port, measured together at a load average near
+11. Making the set of words matched anywhere a list again gives 1.535 s: Pystachy iterates a set
+of strings more slowly than a list.
