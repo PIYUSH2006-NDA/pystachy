@@ -1,0 +1,7 @@
+hot template reparses 0
+pattern bounds 512 256
+template bounds 512 256
+invalid template uncached True
+invalid template uncached True
+purge 0 0 0 0
+[exit 0]

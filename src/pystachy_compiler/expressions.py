@@ -364,7 +364,7 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return 1
     if c.s == "int":
         return 1 if t == "int" or t == "bool" else 0
-    if c.s == "bool" or c.s == "float" or c.s == "str":
+    if c.s == "bool" or c.s == "float" or c.s == "str" or c.s == "bytes":
         return 1 if t == c.s else 0
     if c.s == "tuple" and t in self.nts:
         return -2  # (a tuple, unless it is None)
@@ -375,7 +375,7 @@ def gen_isinst(self, t: str, c: Node) -> int:
     if c.s == "type" and t.startswith("fn[b:"):
         # a builtin's value: one of CPython's builtin classes (int, list, ...) is a type
         return 1 if t[5:-1] in "bool bytearray bytes classmethod complex dict enumerate filter float frozenset int list map memoryview object property range reversed set slice staticmethod str super tuple type zip".split() else 0
-    if c.s in "bytes bytearray memoryview complex range slice type".split():
+    if c.s in "bytearray memoryview complex range slice type".split():
         return 0
     return -1
 
@@ -472,7 +472,7 @@ def gen_truth(self, v: Val) -> str:
         return self.num_cmp("!=", v, Val("0", "int")).v
     if t == "float":
         return self.num_cmp("!=", v, Val("0.0", "float")).v
-    if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
+    if t == "str" or t == "bytes" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
         return self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v
     if t == "None":
         return "false"
@@ -585,6 +585,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "str":
         self.modchk(n)
         return Val(self.sconst(n.s), "str")
+    if k == "bytes":
+        self.modchk(n)
+        return Val(self.bconst(n.s), "bytes")
     if k == "True" or k == "False":
         return Val(k.lower(), "bool")
     if k == "None":
@@ -728,12 +731,12 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             return self.slice_tuple(o, bnd, step)
         if is_vtuple(o.t):
             return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
-        if o.t != "str" and not is_list(o.t):
+        if o.t != "str" and o.t != "bytes" and not is_list(o.t):
             self.err(f"'{o.t}' cannot be sliced")
         if step == "1":
-            fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
+            fn = "pys_str_slice" if o.t == "str" else "pys_bytes_slice" if o.t == "bytes" else "pys_list_slice"
             return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]), o.t)
-        fn = "pys_str_slice_step" if o.t == "str" else "pys_list_slice_step"
+        fn = "pys_str_slice_step" if o.t == "str" else "pys_bytes_slice_step" if o.t == "bytes" else "pys_list_slice_step"
         return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
     if (k == "list" or k == "tuple") and len([x for x in n.kids if x.kind == "starred"]) > 0:
         return self.star_display(n, want)  # ([a, *xs], (a, *xs))
@@ -2096,6 +2099,10 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         i = self.ival(n.kids[1], "TypeError: tuple indices must be integers or slices, not NoneType")
         o = self.unwrap(o, sub)
         return self.from_slot(self.rt("pys_vtuple_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), targs(t)[0])
+    if t == "bytes":
+        i = self.ival(n.kids[1], "TypeError: byte indices must be integers or slices, not NoneType")
+        o = self.unwrap(o, sub)
+        return Val(self.rt("pys_bytes_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), "int")
     if is_list(t) or t == "str":
         i = self.ival(n.kids[1], "TypeError: list indices must be integers or slices, not NoneType" if is_list(t) else "TypeError: string indices must be integers, not 'NoneType'")
         o = self.unwrap(o, sub)
@@ -2309,6 +2316,8 @@ def gen_iter_ret(self, e: Node) -> Val:
         self.err(f"iter() of a dict's {last.s[5:]}() in {self.curfn.name} is not supported: its iterator raises if the dict changes size; return iter(list(...)) of a copy")
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    if v.t == "bytes":
+        v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     if not is_list(v.t):
         self.err(f"iter() of {typestr(v.t)} in {self.curfn.name} is not supported: return iter(xs) of a list xs of the items")
     return v
@@ -2931,14 +2940,14 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
             return Val(self.scalar(FOPS[op], [Val(x.v, 'float'), Val(y.v, 'float')]), "float")
         if op in FRT:
             return Val(self.rt(FRT[op], "double", [f"double {x.v}", f"double {y.v}"]), "float")
-    seq = a.t == "str" or is_list(a.t)
+    seq = a.t == "str" or a.t == "bytes" or is_list(a.t)
     if op == "+" and seq and a.t == b.t:
-        return Val(self.rt("pys_str_add" if a.t == "str" else "pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), a.t)
+        return Val(self.rt("pys_str_add" if a.t == "str" else "pys_bytes_add" if a.t == "bytes" else "pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), a.t)
     lw = self.wider(a.t, b.t) if op == "+" and is_list(a.t) and is_list(b.t) else ""
     if lw != "" and self.widens_items(a.t, lw) and self.widens_items(b.t, lw):
         return Val(self.rt("pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), lw)  # (a new list of the items of both)
     if op == "*" and seq and b.t == "int":
-        return Val(self.rt("pys_str_mul" if a.t == "str" else "pys_list_mul", "ptr", [f"ptr {a.v}", f"i64 {b.v}"]), a.t)
+        return Val(self.rt("pys_str_mul" if a.t == "str" else "pys_bytes_mul" if a.t == "bytes" else "pys_list_mul", "ptr", [f"ptr {a.v}", f"i64 {b.v}"]), a.t)
     if op == "+" and is_tuple(a.t) and is_tuple(b.t):
         return self.tuple_([self.tget(a, i) for i in range(len(targs(a.t)))] + [self.tget(b, i) for i in range(len(targs(b.t)))])
     if op == "*" and is_tuple(a.t) and b.t == "int":
@@ -2951,7 +2960,7 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         if len(ts) > 0 and count > (TYPE_SIZE - 6) // (len(a.t) - 6):
             self.err(f"type representation exceeds {TYPE_SIZE} bytes; simplify the type or annotate template parameters")
         return self.tuple_([self.tget(a, i % len(ts)) for i in range(len(ts) * count)])
-    if op == "*" and a.t == "int" and (b.t == "str" or is_list(b.t) or is_tuple(b.t)):
+    if op == "*" and a.t == "int" and (b.t == "str" or b.t == "bytes" or is_list(b.t) or is_tuple(b.t)):
         return self.arith(op, b, a)
     if op == "+" and is_list(a.t) and is_list(b.t):
         self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
@@ -2970,8 +2979,11 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     bn = tname(b.t)
     if op == "+" and (a.t == "str" or is_list(a.t) or is_tuple(a.t)):
         self.err(f'can only concatenate {an} (not "{bn}") to {an}')
-    if op == "*" and (a.t == "str" or is_list(a.t) or is_tuple(a.t) or b.t == "str" or is_list(b.t) or is_tuple(b.t)):
-        self.err(f"can't multiply sequence by non-int of type '{bn if a.t == 'str' or is_list(a.t) or is_tuple(a.t) else an}'")
+    if op == "+" and a.t == "bytes":
+        self.err(f"can't concat {bn} to bytes")
+    sq = a.t == "str" or a.t == "bytes" or is_list(a.t) or is_tuple(a.t)
+    if op == "*" and (sq or b.t == "str" or b.t == "bytes" or is_list(b.t) or is_tuple(b.t)):
+        self.err(f"can't multiply sequence by non-int of type '{bn if sq else an}'")
     self.err(f"unsupported operand type(s) for {shown if shown != '' else '** or pow()' if op == '**' else op}: '{an}' and '{bn}'")
     return a
 
@@ -3266,6 +3278,12 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         r = ""
         if b.t == "str":
             r = self.rt("pys_str_contains", "i64", [f"ptr {b.v}", f"ptr {self.coerce(a, 'str').v}"])
+        elif b.t == "bytes" and (a.t == "int" or a.t == "bool"):
+            r = self.rt("pys_bytes_has", "i64", [f"ptr {b.v}", f"i64 {self.as_int(a).v}"])  # (a byte's value)
+        elif b.t == "bytes" and a.t == "bytes":
+            r = self.rt("pys_bytes_contains", "i64", [f"ptr {b.v}", f"ptr {a.v}"])
+        elif b.t == "bytes":
+            self.err(f"a bytes-like object is required, not '{tname(a.t)}'")
         elif is_list(b.t):
             if a.t != elem(b.t) and (is_list(a.t) or is_dict(a.t) or is_tuple(a.t)) and self.numeric_comparable(a.t, elem(b.t)):
                 # A read-only search can compare the two item layouts directly;
@@ -3347,7 +3365,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         a = self.boxto(a, ct)
         b = self.boxto(b, ct)
     u = unopt(ct)
-    if ct != "" and (u == "str" or is_list(u) or is_tuple(u) or is_vtuple(u) or (eq and is_dict(u)) or is_set(u) or u == "exc"):
+    if ct != "" and (u == "str" or u == "bytes" or is_list(u) or is_tuple(u) or is_vtuple(u) or (eq and is_dict(u)) or is_set(u) or u == "exc"):
         self.exc_eq(ct)
         d = f"ptr {self.sconst(self.desc(ct, '==' if eq else op))}"
         sa = self.to_slot(a)

@@ -123,6 +123,8 @@ def gen_star_items(self, x: Node) -> Val:
         v = self.obj_iter(v, none, f"Value after * must be an iterable, not {tname(v.t)}")
     elif v.t == "str":
         return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "bytes":
+        return Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     elif not is_list(v.t):
         v = self.as_list(v, "unpack")  # (a new list)
         if not is_list(v.t):
@@ -208,6 +210,8 @@ def gen_sitems(self, v: Val, et: str, what: str) -> Val:
     v = self.unwrap(v, "TypeError: 'NoneType' object is not iterable")
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "bytes":
+        v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     elif v.t == "tuple[]" and et != "":
         v = Val(self.as_list(v, "set").v, self.ctype("list", [et]))  # (() has no item to type: the elements wanted)
     elif not is_set(v.t) and not is_dict(v.t):
@@ -485,6 +489,8 @@ def gen_fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) ->
         xs = self.unwrap(xs, "TypeError: 'NoneType' object is not iterable")
     if xs.t == "str":
         xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {xs.v}"]), "list[str]")
+    elif xs.t == "bytes":
+        xs = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {xs.v}"]), "list[int]")
     elif xs.t == "tuple[]" and kv[0] != "":
         xs = Val(self.as_list(xs, "fromkeys").v, self.ctype("list", [kv[0]]))  # (() has no item to type: the keys wanted)
     elif not is_dict(xs.t):
@@ -505,7 +511,7 @@ def gen_fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) ->
         return Val(self.rt("pys_dict_fromkeys_dict", "ptr", [f"ptr {xs.v}", "i64 " + self.to_slot(v)], self.key_fx(K)), t)
     return Val(self.rt("pys_dict_fromkeys", "ptr", [f"i64 {self.key_kind(K)}", f"ptr {xs.v}", "i64 " + self.to_slot(v)], self.key_fx(K)), t)
 
-def gen_affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
+def gen_affix_any(self, tup: Val, m: str, av: list[str], base: str = "str") -> Val:
     # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
     # item in order, stopping at the first that matches (False for an empty tuple); an item that
     # is None raises when it is reached. av: the call's arguments, the item's place left empty
@@ -514,8 +520,8 @@ def gen_affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
     for i in range(len(targs(tup.t))):
         item = self.tget(tup, i)
         if is_opt(item.t):
-            self.guard(self.ptr_cmp('==', item, Val('null', 'None')).v, f"TypeError: tuple for {m} must only contain str, not NoneType")
-        c = self.rres(self.rt(f"pys_str_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
+            self.guard(self.ptr_cmp('==', item, Val('null', 'None')).v, f"TypeError: tuple for {m} must only contain str, not NoneType" if base == "str" else "TypeError: a bytes-like object is required, not 'NoneType'")
+        c = self.rres(self.rt(f"pys_{base}_{m}", "i64", [av[0], f"ptr {item.v}"] + av[2:]), "bool")
         nx = self.label()
         self.incoming(ph, "true", self.cur)
         self.cbr(c.v, lend, nx)
@@ -535,8 +541,8 @@ def gen_optdefault(self, d: Val, t: str) -> str:
 def gen_key_kind(self, kt: str) -> str:
     # the key kind of a new dict whose keys have type kt (runtime.c's Dict.kind): 0 int, 1 str,
     # or a tuple or object key's type descriptor (hash_desc)
-    if kt == "int" or kt == "str":
-        return "1" if kt == "str" else "0"
+    if kt == "int" or kt == "str" or kt == "bytes":
+        return "0" if kt == "int" else "1"  # (bytes keys are hashed and compared as strs of their bytes)
     return f"ptrtoint (ptr {self.sconst(self.hash_desc(kt))} to i64)"
 
 def gen_key_class(self, t: str) -> bool:
@@ -549,7 +555,7 @@ def gen_key_items(self, t: str) -> bool:
     # that may be None, and such tuples (utils.key_items, objects too)
     for x in targs(t):
         u = unopt(x)
-        if x != "int" and x != "bool" and u != "str" and not self.key_class(u) and not (is_tuple(u) and self.key_items(u)):
+        if x != "int" and x != "bool" and u != "str" and u != "bytes" and not self.key_class(u) and not (is_tuple(u) and self.key_items(u)):
             return False
     return True
 
@@ -612,7 +618,7 @@ def gen_key_fx(self, kt: str) -> str:
     # Ins.x of a dict or set op on keys or elements of type kt: their descriptor where it holds an
     # object whose class's __hash__ and __eq__ run (H), or whose __repr__ a KeyError runs (P),
     # which RUNTIME's U? stands for; else ""
-    d = self.hash_desc(kt) if kt != "int" and kt != "str" else ""
+    d = self.hash_desc(kt) if kt != "int" and kt != "str" and kt != "bytes" else ""
     return d if "H" in d or ("P" in d and self.key_repr(kt)) else ""
 
 def gen_key_repr(self, t: str) -> bool:
@@ -849,8 +855,8 @@ def gen_obj_hash(self, v: Val) -> Val:
 
 def gen_hash_value(self, v: Val) -> Val:
     # hash(v): CPython's where its own does not change from run to run (an int's, a float's, a
-    # tuple's of such items: runtime.c's hitem), a str's the dict's hash of it; TypeError for an
-    # unhashable type, as CPython's
+    # tuple's of such items: runtime.c's hitem), a str's (and a bytes's) the dict's hash of it;
+    # TypeError for an unhashable type, as CPython's
     t = v.t
     if self.key_class(t):
         return self.obj_hash(v)
@@ -867,7 +873,7 @@ def gen_hashable(self, t: str) -> bool:
     # can hash() take a value of type t (but an object's, obj_hash): a number, a str, None, an
     # object, a tuple of such items, or one of these that may be None
     u = unopt(t)
-    if u == "int" or u == "bool" or u == "float" or u == "str" or u == "None" or self.key_class(u):
+    if u == "int" or u == "bool" or u == "float" or u == "str" or u == "bytes" or u == "None" or self.key_class(u):
         return True
     return (is_tuple(u) or is_vtuple(u)) and all(self.hashable(x) for x in targs(u))
 

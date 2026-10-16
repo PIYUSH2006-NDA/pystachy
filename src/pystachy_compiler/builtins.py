@@ -109,6 +109,8 @@ def gen_modattr(self, path: str) -> Val:
         return self.bconsts[path]
     if path == "sys.platform":
         return Val(self.rt("pys_platform", "ptr", []), "str")
+    if path == "sys.byteorder":
+        return Val(self.sconst("little"), "str")  # (that of every target Pystachy builds for: x86-64, arm64)
     if path.startswith("errno.") and path[6:] in ERRNO:
         return Val(self.rt("pys_errno", "i64", [f"ptr {self.sconst(path[6:])}"]), "int")
     if path in MODFUNCS:
@@ -138,6 +140,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         name = name[6:]
     if name.startswith("builtins."):
         name = name[9:]
+    if name == "bytes":
+        return self.bytes_(args)
     if name == "tuple":
         if len(args) > 1 or any(a.kind == "kw" for a in args):
             self.err("tuple() takes zero or one positional iterable argument")
@@ -163,6 +167,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
         if is_gen(v.t):
             v = self.gen_list(v, "")
+        if v.t == "bytes":
+            v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
         if self.iter_object(v.t):
             v = self.as_list(v, "tuple")  # (the items of its iterator object)
         if not is_list(v.t):
@@ -196,7 +202,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "set" or name == "frozenset":
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
-        self.err(f"{name}() is supported as the argument of list(), tuple() (with scalar or optional scalar items), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), and as the value assigned to a list slice, which take its items at once; elsewhere use a list comprehension")
+        self.err(f"{name}() is supported as the argument of list(), tuple() (with scalar or optional scalar items), bytes(), sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod(), str.join() and list.extend(), and as the value assigned to a list slice, which take its items at once; elsewhere use a list comprehension")
     if len(args) > 0 and self.is_mapcall(args[0]) and (name == "list" or name == "sorted" or name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod" or name == "dict"):
         args = [self.mapgen(args[0])] + args[1:]  # (the generator expression it is)
     if name == "hash":
@@ -574,13 +580,13 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if t in self.nts:
             self.notnone(v, "TypeError: object of type 'NoneType' has no len()")
             return Val(str(len(self.classes[t].fields)), "int")
-        if t == "str" and self.rtmode:
+        if (t == "str" or t == "bytes") and self.rtmode:
             # (tagged as the primitives' loads are, and bounded: LLVM then sees that index
             # arithmetic on lengths cannot overflow)
             return Val(self.mload('int', v.v, 'length.range'), "int")
         if t == "str" and self.unicode_audit:
             self.rt("pys_str_audit", "void", [f"ptr {v.v}", f"ptr {self.sconst('len(str)')}"])
-        if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
+        if t == "str" or t == "bytes" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
             return Val(self.mload('int', v.v), "int")
         if is_tuple(t):
             return Val(str(len(targs(t))), "int")
@@ -655,7 +661,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     elif name == "list" and is_dict(t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(t)[0]]))
     elif name == "range" or name == "enumerate" or name == "zip" or name == "reversed":
-        tuple_use = "tuple(), " if name == "range" else "tuple() (with scalar or optional scalar items), " if name == "reversed" else ""
+        tuple_use = "tuple(), bytes(), " if name == "range" else "tuple() (with scalar or optional scalar items), bytes(), " if name == "reversed" else ""
         self.err(f"{name}() is only supported in a for loop, after 'in', or as the argument of list(), {tuple_use}sorted(), sum(), min(), max(), any(), all(), math.fsum(), math.prod() or str.join()")
     if name in self.gtypes or name in self.ltype:
         self.err(f"'{name}' is not callable")
@@ -1171,11 +1177,54 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         return Val(r, self.ctype("list", [et]))
     if v.t == "str" and (name == "sorted" or name == "min" or name == "max" or name == "join"):
         return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    if v.t == "bytes":
+        return Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")  # (its items: ints)
     if v.t == "file":
         return Val(self.rt("pys_file_readlines", "ptr", [f"ptr {v.v}"]), "list[str]")
     if is_gen(v.t):
         return self.gen_list(v, "")  # (its items, as CPython's list(), sorted(), join() take them)
     return v
+
+def gen_bytes_(self, args: list[Node]) -> Val:
+    # bytes(), bytes(n) (n zero bytes), bytes(b) (b itself), bytes(xs) of ints (a list, tuple,
+    # range, generator expression or other iterable of them, which it consumes at once) and
+    # bytes(s, encoding[, errors]) (s.encode(...))
+    pos = [a for a in args if a.kind != "kw"]
+    kws = {a.s: a.kids[0] for a in args if a.kind == "kw"}
+    for k in kws:
+        if k != "encoding" and k != "errors" and k != "source":
+            self.err(f"bytes() got an unexpected keyword argument '{k}'")
+    if "source" in kws:
+        pos = [kws["source"]] + pos
+    if any(a.kind == "starred" or a.kind == "dstar" for a in args) or len(pos) > 3:
+        self.err("bytes() takes at most 3 arguments")
+    if len(pos) == 0 and len(kws) == 0:
+        return Val(self.bconst(""), "bytes")
+    if len(pos) == 0:
+        self.err("encoding without a string argument")
+    v = self.consume(pos[0], "")
+    if len(pos) > 1 or "encoding" in kws or "errors" in kws:
+        enc = self.expr(pos[1] if len(pos) > 1 else kws["encoding"], "str") if len(pos) > 1 or "encoding" in kws else Val("null", "str")
+        err = self.expr(pos[2] if len(pos) > 2 else kws["errors"], "str") if len(pos) > 2 or "errors" in kws else Val("null", "str")
+        if v.t != "str":
+            self.err("encoding without a string argument" if "encoding" in kws or len(pos) > 1 else "errors without a string argument")
+        for x in [enc, err]:
+            if x.t != "str" and x.v != "null":
+                self.err(f"bytes() argument 'encoding' must be str, not {tname(x.t)}")
+        return Val(self.rt("pys_str_encode", "ptr", [f"ptr {v.v}", f"ptr {enc.v}", f"ptr {err.v}"]), "bytes")
+    if v.t == "bytes":
+        return v
+    if v.t == "str":
+        self.err("string argument without an encoding")
+    if v.t == "int" or v.t == "bool":
+        return Val(self.rt("pys_bytes_zeros", "ptr", [f"i64 {self.as_int(v).v}"]), "bytes")
+    if v.t == "None" or is_opt(v.t):
+        v = self.unwrap(v, "TypeError: cannot convert 'NoneType' object to bytes")
+    if is_tuple(v.t) or is_vtuple(v.t) or v.t in self.classes or is_set(v.t) or is_dict(v.t) or is_gen(v.t):
+        v = self.as_list(v, "bytes")
+    if not is_list(v.t) or (elem(v.t) != "int" and elem(v.t) != "bool"):
+        self.err(f"cannot convert '{tname(v.t)}' object to bytes")
+    return Val(self.rt("pys_bytes_from_list", "ptr", [f"ptr {v.v}"]), "bytes")
 
 def gen_reverse_arg(self, n: Node, name: str) -> str:
     return self.reverse_val(self.expr(n, "bool"), name)
@@ -1463,7 +1512,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         tm = self.tmethod(o, m, args)
         if tm.t != "":
             return tm
-    if o.t == "str" and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
+    if (o.t == "str" or o.t == "bytes") and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
         args = args[:2] + [args[2].kids[0]]  # (count may be given by name, as of Python 3.13)
     for a in args:
         if a.kind == "kw":
@@ -1518,8 +1567,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     if key == "dict.get" and (len(args) == 1 or args[-1].kind == "None") and V not in self.classes and not optget:
         self.err(f"dict.get(key{', None' if len(args) == 2 else ''}) needs values that can be None ({OPTTYPES}), not {typestr(V)}: give another default")
     spec = METHODS[key]
-    if key == "str.replace" and len(args) == 3:
-        spec = "str:str,str,int"  # (replace(old, new, count): pys_str_replace_count)
+    if (key == "str.replace" or key == "bytes.replace") and len(args) == 3:
+        spec = f"{base}:{base},{base},int"  # (replace(old, new, count): pys_str_replace_count)
     c = spec.find(":")
     av = [f"{lt(o.t)} {o.v}"]
     nones: list[str] = []  # optional str arguments: None raises (nmsg) once all are evaluated
@@ -1546,7 +1595,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         slot = p.startswith("*")
         pt = self.subst(p[1:] if slot else p, T, K, V, o.t)
         # a str method's start or end (find, count, startswith, ...) that is None is omitted
-        span = base == "str" and p == "int" and (dflt == "0" or dflt == "9223372036854775807")
+        span = (base == "str" or base == "bytes") and p == "int" and (dflt == "0" or dflt == "9223372036854775807")
         if i < len(args) and dflt == "null" and args[i].kind == "None":
             av.append(rtt(pt) + " null")  # an explicit None: the default
         elif i < len(args) and span and args[i].kind == "None":
@@ -1576,31 +1625,36 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                     pending.extend(query.kids)
                 if not contextual:
                     want_arg = ""
-            g = self.mapgen(args[i]) if key == "str.join" and self.is_mapcall(args[i]) else args[i]
+            join = key == "str.join" or key == "bytes.join"
+            g = self.mapgen(args[i]) if join and self.is_mapcall(args[i]) else args[i]
             unrolled = self.unroll(g) if key == "str.join" else None
             if unrolled is not None:
                 v = self.expr(mk("list", "", g.line, unrolled), pt)  # (strs of items of different types)
             else:
-                v = self.consume(g, pt) if key == "str.join" or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
+                v = self.consume(g, pt) if join or key == "list.extend" else self.expr(args[i], want_arg, resultsoft=key in ["list.count", "list.index", "list.remove", "vtuple.count", "vtuple.index"] and i == 0)
             self.stkkey = self.nokey
-            if (key == "str.startswith" or key == "str.endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
+            if (base == "str" or base == "bytes") and (m == "startswith" or m == "endswith") and i == 0 and (is_tuple(unopt(v.t)) or v.t in self.nts):
                 v = self.ntup(v)  # (a NamedTuple: the tuple of its fields, None if it is None)
                 for x in targs(unopt(v.t)):
-                    if x != "str" and x != "opt[str]":
-                        self.err(f"tuple for {m} must only contain str, not {tname(x)}")  # (CPython's TypeError, at the item it reaches)
+                    if x != base and x != f"opt[{base}]":
+                        self.err(f"tuple for {m} must only contain str, not {tname(x)}" if base == "str" else f"a bytes-like object is required, not '{tname(x)}'")  # (CPython's TypeError, at the item it reaches)
                 if is_opt(v.t):
                     nones.append(v.v)
                     nmsg.append(self.none_arg(m, 1))
                 alts = Val(v.v, unopt(v.t))
-                v = Val("null", "str")  # (each item in its place, in affix_any)
-            if is_opt(v.t) and (key == "str.join" or key == "list.extend" or key == "file.writelines"):
-                v = self.unwrap(v, "TypeError: can only join an iterable" if key == "str.join" else "TypeError: 'NoneType' object is not iterable")
-            if key == "str.join" or (key == "list.extend" and (v.t in self.classes or is_gen(v.t))):
-                v = self.as_list(v, "join" if key == "str.join" else "extend")
+                v = Val("null", base)  # (each item in its place, in affix_any)
+            if is_opt(v.t) and (join or key == "list.extend" or key == "file.writelines"):
+                v = self.unwrap(v, "TypeError: can only join an iterable" if join else "TypeError: 'NoneType' object is not iterable")
+            if join or (key == "list.extend" and (v.t in self.classes or is_gen(v.t))):
+                v = self.as_list(v, "join" if join else "extend")
             if (key == "str.join" or key == "file.writelines") and v.t == "list[opt[str]]":
                 v = Val(v.v, "list[str]")  # (an item that is None raises when it runs, as CPython's error)
+            if key == "bytes.join" and v.t == "list[opt[bytes]]":
+                v = Val(v.v, "list[bytes]")
             if key == "str.join" and is_list(v.t) and elem(v.t) != "str" and "?" not in v.t:
                 self.err(f"sequence item 0: expected str instance, {tname(elem(v.t))} found")  # (CPython's TypeError)
+            if key == "bytes.join" and is_list(v.t) and elem(v.t) != "bytes" and "?" not in v.t:
+                self.err(f"sequence item 0: expected a bytes-like object, {tname(elem(v.t))} found")
             if key == "list.extend" and is_list(v.t) and v.t != pt and self.widens_items(v.t, pt):
                 v = Val(v.v, pt)  # (its items are copied: list[str] extends a list[str | None])
             if span and is_sopt(v.t) and unopt(v.t) != "float":
@@ -1629,7 +1683,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 dt = pt
             if is_opt(v.t) and unopt(v.t) == pt and dflt == "null":
                 v = Val(v.v, pt)  # None is the default
-            elif is_opt(v.t) and not slot and unopt(v.t) == pt == "str":
+            elif is_opt(v.t) and not slot and unopt(v.t) == pt and (pt == "str" or pt == "bytes"):
                 nones.append(v.v)
                 nmsg.append(self.none_arg(m, i + 1))
                 v = Val(v.v, pt)
@@ -1648,13 +1702,15 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
     for j in range(len(nones)):
         self.guard(self.scalar_cmp('eq', Val(nones[j], '%ptr'), Val('null', '%ptr')), nmsg[j])
     if alts.t != "":
-        return self.affix_any(alts, m, av)
+        return self.affix_any(alts, m, av, base)
     r = spec[:c]
     slot = r.startswith("*")
     rtype = self.subst(r[1:] if slot else r, T, K, V, o.t)
     if optget:
         rtype = self.optional(V)
-    fn = "pys_str_replace_count" if key == "str.replace" and len(args) == 3 else f"pys_{base}_{m}"
+    fn = f"pys_{base}_{m}"
+    if (key == "str.replace" or key == "bytes.replace") and len(args) == 3:
+        fn = "pys_str_replace_count" if base == "str" else "pys_bytes_replace_count"
     if first:
         fn = "pys_str_split_first"
         rtype = "str"

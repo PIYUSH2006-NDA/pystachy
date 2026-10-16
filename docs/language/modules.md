@@ -170,7 +170,7 @@ restrictions and tests for each module.
 
 The adapted sources remain valid Python, but that does not imply every upstream API compiles.
 Common limitations include unsupported generator forms, byte-oriented string positions, lack of
-`bytes`, and homogeneous container types. Check the module's reference before choosing an API.
+`bytearray` and binary files, and homogeneous container types. Check the module's reference before choosing an API.
 
 ## Builtins
 

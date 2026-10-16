@@ -9,6 +9,7 @@ unsupported forms, see [compatibility](compatibility.md).
 |---|---|
 | `int` | Signed 64-bit; overflow raises `OverflowError` |
 | `float`, `bool`, `str` | Double-precision floats; strings hold UTF-8 with byte-based indexing |
+| `bytes` | Immutable bytes, whose items are ints; also a dict key and set element |
 | `list[T]`, `dict[K, V]` | One static element type, or one key and value type |
 | `set[T]`, `frozenset[T]` | Elements must use the supported dict key types |
 | `tuple[A, B]` | Fixed shape, up to nine items; a constant index gives the item's type, a variable one the union of the items'; slicing requires integer constants (items of one runtime-length element type also slice by run-time bounds, into a `tuple[T, ...]`) |
@@ -19,6 +20,23 @@ unsupported forms, see [compatibility](compatibility.md).
 | `T \| None` | Optional values, including containers and `Callable` |
 | `TextIO` | Text files |
 | `Generator[Y, None, R]`; `Iterator[T]` or `Iterable[T]` as a generator function's return | Generator objects that yield `T` (any generator function's); see [generators](semantics.md#generators). Elsewhere `Iterator[T]` and `Iterable[T]` type nothing ([iterators](semantics.md#iterators)) |
+
+A `bytes` value comes from a literal (`b"\x00ab"`, `rb"..."`), `bytes()` (empty, `bytes(n)` zero
+bytes, `bytes(xs)` of ints, also of a `range()`, `map()` or generator expression, `bytes(b)`,
+`bytes(s, encoding[, errors])`), `bytes.fromhex(s)` and
+`s.encode(encoding, errors)`. Indexing and iteration give ints. `len`, slicing (with a step),
+`+`, `*`, comparisons, `in` (of a bytes or an int), truth tests, `hash()`, `repr()` and
+printing work as in CPython. The methods are `decode`, `hex`, `join`, `split`, `rsplit`,
+`splitlines`, `strip`, `lstrip`, `rstrip`, `find`, `rfind`, `index`, `rindex`, `count`,
+`startswith` and `endswith` (also of a tuple), `replace`, `partition`, `rpartition`,
+`removeprefix`, `removesuffix`, `upper`, `lower`, `swapcase`, `capitalize`, `ljust`, `rjust`,
+`center`, `zfill`, `isalpha`, `isalnum`, `isdigit`, `isspace`, `isupper`, `islower` and
+`isascii`, with CPython's ASCII whitespace and case. `str.encode()`, `bytes.decode()` and
+`bytes(s, encoding)` have CPython's UTF-8, Latin-1 and ASCII codecs, found by their names and
+aliases as `codecs.lookup()` finds them, with the `strict`, `replace`, `ignore`,
+`backslashreplace`, `surrogateescape`, `surrogatepass` and (encoding) `xmlcharrefreplace`
+handlers. Their errors are CPython's `UnicodeDecodeError` and `UnicodeEncodeError`, with its
+messages.
 
 `tuple(xs)` copies a supported homogeneous list or a string into an immutable
 runtime-length tuple; later list mutation does not change it. String conversion follows

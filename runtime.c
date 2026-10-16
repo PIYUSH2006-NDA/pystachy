@@ -519,6 +519,10 @@ static I sspan(I *lo, I hi, I *st, I n) {
   return *lo < hi ? (hi - *lo - 1) / s + 1 : 0;
 }
 Str *pys_str_get(Str *s, I i) { return pys_chr((unsigned char)s->s[idx(i, s->len, "IndexError: string index out of range")]); }
+/* bytes: a Str whose bytes are the bytes object's. Its operations are a str's, which work on bytes,
+   but where a bytes item is an int (b[i], iteration), and in their messages and repr(); they have
+   names of their own, so that a str's that comes to work on code points leaves them as they are */
+I pys_bytes_get(Str *s, I i) { return (unsigned char)s->s[idx(i, s->len, "IndexError: index out of range")]; }
 Str *pys_str_slice(Str *s, I lo, I hi) {      /* all of s is s itself, as in CPython: s[:], a strip that strips nothing */
   span(&lo, &hi, s->len);
   return lo == 0 && hi == s->len ? s : pys_str(s->s + lo, hi - lo);
@@ -530,6 +534,8 @@ Str *pys_str_slice_step(Str *s, I lo, I hi, I st) {   /* s[lo:hi:st], over bytes
   for (I i = 0; i < n; i++) r->s[i] = s->s[lo + i * st];
   return r;
 }
+Str *pys_bytes_slice(Str *s, I lo, I hi) { return pys_str_slice(s, lo, hi); }
+Str *pys_bytes_slice_step(Str *s, I lo, I hi, I st) { return pys_str_slice_step(s, lo, hi, st); }
 Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
@@ -559,6 +565,8 @@ Str *pys_str_mul(Str *a, I n) {       /* as CPython's _PyBytes_Repeat: one byte 
   }
   return s;
 }
+Str *pys_bytes_add(Str *a, Str *b) { return pys_str_add(a, b); }
+Str *pys_bytes_mul(Str *a, I n) { return pys_str_mul(a, n); }
 I pys_str_eq(Str *a, Str *b) { return a == b || (a->len == b->len && !memcmp(a->s, b->s, a->len)); }
 I pys_str_cmp(Str *a, Str *b) {
   int c = memcmp(a->s, b->s, a->len < b->len ? a->len : b->len);
@@ -571,6 +579,8 @@ I pys_str_index(Str *h, Str *n, I st, I en);
 I pys_str_rindex(Str *h, Str *n, I st, I en);
 I pys_str_count(Str *h, Str *n, I st, I en);
 I pys_str_contains(Str *h, Str *n);
+I pys_bytes_has(Str *b, I x);
+I pys_bytes_contains(Str *h, Str *n);
 I pys_str_startswith(Str *s, Str *p, I st, I en);
 I pys_str_endswith(Str *s, Str *p, I st, I en);
 Str *pys_str_replace(Str *s, Str *a, Str *b);
@@ -1384,6 +1394,31 @@ static const char *umember(I *v, const char *d) {
 static double dbl(I v) { double x; memcpy(&x, &v, 8); return x; }
 static int printable(I c);
 static char rquote(const char *s, I n) { return memchr(s, '\'', n) && !memchr(s, '"', n) ? '"' : '\''; }
+static void repr_bytes(Buf *b, Str *s) {   /* a bytes's repr(), as CPython's PyBytes_Repr writes it: b and rquote's
+                                              quotes; \t, \n, \r, \xhh below 32 and from 127 on, \\ and the quote */
+  char q = rquote(s->s, s->len), t[4] = {'\\', 'x', 0, 0};
+  put(b, "b", 1);
+  put(b, &q, 1);
+  for (I i = 0, n; i < s->len; i += n) {
+    for (n = 0; i + n < s->len; n++) {   /* a run of printable ASCII: one put */
+      unsigned char c = s->s[i + n];
+      if (c < 32 || c > 126 || c == q || c == '\\') break;
+    }
+    if (n) { put(b, s->s + i, n); continue; }
+    unsigned char c = s->s[i];
+    n = 1;
+    if (c == q || c == '\\' || c == '\t' || c == '\n' || c == '\r') {
+      t[1] = c == '\t' ? 't' : c == '\n' ? 'n' : c == '\r' ? 'r' : (char)c;
+      put(b, t, 2);
+      t[1] = 'x';
+    } else {
+      t[2] = "0123456789abcdef"[c >> 4];
+      t[3] = "0123456789abcdef"[c & 15];
+      put(b, t, 4);
+    }
+  }
+  put(b, &q, 1);
+}
 static I resc(char *t, const char *s, I len, char q, I *n) {   /* the character at s as CPython's unicode_repr writes it
                                                                  between quotes q, into t (12 bytes); *n: its bytes in s */
   I c;
@@ -1423,6 +1458,7 @@ static const char *repr(Buf *b, I v, const char *d) {
   case 'f': { Str *s = pys_str_float(dbl(v)); put(b, s->s, s->len); return d; }
   case 'b': put(b, v ? "True" : "False", v ? 4 : 5); return d;
   case 's': if (v) repr_str(b, (Str *)v); else put(b, "None", 4); return d;   /* (see hval) */
+  case 'y': if (v) repr_bytes(b, (Str *)v); else put(b, "None", 4); return d;
   case 'L': {                                       /* a list or dict being printed already (through an object) is [...] or {...} */
     List *l = (List *)v;
     if (!pys_repr_enter(l)) { put(b, "[...]", 5); return skip(d); }
@@ -2206,6 +2242,7 @@ List *pys_range_list(I a, I b, I s) {   /* list(range(a, b, s)): allocated once 
   l->len = (I)n; return l;
 }
 List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (I)pys_chr((unsigned char)s->s[i])); return l; }
+List *pys_bytes_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s->len; i++) pys_list_append(l, (unsigned char)s->s[i]); return l; }
 
 /* ---------- dicts: CPython's compact ordered layout ---------- */
 /* Entries (keys, vals, hs) are kept in insertion order. A deleted entry stays in place as a

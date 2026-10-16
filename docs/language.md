@@ -11,7 +11,7 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 
 | Kind | Supported forms |
 |---|---|
-| Scalars | `int`, `float`, `bool`, `str` |
+| Scalars | `int`, `float`, `bool`, `str`, `bytes` |
 | Containers | `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`, fixed-shape `tuple[A, B]`, runtime-length `tuple[T, ...]` |
 | Objects | User classes, dataclasses and class-style `NamedTuple` |
 | Closed scalar unions | `int \| float \| bool \| str`, optionally including `None` |
@@ -21,8 +21,9 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
 | Generics | Function templates and `Generic` or PEP 695 (`class Box[T]`) classes with inferred or explicit type arguments; module-level type aliases |
 
-Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
-have a restricted set of types: integers, strings, objects (hashed by identity, or by their
+Integers are checked 64-bit values. Strings hold UTF-8 bytes; a `bytes` holds its bytes, and its
+items are ints. Dictionary keys and set elements
+have a restricted set of types: integers, strings, `bytes`, objects (hashed by identity, or by their
 class's `__hash__` and `__eq__`) and supported tuples (whose items may include booleans).
 Fixed-shape tuples have at most nine items; a variable index gives an item of their union
 type, and a constant index the item's own type. Runtime-length
@@ -228,7 +229,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 ## Unsupported features
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators' `send()`, `async`,
-`bytes` and binary files, complex and arbitrary-precision numbers, `match`,
+`bytearray`, `memoryview` and binary files, complex and arbitrary-precision numbers, `match`,
 dynamic attribute access, slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.

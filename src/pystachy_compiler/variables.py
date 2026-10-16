@@ -1576,6 +1576,8 @@ def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
     v = self.unwrap(v, "TypeError: must assign iterable to extended slice")  # (CPython 3.13's, for any step)
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "bytes":
+        v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     elif v.t == "tuple[]":
         v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() and [] have no item to type)
     elif not is_list(v.t):
@@ -1669,6 +1671,8 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
             xs = xs if is_list(xs.t) else self.drain(xs)
         elif v.t == "str":
             xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        elif v.t == "bytes":
+            xs = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
         else:
             xs = self.as_list(v, "unpack")
         if not is_list(xs.t):
