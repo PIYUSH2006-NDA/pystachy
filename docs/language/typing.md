@@ -86,10 +86,8 @@ annotation is evaluated; use `"Node"` for a forward reference or
 `from __future__ import annotations` to defer evaluation.
 
 Evaluated annotations may name classes, supported typing forms, builtin generics, unions,
-and type variables. Aliases of supported classes can name those classes; other aliases are
-not supported. Parameterized aliases such as `Row = list[str]` are rejected at their
-definition, even when unused; value aliases such as `Pos = int` fail when used as annotations.
-Generic class subscriptions such as `Box[int]` are supported
+type variables and [type aliases](#type-aliases). Aliases of supported classes can name
+those classes. Generic class subscriptions such as `Box[int]` are supported
 when they use the standard `typing.Generic` hook. Calls, other operators, custom class
 subscripting, and expressions that could execute user code are rejected. `os.PathLike` and the supported
 `collections.abc` names are exceptions to the restriction on builtin module attributes.
@@ -99,6 +97,39 @@ value's type; a class-body value must be a constant. `x: Final` alone binds noth
 `@overload` stubs are discarded when followed by their implementation; they do not create
 runtime overload dispatch. Decorators accepted on unused imported definitions are not
 necessarily supported on methods the program actually uses; see [module rules](modules.md).
+
+### Type aliases
+
+A module-level name that one assignment binds to a type is a type alias: `Row = list[str]`,
+`Num = int | float`, `Handler = Callable[[str], int]`, `MaybeRow = Optional[Row]`.
+`Row: TypeAlias = list[str]` and PEP 695 `type Row = list[str]` statements declare aliases
+too. An annotation that names an alias uses its value, also in another module (`from m import
+Row`, `m.Row`, `import *`).
+
+An assignment evaluates its value when it runs, so the names in it must be bound by then, and
+an annotation that CPython evaluates can name the alias only after the assignment. Its
+subscripts are checked there as CPython's `typing` checks them, even if no annotation names
+the alias: `Box[int, str]` for a class with one type parameter, `Iterable[int, str]` or
+`Union[()]` is an error. A subscript of a typing name other than its generic aliases
+(`List`, `Iterable`, `Generator`, ...), `Optional`, `Union`, `Callable`, `Tuple`, `Literal`,
+`Annotated` and the single-type forms (`ClassVar`, `Final`, ...) is unsupported there. A
+`type` statement's value is evaluated lazily and may name classes defined further down; so
+may a string value, `Label: TypeAlias = "Text"`.
+
+Generic aliases take type arguments: `type Pair[T] = tuple[T, T]`, or an assignment whose
+value mentions `TypeVar`s, `Pair = tuple[T, T]`, whose parameters are those variables in the
+order they first appear. Both make `Pair[int]` mean `tuple[int, int]`. Named without
+arguments, an assigned generic alias keeps its type variables, which make a function
+annotated with it a template; a `type` statement's alias needs its arguments. Type
+arguments for a `TypeVarTuple` or `ParamSpec` parameter are unsupported.
+
+Other code can use an alias of `int`, `float`, `str` or `bool` (`Pos = int`) as that class,
+to call it or pass it to `isinstance()`; using another alias as a value (`print(Row)`,
+`Row.__value__`, `isinstance(x, Num)`) is rejected.
+Recursive aliases (`type Json = int | list[Json]`) and `type` statements outside a module's
+top level, or for a name that another statement also binds, are unsupported, as is an
+annotation whose aliases expand to more than 65,536 nodes (aliases that each name the one
+before twice).
 
 ## Variables and empty containers
 
@@ -400,9 +431,9 @@ Ordinary methods with unannotated parameters, `*args` or `**kwargs` also special
 `__init__` is handled by class specialization below. A template method cannot change a field's
 established type, and comparison methods must return `bool`.
 
-Function annotations mentioning a module-level `TypeVar` or `TypeVarTuple`, or a PEP 695
-function type parameter (`def identity[T](value: T) -> T`), make those parts of the signature
-inferred. Generic classes bind their type variables differently, as described below.
+Function annotations mentioning a module-level `TypeVar` or `TypeVarTuple` (also one
+from-imported from another module), or a PEP 695 function type parameter
+(`def identity[T](value: T) -> T`), make those parts of the signature inferred. Generic classes bind their type variables differently, as described below.
 
 ### Variadic arguments
 
@@ -507,6 +538,13 @@ class Box(Generic[T]):
 print(Box(7).value)
 ```
 
+PEP 695 syntax declares the same class: `class Box[T]:` is `class Box(Generic[T]):` with
+type variables of its own, which hide a module-level name `T` (but where a method's `global T`
+names it), and `class Row[*Ts, R]:` is `Generic[*Ts, R]`. A bound, constraints or a default
+(`class Num[T: (int, float)]`) is not checked: the arguments' types bind the variable, as for
+a `TypeVar`. A PEP 695 function's type parameters hide a module-level name only in its
+annotations; its body reads the module's ([a deviation](compatibility.md#functions-and-object-identity)).
+
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
 `tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
 `Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
@@ -571,10 +609,11 @@ The inferred union uses the existing tagged boxes; per-argument unboxed generic
 fields are separate work, and operations outside the supported union surface
 still require narrowing.
 
-`Generic[...]` must be the class's only base. Use the bare class name or `Self` inside its
-methods and fields, or an explicit specialization such as `"Pair[V, K]"`. PEP 695 class
-syntax (`class Box[T]`) is unsupported. A method's separate type variables make it a
-function template.
+`Generic[...]` must be the class's only base, and a PEP 695 class has no base; its type
+parameters cannot be a `ParamSpec` (`**P`) or more than one `TypeVarTuple`. Use the bare
+class name or `Self` inside its methods and fields, or an explicit specialization such as
+`"Pair[V, K]"`. A method's separate type variables (a module-level `TypeVar`, or its own,
+`def map[U](self, f: Callable[[T], U]) -> "Box[U]"`) make it a function template.
 
 Function and class specializations share a limit of 4,096 per compilation. Additional
 nesting and size limits are listed in [compatibility](compatibility.md#templates-and-empty-containers).

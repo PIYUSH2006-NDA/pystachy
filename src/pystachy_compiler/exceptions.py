@@ -314,6 +314,8 @@ def gen_catch_set(self, t: Node) -> str:
             self.err("an except clause needs exception classes: a name, or a tuple of names")
         if c.s in self.unsupported:
             self.err(self.unsupported[c.s])
+        if c.s in self.taliases:
+            self.err(f"type alias '{short(c.s)}' cannot be used as a value (only annotations may name it)")
         if c.s in self.classes and self.classes[c.s].exc == "":
             self.err("catching classes that do not inherit from BaseException is not allowed")
         if c.s in self.classes and self.classes[c.s].hook != "":

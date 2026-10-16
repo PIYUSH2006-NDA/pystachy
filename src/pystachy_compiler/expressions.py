@@ -309,6 +309,8 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return -2 if abc == "Sequence" and t in self.nts else 0
     if c.kind != "name":
         return -1
+    while c.s in self.taliases and self.alias_kept(c.s):
+        c = self.alias_value(c.s)  # (Pos = int: the class int, which nothing else binds to Pos)
     if c.s in self.classes:
         if t in self.classes and self.classes[t].tag > 0:
             return -2 if self.derives(t, c.s) else -1 if self.derives(c.s, t) else 0
@@ -374,6 +376,8 @@ def gen_isinst_reads(self, c: Node) -> None:
     if c.kind == "tuple" or (c.kind == "binop" and c.s == "|"):
         for x in c.kids:
             self.isinst_reads(x)
+    elif c.kind == "name" and c.s in self.taliases:
+        self.expr(c, "")  # (a type alias's variable, Pos = int, unbound before its assignment)
     elif c.kind == "name":
         self.class_ahead(c.s)
         self.modchk(c)
@@ -1486,7 +1490,7 @@ def gen_subscript(self, n: Node, o: Val) -> Val:
     t = unopt(o.t)
     sub = "TypeError: 'NoneType' object is not subscriptable"  # (once the index is evaluated)
     if t in ["fn[b:list]", "fn[b:dict]", "fn[b:tuple]", "fn[b:set]", "fn[b:frozenset]"]:
-        self.err(f"{t[5:-1]}[...] as a value is not supported (type aliases are not supported; write the type directly in an annotation)")
+        self.err(f"{t[5:-1]}[...] as a value is not supported (only annotations may name a type: a type alias is a module-level name = {t[5:-1]}[...] that nothing else binds)")
     if is_kw(t) and n.kids[1].kind == "str":
         # kwargs["name"]: the keyword argument name, or CPython's KeyError where the call passed none
         names = kw_names(t)

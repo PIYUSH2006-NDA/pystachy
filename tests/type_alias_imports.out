@@ -1,0 +1,12 @@
+mods: init mods
+mods.shapes: init mods.shapes
+2 0 2
+['a', 'ä']
+1.5 ('a', 'c')
+3 [['a']] 3 7
+1.5 s 2
+['q'] 14 3
+a ['b']
+1
+0 True
+[exit 0]

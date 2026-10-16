@@ -144,6 +144,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
+- A PEP 695 function's type parameter hides a module-level name of the same name only in the
+  function's annotations: its body reads the module's (`T = 5` then
+  `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
+  `+` raises `TypeError`). A generic class's type parameters hide it in its methods' bodies too.
+
 ### Errors and control flow
 
 - A type error that CPython raises only when the code runs (`<` between dicts, a constant
@@ -467,8 +472,9 @@ supported alternatives.
   by a function's or method's parameters and return (in `__init__` or a special method that is
   no template, a field, a variable's annotation, or as a value), but a generic class's that its
   objects bind, a `TypeVarTuple` but unpacked (`*Ts`) in `tuple[...]`, `Callable[[...], R]` and
-  `*args`, a generic class whose `Generic[...]` is not its one base, `class C[T]` (PEP 695), a type
-  variable of a generic class that neither arguments nor context bind,
+  `*args`, a generic class whose `Generic[...]` is not its one base, a PEP 695 generic class
+  with a base or with a `ParamSpec` (`**P`) or more than one `TypeVarTuple` among its type
+  parameters, a type variable of a generic class that neither arguments nor context bind,
   `C[X]` for a class with a `TypeVarTuple` or unannotated or variadic `__init__` parameter, a `TypeVar`'s constraints and a bound other than a string, a bare
   `Final` but in an assignment (in a class body, of a constant), an `@overload` stub that the `def`
   implementing it does not follow in its block past other `def`s only (in an imported module, one
@@ -477,6 +483,16 @@ supported alternatives.
   default other than a constant
 - typing's names in a function's local variable annotations that are not imported (CPython never
   evaluates those)
+- a type alias used other than by annotations (`print(Row)`, `Row()`, `del Row`, `Row.__value__`,
+  `isinstance(x, Num)`), but an alias of `int`, `float`, `str` or `bool`; a recursive type alias;
+  a `type` statement other than at a module's top level, or for a name that another statement
+  binds too; a generic `type` statement's alias named without its type arguments, and type
+  arguments for a type alias with a `TypeVarTuple` or `ParamSpec` parameter; in an assigned
+  alias's value, a subscript of a typing name other than its generic aliases, `Optional`,
+  `Union`, `Callable`, `Tuple`, `Literal`, `Annotated` and the single-type forms
+  (`Generic[T]`, `Concatenate[...]`), also where no annotation names the alias; a `type`
+  statement's string value that is not an expression, also where nothing evaluates it; an
+  annotation whose type aliases expand to more than 65,536 nodes
 
 ### Exceptions and exception classes
 

@@ -130,6 +130,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return Val(self.rt("pys_vtuple_new", "ptr", [f"ptr {v.v}"]), self.ctype("vtuple", [elem(v.t)]))
     if name == "typing.NamedTuple":
         self.err("the functional NamedTuple form is not supported: write a class, class P(NamedTuple): with annotated fields")
+    if name in self.taliases:
+        self.err(f"type alias '{short(name)}' cannot be used as a value (only annotations may name it)")
+    if name in self.typevars:
+        self.err(f"TypeVar '{short(name)}' cannot be used as a value (only annotations may name it)")
     if "." not in name and name not in PYBUILTINS:
         self.err(f"name '{short(name)}' is not defined")
     # builtins and module functions ("os.system"); most are one call listed in CALLS

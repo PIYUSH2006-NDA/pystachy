@@ -42,6 +42,7 @@ Builtin-module imports have a [documented scope deviation](../language.md#deviat
 | `from m import *` | Uses `__all__` when present; otherwise takes public names bound when the module's code ends. `__all__` may be extended with `+=`, `append()` and `extend()`. |
 | A package's own binding, such as `from .parse import parse` | Takes precedence over a submodule with the same name. |
 | A module-level alias, `name = function` | Names that function, including a from-imported function or class, for later from-imports and star imports. |
+| A module-level [type alias](typing.md#type-aliases), `Row = list[str]` or `type Row = ...` | Names that type in the annotations of modules that import it, as `m.Row` or by a from-import or star import. |
 
 A global that module code may leave unbound is checked when a function or another module
 reads it. A missing binding raises `NameError` or `AttributeError`. This includes a global

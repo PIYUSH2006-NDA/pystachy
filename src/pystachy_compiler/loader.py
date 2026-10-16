@@ -131,12 +131,16 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
+        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
+        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
         self.fs = Mod("", "", "")
         self.fsure: dict[str, bool] = {}
         self.unsure: dict[str, dict[str, bool]] = {}  # what each def reads before an import of it surely ran (import_reads())
         self.lazyann = False  # the module deftime() walks imports annotations from __future__
+        self.tpnames: dict[str, bool] = {}  # the type parameters (def f[T], class C[T]) around what it reads
         self.called = 0  # and its code may have called a function by now (1), or imported a module (2)
         self.dm = Mod("", "", "")  # (that module)
         self.bdecos: dict[int, bool] = {}  # the decorators, by line, that surely name a builtin
@@ -320,7 +324,7 @@ class Loader:
                 aliases.append(st)
             elif k == "def" or k == "class" or k == "subclass":
                 m.kinds[st.s] = "f" if k == "def" else "c"
-                if k == "subclass" and len(st.kids) == 2 and "__class_getitem__" not in top_bindings(st.kids[0].kids[0].kids):
+                if k == "subclass" and (len(st.kids) == 2 or st.kids[1].kind == "typeparams") and "__class_getitem__" not in top_bindings(st.kids[0].kids[0].kids):
                     m.cbases[st.s] = st.kids[1]
                 for d in [st] if k == "def" else st.kids[0].kids if k == "class" else st.kids[0].kids[0].kids:
                     if d.kind == "def":
@@ -331,6 +335,10 @@ class Loader:
                             if nm not in m.kinds:
                                 m.kinds[nm] = "v"
                                 m.fnonly[nm] = True
+            elif k == "typealias":
+                # type X = value: a type alias if nothing else binds X (see qstmts and Gen.program)
+                aliases.append(st)
+                m.kinds[st.s] = m.kinds.get(st.s, "v")
             elif k != "import":
                 names: dict[str, bool] = {}
                 collect([st], names)
@@ -347,15 +355,24 @@ class Loader:
             if len(m.tvars[nm]) != count[nm]:
                 m.tvars[nm] = []  # (another statement binds it too)
         for al in aliases:
-            if al.kids[0].s in m.fnglobal:
+            if al.kind == "typealias":
+                if count[al.s] == 1 and al.s not in m.fnglobal and len(al.kids) > 0:
+                    m.kinds[al.s] = "t:" + self.qual(m, al.s)
+                    m.taliases[self.qual(m, al.s)] = al
+                    self.aliased[m.name + " " + al.s] = al
+            elif al.kids[0].s in m.fnglobal:
                 m.kinds[al.kids[0].s] = "v"  # a function's global statement rebinds it
             else:
                 al.kind = "pass"
                 self.used_before(m, al)
 
     def late_aliases(self, m: Mod) -> None:
-        # name = f where an import binds f (from m import f): an alias too, if nothing else binds name
+        # name = f where an import binds f (from m import f): an alias too, if nothing else binds
+        # name; so are name = <a type> and name: TypeAlias = <a type> (type_value), type aliases,
+        # and name: TypeAlias = C of a def or class (as name = C)
         count = top_bindings(m.body.kids)
+        dm = self.dm
+        self.dm = m
         for st in m.body.kids:
             if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[1].kind == "name":
                 src = m.kinds.get(st.kids[1].s, "")
@@ -365,6 +382,88 @@ class Loader:
                     st.kind = "pass"
                     self.aliased[m.name + " " + nm] = st
                     self.used_before(m, st)
+            ann = st.kind == "annassign" and len(st.kids) == 3 and st.kids[0].kind == "name" and self.bpath(st.kids[1]) == "typing.TypeAlias"
+            if not ann and not (st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name"):
+                continue
+            nm = st.kids[0].s
+            if m.kinds.get(nm, "") != "v" or count.get(nm, 0) != 1 or nm in m.fnglobal:
+                continue
+            v = st.kids[-1]
+            src = m.kinds.get(v.s, "") if v.kind == "name" else ""
+            if ann and (src == "f" or src == "c" or src.startswith("a:")):
+                m.kinds[nm] = src if src.startswith("a:") else "a:" + m.q + v.s  # (qstmts drops the statement)
+                self.aliased[m.name + " " + nm] = st
+                self.used_before(m, st)
+            elif not ann and v.kind == "call" and self.typevar(st.kids[0]):
+                m.kinds[nm] = "t:" + self.qual(m, nm)  # (T = TypeVar("T"): its imports name it, as a type alias's do)
+                self.aliased[m.name + " " + nm] = st
+            elif self.type_value(v, True) or (ann and v.kind == "str"):
+                # (Gen.program leaves out the assignment unless it binds a class such as int;
+                # qstmts makes name: TypeAlias = value an assignment, or a type statement for a
+                # string, a forward reference)
+                m.kinds[nm] = "t:" + self.qual(m, nm)
+                m.taliases[self.qual(m, nm)] = st
+                self.aliased[m.name + " " + nm] = st
+        self.dm = dm
+
+    def type_value(self, e: Node, top: bool) -> bool:
+        # does e, a value that module dm's top-level code assigns, surely evaluate to a type that
+        # annotations can name, calling no code of the program: the builtin class int, float, str
+        # or bool, a type alias or a TypeVar ("t:"); or, not alone (top), another builtin class,
+        # a class, typing's names and None; a subscript of a builtin generic, of typing's or
+        # collections.abc's names, of a generic class or a type alias; '|' of those
+        k = e.kind
+        if k == "name" or k == "attr":
+            b = self.kind_of(e)
+            if (k == "name" and b == "" and e.s in ["int", "float", "str", "bool"]) or b.startswith("t:"):
+                return True
+            if top:
+                return False
+            p = self.bpath(e) if b.startswith("b:") or k == "attr" else ""
+            return b == "c" or b.startswith("t:") or self.class_alias(b) or self.typevar(e) or p.startswith("typing.") or (k == "name" and b == "" and e.s in GENERICS + ["object", "bytes", "complex"])
+        if k == "binop" and e.s == "|":
+            return self.type_value(e.kids[0], False) and self.type_value(e.kids[1], False) and not (e.kids[0].kind == "None" and e.kids[1].kind == "None")
+        if k == "index":
+            base = e.kids[0]
+            p = self.bpath(base)
+            ok = (base.kind == "name" and self.kind_of(base) == "" and base.s in GENERICS) or self.kind_of(base).startswith("t:") or self.generic_class(base) or p.startswith("typing.") or p.startswith("collections.abc.")
+            return ok and self.type_item(e.kids[1])
+        return k == "None" and not top
+
+    def type_item(self, e: Node) -> bool:
+        # (type_value) an item of a subscript of a type: also a string (a forward reference), a
+        # literal, ..., a list of them (Callable's parameters) or *Ts
+        k = e.kind
+        if k == "tuple" or k == "list":
+            for x in e.kids:
+                if not self.type_item(x):
+                    return False
+            return True
+        if k == "starred":
+            return self.type_item(e.kids[0])
+        if k == "str" or k == "int" or k == "True" or k == "False" or k == "ellipsis":
+            return True
+        if k == "unary" and e.s == "-" and (e.kids[0].kind == "int" or e.kids[0].kind == "float"):
+            return True
+        return self.type_value(e, False)
+
+    def class_alias(self, k: str) -> bool:
+        # is k, a name's kind, an alias of a class ("a:<qualified name>")
+        q = k[2:]
+        for x in self.order if k.startswith("a:") else []:
+            if q.startswith(x.q) and "$" not in q[len(x.q) :]:
+                return x.kinds.get(q[len(x.q) :], "") == "c"
+        return False
+
+    def qual(self, m: Mod, s: str) -> str:
+        # the qualified name of module m's global s, as qname() makes a variable's
+        return "__main__$" + s if m.name == "" and s in PYBUILTINS else m.q + s
+
+    def is_alias(self, m: Mod, st: Node) -> bool:
+        # is st, a top-level statement of m, one that binds a type alias (m.taliases)
+        nm = st.s if st.kind == "typealias" else st.kids[0].s if (st.kind == "assign" or st.kind == "annassign") and st.kids[0].kind == "name" else ""
+        q = self.qual(m, nm) if nm != "" else ""
+        return q in m.taliases and m.taliases[q] is st
 
     def late_takes(self, last: bool) -> bool:
         # from t import x as name took t's variable x, which late_aliases() has since made an alias
@@ -378,7 +477,7 @@ class Loader:
             if n.kids[2].kind == "assign":
                 key = n.kids[4].s + " " + n.s
                 k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
-                if not k.startswith("a:"):
+                if not k.startswith("a:") and not k.startswith("t:"):
                     var[key] = True
                 else:
                     took[key] = k if took.get(key, k) == k else "!"
@@ -387,7 +486,7 @@ class Loader:
             n = self.vtaken[i]
             cp = n.kids[2]
             k = self.mods[n.kids[0].s].kinds.get(n.kids[1].s, "")
-            if cp.kind != "assign" or not k.startswith("a:"):
+            if cp.kind != "assign" or not (k.startswith("a:") or k.startswith("t:")):
                 continue
             key = n.kids[4].s + " " + n.s
             was = n.kids[3].s
@@ -396,7 +495,9 @@ class Loader:
             msg = ""
             if al is not n and int(n.kids[5].s) > 0 and al.line > int(n.kids[5].s):
                 # (taken while t's code ran an import above the alias: CPython raises ImportError)
-                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it ({n.kids[1].s} = {al.kids[1].s}) only after the import that runs this one (not supported for an alias of a function or class)"
+                what = f" ({n.kids[1].s} = {al.kids[-1].s})" if k.startswith("a:") else ""
+                of = "an alias of a function or class" if what != "" else "a TypeVar" if al.kind == "assign" and al.kids[1].kind == "call" else "a type alias"
+                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it{what} only after the import that runs this one (not supported for {of})"
             elif was == "v" or (key in var and last):
                 msg = f"'{n.s}' is bound both as a variable and by an import (not supported)"
             elif took[key] == "!" or (was != "" and was != k) or (now != "" and now != "v" and now != k):
@@ -419,13 +520,14 @@ class Loader:
 
     def used_before(self, m: Mod, al: Node) -> None:
         # an alias (name = f) binds name for all of the module's code; module-level code that runs
-        # before it would see name unbound in CPython
+        # before it would see name unbound in CPython (but not a type statement's value, which is
+        # evaluated lazily)
         nm = al.kids[0].s
         for st in m.body.kids:
             if st is al:
                 return
-            if st.kind != "def" and st.kind != "class" and st.kind != "subclass" and refers(st, nm):
-                fail(f"name '{nm}' is used before '{nm} = {al.kids[1].s}' binds it (not supported for an alias of a function or class)", st.line)
+            if st.kind != "def" and st.kind != "class" and st.kind != "subclass" and st.kind != "typealias" and refers(st, nm):
+                fail(f"name '{nm}' is used before '{nm} = {al.kids[-1].s}' binds it (not supported for an alias of a function or class)", st.line)
 
     def deftime(self, m: Mod, body: list[Node], env: list[dict[str, bool]], cls: str, added: list[str], top: bool) -> None:
         # CPython evaluates a def statement's decorators, defaults and annotations, a class
@@ -442,7 +544,8 @@ class Loader:
         for st in body:
             k = st.kind
             imp = top and cls == "" and m.name != "" and self.called < 2 and has_kind(st, "uimport")
-            if imp or (top and cls == "" and self.called == 0 and calls(st, m)):
+            alias = top and cls == "" and self.is_alias(m, st)  # (a type alias, whose value calls nothing)
+            if imp or (top and cls == "" and self.called == 0 and not alias and calls(st, m)):
                 # (from a first call on, a function's global statement may bind names; from a first
                 # import, a module that imports this one may also assign its builtin names: m.object = 5)
                 for nm in m.kinds:
@@ -478,6 +581,10 @@ class Loader:
                 mark((st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split() + (["__annotations__"] if has_kind(c.kids[0], "annassign") else []), inner, {}, [])
                 tps: list[str] = []
                 mark((st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split(), env[2], {}, tps)
+                tpouter = self.tpnames
+                self.tpnames = dict(tpouter)
+                for t in (st.kids[1].s if k == "subclass" and st.kids[1].kind == "typeparams" else "").split():
+                    self.tpnames[t] = True
                 for b in st.kids[1:] if k == "subclass" else []:
                     # (where the class statement is, with its type parameters; in the main program
                     # too, where a base is an error later: CPython's comes first)
@@ -486,11 +593,15 @@ class Loader:
                     env[2].pop(t, False)
                 own = dict(inner)
                 self.deftime(m, c.kids[0].kids, [env[0], env[1], inner, own], st.s, [], True)
+                self.tpnames = tpouter
                 plain = top and cls == "" and k == "class" and len(st.kids) == 1 and "__class_getitem__" not in own
-            elif k == "annassign":
-                self.ann(st.kids[1], env, "the class body" if cls != "" else "the annotated assignment")
+            elif k == "annassign" or (alias and k == "assign"):
+                if alias and st.kids[-1].kind != "str":
+                    self.reads(st.kids[-1], env, "CPython evaluates this type alias's value when the assignment runs", 3)
+                if k == "annassign":
+                    self.ann(st.kids[1], env, "the class body" if cls != "" else "the annotated assignment")
             first: dict[str, bool] = {}
-            for i in range(len(st.kids) if k != "def" and k != "class" and k != "subclass" else 0):
+            for i in range(len(st.kids) if k != "def" and k != "class" and k != "subclass" and k != "typealias" else 0):
                 x = st.kids[i]
                 tgt: list[str] = [x.s] if x.kind == "except" and x.s != "" else []
                 if x.kind == "block" or x.kind == "except":
@@ -531,7 +642,7 @@ class Loader:
                     if cls != "" and mod != "":
                         # (what a class body's other statements read)
                         self.reads(x.kids[0] if x.kind == "withitem" else x, env, f"CPython runs this statement of the body of class {cls} {mod}", 0)
-            bound = names + (st.s.split() if k == "def" or k == "class" or k == "subclass" or k == "uimport" else [])
+            bound = names + (st.s.split() if k == "def" or k == "class" or k == "subclass" or k == "uimport" or k == "typealias" else [])
             mark(bound, sure, maybe, added)
             for nm in bound if cls == "" else []:
                 self.known.pop(nm, False)
@@ -554,18 +665,24 @@ class Loader:
         nm = e.s
         tps: list[str] = []
         mark(nm.split() if k == "noann" else [], env[2], {}, tps)  # (a generic def's type parameters: Parser.funcdef)
+        outer = self.tpnames
+        if k == "noann":
+            self.tpnames = dict(outer)
+            for t in nm.split():
+                self.tpnames[t] = True
         if k == "name" and "$" not in nm and nm not in env[0] and nm not in env[2] and nm not in PYBUILTINS and nm not in MODNAMES:
             maybe = nm in env[1] or nm in env[3]
             if how >= 2 or (self.dm.kinds.get(nm, "") != "v" and self.dm.kinds.get(nm, "") != "f"):
                 fail(f"name '{nm}' {'may be unbound, which is not supported' if maybe else 'is not defined'} ({'import it from typing' if how >= 2 and nm in TYPING else what})", e.line)
         for kid in e.kids[2:3] if k == "listcomp" or k == "nestedcomp" or k == "asynccomp" else [] if k == "lambda" else e.kids:
             self.reads(kid, env, what, how if how < 3 or k == "noann" else 2)
+        self.tpnames = outer
         why = self.type_error(e, env) if how > 0 else ""
         for t in tps:
             env[2].pop(t, False)
         if why != "":
             fail(f"{why} ({what})", e.line)
-        if how >= 2 and self.not_type(e, how == 3):
+        if how >= 2 and not (k == "name" and nm in self.tpnames) and self.not_type(e, how == 3):
             fail(f"an annotation that is not a type is not supported: only classes, typing's names, their subscripts and '|' of them ({what})", e.line)
         if how >= 2 and k == "attr":
             e.chk = True  # (an attribute a module lacks is CPython's AttributeError: qann)
@@ -640,6 +757,8 @@ class Loader:
             k = self.kind_of(b.kids[0])
             m = self.mods[k[2:]] if k.startswith("m:") and k[2:] in self.mods else self.dm
         base = m.cbases.get(name, None)
+        if base is not None and base.kind == "typeparams":
+            return True  # (class C[T])
         if base is None or base.kind != "index":
             return False
         g = base.kids[0]
@@ -1407,7 +1526,7 @@ class Loader:
         # is an error (in a function, where it is compiled)
         ks = self.fks[self.curdef] if infn else m.kinds
         old = ks.get(name, k)
-        if old != k and (old.startswith("m:") or old.startswith("b:") or old.startswith("a:")) and not k.startswith("x:"):
+        if old != k and (old.startswith("m:") or old.startswith("b:") or old.startswith("a:") or old.startswith("t:")) and not k.startswith("x:"):
             k = f"x:'{name}' is bound by two imports, to different modules, functions or classes (not supported)"
             if not infn:
                 fail(k[2:], line)
@@ -1675,6 +1794,11 @@ class Loader:
             self.bind(m, name, k, infn, line)
             keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", p[: p.find(".")] if "." in p else p, line, [])]))
         elif k != "v":
+            al = self.aliased.get(src.name + " " + x, None)
+            if k.startswith("t:") and al is not None and not src.done and src.at > 0 and al.line > src.at:
+                # (a type statement, taken while src's code ran an import above it: CPython raises
+                # ImportError; late_takes checks the other type aliases and TypeVars)
+                fail(f"cannot import name '{x}' from '{src.name}' here: its code binds it only after the import that runs this one (not supported for a type alias)", line)
             self.bind(m, name, k, infn, line)
         else:
             ks = self.fks[self.curdef] if infn else m.kinds
@@ -1704,12 +1828,14 @@ class Loader:
     def qname(self, m: Mod, s: str, loc: dict[str, bool]) -> str:
         if s in loc or "$" in s:
             return s
+        if s in self.qren:
+            return self.qren[s]
         k = self.kind(m, s)
         if k == "f" or k == "c" or k == "v" or k.startswith("b:"):
             if m.name == "" and s in PYBUILTINS:
                 return "__main__$" + s  # (other modules' code still sees the builtin)
             return m.q + s
-        if k.startswith("a:"):
+        if k.startswith("a:") or k.startswith("t:"):
             return k[2:]
         if k == "" and m.name != "" and s not in PYBUILTINS and not s.startswith("__"):
             return m.q + s  # not defined (the main program's names are not a module's)
@@ -1981,7 +2107,12 @@ class Loader:
                         break
                 self.fkey = str(st.line)
                 self.qdef = True
+                ren = self.qren
+                self.qren = dict(ren)
+                for nm in decl:
+                    self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)
+                self.qren = ren
                 self.qdef = indef
                 self.fk = saved
                 self.fkowner = owners
@@ -1989,14 +2120,19 @@ class Loader:
                     loc[st.s] = True
                 self.fkey = key
             elif k == "subclass":
-                # (a generic class's type parameters stay unqualified in its bases and body)
-                tps = dict(loc)
-                for nm in st.kids[1].s.split() if st.kids[1].kind == "typeparams" else []:
-                    tps[nm] = True
-                self.qstmts(m, [st.kids[0]], tps, cls)
+                # (a generic class's type parameters: in its bases, body and methods, names of
+                # their own, qren's)
+                outer = self.qren
+                self.qren = dict(outer)
+                params = st.kids[1].s.split() if st.kids[1].kind == "typeparams" else []
+                for nm in params:
+                    self.qren[nm] = self.qname(m, st.s, loc) + "$$" + nm
+                st.kids[1].s = " ".join([self.qren[nm] for nm in params]) if len(params) > 0 else st.kids[1].s
+                self.qstmts(m, [st.kids[0]], loc, cls)
                 st.s = st.kids[0].s
                 for kid in st.kids[1:]:
-                    self.qexpr(m, kid, tps)
+                    self.qexpr(m, kid, loc)
+                self.qren = outer
                 if cls:
                     loc[short(st.s)] = True
             elif k == "class":
@@ -2021,15 +2157,44 @@ class Loader:
                     self.qexpr(m, kid, loc)
                 if len(st.kids) == 3:
                     loc[st.kids[0].s] = True
+            elif k == "annassign" and not self.qdef and not cls and len(st.kids) == 3 and st.kids[0].kind == "name" and (self.is_alias(m, st) or self.kind(m, st.kids[0].s).startswith("a:")):
+                # name: TypeAlias = value (late_aliases), once deftime has checked it: name = value,
+                # but name = C of a class is no statement (as bindings makes it), and a string, a
+                # forward reference, is as lazy as a type statement's value
+                v = st.kids[2]
+                if self.kind(m, st.kids[0].s).startswith("a:"):
+                    st.kind = "pass"
+                    st.kids = [st.kids[0], v]
+                elif v.kind == "str":
+                    st.kind = "typealias"
+                    st.s = st.kids[0].s
+                    st.kids = [mk("typeparams", "", st.line, [v])]
+                    self.qstmts(m, [st], loc, cls)
+                else:
+                    st.kind = "assign"
+                    st.s = ""
+                    st.kids = [st.kids[0], v]
+                    self.qstmts(m, [st], loc, cls)
             elif k == "annassign":
                 self.qstore(m, st.kids[0], loc)
                 self.qann(m, st.kids[1], loc)
                 for kid in st.kids[2:]:
                     self.qexpr(m, kid, loc)
             elif k == "assign":
+                alias = not self.qdef and not cls and self.is_alias(m, st)
                 for kid in st.kids[:-1]:
                     self.qstore(m, kid, loc)
-                self.qexpr(m, st.kids[-1], loc)
+                if alias:
+                    self.qann(m, st.kids[-1], loc)  # (a type alias's value, where strings are forward references)
+                else:
+                    self.qexpr(m, st.kids[-1], loc)
+            elif k == "typealias" and len(st.kids) > 0:
+                # type X[T] = value: the value is an annotation that sees the type parameters
+                tps = dict(loc)
+                for nm in st.kids[0].s.split():
+                    tps[nm] = True
+                self.qann(m, st.kids[0].kids[0], tps)
+                st.s = self.qname(m, st.s, loc)
             elif k == "import" or k == "global":
                 for a in st.kids:
                     a.s = self.qname(m, a.s, {})

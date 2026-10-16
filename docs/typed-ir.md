@@ -386,9 +386,9 @@ support explicitly declared class/file alternatives. General dynamic values rema
 outside the current language.
 
 Mixed scalar/list/dict unions permit finite, explicitly written nesting. Recursive
-JSON aliases remain a separate representation milestone: the parser currently
-discards PEP 695 alias bodies, and type operations compare expanded canonical
-strings. A recursive alias must retain its declaration and use a finite reference
+JSON aliases remain a separate representation milestone: annotations expand type
+aliases where they name them (a recursive alias is rejected), and type operations
+compare expanded canonical strings. A recursive alias must retain its declaration and use a finite reference
 to its type graph, with cycle-safe equivalence and descriptor traversal. Repeated
 string expansion or a chosen maximum JSON depth would not provide recursive
 types. Mutable list/dict element types must remain invariant through that change.

@@ -149,6 +149,8 @@ def gen_load_name(self, name: str) -> Val:
         self.err(f"'{name}' is not supported")  # (a module attribute that CPython defines)
     if name in self.typevars:
         self.err(f"TypeVar '{short(name)}' cannot be used as a value (only annotations may name it)")
+    if name in self.taliases:
+        self.err(f"type alias '{short(name)}' cannot be used as a value (only annotations may name it)")
     self.err(f"name '{short(name)}' is not defined")
     return Val("", "")
 
