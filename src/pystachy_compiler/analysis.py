@@ -1027,6 +1027,29 @@ def nested_defs(n: Node, out: list[Node]) -> None:
         nested_defs(k, out)
 
 
+def appends_to(st: Node) -> bool:
+    # is statement st x = x + e
+    if st.kind != "assign" or len(st.kids) != 2 or st.kids[0].kind != "name":
+        return False
+    v = st.kids[1]
+    return v.kind == "binop" and v.s == "+" and v.kids[0].kind == "name" and v.kids[0].s == st.kids[0].s
+
+
+def str_appends(body: list[Node], out: dict[str, bool]) -> None:
+    # the names that the statements of a function's body append to: x += e, x = x + e
+    # (Gen.str_append, where x is a str local), also in its blocks (not in its defs and classes):
+    # statements alone, which only blocks and except clauses hold, as for globals_in
+    for st in body:
+        if (st.kind == "augassign" and st.s == "+" and st.kids[0].kind == "name") or appends_to(st):
+            out[st.kids[0].s] = True
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            for kid in st.kids:
+                if kid.kind == "block":
+                    str_appends(kid.kids, out)
+                elif kid.kind == "except":
+                    str_appends(kid.kids[1].kids, out)
+
+
 def lambda_flags(n: Node, inlam: bool, out: dict[str, bool]) -> None:
     # the names that the lambdas in code n read (all its reads, if inlam: n is in one) whose flag is
     # one of the function's (Node.mchk, L: an import in a try statement of it binds them): a lambda

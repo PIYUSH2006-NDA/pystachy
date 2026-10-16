@@ -345,6 +345,11 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
+static I gc_room(const void *p) {      /* the bytes object p (from gc_alloc) can hold: its slot's, or a large
+                                          object's, less the byte of slack, as for the n that cls(n) took */
+  uintptr_t a = (uintptr_t)p;
+  return pmap[a >> 30][a >> 12 & 0x3ffff]->size - 1;
+}
 /* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
    own frame (Gen.stack_tuple), which the function called copies before it keeps it
    (Gen.keep_stack). Not inlined: the frames of its callers, where such a tuple lives, are then all
@@ -533,6 +538,18 @@ Str *pys_str_slice_step(Str *s, I lo, I hi, I st) {   /* s[lo:hi:st], over bytes
 Str *pys_str_add(Str *a, Str *b) {
   Str *s = pys_alloc_atomic(sizeof(Str) + a->len + b->len + 1);
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
+}
+/* s += t of a str local (Gen.str_append). owned: an append made s and nothing else holds it (nor
+   hashed it: dict_hash is 0), so t goes into s's own memory while it has room. Else a new str, with
+   room for as much again where s was owned: appending in a loop is linear, as CPython's resizing in
+   place of a str that one reference holds makes it, and a single append takes no more memory */
+Str *pys_str_iadd(Str *s, Str *t, I owned) {
+  I n = s->len + t->len;
+  if (owned && (I)sizeof(Str) + n + 1 <= gc_room(s)) {
+    memcpy(s->s + s->len, t->s, t->len); s->s[n] = 0; s->len = n; return s;
+  }
+  Str *r = pys_alloc_atomic(sizeof(Str) + (owned ? 2 * n : n) + 1);
+  r->len = n; memcpy(r->s, s->s, s->len); memcpy(r->s + s->len, t->s, t->len); return r;
 }
 /* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
    The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */

@@ -70,6 +70,11 @@ Memory-bound work and functions already implemented in CPython's C runtime often
 Checked 64-bit integer arithmetic also limits some optimizations. Regex-heavy misses can be
 slower than CPython's `_sre`, even when cache hits are faster.
 
+Appending to a str local with `+=` is linear while the loop reads the local only through `len()`.
+Any other read (printing, comparing, slicing, passing or storing it) may share the str, so the
+next append copies it, where CPython copies only when another reference remains; such a loop is
+quadratic. `"".join(parts)` stays linear.
+
 Cross-function exceptions require stack unwinding and can be expensive in hot loops.
 Same-function handlers use branches. The [extended benchmark guide](extended-performance.md)
 measures these paths separately, along with object dispatch and allocation.
@@ -87,6 +92,7 @@ measures these paths separately, along with object dispatch and allocation.
 | `listfast` | Inlines checked `list[int]` reads; negative/invalid indices use the runtime | `PYSTACHY_OPT=-listfast` |
 | Stack tuple keys | Cache and memo hits can avoid heap allocation; escaping tuples are copied | [#308](https://github.com/den-run-ai/pystachy/pull/308) |
 | First-part split | `s.split(...)[0]` produces only the required string | [#317](https://github.com/den-run-ai/pystachy/pull/317) |
+| In-place str append | `s += t` and `s = s + t` on a str local grow its str in place, with spare room, while only the local holds it | [#112](https://github.com/den-run-ai/pystachy/issues/112) |
 | JIT helper inlining | Inlines program functions up to 20,000 IR lines by default | `PYSTACHY_JIT_INLINE=0` disables it |
 
 `PYSTACHY_OPT=-all` disables the typed-IR passes. JIT inlining has a separate control:

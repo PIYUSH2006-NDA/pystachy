@@ -1,6 +1,6 @@
 """Functions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
-from src.pystachy_compiler.analysis import globals_in, lambda_flags, local_names, nonlocal_decls
+from src.pystachy_compiler.analysis import globals_in, lambda_flags, local_names, nonlocal_decls, str_appends
 from src.pystachy_compiler.ir import Blk, FnInfo, IFn, Try, Val
 from src.pystachy_compiler.local_versions import local_versions
 from src.pystachy_compiler.names import short
@@ -43,6 +43,8 @@ def gen_enter(self, f: FnInfo, body: list[Node]) -> None:
     self.uflags = f.uflags
     self.lflag = {}
     self.iflag = {}
+    self.appends = {}
+    self.owned = {}
     self.lcs = []
     self.lct = []
     self.lcsoft = []
@@ -117,6 +119,8 @@ def gen_function(self, f: FnInfo, body: list[Node]) -> None:
             for cv in self.cells:
                 if cv in nl:
                     self.nlw[cv] = True
+        if not self.rtmode:
+            str_appends(body, self.appends)  # (those that are str locals get an owned flag: alloca)
     for i in range(len(f.params)):
         t = f.ptypes[i]
         if t == "None":

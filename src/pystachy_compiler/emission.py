@@ -48,6 +48,8 @@ def gen_save(self) -> Frame:
     fr.uflags = self.uflags
     fr.lflag = self.lflag
     fr.iflag = self.iflag
+    fr.appends = self.appends
+    fr.owned = self.owned
     fr.cells = self.cells
     fr.nlw = self.nlw
     fr.nonevars = self.nonevars
@@ -87,6 +89,8 @@ def gen_restore(self, fr: Frame) -> None:
     self.uflags = fr.uflags
     self.lflag = fr.lflag
     self.iflag = fr.iflag
+    self.appends = fr.appends
+    self.owned = fr.owned
     self.cells = fr.cells
     self.nlw = fr.nlw
     self.nonevars = fr.nonevars
@@ -494,6 +498,13 @@ def gen_alloca(self, t: str, name: str) -> str:
             i.k = 1
             i.r = [self.n]
             self.fn.slots.append(i)
+        if t == "str" and name in self.appends and name not in self.owned and name not in self.compvars:
+            # the owned flag of a str local that the function appends to (str_append): one for
+            # the name, which its later slots share, as every read and store of it clears the flag
+            i = Ins("slot", "int", name + ".own")
+            i.r = [self.n]
+            self.fn.slots.append(i)
+            self.owned[name] = f"%{name}.own.{self.n}"
     return r
 
 # ---- value conversions

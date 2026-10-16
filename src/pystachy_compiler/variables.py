@@ -107,6 +107,8 @@ def gen_load_name(self, name: str) -> Val:
             t = self.none_read(name)
             if t == "None":
                 return Val("null", "None")
+        if name in self.owned and not self.appending:
+            self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (what reads it may keep it: str_append)
         r = self.mem_load(Val(self.lreg[name], "*" + t)).v
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
@@ -1392,6 +1394,8 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         self.mem_store(Val(self.lreg[name], "*" + t), self.coerce(v, t, self.assigned_to(v, t, name)))
         if name in self.lflag and name not in self.compvars:
             self.mem_store(Val(self.lflag[name], "*bool"), Val("true", "bool"))
+        if name in self.owned:
+            self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (a value others may hold: str_append)
         held = "" if is_union(unopt(t)) and name in self.nlw else self.holds(t, v.t)
         if held == "":
             self.narrowed.pop(name, "")

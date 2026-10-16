@@ -375,6 +375,8 @@ class Frame:
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
         self.iflag: dict[str, str] = {}
+        self.appends: dict[str, bool] = {}
+        self.owned: dict[str, str] = {}
         self.cells: dict[str, str] = {}
         self.nlw: dict[str, bool] = {}
         self.nonevars: dict[str, int] = {}
