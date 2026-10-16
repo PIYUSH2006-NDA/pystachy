@@ -418,6 +418,11 @@ can use the inherited `fromutc()`.
   beyond about 106,751,991 days, as does a float count of microseconds of `2**63` or more.
 - `timezone(timedelta(0))` is a new object equal to `timezone.utc`, and a `name` of `None`
   means no name. Subclasses of `timezone` are rejected.
+- The Python fallback's replacement sentinels remain: an explicit `None` for a numeric
+  field in `date.replace()`, `time.replace()` or `datetime.replace()` preserves that field;
+  explicit `tzinfo=True` in `time.replace()`, `datetime.replace()` or `datetime.combine()`
+  preserves the original time zone. CPython's C implementations reject those explicit
+  values with `TypeError`; `tzinfo=None` still removes the time zone.
 - Objects of subclasses of `date`, `time` and `datetime` print as their base class, and
   arithmetic and `replace()` return objects of the base class.
 - Ordering a `date` with a `datetime` raises the `TypeError` of the reflected comparison.

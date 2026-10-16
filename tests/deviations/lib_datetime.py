@@ -1,6 +1,6 @@
 # Documented deviations of lib/datetime (CPython 3.13's _pydatetime with marked edits that follow
 # _datetimemodule.c) from CPython.
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from typing import Callable
 
 
@@ -55,3 +55,18 @@ class MyDate(date):
 
 md = MyDate(2024, 2, 29)
 print(repr(md), isinstance(md + timedelta(0), MyDate), isinstance(md.replace(day=1), MyDate))
+
+# The Python fallback uses None for omitted numeric replacement fields, and True
+# for an omitted time zone. Explicit sentinel values preserve the original field;
+# CPython's C methods raise TypeError. Explicit tzinfo=None still makes a naive value.
+d = date(2024, 2, 29)
+t = time(12, 34, 56, 789, tzinfo=UTC, fold=1)
+dt = datetime(2024, 2, 29, 12, 34, 56, 789, tzinfo=UTC, fold=1)
+print(repr(d.replace(year=None, month=None, day=None)))
+print(repr(t.replace(hour=None, minute=None, second=None, microsecond=None, fold=None)))
+print(repr(dt.replace(year=None, month=None, day=None, hour=None, minute=None,
+                      second=None, microsecond=None, fold=None)))
+print(repr(t.replace(tzinfo=True)), repr(dt.replace(tzinfo=True)))
+print(repr(datetime.combine(d, t, tzinfo=True)))
+print(t.replace(tzinfo=None).tzinfo is None, dt.replace(tzinfo=None).tzinfo is None,
+      datetime.combine(d, t, tzinfo=None).tzinfo is None)
