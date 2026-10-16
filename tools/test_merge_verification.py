@@ -32,6 +32,9 @@ def report(group, steps):
         if name in ("gc-aot-0", "gc-aot-1", "gc-aot-2"):
             count = 4 if name == "gc-aot-0" else 3   # thirds of a 10-check suite
             step.update(passed=count, expected=count)
+        if name in ("ubsan-0", "ubsan-1", "ubsan-2"):
+            count = 6 if name == "ubsan-2" else 7   # thirds of a suite of 10 checks in each of two modes
+            step.update(passed=count, expected=count)
         if name.startswith("tests-opt-off"):
             step.update(PYSTACHY_OPT=["-all"])
         if name == "gc-self":
@@ -58,7 +61,7 @@ class ContractTests(unittest.TestCase):
         for alias in ("gc-stress", "gc-jit", "gc-aot", "hosted", "ubsan", "native", "opt-off", "python-free", "scaling"):
             self.assertNotIn(alias, groups)  # Compatibility aliases must not duplicate CI work.
         for group in ("gc-self", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2", "ubsan-0", "ubsan-1",
-                      "python-free-0", "python-free-1", "runtime-cache", "scaling-1"):
+                      "ubsan-2", "python-free-0", "python-free-1", "runtime-cache", "scaling-1"):
             self.assertEqual(groups[group], ["bootstrap", group])
         for shard in ("0", "1"):
             self.assertEqual(groups["hosted-" + shard], ["bootstrap", "tests-cpython-" + shard])
@@ -77,7 +80,7 @@ class ContractTests(unittest.TestCase):
             self.assertEqual([step["name"] for step in result["steps"]], groups["all"])
             for group in ("opt-off-0", "opt-off-1", "gc-self", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2",
                           "hosted-0", "hosted-1", "native-0", "native-1", "python-free-0", "python-free-1",
-                          "ubsan-0", "ubsan-1", "runtime-cache", "contracts", "benchmarks", "scaling-1"):
+                          "ubsan-0", "ubsan-1", "ubsan-2", "runtime-cache", "contracts", "benchmarks", "scaling-1"):
                 path = directory / f"verification-{group}" / "verification.json"
                 original = path.read_text()
                 path.unlink()
@@ -126,7 +129,7 @@ class ContractTests(unittest.TestCase):
                     with self.subTest(suite_checks=suite), self.assertRaisesRegex(ValueError, error):
                         merge.merge_reports(directory, groups, COMMIT)
             # the shards of each GC suite make the checks of the corpus in one mode (sources.mode_checks),
-            # and the UBSan halves twice as many
+            # and the UBSan thirds twice as many
             for checks, error in ((11, "GC JIT shards must cover the same full-suite check count"), (10, None)):
                 for path in paths:
                     data = json.loads(path.read_text())
@@ -167,11 +170,11 @@ class ContractTests(unittest.TestCase):
         shard_mutations = [lambda step: step.update(shard_index=1 - step["shard_index"]),
                            lambda step: step.update(shard_index=False),
                            lambda step: step.pop("shard_index"),
-                           lambda step: step.update(shard_count=3),
-                           lambda step: step.update(shard_count="2"),
+                           lambda step: step.update(shard_count=step["shard_count"] + 1),
+                           lambda step: step.update(shard_count=str(step["shard_count"])),
                            lambda step: step.pop("shard_count")]
         for group in ("hosted-0", "hosted-1", "native-0", "native-1", "opt-off-0", "opt-off-1", "python-free-0",
-                      "python-free-1", "ubsan-0", "ubsan-1"):
+                      "python-free-1", "ubsan-0", "ubsan-1", "ubsan-2"):
             mutations[group] = shard_mutations + [lambda step: step.update(passed=step["expected"] - 1),
                                                   lambda step: step.update(failed=1),
                                                   lambda step: step.pop("expected")]
