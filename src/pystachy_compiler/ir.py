@@ -142,6 +142,17 @@ class FnInfo:
         # a function is that Callable of the specialization it returns (see pat_arg)
         self.pats: dict[int, Node] = {}
         self.clo = -1  # a closure's function (a def or lambda inside a function): its Gen.closures position
+        # a generator function (a def whose own body yields): a call makes a generator object, an
+        # LLVM coroutine handle of type gen[Y] (ret; "" while a template's first yield decides Y),
+        # and runs none of the body (docs/internals.md#generators)
+        self.gen = False
+        self.gret = ""  # its return value's type (return v, which yield from gives): "" until a return decides it
+        self.gclose = False  # closing it while it is suspended may run its code: a yield in try, with or yield from
+        self.gwith = False  # a yield inside a with block: its unwind actions are set aside while it is suspended
+        self.gtry = False  # a try statement: the exception being handled is its resumer's while it is suspended
+        # a generator expression's (Gen.genexp_value) whose first iterable is a generator that only it
+        # holds, which this function made: its loop over that iterable (.0) owns it
+        self.gfirst: FnInfo | None = None
 
 
 class Closure:
@@ -290,6 +301,20 @@ class IFn:
         # adds values or blocks numbers them after it (the IR check checks that none is above it)
         self.n = 0
         self.fa: dict[str, bool] = {}  # the values that are addresses of an object's field or flag (Gen.fgep)
+        # a generator function's (FnInfo.gen): a presplitcoroutine, whose gen.start op ends its entry
+        # block. With exceptions on (Gen.eh): gpad, the landing block around its body (it finishes
+        # the generator: PEP 479, close), gbase, the slot of the unwind actions' depth when it was
+        # last resumed (its try statements' marks are relative to it), and gsaved, the slot of the
+        # unwind actions it set aside while suspended (FnInfo.gwith)
+        self.coro = False
+        self.gpad = ""
+        self.gbase = ""
+        self.gsaved = ""
+        self.gnone = False  # some way out of it returns no value (gen_none_end)
+        # FnInfo.gtry: the slots of the exception being handled where it was last resumed (its
+        # resumer's), and of its own where it suspended in an except clause or a finally block
+        self.gouter = ""
+        self.ghand = ""
 
 
 class Lookup:

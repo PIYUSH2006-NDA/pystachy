@@ -20,7 +20,7 @@ Imports search builtin modules first, then the program's directory,
 | `operator` | Adapted CPython | Operator functions, `itemgetter`, `attrgetter`, `methodcaller` | Getters specialize on literal items and names |
 | `html`, `html.entities` | Adapted CPython | `escape`, `unescape`, HTML4 and HTML5 entity tables | UTF-8 byte indexing; no configurable integer digit limit |
 | `html.parser` | Adapted CPython | Incremental HTMLParser with typed subclass callbacks | Byte columns; ASCII name case conversion; see [probe](../docs/html-parser-probe.md) |
-| `difflib` | Adapted CPython | `SequenceMatcher`, `get_close_matches`, junk predicates and `Match` | String items; generator APIs unavailable |
+| `difflib` | Adapted CPython | `SequenceMatcher` (also the generator `get_grouped_opcodes()`), `get_close_matches`, junk predicates and `Match` | String items; `unified_diff()` and `context_diff()` still need `type(x).__name__` and `str.format()`, `ndiff()` a `Differ` with `None` junk functions |
 | `getopt` | Adapted CPython | `getopt`, `gnu_getopt`, `GetoptError` | `longopts` must be `list[str]`; untranslated messages |
 | `heapq` | Adapted CPython | Heap operations, `nlargest`, `nsmallest`, `key=` | `merge` unavailable; non-list inputs are materialized |
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
@@ -33,7 +33,7 @@ Imports search builtin modules first, then the program's directory,
 | `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key`, `partial`, `wraps`, `update_wrapper` | Typed callables and supported value/key types |
 | `textwrap` | Adapted CPython | `TextWrapper`, `wrap`, `fill`, `shorten`, `dedent`, `indent` | Byte widths; no subclassing |
 | `string` | Adapted CPython | Constants, `capwords`, `Template`, `Formatter` and its subclasses | No `Template` subclasses; `Formatter` arguments of one union, no attribute or item fields |
-| `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode | Selected numeric types and APIs |
+| `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode, `covariance` | Selected numeric types and APIs |
 | `random` | Adapted CPython on a subset `_random` (`_pyrandom`) | Seeded `Random` and module functions, integers, sequences, distributions, state | Int, bool and float seeds; 63-bit `getrandbits`; no subclasses |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
 | `codecs` | Adapted CPython on a subset `_codecs` (`_pystachy_codecs`) | BOM constants, `encode`, `decode`, the UTF-8, Latin-1, ASCII and charmap codec functions, `lookup_error`, `register_error`, the incremental classes | No codec registry (`lookup()`); no UTF-16, UTF-32, UTF-7 or escape codecs |

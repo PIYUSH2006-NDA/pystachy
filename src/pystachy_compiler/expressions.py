@@ -39,6 +39,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fn,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -299,7 +300,7 @@ def gen_has(self, t: str, a: str) -> int:
                 c = self.classes[c].base
             return -1 if c in self.classes else 0
         return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__".split() else 0
-    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
+    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else "generator" if is_gen(t) else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:
         return 1 if a in HASATTR[b].split() else 0
@@ -649,6 +650,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.listcomp(n.kids[0], want, "", "", None, k[:-4], resultsoft)
     if k == "dictstar":
         return self.dict_merge(n, want)
+    if k == "yield" and n.s == "from":
+        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
+    if k == "yield":
+        self.err("the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)")
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "walrus":
@@ -883,7 +888,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), tuple(), bytes(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend(), or as the value assigned to a list slice")
+            return self.genexp_value(n)  # (where no consumer takes its items at once: a generator)
         unrolled = self.unroll(n)
         if unrolled is not None:
             return self.expr(mk("list", "", n.line, unrolled), want, resultsoft=resultsoft)
@@ -2198,7 +2203,7 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         ik = self.expr(n.kids[1], self.argtype(t, "__getitem__", 1, f"'{tname(t)}' object is not subscriptable"))
         self.notnone(o, sub)
         return self.protocol(o, "__getitem__", [ik])
-    self.err(f"'{t}' object is not subscriptable")
+    self.err(f"'{tname(t) if is_gen(t) else t}' object is not subscriptable")
     return o
 
 def gen_pick(self, o: Val, tests: list[Val], exc: str, msg: str, what: str, want: str, dflt: Val | None = None) -> Val:
@@ -2285,7 +2290,7 @@ def gen_obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") 
     # its __iter__ (or __reversed__) returns the iterator of (see iter_ret), or a new list of the
     # items its iterator object's __next__ gives (obj_iterator)
     it = self.obj_iterator(v, none, missing, name)
-    return it if is_list(it.t) else self.drain(it)
+    return it if is_list(it.t) or is_gen(it.t) else self.drain(it)
 
 def gen_obj_iterator(self, v: Val, none: str, missing: str, name: str = "__iter__") -> Val:
     # iter(v) of object v: the list its __iter__ returns the iterator of (see iter_ret), or the
@@ -2301,6 +2306,10 @@ def gen_obj_iterator(self, v: Val, none: str, missing: str, name: str = "__iter_
     f = ms[name]
     if f.bad != "":
         self.err(f.bad)  # (an imported module's generator __iter__: its own error, not its type's)
+    if f.gen:
+        # (an __iter__ that yields: the generator its call makes)
+        self.notnone(v, none)
+        return self.protocol(v, name, [])
     if not f.iters and name == "__reversed__":
         # (CPython iterates over what it returns, which need not be an iterator)
         self.err(f"{short(v.t)}.__reversed__ returning {typestr(f.ret)} is not supported: return iter(xs) of a list xs of the items (-> Iterator[T])")
@@ -2833,7 +2842,11 @@ def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
             result = Val(hit if op == "in" else self.scalar('xor', [Val(hit, 'bool'), Val('true', 'bool')]), "bool")
         elif "__iter__" in ci.methods or "__getitem__" in ci.methods:
             items = self.obj_iterator(obj, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{short(ci.name)}' is not iterable")
-            result = self.cmp2(op, a, items) if is_list(items.t) else self.iter_in(op, a, items)
+            if is_gen(items.t):
+                hit = self.gen_contains(a, items).v  # (an __iter__ that yields)
+                result = Val(hit if op == "in" else self.scalar('xor', [Val(hit, 'bool'), Val('true', 'bool')]), "bool")
+            else:
+                result = self.cmp2(op, a, items) if is_list(items.t) else self.iter_in(op, a, items)
         else:
             self.raise_("TypeError", self.sconst(f"argument of type '{short(ci.name)}' is not iterable"))
         if not self.term:
@@ -3273,12 +3286,15 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         # steps through
         if "__contains__" not in self.classes[b.t].methods:
             b = self.obj_iterator(b, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{tname(b.t)}' is not iterable")
-            if not is_list(b.t):
+            if not is_list(b.t) and not is_gen(b.t):
                 return self.iter_in(op, a, b)
         else:
             self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
             r = self.truth(self.protocol(b, "__contains__", [a]))
             return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
+    if (op == "in" or op == "not in") and is_gen(b.t):
+        r = self.gen_contains(a, b).v  # (x in g: it runs until an item equals x)
+        return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
     if (op == "in" or op == "not in") and b.t == "str":
         a = self.unwrap(a, "TypeError: 'in <string>' requires string as left operand, not NoneType")
     if (op == "in" or op == "not in") and a.t == "None" and ((is_dict(b.t) and targs(b.t)[0] not in self.classes) or (is_set(b.t) and selem(b.t) not in self.classes) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):

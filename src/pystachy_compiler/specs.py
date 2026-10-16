@@ -325,6 +325,8 @@ HASATTR: dict[str, str] = {
     "any": "__class__ __delattr__ __dir__ __doc__ __eq__ __format__ __ge__ __getattribute__ __getstate__ __gt__ __hash__ __init__ "
            "__init_subclass__ __le__ __lt__ __ne__ __new__ __reduce__ __reduce_ex__ __repr__ __setattr__ __sizeof__ __str__ __subclasshook__",
     "obj": "__dict__ __firstlineno__ __module__ __static_attributes__ __weakref__",
+    "generator": "__class_getitem__ __del__ __iter__ __name__ __next__ __qualname__ close gi_code gi_frame gi_running "
+                 "gi_suspended gi_yieldfrom send throw",
     "int": "__abs__ __add__ __and__ __bool__ __ceil__ __divmod__ __float__ __floor__ __floordiv__ __getnewargs__ __index__ __int__ "
            "__invert__ __lshift__ __mod__ __mul__ __neg__ __or__ __pos__ __pow__ __radd__ __rand__ __rdivmod__ __rfloordiv__ "
            "__rlshift__ __rmod__ __rmul__ __ror__ __round__ __rpow__ __rrshift__ __rshift__ __rsub__ __rtruediv__ __rxor__ __sub__ "
@@ -380,7 +382,7 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
     "subclass": "class inheritance is not supported",
-    "yield": "'yield' is not supported (there are no generator functions)",
+    "yield": "the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)",
     "starred": "starred expressions (*x) are not supported",
     "dictstar": "dict displays with ** are not supported",
     "dstar": "star arguments are not supported",
@@ -490,7 +492,28 @@ IROPS: dict[str, str] = {
     "empty.kind": "wD",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
+    # generators (LLVM switched-resume coroutines, docs/internals.md#generators): gen.start ends a
+    # generator function's entry block (the frame, its promise and the initial suspend), gen.yield
+    # and gen.ret suspend it (gen.ret finally); gen.promise is the address of its promise (of the
+    # generator's own, or of a handle's), gen.resume runs it to its next suspend, and gen.drop
+    # closes a generator a loop owns and destroys it (it reports what closing raises, as CPython
+    # reports an exception it ignores, so it never raises itself)
+    "gen.start": "T A", "gen.yield": "T U", "gen.ret": "T", "gen.promise": "", "gen.resume": "U",
+    "gen.drop": "A I rL wL rD wD rO wO rG wG rF wF",
 }
+# a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
+# state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
+# what closing it raises). State: suspended where closing it runs no code of its, suspended
+# where it does (a yield in try, with or yield from), finished, running
+GENVAL = 0
+GENRET = 1
+GENSTATE = 2
+GENCMD = 3
+GENNAME = 4
+GENSLOTS = 5
+GENCLEAN = 1
+GENDONE = 2
+GENRUN = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -691,6 +714,11 @@ RUNTIME: dict[str, str] = {
     "exc.user": "exc:%ptr|A|", "exc.obj": "%ptr:exc||", "exc.id": "%ptr:exc||", "exc.ostr": "str:%ptr|U|", "exc.orepr": "str:%ptr|U|",
     "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
+    # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
+    # again when it resumes (gen.enter, which returns their depth below them); the reports of a
+    # generator closed by its loop that yielded again or raised
+    "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
     "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams
