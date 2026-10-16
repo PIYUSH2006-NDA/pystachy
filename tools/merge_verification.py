@@ -15,14 +15,14 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
                "tests-opt-off-1", "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1",
-               "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+               "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
 # Steps that run one of the disjoint shards of the corpus (tests/verify.sh shard_cases), and how many
 # shards their suite has: the name ends in the shard index.
 SHARDED_STEPS = {f"{suite}-{index}": count for suite, count in
                  (("tests-cpython", 2), ("tests-native", 2), ("tests-opt-off", 2), ("python-free", 2),
-                  ("ubsan", 2), ("gc-aot", 3))
+                  ("ubsan", 2), ("gc-jit", 2), ("gc-aot", 3))
                  for index in range(count)}
-GC_STEPS = {"gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+GC_STEPS = {"gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
 # The halves of tools/scaling.py's check (tests/verify.sh's SCALING_0 and the shapes it leaves)
 SCALING_STEPS = ("scaling-0", "scaling-1")
 
@@ -117,7 +117,7 @@ def validate_report(report, group, expected):
                     integer(step.get("compiler_interval"), f"{label}.compiler_interval", 1) != 5000):
                 raise ValueError(f"{label}: missing GC-stressed IR identity or wrong interval")
         if step["name"] in GC_STEPS:
-            mode = "jit" if step["name"] == "gc-jit" else "aot"
+            mode = "jit" if step["name"].startswith("gc-jit") else "aot"
             if (step.get("modes") != [mode] or
                     integer(step.get("tests_compiler_interval"), f"{label}.tests_compiler_interval", 1) != 1000 or
                     integer(step.get("tests_interval"), f"{label}.tests_interval", 1) != 1):
@@ -143,7 +143,8 @@ def validate_report(report, group, expected):
     for key in ("git", "sources", "toolchain"):
         if not isinstance(report.get(key), dict) or not report[key]:
             raise ValueError(f"{group}: missing {key} identity")
-    integer(report["sources"].get("suite_checks"), f"{group}.sources.suite_checks", 1)
+    for key in ("suite_checks", "mode_checks"):
+        integer(report["sources"].get(key), f"{group}.sources.{key}", 1)
     if not re.fullmatch(r"[0-9a-f]{40}", str(report["git"].get("commit", ""))):
         raise ValueError(f"{group}: invalid git commit")
 
@@ -183,14 +184,15 @@ def merge_reports(directory, groups, expected_commit=None):
             runs = len(settings)
         if halves[0]["expected"] + halves[1]["expected"] != suite * runs:
             raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
-    for shards, whole, what in ((("gc-aot-0", "gc-aot-1", "gc-aot-2"), ("gc-jit",),
-                                 "GC AOT shards must cover the same full-suite check count as GC JIT"),
-                                (("ubsan-0", "ubsan-1"), ("gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2"),
-                                 "UBSan shards must cover the same full-suite check count as GC JIT and GC AOT")):
-        if all(group in reports for group in shards + whole):
-            count = {group: reports[group]["steps"][-1]["expected"] for group in shards + whole}
-            if sum(count[group] for group in shards) != sum(count[group] for group in whole):
-                raise ValueError(what)
+    # The shards of a GC suite, which runs in one mode, make as many as the corpus has in one mode
+    # (sources.mode_checks), and the UBSan halves, which run in both modes one at a time, twice as many.
+    mode_checks = reports[wanted[0]]["sources"]["mode_checks"]
+    for shards, runs, what in ((("gc-jit-0", "gc-jit-1"), 1, "GC JIT"),
+                               (("gc-aot-0", "gc-aot-1", "gc-aot-2"), 1, "GC AOT"),
+                               (("ubsan-0", "ubsan-1"), 2, "UBSan")):
+        if (all(group in reports for group in shards) and
+                sum(reports[group]["steps"][-1]["expected"] for group in shards) != mode_checks * runs):
+            raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
     halves = {step["name"]: step["shapes"] for report in reports.values() for step in report["steps"]
               if step["name"] in SCALING_STEPS}
     if len(halves) == len(SCALING_STEPS):

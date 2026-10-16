@@ -27,7 +27,7 @@ def report(group, steps):
         if name in merge.SUITE_STEPS:
             step.update(passed=10, failed=0, expected=10, failures=[])
         if name in ("tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
-                    "tests-opt-off-1", "python-free-0", "python-free-1"):
+                    "tests-opt-off-1", "python-free-0", "python-free-1", "gc-jit-0", "gc-jit-1"):
             step.update(passed=5, expected=5)   # halves of a 10-check suite
         if name in ("gc-aot-0", "gc-aot-1", "gc-aot-2"):
             count = 4 if name == "gc-aot-0" else 3   # thirds of a 10-check suite
@@ -38,7 +38,7 @@ def report(group, steps):
             step.update(compiler_interval=5000, ir_identical=True)
         if name in merge.GC_STEPS:
             step.update(tests_compiler_interval=1000, tests_interval=1,
-                        modes=["jit" if name == "gc-jit" else "aot"])
+                        modes=["jit" if name.startswith("gc-jit") else "aot"])
         if name in merge.SHARDED_STEPS:
             step.update(shard_index=int(name[-1]), shard_count=merge.SHARDED_STEPS[name])
         if name in merge.SCALING_STEPS:
@@ -47,7 +47,7 @@ def report(group, steps):
     return {"project": "Pystachy", "group": group, "result": "pass",
             "summary": {"steps": len(steps), "passed": len(steps), "failed": 0, "seconds": 6.0},
             "git": {"commit": COMMIT, "dirty": False},
-            "sources": {"pystachy.py": {"sha256": "c" * 64}, "test_programs": 5, "suite_checks": 10},
+            "sources": {"pystachy.py": {"sha256": "c" * 64}, "test_programs": 5, "suite_checks": 10, "mode_checks": 10},
             "toolchain": {"llvm": "LLVM 18", "python": "Python 3.13"},
             "platform": {"machine": "x86_64"}, "steps": checks}
 
@@ -55,9 +55,9 @@ def report(group, steps):
 class ContractTests(unittest.TestCase):
     def test_real_plan_requires_native_suites_and_every_gc_job(self):
         groups = merge.load_groups()
-        for alias in ("gc-stress", "gc-aot", "hosted", "ubsan", "native", "opt-off", "python-free", "scaling"):
+        for alias in ("gc-stress", "gc-jit", "gc-aot", "hosted", "ubsan", "native", "opt-off", "python-free", "scaling"):
             self.assertNotIn(alias, groups)  # Compatibility aliases must not duplicate CI work.
-        for group in ("gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2", "ubsan-0", "ubsan-1",
+        for group in ("gc-self", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2", "ubsan-0", "ubsan-1",
                       "python-free-0", "python-free-1", "runtime-cache", "scaling-1"):
             self.assertEqual(groups[group], ["bootstrap", group])
         for shard in ("0", "1"):
@@ -75,7 +75,7 @@ class ContractTests(unittest.TestCase):
                 path.write_text(json.dumps(report(group, steps)))
             result = merge.merge_reports(directory, groups, COMMIT)
             self.assertEqual([step["name"] for step in result["steps"]], groups["all"])
-            for group in ("opt-off-0", "opt-off-1", "gc-self", "gc-jit", "gc-aot-0", "gc-aot-1", "gc-aot-2",
+            for group in ("opt-off-0", "opt-off-1", "gc-self", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2",
                           "hosted-0", "hosted-1", "native-0", "native-1", "python-free-0", "python-free-1",
                           "ubsan-0", "ubsan-1", "runtime-cache", "contracts", "benchmarks", "scaling-1"):
                 path = directory / f"verification-{group}" / "verification.json"
@@ -125,6 +125,16 @@ class ContractTests(unittest.TestCase):
                 if error is not None:
                     with self.subTest(suite_checks=suite), self.assertRaisesRegex(ValueError, error):
                         merge.merge_reports(directory, groups, COMMIT)
+            # the shards of each GC suite make the checks of the corpus in one mode (sources.mode_checks),
+            # and the UBSan halves twice as many
+            for checks, error in ((11, "GC JIT shards must cover the same full-suite check count"), (10, None)):
+                for path in paths:
+                    data = json.loads(path.read_text())
+                    data["sources"]["mode_checks"] = checks
+                    path.write_text(json.dumps(data))
+                if error is not None:
+                    with self.subTest(mode_checks=checks), self.assertRaisesRegex(ValueError, error):
+                        merge.merge_reports(directory, groups, COMMIT)
             merge.merge_reports(directory, groups, COMMIT)
             # scaling-0 and scaling-1 check every shape of tools/scaling.py once
             path = directory / "verification-scaling-1" / "verification.json"
@@ -145,14 +155,14 @@ class ContractTests(unittest.TestCase):
                         lambda step: step.pop("compiler_interval"),
                         lambda step: step.update(ir_identical=False),
                         lambda step: step.pop("ir_identical")],
-            "gc-jit": [lambda step: step.update(tests_compiler_interval=1001),
-                       lambda step: step.update(tests_interval=2),
-                       lambda step: step.pop("tests_interval"),
-                       lambda step: step.update(modes=["aot"]),
-                       lambda step: step.update(modes=["jit", "aot"]),
-                       lambda step: step.pop("modes"),
-                       lambda step: step.update(passed=9),
-                       lambda step: step.pop("expected")],
+            "gc-jit-0": [lambda step: step.update(tests_compiler_interval=1001),
+                         lambda step: step.update(tests_interval=2),
+                         lambda step: step.pop("tests_interval"),
+                         lambda step: step.update(modes=["aot"]),
+                         lambda step: step.update(modes=["jit", "aot"]),
+                         lambda step: step.pop("modes"),
+                         lambda step: step.update(passed=9),
+                         lambda step: step.pop("expected")],
         }
         shard_mutations = [lambda step: step.update(shard_index=1 - step["shard_index"]),
                            lambda step: step.update(shard_index=False),
@@ -193,17 +203,19 @@ class ContractTests(unittest.TestCase):
                 with self.subTest(group=group, mutation=index), self.assertRaises(ValueError):
                     merge.validate_report(data, group, groups[group])
 
-    def test_reports_require_the_corpus_check_count(self):
+    def test_reports_require_the_corpus_check_counts(self):
         groups = merge.load_groups()
         valid = report("native-0", groups["native-0"])
         merge.validate_report(valid, "native-0", groups["native-0"])
-        for mutate in (lambda sources: sources.pop("suite_checks"), lambda sources: sources.update(suite_checks=0),
-                       lambda sources: sources.update(suite_checks="10"),
-                       lambda sources: sources.update(suite_checks=True)):
-            data = copy.deepcopy(valid)
-            mutate(data["sources"])
-            with self.subTest(sources=data["sources"]), self.assertRaisesRegex(ValueError, "suite_checks"):
-                merge.validate_report(data, "native-0", groups["native-0"])
+        for key in ("suite_checks", "mode_checks"):
+            for value in (None, 0, "10", True):
+                data = copy.deepcopy(valid)
+                if value is None:
+                    del data["sources"][key]
+                else:
+                    data["sources"][key] = value
+                with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, key):
+                    merge.validate_report(data, "native-0", groups["native-0"])
 
     def test_missing_duplicate_or_unknown_checks_cannot_weaken_the_gate(self):
         contracts = [CONTRACT.replace("contracts bootstrap check-ir", "contracts bootstrap"),
