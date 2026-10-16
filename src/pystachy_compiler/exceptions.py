@@ -73,6 +73,8 @@ def gen_try_(self, n: Node) -> None:
     # the try notes the depth of the unwind actions (pys_exc_begin runs those added since) and
     # the exception being handled, which every way out of its clauses restores
     mark = Val(self.rt("pys_try_mark", "i64", []), "int")
+    if self.fn.gbase != "":
+        mark = Val(self.scalar('sub', [mark, Val(self.mload('int', self.fn.gbase), 'int')]), "int")  # (see landing)
     old = self.rt("pys_exc_handled", "ptr", [])
     slot = self.alloca("exc", "")
     outer = self.handler
@@ -443,6 +445,10 @@ def gen_landing(self, l: str, slot: str, mark: Val) -> Val:
     self.term = True
     self.place(j)
     x = self.mload('%ptr', slot)
+    if self.fn.gbase != "":
+        # (a generator's marks are relative to the depth of the unwind actions where it was
+        # last resumed, which its consumer may have changed since: gen_enter)
+        mark = Val(self.scalar('add', [mark, Val(self.mload('int', self.fn.gbase), 'int')]), "int")
     return Val(self.rt("pys_exc_begin", "ptr", [f"ptr {x}", f"i64 {mark.v}"]), "exc")
 
 def gen_exc_match(self, e: Val, names: str) -> str:
@@ -577,6 +583,15 @@ def gen_raise_stmt(self, n: Node) -> None:
         return
     e = n.kids[0]
     k = self.exc_class(e)
+    if self.curfn.gen and not self.eh and k != "" and (exc_derives(k, "StopIteration") if k not in self.classes else self.derives(k, "StopIteration")):
+        # (PEP 479: a StopIteration that leaves a generator is a RuntimeError; with exceptions
+        # off, nothing in the generator can catch it first)
+        if k in self.classes:
+            self.exc_value_of(e, k)
+        else:
+            self.exc_vals(self.exc_args(e), k)
+        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+        return
     if k == "" or k in self.classes:
         v = self.exc_value_of(e, k)
         if v.t in self.classes and self.classes[v.t].exc != "":

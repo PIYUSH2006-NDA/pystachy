@@ -147,10 +147,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   CPython makes a new method object at each read.
 
 - A function declared or inferred to return a value that ends without a `return` raises
-  `RuntimeError` there, where CPython returns `None`, also when it is declared to return
-  `C | None` for a class `C` (a dataclass or `NamedTuple` too). A function declared to return
-  `T | None` for an `int`, `float`, `bool`, `str`, `list`, `dict` or `tuple` T, and a template
-  that returns objects or `T | None`, return `None` there, as CPython does.
+  `RuntimeError` there, where CPython returns `None`. A function declared to return `T | None`
+  (or `Optional[T]`) for a class T (a dataclass or `NamedTuple` too) or an `int`, `float`,
+  `bool`, `str`, `list`, `dict` or `tuple` T, and a template that returns objects or `T | None`,
+  return `None` there, as CPython does.
 
 - A left operand of `+ - * / // % @ & | ^ << >>` (or of their in-place forms) whose class
   defines the operator's method, but which is `None` when the code runs, raises CPython's
@@ -173,10 +173,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   order without a key here (a closed union, functions): it is called then, raising
   `TypeError: 'NoneType' object is not callable`, where CPython orders the items.
 
-- A PEP 695 function's type parameter hides a module-level name of the same name only in the
-  function's annotations: its body reads the module's (`T = 5` then
-  `def f[T](x: T) -> int: return T + 1` returns 6, where CPython's `T` is the `TypeVar` and
-  `+` raises `TypeError`). A generic class's type parameters hide it in its methods' bodies too.
+- The text of `getattr(o, name)` with a run-time name (see [reflection](semantics.md#reflection))
+  shows the addresses CPython shows, but not CPython's: a method wrapper's or builtin method's
+  object address is the object's, a builtin method of the type (`__new__`, `__init_subclass__`)
+  and a static method (`<function C.m at 0x...>`) show the address of the class's reflection
+  record, as no type or function object exists at run time.
 
 ### Errors and control flow
 
@@ -267,12 +268,57 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   Its data can then be missing when the file is read back, and appends through several
   dropped writers can land out of order.
 
+- A suspended generator that the program drops (a variable that goes, `del`, a generator kept
+  only in a container, a temporary such as `next(g())`'s, one still suspended when the program
+  ends) is never closed: its `finally` blocks and `with` blocks do not run, where CPython closes
+  it as its last reference goes (at the latest as the interpreter shuts down). A generator
+  that a `for` loop's iterable has just made is closed as CPython closes it, where the loop is
+  left, and so is a generator that `yield from` delegates to when its delegating generator is
+  closed so. (`tests/deviations/gen_finalization.py`) Where an exception leaves a consumer's
+  generator expression (`any(f(x) for x in g())`), the generator it iterates is closed before
+  the handler runs; CPython closes it once the handler has finished, as the exception's
+  traceback holds the expression's frame until then. (`tests/deviations/gen_genexp_close_timing.py`)
+
+- In a program without `try` or `with` statements, a `StopIteration` raised by a function that a
+  generator calls ends the program as `StopIteration`, where PEP 479 makes it
+  `RuntimeError: generator raised StopIteration` as it leaves the generator; nothing could catch
+  either, and the exit status is the same. A `raise StopIteration` or a `next()` in the
+  generator's own body is converted, and so is everything in a program with `try` or `with`.
+  (`tests/deviations/gen_pep479_no_try.py`)
+
+- What closing a generator raises (other than `GeneratorExit`) is reported, not propagated, when
+  a `yield from` closes the generator it delegates to: CPython raises it in the delegating
+  generator, whose own handlers may see it. A generator expression's first iterable is evaluated
+  where it is written, but a `range()`, `enumerate()`, `zip()` or `reversed()` there checks its
+  arguments (a zero step), and a dict's or set's iterator records its size, when the generator
+  first runs, not where it is made.
+
 ## Rejected rather than miscompiled
 
 CPython can execute these constructs, often raising a runtime error. Pystachy instead rejects
 them at compile time with a `file:line: error:`. The lists are grouped by feature; the
 [typing](typing.md), [module](modules.md) and [execution](semantics.md) references explain the
 supported alternatives.
+
+### Generators
+
+- the value of a `yield` expression (`x = yield v`: there is no `send()`), a `yield from` whose
+  value is used other than assigned to a variable (`r = yield from g()`), the value of a
+  `yield from` that delegates to a generator other than a call of a generator function (whose
+  return type is not known), and a `return v` in a generator annotated `Iterator[T]` or
+  `Iterable[T]`
+- `send()`, `throw()` and `close()` of a generator, `Generator[Y, S, R]` with a send type other
+  than `None`, a generator function's return annotation other than `Iterator[T]`, `Iterable[T]`
+  or `Generator[Y, None, R]`, async generators, and printing or comparing a generator object
+- an unannotated generator function that delegates to itself (`yield from f(...)`) before its
+  first `yield`, whose yield type is not known there
+- a generator expression made a value (not a direct argument of a consumer) that reads a
+  variable of a comprehension around it, a variable of a function around its own, or a variable
+  of its function that may be bound again (or not yet be bound) where it is written: CPython
+  reads such a variable when the generator runs (late binding), and Pystachy passes its value
+  where the expression is
+- `reversed()` of a generator, `len()` of one, `dict()` of one (a dict comprehension over it
+  works), and a generator where a list is expected
 
 ### Names and scopes
 
@@ -344,7 +390,7 @@ supported alternatives.
   another module, or from m's own code after it imports itself
 - in an imported module, uncompiled code that may run code of the program when its `def`
   or `class` statement runs (a call of a function or class; a callable of the program given to a
-  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass; a base that defines
+  builtin, such as `sorted(xs, key=C.m)`; any other decorator of a class or method; a metaclass but `abc.ABCMeta`; a base that defines
   `__init_subclass__` or `__class_getitem__`; a value that may hold objects of the program's
   classes used as a class attribute, set item, dict key, operand or argument; a read of a class
   attribute that may be such an object; an assignment to an attribute or item; a comprehension,
@@ -403,18 +449,18 @@ supported alternatives.
 - comparison dunders and `__bool__` that do not return `bool`, `__str__`/`__repr__` that do not
   return `str`, a `__len__` that returns neither an `int` nor a `bool`, methods without `self` (or
   a class method without `cls`)
-- an `__iter__` that is a generator, or that returns something other than an iterator object
+- an `__iter__` that is not a generator and returns something other than an iterator object
   (a list it returns as it is is rejected by CPython too: `iter() returned non-iterator of type
   'list'`); in an `__iter__` annotated `-> Iterator[T]` that returns `iter(x)`, an `x` other than
   a list, a tuple, a `str` or an object with such an `__iter__` (a dict or its `keys()`,
   `values()` or `items()`, whose iterator raises if the dict changes size, or an object whose
   `__iter__` returns an iterator object: leave out the annotation), and a call of that
   `__iter__` (`o.__iter__()`)
-- a `__reversed__` that is a generator, or that returns anything but `iter(xs)` or
+- a `__reversed__` that is not a generator and returns anything but `iter(xs)` or
   `reversed(xs)` of a list, a tuple, a `str` or an object with an `__iter__` annotated as above
   (also an iterator object, which CPython iterates over)
-- `iter(callable, sentinel)`; `iter()` of `enumerate()`, `zip()`, `map()`, `filter()`,
-  `reversed()` or a generator expression; `next(it, default)` where the default's type and the
+- `iter(callable, sentinel)`; `iter()` of `enumerate()`, `zip()`, `map()`, `filter()` or
+  `reversed()`; `next(it, default)` where the default's type and the
   items' join to no type; and an iterator class without `__iter__` where CPython 3.13 calls
   `iter()` of the iterator again: in a comprehension and in `str.join()`
 - a class in an inheritance hierarchy whose `__init__` calls `iter()` or takes an
@@ -491,8 +537,9 @@ supported alternatives.
   it is imported)
 - `@dataclass(slots=True)` and `weakref_slot=`, `@dataclass` and `field()` options that are not
   `True` or `False` literals, `field(metadata=...)`, a `default_factory` that is not a function,
-  a class or a lambda without parameters, `dataclasses.asdict()`, `astuple()`, `fields()` and
-  `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
+  a class or a lambda without parameters, `dataclasses.fields()` other than as a loop's iterable,
+  `asdict()` and `astuple()` with a factory or of fields that join in no type (see
+  [reflection](#reflection)), `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
   `except` clause, `hash()` of a dataclass object, a base dataclass's field declared again with
   another type, and `repr=False` in a dataclass whose base has the `__repr__` `@dataclass` writes
 - a property's `@x.getter`, a second setter or deleter, a setter or deleter of another name than
@@ -645,11 +692,10 @@ supported alternatives.
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
   a value where no annotation gives the values a type that can be `None`
 - an `encoding=` constant other than UTF-8 and Latin-1
-- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `bytes.translate()`,
-  `maketrans()`, `expandtabs()`, `title()` and `istitle()`, the separator arguments of
-  `bytes.hex()`, `%` formatting of bytes
-  (`b"%d" % 1`), a search of a bytes for an int (`b.find(97)`), keyword arguments to its methods
-  (as to a str's), and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
+- `bytearray`, `memoryview`, binary files (`open(..., "rb")`), `expandtabs()`, `title()` and
+  `istitle()`, `%` formatting of bytes (`b"%d" % 1`), a search of a bytes for an int
+  (`b.find(97)`), keyword arguments to its methods (as to a str's) but `hex()`'s and
+  `translate()`'s, and comparing a bytes with a str (`b"a" == "a"`, which CPython makes `False`)
 - `str.format()` and `str.format_map()` of a format string other than a literal or a module
   global bound once to one (`fmt.format(x)` of a parameter, also of an f-string; a global whose
   name anything else in the program binds, even a function's local), either method or
@@ -662,6 +708,36 @@ supported alternatives.
   a NamedTuple), or of a builtin, a method or a lambda; a required keyword-only parameter or a
   call through the cache that explicitly supplies a keyword-only argument (an optional
   keyword-only parameter's default may be used); and `cache_parameters()`
+
+<a id="reflection"></a>
+
+### Reflection
+
+The [reflection rules](semantics.md#reflection) list what is supported; these are rejected:
+
+- `type(x)` as a value (a class object, #7), `type(e)` of an exception other than
+  `type(e).__name__`, and `type(x).__name__` of a function, file or callable
+- `getattr()` of a name only the run time knows whose value is used (kept, passed on, called,
+  compared, a sort key: `attrgetter(input())`), its text with a format spec, and its text for a
+  dataclass, a generic class, a class with annotated class attributes or a builtin value (#487,
+  #489)
+- reflection over classes with private attributes (`__x`): CPython mangles their names (to
+  `_C__x`), which Pystachy does not (see [functions and object identity](#functions-and-object-identity))
+- `setattr()` of a run-time name on an object whose class does not close its names with
+  `__slots__` (it may add an attribute: #489), with a value that does not fit every slot field,
+  or that may name a slot no code assigns; `delattr()` and `del o.x` of a field (#489)
+- `vars(x)` and `x.__dict__` other than printed, iterated, formatted or copied; of a class whose
+  `__init__` assigns two new attributes in one branch or loop, through a property's setter, or
+  outside `__init__`, whose `__post_init__` adds an attribute, or one of whose fields `__init__`
+  may leave unassigned and other code may assign (unless it is the last); and of a class
+  attribute the program may also assign through an object
+- `getattr`, `setattr`, `hasattr` and `dir()` of exception objects, and `dir()` of files and
+  functions
+- a loop over constant names whose body defines a function, lambda or class, or assigns the
+  loop variable (the name is then a run-time name), and loops that would compile their body more
+  than 256 times
+- `dataclasses.replace(obj, **changes)` of a `dict[str, T]` (which field a key names is known only
+  at run time, #489)
 
 ### Source text
 

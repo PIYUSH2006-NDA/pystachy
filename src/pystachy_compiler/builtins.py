@@ -5,6 +5,7 @@ from src.pystachy_compiler.ir import Data, Ins, IterArg, Loop, Reduce, Val
 from src.pystachy_compiler.lexer import Lexer
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.parser import Parser
+from src.pystachy_compiler.reflection import VARS_USES
 from src.pystachy_compiler.specs import (
     ARITY,
     CALLS,
@@ -29,7 +30,7 @@ from src.pystachy_compiler.specs import (
     REFL,
     VERSIONINFO,
 )
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
@@ -37,6 +38,8 @@ from src.pystachy_compiler.utils import (
     is_callable,
     is_dict,
     is_fn,
+    gelem,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -136,11 +139,19 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if name.endswith("enter") else Val("null", "None")
     if name.startswith("__pys_dict_") or name.startswith("__pys_set_"):
         return self.walk(name, args)
+    if name == "__pys_asdict" or name == "__pys_astuple" or name == "dataclasses.asdict" or name == "dataclasses.astuple" or name == "dataclasses.is_dataclass":
+        return self.refl_dataclasses(name, args)  # (reflection.py)
+    if name == "dataclasses.fields":
+        self.err("dataclasses.fields() is supported as the iterable of a for loop or a list comprehension that reads each field's .name (#486)")
     if name == "__pys_repr" or name == "__pys_str" or name == "__pys_ascii" or name == "__pys_hash":
         # compiler-written calls (f"{x!r}", dataclass __repr__, hash_helper): always the builtin
         name = name[6:]
     if name.startswith("builtins."):
         name = name[9:]
+    if (name == "str" or name == "repr" or name == "ascii" or name == "format") and len(args) == 1 and self.refl_textual(args[0]):
+        # str(vars(o)), repr(getattr(o, name)), ...: the text of what it looks up (reflection.py)
+        rtext = self.refl_finish(self.refl_defer(args[0]), "repr" if name == "repr" or name == "ascii" else "str")
+        return Val(self.rt("pys_ascii", "ptr", [f"ptr {rtext.v}"]), "str") if name == "ascii" else rtext
     if name == "bytes":
         return self.bytes_(args)
     if name == "tuple":
@@ -166,6 +177,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
         if v.t == "str":
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        if is_gen(v.t):
+            v = self.gen_list(v, "")
         if v.t == "bytes":
             v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
         if self.iter_object(v.t):
@@ -220,10 +233,26 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             pv = Val(self.rt("pys_path_join", "ptr", [f"ptr {pv.v}", f"ptr {b.v}"]), "str")
         return pv
     if name == "getattr":
-        # getattr(o, "name") reads o.name: o, then the attribute, as CPython looks it up
-        if len(args) != 2 or self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)) == "":
-            self.err("getattr() is supported with two arguments, the second a str literal (or, in operator's getters, a constant name)")
+        # getattr(o, "name") reads o.name: o, then the attribute, as CPython looks it up; with a
+        # default, or a name only the run time knows, see refl_getattr
+        if len(args) != 2 or self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)) == "" or self.refl_derived_only(args[0], self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args))):
+            return self.refl_getattr(args, want)
         return self.expr(mk("attr", self.getattr_name(mk("call", "", self.line, [mk("name", "getattr", self.line, [])] + args)), args[0].line, [args[0]]), want)
+    if name == "setattr":
+        return self.refl_setattr(args)
+    if name == "dir" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
+        return self.refl_dir(args[0])
+    if name == "vars" and len(args) == 1:
+        self.err(VARS_USES)
+    if name == "dict" and len(args) == 1 and self.refl_dict_of(args[0]) is not None:
+        return self.refl_dict_copy(args[0])
+    if name == "delattr":
+        self.err("delattr() is not supported: deleting an attribute needs an unbound state for each field (#489)")
+    if name == "type" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
+        tv = self.expr(args[0], "")
+        if tv.t == "exc" or (tv.t in self.classes and self.classes[tv.t].exc != ""):
+            self.err(f"unsupported call type({tv.t}): type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
+        self.err("type(x) as a value (a class object) is not supported (#7); type(x).__name__, x.__class__.__name__, type(x) is C and type(a) == type(b) are (#486)")
     if name == "callable" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
         # decided by the static type: an object is callable where its class defines __call__
         # and it is not None
@@ -232,9 +261,14 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if known == -2:
             return Val("true", "bool") if v.v in self.nn else self.ptr_cmp('!=', v, Val('null', 'None'))
         return Val("true" if known == 1 else "false", "bool")
+    if name == "hasattr" and not (len(args) == 2 and args[1].kind == "str"):
+        return self.refl_hasattr(args)  # (a name only the run time knows: reflection.py)
     if name == "hasattr" and len(args) == 2 and args[1].kind == "str":
         # decided by the static type of the object (for an object: is it None)
         hv = self.expr(args[0], "")
+        if self.refl_prop_in(hv.t, args[1].s) or (self.reference_union(hv.t) and "file" not in umembers(unopt(hv.t))):
+            # (a property's getter, and each class of a union of classes: reflection.py)
+            return self.refl_hasattr_lit(hv, args[1].s, self.knownobj(args[0]))
         if hv.t in self.classes and self.classes[hv.t].tag > 0:
             # A derived class may add this attribute, or leave its field unassigned.
             # Read a field's flag only in its concrete class's arm: it may lie beyond
@@ -306,7 +340,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         # these stop at the deciding item, as CPython's iterators do
         g = args[0]
         if g.kind != "listcomp":
-            g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), mk("name", "__item", g.line, []), g])
+            g = mk("listcomp", "gen", g.line, [mk("name", "__item", g.line, []), made_var("__item", g.line), g])
         return self.listcomp(g, "", name)
     if name == "sum" or name == "min" or name == "max":
         stt = self.stream_start(name, args)
@@ -356,14 +390,36 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "dict" and npos == 1 and (self.iterator_call(args[0]) or args[0].kind == "listcomp" or args[0].kind == "list"):
         # dict(zip(ks, vs)), dict(enumerate(xs)), dict((k, v) for ...), dict([(k, v), ...]): a new
         # dict of the pairs (taken at once, as list() takes them)
-        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want else ""
-        return self.dict_pairs(self.consume(args[0], pw, None, resultsoft))
+        a = args[0]
+        fn = a.kids[0].s if a.kind == "call" else ""
+        # the tuples that displays (or zip()'s arguments) show the items to be: of other than two
+        # items, none starred, they are not typed by want, whose items are pairs
+        shown = [a.kids[0]] if a.kind == "listcomp" else a.kids if a.kind == "list" else [mk("tuple", "", a.line, a.kids[1:])] if fn == "zip" else []
+        plain = [k for k in shown if k.kind == "tuple" and len([x for x in k.kids if x.kind == "starred" or x.kind == "kw"]) == 0]
+        odd = len([k for k in plain if len(k.kids) != 2]) > 0
+        pw = self.ctype("list", [self.ctype("tuple", targs(unopt(want)))]) if is_dict(unopt(want)) and "?" not in want and not odd else ""
+        if (fn != "" or a.s == "gen") and (fn == "reversed" or len(plain) < len(shown) or odd):
+            # an iterator not shown to make pairs is typed first: of tuples of another length, it
+            # is taken only up to its first item, CPython's ValueError (any() of each item's
+            # 1-tuple, which is true, stops there)
+            item = mk("name", "__item", a.line, [])
+            g = a if fn == "" else mk("listcomp", "gen", a.line, [item, item, a])
+            et = elem(self.dry(mk("listcomp", "", a.line, g.kids), pw))
+            if is_tuple(et) and len(targs(et)) != 2:
+                one = mk("listcomp", "gen", a.line, [mk("tuple", "", a.line, [g.kids[0]])] + g.kids[1:])
+                return self.dict_pairs(Val("", self.ctype("list", [et])), want, self.listcomp(one, "", "any").v)
+        return self.dict_pairs(self.consume(a, pw, None, resultsoft), want)
     if npos == 1 and (name == "sorted" or name == "min" or name == "max" or name == "sum" or name == "any" or name == "all" or name == "list" or name == "math.fsum" or name == "math.prod"):
         # these iterate their argument at once, so range(), reversed(), enumerate() and zip() may be it
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
         lazy = self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")
         ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and lazy else None
+        self.gencall = ""
         v0 = self.consume(args[0], w, ka, resultsoft)
+        if is_gen(v0.t) and ka is None and (name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
+            # (a generator's items as they come, as of a generator expression: any() and all()
+            # stop at the deciding one, and nothing is kept)
+            return self.gen_stream(name, v0, args[1:], want, resultsoft)
         if ka is not None:
             kvals = [self.tget(ka.value, j) for j in range(len(kws))]
         elif len(kws) > 0:
@@ -375,13 +431,13 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
             return self.num_cmp('!=', Val(self.mload('int', first), "int"), Val('0', "int"))
         kv = [kvals[j] for j in range(len(kws)) if kws[j].s == "key" and kvals[j].t != "None"]
-        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max"):
+        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max") and not (len(kv) > 0 and name != "sum" and self.classes[v0.t].methods["__iter__"].gen):
             # an object whose __iter__ returns an iterator object: its items as they come, as
             # CPython takes them (any() and all() stop at the deciding one)
             if len(kv) > 0 and name != "sum":
                 self.key_check(kv[0], f"{name}()")
                 return self.key_minmax_next(v0, kv[0], name)
-            item = mk("name", "__item", self.line, [])
+            item = made_var("__item", self.line)
             g = mk("listcomp", "gen", self.line, [item, item, self.vnode(v0)])
             return self.listcomp(g, "", name) if name == "any" or name == "all" else self.reduce(name, [g], "")
         vals = [self.as_list(v0, name)]
@@ -394,7 +450,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         # __iter__ and range's step check run before start; reversed keeps its original length.
         it = args[0]
         if self.iterator_call(it):
-            item = mk("name", "__item", it.line, [])
+            item = made_var("__item", it.line)
             it = mk("listcomp", "gen", it.line, [item, item, it])
         st = IterArg(args[1])
         vals = [self.listcomp(it, "", "", "", st), st.value]
@@ -402,6 +458,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.allowq = True
         vals = [self.read(args[0])]
         self.allowq = False
+    elif name == "len" and len(args) == 1 and args[0].kind == "name" and self.owns(args[0].s):
+        self.appending = True  # (len() of a str that str_append owns keeps it owned: it loads the length alone)
+        vals = [self.read(args[0])]
+        self.appending = False
     else:
         vals = [self.expr(a, w, resultsoft=resultsoft) for a in args if a.kind != "kw"]
         kvals = [self.expr(a.kids[0], "") for a in kws]
@@ -415,11 +475,11 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.key_check(keyv, f"{name}()")
     if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
         self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
-    if name == "sum" and len(vals) == 2 and self.iter_object(vals[0].t) and (vals[1].t == "int" or vals[1].t == "float"):
-        # (an iterator object's items, added as they come)
-        item = mk("name", "__item", self.line, [])
+    if name == "sum" and len(vals) == 2 and (self.iter_object(vals[0].t) or is_gen(vals[0].t)) and (vals[1].t == "int" or vals[1].t == "float"):
+        # (an iterator object's or a generator's items, added as they come)
+        item = made_var("__item", self.line)
         return self.reduce(name, [mk("listcomp", "gen", self.line, [item, item, self.vnode(vals[0])]), self.vnode(vals[1])], vals[1].t)
-    if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
+    if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t) or is_gen(vals[0].t)):
         vals[0] = self.as_list(vals[0], name)  # (sum(o, start) iterates o once start is evaluated)
     if name == "round" and len(vals) == 2 and vals[1].t == "None":
         vals = vals[:1]  # round(x, None) is round(x)
@@ -647,7 +707,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         pm = [self.coerce(self.as_int(x), "int").v for x in vals]
         return Val(self.rt("pys_powmod", "i64", [f"i64 {pm[0]}", f"i64 {pm[1]}", f"i64 {pm[2]}"]), "int")
     elif name == "dict" and (is_list(t) or is_vtuple(t) or is_tuple(t)):
-        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v)
+        return self.dict_pairs(self.as_list(v, name) if not is_list(t) else v, want)
     elif name == "dict" and is_dict(t):
         # not d.copy(): dict(d) merges d into an empty dict, whose table can differ (runtime.c),
         # comparing keys hashed by their class (key_fx)
@@ -666,6 +726,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"dict() of an object ('{tname(t)}') is not supported: make the dict with a comprehension ({{k: v for k, v in x.items()}})")
     if t in self.classes and name in NONEARG:
         self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
+    if is_gen(t) and name == "len":
+        self.err("object of type 'generator' has no len()")
+    if is_gen(t) and name == "dict":
+        self.err("dict() of a generator is not supported: make the dict with a comprehension ({k: v for k, v in g})")
     if name == "hex" or name == "oct" or name == "bin":
         self.err(NONEARG[name].replace("NoneType", tname(t)))
     if name == "type" and len(vals) == 1 and (t == "exc" or (t in self.classes and self.classes[t].exc != "")):
@@ -1006,7 +1070,7 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     # and strs collect them for pys_list_minmax, as before
     g = args[0]
     if g.kind != "listcomp":
-        item = mk("name", "__item", g.line, [])
+        item = made_var("__item", g.line)
         g = mk("listcomp", "gen", g.line, [item, item, g])
     key = str(len(self.reds))
     r = Reduce(name, stt)
@@ -1167,9 +1231,9 @@ def gen_mapgen(self, n: Node) -> Node:
     f = args[0] if fn == "filter" and args[0].kind == "None" else fmt if literal_format(fmt) else self.vnode(self.expr(args[0], ""))
     if fn == "filter":
         cond = mk("name", "__item", line, []) if f.kind == "None" else mk("call", "", line, [f, mk("name", "__item", line, [])])
-        return mk("listcomp", "gen", line, [mk("name", "__item", line, []), mk("name", "__item", line, []), args[1], cond])
+        return mk("listcomp", "gen", line, [mk("name", "__item", line, []), made_var("__item", line), args[1], cond])
     if len(args) == 2:
-        return mk("listcomp", "gen", line, [mk("call", "", line, [f, mk("name", "__item", line, [])]), mk("name", "__item", line, []), args[1]])
+        return mk("listcomp", "gen", line, [mk("call", "", line, [f, mk("name", "__item", line, [])]), made_var("__item", line), args[1]])
     if self.bound("zip"):
         self.err("map() of several iterables is not supported where zip is bound")
     items = [mk("name", f"__item{i}", line, []) for i in range(len(args) - 1)]
@@ -1202,7 +1266,7 @@ def gen_consume(self, n: Node, want: str, arg: IterArg | None = None, resultsoft
         self.iterarg(arg)
         return r
     it = mk("name", "__item", n.line, [])
-    return self.listcomp(mk("listcomp", "", n.line, [it, mk("name", "__item", n.line, []), n]), want, "", "", arg, resultsoft=resultsoft)
+    return self.listcomp(mk("listcomp", "", n.line, [it, made_var("__item", n.line), n]), want, "", "", arg, resultsoft=resultsoft)
 
 def gen_as_list(self, v: Val, name: str) -> Val:
     # sorted(d), max(t), ...: a dict's keys, or the items of a tuple (or NamedTuple) of one item
@@ -1217,6 +1281,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         # (xs[a:b] = v: CPython's PySequence_Fast iterates v, calling no __len__: list() of iter(v),
         # which calls iter() of an iterator object again)
         items = self.obj_iterator(v, "TypeError: must assign iterable to extended slice", "must assign iterable to extended slice")
+        if is_gen(items.t):
+            return self.gen_list(items, "")
         if not is_list(items.t):
             items = self.obj_iterator(items, "", f"'{tname(items.t)}' object is not iterable")
         return items if is_list(items.t) else self.drain(items)
@@ -1225,6 +1291,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
                                   "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")
         if (name == "list" or name == "sorted" or name == "extend" or name == "tuple") and "__len__" in self.classes[v.t].methods:
             self.objlen(v)  # (a length hint: CPython's list() calls __len__ once __iter__ has run)
+        if is_gen(items.t):
+            return self.gen_list(items, "")  # (an __iter__ that yields: its generator's items)
         if name == "join" and not is_list(items.t):
             # (str.join() makes a list of the iterator's items, which calls iter() of it again)
             items = self.obj_iterator(items, "", f"'{tname(items.t)}' object is not iterable")
@@ -1256,6 +1324,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         return Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")  # (its items: ints)
     if v.t == "file":
         return Val(self.rt("pys_file_readlines", "ptr", [f"ptr {v.v}"]), "list[str]")
+    if is_gen(v.t):
+        return self.gen_list(v, "")  # (its items, as CPython's list(), sorted(), join() take them)
     return v
 
 def gen_bytes_(self, args: list[Node]) -> Val:
@@ -1293,11 +1363,84 @@ def gen_bytes_(self, args: list[Node]) -> Val:
         return Val(self.rt("pys_bytes_zeros", "ptr", [f"i64 {self.as_int(v).v}"]), "bytes")
     if v.t == "None" or is_opt(v.t):
         v = self.unwrap(v, "TypeError: cannot convert 'NoneType' object to bytes")
-    if is_tuple(v.t) or is_vtuple(v.t) or v.t in self.classes or is_set(v.t) or is_dict(v.t):
+    if is_tuple(v.t) or is_vtuple(v.t) or v.t in self.classes or is_set(v.t) or is_dict(v.t) or is_gen(v.t):
         v = self.as_list(v, "bytes")
     if not is_list(v.t) or (elem(v.t) != "int" and elem(v.t) != "bool"):
         self.err(f"cannot convert '{tname(v.t)}' object to bytes")
     return Val(self.rt("pys_bytes_from_list", "ptr", [f"ptr {v.v}"]), "bytes")
+
+def bytes_like(t: str) -> bool:
+    # does an argument of type t give a bytes, or None, which then raises as it runs
+    return t == "bytes" or (is_opt(t) and unopt(t) == "bytes")
+
+def gen_bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
+    # bytes.maketrans(frm, to) (also of a bytes object o), o.translate(table, delete=b"") and
+    # o.hex(sep, bytes_per_sep=1), with their arguments by position and by name as CPython takes
+    # them, and its TypeErrors; an argument that may be None raises as it runs, once those after
+    # it are evaluated (pys_bytes_maketrans, pys_bytes_translate, pys_bytes_hex_sep)
+    if any(a.kind == "starred" or a.kind == "dstar" for a in args):
+        self.err(f"bytes.{m}() of unpacked arguments is not supported")
+    pos = [a for a in args if a.kind != "kw"]
+    if m == "maketrans":
+        if len(pos) < len(args):
+            self.err("bytes.maketrans() takes no keyword arguments")
+        if len(args) != 2:
+            self.err(f"maketrans expected 2 arguments, got {len(args)}")
+        vs = [self.expr(a, "bytes") for a in args]
+        for v in vs:
+            if not bytes_like(v.t):
+                self.err(f"a bytes-like object is required, not '{tname(v.t)}'")
+        vs = [self.unwrap(v, "TypeError: a bytes-like object is required, not 'NoneType'") for v in vs]
+        return Val(self.rt("pys_bytes_maketrans", "ptr", [f"ptr {vs[0].v}", f"ptr {vs[1].v}"]), "bytes")
+    if m == "translate":
+        if len(args) > 2:
+            self.err(f"translate() takes at most 2 arguments ({len(args)} given)")
+        for a in args:
+            if a.kind == "kw" and a.s != "delete":
+                self.err(f"translate() got an unexpected keyword argument '{a.s}'")
+        if len(pos) == 0:
+            self.err("translate() takes at least 1 positional argument (0 given)")
+        t = self.expr(pos[0], "bytes")  # (None, or a bytes | None that is: no table)
+        if t.t != "None" and not bytes_like(t.t):
+            self.err(f"a bytes-like object is required, not '{tname(t.t)}'")
+        d = Val("null", "bytes")  # (b"")
+        if len(args) == 2:
+            d = self.expr(args[1].kids[0] if args[1].kind == "kw" else args[1], "bytes")
+            if not bytes_like(d.t):
+                self.err(f"a bytes-like object is required, not '{tname(d.t)}'")
+            d = self.unwrap(d, "TypeError: a bytes-like object is required, not 'NoneType'")
+        return Val(self.rt("pys_bytes_translate", "ptr", [f"ptr {o.v}", f"ptr {'null' if t.t == 'None' else t.v}", f"ptr {d.v}"]), "bytes")
+    names = ["sep", "bytes_per_sep"]
+    if len(args) > 2:
+        self.err(f"hex() takes at most 2 arguments ({len(args)} given)")
+    given: list[int] = [-1, -1]  # (the index in args of each)
+    for i in range(len(args)):
+        a = args[i]
+        if a.kind == "kw" and a.s not in names:
+            self.err(f"hex() got an unexpected keyword argument '{a.s}'")
+        k = names.index(a.s) if a.kind == "kw" else i
+        if given[k] >= 0:
+            self.err(f"argument for hex() given by name ('{names[k]}') and position ({k + 1})")
+        given[k] = i
+    sep = Val("null", "str")  # (none: no separator)
+    chars = 0
+    if given[0] >= 0:
+        a = args[given[0]]
+        sep = self.expr(a.kids[0] if a.kind == "kw" else a, "")
+        st = unopt(sep.t) if is_opt(sep.t) else sep.t
+        if st != "str" and st != "bytes":
+            self.err(f"object of type '{tname(st)}' has no len()" if st in ["int", "float", "bool", "None"] else "sep must be str or bytes.")
+        chars = 1 if st == "str" else 0  # (a str's characters count, not its UTF-8 bytes)
+    per = Val("1", "int")
+    if given[1] >= 0:
+        a = args[given[1]]
+        per = self.expr(a.kids[0] if a.kind == "kw" else a, "int")
+        pt = unopt(per.t) if is_opt(per.t) else per.t
+        if pt != "int" and pt != "bool":
+            self.err(f"'{tname(pt)}' object cannot be interpreted as an integer")
+        per = self.as_int(self.unwrap(per, "TypeError: 'NoneType' object cannot be interpreted as an integer"))
+    sep = self.unwrap(sep, "TypeError: object of type 'NoneType' has no len()")
+    return Val(self.rt("pys_bytes_hex_sep", "ptr", [f"ptr {o.v}", f"ptr {sep.v}", f"i64 {chars}", f"i64 {per.v}"]), "str")
 
 def gen_reverse_arg(self, n: Node, name: str) -> str:
     return self.reverse_val(self.expr(n, "bool"), name)
@@ -1322,6 +1465,10 @@ def gen_next_(self, args: list[Node], want: str) -> Val:
     if len(args) == 0 or len(args) > 2:
         self.err(f"next expected {'at least 1 argument' if len(args) == 0 else 'at most 2 arguments'}, got {len(args)}")
     it = self.expr(args[0], "")
+    if is_gen(unopt(it.t)):
+        # (a generator's next item: gen_next_value)
+        it = self.unwrap(it, "TypeError: 'NoneType' object is not an iterator")
+        return self.gen_next_value(it, self.expr(args[1], gelem(it.t)) if len(args) == 2 else Val("", ""))
     if it.t != "None" and it.t != "file" and not self.is_iterator(it.t):
         self.err(f"'{tname(it.t)}' object is not an iterator")
     nt = self.classes[it.t].methods["__next__"].ret if self.is_iterator(it.t) else "str" if it.t == "file" else ""
@@ -1405,6 +1552,8 @@ def gen_iter_(self, args: list[Node]) -> Val:
         self.raise_("TypeError", self.sconst("'NoneType' object is not iterable"))
         return Val("null", "None")
     v = self.unwrap(v, "TypeError: 'NoneType' object is not iterable")
+    if is_gen(v.t):
+        return v  # (a generator is its own iterator)
     if v.t == "file":
         # (a file is its own iterator, once it is found open)
         c = self.rt("pys_file_closed", "i64", [f"ptr {v.v}"])
@@ -1482,7 +1631,7 @@ def gen_print_(self, args: list[Node]) -> Val:
     temp: list[Node] = []  # file=open(...): closed after the print, as close_temp does
     for a in args:
         if a.kind != "kw":
-            vals.append(self.expr(a, ""))
+            vals.append(self.refl_defer(a) if self.refl_textual(a) else self.expr(a, ""))  # (vars(o): reflection.py)
             continue
         x = a.kids[0]
         if a.s == "sep" or a.s == "end":
@@ -1516,7 +1665,7 @@ def gen_print_(self, args: list[Node]) -> Val:
     for i in range(len(vals)):
         if i > 0:
             self.pwrite(fd, fv, sep, fo)
-        self.pwrite(fd, fv, self.to_str(vals[i]).v, fo)
+        self.pwrite(fd, fv, (self.refl_finish(vals[i], "str") if vals[i].t == "%refl" else self.to_str(vals[i])).v, fo)
     self.pwrite(fd, fv, end, fo)
     if flush != "" and fo.t != "" and "flush" not in self.classes[fo.t].methods:
         # CPython looks flush() up only where flush is true
@@ -1579,6 +1728,8 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
         tm = self.tmethod(o, m, args)
         if tm.t != "":
             return tm
+    if o.t == "bytes" and (m == "maketrans" or m == "translate" or (m == "hex" and len(args) > 0)):
+        return self.bytes_method(o, m, args)
     if (o.t == "str" or o.t == "bytes") and m == "replace" and len(args) == 3 and args[2].kind == "kw" and args[2].s == "count":
         args = args[:2] + [args[2].kids[0]]  # (count may be given by name, as of Python 3.13)
     for a in args:
@@ -1712,7 +1863,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 v = Val("null", base)  # (each item in its place, in affix_any)
             if is_opt(v.t) and (join or key == "list.extend" or key == "file.writelines"):
                 v = self.unwrap(v, "TypeError: can only join an iterable" if join else "TypeError: 'NoneType' object is not iterable")
-            if join or (key == "list.extend" and v.t in self.classes):
+            if join or (key == "list.extend" and (v.t in self.classes or is_gen(v.t))):
                 v = self.as_list(v, "join" if join else "extend")
             if (key == "str.join" or key == "file.writelines") and v.t == "list[opt[str]]":
                 v = Val(v.v, "list[str]")  # (an item that is None raises when it runs, as CPython's error)
@@ -1971,14 +2122,26 @@ def gen_prod_item(self, s: Val, item: Val) -> Val:
     self.raise_("TypeError", self.sconst(bad))
     return s
 
-def gen_dict_pairs(self, v: Val) -> Val:
+def gen_dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
-    # PyDict_MergeFromSeq2 inserts them
+    # PyDict_MergeFromSeq2 inserts them. Of tuples of another length, an item is CPython's
+    # ValueError, for element #0 (every item has the one tuple type, so the first is bad), and an
+    # empty list makes an empty dict: of the dict type wanted (a union's one dict type), or else,
+    # as it is always empty, dict[int, int] (as gen_load_name takes such a dict, which guessed
+    # explains). found: whether an iterator of them, v being only their list's type, had an item
     et = elem(v.t) if is_list(v.t) else ""
-    if is_tuple(et) and len(targs(et)) != 2:
-        self.err(f"dictionary update sequence element #0 has length {len(targs(et))}; 2 is required (dict() of a {typestr(v.t)})")
     if not is_tuple(et):
         self.err(f"dict() of a {typestr(v.t)} is not supported: it takes a dict, or (key, value) tuples")
+    if len(targs(et)) != 2:
+        self.guard(found if found != "" else self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v, f"ValueError: dictionary update sequence element #0 has length {len(targs(et))}; 2 is required")
+        t = unopt(want)
+        if is_union(t):
+            ds = [m for m in umembers(t) if is_dict(m)]
+            t = ds[0] if len(ds) == 1 else ""
+        if not is_dict(t) or "?" in t:
+            t = self.ctype("dict", ["int", "int"])
+            self.guessed[self.curfn.ll] = f"dict() at line {self.line} of tuples of {len(targs(et))} items makes only an empty dict, taken as {typestr(t)}: give it a type first, as in d: dict[K, V] = dict(...)"
+        return Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(targs(t)[0])}", "i64 0"]), t)
     kv = targs(et)
     if self.key_problem(kv[0]) != "":
         self.err(self.key_problem(kv[0]))

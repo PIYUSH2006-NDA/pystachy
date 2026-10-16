@@ -1,0 +1,255 @@
+'a' Ll L 0 0 Na '' LATIN SMALL LETTER A
+'Z' Lu L 0 0 Na '' LATIN CAPITAL LETTER Z
+'5' Nd EN 0 0 Na '' DIGIT FIVE
+'\xbd' No ON 0 0 A '<fraction> 0031 2044 0032' VULGAR FRACTION ONE HALF
+'\xe9' Ll L 0 0 A '0065 0301' LATIN SMALL LETTER E WITH ACUTE
+'\u0301' Mn NSM 230 0 A '' COMBINING ACUTE ACCENT
+'\u0627' Lo AL 0 0 N '' ARABIC LETTER ALEF
+'\u05d0' Lo R 0 0 N '' HEBREW LETTER ALEF
+'\u0915' Lo L 0 0 N '' DEVANAGARI LETTER KA
+'\u093c' Mn NSM 7 0 N '' DEVANAGARI SIGN NUKTA
+'\u0e01' Lo L 0 0 N '' THAI CHARACTER KO KAI
+'\u3042' Lo L 0 0 W '' HIRAGANA LETTER A
+'\uac00' Lo L 0 0 W '1100 1161' HANGUL SYLLABLE GA
+'\ud7a3' Lo L 0 0 W '1112 1175 11C2' HANGUL SYLLABLE HIH
+'\u4e00' Lo L 0 0 W '' CJK UNIFIED IDEOGRAPH-4E00
+'\uf900' Lo L 0 0 W '8C48' CJK COMPATIBILITY IDEOGRAPH-F900
+'\u2167' Nl L 0 0 A '<compat> 0056 0049 0049 0049' ROMAN NUMERAL EIGHT
+'\u2028' Zl WS 0 0 N '' LINE SEPARATOR
+'\u200d' Cf BN 0 0 N '' ZERO WIDTH JOINER
+'\ufeff' Cf BN 0 0 N '' ZERO WIDTH NO-BREAK SPACE
+'\u0f73' Mn NSM 0 0 N '0F71 0F72' TIBETAN VOWEL SIGN II
+'\U0001f600' So ON 0 0 W '' GRINNING FACE
+'\U0001d400' Lu L 0 0 N '<font> 0041' MATHEMATICAL BOLD CAPITAL A
+'\U00010400' Lu L 0 0 N '' DESERET CAPITAL LETTER LONG I
+'\U00017000' Lo L 0 0 W '' -
+'\U0001b170' Lo L 0 0 W '' NUSHU CHARACTER-1B170
+'\ue000' Co L 0 0 A '' -
+'\U000e0001' Cf BN 0 0 N '' LANGUAGE TAG
+'\u0378' Cn  0 0 N '' -
+'\U0010ffff' Cn  0 0 N '' -
+'\x00' Cc BN 0 0 N '' -
+'\x7f' Cc BN 0 0 N '' -
+' ' Zs WS 0 0 Na '' SPACE
+'\ud800' Cs L 0 0 N '' -
+'\u2329' Ps ON 0 1 W '3008' LEFT-POINTING ANGLE BRACKET
+'(' Ps ON 0 1 Na '' LEFT PARENTHESIS
+'\xa0' Zs CS 0 0 N '<noBreak> 0020' NO-BREAK SPACE
+'\uff21' Lu L 0 0 F '<wide> 0041' FULLWIDTH LATIN CAPITAL LETTER A
+'\u1100' Lo L 0 0 W '' HANGUL CHOSEONG KIYEOK
+'\u11a8' Lo L 0 0 N '' HANGUL JONGSEONG KIYEOK
+'0' 0 0 0.0 1 0.0
+'9' 9 9 9.0 10 18.0
+'\u0663' 3 3 3.0 4 6.0
+'\xb2' None 2 2.0 0 4.0
+'\u2460' None 1 1.0 0 2.0
+'\xbd' None None 0.5 0 1.0
+'\u2155' None None 0.2 0 0.4
+'\u216b' None None 12.0 0 24.0
+'\u4e07' None None 10000.0 0 20000.0
+'\U00012432' None None 216000.0 0 432000.0
+'\u0f33' None None -0.5 0 -1.0
+'x' None None None 0 1.0
+NFC 'e\u0301' '\xe9' False True
+NFD 'e\u0301' 'e\u0301' True True
+NFKC 'e\u0301' '\xe9' False True
+NFKD 'e\u0301' 'e\u0301' True True
+NFC '\xe9' '\xe9' True True
+NFD '\xe9' 'e\u0301' False True
+NFKC '\xe9' '\xe9' True True
+NFKD '\xe9' 'e\u0301' False True
+NFC '\u1e9b\u0323' '\u1e9b\u0323' True True
+NFD '\u1e9b\u0323' '\u017f\u0323\u0307' False True
+NFKC '\u1e9b\u0323' '\u1e69' False True
+NFKD '\u1e9b\u0323' 's\u0323\u0307' False True
+NFC '\ufb01' '\ufb01' True True
+NFD '\ufb01' '\ufb01' True True
+NFKC '\ufb01' 'fi' False True
+NFKD '\ufb01' 'fi' False True
+NFC '\u2167' '\u2167' True True
+NFD '\u2167' '\u2167' True True
+NFKC '\u2167' 'VIII' False True
+NFKD '\u2167' 'VIII' False True
+NFC '\uac00' '\uac00' True True
+NFD '\uac00' '\u1100\u1161' False True
+NFKC '\uac00' '\uac00' True True
+NFKD '\uac00' '\u1100\u1161' False True
+NFC '\uac01' '\uac01' True True
+NFD '\uac01' '\u1100\u1161\u11a8' False True
+NFKC '\uac01' '\uac01' True True
+NFKD '\uac01' '\u1100\u1161\u11a8' False True
+NFC '\u1100\u1161\u11a8' '\uac01' False True
+NFD '\u1100\u1161\u11a8' '\u1100\u1161\u11a8' True True
+NFKC '\u1100\u1161\u11a8' '\uac01' False True
+NFKD '\u1100\u1161\u11a8' '\u1100\u1161\u11a8' True True
+NFC '\u1100\u1161' '\uac00' False True
+NFD '\u1100\u1161' '\u1100\u1161' True True
+NFKC '\u1100\u1161' '\uac00' False True
+NFKD '\u1100\u1161' '\u1100\u1161' True True
+NFC '\u1100\u1176' '\u1100\u1176' True True
+NFD '\u1100\u1176' '\u1100\u1176' True True
+NFKC '\u1100\u1176' '\u1100\u1176' True True
+NFKD '\u1100\u1176' '\u1100\u1176' True True
+NFC 'a\u0328\u0301\u0308' '\u0105\u0301\u0308' False True
+NFD 'a\u0328\u0301\u0308' 'a\u0328\u0301\u0308' True True
+NFKC 'a\u0328\u0301\u0308' '\u0105\u0301\u0308' False True
+NFKD 'a\u0328\u0301\u0308' 'a\u0328\u0301\u0308' True True
+NFC 'a\u0308\u0328' '\u0105\u0308' False True
+NFD 'a\u0308\u0328' 'a\u0328\u0308' False True
+NFKC 'a\u0308\u0328' '\u0105\u0308' False True
+NFKD 'a\u0308\u0328' 'a\u0328\u0308' False True
+NFC '\u0344' '\u0308\u0301' False True
+NFD '\u0344' '\u0308\u0301' False True
+NFKC '\u0344' '\u0308\u0301' False True
+NFKD '\u0344' '\u0308\u0301' False True
+NFC '\u0958' '\u0915\u093c' False True
+NFD '\u0958' '\u0915\u093c' False True
+NFKC '\u0958' '\u0915\u093c' False True
+NFKD '\u0958' '\u0915\u093c' False True
+NFC '\u212b' '\xc5' False True
+NFD '\u212b' 'A\u030a' False True
+NFKC '\u212b' '\xc5' False True
+NFKD '\u212b' 'A\u030a' False True
+NFC '\xc5\u0301' '\u01fa' False True
+NFD '\xc5\u0301' 'A\u030a\u0301' False True
+NFKC '\xc5\u0301' '\u01fa' False True
+NFKD '\xc5\u0301' 'A\u030a\u0301' False True
+NFC 'A\u030a\u0301' '\u01fa' False True
+NFD 'A\u030a\u0301' 'A\u030a\u0301' True True
+NFKC 'A\u030a\u0301' '\u01fa' False True
+NFKD 'A\u030a\u0301' 'A\u030a\u0301' True True
+NFC '\u0f73\u0f71' '\u0f71\u0f71\u0f72' False True
+NFD '\u0f73\u0f71' '\u0f71\u0f71\u0f72' False True
+NFKC '\u0f73\u0f71' '\u0f71\u0f71\u0f72' False True
+NFKD '\u0f73\u0f71' '\u0f71\u0f71\u0f72' False True
+NFC '\U0001d15e' '\U0001d157\U0001d165' False True
+NFD '\U0001d15e' '\U0001d157\U0001d165' False True
+NFKC '\U0001d15e' '\U0001d157\U0001d165' False True
+NFKD '\U0001d15e' '\U0001d157\U0001d165' False True
+NFC '\u3060' '\u3060' True True
+NFD '\u3060' '\u305f\u3099' False True
+NFKC '\u3060' '\u3060' True True
+NFKD '\u3060' '\u305f\u3099' False True
+NFC '\u304b\u3099' '\u304c' False True
+NFD '\u304b\u3099' '\u304b\u3099' True True
+NFKC '\u304b\u3099' '\u304c' False True
+NFKD '\u304b\u3099' '\u304b\u3099' True True
+NFC '\u30f0\u3099' '\u30f8' False True
+NFD '\u30f0\u3099' '\u30f0\u3099' True True
+NFKC '\u30f0\u3099' '\u30f8' False True
+NFKD '\u30f0\u3099' '\u30f0\u3099' True True
+NFC '\u1e0b\u0323' '\u1e0d\u0307' False True
+NFD '\u1e0b\u0323' 'd\u0323\u0307' False True
+NFKC '\u1e0b\u0323' '\u1e0d\u0307' False True
+NFKD '\u1e0b\u0323' 'd\u0323\u0307' False True
+NFC 'q\u0307\u0323' 'q\u0323\u0307' False True
+NFD 'q\u0307\u0323' 'q\u0323\u0307' False True
+NFKC 'q\u0307\u0323' 'q\u0323\u0307' False True
+NFKD 'q\u0307\u0323' 'q\u0323\u0307' False True
+NFC '\u0b47\u0b3e' '\u0b4b' False True
+NFD '\u0b47\u0b3e' '\u0b47\u0b3e' True True
+NFKC '\u0b47\u0b3e' '\u0b4b' False True
+NFKD '\u0b47\u0b3e' '\u0b47\u0b3e' True True
+NFC '\xc7\u0301' '\u1e08' False True
+NFD '\xc7\u0301' 'C\u0327\u0301' False True
+NFKC '\xc7\u0301' '\u1e08' False True
+NFKD '\xc7\u0301' 'C\u0327\u0301' False True
+NFC 'x\u0301\u0301' 'x\u0301\u0301' True True
+NFD 'x\u0301\u0301' 'x\u0301\u0301' True True
+NFKC 'x\u0301\u0301' 'x\u0301\u0301' True True
+NFKD 'x\u0301\u0301' 'x\u0301\u0301' True True
+NFC '\u2fc4' '\u2fc4' True True
+NFD '\u2fc4' '\u2fc4' True True
+NFKC '\u2fc4' '\u9e75' False True
+NFKD '\u2fc4' '\u9e75' False True
+NFC 'A\u0301\u0300\u0327' '\xc1\u0327\u0300' False True
+NFD 'A\u0301\u0300\u0327' 'A\u0327\u0301\u0300' False True
+NFKC 'A\u0301\u0300\u0327' '\xc1\u0327\u0300' False True
+NFKD 'A\u0301\u0300\u0327' 'A\u0327\u0301\u0300' False True
+NFC '' '' True True
+NFD '' '' True True
+NFKC '' '' True True
+NFKD '' '' True True
+NFC '\U0002f868' '\u36fc' False True
+NFD '\U0002f868' '\u36fc' False True
+NFKC '\U0002f868' '\u36fc' False True
+NFKD '\U0002f868' '\u36fc' False True
+NFC '\u0386' '\u0386' True True
+NFD '\u0386' '\u0391\u0301' False True
+NFKC '\u0386' '\u0386' True True
+NFKD '\u0386' '\u0391\u0301' False True
+NFC '\u1f80\u0345' '\u1f80\u0345' True True
+NFD '\u1f80\u0345' '\u03b1\u0313\u0345\u0345' False True
+NFKC '\u1f80\u0345' '\u1f80\u0345' True True
+NFKD '\u1f80\u0345' '\u03b1\u0313\u0345\u0345' False True
+NFC '\u01c4' '\u01c4' True True
+NFD '\u01c4' '\u01c4' True True
+NFKC '\u01c4' 'D\u017d' False True
+NFKD '\u01c4' 'DZ\u030c' False True
+NFC '\xb5' '\xb5' True True
+NFD '\xb5' '\xb5' True True
+NFKC '\xb5' '\u03bc' False True
+NFKD '\xb5' '\u03bc' False True
+NFC '\u3392' '\u3392' True True
+NFD '\u3392' '\u3392' True True
+NFKC '\u3392' 'MHz' False True
+NFKD '\u3392' 'MHz' False True
+LATIN SMALL LETTER A 'a'
+latin capital letter z 'Z'
+GRINNING FACE '\U0001f600'
+HANGUL SYLLABLE GAG '\uac01'
+hangul syllable pwilh '\ud4db'
+Hangul Syllable A '\uc544'
+CJK UNIFIED IDEOGRAPH-4E00 '\u4e00'
+cjk unified ideograph-2a6df '\U0002a6df'
+CJK COMPATIBILITY IDEOGRAPH-F900 '\uf900'
+TANGUT IDEOGRAPH-17000 '\U00017000'
+NUSHU CHARACTER-1B170 '\U0001b170'
+LATIN CAPITAL LETTER GHA '\u01a2'
+BYTE ORDER MARK '\ufeff'
+BOM '\ufeff'
+LATIN SMALL LETTER R WITH TILDE 'r\u0303'
+KEYCAP NUMBER SIGN '#\ufe0f\u20e3'
+TAMIL SYLLABLE KSSA '\u0b95\u0bcd\u0bb7'
+HANGUL SYLLABLE GA HANGUL SYLLABLE HIH CJK UNIFIED IDEOGRAPH-4E00 CJK UNIFIED IDEOGRAPH-2B739 NUSHU CHARACTER-1B170 None
+15.1.0 3.2.0
+'a' Ll L 0 0 Na '' LATIN SMALL LETTER A None None None
+'\u20ac' Sc ET 0 0 A '' EURO SIGN None None None
+'\u0221' Cn  0 0 N '' - None None None
+'\u4e00' Lo L 0 0 W '' CJK UNIFIED IDEOGRAPH-4E00 None None 1.0
+'\U0001f600' Cn  0 0 N '' - None None None
+'\u20b9' Cn  0 0 N '' - None None None
+'\u0e3f' Sc ET 0 0 N '' THAI CURRENCY SYMBOL BAHT None None None
+'\U0002f868' Lo L 0 0 W '36FC' CJK COMPATIBILITY IDEOGRAPH-2F868 None None None
+'\xb2' No EN 0 0 A '<super> 0032' SUPERSCRIPT TWO 2 2 2.0
+'\u09f4' No L 0 0 N '' BENGALI CURRENCY NUMERATOR ONE None None 1.0
+'\u3405' Lo L 0 0 W '' CJK UNIFIED IDEOGRAPH-3405 None None None
+'\u1680' Zs WS 0 0 N '' OGHAM SPACE MARK None None None
+'\u2028' Zl WS 0 0 N '' LINE SEPARATOR None None None
+'\U00010400' Lu L 0 0 N '' DESERET CAPITAL LETTER LONG I None None None
+'\U0002136a' '\U0002136a' False
+'\u5f33' '\u5f33' False
+'\u2fc4' '\u9e75' True
+'e\u0301' '\xe9' False
+'\U0001f600\u0301' '\U0001f600\u0301' True
+'a' '\U0001f600' '\uac00'
+ValueError: no such name
+ValueError: not a decimal
+ValueError: not a digit
+ValueError: not a numeric character
+KeyError: "undefined character name 'NO SUCH NAME'"
+KeyError: 'name too long'
+ValueError: invalid normalization form
+TypeError: category() argument must be a unicode character, not str
+TypeError: name() argument 1 must be a unicode character, not str
+KeyError: "undefined character name 'BYTE ORDER MARK'"
+ValueError: no such name
+TypeError: cannot create 'unicodedata.UCD' instances
+KeyError: "undefined character name 'HANGUL SYLLABLE GAX'"
+KeyError: "undefined character name 'CJK UNIFIED IDEOGRAPH-04E00'"
+ValueError: invalid normalization form
+KeyError: "undefined character name 'LATIN SMALL LETTER R WITH TILDE'"
+TypeError: decomposition() argument must be a unicode character, not str
+TypeError: combining() argument must be a unicode character, not str
+ True
+[exit 0]

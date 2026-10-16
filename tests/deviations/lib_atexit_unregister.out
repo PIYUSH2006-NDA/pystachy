@@ -1,0 +1,3 @@
+NotImplementedError: atexit.unregister() is not supported: Pystachy keeps the callbacks as closures, which no function compares equal to
+f
+[exit 0]

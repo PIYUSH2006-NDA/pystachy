@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins
 from src.pystachy_compiler.specs import FX, FXALL, FXBIT, ICMP, IROPS, RAWR, RAWW, RUNTIME
-from src.pystachy_compiler.utils import is_dict, is_opt, is_set, is_tuple, is_union, lt, same_kind, targs, umembers
+from src.pystachy_compiler.utils import is_dict, is_gen, is_opt, is_set, is_tuple, is_union, lt, same_kind, targs, umembers
 
 
 class EffectSummaries:
@@ -118,7 +118,7 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
             i = b.code[j]
             if i.op not in IROPS:
                 self.bad_ir(fn, b, f"unknown op {i.op}")
-            inv = len(i.b) == 2 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init")
+            inv = len(i.b) == 2 and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init" or i.op == "gen.resume")
             if ("T" in IROPS[i.op] or inv) != (j == len(b.code) - 1):
                 self.bad_ir(fn, b, f"a terminator in the middle, at {i.op}" if j < len(b.code) - 1 else f"no terminator, last {i.op}")
             if i.op == "landing" and j > 0:
@@ -128,7 +128,7 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
             for l in i.b[:1] if inv else i.b if i.op != "phi" else i.b[:0]:
                 if l in lands:
                     self.bad_ir(fn, b, f"a branch to the landing block {l}, which only unwind edges may reach")
-            if eh and b.handler != "" and (i.op == "raise" or i.op == "throw" or (not inv and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init") and self.opfx(i, fn.fa) & FXBIT["R"] != 0)):
+            if eh and b.handler != "" and (i.op == "raise" or i.op == "throw" or (not inv and (i.op == "rt" or i.op == "call" or i.op == "icall" or i.op == "init" or i.op == "gen.resume") and self.opfx(i, fn.fa) & FXBIT["R"] != 0)):
                 self.bad_ir(fn, b, f"{i.op} {i.s} may raise, in a block {b.handler} covers, but goes to no landing block")
             if i.op == "phi" and j > 0 and b.code[j - 1].op != "phi":
                 self.bad_ir(fn, b, "a phi after other ops")
@@ -250,6 +250,8 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                         self.bad_ir(fn, b, f"{i.op} needs distinct nonoptional union members")
                 if (i.op == "union.tag" and (i.t != "int" or i.s != "")) or (i.op == "union.payload" and (i.t != "%slot" or i.s not in ms)):
                     self.bad_ir(fn, b, f"{i.op} has an invalid result type or member")
+            if i.op.startswith("gen."):
+                self.verify_gen(fn, b, i, j)
             n = self.nums(i)
             if len(i.r) != n:
                 self.bad_ir(fn, b, f"{i.op} {i.s} with {len(i.r)} numbers, where its lowering prints {n}")
@@ -276,6 +278,29 @@ def gen_verify(self, fn: IFn, eh: bool) -> None:
                     if l not in at or b.label not in succ[at[l]]:
                         self.bad_ir(fn, b, f"a phi from {l}, which does not branch there")
 
+def gen_verify_gen(self, fn: IFn, b: Blk, i: Ins, j: int) -> None:
+    # a generator op (docs/internals.md#generators): gen.start ends the entry block of a
+    # generator function (IFn.coro) and names it (a str); gen.yield (a %slot, k 0 or 1) and
+    # gen.ret (none, or a %slot) suspend one, gen.promise without an operand is its own promise;
+    # gen.promise, gen.resume and gen.drop of a handle take a generator
+    own = i.op == "gen.start" or i.op == "gen.yield" or i.op == "gen.ret" or (i.op == "gen.promise" and len(i.a) == 0)
+    if own and not fn.coro:
+        self.bad_ir(fn, b, f"{i.op} outside a generator function")
+    if i.s != "" or i.x != "" or (i.k != 0 and i.op != "gen.yield") or i.k < 0 or i.k > 1:
+        self.bad_ir(fn, b, f"{i.op} with extra metadata")
+    if i.op == "gen.start" and (b is not fn.blocks[0] or len(i.a) != 1 or i.a[0].t != "str" or len(i.b) != 1 or i.t != ""):
+        self.bad_ir(fn, b, "gen.start must end the entry block, with the generator's name and its first block")
+    if i.op == "gen.yield" and (len(i.a) != 1 or i.a[0].t != "%slot" or len(i.b) != 1 or i.t != ""):
+        self.bad_ir(fn, b, "gen.yield needs the value's slot and the block where it resumes")
+    if i.op == "gen.ret" and (len(i.a) > 1 or (len(i.a) == 1 and i.a[0].t != "%slot") or len(i.b) != 0 or i.t != ""):
+        self.bad_ir(fn, b, "gen.ret needs the slot of its value, if any")
+    if i.op == "gen.promise" and (i.t != "%ptr" or len(i.a) > 1 or (len(i.a) == 1 and not is_gen(i.a[0].t)) or len(i.b) != 0):
+        self.bad_ir(fn, b, "gen.promise needs a generator or none (its own)")
+    if (i.op == "gen.resume" or i.op == "gen.drop") and (len(i.a) != 1 or not is_gen(i.a[0].t) or i.t != "" or (len(i.b) != 0 and (i.op == "gen.drop" or len(i.b) != 2))):
+        self.bad_ir(fn, b, f"{i.op} needs a generator")
+    if i.op == "gen.start" and j != len(b.code) - 1:
+        self.bad_ir(fn, b, "gen.start before other ops")
+
 def gen_nums(self, i: Ins) -> int:
     if i.op == "scalar.bin" or i.op == "scalar.cast" or i.op == "scalar.cmp":
         return 1
@@ -289,6 +314,12 @@ def gen_nums(self, i: Ins) -> int:
     if i.op == "landing" or i.op == "exc.match" or i.op == "union.payload" or i.op == "tuple.load":
         return 2
     if i.op == "phi" or i.op == "select" or i.op == "list.len" or i.op == "slot.pack" or i.op == "slot.unpack" or i.op == "union.tag" or i.op == "num.cast" or i.op == "num.cmp" or i.op == "alloc.fixed" or i.op == "tuple.store" or i.op == "mem.load" or i.op == "int.ucmp" or i.op == "ptr.cmp" or i.op == "empty.kind":
+        return 1
+    if i.op == "gen.yield":
+        return 2
+    if i.op == "gen.ret":
+        return 2
+    if i.op == "gen.promise":
         return 1
     if i.op == "rt":
         return 0 if self.rtfns[i.s].sig[0] == "None" else 1

@@ -1,0 +1,19 @@
+ attr label True
+ attr runs True
+c base
+ attr check_extra True
+ attr extra True
+ attr label True
+ attr runs True
+m add 2
+m base
+ attr check_extra True
+ attr label True
+ attr runs True
+n add 2
+n base
+x 1
+y 2
+x 1 False
+['x', 'y']
+[exit 0]

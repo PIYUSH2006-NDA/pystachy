@@ -1,0 +1,13 @@
+16 ete Angstrom
+['COMBINING ACUTE ACCENT', 'COMBINING ACUTE ACCENT', 'COMBINING RING ABOVE', 'COMBINING DIAERESIS']
+['Ll', 'Ll', 'Ll', 'Zs', 'Lu', 'Ll', 'Ll', 'Ll', 'Ll', 'Ll', 'Ll', 'Ll']
+15 Creme brulee
+['COMBINING GRAVE ACCENT', 'COMBINING CIRCUMFLEX ACCENT', 'COMBINING ACUTE ACCENT']
+['Lu', 'Ll', 'Ll', 'Ll', 'Ll', 'Zs', 'Ll', 'Ll', 'Ll', 'Ll', 'Ll', 'Ll']
+8 A 가😀
+['COMBINING DOT BELOW', 'COMBINING GRAVE ACCENT', 'COMBINING ACUTE ACCENT']
+['Lu', 'Mn', 'Mn', 'Zs', 'Lo', 'So']
+5 plain
+[]
+['Ll', 'Ll', 'Ll', 'Ll', 'Ll']
+[exit 0]

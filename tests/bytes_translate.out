@@ -1,0 +1,22 @@
+256 45 95 0 255 99
+b'a-b_c' b'abc' b'acac' b'ab'
+01:02:03 01:0203 0102-03 0102
+0102  0102030405 01:02
+ValueError maketrans arguments must have same length
+ValueError translation table must be 256 characters long
+ValueError sep must be length 1.
+ValueError sep must be ASCII.
+ValueError sep must be ASCII.
+OverflowError Python int too large to convert to C int
+OverflowError Python int too large to convert to C int
+TypeError a bytes-like object is required, not 'NoneType'
+TypeError a bytes-like object is required, not 'NoneType'
+TypeError object of type 'NoneType' has no len()
+TypeError 'NoneType' object cannot be interpreted as an integer
+TypeError 'NoneType' object cannot be interpreted as an integer
+ValueError sep must be ASCII.
+b'abc' b'bc' True 010203.04
+b'\xff\xfe\xfd\xfc' ff00
+b'ab-_cd__' b'ab+/cd'
+00ff10 0001.02030405.06070809 00010203.04050607.0809 ab
+[exit 0]

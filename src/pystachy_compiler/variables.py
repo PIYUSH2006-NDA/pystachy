@@ -14,6 +14,7 @@ from src.pystachy_compiler.analysis import (
     lambda_flags,
     local_names,
     nested_defs,
+    none_sites,
     only_none,
     scope_binds,
     shows_items,
@@ -25,7 +26,7 @@ from src.pystachy_compiler.diagnostics import FILES, LINES, MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
-from src.pystachy_compiler.syntax import Node, comp_names, mk, name_targets, starred_target
+from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, name_targets, starred_target
 from src.pystachy_compiler.utils import (
     elem,
     empty_ann,
@@ -35,6 +36,7 @@ from src.pystachy_compiler.utils import (
     is_dict,
     is_fn,
     is_fset,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -108,6 +110,8 @@ def gen_load_name(self, name: str) -> Val:
             t = self.none_read(name)
             if t == "None":
                 return Val("null", "None")
+        if name in self.owned and not self.appending:
+            self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (what reads it may keep it: str_append)
         r = self.mem_load(Val(self.lreg[name], "*" + t)).v
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
@@ -515,8 +519,12 @@ def gen_none_type(self, name: str) -> str:
     # the code of its function (or module) assigns it, also by unpacking, that can be typed here
     # (as lookahead does); "" if there is none
     body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
+    if "" not in self.nonesites:
+        none_sites(body, self.nonesites)  # (once for the function: each variable asks for its own)
+        self.nonesites[""] = []
     found: list[Node] = []
-    self.none_values(body, name, found)
+    for st in self.nonesites[name] if name in self.nonesites else []:
+        self.none_values(st, name, found)
     for e in found:
         if e.kind != "None" and not empty_display(e) and self.typed_now(e) and not self.calls_open(e, {}):
             # (typed as where it is assigned, under tests of the optional locals it reads)
@@ -532,33 +540,25 @@ def gen_none_type(self, name: str) -> str:
                 return self.optional(t)
     return ""
 
-def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-    # the values that statements in body (into blocks, in order) assign to variable name: of
-    # a, b = e the item of e (an index node if e is not a display), of name := v v
-    for st in body:
-        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
-            continue
-        if st.kind == "assign":
-            e = st.kids[-1]
-            for t in st.kids[:-1]:
-                if t.kind == "name" and t.s == name:
-                    out.append(e)
-                elif t.kind == "tuple" or t.kind == "list":
-                    for i in range(len(t.kids)):
-                        if t.kids[i].kind == "name" and t.kids[i].s == name:
-                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
-                            # (after a starred target, the item counted from the end)
-                            after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
-                            at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
-                            out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
-        for kid in st.kids:
-            if kid.kind != "block" and kid.kind != "except":
-                walrus_values(kid, name, out)  # (name := v)
-        for kid in st.kids:
-            if kid.kind == "block":
-                self.none_values(kid.kids, name, out)
-            elif kid.kind == "except":
-                self.none_values(kid.kids[1].kids, name, out)
+def gen_none_values(self, st: Node, name: str, out: list[Node]) -> None:
+    # the values that statement st itself (not its blocks: see none_sites) assigns to variable
+    # name: of a, b = e the item of e (an index node if e is not a display), of name := v v
+    if st.kind == "assign":
+        e = st.kids[-1]
+        for t in st.kids[:-1]:
+            if t.kind == "name" and t.s == name:
+                out.append(e)
+            elif t.kind == "tuple" or t.kind == "list":
+                for i in range(len(t.kids)):
+                    if t.kids[i].kind == "name" and t.kids[i].s == name:
+                        disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
+                        # (after a starred target, the item counted from the end)
+                        after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
+                        at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
+                        out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
+    for kid in st.kids:
+        if kid.kind != "block" and kid.kind != "except":
+            walrus_values(kid, name, out)  # (name := v)
 
 def gen_read(self, n: Node) -> Val:
     # a variable read; if flow analysis found it may be unassigned, check at run time
@@ -1296,8 +1296,9 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
             return False
     return True
 
-def gen_dry(self, e: Node) -> str:
-    # the type of e, compiled into blocks that are dropped (an error after it is still the read's)
+def gen_dry(self, e: Node, want: str = "") -> str:
+    # the type of e (where want is expected), compiled into blocks that are dropped (an error
+    # after it is still the read's)
     blk = self.blk
     blocks = self.fn.blocks
     loops = self.fn.loops
@@ -1308,7 +1309,7 @@ def gen_dry(self, e: Node) -> str:
     self.fn.blocks = []
     self.fn.loops = []
     self.drying += 1
-    t = self.expr(e, "").t
+    t = self.expr(e, want).t
     self.drying -= 1
     self.blk = blk
     self.fn.blocks = blocks
@@ -1374,7 +1375,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         a = self.mapgen(args[0]) if self.is_mapcall(args[0]) else args[0]
         if (a.kind != "listcomp" or a.s != "gen") and not self.iterator_call(a):
             a = self.vnode(self.consume(a, ""))
-        item = mk("name", "__item", a.line, [])
+        item = made_var("__item", a.line)
         g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
         et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
         et = self.none_items(et) if is_tuple(et) else et
@@ -1494,6 +1495,8 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         self.mem_store(Val(self.lreg[name], "*" + t), self.coerce(v, t, self.assigned_to(v, t, name)))
         if name in self.lflag and name not in self.compvars:
             self.mem_store(Val(self.lflag[name], "*bool"), Val("true", "bool"))
+        if name in self.owned:
+            self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (a value others may hold: str_append)
         held = "" if is_union(unopt(t)) and name in self.nlw else self.holds(t, v.t)
         if held == "":
             self.narrowed.pop(name, "")
@@ -1615,6 +1618,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
                 self.assign(t.kids[i], self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
         for i in range(len(items)):
             self.assign(t.kids[i], items[i])
+    elif k == "tuple" and is_gen(v.t):
+        self.gen_unpack(t, v)  # (a, b = g: an item from g for each target)
     elif k == "tuple" and v.t in self.nts:
         # a, b = p: a NamedTuple's fields in order
         fs = self.classes[v.t].fields
@@ -1628,6 +1633,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
         it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
         if is_list(it.t):
             self.assign(t, it)
+        elif is_gen(it.t):
+            self.gen_unpack(t, it)  # (an __iter__ that yields)
         else:
             self.unpack_next(t, it)
     elif k == "tuple":
@@ -1760,6 +1767,8 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
     else:
         if v.t in self.classes:
             xs = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            if is_gen(xs.t):
+                xs = self.gen_list(xs, "")  # (an __iter__ that yields: all its items, as list() takes them)
             if not is_list(xs.t):
                 # (UNPACK_EX takes list() of the iterator, which calls iter() of it again)
                 xs = self.obj_iterator(xs, "", f"'{tname(xs.t)}' object is not iterable")

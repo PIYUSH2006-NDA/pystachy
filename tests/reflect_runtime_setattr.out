@@ -1,0 +1,15 @@
+y set
+z AttributeError: 'P' object has no attribute 'z' and no __dict__ for setting new attributes
+setter 5
+t set
+ro AttributeError: property 'ro' of 'P' object has no setter
+norm AttributeError: 'P' object attribute 'norm' is read-only
+__class__ TypeError: __class__ must be set to a class, not 'int' object
+__doc__ AttributeError: 'P' object attribute '__doc__' is read-only
+__slots__ AttributeError: 'P' object attribute '__slots__' is read-only
+x set
+5 5 5
+AttributeError: 'P' object has no attribute 'w' and no __dict__ for setting new attributes
+7
+7
+[exit 0]

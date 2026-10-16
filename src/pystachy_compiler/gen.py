@@ -41,6 +41,82 @@ from src.pystachy_compiler.unions import (
     gen_isinst_narrow as unions_isinst_narrow,
     gen_holds as unions_holds,
 )
+from src.pystachy_compiler.reflection import (
+    RArm,
+    RLeaf,
+    RText,
+    gen_refl_typeof as reflection_refl_typeof,
+    gen_refl_concrete as reflection_refl_concrete,
+    gen_refl_may_none as reflection_refl_may_none,
+    gen_refl_split as reflection_refl_split,
+    gen_refl_split_class as reflection_refl_split_class,
+    gen_refl_type_name as reflection_refl_type_name,
+    gen_refl_record as reflection_refl_record,
+    gen_refl_type_of as reflection_refl_type_of,
+    gen_refl_class_of as reflection_refl_class_of,
+    gen_refl_type_attr as reflection_refl_type_attr,
+    gen_refl_type_operand as reflection_refl_type_operand,
+    gen_refl_type_cmp as reflection_refl_type_cmp,
+    gen_refl_derived_only as reflection_refl_derived_only,
+    gen_refl_replace_changes as reflection_refl_replace_changes,
+    gen_refl_hasattr_lit as reflection_refl_hasattr_lit,
+    gen_refl_prop_in as reflection_refl_prop_in,
+    gen_refl_name_list as reflection_refl_name_list,
+    gen_refl_names_table as reflection_refl_names_table,
+    gen_refl_runtime_name as reflection_refl_runtime_name,
+    gen_refl_find as reflection_refl_find,
+    gen_refl_hasattr as reflection_refl_hasattr,
+    gen_refl_otext as reflection_refl_otext,
+    gen_refl_lookup as reflection_refl_lookup,
+    gen_refl_lookup_text as reflection_refl_lookup_text,
+    gen_refl_arm_text as reflection_refl_arm_text,
+    gen_refl_setattr_runtime as reflection_refl_setattr_runtime,
+    gen_refl_union_str as reflection_refl_union_str,
+    gen_refl_dc_class as reflection_refl_dc_class,
+    gen_refl_dc_check as reflection_refl_dc_check,
+    gen_refl_dc_names as reflection_refl_dc_names,
+    gen_refl_unroll_fields as reflection_refl_unroll_fields,
+    gen_refl_dc_type as reflection_refl_dc_type,
+    gen_refl_dc_copy as reflection_refl_dc_copy,
+    gen_refl_dataclasses as reflection_refl_dataclasses,
+    gen_refl_dir_names as reflection_refl_dir_names,
+    gen_refl_dir as reflection_refl_dir,
+    gen_refl_dir_of as reflection_refl_dir_of,
+    gen_refl_dict_copy as reflection_refl_dict_copy,
+    gen_refl_dict_format as reflection_refl_dict_format,
+    gen_refl_percent as reflection_refl_percent,
+    gen_refl_format_map as reflection_refl_format_map,
+    gen_refl_unroll_dict as reflection_refl_unroll_dict,
+    gen_refl_size_check as reflection_refl_size_check,
+    gen_refl_dict_operand as reflection_refl_dict_operand,
+    gen_refl_supported as reflection_refl_supported,
+    gen_refl_defines as reflection_refl_defines,
+    gen_refl_names as reflection_refl_names,
+    gen_refl_listed as reflection_refl_listed,
+    gen_refl_public as reflection_refl_public,
+    gen_refl_init_order as reflection_refl_init_order,
+    gen_refl_dict_order as reflection_refl_dict_order,
+    gen_refl_stored as reflection_refl_stored,
+    gen_refl_late as reflection_refl_late,
+    gen_refl_fields_table as reflection_refl_fields_table,
+    gen_refl_layout_record as reflection_refl_layout_record,
+    gen_refl_dict_of as reflection_refl_dict_of,
+    gen_refl_vars_text as reflection_refl_vars_text,
+    gen_refl_textual as reflection_refl_textual,
+    gen_refl_defer as reflection_refl_defer,
+    gen_refl_finish as reflection_refl_finish,
+    gen_refl_bound_once as reflection_refl_bound_once,
+    gen_refl_const_names as reflection_refl_const_names,
+    gen_refl_unroll_for as reflection_refl_unroll_for,
+    gen_refl_name as reflection_refl_name,
+    gen_refl_args as reflection_refl_args,
+    gen_refl_has as reflection_refl_has,
+    gen_refl_join as reflection_refl_join,
+    gen_refl_phi as reflection_refl_phi,
+    gen_refl_catch_attr as reflection_refl_catch_attr,
+    gen_refl_getattr as reflection_refl_getattr,
+    gen_refl_setattr as reflection_refl_setattr,
+)
 from src.pystachy_compiler.builtins import (
     gen_anyall as builtins_anyall,
     gen_as_list as builtins_as_list,
@@ -80,6 +156,7 @@ from src.pystachy_compiler.builtins import (
     gen_reduce_item as builtins_reduce_item,
     gen_reverse_arg as builtins_reverse_arg,
     gen_bytes_ as builtins_bytes_,
+    gen_bytes_method as builtins_bytes_method,
     gen_reverse_val as builtins_reverse_val,
     gen_stream_start as builtins_stream_start,
     gen_update as builtins_update,
@@ -205,6 +282,7 @@ from src.pystachy_compiler.declarations import (
     gen_ann as declarations_ann,
     gen_ann_base as declarations_ann_base,
     gen_ann_items as declarations_ann_items,
+    gen_ann_none as declarations_ann_none,
     gen_ann_problem as declarations_ann_problem,
     gen_boxto as declarations_boxto,
     gen_boxwider as declarations_boxwider,
@@ -474,6 +552,38 @@ from src.pystachy_compiler.flow import (
     gen_scc as flow_scc,
     gen_user_call as flow_user_call,
 )
+from src.pystachy_compiler.generators import (
+    gen_builtin_catch as generators_builtin_catch,
+    gen_gen_ann_ret as generators_gen_ann_ret,
+    gen_gen_begin as generators_gen_begin,
+    gen_gen_cleanup as generators_gen_cleanup,
+    gen_gen_contains as generators_gen_contains,
+    gen_gen_unpack as generators_gen_unpack,
+    gen_gen_declare as generators_gen_declare,
+    gen_gen_drop as generators_gen_drop,
+    gen_gen_end as generators_gen_end,
+    gen_gen_enter as generators_gen_enter,
+    gen_gen_list as generators_gen_list,
+    gen_hidden_loop as generators_hidden_loop,
+    gen_gen_name as generators_gen_name,
+    gen_gen_next as generators_gen_next,
+    gen_gen_none_end as generators_gen_none_end,
+    gen_none_null as generators_none_null,
+    gen_gen_promise as generators_gen_promise,
+    gen_gen_ret as generators_gen_ret,
+    gen_gen_method as generators_gen_method,
+    gen_genexp_value as generators_genexp_value,
+    gen_gen_next_value as generators_gen_next_value,
+    gen_gen_unhandle as generators_gen_unhandle,
+    gen_gen_return as generators_gen_return,
+    gen_gen_stream as generators_gen_stream,
+    gen_gen_suspend as generators_gen_suspend,
+    gen_owned_gen as generators_owned_gen,
+    gen_owned_node as generators_owned_node,
+    gen_owned_loop as generators_owned_loop,
+    gen_yield_from as generators_yield_from,
+    gen_yield_stmt as generators_yield_stmt,
+)
 from src.pystachy_compiler.functions import (
     gen_enter as functions_enter,
     gen_extern_args as functions_extern_args,
@@ -509,6 +619,7 @@ from src.pystachy_compiler.ircheck import (
     gen_nums as ircheck_nums,
     gen_opfx as ircheck_opfx,
     gen_verify as ircheck_verify,
+    gen_verify_gen as ircheck_verify_gen,
 )
 from src.pystachy_compiler.lowering import (
     gen_eh_ir as lowering_eh_ir,
@@ -520,6 +631,7 @@ from src.pystachy_compiler.lower_module import (
     gen_cextern as lower_module_cextern,
     gen_dispatch as lower_module_dispatch,
     gen_extern_decl as lower_module_extern_decl,
+    gen_gen_module as lower_module_gen_module,
     gen_lower_module as lower_module_lower_module,
     gen_pyext as lower_module_pyext,
 )
@@ -539,6 +651,9 @@ from src.pystachy_compiler.program import (
     gen_body_effect as program_body_effect,
     gen_body_names as program_body_names,
     gen_class_effect as program_class_effect,
+    gen_abc_class as program_abc_class,
+    gen_abstract_defs as program_abstract_defs,
+    gen_abstract_of as program_abstract_of,
     gen_class_problem as program_class_problem,
     gen_decorators as program_decorators,
     gen_derives as program_derives,
@@ -599,6 +714,7 @@ from src.pystachy_compiler.statements import (
     gen_nonemix as statements_nonemix,
     gen_obj_helpers as statements_obj_helpers,
     gen_objlen as statements_objlen,
+    gen_owns as statements_owns,
     gen_range_args as statements_range_args,
     gen_reopt as statements_reopt,
     gen_scan_imports as statements_scan_imports,
@@ -611,10 +727,19 @@ from src.pystachy_compiler.statements import (
     gen_drain as statements_drain,
     gen_stmt as statements_stmt,
     gen_stmts as statements_stmts,
+    gen_str_append as statements_str_append,
     gen_unhashable as statements_unhashable,
     gen_while_ as statements_while_,
 )
 from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.structs import (
+    StructFmt,
+    gen_struct_call as structs_struct_call,
+    gen_struct_format as structs_struct_format,
+    gen_struct_helper as structs_struct_helper,
+    gen_struct_nodes as structs_struct_nodes,
+    gen_struct_pack as structs_struct_pack,
+)
 from src.pystachy_compiler.templates import (
     gen_bind as templates_bind,
     gen_constructor_unions as templates_constructor_unions,
@@ -788,6 +913,12 @@ class Gen:
         self.lenient = False
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        # the names the function appends to (s += t, s = s + t: str_appends), and the "owned" flag
+        # of each that is a str local: the slot of an int that is 1 where its str is one an append
+        # made and that nothing else holds (see str_append); appending: the append's own read of it
+        self.appends: dict[str, bool] = {}
+        self.owned: dict[str, str] = {}
+        self.appending = False
         # the flags of the names that imports in try statements bind (imp_flag): module code's
         # globals defined so far, and the function's own, each name's slot or cell
         self.impg: dict[str, bool] = {}
@@ -804,6 +935,9 @@ class Gen:
         # may hold a value of another type: its first binding (none_ends), once compiled the line
         # that gives it that value (see assign, static_type)
         self.nonevars: dict[str, int] = {}
+        # the statements that may assign each name, for a variable typed from None (none_type):
+        # found once a function needs them (none_sites), then with the key ""
+        self.nonesites: dict[str, list[Node]] = {}
         # optional, union and class locals: the narrower type a read has here (see narrows)
         self.narrowed: dict[str, str] = {}
         self.nonecmp = False  # the read being compiled is compared with None (see none_type)
@@ -831,6 +965,8 @@ class Gen:
         self.intat: dict[str, int] = {}  # the line of each constant's own binding (including from-imports)
         self.strglobals: dict[str, str] = {}  # single-binding module str literals: formats for str.format()
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
+        self.abstracts: dict[str, list[str]] = {}  # each class's own @abstractmethod methods (abstract_defs)
+        self.abcmeta: dict[str, bool] = {}  # the classes whose statements pass metaclass=ABCMeta
         self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
@@ -866,6 +1002,15 @@ class Gen:
         self.decoexprs: dict[str, Node] = {}  # "<module> <line>" -> the dotted name of the decorator there (deco_callee)
         self.cvos: dict[str, bool] = {}  # the constant Callable objects defined (Gen.to_callable)
         self.nlw: dict[str, bool] = {}  # and those of them, or of the variables it takes, that a closure assigns (nonlocal)
+        # the generator object a call of a generator function made last (the call's value), and that
+        # function (Gen.call_fn): a loop over that value owns the generator (owned_gen)
+        self.gencall = ""
+        self.gencallf: FnInfo | None = None
+        self.ngenexp = 0  # the generator expressions made values (genexp_value): each a function of its own
+        self.vowned: dict[str, FnInfo] = {}  # val nodes of such generators (owned_node), by the node's text
+        self.gendrops = False  # a gen.drop op was lowered: the module defines its helper (lower_module)
+        self.coros = False  # a generator function was lowered: the module declares LLVM's coroutine intrinsics
+        self.lowblk = ""  # the label of the block being lowered (gen.start's phi names it)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
         self.elsebrk = ""  # and the label after its else block
         self.brks: list[list[dict[str, str]]] = []  # for each loop being compiled, what narrowed holds at its breaks
@@ -918,11 +1063,231 @@ class Gen:
         # the generic classes (class C(Generic[T, *Ts]) and class C[T, *Ts]): their type variables,
         # which the arguments of the call that makes an object bind (see bind)
         self.tparams: dict[str, list[str]] = {}
+        self.pep695: dict[str, bool] = {}  # the generic classes of PEP 695's syntax, class C[T] (reflection: __type_params__)
         # the type aliases, by qualified name: the statement that binds each (Mod.taliases), and
         # those whose annotation alias_ann is making the type of
         self.taliases: dict[str, Node] = {}
         self.resolving: list[str] = []
         self.unaliased = 0  # (the nodes unalias has made of the annotation it expands)
+        self.reflrecs: dict[str, Data] = {}  # the reflection records made (refl_record), by global name
+        self.reflstores: dict[str, bool] = {}  # the attribute names the program's assignments assign (refl_stored)
+        self.refllate: dict[str, bool] = {}  # those assigned other than by an __init__ through its object (refl_late)
+        self.refltexts: list[RText] = []  # the deferred texts of reflective lookups (refl_defer)
+        self.reflcopies = 1  # the copies of the code being compiled that unrolled loops make (refl_unroll_for)
+
+    # ---- reflection (reflection.py)
+    def refl_typeof(self, n: Node) -> Node | None:
+        return reflection_refl_typeof(self, n)
+
+    def refl_concrete(self, t: str) -> list[str]:
+        return reflection_refl_concrete(self, t)
+
+    def refl_may_none(self, v: Val) -> bool:
+        return reflection_refl_may_none(self, v)
+
+    def refl_split(self, v: Val, nonnull: bool = False) -> list[RLeaf]:
+        return reflection_refl_split(self, v, nonnull)
+
+    def refl_split_class(self, v: Val) -> list[RLeaf]:
+        return reflection_refl_split_class(self, v)
+
+    def refl_type_name(self, c: str, what: str) -> str:
+        return reflection_refl_type_name(self, c, what)
+
+    def refl_record(self, c: str) -> str:
+        return reflection_refl_record(self, c)
+
+    def refl_type_of(self, v: Val, what: str, nonnull: bool = False) -> list[RLeaf]:
+        return reflection_refl_type_of(self, v, what, nonnull)
+
+    def refl_class_of(self, v: Val, nonnull: bool = False) -> Val:
+        return reflection_refl_class_of(self, v, nonnull)
+
+    def refl_type_attr(self, x: Node, what: str) -> Val:
+        return reflection_refl_type_attr(self, x, what)
+
+    def refl_type_operand(self, n: Node) -> str:
+        return reflection_refl_type_operand(self, n)
+
+    def refl_type_cmp(self, n: Node) -> Val | None:
+        return reflection_refl_type_cmp(self, n)
+
+    def refl_name(self, n: Node) -> str:
+        return reflection_refl_name(self, n)
+
+    def refl_args(self, name: str, args: list[Node], lo: int, hi: int) -> None:
+        return reflection_refl_args(self, name, args, lo, hi)
+
+    def refl_has(self, c: str, a: str) -> str:
+        return reflection_refl_has(self, c, a)
+
+    def refl_join(self, vals: list[Val], what: str) -> str:
+        return reflection_refl_join(self, vals, what)
+
+    def refl_phi(self, vals: list[Val], blocks: list[str], end: str, what: str) -> Val:
+        return reflection_refl_phi(self, vals, blocks, end, what)
+
+    def refl_catch_attr(self, x: Val, a: str, d: Val, vals: list[Val], blocks: list[str], end: str, truth: bool = False) -> None:
+        return reflection_refl_catch_attr(self, x, a, d, vals, blocks, end, truth)
+
+    def refl_getattr(self, args: list[Node], want: str) -> Val:
+        return reflection_refl_getattr(self, args, want)
+
+    def refl_setattr(self, args: list[Node]) -> Val:
+        return reflection_refl_setattr(self, args)
+
+    def refl_bound_once(self, name: str) -> list[str] | None:
+        return reflection_refl_bound_once(self, name)
+
+    def refl_const_names(self, it: Node) -> list[str] | None:
+        return reflection_refl_const_names(self, it)
+
+    def refl_unroll_for(self, n: Node) -> bool:
+        return reflection_refl_unroll_for(self, n)
+
+    def refl_supported(self, c: str, what: str) -> None:
+        return reflection_refl_supported(self, c, what)
+
+    def refl_defines(self, c: str, m: str) -> bool:
+        return reflection_refl_defines(self, c, m)
+
+    def refl_names(self, c: str) -> list[list[str]]:
+        return reflection_refl_names(self, c)
+
+    def refl_listed(self, c: str, nk: list[str]) -> bool:
+        return reflection_refl_listed(self, c, nk)
+
+    def refl_public(self, c: str, n: str) -> None:
+        return reflection_refl_public(self, c, n)
+
+    def refl_init_order(self, c: str, f: FnInfo, out: list[str], maybe: dict[str, bool]) -> bool:
+        return reflection_refl_init_order(self, c, f, out, maybe)
+
+    def refl_dict_order(self, c: str) -> list[str]:
+        return reflection_refl_dict_order(self, c)
+
+    def refl_stored(self, name: str) -> bool:
+        return reflection_refl_stored(self, name)
+
+    def refl_late(self, name: str) -> bool:
+        return reflection_refl_late(self, name)
+
+    def refl_fields_table(self, c: str) -> str:
+        return reflection_refl_fields_table(self, c)
+
+    def refl_layout_record(self, c: str) -> str:
+        return reflection_refl_layout_record(self, c)
+
+    def refl_dict_of(self, n: Node) -> Node | None:
+        return reflection_refl_dict_of(self, n)
+
+    def refl_vars_text(self, o: Val, known: bool) -> Val:
+        return reflection_refl_vars_text(self, o, known)
+
+    def refl_textual(self, n: Node) -> bool:
+        return reflection_refl_textual(self, n)
+
+    def refl_defer(self, n: Node) -> Val:
+        return reflection_refl_defer(self, n)
+
+    def refl_finish(self, v: Val, conv: str) -> Val:
+        return reflection_refl_finish(self, v, conv)
+
+    def refl_dict_operand(self, n: Node, x: Node) -> Val:
+        return reflection_refl_dict_operand(self, n, x)
+
+    def refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
+        return reflection_refl_unroll_dict(self, n, d, x, m)
+
+    def refl_size_check(self, ov: Val, flagged: list[str], snap: list[str]) -> None:
+        return reflection_refl_size_check(self, ov, flagged, snap)
+
+    def refl_dir_names(self, c: str) -> list[list[str]]:
+        return reflection_refl_dir_names(self, c)
+
+    def refl_dir(self, x: Node) -> Val:
+        return reflection_refl_dir(self, x)
+
+    def refl_dir_of(self, it: Node) -> Node | None:
+        return reflection_refl_dir_of(self, it)
+
+    def refl_dict_copy(self, d: Node) -> Val:
+        return reflection_refl_dict_copy(self, d)
+
+    def refl_dict_format(self, d: Node, keys: list[str], fmt: str, what: str) -> Val:
+        return reflection_refl_dict_format(self, d, keys, fmt, what)
+
+    def refl_percent(self, fmt: str, d: Node) -> Val:
+        return reflection_refl_percent(self, fmt, d)
+
+    def refl_format_map(self, fmt: str, d: Node) -> Val:
+        return reflection_refl_format_map(self, fmt, d)
+
+    def refl_dc_class(self, x: Node, what: str) -> str:
+        return reflection_refl_dc_class(self, x, what)
+
+    def refl_dc_check(self, t: str, what: str) -> str:
+        return reflection_refl_dc_check(self, t, what)
+
+    def refl_dc_names(self, it: Node) -> list[str] | None:
+        return reflection_refl_dc_names(self, it)
+
+    def refl_unroll_fields(self, n: Node, names: list[str]) -> None:
+        return reflection_refl_unroll_fields(self, n, names)
+
+    def refl_dc_type(self, t: str, what: str, seen: list[str]) -> str:
+        return reflection_refl_dc_type(self, t, what, seen)
+
+    def refl_dc_copy(self, v: Val, what: str, seen: list[str], nonnull: bool = False) -> Val:
+        return reflection_refl_dc_copy(self, v, what, seen, nonnull)
+
+    def refl_dataclasses(self, name: str, args: list[Node]) -> Val:
+        return reflection_refl_dataclasses(self, name, args)
+
+    def refl_union_str(self, v: Val, m: str) -> Val:
+        return reflection_refl_union_str(self, v, m)
+
+    def refl_name_list(self, c: str) -> list[list[str]]:
+        return reflection_refl_name_list(self, c)
+
+    def refl_names_table(self, c: str) -> str:
+        return reflection_refl_names_table(self, c)
+
+    def refl_runtime_name(self, a: Node, what: str) -> Val:
+        return reflection_refl_runtime_name(self, a, what)
+
+    def refl_find(self, c: str, name: Val) -> str:
+        return reflection_refl_find(self, c, name)
+
+    def refl_hasattr(self, args: list[Node]) -> Val:
+        return reflection_refl_hasattr(self, args)
+
+    def refl_otext(self, c: str, name: str) -> str:
+        return reflection_refl_otext(self, c, name)
+
+    def refl_lookup(self, n: Node) -> RText:
+        return reflection_refl_lookup(self, n)
+
+    def refl_lookup_text(self, r: RText, conv: str) -> Val:
+        return reflection_refl_lookup_text(self, r, conv)
+
+    def refl_arm_text(self, r: RText, arm: RArm, conv: str) -> Val:
+        return reflection_refl_arm_text(self, r, arm, conv)
+
+    def refl_setattr_runtime(self, args: list[Node]) -> Val:
+        return reflection_refl_setattr_runtime(self, args)
+
+    def refl_replace_changes(self, obj: Node, d: Val) -> None:
+        return reflection_refl_replace_changes(self, obj, d)
+
+    def refl_hasattr_lit(self, o: Val, a: str, known: bool) -> Val:
+        return reflection_refl_hasattr_lit(self, o, a, known)
+
+    def refl_prop_in(self, t: str, a: str) -> bool:
+        return reflection_refl_prop_in(self, t, a)
+
+    def refl_derived_only(self, x: Node, a: str) -> bool:
+        return reflection_refl_derived_only(self, x, a)
 
     # ---- emission helpers
     def err(self, msg: str) -> None:
@@ -1130,6 +1495,9 @@ class Gen:
 
     def ann_base(self, b: Node) -> str:
         return declarations_ann_base(self, b)
+
+    def ann_none(self, n: Node, seen: list[str]) -> bool:
+        return declarations_ann_none(self, n, seen)
 
     def ann_items(self, xs: list[Node]) -> list[str]:
         return declarations_ann_items(self, xs)
@@ -1410,8 +1778,8 @@ class Gen:
     def none_type(self, name: str) -> str:
         return variables_none_type(self, name)
 
-    def none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-        return variables_none_values(self, body, name, out)
+    def none_values(self, st: Node, name: str, out: list[Node]) -> None:
+        return variables_none_values(self, st, name, out)
 
     def read(self, n: Node) -> Val:
         return variables_read(self, n)
@@ -1530,8 +1898,8 @@ class Gen:
     def typed_now(self, e: Node, own: str='') -> bool:
         return variables_typed_now(self, e, own)
 
-    def dry(self, e: Node) -> str:
-        return variables_dry(self, e)
+    def dry(self, e: Node, want: str='') -> str:
+        return variables_dry(self, e, want)
 
     def fill(self, n: Node, m: str, args: list[Node], want: str='') -> Val:
         return variables_fill(self, n, m, args, want)
@@ -1585,6 +1953,97 @@ class Gen:
     def function(self, f: FnInfo, body: list[Node]) -> None:
         return functions_function(self, f, body)
 
+    def builtin_catch(self, b: str) -> str:
+        return generators_builtin_catch(self, b)
+
+    def gen_ann_ret(self, n: Node) -> list[str]:
+        return generators_gen_ann_ret(self, n)
+
+    def gen_begin(self, f: FnInfo) -> None:
+        return generators_gen_begin(self, f)
+
+    def gen_cleanup(self) -> int:
+        return generators_gen_cleanup(self)
+
+    def gen_unpack(self, t: Node, g: Val) -> None:
+        return generators_gen_unpack(self, t, g)
+
+    def gen_contains(self, x: Val, g: Val) -> Val:
+        return generators_gen_contains(self, x, g)
+
+    def gen_declare(self, f: FnInfo, d: Node) -> str:
+        return generators_gen_declare(self, f, d)
+
+    def gen_drop(self, h: Val) -> None:
+        return generators_gen_drop(self, h)
+
+    def gen_end(self, f: FnInfo) -> None:
+        return generators_gen_end(self, f)
+
+    def gen_enter(self) -> None:
+        return generators_gen_enter(self)
+
+    def hidden_loop(self, loop: Node, own: list[str], names: list[str]) -> None:
+        return generators_hidden_loop(self, loop, own, names)
+
+    def gen_list(self, v: Val, want: str) -> Val:
+        return generators_gen_list(self, v, want)
+
+    def gen_name(self, f: FnInfo) -> str:
+        return generators_gen_name(self, f)
+
+    def gen_next(self, h: Val, done: str) -> str:
+        return generators_gen_next(self, h, done)
+
+    def gen_none_end(self) -> None:
+        return generators_gen_none_end(self)
+
+    def none_null(self, t: str) -> bool:
+        return generators_none_null(self, t)
+
+    def gen_promise(self, h: Val) -> str:
+        return generators_gen_promise(self, h)
+
+    def gen_unhandle(self) -> None:
+        return generators_gen_unhandle(self)
+
+
+    def genexp_value(self, n: Node) -> Val:
+        return generators_genexp_value(self, n)
+
+    def gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        return generators_gen_method(self, o, m, args)
+
+    def gen_next_value(self, g: Val, dflt: Val) -> Val:
+        return generators_gen_next_value(self, g, dflt)
+
+    def gen_ret(self, v: Val) -> None:
+        return generators_gen_ret(self, v)
+
+    def gen_return(self, n: Node) -> None:
+        return generators_gen_return(self, n)
+
+    def gen_stream(self, name: str, v: Val, args: list[Node], want: str, resultsoft: bool) -> Val:
+        return generators_gen_stream(self, name, v, args, want, resultsoft)
+
+    def gen_suspend(self, slot: str, k: int, sub: Val) -> None:
+        return generators_gen_suspend(self, slot, k, sub)
+
+    def owned_gen(self, v: Val, it: Node) -> int:
+        return generators_owned_gen(self, v, it)
+
+    def owned_node(self, v: Val) -> Node:
+        return generators_owned_node(self, v)
+
+    def owned_loop(self, owned: list[Val], close: bool, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None, made: SeqStart | None) -> None:
+        return generators_owned_loop(self, owned, close, tgt, seqs, mode, body, start, hide, arg, made)
+
+    def yield_from(self, x: Node) -> Val:
+        return generators_yield_from(self, x)
+
+    def yield_stmt(self, n: Node) -> None:
+        return generators_yield_stmt(self, n)
+
     def extern_args(self, x: Node, more: bool) -> list[str]:
         return functions_extern_args(self, x, more)
 
@@ -1606,6 +2065,9 @@ class Gen:
     def lower_module(self) -> str:
         return lower_module_lower_module(self)
 
+    def gen_module(self) -> list[str]:
+        return lower_module_gen_module(self)
+
     def lower(self, fn: IFn) -> None:
         return lowering_lower(self, fn)
 
@@ -1617,6 +2079,9 @@ class Gen:
 
     def verify(self, fn: IFn, eh: bool) -> None:
         return ircheck_verify(self, fn, eh)
+
+    def verify_gen(self, fn: IFn, b: Blk, i: Ins, j: int) -> None:
+        return ircheck_verify_gen(self, fn, b, i, j)
 
     def nums(self, i: Ins) -> int:
         return ircheck_nums(self, i)
@@ -1698,6 +2163,15 @@ class Gen:
 
     def class_problem(self, m: Mod, st: Node, exc: bool) -> str:
         return program_class_problem(self, m, st, exc)
+
+    def abstract_defs(self, body: list[Node]) -> list[Node]:
+        return program_abstract_defs(self, body)
+
+    def abstract_of(self, c: str) -> list[str]:
+        return program_abstract_of(self, c)
+
+    def abc_class(self, c: str) -> bool:
+        return program_abc_class(self, c)
 
     def eager(self, e: str, why: str, does: str) -> None:
         return program_eager(self, e, why, does)
@@ -1971,6 +2445,12 @@ class Gen:
 
     def augassign(self, n: Node) -> None:
         return statements_augassign(self, n)
+
+    def owns(self, name: str) -> bool:
+        return statements_owns(self, name)
+
+    def str_append(self, t: Node, rhs: Node, shown: str) -> None:
+        return statements_str_append(self, t, rhs, shown)
 
     def may_change(self, b0: Blk, x0: int, n0: int) -> bool:
         return statements_may_change(self, b0, x0, n0)
@@ -2617,6 +3097,24 @@ class Gen:
     def reverse_arg(self, n: Node, name: str) -> str:
         return builtins_reverse_arg(self, n, name)
 
+    def bytes_method(self, o: Val, m: str, args: list[Node]) -> Val:
+        return builtins_bytes_method(self, o, m, args)
+
+    def struct_call(self, name: str, args: list[Node], want: str) -> Val | None:
+        return structs_struct_call(self, name, args, want)
+
+    def struct_format(self, a: Node) -> Node | None:
+        return structs_struct_format(self, a)
+
+    def struct_helper(self, f: str, args: list[Node]) -> Node:
+        return structs_struct_helper(self, f, args)
+
+    def struct_nodes(self, sf: StructFmt, bn: Node, base: Node | None) -> list[Node]:
+        return structs_struct_nodes(self, sf, bn, base)
+
+    def struct_pack(self, sf: StructFmt, args: list[Node]) -> Val:
+        return structs_struct_pack(self, sf, args)
+
     def bytes_(self, args: list[Node]) -> Val:
         return builtins_bytes_(self, args)
 
@@ -2653,8 +3151,8 @@ class Gen:
     def tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         return builtins_tmethod(self, o, m, args)
 
-    def dict_pairs(self, v: Val) -> Val:
-        return builtins_dict_pairs(self, v)
+    def dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
+        return builtins_dict_pairs(self, v, want, found)
 
     def isclose(self, args: list[Node]) -> Val:
         return builtins_isclose(self, args)

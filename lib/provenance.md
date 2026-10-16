@@ -70,7 +70,12 @@ CPython runs the source.
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
 | `binascii` (`_pystachy_binascii`) | `Modules/binascii.c`, `Python/pystrhex.c` | All twelve functions of the C module, with its errors and messages |
+| `atexit` (`_pystachy_atexit`) | `Modules/atexitmodule.c` (SHA-256 `a61f11e295d38463b36524e51b8eba64d5a84022bb7df7b3c0ccd8aa9fe9521b`) | `register()`, `_clear()`, `_run_exitfuncs()` and `_ncallbacks()`, with the C module's order of callbacks; `unregister()` raises `NotImplementedError` |
+| `abc` (`_pystachy_abc`) | `Lib/abc.py` (SHA-256 `e558702a95cdce3febd289da021715d2b92bc43995b8a1bc58dfa1c3d8010287`), `Modules/_abc.c`, `Objects/typeobject.c` | `ABC`, `ABCMeta`, `abstractmethod()` and the deprecated decorators, which the compiler applies, with `object.__new__`'s `TypeError` for an abstract class; their docstrings |
 | `_codecs` (`_pystachy_codecs`) | `Modules/_codecsmodule.c`, `Objects/unicodeobject.c`, `Objects/stringlib/codecs.h` | The UTF-8, Latin-1, ASCII and charmap codec functions, `encode()`, `decode()` and the error handler registry, with the C module's errors and messages; the other codecs raise `NotImplementedError` |
+| `_struct` (`_pystachy_struct`) | `Modules/_struct.c`, `Objects/floatobject.c` | `calcsize()`, and the packing and unpacking of each item, which the compiler composes into `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` for a format it knows, with the C module's sizes, alignment, errors and messages and `PyFloat_Pack2()`'s rounding; `Struct`; their docstrings |
+| `_thread` (`_pystachy_thread`) | `Modules/_threadmodule.c`, `Python/pytime.c` | Locks and reentrant locks for one thread, with `acquire()`'s checks of its arguments and the C module's errors and messages; thread identities and handles, `stack_size()`, `interrupt_main()`, `exit()`; their docstrings |
+| `unicodedata` (`_pystachy_unicodedata`) | `Modules/unicodedata.c`, `Tools/unicode/makeunicodedata.py` | Every function and `ucd_3_2_0`, with the C module's errors and messages, on the tables that `tools/unicodedata_tables.py` takes from CPython's `unicodedata`; their docstrings |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -151,6 +156,46 @@ module (`Modules/binascii.c`, SHA-256
 and compares their signatures. Its `--upstream DIR` option runs the pinned `test_binascii`
 (SHA-256 `95648ecc7cd21319fd515090ef5c0c2e4a501d43409ffc3ce27f5f647e73c7d7`) on the port, as
 recorded above.
+
+`tools/struct_check.py` runs `lib/_pystachy_struct.py` on CPython and composes its functions
+item by item as the compiler composes them, for 20,000 random formats, native and standard,
+with values at the edges of the codes' ranges and beyond, signed zeros, subnormals, infinities,
+NaNs and ties of rounding, cut and padded bytes, and offsets and buffers of every size. It
+compares the bytes, values and errors of 100,000 calls, also of `calcsize()` with invalid
+formats, with those of the C module (`Modules/_struct.c`, SHA-256
+`851f2a21bdbf4432c2e525da31a68a8213f5a4341d90bb2a6857b84c1a73d8e6`, which packs floats with
+`Objects/floatobject.c`'s `PyFloat_Pack2()`, `PyFloat_Pack4()` and `PyFloat_Pack8()`, SHA-256
+`be9a74fef157cf6105de8ce3beedb5325f0b433ebd4c64e604aeb9ebf29394b1`), and compares the functions'
+signatures and docstrings.
+
+`tools/thread_check.py` runs `lib/_pystachy_thread.py` on CPython and compares it with the C
+module (`Modules/_threadmodule.c`, SHA-256
+`2bda8f59c35c9939a45819471b248115284f4d74405c5f4172e65ee058d5bc70`, whose timeouts
+`Python/pytime.c` converts, SHA-256
+`d6c7c60fd1302f7fe665a27091764dfb5d0cf472f645e94c937971fb47683462`) for 20,000 random cases:
+`acquire()` of unlocked and locked locks and reentrant locks, with blocking flags and int and
+float timeouts at the edges of `PyTime_t`'s range, NaNs and infinities; a reentrant lock's counts,
+also through `_release_save()` and `_acquire_restore()`; `stack_size()` and `interrupt_main()`.
+With the functions' signatures and docstrings, that is 263,014 checks.
+
+`tools/unicodedata_tables.py` asks CPython 3.13.16's `unicodedata` about every code point and
+writes `lib/_pystachy_unicodedata_db.py` and `_pystachy_unicodedata_names.py`. The aliases, named
+sequences and 3.2.0's corrected decompositions, which no function lists, come from Unicode
+15.1.0's `NameAliases.txt` (SHA-256
+`fbf0e640bab36e165c4da5b6a98bdd963fcb4f923b5097f26f6f7f18b9678698`), `NamedSequences.txt`
+(`7700f03419912fc58c26962b6252e2fcac135240a26925440aff6a4c8b714795`) and
+`NormalizationCorrections.txt`
+(`c5b44a452cec45b1907f9b6b255f57492ccfb813bcc56fefdef0204493634be7`), each checked against
+CPython's `lookup()` and `ucd_3_2_0.normalize()`. `tools/unicodedata_check.py` runs
+`lib/_pystachy_unicodedata.py` on CPython and compares it with the C module
+(`Modules/unicodedata.c`, SHA-256
+`d44b25f8269744833467d512a6c6a0c7095818e2d2e058290318ef5d9ffa0893`, whose tables
+`Tools/unicode/makeunicodedata.py` makes, SHA-256
+`6c4a119ec7e0cb029407c205b948aaee1115506b11af44c9a79644afd4726828`): every function of every
+code point, in both versions; `lookup()` of every name, in upper and lower case, alias, named
+sequence and derived name, and of 4,000 malformed ones; `normalize()` and `is_normalized()` of
+50,000 random strings in the four forms of both versions; and the functions' signatures and
+docstrings: 3,515,917 checks.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of

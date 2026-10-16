@@ -4,7 +4,7 @@ from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, Ins, IterArg, SetArg, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import ITERS, NONEVAR, OPTTYPES
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
@@ -167,7 +167,7 @@ def gen_star_display(self, n: Node, want: str) -> Val:
     for i in range(len(parts)):
         if lists[i] and elem(parts[i].t) != et:
             # (a list of other items, an int's where they are int | str: each converted)
-            item = mk("name", "__pys_item", n.line, [])
+            item = made_var("__pys_item", n.line)
             parts[i] = self.listcomp(mk("listcomp", "", n.line, [item, item, self.vnode(parts[i])]), self.ctype("list", [et]))
     r = self.rt("pys_list_new", "ptr", [f"i64 {len([b for b in lists if not b])}"])
     for i in range(len(parts)):
@@ -266,7 +266,7 @@ def gen_sargs(self, o: Val, m: str, args: list[Node]) -> list[SetArg]:
     for a in args:
         g = self.mapgen(a) if self.is_mapcall(a) else a
         if len(args) > 1 and self.iterator_call(g):
-            item = mk("name", "__item", g.line, [])
+            item = made_var("__item", g.line)
             g = mk("listcomp", "gen", g.line, [item, item, g])
         if g.kind != "listcomp" or g.s != "gen":
             out.append(SetArg(self.consume(g, self.ctype("list", [et]) if et != "" else ""), g))
@@ -880,6 +880,8 @@ def gen_hashable(self, t: str) -> bool:
 def gen_repr(self, v: Val) -> Val:
     if is_kw(v.t):
         return self.kw_repr(v)
+    if self.reference_union(v.t):
+        return self.refl_union_str(v, "__repr__")  # (each class's: reflection.py)
     if v.t in self.classes:
         return self.obj_str(v, "__repr__")
     if v.t == "None":
