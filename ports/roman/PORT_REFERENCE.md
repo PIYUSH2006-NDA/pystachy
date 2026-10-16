@@ -16,13 +16,15 @@ Archive SHA-256: `275fe9f46290f7d0ffaea1c33251b92b8e463ace23660508ceef522e7587cb
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `7d8962ca4ed71a67e0d07d0f6e81deb0f0b177565375d5ff39be1b1dc50e16f5` | 4 regions, and the notice of change |
+| `__init__.py` | `7d8962ca4ed71a67e0d07d0f6e81deb0f0b177565375d5ff39be1b1dc50e16f5` | 2 regions, and the notice of change |
 
 ## Adaptation record
 
-- A small boolean scanner replaces the compiled numeral regular expression without changing its accepted ASCII language, including `$` before one final newline.
-- `fromRoman()` calls that scanner. `argparse` is imported lazily in `parse_args()`, whose annotation is quoted.
-- Four edited regions and a dated change notice satisfy the ZPL modified-file requirement; conversion algorithms and numeral mappings remain upstream’s.
+- `romanNumeralPattern` is upstream's `re.VERBOSE` pattern, compiled by `lib/re`; until the
+  re-baseline (#262) a hand-written scanner stood in for it.
+- `argparse` is imported lazily in `parse_args()`, whose annotation is quoted: Pystachy has no
+  `argparse` module.
+- Two edited regions and a dated change notice satisfy the ZPL modified-file requirement; conversion algorithms, numeral mappings and the validating pattern remain upstream’s.
 
 ## Validation snapshot
 
@@ -36,13 +38,14 @@ there and back, in upper and lower case, other call forms (`import roman as rm`,
 `toRoman as to_roman`, every argument by keyword and in either order), `__author__`,
 `__copyright__` and the uses of `romanNumeralMap` that compile, and last an `OutOfRangeError`
 that escapes, whose report must match CPython's last line of stderr.
-`tests/port_roman_validate.py` runs the validation replaced by the boolean scanner: 59 strings at the
+`tests/port_roman_validate.py` runs the validation that `romanNumeralPattern` makes: 59 strings at the
 pattern's edges (a group's alternative followed by the letter another one would leave, as in
 `CMCM`, `CDC`, `XCX` and `IXI`; too many letters of a kind; `$` before a final newline and not
 before two, before `\r\n` or before another line break such as `\r`, `\x0b`, `\x85` and
 `\u2028`; a leading newline, spaces, a tab, NUL, `%` signs, 50 M's, and four strings with
 characters outside ASCII that have no case), then every string of one to four numeral letters,
-2,800 strings of which 347 are valid, with a checksum of their values. They leave out what the
+2,800 strings of which 347 are valid, with a checksum of their values; a hand-written scanner
+stood in for the pattern when they were written. They leave out what the
 edits remove (the command line, which upstream's tests drive through `sys.argv` and `StringIO`)
 and `toRoman('1')`, which Pystachy rejects at compile time.
 
@@ -70,3 +73,11 @@ That is 3.7 times faster. Two more sets of 5 runs gave the same in CPU time (0.6
 wall-clock time (3.4 times). roman has no C extension, but CPython checks each numeral in its C
 regex engine: under CPython the port, whose check is the adapted Python scanner, is slower
 than upstream, so the executable runs the code of this port 4.7 times faster than CPython does.
+
+That port had the hand-written scanner in place of upstream's regular expression. With the
+pattern restored (the re-baseline of #262), the same workload took a median of 1.463 s of CPU time
+as an AOT executable, against 2.787 s for CPython on unmodified roman 5.2 (1.9 times faster) and
+0.864 s for the scanner-based executable, measured together on the same VM at a load average of
+9 to 11. The compiled `re` engine and the pattern's compilation at import make the AOT build about
+4 s longer (4.6 s against 0.7 s) and the executable 286 KB instead of 68 KB. Under CPython, the
+port now runs as fast as upstream.
