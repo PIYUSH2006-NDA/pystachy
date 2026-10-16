@@ -724,3 +724,34 @@ format.
 - `struct.pack` and the module's other functions as values (`f = struct.pack`) raise
   `NotImplementedError` when called, as the compiler makes the calls by their names. A `Struct`'s
   methods are values, as `Struct("!I").pack` is.
+
+## Thread
+
+`_thread` is `_pystachy_thread`, a port of the C module `_thread` (`Modules/_threadmodule.c`)
+that Pystachy loads for `import _thread`, for the one thread that a Pystachy program runs, as
+CPython's builds without threads had `_dummy_thread` until 3.8. Locks (`allocate_lock()` and
+`LockType`, also through the obsolete `allocate()`, `acquire_lock()`, `release_lock()` and
+`locked_lock()`) and reentrant locks (`RLock`, with the `_is_owned()`, `_recursion_count()`,
+`_release_save()` and `_acquire_restore()` of `threading.Condition`) work as CPython's do in one
+thread: `acquire()` of an unlocked lock takes it, `acquire(False)` of a locked one gives `False`,
+and an `acquire()` with a timeout gives `False` once the timeout has passed. `acquire()` checks
+its arguments as CPython's does, with its `ValueError` and `OverflowError`, and `release()` of a
+lock that is not held raises CPython's `RuntimeError`. `_count()`, `stack_size()`,
+`interrupt_main()`, whose SIGINT raises `KeyboardInterrupt`, `exit()`, `daemon_threads_allowed()`,
+`TIMEOUT_MAX` and `error`, which is `RuntimeError`, work as in CPython, and `_local` is a base
+class whose subclasses' `__init__` binds their fields.
+
+- `start_new_thread()`, the obsolete `start_new()` and `start_joinable_thread()` raise
+  `NotImplementedError` ([deviation](../tests/deviations/lib_thread_start.py)).
+- An `acquire()` of a locked lock that would wait for ever (without a timeout) raises
+  `RuntimeError: deadlock: ...`, where CPython waits for another thread to release the lock, and
+  so do `_acquire_restore()` of a reentrant lock that is held and `join()` of a thread handle that
+  is not done ([deviation](../tests/deviations/lib_thread_deadlock.py)).
+- `with lock:` is a compile-time error, as `with` takes only files
+  ([error test](../tests/errors/lib_thread_with.py)): call `acquire()` and `release()`.
+- `get_ident()` is the process's id, and so is `get_native_id()`, as Linux gives a process's main
+  thread the process's id; CPython's `get_ident()` is the thread's `pthread_t`.
+- `interrupt_main()` of another signal than SIGINT does nothing, as CPython's default handlers do
+  (Linux's signal numbers: those from 65 on are out of range).
+- `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
+  `NotImplementedError`: no thread but the main one runs.

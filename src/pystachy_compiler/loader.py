@@ -62,6 +62,7 @@ from src.pystachy_compiler.specs import (
     STANDINS,
     TYPING,
     VERSIONINFO,
+    is_excname,
 )
 from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
 from src.pystachy_compiler.utils import clone, int_fits
@@ -1868,6 +1869,8 @@ class Loader:
                 if a.s == "*":
                     fail(f"'from {path} import *' is not supported", line)
                 self.bind(m, a.s, "b:" + a.kids[0].s, infn, line)
+                if not infn and a.kids[0].s.startswith("builtins.") and is_excname(a.kids[0].s[9:]):
+                    continue  # (a builtin exception class, which qname() names itself)
                 keep.kids.append(a)
                 if not infn and a.kids[0].s == "builtins." + a.s:
                     continue  # the same builtin is available before the import too
@@ -2090,7 +2093,8 @@ class Loader:
         elif k.startswith("b:"):
             p = k[2:]
             self.bind(m, name, k, infn, line)
-            keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
+            if infn or not (p.startswith("builtins.") and is_excname(p[9:])):  # (qname() names a builtin exception class itself)
+                keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
         elif k != "v":
             al = self.aliased.get(src.name + " " + x, None)
             if k.startswith("t:") and al is not None and not src.done and src.at > 0 and al.line > src.at:
@@ -2129,6 +2133,8 @@ class Loader:
         if s in self.qren:
             return self.qren[s]
         k = self.kind(m, s)
+        if k.startswith("b:builtins.") and is_excname(k[11:]) and s not in self.fk:
+            return k[11:]  # (a builtin exception class by another name: from builtins import RuntimeError as error)
         if k == "f" or k == "c" or k == "v" or k.startswith("b:"):
             if m.name == "" and s in PYBUILTINS:
                 return "__main__$" + s  # (other modules' code still sees the builtin)

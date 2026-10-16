@@ -102,6 +102,11 @@ Objects/floatobject.c to Pystachy's subset, following their behaviour and messag
 the C module's docstrings; it is derived from Python and is used under the same license and
 copyright notice.
 
+lib/_pystachy_thread.py ports CPython 3.13.16's Modules/_threadmodule.c, and the conversion of
+timeouts of Python/pytime.c, to Pystachy's subset for one thread, following their behaviour and
+messages and keeping the C module's docstrings; it is derived from Python and is used under the
+same license and copyright notice.
+
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
 Modules/_sre/sre.c and sre_lib.h, to Pystachy's subset (lib/README.md). lib/re/_unicode.py is

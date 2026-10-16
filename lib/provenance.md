@@ -74,6 +74,7 @@ CPython runs the source.
 | `abc` (`_pystachy_abc`) | `Lib/abc.py` (SHA-256 `e558702a95cdce3febd289da021715d2b92bc43995b8a1bc58dfa1c3d8010287`), `Modules/_abc.c`, `Objects/typeobject.c` | `ABC`, `ABCMeta`, `abstractmethod()` and the deprecated decorators, which the compiler applies, with `object.__new__`'s `TypeError` for an abstract class; their docstrings |
 | `_codecs` (`_pystachy_codecs`) | `Modules/_codecsmodule.c`, `Objects/unicodeobject.c`, `Objects/stringlib/codecs.h` | The UTF-8, Latin-1, ASCII and charmap codec functions, `encode()`, `decode()` and the error handler registry, with the C module's errors and messages; the other codecs raise `NotImplementedError` |
 | `_struct` (`_pystachy_struct`) | `Modules/_struct.c`, `Objects/floatobject.c` | `calcsize()`, and the packing and unpacking of each item, which the compiler composes into `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` for a format it knows, with the C module's sizes, alignment, errors and messages and `PyFloat_Pack2()`'s rounding; `Struct`; their docstrings |
+| `_thread` (`_pystachy_thread`) | `Modules/_threadmodule.c`, `Python/pytime.c` | Locks and reentrant locks for one thread, with `acquire()`'s checks of its arguments and the C module's errors and messages; thread identities and handles, `stack_size()`, `interrupt_main()`, `exit()`; their docstrings |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -165,6 +166,16 @@ formats, with those of the C module (`Modules/_struct.c`, SHA-256
 `Objects/floatobject.c`'s `PyFloat_Pack2()`, `PyFloat_Pack4()` and `PyFloat_Pack8()`, SHA-256
 `be9a74fef157cf6105de8ce3beedb5325f0b433ebd4c64e604aeb9ebf29394b1`), and compares the functions'
 signatures and docstrings.
+
+`tools/thread_check.py` runs `lib/_pystachy_thread.py` on CPython and compares it with the C
+module (`Modules/_threadmodule.c`, SHA-256
+`2bda8f59c35c9939a45819471b248115284f4d74405c5f4172e65ee058d5bc70`, whose timeouts
+`Python/pytime.c` converts, SHA-256
+`d6c7c60fd1302f7fe665a27091764dfb5d0cf472f645e94c937971fb47683462`) for 20,000 random cases:
+`acquire()` of unlocked and locked locks and reentrant locks, with blocking flags and int and
+float timeouts at the edges of `PyTime_t`'s range, NaNs and infinities; a reentrant lock's counts,
+also through `_release_save()` and `_acquire_restore()`; `stack_size()` and `interrupt_main()`.
+With the functions' signatures and docstrings, that is 263,014 checks.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of
