@@ -147,8 +147,9 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
-        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
-        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        # the type parameters of the generic classes and defs (class C[T], def f[T]) it is in, by
+        # name: the names of their own that they are qualified to (<class's or def's name>$$T,
+        # unlike any other)
         self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
@@ -2446,6 +2447,14 @@ class Loader:
                 self.qdef = True
                 ren = self.qren
                 self.qren = dict(ren)
+                for nm in st.kids[2].s.split():
+                    # (a generic def's type parameters, in its body as a generic class's are in its
+                    # methods: CPython's TypeVars, not the module's or an enclosing function's
+                    # names, which they hide)
+                    self.qren[nm] = st.s + "$$" + nm
+                    m.deftps.append(self.qren[nm])
+                    if nm not in own:
+                        inner.pop(nm, False)
                 for nm in decl:
                     self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)
