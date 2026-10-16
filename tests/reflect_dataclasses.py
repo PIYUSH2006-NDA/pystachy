@@ -1,6 +1,6 @@
 # dataclasses.fields(), asdict(), astuple() and is_dataclass() (#486), made per class: asdict()
 # and astuple() copy recursively into nested dataclasses, lists and dicts, as CPython's
-# _asdict_inner does; values of different types join in a union
+# _asdict_inner does; values of different types join in a union; bytes, immutable, are kept
 from dataclasses import asdict, astuple, dataclass, field, fields, is_dataclass
 
 
@@ -44,6 +44,12 @@ class Derived(Base):
     z: int = 0
 
 
+@dataclass
+class Packet:
+    body: bytes
+    extra: bytes | None = None
+
+
 def describe(o: Base) -> str:
     return str(asdict(o))
 
@@ -69,3 +75,6 @@ print(asdict(Derived(1, 2, 3)), astuple(Derived(4, 5)), describe(Base(6, 7)), de
 print(is_dataclass(s), is_dataclass(Point), is_dataclass(1), is_dataclass(Item("a", 1, 1.0)))
 t = astuple(Point(1, 2))
 print(t[0] + t[1])
+pk = Packet(b"\x00ab")
+pd = asdict(pk)
+print(pd, astuple(Packet(b"c", b"d")), pd["body"] is pk.body)

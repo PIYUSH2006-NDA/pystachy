@@ -257,7 +257,8 @@ format) or copied (`dict(vars(x))`, `vars(x).copy()`). Its keys are the attribut
 holds in CPython's order: the order its `__init__` (a dataclass's: its fields) first assigns
 them, with a field `__init__` may leave unassigned only where it is set; a class attribute is not
 in it. Iteration reads each attribute as its turn comes, as CPython's iterator over the live
-`__dict__` does, and its values have the join of the fields' types. A `__dict__` kept as a value,
+`__dict__` does, and its values (where the loop binds them, and in a copy) have the join of the
+fields' types; a loop over the names alone takes fields of any types. A `__dict__` kept as a value,
 an order that depends on the run (two attributes first assigned in one branch), a class with
 `__slots__` (CPython raises) and a class attribute that the program may also assign through an
 object are rejected. `hasattr(x, "__dict__")` and `"__weakref__"` are false for a class whose
@@ -275,7 +276,8 @@ every object has, and those a class body or `@dataclass` adds (`__module__`, `__
 `dataclasses.fields(X)` (of a class or an object) is supported as the iterable of a `for` loop or
 list comprehension that reads each field's `.name`. `asdict()` and `astuple()` are made for the
 class: they copy recursively into nested dataclasses (also of a hierarchy, by the object's
-class), lists, dicts and tuples, as CPython's `_asdict_inner` does, and keep `None`;
+class), lists, dicts and tuples, as CPython's `_asdict_inner` does, and keep `None`, numbers,
+strings and `bytes` (immutable: `copy.deepcopy()` returns them themselves);
 `asdict()`'s values of different types join in a union, so a dataclass holding a tuple and
 another type, or objects and scalars, is rejected. `is_dataclass()` is decided by the static
 type. `dict_factory=` and `tuple_factory=` are not supported.

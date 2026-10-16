@@ -18,4 +18,5 @@ hidden 0
 {'a': 1, 'b': 2, 'z': 3} (4, 5, 0) {'a': 6, 'b': 7} {'a': 8, 'b': 9, 'z': 10}
 True True False True
 3
+{'body': b'\x00ab', 'extra': None} (b'c', b'd') True
 [exit 0]

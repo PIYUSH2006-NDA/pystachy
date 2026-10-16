@@ -1120,7 +1120,9 @@ def gen_refl_unroll_dict(self, n: Node, d: Node, x: Node, m: str) -> None:
             types.append(Val("", self.classes[lf.c].ftypes[fl]))
     if total * self.reflcopies > REFL_BUDGET:
         self.err(f"unrolling this loop over the attributes of {typestr(o.t)} would compile its body {total * self.reflcopies} times, more than the budget of {REFL_BUDGET} copies (#486)")
-    vt = self.refl_join(types, f"the values of vars() of {typestr(o.t)}") if len(types) > 0 else "int"
+    # (the values' join only where the loop binds them: a loop over the names alone takes fields
+    # of types that join in none)
+    vt = self.refl_join(types, f"the values of vars() of {typestr(o.t)}") if len(types) > 0 and m in ["items", "values"] else "int"
     kt = ""  # (the key's name, read as the literal in each copy where the body does not assign it)
     vn: Node | None = None
     if m == "items" and tgt.kind == "tuple" and len(tgt.kids) == 2 and tgt.kids[0].kind == "name":
@@ -1527,9 +1529,10 @@ def gen_refl_unroll_fields(self, n: Node, names: list[str]) -> None:
 
 def gen_refl_dc_type(self, t: str, what: str, seen: list[str]) -> str:
     # the type of asdict()'s (what "asdict") or astuple()'s copy of a value of type t: a
-    # dataclass's object a dict (a tuple), recursively into lists, tuples and dicts; scalars as
-    # they are (CPython's _asdict_inner: other objects it deep-copies, which is not supported)
-    if t in ["int", "float", "bool", "str", "None"] or self.scalar_union(t):
+    # dataclass's object a dict (a tuple), recursively into lists, tuples and dicts; scalars and
+    # bytes as they are (CPython's _asdict_inner deep-copies them, and deepcopy returns an
+    # immutable object itself; other objects it deep-copies, which is not supported)
+    if t in ["int", "float", "bool", "str", "bytes", "None"] or self.scalar_union(t):
         return t
     if is_opt(t):
         x = self.refl_dc_type(unopt(t), what, seen)
@@ -1568,7 +1571,7 @@ def gen_refl_dc_copy(self, v: Val, what: str, seen: list[str], nonnull: bool = F
     # asdict()'s (astuple()'s) copy of value v (refl_dc_type): new containers throughout, as
     # CPython's _asdict_inner (_astuple_inner) makes them
     t = v.t
-    if t in ["int", "float", "bool", "str", "None"] or self.scalar_union(t):
+    if t in ["int", "float", "bool", "str", "bytes", "None"] or self.scalar_union(t):
         return v
     rt = self.refl_dc_type(t, what, seen)
     if is_opt(t) or (t in self.classes and v.v not in self.nn and not nonnull):

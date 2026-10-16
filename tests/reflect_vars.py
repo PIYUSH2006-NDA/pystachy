@@ -43,6 +43,12 @@ class Node:
         return f"Node({vars(self)})"
 
 
+class Blob:
+    def __init__(self) -> None:
+        self.tag = "t"
+        self.data: bytes = b"\x01z"
+
+
 p = Point(1, 2)
 print(vars(p))
 print(Rec("a", 1, 0.5).__dict__)
@@ -75,3 +81,7 @@ print("{name}={value:>4} {name!r} {{}}".format_map(vars(r)))
 d = dict(vars(p))
 d["x"] = 100
 print(d, p.x, vars(p).copy())
+blob = Blob()
+for k in vars(blob):
+    print(k, getattr(blob, k))
+print(vars(blob))
