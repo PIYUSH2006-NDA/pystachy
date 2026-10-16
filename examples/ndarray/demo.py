@@ -28,8 +28,14 @@ try:
 except ValueError as e:
     print("ValueError:", repr(str(e)))
 
+c = a.copy()
+c += b
+print("c = a.copy(); c += b, in place:", c)
+
 x = arange(1000) / 7.0
 y = arange(1000) * 0.5
 d = lazy(x) - lazy(y)
-print("sum((x - y) * (x - y)): fused", (d * d).sum(), "eager", total((x - y) * (x - y)))
 print("x * y + 1 fused == eager:", (lazy(x) * lazy(y) + 1.0).evaluate().values() == (x * y + 1.0).values())
+print("sum((x - y) * (x - y)): lazy", (d * d).sum(), "total", total((x - y) * (x - y)))
+z = array([1e16] + [1.0] * 100 + [-1e16])
+print("sum of 1e16, 100 ones, -1e16: total (pairwise)", total(z), "lazy (compensated)", (lazy(z) + 0.0).sum())

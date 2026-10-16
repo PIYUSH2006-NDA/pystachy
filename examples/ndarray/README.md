@@ -2,10 +2,11 @@
 
 A small NumPy-style array written in the typed subset, to measure how far Pystachy gets with array
 code. [`ndarray.py`](ndarray.py) has views (transposes, rows and reshapes share their data),
-NumPy's broadcasting, arithmetic with arrays and numbers, reductions in NumPy's order and a matrix
-product. [`lazy.py`](lazy.py) builds elementwise expressions whose evaluation compiles to one loop,
-without temporary arrays. Both are plain Python: CPython runs them too, which lets
-[`check_numpy.py`](check_numpy.py) compare them with NumPy.
+NumPy's broadcasting, arithmetic with arrays and numbers into a new array or an existing one
+(`out=`, `+=`), reductions and a matrix product. [`lazy.py`](lazy.py) builds elementwise
+expressions over whole arrays whose evaluation compiles to one loop, without temporary arrays.
+Both are plain Python: CPython runs them too, which lets [`check_numpy.py`](check_numpy.py)
+compare them with NumPy.
 
 ## Run
 
@@ -30,34 +31,50 @@ a > 2.5      [False, False, True, True, True, True]
 1 / [1 -1 0] array([inf, -inf, nan], shape=(3,))
 t[0, 1] = 40 writes a[1, 0]: 40.0
 ValueError: 'operands could not be broadcast together with shapes (2,3) (2,) '
-sum((x - y) * (x - y)): fused 42453252.55102041 eager 42453252.551020406
+c = a.copy(); c += b, in place: array([11.0, 22.0, 33.0, 50.0, 25.0, 36.0], shape=(2,3))
 x * y + 1 fused == eager: True
+sum((x - y) * (x - y)): lazy 42453252.551020406 total 42453252.551020406
+sum of 1e16, 100 ones, -1e16: total (pairwise) 84.0 lazy (compensated) 100.0
 ```
 
 CPython, the JIT and the executable print the same. `repr()` lists the items in C order and the
 shape; it is not NumPy's format.
 
-## Agreement with NumPy
+## Numerical behavior
+
+Elementwise arithmetic is one IEEE operation per item, so it gives NumPy's float64 results,
+signed zeros, infinities and NaNs included. Division by zero gives NumPy's `inf` and `nan`, not
+Python's `ZeroDivisionError`. A sum, though, depends on the order of its additions, so each
+operation here fixes its order:
+
+| Operation | How it adds | Against NumPy, in `check_numpy.py` |
+|---|---|---|
+| `total()`, `mean()` | Pairwise, as NumPy's `pairwise_sum`: eight accumulators over blocks of up to 128 items. Memory order for C- and F-ordered arrays, C order for other views | Equal for C- and F-ordered arrays; other views within 1e-12 on random data |
+| `sum_axis()` | Pairwise along a summed axis that is contiguous in memory; otherwise the lines across it one after another, into one result, as NumPy adds them | Equal |
+| `lazy`'s `sum()` | Python's `sum()` of floats: in order, with Neumaier's compensation | Equal to `sum()` of the items; within 1e-12 of `np.sum` on random data |
+| `dot()` | `total(a * b)` | Equal to `np.sum(a * b)`; within 1e-12 of `np.dot`, which calls BLAS |
+| `matmul()`, `@` | Row by row | Within 1e-12 of BLAS |
+
+An ill-conditioned sum shows how much the order matters. `[1e16] + [1.0] * 100 + [-1e16]` sums to:
+- 84.0 pairwise (`total()`, `np.sum`);
+- 100.0 compensated (`lazy`'s `sum()`, Python's `sum()`, `math.fsum`);
+- 0.0 added in plain order.
+
+The error bound of pairwise summation grows with log *n*, that of plain order with *n*.
+Compensation keeps it near one rounding of the result for all but extremely ill-conditioned sums.
 
 ```sh
 python3 check_numpy.py
 ```
 
 ```
-88 checks equal NumPy's to the last bit, 5 within 1e-12 (numpy 2.5.3)
+111 checks equal NumPy's results, 6 agree within 1e-12, 4 check the summation policy, 7 check the checker (numpy 2.5.3)
 ```
 
-- **Bit for bit:** elementwise arithmetic, broadcasting, views and `lazy`'s `evaluate()` give
-  NumPy's float64 results, signed zeros, infinities and NaNs included. Division by zero gives
-  NumPy's `inf` and `nan`, not Python's `ZeroDivisionError`.
-- **Reductions in NumPy's order:** `total()`, `mean()` and `sum_axis()` add as NumPy does, so they
-  match bit for bit. NumPy adds pairwise along the axis that is contiguous in memory, and item after
-  item across the other.
-- **BLAS order:** `dot()` is `np.sum(a * b)` exactly. `np.dot` and `@` call BLAS, which adds in other
-  orders, so `dot()` and `matmul()` agree with them within 1e-12 relative.
-- **In order:** `lazy`'s `sum()` adds the items in order, as a hand-written loop does; it agrees with
-  `np.sum`'s pairwise result within 1e-12 relative (see below).
-- **Errors:** broadcasting, `reshape`, indexing and `matmul` raise with NumPy's messages.
+These counts are results on the inputs the script generates, not a promise for every input.
+- **Self-checks first:** the script confirms that its comparisons reject a NaN against a number, lists of different lengths, and an infinity against a large number.
+- **Error messages:** broadcasting, `out=` shapes, `reshape`, indexing and `matmul` errors are checked against NumPy's messages.
+- **Compiled tests:** `tests/example_ndarray.py` carries representative NumPy results into the tests that run under the JIT and as an executable.
 
 ## Recorded benchmark
 
@@ -65,38 +82,47 @@ python3 check_numpy.py
 python3 -I bench.py pystachy
 ```
 
-A single run on a shared 4-vCPU x86-64 VM (Xeon, 2.8 GHz), compiler at
-[`2379159`](https://github.com/den-run-ai/pystachy/commit/2379159), LLVM 18.1.3,
-CPython 3.13.16 and NumPy 2.5.3. NumPy is single-threaded (`OPENBLAS_NUM_THREADS=1`), as Pystachy
-is. Times are the best of five inside each process, in milliseconds, so the JIT's exclude its
-compilation. `a` and `b` have 4,000,000 items.
+The run:
+- **Machine:** a single run on a shared 4-vCPU x86-64 VM (Xeon, 2.8 GHz).
+- **Versions:** compiler at [`2379159`](https://github.com/den-run-ai/pystachy/commit/2379159), LLVM 18.1.3, CPython 3.13.16, NumPy 2.5.3.
+- **Threads:** NumPy single-threaded (`OPENBLAS_NUM_THREADS=1`), as Pystachy is.
+- **Timing:** best of five inside each process, in milliseconds, so the JIT's numbers exclude its compilation.
+- **Data:** `a` and `b` have 4,000,000 items.
+- **Rows:** "into `out`" writes into an array made once; "loop" is the reduction written by hand as one loop.
 
 | Workload | AOT | JIT | NumPy |
 |---|---:|---:|---:|
-| `a + b` | 42.3 | 55.3 | 9.3 |
-| `a * 1.5` | 42.7 | 48.6 | 4.9 |
-| `a * b + a` | 88.5 | 98.1 | 22.2 |
-| `a * b + a`, lazy | 37.7 | 43.4 | — |
-| `sum(a)` | 4.9 | 7.8 | 2.7 |
-| `sum((a - b) * (a - b))` | 133.0 | 186.3 | 40.4 |
-| `sum((a - b) * (a - b))`, lazy | **6.5** | 24.1 | — |
-| `m + row`, 1000×1000 | 5.4 | 16.1 | 1.0 |
-| `m.T + m`, 1000×1000 | 7.5 | 22.0 | 1.8 |
-| `p @ q`, 256×256 | 15.7 | 58.3 | 0.7 |
+| `a + b` | 34.2 | 39.8 | 8.8 |
+| `a + b`, into `out` | 10.5 | 17.7 | 10.0 |
+| `a * 1.5` | 25.3 | 27.6 | 5.8 |
+| `a * b + a` | 53.7 | 63.4 | 23.9 |
+| `a * b + a`, into `out` | 20.8 | 34.9 | 15.7 |
+| `a * b + a`, lazy | 31.2 | 38.1 | — |
+| `a * b + a`, lazy into `out` | 13.4 | 23.3 | — |
+| `sum(a)` | 5.0 | 8.1 | 3.6 |
+| `sum((a - b) * (a - b))` | 80.9 | 117.9 | 40.0 |
+| `sum((a - b) * (a - b))`, lazy | 9.7 | 31.6 | — |
+| `sum((a - b) * (a - b))`, loop | 7.4 | 6.8 | — |
+| `m + row`, 1000×1000 | 7.6 | 10.2 | 0.8 |
+| `m.T + m`, 1000×1000 | 9.5 | 13.8 | 1.5 |
+| `sum(m, axis=0)`, 1000×1000 | 1.3 | 3.8 | 0.3 |
+| `p @ q`, 256×256 | 15.1 | 59.1 | 0.6 |
 
-- **Fusion wins.** The lazy `sum((a - b) * (a - b))` makes no array: one loop at about 1.6 ns per
-  item, 6.2 times faster than NumPy's eager expression. NumPy allocates and fills two temporary
-  arrays for it.
-- **New arrays are the cost.** An operation that makes an array takes 3 to 9 times NumPy's time.
-  The loops themselves run at C's speed, but numeric lists are scanned by the collector
-  ([#210](https://github.com/den-run-ai/pystachy/issues/210)) and each result takes fresh memory,
-  where NumPy reuses freed buffers. The lazy `a * b + a` still makes its result.
+- **New arrays are most of the cost.** Writing into an array made once brings `a + b` from 34.2 ms
+  to 10.5, about NumPy's 10.0 into `out`. NumPy's 8.8 for a new array reuses freed memory, while a
+  new numeric list here takes fresh memory that the collector then scans
+  ([#210](https://github.com/den-run-ai/pystachy/issues/210)).
+- **Fusion removes temporaries.** The lazy sum of `(a - b) * (a - b)`, compensated, takes 9.7 ms
+  against NumPy's 40.0 for the eager expression; a hand-written loop, uncompensated, takes 7.4.
+  The lazy `a * b + a` into `out` takes 13.4, NumPy's two passes into `out` 15.7.
+- **Strided loops are slower.** Broadcast and strided loops, and the axis sum, take 5 to 9 times
+  NumPy's time: they index through strides with a bounds check per item.
 - **The JIT inlines less** than the executable's whole-program `-O2`
   ([#209](https://github.com/den-run-ai/pystachy/issues/209)).
-- **Matrix products need BLAS.** The compiled loop reaches about 2 GFLOP/s, NumPy's OpenBLAS 49.
-- **Pairwise order costs extra.** A fused sum in NumPy's pairwise order ran 5.0 ns per item, in each
-  of the three forms tried, against 1.6 for this one, so `lazy` adds in order. The follow-up issue
-  below has the causes found in the optimized IR.
+- **Matrix products need BLAS.** The compiled loop reaches about 2 GFLOP/s, NumPy's OpenBLAS 52.
+- **One call per loop.** Each of `lazy`'s loops calls an expression's `at()` from one place: LLVM
+  did not inline it from several, and the compensated sum ran at 6.2 ns per item with two calls
+  against 2.4 with one.
 
 ## What the subset cannot express yet
 
@@ -110,5 +136,6 @@ compilation. `a` and `b` have 4,000,000 items.
 | `lazy(a) * b`, `b` an array | `lazy(a) * lazy(b)` | Compile time cannot decide `isinstance(b, NDArray)`: an object may be `None` |
 | float32, int8 and other dtypes | float64 only | No narrower scalars or packed numeric buffers |
 
-Native numeric buffers, optional BLAS and NumKong kernels and NumPy interoperability are tracked
-in [#582](https://github.com/den-run-ai/pystachy/issues/582), with measurements.
+`lazy()` takes whole arrays only, so every operand is read when the expression is evaluated; a view
+goes in as `lazy(v.copy())`. Native numeric buffers, optional BLAS and NumPy interoperability are
+tracked in [#582](https://github.com/den-run-ai/pystachy/issues/582).

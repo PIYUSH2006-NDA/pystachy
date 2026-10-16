@@ -1,7 +1,8 @@
 """bench: workloads.py as a Pystachy AOT executable and under the JIT, and the same operations in
 NumPy on the same data if NumPy is installed: the best of REPS timings of each inside its process,
 in milliseconds. NumPy runs single-threaded, as Pystachy does (OPENBLAS_NUM_THREADS=1, set before
-NumPy loads). The lazy rows have no NumPy column: NumPy evaluates the row above them eagerly.
+NumPy loads). The lazy and loop rows have no NumPy column: NumPy evaluates their expressions eagerly,
+as in the rows above them.
 
 usage: python3 -I bench.py PYSTACHY [N [REPS]]
 The executable goes to build/ndarray/ of the checkout.
@@ -51,14 +52,23 @@ def numpy_timings(count: int, times: int) -> dict[str, str]:
     r = (np.arange(1000) * 104729 % 10009) / 10009.0 - 0.5
     p = ((np.arange(65536) * 7919 % 10007) / 10007.0 - 0.5).reshape(256, 256)
     q = ((np.arange(65536) * 104729 % 10009) / 10009.0 - 0.5).reshape(256, 256)
+    c = np.zeros(count)
+
+    def into_out():
+        np.multiply(a, b, out=c)
+        return np.add(c, a, out=c)
+
     work = [
         ("a + b", lambda: a + b),
+        ("a + b, into out", lambda: np.add(a, b, out=c)),
         ("a * 1.5", lambda: a * 1.5),
         ("a * b + a", lambda: a * b + a),
+        ("a * b + a, into out", into_out),
         ("sum(a)", lambda: np.sum(a)),
         ("sum((a - b) * (a - b))", lambda: np.sum((a - b) * (a - b))),
         ("m + row, 1000x1000", lambda: m + r),
         ("m.T + m, 1000x1000", lambda: m.T + m),
+        ("sum(m, axis=0), 1000x1000", lambda: np.sum(m, axis=0)),
         ("p @ q, 256x256", lambda: p @ q),
     ]
     ms = {}
