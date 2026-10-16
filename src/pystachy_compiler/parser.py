@@ -41,7 +41,12 @@ class Parser:
         self.fend = -1  # (in a field's parser: where its expression ends, see fail())
         self.cutmsg = ""  # the tokenizer's error that cut short the f-string being parsed (see field())
         self.cutline = 0
+        self.incut = ""  # that error, in any parser of a field of that f-string (see limit())
+        self.incutline = 0
+        self.probe = 0  # (reading an f-string after an expression, see reads(): the line of its error)
         self.fnl: list[int] = []  # where the newlines are in the text of the f-string being parsed
+        self.undecoded: list[Node] = []  # the f-string's literal text, until it ends (see flush())
+        self.pieces: list[list[str]] = []
         self.orp = -1  # the tokens of the disjunction that an expression ended with (see comma())
         self.ore = -1
         self.orn = mk("omit", "", 0, [])
@@ -88,6 +93,10 @@ class Parser:
         # in brackets, an expression right after the disjunction an expression ended with: CPython
         # says that a comma may be missing (not after a name that a string follows, nor after a
         # soft keyword), and after print or exec that its call's parentheses are
+        if self.probe > 0:
+            return  # (CPython's parser reads an f-string there without its rules for errors)
+        if self.fend < 0:
+            self.reads()
         a = self.toks[self.orp]
         e = self.orn
         k = self.peek()
@@ -141,6 +150,21 @@ class Parser:
                 return i
             i += 1
 
+    def reads(self) -> None:
+        # where CPython's parser fails right after an expression, its rule for a missing comma
+        # (invalid_expression) reads the expression that follows, without its rules for errors:
+        # strings there that end with an f-string cut short (see Lexer.string) end with the
+        # tokenizer's error that cut it, unless an error in a field comes first, which is then
+        # "invalid syntax" (but for an error of CPython's actions, see fail())
+        j = self.p
+        while self.toks[j].kind == "str" or self.toks[j].kind == "fstr" or self.toks[j].kind == "rfstr" or self.toks[j].kind == "bytes":
+            if self.toks[j].part:
+                self.probe = self.toks[self.p].line
+                self.incut = self.toks[j + 1].text
+                self.incutline = self.toks[j + 1].line
+                self.atom()  # (which fails)
+            j += 1
+
     def colon(self) -> None:
         # a ':' that CPython's grammar forces (after a def's signature, try, else and finally)
         if self.peek() != ":":
@@ -157,6 +181,10 @@ class Parser:
         # (At the end of a field cut short, CPython's parser meets the tokenizer's error first.)
         if self.cutmsg != "" and self.fend >= 0 and self.p >= self.fend:
             fail(self.cutmsg, self.cutline)
+        if self.probe > 0 and not (msg.startswith("(unicode error)") or msg.startswith("f-string: invalid conversion character '") or msg.startswith("f-string: conversion type")):
+            fail("invalid syntax", self.probe)  # (see reads(); CPython's actions raise theirs)
+        if msg == "invalid syntax" and self.fend < 0 and self.ore == self.p:
+            self.reads()
         if msg == "invalid syntax" and self.fend >= 0:
             # in an f-string field's expression, CPython's parser expects '=', '!', ':' or '}'
             # after the longest expression it can read from the field's start (if any: one ends
@@ -1356,12 +1384,20 @@ class Parser:
                     if pt.part:
                         self.cutmsg = self.toks[self.p].text  # (the error after it)
                         self.cutline = self.toks[self.p].line
+                        self.incut = self.cutmsg
+                        self.incutline = self.cutline
                     self.fnl = []
                     nl = pt.text.find("\n")
                     while nl >= 0:
                         self.fnl.append(nl)
                         nl = pt.text.find("\n", nl + 1)
+                    self.undecoded = []
+                    self.pieces = []
                     self.fparts(pt.text, 0, pt.kind == "rfstr", pt.line, n, 0)
+                    if not pt.part:
+                        # (CPython decodes an f-string's literal text once it has read its end)
+                        for ui in range(len(self.undecoded)):
+                            self.undecoded[ui].s = "".join([self.unescape(x, pt.line) for x in self.pieces[ui]])
                     self.cutmsg = saved
                     self.cutline = savedline
                 k = self.peek()
@@ -1493,21 +1529,21 @@ class Parser:
         # in it), appended to n: literal text as str nodes, each replacement field as fmt(expression,
         # spec). A format spec ends at its field's '}', whose index is returned (len(s) if none).
         # Lexer.fstring() read the f-string as CPython's tokenizer does (line: its first line)
-        text: list[str] = []  # the literal text so far, decoded: CPython decodes it to each doubled brace
-        lit: list[str] = []  # (and the rest, as it stands)
+        text: list[str] = []  # the literal text so far, in the pieces CPython decodes: to each doubled brace
+        lit: list[str] = []  # (and the rest)
         while i < len(s):
             c = s[i]
             if c == "}" and spec > 0:
                 break
             if (c == "{" and s[i + 1 : i + 2] == "{" and spec != 1) or (c == "}" and s[i + 1 : i + 2] == "}"):
                 lit.append(c)
-                text.append("".join(lit) if raw else self.unescape("".join(lit), line))
+                text.append("".join(lit))
                 lit = []
                 i += 2
             elif c == "}":
                 fail("f-string: single '}' is not allowed", self.fline(line, i))
             elif c == "{":
-                self.flush(text, lit, raw, line, n)
+                self.flush(text + ["".join(lit)], raw, line, n, spec)
                 text = []
                 lit = []
                 i = self.field(s, i + 1, raw, line, n)
@@ -1522,7 +1558,7 @@ class Parser:
             else:
                 lit.append(c)
                 i += 1
-        self.flush(text, lit, raw, line, n)
+        self.flush(text + ["".join(lit)], raw, line, n, spec)
         return i
 
     def field(self, s: str, i: int, raw: bool, line: int, n: Node) -> int:
@@ -1574,6 +1610,9 @@ class Parser:
         cut = -1
         for k in range(len(toks)):
             toks[k].line = min(toks[k].line, last)
+            if self.incut != "" and toks[k].kind == "stop" and toks[k].text == "non-ASCII identifiers are not supported":
+                toks[k].text = self.incut  # (see limit())
+                toks[k].line = self.incutline
             if (toks[k].kind == "error" or toks[k].kind == "stop") and ran and self.cutmsg != "" and lx.halt >= len(lx.src) - 1:
                 # a bracket left open in a field cut short: where it ends (instead of the
                 # parenthesis added), CPython's parser meets the error that cut it
@@ -1592,8 +1631,13 @@ class Parser:
         if ran and not selfdoc:
             sub.cutmsg = self.cutmsg  # (where the expression ends, CPython's parser meets the error)
             sub.cutline = self.cutline
+        sub.incut = self.incut
+        sub.incutline = self.incutline
+        sub.probe = self.probe
         sub.expect("(")
         e = sub.no_star(sub.rhs())
+        if sub.peek() == "=" and sub.toks[sub.p + 1].kind == "error":
+            sub.p += 1  # (CPython's parser reads the token after it: a tokenizer error there comes first)
         if sub.peek() == "=":
             sub.fail("f-string: expecting '!', or ':', or '}'", sub.line())
         if sub.peek() != ")" and sub.ore == sub.p:
@@ -1628,6 +1672,9 @@ class Parser:
             if j >= len(s):
                 self.cut("f-string: expecting ':' or '}'", self.fline(line, j))
             if s[j] != ":" and s[j] != "}":
+                t = Lexer(s[j:], self.fline(line, j)).run()[0]
+                if t.kind == "error":
+                    fail(t.text, t.line)  # (CPython's parser reads that token: a tokenizer error comes first)
                 self.fail("f-string: expecting ':' or '}'", self.fline(line, j))
         spec = mk("str", "", line, [])
         colon = j < len(s) and s[j] == ":"
@@ -1664,6 +1711,13 @@ class Parser:
                 hi = m
         return line + lo
 
+    def limit(self, msg: str, line: int) -> None:
+        # a Pystachy limitation; in an f-string cut short, CPython reads on to the tokenizer's
+        # error that cut it (unless an error in a field comes first)
+        if self.incut != "":
+            fail(self.incut, self.incutline)
+        self.fail(msg, line)
+
     def cut(self, msg: str, line: int) -> None:
         # an error where an f-string's text ends, after the tokenizer's error that cut it short
         # (see Lexer.string), if any
@@ -1681,10 +1735,18 @@ class Parser:
                 j += 1
         return j
 
-    def flush(self, text: list[str], lit: list[str], raw: bool, line: int, n: Node) -> None:
-        # an f-string's literal text: text decoded, then lit
-        if len(text) > 0 or len(lit) > 0:
-            n.kids.append(mk("str", "".join(text) + ("".join(lit) if raw else self.unescape("".join(lit), line)), line, []))
+    def flush(self, text: list[str], raw: bool, line: int, n: Node, spec: int) -> None:
+        # an f-string's literal text, in the pieces CPython decodes (see fparts): at once in a format
+        # spec, and in its body once the f-string ends (see atom)
+        t = mk("str", "".join(text), line, [])
+        if t.s == "":
+            return
+        if not raw and spec > 0:
+            t.s = "".join([self.unescape(x, line) for x in text])
+        elif not raw:
+            self.undecoded.append(t)
+            self.pieces.append(text)
+        n.kids.append(t)
 
     def unescape(self, s: str, line: int) -> str:
         # decode the backslash escapes of a string literal's source text. CPython's error for an
@@ -1729,7 +1791,7 @@ class Parser:
                 if s[i : i + 1] != "{" or k < 0 or k == i + 1:
                     end = at + 1 if s[i : i + 1] != "{" else (at + 2 if k == i + 1 else at + n - b - 1)
                     self.fail(f"(unicode error) 'unicodeescape' codec can't decode bytes in position {at}-{end}: malformed \\N character escape", line)
-                self.fail("\\N{...} escapes are not supported", line)
+                self.limit("\\N{...} escapes are not supported", line)
             elif e == "\n":
                 pass
             elif e in ESCAPES:
