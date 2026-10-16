@@ -1,0 +1,5 @@
+10 10 10 [1, 1] CacheInfo(hits=1, misses=2, maxsize=None, currsize=2)
+2 2 4 6 2 [1, 2, 3, 1]
+CacheInfo(hits=1, misses=4, maxsize=2, currsize=2)
+10 CacheInfo(hits=0, misses=1, maxsize=None, currsize=1)
+[exit 0]

@@ -1,0 +1,33 @@
+{Node('a'): 0, Node('b'): 1, Node('ç'): 2} 3
+2 True False True
+{Node('a'): 5, Node('b'): 1, Node('ç'): 2}
+{Node('a'): 5, Node('b'): 7} None -1 2 7 {Node('a'): 5, Node('b'): 7}
+[Node('a'), Node('b')] [5, 7] [(Node('a'), 5), (Node('b'), 7)]
+KeyError Node('x') KeyError(Node('x'))
+KeyError Node('ç')
+KeyError Node('ç')
+9 True
+['a:0', 'b:1', 'ç:1'] ['ç:0', 'a:1', 'b:2']
+{Node('a'): 3, Node('b'): 2, Node('ç'): 21}
+{Node('a'): ['x', 'z'], Node('b'): ['y']}
+True True False False False
+True 4
+{Node('b'): 0, Node('ç'): 0, Node('a'): 0}
+{Node('b'): 2, Node('ç'): 21, Node('a'): 3}
+{Node('a'): 'v', Node('b'): 'v', Node('ç'): 'v'}
+['a', 'b', 'ç'] ['ç', 'b', 'a']
+a 3; b 2; ç 21; 
+['a', 'b', 'ç'] [Node('a'), Node('b'), Node('ç')]
+x False True False
+{(Node('a'), 1): 'z', (Node('ç'), 1): 'w'}
+1 False
+{None: 'none', Node('a'): 'a'} True none ?
+{Node('a'): 'a'} False
+1 2 2 False
+[0, 1, 0, 2, 1] {Node('b'): 0, Node('a'): 1, Node('ç'): 2}
+[1, 1, 2, 3]
+{Node('a'): 3, Node('b'): 1}
+1000 1000000 1999 False True
+Kit(a) None [(Vec1, Kit(a)), (Vec2, Kit(b))] [Vec1, Vec2] [Kit(a), Kit(b)] Kit(b) {Vec1: Kit(a)}
+[Kit(x)] [((Vec1, Kit(k)), [Kit(x)])]
+[exit 0]

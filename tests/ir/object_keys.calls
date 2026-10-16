@@ -1,0 +1,29 @@
+@main.init: pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_set_new pys_set_add pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc pys_dict_new pys_dict_set pys_alloc pys_alloc
+@f.node_get: pys_dict_getitem
+@f.node_in: pys_set_has
+@f.node_fused: pys_dict_find pys_dict_val
+@f.shown_get: pys_dict_getitem
+@f.shown_in: pys_dict_has
+@f.hashed_in: pys_dict_has
+@f.hashed_fused: pys_dict_has pys_dict_getitem
+@f.node_hash: pys_hash_id
+@m.Node.__init__:
+@m.Shown.__repr__:
+@m.Shown.__init__:
+@m.Hashed.__init__:
+@m.Hashed.__eq__: pys_raise
+@m.Hashed.__hash__:
+@o.eq.Node:
+@o.cmp.Node: pys_raise pys_raise pys_raise pys_raise
+@o.repr.Node: pys_default_repr
+@o.eq.Shown:
+@o.cmp.Shown: pys_raise pys_raise pys_raise pys_raise
+@o.repr.Shown:
+@o.eq.Hashed:
+@o.cmp.Hashed: pys_raise pys_raise pys_raise pys_raise
+@o.repr.Hashed: pys_default_repr
+@o.hash.Hashed:
+@pys_obj_eq:
+@pys_obj_cmp:
+@pys_obj_repr:
+@main: pys_init pys_finish

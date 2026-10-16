@@ -1,0 +1,13 @@
+mods: init mods
+mods.shapes: init mods.shapes
+True False True False
+True True True
+2 True {Point(1, 2), Point(3, 4)}
+point 5,6 other 3 str s other [1] point 1,1
+origin ? True
+True False True False
+[1, 2] False
+one False {Pair(1)} True
+TypeError: unhashable type: 'Pair'
+True False False
+[exit 0]

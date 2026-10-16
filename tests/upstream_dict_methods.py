@@ -28,12 +28,12 @@
 #   d.pop(), d.update(None), dict.fromkeys(3)): compile-time errors here, with messages of their
 #   own; test_get's d.get() with no argument crashes the compiler (bug: IndexError in bmethod()
 #   instead of a file:line: error; #274)
-# - keys that are objects with __hash__ or __eq__ (BadEq, BadHash, Hashed, NastyKey, BadCmp,
-#   BadDictKey, X, CustomHash): test_getitem's and test_pop's second parts, test_setdefault's
-#   BadHash, test_setdefault_atomic, test_setitem_atomic_at_resize, test_mutating_lookup,
-#   test_eq's BadCmp, test_bad_key (also exec()), test_resize2, test_merge_and_mutate,
-#   test_equal_operator_modifying_operand, test_dictitems_contains_use_after_free,
-#   test_init_use_after_free (dict keys must be ints, strs or tuples of them)
+# - keys that are objects with __hash__ or __eq__, which a dict holds with no other key type:
+#   test_getitem's and test_pop's second parts, test_setdefault's BadHash,
+#   test_setdefault_atomic, test_setitem_atomic_at_resize, test_mutating_lookup, test_eq's
+#   BadCmp, test_bad_key and test_resize2 are in tests/upstream_dict_object_keys.py;
+#   test_merge_and_mutate, test_equal_operator_modifying_operand,
+#   test_dictitems_contains_use_after_free and test_init_use_after_free are not (see there)
 # - test_update's SimpleUserDict, FailingUserDict and badseq (update() of objects), and
 #   update([(1, 2, 3)]) (a list of 3-tuples is rejected)
 # - test_fromkeys' d.fromkeys(...) through an instance and of a generator, dict subclasses
