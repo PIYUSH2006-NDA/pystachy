@@ -178,8 +178,8 @@ of these mappings (a `Counter` types only the keys of an `OrderedDict` or
 `defaultdict`: the `int` values need an annotation); other iterable objects of
 pairs need `list(...)` first, and a generator expression a list comprehension.
 Keyword arguments are accepted by `update` and `subtract`, not by constructors.
-Calling `__init__` again updates the items, as CPython's does (`Counter` adds the counts; a
-`defaultdict`'s also replaces `default_factory`).
+Calling `__init__` again updates the items, as CPython's does (`Counter` adds
+the counts; a `defaultdict`'s also replaces `default_factory`).
 `dict(m)` of a mapping is not supported: `{k: v for k, v in m.items()}` copies it.
 
 - `defaultdict(factory)` accepts builtin classes such as `int`, `list`, `set`,

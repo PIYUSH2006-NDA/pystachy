@@ -8,4 +8,13 @@ y before: False
 1 2 True
 y before: True
 3
+AttributeError: 'Sized' object has no attribute 'items'
+size 1
+size 2
+2
+AttributeError: 'Peeked' object has no attribute 'x'
+AttributeError: 'Peeked' object has no attribute 'y'
+2
+peek 1
+2
 [exit 0]

@@ -308,6 +308,11 @@ def gen_fl_nested(self, fl: Flow, n: Node) -> None:
             self.fl_expr(fl, mk("call", "", dx.line, [self.deco_callee(dx, self.flowmod)]))  # (its decorators, called)
     free: dict[str, bool] = {}
     closure_free(d, free)
+    if fl.me in free:
+        # (in __init__, fl_fields: a function that takes self may run later, from anywhere, and
+        # read the fields not assigned here)
+        fl.exposed()
+        fl.escaped = True
     caps: dict[str, bool] = {}
     late: list[str] = []
     own = n.s if n.kind == "def" and not self.applies(n, False, fl.scope) else ""  # (a decorated def's name binds what the decorators give, later)

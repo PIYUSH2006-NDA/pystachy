@@ -1,7 +1,9 @@
 # __init__ that tests hasattr(self, "f"): where the test is true, f is assigned, so a field that
 # __init__ makes only where hasattr finds it missing is assigned wherever it is read, also when
 # __init__ runs again (as lib/collections' mappings keep their dicts). Fields that may still be
-# read unassigned raise AttributeError, as in CPython.
+# read unassigned raise AttributeError, as in CPython: also through a def or lambda that takes
+# self before the test, whether it reads the tested field or another one.
+from typing import Callable
 
 
 class Tally:
@@ -63,3 +65,49 @@ lt = Late()
 print(lt.x, lt.y, peek(lt))
 lt.__init__()
 print(lt.x + lt.y)
+
+
+class Sized:
+    def __init__(self) -> None:
+        def size() -> int:
+            return len(self.items)
+
+        if not hasattr(self, "items"):
+            try:
+                print("size", size())
+            except AttributeError as e:
+                print("AttributeError:", e)
+            self.items: list[str] = []
+        self.items.append("a")
+        print("size", size())
+
+
+sz = Sized()
+sz.__init__()
+print(len(sz.items))
+
+
+class Peeked:
+    def __init__(self) -> None:
+        peek: Callable[[], int] = lambda: len(self.y)
+        first: Callable[[], int] = lambda: self.x
+        if not hasattr(self, "x"):
+            try:
+                print("first", first())
+            except AttributeError as e:
+                print("AttributeError:", e)
+            self.x = 1
+        try:
+            print("peek", peek())
+        except AttributeError as e:
+            print("AttributeError:", e)
+        self.y: list[int] = [1]
+
+    def get(self) -> int:
+        return self.x + len(self.y)
+
+
+pk = Peeked()
+print(pk.get())
+pk.__init__()
+print(pk.get())

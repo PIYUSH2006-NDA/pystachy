@@ -84,7 +84,8 @@ raise the appropriate error; LLVM can remove checks it proves redundant. Optiona
 narrowing is a separate typing concern. In `__init__` of a class outside a hierarchy, the
 branch where `hasattr(self, "f")` is true has field `f` assigned: a field made only where
 it is false (`if not hasattr(self, "f"): self.f = ...`) keeps a flag for `hasattr`, and its
-reads have no check.
+reads have no check unless `self` escapes before it is assigned: to a call, a bound method,
+or a def or lambda that takes `self` and may run later.
 
 <a id="the-typed-ir"></a>
 <a id="ssa-by-delegation"></a>
