@@ -306,6 +306,11 @@ def gen_fl_nested(self, fl: Flow, n: Node) -> None:
             caps[x] = True
             if x != own and x in fl.tracked and x not in fl.defd and " dead" not in fl.defd:
                 late.append(x)
+    if fl.me != "":
+        # field mode (fl_fields): flow_function's pass over __init__ has set n.mchk and marked
+        # n's body, with the variables it takes; this Flow tracks no variable, so a pass here
+        # would clear n.mchk and mark the reads of those that share a global's name
+        return
     n.mchk = " ".join(late)
     if n.kind == "def":
         fl.put(n.s)
