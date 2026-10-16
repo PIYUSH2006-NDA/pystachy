@@ -2098,7 +2098,12 @@ class Loader:
                         break
                 self.fkey = str(st.line)
                 self.qdef = True
+                ren = self.qren
+                self.qren = dict(ren)
+                for nm in decl:
+                    self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)
+                self.qren = ren
                 self.qdef = indef
                 self.fk = saved
                 self.fkowner = owners

@@ -2,9 +2,10 @@
 # the type parameters, or a C[X] annotation or call names them (#307); bounds, constraints
 # and defaults only infer, as a TypeVar's do (#409), so values keep their types. Each class's
 # type parameters are its own: two classes may both name theirs T, and a module-level T
-# (also a variable) stays another name, here and for a generic def. A method's own type
-# parameters (def map[U]) make it a template, also where a string annotation names them; a
-# dataclass's field may name a specialization (Stack[str]).
+# (also a variable) stays another name, here and in a generic def's annotations; a method's
+# global statement names the module's. A method's own type parameters (def map[U]) make it a
+# template, also where a string annotation names them; a dataclass's field may name a
+# specialization (Stack[str]).
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -105,8 +106,23 @@ def scale(n: int, f: float) -> float:
     return n * f
 
 
+class Tagged[T]:
+    def __init__(self, x: T) -> None:
+        self.x = x
+
+    def retag(self, suffix: str) -> T:
+        global T  # (the module's T, here and in shout, not the type parameter)
+        T = T + suffix
+
+        def shout() -> str:
+            return T.upper()
+
+        print(shout())
+        return self.x
+
+
 def first[T](xs: list[T]) -> T:
-    # (a generic def's T, too, is not the module's)
+    # (in a generic def's annotations, T is its own too)
     return xs[0]
 
 
@@ -134,3 +150,4 @@ print(s.map(str).items, s.map(lambda n: n * 0.5).pop())
 nm = Named("n", Stack(["x"]))
 nm.stack.push("ÿ")
 print(nm.name, nm.stack.items)
+print(Tagged(7).retag("!"), T, Tagged("ü").x)

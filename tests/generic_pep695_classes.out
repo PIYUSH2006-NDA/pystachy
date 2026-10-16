@@ -10,4 +10,6 @@ abc 2.5 3 not an int
 a module-level T True True ü
 ['1', '2'] 1.0
 n ['x', 'ÿ']
+A MODULE-LEVEL T!
+7 a module-level T! ü
 [exit 0]
