@@ -580,6 +580,7 @@ class Parser:
         if self.toks[self.p + 1].kind == "]":
             self.fail("Type parameter list cannot be empty", self.line())
         self.expect("[")
+        defaults = False  # (whether a parameter so far has a default)
         while not self.eat("]"):
             kind = "TypeVar"
             if self.eat("**"):
@@ -602,6 +603,9 @@ class Parser:
                 self.scoped(b, f"a {kind} default")
                 self.dropped(line, b)
                 kinds[len(kinds) - 1] = kinds[len(kinds) - 1] + "="
+                defaults = True
+            elif defaults:  # (CPython's compiler, compiling the type parameters)
+                self.later(2, f"non-default type parameter '{name}' follows default type parameter", at)
             if not self.eat(","):
                 self.expect("]")
                 break

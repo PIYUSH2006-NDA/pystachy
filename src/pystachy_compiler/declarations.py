@@ -406,10 +406,18 @@ def gen_alias_problem(self, e: Node) -> str:
     b = e.kids[0]
     xs = e.kids[1].kids if e.kids[1].kind == "tuple" else [e.kids[1]]
     n = len(xs)
-    if len([x for x in xs if x.kind == "starred"]) > 0:
-        return ""  # (*Ts: as many as it unpacks)
     p = self.imported_ref(b)
     nm = p[p.rfind(".") + 1 :]
+    starred = len([x for x in xs if x.kind == "starred"]) > 0
+    if p.startswith("typing.") and nm in ["Optional", "ClassVar", "Final", "Required", "NotRequired", "ReadOnly", "TypeGuard", "TypeIs", "Unpack"]:
+        if e.kids[1].kind != "tuple" and not starred:
+            return ""
+        # (CPython's messages add the arguments' reprs)
+        if nm == "Optional":
+            return "typing.Optional requires a single type"
+        return f"{nm} accepts only a single type" if nm in ["Required", "NotRequired", "ReadOnly"] else f"{p} accepts only single type"
+    if starred:
+        return ""  # (*Ts: as many as it unpacks)
     if b.kind == "name" and b.s in self.taliases:
         return self.alias_args(b.s, n)
     if b.kind == "name" and b.s in self.tparams:
@@ -432,8 +440,6 @@ def gen_alias_problem(self, e: Node) -> str:
         if n < lo or n > hi:
             return f"Too {'many' if n > hi else 'few'} arguments for {p}; actual {n}, expected {'at least ' + str(lo) if lo != hi else str(hi)}"
         return ""
-    if nm in ["Optional", "ClassVar", "Final", "Required", "NotRequired", "ReadOnly", "TypeGuard", "TypeIs", "Unpack"]:
-        return f"{p} accepts only a single type" if e.kids[1].kind == "tuple" else ""
     if nm == "Union":
         return "Cannot take a Union of no types" if n == 0 else ""
     if nm == "Annotated":
