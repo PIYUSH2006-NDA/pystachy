@@ -89,6 +89,7 @@ These tools answer different questions:
 |---|---|
 | `tools/census.py` | Historical source-feature heuristic; inspect candidates, then verify with the current compiler. |
 | `tools/import_sweep.py` | A module's import program compiles; this does not verify its functions. |
+| `tools/import_sweep.py --stubs` | A module's import compiles once the modules built into CPython that it needs exist; this ranks those modules. |
 | `tests/lib_*.py` | Selected compiled APIs match CPython in the differential suite. |
 | Upstream tests on an adapted file under CPython | The adaptations preserve the tested Python behavior. |
 
@@ -98,6 +99,7 @@ With CPython's standard-library sources available, run from the repository root:
 python3 -I tools/census.py cpython=/usr/lib/python3.13 --json build/census.json
 python3 tools/import_sweep.py ./pystachy /usr/lib/python3.13 build/import-sweep.json
 python3 tools/import_sweep.py --overlay ./pystachy /usr/lib/python3.13 build/cpython-lib
+python3 tools/import_sweep.py --stubs /usr/lib/python3.13 build/import-sweep-stubs.json
 PYSTACHY_PATH=build/cpython-lib ./pystachy run prog.py
 make test FILES="tests/lib_*.py"
 ```
@@ -108,6 +110,14 @@ The census model predates shipped features and can flag constructs now supported
 results do not measure current compiler coverage.
 The sweep reports excluded modules separately. Preserve the compiler revision, CPython version
 and overlay policy with any result; compare sweeps only when their denominators agree.
+
+A plain sweep reports each module's first error, so a module built into CPython that Pystachy
+lacks hides the errors behind it. `--stubs` stands a stub in for each such module that some
+module imports without an `ImportError` fallback, with the names the running CPython's module
+has (its functions raise `NotImplementedError`), and compiles with this checkout's
+CPython-hosted compiler. Its report counts, for each stub, the modules that import with it and
+those that need no other stub: these would import once Pystachy had that module, as far as
+their imports go. `--only NAME,...` stubs just those modules.
 
 <a id="4-pypys-pure-python-modules"></a>
 <a id="5-popular-packages"></a>
