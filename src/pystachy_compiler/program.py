@@ -1023,14 +1023,23 @@ def gen_program(self, mods: list[Mod]) -> str:
             hpush(self.wake, i)
     done: dict[str, bool] = {}
     helped: dict[str, bool] = {}
+    cmped: dict[str, bool] = {}
     hashed: dict[str, bool] = {}
     xmade: dict[str, bool] = {}
     while True:
-        before = len(done) + len(helped) + len(hashed) + len(xmade)
+        before = len(done) + len(helped) + len(cmped) + len(hashed) + len(xmade)
         for c in [x for x in self.ocls]:
             if c not in helped:
                 helped[c] = True
-                self.obj_helpers(c)
+                if c in self.ocmp:
+                    cmped[c] = True
+                    self.obj_helpers(c, [0, 1, 2])  # (in the order of a class's helpers before ocmp)
+                else:
+                    self.obj_helpers(c, [2])
+        for c in [x for x in self.ocmp]:
+            if c not in cmped:
+                cmped[c] = True
+                self.obj_helpers(c, [0, 1])
         for c in [x for x in self.hcls]:
             if c not in hashed:
                 hashed[c] = True
@@ -1052,7 +1061,7 @@ def gen_program(self, mods: list[Mod]) -> str:
                     self.function(lz[i], lz[i].node.kids[2].kids)
         for i in later:
             hpush(self.wake, i)
-        if len(done) + len(helped) + len(hashed) + len(xmade) == before:
+        if len(done) + len(helped) + len(cmped) + len(hashed) + len(xmade) == before:
             break
     for nm in self.flagged:
         if nm not in self.gtypes and nm not in self.funcs and nm not in self.classes:
