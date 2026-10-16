@@ -51,6 +51,7 @@ def gen_save(self) -> Frame:
     fr.cells = self.cells
     fr.nlw = self.nlw
     fr.nonevars = self.nonevars
+    fr.nonesites = self.nonesites
     fr.narrowed = self.narrowed
     fr.lkk = self.lkk
     fr.branch = self.branch
@@ -90,6 +91,7 @@ def gen_restore(self, fr: Frame) -> None:
     self.cells = fr.cells
     self.nlw = fr.nlw
     self.nonevars = fr.nonevars
+    self.nonesites = fr.nonesites
     self.narrowed = fr.narrowed
     self.lkk = fr.lkk
     self.branch = fr.branch
