@@ -1,0 +1,6 @@
+one True 2 True
+2 1
+u
+True False
+TypeError unhashable type: 'P'
+[exit 0]

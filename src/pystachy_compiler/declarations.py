@@ -1583,6 +1583,8 @@ def gen_dc_field(self, ci: ClassInfo, st: Node) -> None:
         elif a.s == "hash":
             if v.kind != "True" and v.kind != "False" and v.kind != "None":
                 self.bad_class(ci, "field(hash=...) needs True, False or None")
+            if v.kind == "True" or v.kind == "False":
+                o["hash" if v.kind == "True" else "no-hash"] = True
         elif a.s == "metadata":
             self.bad_class(ci, "field(metadata=...) is not supported")
         else:
@@ -1704,6 +1706,13 @@ def gen_dc_methods(self, ci: ClassInfo) -> None:
                                         mk("if", "", line, [isnone, no, mk("block", "", line, [])]), mk("return", "", line, [test])])
     if "unsafe_hash" in ci.dcopts and "__hash__" in own:
         self.err(f"Cannot overwrite attribute __hash__ in class {short(ci.name)}")
+    if "__hash__" not in own and ci.name not in self.nts and ("unsafe_hash" in ci.dcopts or ("frozen" in ci.dcopts and "no-eq" not in ci.dcopts)):
+        # unsafe_hash=True, or frozen=True with eq: the hash of the tuple of the fields that
+        # field(hash=True) names, or whose hash is None and that compare (CPython's _hash_add)
+        hs = [x for x in self.dc_fields(ci) if x in ci.fopts and ("hash" in ci.fopts[x] or ("no-hash" not in ci.fopts[x] and "no-compare" not in ci.fopts[x]))]
+        hs = [x for x in self.dc_fields(ci) if x not in ci.fopts or x in hs]
+        tup = mk("tuple", "", line, [mk("attr", x, line, [me]) for x in hs])
+        self.synth(ci, "__hash__", "int", [mk("return", "", line, [mk("call", "", line, [mk("name", "__pys_hash", line, []), tup])])])
     for m in ["__lt__", "__le__", "__gt__", "__ge__"] if "order" in ci.dcopts else []:
         if m in own:
             self.err(f"Cannot overwrite attribute {m} in class {short(ci.name)} Consider using functools.total_ordering")
