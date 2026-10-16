@@ -44,6 +44,13 @@ from CPython's accelerated modules:
 - `stat` tests use the module's constants rather than `_stat`'s separate constants.
 - For more than 2,500 items, `heapify` compares in a different order from `_heapq`'s
   cache-friendly loop, with the same result.
+- `operator.__doc__` is the Python module's docstring, which CPython replaces with
+  `_operator`'s.
+
+## Module docstrings
+
+A module's `__doc__` is its docstring, as in CPython, but for the modules written for
+Pystachy: `collections`, `curses`, `functools` and `io` have docstrings of their own.
 
 ## Html and HTMLParser
 
