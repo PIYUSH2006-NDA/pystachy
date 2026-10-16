@@ -1,0 +1,18 @@
+call add
+5 add add
+call mul
+12 mul mul
+3 inc name_only.<locals>.inner 2 inner inc 2 inner neither.<locals>.inner
+2 kept module_only.<locals>.kept 2 inc inc
+5 inc inc 5 inc inc
+call nested
+6 nested outer.<locals>.nested
+call method
+4 method Box.method
+call len
+3 len len
+call <lambda>
+6 <lambda> <lambda>
+11 timer timed.<locals>.timer
+('__module__', '__name__', '__qualname__', '__doc__', '__annotations__', '__type_params__') ('__dict__',)
+[exit 0]

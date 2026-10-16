@@ -603,10 +603,12 @@ def module_ints(mods: list[Mod], at: dict[str, int]) -> dict[str, str]:
     return out
 
 
-def module_strs(mods: list[Mod]) -> dict[str, str]:
+def module_strs(mods: list[Mod], tuples: dict[str, list[str]]) -> dict[str, str]:
     # The module globals that one direct module-level assignment binds to a str literal, or a
     # from-import of another such name: their text, which str.format() of the name reads as
-    # a literal format (Gen.str_format). The name is still read, with its usual checks.
+    # a literal format (Gen.str_format). The name is still read, with its usual checks. Those
+    # bound so to a tuple of str literals go to tuples, with its items: the attribute names
+    # functools.wraps()'s assigned gives (Gen.wrap_names: WRAPPER_ASSIGNMENTS)
     count: dict[str, int] = {}
     for m in mods:
         constant_writes(m.body, count)
@@ -618,6 +620,8 @@ def module_strs(mods: list[Mod]) -> dict[str, str]:
                 continue
             if st.kids[-1].kind == "str":
                 out[st.kids[0].s] = st.kids[-1].s
+            elif st.kids[-1].kind == "tuple" and all(x.kind == "str" for x in st.kids[-1].kids):
+                tuples[st.kids[0].s] = [x.s for x in st.kids[-1].kids]
             elif st.kind == "assign" and st.s == "from" and st.kids[1].kind == "name":
                 copies.append(st)
     more = True
@@ -626,6 +630,9 @@ def module_strs(mods: list[Mod]) -> dict[str, str]:
         for st in copies:
             if st.kids[0].s not in out and st.kids[1].s in out:
                 out[st.kids[0].s] = out[st.kids[1].s]
+                more = True
+            if st.kids[0].s not in tuples and st.kids[1].s in tuples:
+                tuples[st.kids[0].s] = tuples[st.kids[1].s]
                 more = True
     return out
 def calls_iter(n: Node, listed: bool) -> bool:
