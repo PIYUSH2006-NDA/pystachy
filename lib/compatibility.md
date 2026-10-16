@@ -678,3 +678,49 @@ implementation for abstract methods 'a', 'b'`. Abstract methods can have bodies,
 - An abstract method is implemented by a `def` (a class attribute that shadows a method of the
   base is not supported).
 - `update_abstractmethods()` is not supported: class decorators are not compiled.
+
+## Struct
+
+`struct` is CPython 3.13.16's `Lib/struct.py`, unchanged, on `_pystachy_struct`, a port of the C
+module `_struct` (`Modules/_struct.c`) that Pystachy loads for `import _struct`. The types of the
+values `unpack()` gives depend on its format, so the compiler parses a format it knows as the
+program compiles: a literal (a `str` or a `bytes`), a module's global bound once to a `str`
+literal, as `zipfile`'s `structCentralDir` is, or the format of a `Struct` made of a literal. A
+call of `pack()`, `unpack()`, `unpack_from()`, `iter_unpack()` or `calcsize()` with such a
+format, by its name (`struct.pack(...)`, `pack(...)` after `from struct import pack`) or through a
+`Struct`'s method, packs or unpacks each item with the port's functions. Every code of the native
+and standard tables works, with the byte orders `@`, `=`, `<`, `>` and `!`, repeat counts,
+whitespace, pad bytes and native alignment, and the values have the items' types: `int` for the
+integer codes, `float` for `e`, `f` and `d`, `bool` for `?` and `bytes` for `c`, `s` and `p`. The
+bytes, the values and the errors are the C module's on x86-64 Linux: `struct.error` with its
+messages for a value out of its code's range, a buffer of the wrong size or an offset out of its
+range, and `OverflowError` for a float too large for `e` or `f`. `calcsize()` and `Struct()`
+also take a `str` the program makes as it runs, raising CPython's `struct.error` for an invalid
+format.
+
+- `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` of a format not known as the program
+  compiles are compile-time errors ([error test](../tests/errors/lib_struct_dynamic.py)), and so
+  are the methods of a `Struct` made of one, and `Struct()` of a `bytes` format.
+- What CPython checks as `pack()` runs, the number of values for the format and the type of a
+  value for its code (a `str` for `s`, a `float` for an integer code), is checked as the program
+  compiles, with CPython's message ([error test](../tests/errors/lib_struct_arity.py),
+  [another](../tests/errors/lib_struct_str.py)), and a value that may be `None` is a compile-time
+  error but for `?`. So is a format CPython rejects in `unpack()`, `unpack_from()` and
+  `iter_unpack()`; `pack()` and `calcsize()` of one raise CPython's `struct.error` as the
+  program runs.
+- `iter_unpack()` gives a list of the tuples, where CPython gives an iterator of them
+  ([deviation](../tests/deviations/lib_struct_iter_unpack.py)); a `for` loop and `list()` see the
+  same tuples.
+- An unsigned 8-byte value from 2\*\*63 on (`Q`, and the native `L`, `N` and `P`) raises
+  `OverflowError: integer result does not fit in 64 bits` as it is unpacked, since Pystachy's ints
+  are 64-bit ([deviation](../tests/deviations/lib_struct_unsigned64.py)).
+- Buffers are `bytes`: Pystachy has no `bytearray`, `memoryview` or `array`, and `pack_into()`,
+  which writes into one, raises `NotImplementedError`.
+- A format of more than nine values gives a tuple of more than nine items, which can be unpacked
+  into names and indexed, but not printed, compared or hashed
+  ([tuples](../docs/language/typing.md)).
+- A NaN's payload is not kept: unpacking a NaN gives a NaN of its sign, which packs as the quiet
+  NaN, where CPython keeps the bits of a NaN it unpacks with `f` or `d`.
+- `struct.pack` and the module's other functions as values (`f = struct.pack`) raise
+  `NotImplementedError` when called, as the compiler makes the calls by their names. A `Struct`'s
+  methods are values, as `Struct("!I").pack` is.
