@@ -1,6 +1,6 @@
 # pyperformance results
 
-Pystachy compiles 19 of the 52 benchmarks tried from pyperformance 1.14.0, after the localized
+Pystachy includes 18 of the 52 benchmarks tried from pyperformance 1.14.0, after the localized
 adaptations listed in the [port notes](../bench/pyperformance/README.md). CPython runs the same
 adapted files, and every JIT and AOT run must print exactly what CPython printed. These are
 comparisons on that source, not pyperformance scores: some inputs, random number generators and data
@@ -16,7 +16,8 @@ five processes of a benchmark and mode differed by up to 115% of their median wa
 AOT). `unpack_sequence`'s AOT runs, which take a few milliseconds, are the exception: 12% and 317%.
 Each value is the median of five processes; ratios above 1 mean faster than CPython. The [raw
 samples](benchmarks/pyperformance-2026-10-16-a74faae.json) include each process's wall, CPU and
-timed seconds, the outputs and the source hashes.
+timed seconds, the outputs and the source hashes. That historical record also includes
+`deltablue`, which is now excluded from the delivered suite pending a licence provenance decision.
 
 Whole-process wall time:
 
@@ -24,7 +25,6 @@ Whole-process wall time:
 |---|---|---:|---:|---:|---:|
 | `barnes_hut` | 1 | 1.25 s | 0.34 s | 0.076 s | 16.4× |
 | `chaos` | 10 | 0.74 s | 0.31 s | 0.048 s | 15.4× |
-| `deltablue` | 200 | 0.75 s | 0.69 s | 0.069 s | 11.0× |
 | `fannkuch` | 2 | 1.22 s | 0.60 s | 0.48 s | 2.5× |
 | `float` | 10 | 1.27 s | 0.33 s | 0.082 s | 15.6× |
 | `go` | 4 | 0.99 s | 0.41 s | 0.073 s | 13.6× |
@@ -49,7 +49,6 @@ AOT build time:
 |---|---:|---:|---:|---:|---:|---:|
 | `barnes_hut` | 1.201 s | 0.0837 s | 0.0662 s | 14.4× | 18.1× | 1.1 s |
 | `chaos` | 0.690 s | 0.0634 s | 0.0423 s | 10.9× | 16.3× | 1.8 s |
-| `deltablue` | 0.718 s | 0.0542 s | 0.0504 s | 13.2× | 14.2× | 2.4 s |
 | `fannkuch` | 1.195 s | 0.443 s | 0.474 s | 2.7× | 2.5× | 0.7 s |
 | `float` | 1.250 s | 0.123 s | 0.0761 s | 10.2× | 16.4× | 0.7 s |
 | `go` | 0.952 s | 0.0680 s | 0.0613 s | 14.0× | 15.5× | 1.5 s |
@@ -69,7 +68,7 @@ AOT build time:
 
 ## Reading the results
 
-- AOT ran 15 of the 18 comparable benchmarks faster than CPython, by 1.5× to 84× in whole-process
+- AOT ran 14 of the 17 comparable benchmarks faster than CPython, by 1.5× to 84× in whole-process
   time. Object and numeric code gained most: `richards`, `richards_super` and `spectral_norm`.
 - The three regex benchmarks were 2.5–2.7× slower AOT in whole-process time, and 2.7–3.2× slower in
   the timed part. `lib/re` is written in the supported subset, while CPython matches in its C `_sre`
@@ -81,7 +80,7 @@ AOT build time:
   runtime calls; they were not profiled. The `fannkuch` and `nqueens` adaptations also replace slice
   assignment with new lists.
 - JIT whole-process time includes compiling the program; besides the regex benchmarks, it was within
-  10% of CPython's for `deltablue`, `meteor_contest` and `unpack_sequence`.
+  10% of CPython's for `meteor_contest` and `unpack_sequence`.
 - `unpack_sequence` does not measure unpacking under AOT: its timed part took 0.2 µs, far too little
   for 40 million unpackings, because optimization removed the repeated unpacking of an unchanged
   tuple and list. Its AOT ratios are omitted. The JIT's timed part was 2.2× faster than CPython's.

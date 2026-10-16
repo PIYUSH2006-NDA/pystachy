@@ -1,6 +1,6 @@
 # pyperformance benchmarks
 
-These are 19 of the 52 benchmarks tried from [pyperformance](https://github.com/python/pyperformance)
+These are 18 of the 52 benchmarks tried from [pyperformance](https://github.com/python/pyperformance)
 1.14.0, adapted so that Pystachy compiles them. CPython runs the same adapted files, so each
 comparison runs identical source in CPython, the JIT and AOT. The adaptations and smaller
 inputs change the work, so these results are not comparable with published pyperformance numbers.
@@ -63,7 +63,7 @@ reporting the first compiler error.
 | `decimal_factorial` | `0b88119beb7a2151ef59f0d7d969e655850d9aeef143426efd0e0a656b2bbcc6` | blocked |
 | `decimal_pi` | `eb3974785e602143f16fcfbd07ffd8b742b326096d9fd914c59a79531175104c` | blocked |
 | `deepcopy` | `9e1550442cbccfaff8a4988936487c091ac18bcc9c8ebdc41c1cb747c14ea078` | blocked |
-| `deltablue` | `70da5e16cd5b14f2f398ccc066794b83a30d997c2d91150695b8f938f934dc30` | ported |
+| `deltablue` | `70da5e16cd5b14f2f398ccc066794b83a30d997c2d91150695b8f938f934dc30` | deferred: licence provenance |
 | `fannkuch` | `2a8e4bc4c5e7e8ac605a4ca8246cc4baeab5336ac986d976e33657162750e8bf` | ported |
 | `float` | `b4f61a0978f5b0af2c0d07544ae26422868992e62b8f40e2967e3c694fc1b9a9` | ported |
 | `gc_collect` | `7886042f07e517abb79c58643a4b488710f3079936c6990522624bfb9c2acb9b` | blocked |
@@ -105,7 +105,8 @@ reporting the first compiler error.
 pyperformance is distributed under the MIT License; [LICENSE](LICENSE) and [AUTHORS](AUTHORS)
 are its `COPYING` and `AUTHORS` files. Each port keeps its upstream header. `regex_v8.py`'s
 header carries the V8 project's BSD license, and `raytrace.py`'s states the MIT License.
-`deltablue.py`'s docstring says the JavaScript original was licensed under the GPL.
+`deltablue` is excluded pending a separate provenance decision: its upstream docstring
+says the JavaScript original was GPL-licensed. The other 18 benchmarks remain included.
 `fannkuch.py`, `meteor_contest.py`, `nbody.py`, `regex_dna.py` and `spectral_norm.py` say they
 come from The Computer Language Benchmarks Game, whose programs are published under the
 3-clause BSD License. `richards.py` and `richards_super.py` credit a Java version
@@ -134,7 +135,6 @@ Each edit is marked `# Pystachy port:` in the source. Every port has these chang
 |---|---|
 | `barnes_hut` | Integer zeros that become floats are float literals. Constructors, the particle list and the child nodes are annotated. |
 | `chaos` | A Park–Miller generator replaces `random.seed()` and `randrange()`, so the points differ from upstream. `GVector` has float parameters and defaults; `__rmul__ = __mul__` becomes a method; fields are annotated; loops replace two-clause comprehensions; `length` starts as `0.0`; `x` and `y` are converted to int in one assignment each; an impossible `type()` message is a literal. `main()` returns the game, whose `create_image_chaos()` the main times with the default arguments. |
-| `deltablue` | `OrderedCollection(list)` uses become annotated lists. `super(C, self).__init__()` calls of `object` are commented out, and `Strength` replaces `self.__class__`. `Constraint` declares the methods its subclasses define. `Variable.value` is `int \| float`, and other fields, parameters and recursive methods are annotated. |
 | `fannkuch` | The reversing slice assignment uses a slice, `reverse()` and concatenation. |
 | `float` | `self.x = x = sin(i)` is split so that fields can be annotated, and so are `__init__` and `points`. |
 | `go` | The same generator replaces `random`, so the games differ from upstream. Fields set outside `__init__` are declared in the class body. `useful()` returns `bool(...)`, and `score()` counts in a float. `maxscore` starts as `-1.0`. The never-called `Board.check()`, whose sets hold `Square` objects, is commented out. |

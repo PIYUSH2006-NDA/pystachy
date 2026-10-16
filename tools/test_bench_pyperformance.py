@@ -132,13 +132,14 @@ class RecordTests(unittest.TestCase):
             row = re.search(rf"^\| `{name}` \|.*$", readme, re.M)
             self.assertIsNotNone(row, name)
             self.assertIn(sha, row.group(0), name)
-            self.assertIn("ported" if name in bench.BENCHMARKS else "blocked", row.group(0), name)
+            status = "ported" if name in bench.BENCHMARKS else "deferred" if name in bench.DEFERRED else "blocked"
+            self.assertIn(status, row.group(0), name)
 
 
 class ArgumentTests(unittest.TestCase):
     def test_invalid_settings_fail_before_execution(self):
         for arguments in (["--runs", "0"], ["--timeout", "inf"], ["--timeout", "-1"], ["--compiler", ""],
-                          ["--benchmarks", "pidigits"]):
+                          ["--benchmarks", "pidigits"], ["--benchmarks", "deltablue"]):
             with self.subTest(arguments=arguments), mock.patch.object(bench, "execute") as execute:
                 with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                     bench.main(arguments)

@@ -109,7 +109,7 @@ Early AOT benchmark results against CPython, rounded for readability:
 | Selected compute workloads | Up to about **70× faster** |
 | `fnmatch` event router, with only compiled-pattern caching | **About the same speed** in the paired launch check |
 | [Event router, with each event name's classification cached](examples/route/README.md#current-paired-snapshot) | About **1.9× faster** in the paired launch check |
-| [19 adapted pyperformance benchmarks](docs/pyperformance.md) | **1.5× to 84× faster** for 15; the 3 regex benchmarks **2.5–2.7× slower** |
+| [18 adapted pyperformance benchmarks](docs/pyperformance.md) | **1.5× to 84× faster** for 14; the 3 regex benchmarks **2.5–2.7× slower** |
 
 Both router comparisons use the same caching policy for CPython and Pystachy.
 The `fnmatch` variant still caches compiled patterns; caching classifications lets repeated

@@ -38,7 +38,6 @@ SDIST_DIR = "pyperformance-1.14.0/pyperformance/data-files/benchmarks/"
 BENCHMARKS = {
     "barnes_hut": (["1"], ["1", "5", "50"]),
     "chaos": (["10"], ["1", "200"]),
-    "deltablue": (["200"], ["1", "20"]),
     "fannkuch": (["2"], ["1", "7"]),
     "float": (["10"], ["1", "1000"]),
     "go": (["4"], ["1"]),
@@ -56,6 +55,9 @@ BENCHMARKS = {
     "spectral_norm": (["10"], ["1"]),
     "unpack_sequence": (["50000"], ["1"]),
 }
+
+# Excluded from the delivered suite pending a separate provenance decision.
+DEFERRED = {"deltablue": "license provenance"}
 
 # SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not: the 31 that this port
 # set out to try, and the other 21 that need no third-party package (bench/pyperformance/README.md).
@@ -191,7 +193,6 @@ CENSUS_CALLS = {
 TIMED_PART = {
     "barnes_hut": ["bench_quadtree_nbody"],
     "chaos": "create_image_chaos",
-    "deltablue": "delta_blue",
     "fannkuch": "fannkuch",
     "float": "benchmark",
     "go": "versus_cpu",
@@ -335,6 +336,7 @@ def census(args, compiler, env):
                                     capture_output=True, text=True, timeout=args.timeout)
             output = (result.stdout + result.stderr).replace(str(path.parent) + os.sep, "")
             row = {"name": name, "ported": name in BENCHMARKS,
+                   "deferred": DEFERRED.get(name, ""),
                    "first_error": first_error(output) if result.returncode else "",
                    "returncode": result.returncode}
             if name in BENCHMARKS:
@@ -349,7 +351,8 @@ def census(args, compiler, env):
     print("|---|---|---|")
     for row in rows:
         error = row["first_error"].replace("|", "\\|") or "none: compiles"
-        print(f"| `{row['name']}` | {'ported' if row['ported'] else 'blocked'} | `{error}` |")
+        status = "ported" if row["ported"] else "deferred: " + row["deferred"] if row["deferred"] else "blocked"
+        print(f"| `{row['name']}` | {status} | `{error}` |")
     failures = [f"{r['name']}: hunks without a 'Pystachy port' note at lines {', '.join(r['unmarked_hunks'])}"
                 for r in rows if r.get("unmarked_hunks")]
     failures += [f"{r['name']}: {problem}" for r in rows for problem in r.get("timing", [])]

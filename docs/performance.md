@@ -28,11 +28,11 @@ Run `make bench` to collect current results. Each invocation of `bench/run.sh` m
 mode once; repeat it to obtain a median. The benchmark gate in `make verify` rejects output
 mismatches, without imposing timing thresholds.
 
-The [pyperformance results](pyperformance.md) compare CPython, JIT and AOT on 19 benchmarks
+The [pyperformance results](pyperformance.md) compare CPython, JIT and AOT on 18 benchmarks
 adapted from pyperformance 1.14.0. In that advisory snapshot, taken on a loaded machine, AOT ran
-15 of 18 comparable benchmarks 1.5× to 84× faster and the three regex benchmarks 2.5–2.7× slower
+14 of 17 comparable benchmarks 1.5× to 84× faster and the three regex benchmarks 2.5–2.7× slower
 than CPython. The [port notes](../bench/pyperformance/README.md#blocked) record why the other 33
-benchmarks tried do not compile.
+benchmarks tried do not compile. Deltablue is separately deferred for a licence provenance decision.
 
 ## Caching workloads
 
