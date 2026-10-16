@@ -263,8 +263,9 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   dropped writers can land out of order.
 
 - A suspended generator that the program drops (a variable that goes, `del`, a generator kept
-  only in a container, a temporary such as `next(g())`'s) is never closed: its `finally` blocks
-  and `with` blocks do not run, where CPython closes it as its last reference goes. A generator
+  only in a container, a temporary such as `next(g())`'s, one still suspended when the program
+  ends) is never closed: its `finally` blocks and `with` blocks do not run, where CPython closes
+  it as its last reference goes (at the latest as the interpreter shuts down). A generator
   that a `for` loop's iterable has just made is closed as CPython closes it, where the loop is
   left, and so is a generator that `yield from` delegates to when its delegating generator is
   closed so. (`tests/deviations/gen_finalization.py`) Where an exception leaves a consumer's
