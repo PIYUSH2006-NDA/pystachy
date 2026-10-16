@@ -106,6 +106,13 @@ class OutputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs"):
             bench.run(command, dict(os.environ), 30, "result 2\n")
 
+    def test_conditions_name_the_widest_spread_and_least_cpu_share(self):
+        results = [{"name": "a", "summary": {"jit": {"wall_spread": 0.2, "cpu_share_min": 0.9},
+                                             "aot": {"wall_spread": 0.6, "cpu_share_min": 0.95}}},
+                   {"name": "b", "summary": {"jit": {"wall_spread": 0.1, "cpu_share_min": 0.5}}}]
+        self.assertEqual(bench.conditions(results), {"wall_spread": {"value": 0.6, "where": "a aot"},
+                                                     "cpu_share_min": {"value": 0.5, "where": "b jit"}})
+
 
 class RecordTests(unittest.TestCase):
     def test_ports_tables_and_files_agree(self):

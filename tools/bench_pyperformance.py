@@ -49,7 +49,7 @@ BENCHMARKS = {
     "raytrace": (["4"], ["1", "20", "20"]),
     "regex_dna": (["4"], ["1", "1000"]),
     "regex_effbot": (["20"], ["1"]),
-    "regex_v8": (["4"], ["1"]),
+    "regex_v8": (["20"], ["1"]),
     "richards": (["20"], ["1"]),
     "richards_super": (["20"], ["1"]),
     "scimark": (["2"], ["1"]),
@@ -426,8 +426,25 @@ def measure(name, arguments, args, compiler, env, directory):
             runs[mode].append(run(commands[mode], envs[mode], args.timeout, oracle["stdout"]))
     summary = {mode: {key: median(records, key) for key in ("wall_s", "cpu_s", "loop_s")}
                for mode, records in runs.items()}
+    for mode, records in runs.items():
+        # how far apart the runs were, and the least CPU time a process had of its wall time
+        walls = [r["wall_s"] for r in records]
+        summary[mode]["wall_spread"] = (max(walls) - min(walls)) / summary[mode]["wall_s"] if min(walls) > 0 else 0.0
+        summary[mode]["cpu_share_min"] = min((r["cpu_s"] / r["wall_s"] for r in records if r["wall_s"] > 0),
+                                             default=0.0)
     return {"name": name, "arguments": arguments, "output": oracle["stdout"],
             "aot_build_s": build["wall_s"], "summary": summary, "runs": runs}
+
+
+def conditions(results):
+    """The largest spread of a mode's wall times ((max - min) / median) and the least share of its
+    wall time that a process spent on a CPU, each with where it occurred."""
+    cells = [(s[key], key, f"{r['name']} {mode}") for r in results for mode, s in r["summary"].items()
+             for key in ("wall_spread", "cpu_share_min")]
+    spread = max((c for c in cells if c[1] == "wall_spread"), default=(0.0, "", ""))
+    share = min((c for c in cells if c[1] == "cpu_share_min"), default=(0.0, "", ""))
+    return {"wall_spread": {"value": spread[0], "where": spread[2]},
+            "cpu_share_min": {"value": share[0], "where": share[2]}}
 
 
 def positive(value):
@@ -495,6 +512,12 @@ def main(argv=None):
                           f" | {result['aot_build_s']:.1f} |", flush=True)
                 del report["active"]
             report["status"] = "ok"
+            report["metadata"]["load_average_end"] = os.getloadavg() if hasattr(os, "getloadavg") else None
+            if not args.smoke:
+                report["conditions"] = conditions(report["benchmarks"])
+                spread, share = report["conditions"]["wall_spread"], report["conditions"]["cpu_share_min"]
+                print(f"Largest spread of wall times: {spread['value']:.0%} ({spread['where']}); least CPU time "
+                      f"of a process's wall time: {share['value']:.0%} ({share['where']})")
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         report["status"], report["error"] = "failed", str(exc)
         print(f"pyperformance benchmark failed: {exc}", file=sys.stderr)
