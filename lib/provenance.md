@@ -68,6 +68,7 @@ CPython runs the source.
 | `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
+| `binascii` (`_pystachy_binascii`) | `Modules/binascii.c`, `Python/pystrhex.c` | All twelve functions of the C module, with its errors and messages |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -100,6 +101,7 @@ Historical upstream-suite checks recorded with the ports:
 | `shlex` | `test_shlex` | 43 of 44 passed; punctuation field is writable |
 | `random` | `test_random` | 106 passed, two memory-limited skips; with `_pyrandom`, 96: nine need over 63 bits, one pickles `_random.Random` |
 | `datetime` | `test_datetime`'s pure-Python cases | 1209 of 1775 passed, 27 skipped; the others need local time, pickling, hashing, subclass construction, `NotImplemented` reflection, the `timezone.utc` singleton or dynamic argument types |
+| `binascii` | `test_binascii`, with `_pystachy_binascii` as `binascii` | 72 of 93 passed and 17 skipped (Hypothesis and big-memory tests); the 4 `test_c_contiguity` cases need non-contiguous `memoryview` buffers |
 
 These counts describe specific recorded checks of the adapted source under
 CPython, not the number of APIs or upstream tests executed by the compiled
@@ -128,6 +130,15 @@ hash with `hash()` and the `lgamma` port with `math.lgamma()`. Its `--upstream D
 runs the pinned `test_random` (SHA-256
 `04ffe61561421e6cf3b85edcea3ebaca995e6a5def1267cf3562acbb3b9b1337`) and its `randv*.pck`
 files from DIR on both generators, as recorded above.
+
+`tools/binascii_check.py` runs `lib/_pystachy_binascii.py` on CPython, compares the results and
+errors of 420,000 calls of its functions, mostly at the edges of their inputs, with those of the C
+module (`Modules/binascii.c`, SHA-256
+`b5919586319f5e28f9a4c1754691908af77489aadcbde97ca1ca998af2fcd1d2`, whose hex separators are
+`Python/pystrhex.c`'s, SHA-256 `7842f6d7d9b58bcbf10cbb24d29f6d1f36668e20f935689e197bbe0abdccd4ed`),
+and compares their signatures. Its `--upstream DIR` option runs the pinned `test_binascii`
+(SHA-256 `95648ecc7cd21319fd515090ef5c0c2e4a501d43409ffc3ce27f5f647e73c7d7`) on the port, as
+recorded above.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of
