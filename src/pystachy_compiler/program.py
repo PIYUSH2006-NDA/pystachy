@@ -136,10 +136,10 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             ci.methods[m] = f
         elif f.prop != ci.methods[m].prop:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
+            self.bad_class(ci, f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
         elif ci.exc == "" and (f.deco != "" or ci.methods[m].deco != ""):
             self.line = ci.methods[m].node.line
-            self.err(f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
+            self.bad_class(ci, f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
         elif ci.exc != "" and m != "__init__" and m != "__str__" and m != "__repr__":
             self.line = ci.methods[m].node.line
             self.err(f"method '{m}' of '{short(ci.name)}' overrides that of '{short(b.methods[m].cls)}': only __init__, __str__ and __repr__ may be overridden")
@@ -152,7 +152,7 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             bn = f.accof[: f.accof.rfind(".")]
             if p not in ci.methods or not ci.methods[p].prop or ci.methods[p].cls == ci.name or bn not in self.classes or p not in self.classes[bn].methods or ci.methods[p] is not self.classes[bn].methods[p]:
                 self.line = f.node.line
-                self.err(f"@{short(f.accof)}.{f.acc} is not supported here: {short(bn)} must be the base class whose property {f.node.s} this class inherits")
+                self.bad_class(ci, f"@{short(f.accof)}.{f.acc} is not supported here: {short(bn)} must be the base class whose property {f.node.s} this class inherits")
 
 def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
     # method d of class ci, decorated @x.setter or @x.deleter (or @Base.x.setter, see inherit):
@@ -261,12 +261,20 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
     # docstring
     if len(st.kids) > 2 or (len(st.kids) > 1 and (dc_args(st.kids[1]).startswith("!") or self.imported(st.kids[1].s) != "dataclasses.dataclass")):
         return f"its decorator @{short(st.kids[1].s)} is not supported"
+    props: dict[str, bool] = {}  # (its properties, and their setters and deleters: x.setter)
     for b in st.kids[0].kids:
         if b.kind == "def":
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            acc = deco.endswith(".setter") or deco.endswith(".deleter")
+            # @x.setter or @x.deleter on def x after @property def x, once each; @Base.x.setter
+            # in a subclass (see accessor and inherit)
+            of = deco[: deco.rfind(".")] if "." in deco else ""
+            acc = (deco.endswith(".setter") or deco.endswith(".deleter")) and (of == b.s and b.s in props or (exc and of.endswith("." + b.s))) and b.s + deco[deco.rfind(".") :] not in props
+            if acc:
+                props[b.s + deco[deco.rfind(".") :]] = True
+            elif deco == "property":
+                props[b.s] = True
             if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property" and not acc) or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:

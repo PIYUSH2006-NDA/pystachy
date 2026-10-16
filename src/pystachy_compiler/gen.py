@@ -173,6 +173,7 @@ from src.pystachy_compiler.declarations import (
     gen_declare_fields as declarations_declare_fields,
     gen_declare_fn as declarations_declare_fn,
     gen_exc_attr as declarations_exc_attr,
+    gen_bad_class as declarations_bad_class,
     gen_fgep as declarations_fgep,
     gen_field as declarations_field,
     gen_frozen as declarations_frozen,
@@ -1098,6 +1099,9 @@ class Gen:
 
     def exc_attr(self, ci: ClassInfo, name: str) -> None:
         return declarations_exc_attr(self, ci, name)
+
+    def bad_class(self, ci: ClassInfo, why: str) -> None:
+        return declarations_bad_class(self, ci, why)
 
     def shadowed(self, ci: ClassInfo, name: str) -> bool:
         return declarations_shadowed(self, ci, name)

@@ -890,6 +890,16 @@ def gen_exc_attr(self, ci: ClassInfo, name: str) -> None:
                 self.err(why)
             ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
 
+def gen_bad_class(self, ci: ClassInfo, why: str) -> None:
+    # why class ci cannot be compiled: an error, or for an imported module's class, one only where
+    # the program uses it. Its objects cannot be made, so dispatch on a base's class tag leaves it
+    # out, and the classes deriving from it too (see declare_fields)
+    if ci.mod == "":
+        self.err(why)
+    ci.bad = ci.bad if ci.bad != "" else f"class {shown(ci.name)} is not supported: {why}"
+    ci.out = True
+    ci.tag = 0
+
 def gen_shadowed(self, ci: ClassInfo, name: str) -> bool:
     # does class ci or a base of the program give attribute name a default in its class body:
     # then CPython's instances keep it in their __dict__, apart from the slot of the builtin
@@ -948,6 +958,9 @@ def gen_add_field(self, ci: ClassInfo, name: str, t: str) -> None:
 def gen_declare_fields(self, ci: ClassInfo) -> None:
     noann = mk("noann", "", ci.node.line, [])
     last = ""
+    if ci.base in self.classes and self.classes[ci.base].out:
+        why = self.classes[ci.base].bad
+        self.bad_class(ci, f"its base {shown(ci.base)} is not supported: {why[why.find(': ') + 2 :]}")
     # Slot names constrain layout; the declaration remains a class attribute. A
     # subclass without its own __slots__, or with an unslotted base, has a dict.
     if ci.base in self.classes:
@@ -1063,7 +1076,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         if dc and st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
             # (a base dataclass's field declared again, with or without a default)
             if self.vtype(st.kids[1]) != self.classes[ci.base].ftypes[st.kids[0].s]:
-                self.err(f"field '{st.kids[0].s}' of '{short(ci.base)}' declared again in '{short(ci.name)}' with another type (not supported)")
+                self.bad_class(ci, f"field '{st.kids[0].s}' of '{short(ci.base)}' declared again in '{short(ci.name)}' with another type (not supported)")
+                continue
         elif st.kind == "annassign" and st.kids[0].kind == "name" and ci.base in self.classes and st.kids[0].s in self.classes[ci.base].ftypes:
             # (a class attribute of the base bound again, with the same type: as x = v is)
             b = self.classes[ci.base]
@@ -1084,8 +1098,10 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
                 last = name
             elif last != "" and ci.name in self.nts:
                 self.err(f"Non-default namedtuple field {name} cannot follow default field {last}")
+        elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and dc and st.kids[1].kind == "call" and self.imported_ref(st.kids[1].kids[0]) == "dataclasses.field":
+            self.err(f"'{st.kids[0].s}' is a field but has no type annotation")  # (CPython's TypeError where it creates the class)
         elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and self.is_dc(ci.name):
-            self.err(f"a class attribute without an annotation ({st.kids[0].s} = ...), which is no field of a {'NamedTuple' if ci.name in self.nts else 'dataclass'}, is not supported: annotate it")
+            self.bad_class(ci, f"a class attribute without an annotation ({st.kids[0].s} = ...), which is no field of a {'NamedTuple' if ci.name in self.nts else 'dataclass'}, is not supported: annotate it")
         elif st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name":
             # x = v: a class attribute, typed by v as a field is (and from here on read as x: T = v)
             if st.kids[1].kind == "call" and st.kids[1].kids[0].kind == "name" and st.kids[1].kids[0].s == "property" and "property" not in self.funcs:
@@ -1162,7 +1178,8 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
             if name in ci.methods:
                 self.line = ci.node.line
                 owner = short(ci.methods[name].cls)
-                self.err(f"field '{name}' of '{short(ci.name)}' conflicts with method '{owner}.{name}': method and field shadowing in an inheritance hierarchy is not supported")
+                self.bad_class(ci, f"field '{name}' of '{short(ci.name)}' conflicts with method '{owner}.{name}': method and field shadowing in an inheritance hierarchy is not supported")
+                break
     if "__init__" in ci.methods or ci.exc != "":
         return
     # synthesize __init__: @dataclass takes every field as a parameter
@@ -1262,7 +1279,10 @@ def gen_dc_field(self, ci: ClassInfo, st: Node) -> None:
     for a in call.kids[1:]:
         if a.kind != "kw":
             n = len([x for x in call.kids[1:] if x.kind != "kw"])
-            self.err(f"field() takes 0 positional arguments but {n} {'was' if n == 1 else 'were'} given" if a.kind != "starred" and a.kind != "dstar" else "star arguments are not supported")
+            if a.kind == "starred" or a.kind == "dstar":
+                self.bad_class(ci, "star arguments are not supported")
+                continue
+            self.err(f"field() takes 0 positional arguments but {n} {'was' if n == 1 else 'were'} given")
         v = a.kids[0]
         if a.s == "default":
             dflt.append(v)
@@ -1270,16 +1290,16 @@ def gen_dc_field(self, ci: ClassInfo, st: Node) -> None:
             ci.factory[name] = v
         elif a.s == "init" or a.s == "repr" or a.s == "compare" or a.s == "kw_only":
             if v.kind != "True" and v.kind != "False":
-                self.err(f"field({a.s}=...) needs True or False")
+                self.bad_class(ci, f"field({a.s}=...) needs True or False")
             if a.s == "kw_only":
                 o["kw_only" if v.kind == "True" else "pos"] = True
             elif v.kind == "False":
                 o["no-" + a.s] = True
         elif a.s == "hash":
             if v.kind != "True" and v.kind != "False" and v.kind != "None":
-                self.err("field(hash=...) needs True, False or None")
+                self.bad_class(ci, "field(hash=...) needs True, False or None")
         elif a.s == "metadata":
-            self.err("field(metadata=...) is not supported")
+            self.bad_class(ci, "field(metadata=...) is not supported")
         else:
             self.err(f"field() got an unexpected keyword argument '{a.s}'")
     if len(dflt) > 0 and name in ci.factory:
@@ -1303,8 +1323,8 @@ def gen_dc_factory(self, ci: ClassInfo, fl: str) -> None:
             self.err(f"name '{short(x.s)}' is not defined (CPython reads a default_factory when it creates the class, before this def or class statement runs)")
     else:
         self.line = line
-        self.err("default_factory= is only supported as a function, a class or a lambda without parameters")
-        v = x
+        self.bad_class(ci, "default_factory= is only supported as a function, a class or a lambda without parameters")
+        v = mk("None", "", line, [])
     f = FnInfo(fl + ".factory", f"@m.{ci.name}.{fl}.factory", mk("def", fl, line, [mk("noann", "", line, []), mk("noann", "", line, []), mk("block", "", line, [mk("return", "", line, [v])])]), ci.name)
     f.deco = "staticmethod"
     f.ret = ci.ftypes[fl]
@@ -1363,7 +1383,7 @@ def gen_dc_methods(self, ci: ClassInfo) -> None:
     cmps = [x for x in self.dc_fields(ci) if x not in ci.fopts or "no-compare" not in ci.fopts[x]]
     if "no-repr" in ci.dcopts and "__repr__" in ci.methods and ci.methods["__repr__"].synthetic and "__repr__" not in own:
         self.line = line
-        self.err(f"repr=False in a dataclass whose base's __repr__ is the one @dataclass writes is not supported (CPython's shows the object's class, {short(ci.name)})")
+        self.bad_class(ci, f"repr=False in a dataclass whose base's __repr__ is the one @dataclass writes is not supported (CPython's shows the object's class, {short(ci.name)})")
     if "__repr__" not in own and "no-repr" not in ci.dcopts:
         parts: list[Node] = []
         lit = short(ci.name) + "("
