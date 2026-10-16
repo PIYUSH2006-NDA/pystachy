@@ -1,7 +1,7 @@
 """Builtins component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.ir import Ins, IterArg, Loop, Reduce, Val
+from src.pystachy_compiler.ir import Data, Ins, IterArg, Loop, Reduce, Val
 from src.pystachy_compiler.lexer import Lexer
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.parser import Parser
@@ -93,7 +93,13 @@ def gen_modattr(self, path: str) -> Val:
     if path == "sys.version_info":
         # (a tuple of its items: comparisons, indexing and slicing work as on CPython's, but str()
         # and repr() show a tuple, not sys.version_info(major=3, ...))
-        return self.tuple_([self.modattr("sys.version_info." + x) for x in "major minor micro releaselevel serial".split()])
+        if path not in self.bconsts:
+            vals = [self.modattr("sys.version_info." + x) for x in "major minor micro releaselevel serial".split()]
+            d = Data("tuple", "@sys.version_info")
+            d.items = vals
+            self.consts.append(d)
+            self.bconsts[path] = Val(d.name, self.ctype("tuple", [v.t for v in vals]))
+        return self.bconsts[path]
     if path == "sys.platform":
         return Val(self.rt("pys_platform", "ptr", []), "str")
     if path.startswith("errno.") and path[6:] in ERRNO:

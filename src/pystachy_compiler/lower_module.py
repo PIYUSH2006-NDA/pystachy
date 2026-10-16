@@ -21,6 +21,11 @@ def lower_data(d: Data) -> str:
         n = len(d.text) + 1
         # Bytes are immutable; runtime.c's Str dictionary hash cache is writable.
         return f'{d.name} = private unnamed_addr global {{i64, i64, [{n} x i8]}} {{i64 {n - 1}, i64 0, [{n} x i8] c"{llstr(d.text)}\\00"}}, align 8'
+    if d.kind == "tuple":
+        # Fixed tuples use one i64 slot per item. These literals refer only to static strings,
+        # so no heap allocation or collector root is needed; keep their address significant.
+        slots = ["i64 ptrtoint (ptr " + v.v + " to i64)" if v.t == "str" else "i64 " + v.v for v in d.items]
+        return f"{d.name} = private constant [{len(slots)} x i64] [{', '.join(slots)}], align 8"
     if d.kind == "callable" or d.kind == "exception":
         return f"{d.name} = private constant {{{', '.join(['ptr' for _ in d.refs])}}} {{{', '.join(['ptr ' + x for x in d.refs])}}}"
     fail(f"internal error: no LLVM lowering for module data {d.kind}", 0)

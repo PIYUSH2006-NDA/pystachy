@@ -11,13 +11,14 @@ class Val:
 
 
 class Data:
-    # Immutable module data: string bytes, a callable's code/env, or an exception descriptor.
+    # Immutable module data: string bytes, callable/exception references, or constant tuple slots.
     # LLVM's concrete layout and declaration syntax belong to lower_module.
     def __init__(self, kind: str, name: str):
         self.kind = kind
         self.name = name
         self.text = ""
         self.refs: list[str] = []
+        self.items: list[Val] = []  # tuple slots: int literals or static string references
 
 
 class IterArg:
