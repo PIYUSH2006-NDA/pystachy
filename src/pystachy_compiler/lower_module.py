@@ -255,6 +255,10 @@ def gen_lower_module(self) -> str:
     # covers @main.init if inlined here) and the table of pointer-typed globals
     hdr.append(runtime_decl("init"))
     hdr.append(runtime_decl("finish"))
+    # (atexit's callbacks: pys_finish runs the Callable its _hook holds, once its module has run)
+    hook = "@g.atexit$_hook" if any(g.v == "@g.atexit$_hook" for g in self.globs) else ""
+    if hook != "":
+        hdr.append(runtime_decl("exit_hook"))
     hdr.append(runtime_decl("frameaddress"))
     if self.eh:
         hdr.append(runtime_decl("eh_on"))
@@ -263,6 +267,8 @@ def gen_lower_module(self) -> str:
     hdr.append(f"  call void @pys_init(i32 %argc, ptr %argv, ptr %sb, ptr @pys.roots, i64 {len(self.gcroots)})")
     if self.eh:
         hdr.append("  call void @pys_eh_on()")  # (from now on, the runtime raises exceptions)
+    if hook != "":
+        hdr.append(f"  call void @pys_exit_hook(ptr {hook})")
     hdr.append("  call void @main.init()")
     hdr.append("  call void @pys_finish()")
     hdr.append("  ret i32 0")

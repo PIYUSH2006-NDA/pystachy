@@ -641,6 +641,25 @@ without them, which binds them to `None`; the four incremental classes' `errors`
 are annotated, so that the classes are no templates; and the `import encodings`, which never
 runs, is left out.
 
+## Atexit
+
+`atexit` is `_pystachy_atexit`, a port of the C module `atexit` that Pystachy loads for
+`import atexit`. `register(func, *args, **kwargs)` (also as a decorator) records a callback
+that calls `func` with those arguments, and the end of the program runs the callbacks, the last
+registered first, as CPython's finalization does: after the program's code, and also where it
+ends with `sys.exit()` or with an exception that nothing catches, whose message is shown first.
+A callback that raises, also `SystemExit`, is reported on stderr and the next one runs; the exit
+status stays the program's. `_run_exitfuncs()`, `_clear()` and `_ncallbacks()` work as in
+CPython.
+
+- `atexit.unregister()` raises `NotImplementedError`
+  ([deviation](../tests/deviations/lib_atexit_unregister.py)): a callback is a closure that calls
+  the function, and Pystachy cannot compare it with another function.
+- The report of a callback that raises is `Exception ignored in atexit callback:` and the
+  exception's last line, where CPython names the function and shows the traceback.
+- In an extension module (`pystachy ext`), `register()` records callbacks that never run:
+  CPython's own finalization does not know of them.
+
 ## Abc
 
 `abc` is `_pystachy_abc`, which Pystachy loads for `import abc`, as CPython has imported its
