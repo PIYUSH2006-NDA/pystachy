@@ -196,7 +196,7 @@ lists further blockers found by reading the upstream code; there may be others.
 | `typing_runtime_protocols` | `bm_typing_runtime_protocols.py:38: error: unsupported base class: single inheritance requires a previously declared ordinary class or a supported exception class` | `typing.Protocol` classes, and `isinstance()` checks against them |
 | `xml_etree` | `bm_xml_etree.py:15: error: 'defaultdict' from 'collections' is not supported: no definition or submodule was found on the module path` | `xml.etree.ElementTree`, `globals()`, and temporary files |
 
-The ported benchmarks' upstream files stop at these first errors before adaptation:
+The ported and deferred benchmarks' upstream files stop at these first errors before adaptation:
 
 | Benchmark | First compiler error of the upstream file |
 |---|---|
