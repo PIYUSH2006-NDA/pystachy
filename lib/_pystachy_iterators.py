@@ -76,10 +76,12 @@ class range_iterator:
         return self
 
     def __next__(self):
-        if self._n > 0:
+        # pys_range_len stores an unsigned count in an i64. Zero alone means exhaustion;
+        # crossing the sign bit must wrap explicitly because signed subtraction checks overflow.
+        if self._n != 0:
             v = self._next
-            self._n -= 1
-            if self._n > 0:
+            self._n = 9223372036854775807 if self._n == -9223372036854775807 - 1 else self._n - 1
+            if self._n != 0:
                 self._next = v + self._step
             return v
         raise StopIteration
