@@ -295,6 +295,21 @@ def gen_flow_function(self, f: FnInfo, gl: dict[str, bool], safe: dict[str, bool
         else:
             self.gflag[nm] = True
 
+def self_fields(n: Node, me: str, fields: list[str], out: dict[str, bool]) -> bool:
+    # whether code n uses the name me only as me.f, of a field f (each kept in out)
+    if n.kind == "attr" and n.kids[0].kind == "name" and n.kids[0].s == me:
+        if n.s not in fields:
+            return False
+        out[n.s] = True
+        return True
+    if (n.kind == "name" and n.s == me) or (n.kind == "deco" and (n.s == me or n.s.startswith(me + "."))):
+        return False
+    for k in n.kids:
+        if not self_fields(k, me, fields, out):
+            return False
+    return True
+
+
 def gen_fl_nested(self, fl: Flow, n: Node) -> None:
     # a def or lambda n in the code fl analyses: its defaults and decorators run here. The
     # variables of fl's function that it reads must be assigned here, but a def's own name: a
@@ -309,10 +324,18 @@ def gen_fl_nested(self, fl: Flow, n: Node) -> None:
     free: dict[str, bool] = {}
     closure_free(d, free)
     if fl.me in free:
-        # (in __init__, fl_fields: a function that takes self may run later, from anywhere, and
-        # read the fields not assigned here)
-        fl.exposed()
-        fl.escaped = True
+        # (in __init__, fl_fields: a function that takes self may run later and read the fields
+        # not assigned here. One that uses self only as self.f, of fields f, reads only those (a
+        # flag tests each); any other use may pass self anywhere, which reads any field)
+        used: dict[str, bool] = {}
+        if self_fields(d, fl.me, fl.fields, used):
+            if " dead" not in fl.defd:
+                for f in used:
+                    if "." + f not in fl.defd:
+                        fl.unsafe[f] = True
+        else:
+            fl.exposed()
+            fl.escaped = True
     caps: dict[str, bool] = {}
     late: list[str] = []
     own = n.s if n.kind == "def" and not self.applies(n, False, fl.scope) else ""  # (a decorated def's name binds what the decorators give, later)

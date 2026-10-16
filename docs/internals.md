@@ -85,7 +85,9 @@ narrowing is a separate typing concern. In `__init__` of a class outside a hiera
 branch where `hasattr(self, "f")` is true has field `f` assigned: a field made only where
 it is false (`if not hasattr(self, "f"): self.f = ...`) keeps a flag for `hasattr`, and its
 reads have no check unless `self` escapes before it is assigned: to a call, a bound method,
-or a def or lambda that takes `self` and may run later.
+or a def or lambda that uses `self` other than as `self.f` of its fields. A def or lambda
+that uses it only that way may run later and reads only those fields: the ones not assigned
+where it is defined keep their checks.
 
 <a id="the-typed-ir"></a>
 <a id="ssa-by-delegation"></a>
