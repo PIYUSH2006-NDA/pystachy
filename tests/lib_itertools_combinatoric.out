@@ -1,0 +1,68 @@
+[('A', 'x'), ('A', 'y'), ('B', 'x'), ('B', 'y')] [('a', 1, True), ('a', 2, True), ('b', 1, True), ('b', 2, True)] [(0.5,)]
+[(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1)] [('a', 'a'), ('a', 'b'), ('b', 'a'), ('b', 'b')] [('a', 'c', 'a', 'c'), ('a', 'c', 'b', 'c'), ('b', 'c', 'a', 'c'), ('b', 'c', 'b', 'c')]
+[()] [()] [()] [] []
+[('a', 'c', 'e', 'f'), ('a', 'c', 'e', 'g'), ('a', 'd', 'e', 'f'), ('a', 'd', 'e', 'g'), ('b', 'c', 'e', 'f'), ('b', 'c', 'e', 'g'), ('b', 'd', 'e', 'f'), ('b', 'd', 'e', 'g')] 24
+1 a
+1 b
+2 a
+2 b
+2 1 2
+3 1 2
+3 2 2
+4 2 2
+[(1, 0), (2, 0)] [('k', 3)] [(1.5,), (2.5,)]
+  read 0
+  read 1
+  read 0
+  read 1
+made
+[(0, 0), (0, 1), (1, 0), (1, 1)]
+made
+[()]
+ValueError: repeat argument cannot be negative
+TypeError: 'float' object cannot be interpreted as an integer
+[('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'C'), ('C', 'A'), ('C', 'B')] [(1, 2, 3), (1, 3, 2), (2, 1, 3), (2, 3, 1), (3, 1, 2), (3, 2, 1)] []
+[()] [()] [()] [(True, False), (False, True)]
+True [(1.5,), (2.5,)]
+  read 0
+  read 1
+  read 2
+made
+[(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]
+  read 0
+  read 1
+ValueError: r must be non-negative
+  read 0
+  read 1
+TypeError: Expected int as r
+[('A', 'B'), ('A', 'C'), ('A', 'D'), ('B', 'C'), ('B', 'D'), ('C', 'D')] [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)] []
+[()] [()] [(1, 2)]
+[('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')] [(1, 1, 1), (1, 1, 2), (1, 2, 2), (2, 2, 2)]
+[()] [] [()]
+counts agree
+  read 0
+  read 1
+  read 2
+  read 3
+made
+(0, 1) [(0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+  read 0
+  read 1
+made
+[(0, 0), (0, 1), (1, 1)]
+  read 0
+  read 1
+ValueError: r must be non-negative
+  read 0
+  read 1
+ValueError: r must be non-negative
+  read 0
+  read 1
+ValueError: r must be non-negative
+  read 0
+  read 1
+ValueError: r must be non-negative
+TypeError: 'float' object cannot be interpreted as an integer
+['red green', 'red blue', 'green blue'] ['ab', 'ba']
+[3, 4, 5, 5, 6, 7] (2, 4)
+[exit 0]
