@@ -155,3 +155,10 @@ st.add("b c b")
 print(st.seen, st.top(), top(["x", "y", "x"], 1), tally(["a b", "b ω", "ω ω"]))
 local("aab")
 print(counter_of(["p", "q", "p", "p"]))
+# counts and popitem() in turn
+churn = Counter("ab")
+for j in range(2000):
+    churn["k" + str(j % 70)] += 1
+    if j % 4 != 0:
+        churn.popitem()
+print(len(churn), churn.most_common(3), churn.total())

@@ -93,3 +93,34 @@ try:
     s.pop()
 except KeyError as e:
     print("KeyError", e)
+
+# popitem() and inserts of new keys in turn, well past the table's size: the entries popitem
+# cuts off still fill the table until it is rebuilt (CPython keeps dk_usable), so lookups end
+d2 = {"a": 1}
+for j in range(1000):
+    d2.popitem()
+    d2[str(j)] = j
+print(d2, "a" in d2, d2.get("zz"))
+n2 = {0: 0, 1: 1}
+for j in range(1, 5000):
+    n2.popitem()
+    n2[j * 37] = j
+print(n2, n2.copy(), dict(n2), list(reversed(n2)), 37 in n2)
+# where the table is rebuilt decides what a loop that replaces keys sees, as in CPython
+for size in range(1, 12):
+    t: dict[int, int] = {}
+    for j in range(size):
+        t[j] = j
+    for j in range(size):
+        t.popitem()
+        t[100 + j] = j
+    seen: list[int] = []
+    try:
+        for k4 in t:
+            seen.append(k4)
+            del t[k4]
+            t[k4 + 1000] = k4
+    except RuntimeError as e:
+        print(size, "RuntimeError", e, seen)
+    else:
+        print(size, seen, t)

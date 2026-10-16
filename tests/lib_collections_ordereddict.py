@@ -180,3 +180,18 @@ def rank(scores: dict[str, int]) -> OrderedDict[str, int]:
 
 
 print(rank({"ann": 3, "bob": 9, "eve": 5, "zoë": 9}))
+
+# used as a stack, a push and a popitem() in turn, and as a queue
+stack: OrderedDict[str, int] = OrderedDict()
+stack["bottom"] = 0
+for j in range(2000):
+    stack["k" + str(j)] = j
+    if j % 3 != 2:
+        stack.popitem()
+print(len(stack), list(stack.items())[:3], stack.popitem(), stack.popitem(last=False))
+queue: OrderedDict[int, int] = OrderedDict()
+for j in range(2000):
+    queue[j] = j * j
+    if j % 2 == 1:
+        queue.popitem(last=False)
+print(len(queue), queue.popitem(last=False), queue.popitem(), 1999 in queue, 1001 in queue)
