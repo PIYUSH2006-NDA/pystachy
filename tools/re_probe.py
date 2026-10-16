@@ -9,6 +9,10 @@ sre_count()'s nested ones) and the contexts it makes (_sre.Ctx objects). The cou
 deterministic: the run fails if one is above its limit, so a change to lib/re that makes the matcher
 do more fails here, and one that makes it do less lowers the limits.
 
+The charset compiler also checks full BMP and non-BMP case-insensitive ranges against CPython's
+code and matches. Its bit-setting calls may only receive existing case-fix lists, never temporary
+singleton/empty lists per code point; this deterministic guard needs no timing threshold.
+
 The time of a call of lib/re under CPython says little about compiled code: --time PYSTACHY builds
 tools/re_bench.py with that compiler and prints each operation's time per call, compiled and under
 CPython's own re, for information only.
@@ -18,6 +22,8 @@ usage: python3 tools/re_probe.py [--time PYSTACHY]   (make re-probe; a step of m
 import importlib.util
 import os
 import re
+import re._compiler
+import re._parser
 import subprocess
 import sys
 import tempfile
@@ -70,6 +76,53 @@ def run(rx, what: str, text: str):
     return rx.findall(text)
 
 
+def check_charset_allocations() -> int:
+    # The shared empty result and Unicode case-fix table stay alive throughout this check.
+    # Counting unowned list arguments catches both singleton and empty per-code-point lists,
+    # including a regression that changes _Case.fixes() back to returning a fresh empty list.
+    empty = port._Case(port.A | port.I).fixes(0)
+    owned = {id(empty)} | {id(fixes) for fixes in port._fixes().values()}
+    calls = fresh = failed = 0
+    original = port._setbits
+
+    def counted(charmap, ks):
+        nonlocal calls, fresh
+        calls += 1
+        fresh += id(ks) not in owned
+        return original(charmap, ks)
+
+    patterns = [r'[N-\uffff]', r'[n-\uffff]', r'[N-\U00010000]', r'[n-\U00010000]',
+                r'[N-\U0010ffff]', r'[^N-\uffff]', r'[9-\xff]', r'[9-\u0100]',
+                r'[\xb5-\xb6]', r'[\U00010400-\U00010427]', r'[19\u0100]']
+    subjects = ['\x00', '9', '@', 'A', 'M', 'N', 'Z', '[', '`', 'a', 'm', 'n', 'z',
+                '\xff', '\u0100', '\u0101', '\xb5', '\u039c', '\u03bc', '\u017f',
+                '\u212a', '\uffff', '\U00010000', '\U00010001', '\U00010400',
+                '\U00010428', '\U0010ffff']
+    port._setbits = counted
+    try:
+        for flags in [0, re.I, re.I | re.A]:
+            for pattern in patterns:
+                port.purge()
+                mine = port.compile(pattern, flags)
+                theirs = re.compile(pattern, flags)
+                code = [int(c) for c in re._compiler._code(re._parser.parse(pattern, flags), flags)]
+                if mine._code != code:
+                    print(f'charset bytecode differs: {pattern!r}, {flags}')
+                    failed += 1
+                for subject in subjects:
+                    got = mine.fullmatch(subject)
+                    want = theirs.fullmatch(subject)
+                    if (None if got is None else got.group()) != (None if want is None else want.group()):
+                        print(f'charset match differs: {pattern!r}, {flags}, {subject!r}')
+                        failed += 1
+    finally:
+        port._setbits = original
+    if fresh:
+        failed += 1
+    print(f'charset bit lists: {fresh} temporary of {calls} calls (limit 0)')
+    return failed
+
+
 def main() -> int:
     paras, blocks = re_bench.inputs(20)
     failed = 0
@@ -88,6 +141,7 @@ def main() -> int:
         over = e > max_entries or c > max_contexts
         failed += over
         print(f"{name:30} {e / len(texts):8.1f} {c / len(texts):9.1f}   ({e} of {max_entries}, {c} of {max_contexts}){'  OVER THE LIMIT' if over else ''}")
+    failed += check_charset_allocations()
     if "--time" in sys.argv:
         pys = sys.argv[sys.argv.index("--time") + 1]
         with tempfile.TemporaryDirectory() as d:
