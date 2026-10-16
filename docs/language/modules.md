@@ -16,9 +16,10 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
 `ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
 CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
-For `binascii`, `_codecs`, `atexit` and `_struct`, Pystachy loads its ports of those C modules,
-`lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py`, `lib/_pystachy_atexit.py` and
-`lib/_pystachy_struct.py` ([library reference](../../lib/compatibility.md#binascii)), and the end
+For `binascii`, `_codecs`, `atexit`, `_struct` and `_thread`, Pystachy loads its ports of those C
+modules, `lib/_pystachy_binascii.py`, `lib/_pystachy_codecs.py`, `lib/_pystachy_atexit.py`,
+`lib/_pystachy_struct.py` and `lib/_pystachy_thread.py`
+([library reference](../../lib/compatibility.md#binascii)), and the end
 of the program runs `atexit`'s callbacks. For `abc`, which CPython imports as it starts, it loads
 `lib/_pystachy_abc.py` ([abc](../../lib/compatibility.md#abc)).
 
@@ -56,6 +57,7 @@ Builtin-module imports have a [documented scope deviation](../language.md#deviat
 | `from m import *` | Uses `__all__` when present; otherwise takes public names bound when the module's code ends. `__all__` may be extended with `+=`, `append()` and `extend()`. |
 | A package's own binding, such as `from .parse import parse` | Takes precedence over a submodule with the same name. |
 | A module-level alias, `name = function` | Names that function, including a from-imported function or class, for later from-imports and star imports. |
+| `from builtins import RuntimeError as error` at module level | Names that builtin exception class, also as `m.error` and through from-imports, in `except` clauses, `raise`, calls and `isinstance()`, as `_thread.error` names `RuntimeError`. |
 | A module-level [type alias](typing.md#type-aliases), `Row = list[str]` or `type Row = ...` | Names that type in the annotations of modules that import it, as `m.Row` or by a from-import or star import. |
 
 A global that module code may leave unbound is checked when a function or another module

@@ -45,7 +45,7 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
-                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct"}
+                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "_thread": "_pystachy_thread"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -628,6 +628,7 @@ RUNTIME: dict[str, str] = {
     # strings
     "str.audit": "None:str,str|R|",
     "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.slice_step": "str:S,int,int,int|R A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.iadd": "str:S,str,int|A|",  # (s += t of a str local, appending in place to the str it owns: Gen.str_append)
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.split_first": "str:S,str,int|R A|",  # (s.split(sep, n)[0]: Gen.index)

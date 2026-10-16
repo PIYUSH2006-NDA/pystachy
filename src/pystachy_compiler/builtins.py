@@ -438,6 +438,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.allowq = True
         vals = [self.read(args[0])]
         self.allowq = False
+    elif name == "len" and len(args) == 1 and args[0].kind == "name" and self.owns(args[0].s):
+        self.appending = True  # (len() of a str that str_append owns keeps it owned: it loads the length alone)
+        vals = [self.read(args[0])]
+        self.appending = False
     else:
         vals = [self.expr(a, w, resultsoft=resultsoft) for a in args if a.kind != "kw"]
         kvals = [self.expr(a.kids[0], "") for a in kws]

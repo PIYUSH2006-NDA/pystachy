@@ -711,6 +711,7 @@ from src.pystachy_compiler.statements import (
     gen_nonemix as statements_nonemix,
     gen_obj_helpers as statements_obj_helpers,
     gen_objlen as statements_objlen,
+    gen_owns as statements_owns,
     gen_range_args as statements_range_args,
     gen_reopt as statements_reopt,
     gen_scan_imports as statements_scan_imports,
@@ -723,6 +724,7 @@ from src.pystachy_compiler.statements import (
     gen_drain as statements_drain,
     gen_stmt as statements_stmt,
     gen_stmts as statements_stmts,
+    gen_str_append as statements_str_append,
     gen_unhashable as statements_unhashable,
     gen_while_ as statements_while_,
 )
@@ -908,6 +910,12 @@ class Gen:
         self.lenient = False
         self.uflags: dict[str, bool] = {}
         self.lflag: dict[str, str] = {}
+        # the names the function appends to (s += t, s = s + t: str_appends), and the "owned" flag
+        # of each that is a str local: the slot of an int that is 1 where its str is one an append
+        # made and that nothing else holds (see str_append); appending: the append's own read of it
+        self.appends: dict[str, bool] = {}
+        self.owned: dict[str, str] = {}
+        self.appending = False
         # the flags of the names that imports in try statements bind (imp_flag): module code's
         # globals defined so far, and the function's own, each name's slot or cell
         self.impg: dict[str, bool] = {}
@@ -2434,6 +2442,12 @@ class Gen:
 
     def augassign(self, n: Node) -> None:
         return statements_augassign(self, n)
+
+    def owns(self, name: str) -> bool:
+        return statements_owns(self, name)
+
+    def str_append(self, t: Node, rhs: Node, shown: str) -> None:
+        return statements_str_append(self, t, rhs, shown)
 
     def may_change(self, b0: Blk, x0: int, n0: int) -> bool:
         return statements_may_change(self, b0, x0, n0)
