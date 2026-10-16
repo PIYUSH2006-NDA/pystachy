@@ -359,6 +359,7 @@ class Loader:
                 if count[al.s] == 1 and al.s not in m.fnglobal and len(al.kids) > 0:
                     m.kinds[al.s] = "t:" + self.qual(m, al.s)
                     m.taliases[self.qual(m, al.s)] = al
+                    self.aliased[m.name + " " + al.s] = al
             elif al.kids[0].s in m.fnglobal:
                 m.kinds[al.kids[0].s] = "v"  # a function's global statement rebinds it
             else:
@@ -395,6 +396,7 @@ class Loader:
                 self.used_before(m, st)
             elif not ann and v.kind == "call" and self.typevar(st.kids[0]):
                 m.kinds[nm] = "t:" + self.qual(m, nm)  # (T = TypeVar("T"): its imports name it, as a type alias's do)
+                self.aliased[m.name + " " + nm] = st
             elif self.type_value(v, True) or (ann and v.kind == "str"):
                 # (Gen.program leaves out the assignment unless it binds a class such as int;
                 # qstmts makes name: TypeAlias = value an assignment, or a type statement for a
@@ -494,7 +496,8 @@ class Loader:
             if al is not n and int(n.kids[5].s) > 0 and al.line > int(n.kids[5].s):
                 # (taken while t's code ran an import above the alias: CPython raises ImportError)
                 what = f" ({n.kids[1].s} = {al.kids[-1].s})" if k.startswith("a:") else ""
-                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it{what} only after the import that runs this one (not supported for {'a type alias' if what == '' else 'an alias of a function or class'})"
+                of = "an alias of a function or class" if what != "" else "a TypeVar" if al.kind == "assign" and al.kids[1].kind == "call" else "a type alias"
+                msg = f"cannot import name '{n.kids[1].s}' from '{n.kids[0].s}' here: its code binds it{what} only after the import that runs this one (not supported for {of})"
             elif was == "v" or (key in var and last):
                 msg = f"'{n.s}' is bound both as a variable and by an import (not supported)"
             elif took[key] == "!" or (was != "" and was != k) or (now != "" and now != "v" and now != k):
@@ -1790,6 +1793,11 @@ class Loader:
             self.bind(m, name, k, infn, line)
             keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", p[: p.find(".")] if "." in p else p, line, [])]))
         elif k != "v":
+            al = self.aliased.get(src.name + " " + x, None)
+            if k.startswith("t:") and al is not None and not src.done and src.at > 0 and al.line > src.at:
+                # (a type statement, taken while src's code ran an import above it: CPython raises
+                # ImportError; late_takes checks the other type aliases and TypeVars)
+                fail(f"cannot import name '{x}' from '{src.name}' here: its code binds it only after the import that runs this one (not supported for a type alias)", line)
             self.bind(m, name, k, infn, line)
         else:
             ks = self.fks[self.curdef] if infn else m.kinds
