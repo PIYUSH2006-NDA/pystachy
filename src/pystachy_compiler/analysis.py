@@ -958,6 +958,8 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
     # (sure: those an import before n has bound, to which n adds those it surely binds: in both
     # branches of an if, in a with block, not in a loop), and those its imports of Python modules
     # bind (user)
+    if n.kind == "global":
+        return  # (it names them, but reads none)
     if n.kind == "name" and n.s not in sure:
         out[n.s] = True
     if n.kind == "def":

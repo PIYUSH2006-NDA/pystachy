@@ -1660,9 +1660,11 @@ class Loader:
         flags: list[str] = []
         checks: list[str] = []  # each from-imported alias must exist in its source module too
         for a in st.kids if infn else st.kids[:0]:
-            if a.s in self.fgl.get(self.curdef, {}) and (not builtin_import(st, a) or m.kinds.get(a.s, "") != "b:" + a.kids[0].s):
+            same = "b:" + a.kids[0].s if builtin_import(st, a) else "m:" + a.kids[0].s if st.s == "" and builtin_module(a.kids[1].s) else ""
+            if a.s in self.fgl.get(self.curdef, {}) and (same == "" or m.kinds.get(a.s, "") != same):
                 # (CPython binds the module's global, which then names one module or another; but
-                # for a builtin module that the module's code has bound it to already)
+                # for a builtin module, or the package of one (import collections.abc), that the
+                # module's code has bound it to already)
                 out.append(mk("badimport", f"an import of '{a.s}' in a function that declares it global is not supported", line, []))
                 return
         for a in st.kids:

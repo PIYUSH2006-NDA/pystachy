@@ -4,7 +4,7 @@ True False
 True True
 ['a', 'b']
 deque([4], maxlen=1) deque(['a', 'b'])
-[0, 1, 2] True False True
+[0, 1, 2] True False True True
 a/b / True
 5 True False deque(['y', 'z'], maxlen=2)
 True True False
