@@ -1,0 +1,39 @@
+True False True True True True False
+True False True True True False
+True False True True True False
+True False True
+False True False False False False True
+False True False False False True
+False True False False False True
+False True False
+False True False True False True False True
+False False False True True True False False
+True True True True True True True
+False True True
+TypeError '<=' not supported between instances of 'Counter' and 'NoneType'
+TypeError '<' not supported between instances of 'Counter' and 'NoneType'
+TypeError '>=' not supported between instances of 'Counter' and 'NoneType'
+TypeError '>' not supported between instances of 'Counter' and 'NoneType'
+TypeError unsupported operand type(s) for +: 'Counter' and 'NoneType'
+TypeError unsupported operand type(s) for -: 'Counter' and 'NoneType'
+TypeError unsupported operand type(s) for |: 'Counter' and 'NoneType'
+TypeError unsupported operand type(s) for &: 'Counter' and 'NoneType'
+TypeError '<' not supported between instances of 'collections.deque' and 'NoneType'
+TypeError '<=' not supported between instances of 'collections.deque' and 'NoneType'
+TypeError '>' not supported between instances of 'collections.deque' and 'NoneType'
+TypeError '>=' not supported between instances of 'collections.deque' and 'NoneType'
+False True True False
+TypeError unsupported operand type(s) for |: 'collections.defaultdict' and 'tuple'
+TypeError unsupported operand type(s) for |: 'collections.OrderedDict' and 'list'
+TypeError unsupported operand type(s) for |: 'collections.defaultdict' and 'set'
+TypeError unsupported operand type(s) for |: 'collections.OrderedDict' and 'NoneType'
+TypeError unsupported operand type(s) for |: 'collections.defaultdict' and 'NoneType'
+TypeError unsupported operand type(s) for |: 'collections.OrderedDict' and 'int'
+TypeError unsupported operand type(s) for |: 'collections.defaultdict' and 'str'
+defaultdict(<class 'int'>, {'a': 1, 'b': 1}) OrderedDict({'a': 1, 'b': 1}) OrderedDict({'a': 1, 'b': 1}) defaultdict(<class 'int'>, {'a': 1, 'b': 1})
+OrderedDict({'a': 1, 'b': 1}) defaultdict(<class 'int'>, {'a': 1, 'b': 1}) defaultdict(<class 'int'>, {'a': 1, 'b': 1, 'z': 3}) OrderedDict({'a': 0, 'b': 1, 'z': 3})
+TypeError unsupported operand type(s) for |: 'collections.OrderedDict' and 'list'
+defaultdict(<class 'int'>, {'a': 1, 'b': 1, 'y': 4}) OrderedDict({'a': 1, 'b': 1, 'y': 4})
+OrderedDict({'a': 2, 'b': 1, 'c': 1}) defaultdict(<class 'int'>, {'ω': 2, 'é': 1, 'new': 1}) OrderedDict({'z': 2})
+False True False True False
+[exit 0]

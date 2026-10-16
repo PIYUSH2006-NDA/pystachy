@@ -586,7 +586,7 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         if m not in ci.methods:
             return self.replace(o, args)
         if ci.methods[m].iters:
-            self.err(f"calling {short(o.t)}.__iter__() is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"calling {short(o.t)}.{m}() is not supported (its iterator is the list it steps through here): iterate over the object")
         if ci.methods[m].prop:
             return self.obj_call(self.call_fn(ci.methods[m], [o], []), args, "")
         self.cls_bound(ci.methods[m], o.t, True)
@@ -686,7 +686,7 @@ def gen_method_value(self, o: Val, name: str) -> Val:
         if f.deco != "":
             self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
         if f.iters:
-            self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"{short(t)}.{name} as a value is not supported (its iterator is the list it steps through here): iterate over the object")
         if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
         return Val(o.v, f"fn[m:{t}.{name}]")
@@ -879,8 +879,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     vals: list[Val] = []
     # A surrounding annotation is a storage contract; C[T](...) alone only hints
     # at unbound or conflicting arguments. Keep both through unpacked calls.
-    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, want)) > 0
-    context = want if contract or typeargs == "" else typeargs
+    # C(...) of a generic class that a lambda returns is a forwarding call: the Callable's
+    # result type binds C's type variables, as lambda: defaultdict(int) takes them (see instance)
+    ctx = self.curfn.rctx if want == "?" and f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else want
+    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, ctx)) > 0
+    context = ctx if contract or typeargs == "" else typeargs
     hint = self.want_params(f.cls, context) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))

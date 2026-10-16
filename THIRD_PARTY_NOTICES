@@ -132,9 +132,12 @@ license and copyright notice.
 
 lib/shlex.py adapts CPython 3.13.16's Lib/shlex.py at the same commit. Its upstream
 table assertions in tests/lib_shlex_upstream.py derive from Lib/test/test_shlex.py.
-lib/collections/__init__.py implements a typed deque after Modules/_collectionsmodule.c,
-including its comparison mutation checks and messages. These sources, their retained
-docstrings and upstream-derived tests use the same PSF license and copyright notice.
+lib/collections/__init__.py implements a typed deque and defaultdict after
+Modules/_collectionsmodule.c, including the deque's comparison mutation checks and their
+messages, and an OrderedDict and a Counter after Lib/collections/__init__.py, whose
+docstrings, comments and Counter method bodies it keeps, with the messages of
+Objects/odictobject.c. These sources, their retained docstrings and upstream-derived tests
+use the same PSF license and copyright notice.
 
 Mersenne Twister (lib/_pyrandom.py)
 -----------------------------------

@@ -1062,11 +1062,11 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         rename(d.kids[2], ps[0].s, cls)
     if not inherited and bad == "" and has_kind(d.kids[2], "yield"):
         bad = UNSUPPORTED["yield"]  # a generator function
-        if cls != "" and d.s == "__iter__":
-            bad += ": __iter__ can return iter(xs) of a list xs of the items"
+        if cls != "" and (d.s == "__iter__" or d.s == "__reversed__"):
+            bad += f": {d.s} can return iter(xs) of a list xs of the items"
     tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s))
     if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret:
-        it = self.iter_item(d.kids[1]) if cls != "" and d.s == "__iter__" else None  # (see iter_ann)
+        it = self.iter_item(d.kids[1]) if cls != "" and (d.s == "__iter__" or d.s == "__reversed__") else None  # (see iter_ann)
         why = self.ann_problem(d.kids[1], True) if it is None else self.ann_problem(it, False)
         if why != "":
             bad = f"{cls + '.' if cls != '' else ''}{d.s}() is not supported: return annotation: {why}"
@@ -1077,7 +1077,7 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
     f.bad = bad
     if bad != "" and self.lib:
         f.ret = "None"
-    elif d.kids[1].kind != "noann" and cls != "" and d.s == "__iter__" and self.iter_ann(d.kids[1]) != "":
+    elif d.kids[1].kind != "noann" and cls != "" and (d.s == "__iter__" or d.s == "__reversed__") and self.iter_ann(d.kids[1]) != "":
         f.ret = self.iter_ann(d.kids[1])
         f.iters = True
     elif tret:
@@ -1105,7 +1105,7 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
     return f
 
 def gen_iter_ann(self, n: Node) -> str:
-    # an __iter__'s return annotation Iterator[T] or Iterable[T] (typing's or collections.abc's):
+    # an __iter__'s (or __reversed__'s) return annotation Iterator[T] or Iterable[T] (typing's or collections.abc's):
     # list[T], the list that the iterator it returns steps through (see iter_ret); else ""
     t = self.iter_item(n)
     return self.ctype("list", [self.vtype(t)]) if t is not None else ""

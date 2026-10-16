@@ -549,6 +549,7 @@ from src.pystachy_compiler.templates import (
     gen_instance as templates_instance,
     gen_generic_ann as templates_generic_ann,
     gen_generic_hint as templates_generic_hint,
+    gen_named_param as templates_named_param,
     gen_named_params as templates_named_params,
     gen_want_params as templates_want_params,
     gen_want_tvars as templates_want_tvars,
@@ -2034,8 +2035,8 @@ class Gen:
     def protocol(self, o: Val, m: str, args: list[Val]) -> Val:
         return expressions_protocol(self, o, m, args)
 
-    def obj_iter(self, v: Val, none: str, missing: str) -> Val:
-        return expressions_obj_iter(self, v, none, missing)
+    def obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") -> Val:
+        return expressions_obj_iter(self, v, none, missing, name)
 
     def iter_ret(self, e: Node) -> Val:
         return expressions_iter_ret(self, e)
@@ -2261,6 +2262,9 @@ class Gen:
 
     def named_params(self, c: str, init: Node) -> list[str]:
         return templates_named_params(self, c, init)
+
+    def named_param(self, a: Node) -> str:
+        return templates_named_param(self, a)
 
     def match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
         return templates_match(self, a, t, tv, tvs)

@@ -339,6 +339,9 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return 1
     if c.s == "list" or c.s == "dict" or c.s == "tuple" or c.s == "set" or c.s == "frozenset":
         return 1 if t.startswith(c.s + "[") else 0
+    if c.s == "type" and t.startswith("fn[b:"):
+        # a builtin's value: one of CPython's builtin classes (int, list, ...) is a type
+        return 1 if t[5:-1] in "bool bytearray bytes classmethod complex dict enumerate filter float frozenset int list map memoryview object property range reversed set slice staticmethod str super tuple type zip".split() else 0
     if c.s in "bytes bytearray memoryview complex range slice type".split():
         return 0
     return -1
@@ -1608,43 +1611,50 @@ def gen_protocol(self, o: Val, m: str, args: list[Val]) -> Val:
         self.err(f"{m} must take {len(args)} argument{'s' if len(args) != 1 else ''} besides self")
     return self.call_fn(f, [o] + args, [])
 
-def gen_obj_iter(self, v: Val, none: str, missing: str) -> Val:
-    # what iterating over object v steps through: the list its __iter__ returns the iterator of
-    # (see iter_ret). v None raises none ("Kind: text"); missing is the error where v's class
-    # does not define __iter__ (CPython iterates by __getitem__ then, which is not supported)
+def gen_obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") -> Val:
+    # what iterating over object v steps through: the list its __iter__ (or __reversed__) returns
+    # the iterator of (see iter_ret). v None raises none ("Kind: text"); missing is the error where
+    # v's class does not define __iter__ (CPython iterates by __getitem__ then, which is not
+    # supported)
     ms = self.classes[v.t].methods
-    if "__iter__" not in ms and "__getitem__" in ms:
+    if name not in ms and "__getitem__" in ms:
         self.err(f"iterating over {short(v.t)} by its __getitem__ is not supported (CPython calls __getitem__(0), __getitem__(1), ... until IndexError): define __iter__")
-    if "__iter__" not in ms:
+    if name not in ms:
         self.err(missing)
-    f = ms["__iter__"]
+    f = ms[name]
     if f.bad != "":
         self.err(f.bad)  # (an imported module's generator __iter__: its own error, not its type's)
     if not f.iters and f.ret in self.classes and "__next__" in self.classes[f.ret].methods:
         # (CPython's iterator protocol, which calls __next__ until StopIteration)
-        self.err(f"an iterator class is not supported: {short(v.t)}.__iter__ returns a {short(f.ret)}, whose __next__ CPython would call until it raises StopIteration; return iter(xs) of a list xs of the items (-> Iterator[T])")
+        self.err(f"an iterator class is not supported: {short(v.t)}.{name} returns a {short(f.ret)}, whose __next__ CPython would call until it raises StopIteration; return iter(xs) of a list xs of the items (-> Iterator[T])")
+    if not f.iters and name == "__reversed__":
+        # (CPython iterates over what it returns, which need not be an iterator)
+        self.err(f"{short(v.t)}.__reversed__ returning {typestr(f.ret)} is not supported: return iter(xs) of a list xs of the items (-> Iterator[T])")
     if not f.iters:
-        self.err(f"iter() returned non-iterator of type '{tname(f.ret)}': {short(v.t)}.__iter__ must return an iterator, as iter(xs) of a list xs makes one (-> Iterator[T])")
+        self.err(f"iter() returned non-iterator of type '{tname(f.ret)}': {short(v.t)}.{name} must return an iterator, as iter(xs) of a list xs makes one (-> Iterator[T])")
     self.notnone(v, none)
-    return self.protocol(v, "__iter__", [])
+    return self.protocol(v, name, [])
 
 def gen_iter_ret(self, e: Node) -> Val:
     # return iter(x) in an __iter__ that returns an Iterator[T]: the list[T] that iterator steps
     # through, as a for loop over x would: x for a list, a new list of the items of a tuple or
-    # str, the list of an object's own __iter__; an iterator other than iter()'s is not supported
+    # str, the list of an object's own __iter__; reversed(x), as iter(list(reversed(x))): a new
+    # list of its items; an iterator other than these is not supported
+    if e.kind == "call" and e.kids[0].kind == "name" and e.kids[0].s == "reversed" and not self.bound("reversed") and not self.bound("list") and len(e.kids) == 2 and e.kids[1].kind != "kw":
+        e = mk("call", "", e.line, [mk("name", "iter", e.line, []), mk("call", "", e.line, [mk("name", "list", e.line, []), e])])
     if e.kind != "call" or e.kids[0].kind != "name" or e.kids[0].s != "iter" or self.bound("iter") or len(e.kids) != 2 or e.kids[1].kind == "kw":
-        self.err(f"{short(self.curfn.cls)}.__iter__ must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
+        self.err(f"{short(self.curfn.cls)}.{self.curfn.name} must return iter(xs) or reversed(xs) here, where xs is a list, a tuple, a str or an object with __iter__")
     v = self.iterable(self.consume(e.kids[1], self.ret))
     if is_tuple(v.t) and v.t != "tuple[]":
         v = self.as_list(v, "iter")  # (of the items, which share one type)
     last = self.blk.code[-1] if len(self.blk.code) > 0 else Ins("", "", "")
     if last.op == "rt" and (last.s == "dict.keys" or last.s == "dict.values" or last.s == "dict.items") and v.v == f"%t{last.r[0]}":
         # (keys() is a list here; CPython's view iterator raises if the dict changes size)
-        self.err(f"iter() of a dict's {last.s[5:]}() in __iter__ is not supported: its iterator raises if the dict changes size; return iter(list(...)) of a copy")
+        self.err(f"iter() of a dict's {last.s[5:]}() in {self.curfn.name} is not supported: its iterator raises if the dict changes size; return iter(list(...)) of a copy")
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
     if not is_list(v.t):
-        self.err(f"iter() of {typestr(v.t)} in __iter__ is not supported: return iter(xs) of a list xs of the items")
+        self.err(f"iter() of {typestr(v.t)} in {self.curfn.name} is not supported: return iter(xs) of a list xs of the items")
     return v
 
 def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: IterArg | None = None, kind: str = "list", resultsoft: bool = False) -> Val:

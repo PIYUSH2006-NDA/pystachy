@@ -57,6 +57,9 @@ CPython runs the source.
 | `io` | `Modules/_io/stringio.c` | Typed `StringIO`, with append chunks joined when read |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
+| `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
+| `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
+| `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
 | `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction and comparison-key fallbacks |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
 | `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
@@ -97,10 +100,17 @@ CPython, not the number of APIs or upstream tests executed by the compiled
 subset. Current test commands and CI coverage are in
 [the testing guide](../docs/testing.md).
 
-The deque reference at the same pinned CPython commit has SHA-256
-`02d5bcaea730fc7af1fed5f50f87eacad710022dbebb1efebbbd1737ec940cae`.
+The deque and defaultdict reference at the same pinned CPython commit,
+`Modules/_collectionsmodule.c`, has SHA-256
+`02d5bcaea730fc7af1fed5f50f87eacad710022dbebb1efebbbd1737ec940cae`;
+`Lib/collections/__init__.py` has
+`f1bcb4869aeb72253315fcf04646eb3a87e7140afec65bda6500aa609fc2f641`, and
+`Objects/odictobject.c` has
+`bc7d7009221eed5d7be4124bfd5f9ff9cd05650a543fdc56e0a1da3bc330714a`.
 `tests/lib_collections.py` and `tests/lib_collections_mutation.py` exercise compiled
-queue operations, callback mutation and bounded repetition. Shlex's differential
+queue operations, callback mutation and bounded repetition;
+`tests/lib_collections_counter.py`, `_defaultdict.py`, `_ordereddict.py` and
+`_reversed.py` the mappings and `reversed()`. Shlex's differential
 upstream selection retains its three split/join table methods; HTML retains both
 upstream methods, and keyword retains nine methods while excluding dynamic `exec`.
 Test headers record source-test hashes and exclusions.

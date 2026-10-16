@@ -1,12 +1,13 @@
 # Adapted from CPython 3.13.16 Lib/test/test_dict.py, class DictTest: test_constructor,
 # test_bool, test_keys, test_values, test_items, test_contains, test_len, test_getitem,
 # test_clear, test_update, test_fromkeys, test_copy, test_copy_fuzz, test_copy_noncompact,
-# test_get, test_setdefault, test_pop, test_repr, test_eq, test_tuple_keyerror, test_resize1,
-# test_empty_presized_dict_in_freelist and test_hash_collision_remove_add, commit
+# test_get, test_setdefault, test_pop, test_popitem, test_repr, test_eq, test_tuple_keyerror,
+# test_resize1, test_empty_presized_dict_in_freelist and test_hash_collision_remove_add, commit
 # cbc944f4bc59639a444dd971c737788ba2283a91.
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name; assertEqual(a, b) prints a and asserts
-# a == b, assertRaises a try statement that prints the exception. An empty display and dict()
+# a == b (test_popitem's loops only assert), assertFalse(x) asserts not x, assertRaises a try
+# statement that prints the exception. An empty display and dict()
 # that nothing types get an annotation; a variable has one type, so where upstream rebinds `d`
 # to another type the new value has a name of its own. Test-local exception classes are module
 # classes. dict(zip(...)) and dict(items), dict() of pairs (not supported), are the equal
@@ -41,7 +42,6 @@
 # - test_get's and test_setdefault's d.setdefault('key0') without a default (rejected:
 #   "missing argument for setdefault()"); test_pop's d.pop(k, 1), an int default for str values
 #   (rejected: the result would be a str or an int)
-# - test_popitem: dict.popitem() (not supported)
 # - test_repr's `d[1] = d` (a dict holding itself has no type), test_repr_deep (RecursionError)
 # - test_missing (hasattr() of a type, dict subclasses), test_copy_maintains_tracking, test_track_*,
 #   test_string_keys_can_track_values,
@@ -264,6 +264,40 @@ def test_pop() -> None:
     check("d.pop(k, v)", d.pop(k, v), v)
 
 
+def test_popitem() -> None:
+    # dict.popitem()
+    for copymode in -1, +1:
+        # -1: b has same structure as a
+        # +1: b is a.copy()
+        for log2size in range(12):
+            size = 2**log2size
+            a: dict[str, int] = {}
+            b: dict[str, int] = {}
+            for i in range(size):
+                a[repr(i)] = i
+                if copymode < 0:
+                    b[repr(i)] = i
+            if copymode > 0:
+                b = a.copy()
+            for i in range(size):
+                ka, va = ta = a.popitem()
+                assert va == int(ka)
+                kb, vb = tb = b.popitem()
+                assert vb == int(kb)
+                assert not (copymode < 0 and ta != tb)
+            assert not a
+            assert not b
+        print("popitem copymode", copymode)
+
+    d: dict[int, int] = {}
+    try:
+        d.popitem()
+    except KeyError as e:
+        print("d.popitem(): KeyError", e)
+    else:
+        assert False, "expected KeyError"
+
+
 class Exc(Exception): pass
 
 
@@ -385,6 +419,7 @@ test_copy_noncompact()
 test_get()
 test_setdefault()
 test_pop()
+test_popitem()
 test_repr()
 test_eq()
 test_tuple_keyerror()

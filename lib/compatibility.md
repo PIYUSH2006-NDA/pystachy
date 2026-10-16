@@ -125,20 +125,68 @@ does not change the predicates.
 
 ## Collections
 
-The shipped module provides `deque` only. It supports both ends, optional `maxlen`,
-extension, rotation, insertion/removal, indexing, containment/search, copies,
-comparisons and repetition. The item type comes from a supported iterable argument,
-an annotation (`q: deque[int] = deque()`), or an explicit constructor
-(`deque[int]()`). Parameters, returns and fields can name `deque[T]`. The compiled
-item type is fixed, and may be an explicitly supported union such as `int | str`.
+The shipped module provides `deque`, `defaultdict`, `OrderedDict` and `Counter`.
+Each is a generic class whose item types (`deque[T]`, `Counter[T]`,
+`defaultdict[K, V]`, `OrderedDict[K, V]`) come from supported constructor
+arguments, an annotation (`q: deque[int] = deque()`,
+`d: defaultdict[str, list[int]] = defaultdict(list)`) or an explicit constructor
+(`Counter[str]()`). Parameters, returns and fields can name them. The compiled
+types are fixed; a deque's items may be an explicitly supported union such as
+`int | str`, and mapping keys are the supported dict key types.
 
-Iteration is a snapshot, and `maxlen` is writable. Rich comparisons also use
-snapshots when item comparison callbacks mutate a queue. Searches (`count`,
-`index`, containment and `remove`) read live items and detect structural mutations
-with CPython's operation-specific errors; same-size replacements are preserved.
-`reversed`, reflected multiplication, comparisons with other containers, pickling,
-`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable. A `deque`
-is not a `collections.abc.Sequence` to `isinstance`.
+`deque` supports both ends, optional `maxlen`, extension, rotation,
+insertion/removal, indexing, containment/search, copies, comparisons, repetition
+and `reversed()`. Iteration is a snapshot, and `maxlen` is writable. Rich
+comparisons also use snapshots when item comparison callbacks mutate a queue.
+Searches (`count`, `index`, containment and `remove`) read live items and detect
+structural mutations with CPython's operation-specific errors; same-size
+replacements are preserved.
+
+The mappings hold dicts rather than derive from `dict`, so `isinstance(x, dict)`
+is false. They support indexing, assignment, `del`, `in`, `len`, iteration,
+`reversed()`, `keys()`, `values()`, `items()`, `get`, `pop`, `popitem`,
+`setdefault`, `clear`, `update`, `copy` and equality with each other and with a
+dict on the right; any other operand, such as `None`, is unequal, as CPython's
+identity fallback finds. An empty display operand (`d == {}`) has no type: test
+`not d`. Views are lists, as a dict's are here, and iteration is a snapshot
+rather than CPython's iterator that raises when the mapping changes size.
+Constructors and `update` take a dict, a list, tuple or set of pairs, or another
+of these mappings (a `Counter` types only the keys of an `OrderedDict` or
+`defaultdict`: the `int` values need an annotation); other iterable objects of
+pairs need `list(...)` first, and a generator expression a list comprehension.
+Keyword arguments are accepted by `update` and `subtract`, not by constructors.
+`dict(m)` of a mapping is not supported: `{k: v for k, v in m.items()}` copies it.
+
+- `defaultdict(factory)` accepts builtin classes such as `int`, `list`, `set`,
+  `str`, `float` and `dict`, functions, lambdas and `None`. A factory types
+  nothing unless it is a function with a return annotation, so the key and value
+  types come from an annotation or explicit types (`defaultdict[str, int](int)`)
+  where no mapping argument gives them; a factory that makes another mapping
+  (`defaultdict(lambda: defaultdict(int))`) takes the value type from them. Only
+  indexing calls the factory, keeping a value the factory itself stored for the
+  key. `__missing__`, a writable `default_factory`, `copy`, `|` and `|=` follow
+  the C type: `|` takes a dict or another of these mappings, raising CPython's
+  `TypeError` for `None` and builtin values that are not, and `|=` also pairs.
+  The repr names a builtin class given to the constructor as CPython does, and
+  other factories, and a class assigned to `default_factory` later, as
+  `<function>`.
+- `OrderedDict` supports `move_to_end(key, last=True)`, `popitem(last=True)`,
+  `fromkeys(iterable, value)` with a value that types the items, `|` and `|=` (as
+  defaultdict's), and order-sensitive equality between OrderedDicts. Two dicts
+  hold its items, the first ones in reverse order, so that operations at either
+  end take amortized constant time, as with CPython's linked list. Moving a key
+  reinserts the key object given.
+- `Counter` counts with ints. It supports missing counts of zero, `update` and
+  `subtract` from iterables and mappings, `most_common(n)`, `elements()`,
+  `total()`, `+ - | &`, unary `+` and `-`, their in-place forms, and the 3.10
+  comparisons, which raise CPython's `TypeError` for a `None` operand.
+  `elements()` returns a list rather than an iterator, and an empty `Counter()`
+  operand on the left of an operator needs its type.
+
+A deque compares with deques: `==` with `None` is false and `<` raises CPython's
+`TypeError`. Its reflected multiplication and comparisons with other containers,
+pickling, `namedtuple`, `ChainMap` and the `User*` classes are unavailable. A `deque` is
+not a `collections.abc.Sequence` to `isinstance`.
 
 ## Shlex
 

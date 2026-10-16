@@ -1,4 +1,4 @@
-# error: Seq.__iter__ must return iter(xs) here, where xs is a list, a tuple, a str or an object with __iter__
+# error: Seq.__iter__ must return iter(xs) or reversed(xs) here, where xs is a list, a tuple, a str or an object with __iter__
 from collections.abc import Iterator
 
 

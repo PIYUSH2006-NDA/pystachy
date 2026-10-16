@@ -57,7 +57,7 @@ typedef int64_t I;
 typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len; I a[]; } VTuple;                /* immutable homogeneous tuple, counted inline slots */
-typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
+typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; I cut; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple keys; see dicts */
 typedef struct { I len, kind, fill, mask, finger; I *keys, *hs; } Set; /* a set or frozenset, kind as Dict's; see sets */
 typedef struct { char *p; I n, cap; } Buf;
 typedef struct Exc Exc;                                /* a raised exception (see exceptions) */
@@ -1770,8 +1770,8 @@ List *pys_str_list(Str *s) { List *l = pys_list_new(s->len); for (I i = 0; i < s
    stays valid. idx is open addressing over 2*size slots holding entry + 1 (0 empty, -1
    deleted). The sizes are CPython 3.13's, because they decide what a loop that changes its
    dict sees: size is a power of two >= 8 (0 before the first insertion and after clear()),
-   at most size*2/3 entries are used, and inserting into a full table rebuilds it without
-   holes at the size for len*3. An int key's hash is one round of SplitMix64's mixer: the
+   at most size*2/3 entries are used (popitem's, which it cuts off the end, still count: cut),
+   and inserting into a full table rebuilds it without holes at the size for len*3. An int key's hash is one round of SplitMix64's mixer: the
    first shift folds the key's high bits into its low ones, the multiply spreads them up and
    the last shift brings the product's high bits down, so keys that differ only in their high
    bits (i << 46) get unrelated low bits, and distinct ints never share a hash (a bijection).
@@ -1858,7 +1858,7 @@ static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a ta
     while (ix[i]) { p >>= 5; i = (i * 5 + p + 1) & m; DICT_PROBE(); }
     k[n] = src->keys[e]; v[n] = src->vals[e]; hs[n] = h; ix[i] = (int32_t)++n;
   }
-  d->len = n; d->n = n; d->size = size; d->keys = k; d->vals = v; d->hs = hs; d->idx = ix;
+  d->len = n; d->n = n; d->cut = 0; d->size = size; d->keys = k; d->vals = v; d->hs = hs; d->idx = ix;
 }
 Dict *pys_dict_new(I kind, I n) {                     /* a display of n items is presized, as in CPython */
   Dict *d = pys_alloc(sizeof(Dict)); d->kind = kind;
@@ -1887,7 +1887,7 @@ LOOKUP I pys_dict_get(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? 
 static void dset(Dict *d, I k, uint64_t h, I v) {   /* d[k] = v, k's hash h */
   I f = -1, i = dfind(d, k, h, &f);
   if (i >= 0) { d->vals[d->idx[i] - 1] = v; return; }
-  if (d->n >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
+  if (d->n + d->cut >= d->size * 2 / 3) { build(d, d, keysize(d->len * 3)); dfind(d, k, h, &f); }   /* full: insertion_resize */
   d->keys[d->n] = k; d->vals[d->n] = v; d->hs[d->n] = h; d->idx[f] = (int32_t)++d->n; d->len++;
 }
 LOOKUP void pys_dict_set(Dict *d, I k, I v) { dset(d, k, hsh(d, k), v); }
@@ -1900,11 +1900,26 @@ static I dpop(Dict *d, I k, I dflt, int has) {
 }
 I pys_dict_pop(Dict *d, I k) { return dpop(d, k, 0, 0); }
 I pys_dict_pop_default(Dict *d, I k, I dflt) { return dpop(d, k, dflt, 1); }
+/* d.popitem() (dict_popitem_impl): the last entry's (key, value) tuple. The entries end where it
+   was, as CPython sets dk_nentries, so the holes before it are not walked again: popping every
+   item takes linear time. Its idx slot is found by its position (lookdict_index), not its key,
+   and stays deleted, so the entries cut off still fill the table until it is rebuilt (CPython
+   does not give dk_usable back): otherwise inserts after pops would use up its empty slots */
+I *pys_dict_popitem(Dict *d) {
+  if (!d->len) pys_fail("KeyError: 'popitem(): dictionary is empty'");
+  I e = d->n - 1;
+  while (!d->hs[e]) e--;
+  uint64_t h = d->hs[e], m = d->size * 2 - 1, i = h & m, p = h;
+  while (d->idx[i] != e + 1) { p >>= 5; i = (i * 5 + p + 1) & m; }
+  I *t = pys_alloc(16); t[0] = d->keys[e]; t[1] = d->vals[e];
+  d->idx[i] = -1; d->hs[e] = 0; d->keys[e] = d->vals[e] = 0; d->len--; d->cut += d->n - e; d->n = e;
+  return t;
+}
 /* d.get(k) and d.pop(k, None) of int, float and bool values: the value's box, or dflt (None or a box) */
 LOOKUP I pys_dict_getbox(Dict *d, I k, I dflt) { I e = entry(d, k); return e < 0 ? dflt : (I)pys_box(d->vals[e]); }
 LOOKUP I pys_dict_popbox(Dict *d, I k, I dflt) { return entry(d, k) < 0 ? dflt : (I)pys_box(dpop(d, k, 0, 0)); }
 LOOKUP I pys_dict_setdefault(Dict *d, I k, I v) { I e = entry(d, k); if (e >= 0) return d->vals[e]; pys_dict_set(d, k, v); return v; }
-void pys_dict_clear(Dict *d) { d->len = d->n = d->size = 0; d->keys = d->vals = 0; d->hs = 0; d->idx = 0; }
+void pys_dict_clear(Dict *d) { d->len = d->n = d->cut = d->size = 0; d->keys = d->vals = 0; d->hs = 0; d->idx = 0; }
 /* for loops: entry e's key and value; the next entry from e (reversed: the previous one), or
    -1 at the end, failing like CPython's dict iterators when the dict changed meanwhile:
    used = len when the loop started, count = items produced so far. As in CPython 3.13.16, a
@@ -1944,7 +1959,7 @@ static void retable(Dict *r, Dict *d) {              /* r := d's table, holes in
   I u = d->size * 2 / 3;
   r->keys = keymem(r->kind, u); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(d->size * 8);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
-  memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->size = d->size;
+  memcpy(r->idx, d->idx, d->size * 8); r->len = d->len; r->n = d->n; r->cut = d->cut; r->size = d->size;
 }
 static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
 static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }

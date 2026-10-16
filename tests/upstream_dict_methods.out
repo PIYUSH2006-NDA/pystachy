@@ -74,6 +74,9 @@ d.pop(k) 'def'
 len(d) 0
 d.pop(k): KeyError 'abc'
 d.pop(k, v) 'def'
+popitem copymode -1
+popitem copymode 1
+d.popitem(): KeyError 'popitem(): dictionary is empty'
 repr(d) '{}'
 repr(d) '{1: 2}'
 repr({1: BadRepr()}): Exc

@@ -23,7 +23,7 @@ Imports search builtin modules first, then the program's directory,
 | `getopt` | Adapted CPython | `getopt`, `gnu_getopt`, `GetoptError` | `longopts` must be `list[str]`; untranslated messages |
 | `heapq` | Adapted CPython | Heap operations, `nlargest`, `nsmallest`, `key=` | `merge` unavailable; non-list inputs are materialized |
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
-| `collections` | Subset implementation | Typed `deque`, both ends, bounded queues, searches and comparisons | Items share one type; iteration is a snapshot |
+| `collections` | Subset implementation | Typed `deque`, `defaultdict`, `OrderedDict` and `Counter` | Items share one type; mappings hold dicts; iteration is a snapshot |
 | `shlex` | Adapted CPython | `split`, `quote`, `join`, lexer options and source stacking | Files are read eagerly; punctuation field is writable |
 | `io` | Subset implementation | `StringIO` and seek constants | Byte positions; eager line iteration |
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |

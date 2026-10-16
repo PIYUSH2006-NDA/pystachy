@@ -416,6 +416,8 @@ Type-dependent tests such as `isinstance(x, T)`, `hasattr(x, "name")`, tests aga
 and comparisons of fixed tuple or `**kwargs` length with an integer constant can eliminate
 branches during compilation. Only reachable branches are compiled. `isinstance()` still
 looks up its class names at runtime, so a class not yet defined can raise `NameError`.
+`isinstance(f, type)` is true for a builtin class passed as a value, such as `int`, and false
+for functions and `Callable` values.
 Tests against `None` respect user-defined equality rather than replacing it with an identity test.
 
 A parameter passed as `None` can be reinitialized with a statically determined type,
@@ -546,13 +548,19 @@ a `TypeVar`. A PEP 695 function's type parameters hide a module-level name only 
 annotations; its body reads the module's ([a deviation](compatibility.md#functions-and-object-identity)).
 
 Supported matching forms are `T`, `list[T]`, `dict[K, V]`, `set[T]`, `frozenset[T]`,
-`tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), and
-`Callable[[A, *Ts], R]`. Iterable matching uses the item type of a supported list, set,
-dict, string or homogeneous tuple; an empty tuple binds nothing. A direct `None` argument binds
-no type variable on its own. Repeated bindings must preserve the values' types: mixed `int`
-and `bool` constructor arguments can use the direct-scalar union fallback below, but do not
-implicitly join to `int`. Callable matching uses annotated positional parameters and
-returns, or an existing `Callable` signature.
+`tuple[A, *Ts]`, `T | None`, `Iterable[T]` (or `Iterator[T]`), `Callable[[A, *Ts], R]`,
+a generic class's `C[K, V]`, and unions of these. Iterable matching uses the item type of a
+supported list, set, dict, string or homogeneous tuple, or of an object's supported
+`__iter__`; an empty tuple binds nothing. `C[K, V]` matches an object of a specialization of
+`C`. In a union such as `Iterable[tuple[K, V]] | dict[K, V]`, the first member that fits
+binds, trying `Iterable[...]` members last; a named specialization types such a parameter as
+its first member. A direct `None` argument binds no type variable on its own. Repeated
+bindings must preserve the values' types: mixed `int` and `bool` constructor arguments can use
+the direct-scalar union fallback below, but do not implicitly join to `int`. Callable
+matching uses annotated positional parameters and returns, or an existing `Callable`
+signature. A lambda, a builtin such as `int` or `list`, or an unannotated function binds
+nothing; where the other arguments or the context bind its `Callable`'s type variables,
+it is passed as that `Callable`, also to a field that `__init__` assigns it to unannotated.
 
 The resulting fields and methods use those bindings, including `tuple[*Ts]`,
 `Callable[[*Ts], R]` and `*args: *Ts`. This supports the function wrappers used by
@@ -571,6 +579,9 @@ Nonempty homogeneous displays infer the same types as stored arguments. Empty an
 empty displays use contextual types where their contents do not already determine a type.
 Heterogeneous displays with known item types can use an explicit union context. Opaque
 calls and operations infer normally; their syntax alone does not request a union layout.
+A lambda that returns `C(...)` takes the result type of the `Callable` it becomes as that
+call's context: `defaultdict(lambda: defaultdict(int))` for a
+`defaultdict[str, defaultdict[str, int]]`. A function needs a return annotation for this.
 A variable that neither arguments nor context bind is an error.
 
 When ordinary argument matching cannot bind the type variables consistently,
