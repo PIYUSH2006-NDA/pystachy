@@ -235,7 +235,9 @@ first, as CPython evaluates its arguments, and then assigns through a property's
 evaluates the default first, then gives the attribute where the object's exact class has it
 (a field that `__init__` may leave unassigned: where its flag says it is set) and the default
 where it has not; a property's getter that raises `AttributeError` gives the default, as
-CPython catches it. `hasattr()` of a property runs its getter likewise. On a hierarchy's base,
+CPython catches it. `hasattr()` of a property runs its getter likewise, and `hasattr()` of a value
+that may be an object of one of several classes (a union of classes) answers for its class. On a
+hierarchy's base,
 `getattr(o, "name")` of an attribute only a subclass has reads it where the object has it and
 raises CPython's `AttributeError` elsewhere.
 

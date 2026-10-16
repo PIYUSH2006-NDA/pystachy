@@ -205,8 +205,8 @@ def gen_static(self, n: Node) -> int:
         t = self.static_type(n.kids[1], True)
         if t in self.classes and self.classes[t].tag > 0:
             return -1  # the concrete class may add attributes beyond the static type
-        if t != "" and self.refl_prop_in(t, n.kids[2].s):
-            return -1  # (a property's getter decides: reflection.py)
+        if t != "" and (self.refl_prop_in(t, n.kids[2].s) or self.reference_union(t)):
+            return -1  # (a property's getter, or the union's member, decides: reflection.py)
         h = self.has(t, n.kids[2].s) if t != "" else -1
         return 1 if h == -1 and self.knownobj(n.kids[1]) else max(h, -1)
     if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and not self.bound("isinstance") and len(n.kids) == 3:

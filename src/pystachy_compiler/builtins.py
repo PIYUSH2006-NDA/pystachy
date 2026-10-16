@@ -259,8 +259,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "hasattr" and len(args) == 2 and args[1].kind == "str":
         # decided by the static type of the object (for an object: is it None)
         hv = self.expr(args[0], "")
-        if self.refl_prop_in(hv.t, args[1].s):
-            return self.refl_hasattr_lit(hv, args[1].s, self.knownobj(args[0]))  # (a property's getter: reflection.py)
+        if self.refl_prop_in(hv.t, args[1].s) or (self.reference_union(hv.t) and "file" not in umembers(unopt(hv.t))):
+            # (a property's getter, and each class of a union of classes: reflection.py)
+            return self.refl_hasattr_lit(hv, args[1].s, self.knownobj(args[0]))
         if hv.t in self.classes and self.classes[hv.t].tag > 0:
             # A derived class may add this attribute, or leave its field unassigned.
             # Read a field's flag only in its concrete class's arm: it may lie beyond
