@@ -2316,7 +2316,27 @@ def gen_titem_eq(self, item: Val, a: Val, hit: str, ph: Ins | None, value: str) 
     # whether tuple item is x, or item == x, as CPython's PyObject_RichCompareBool(item, x, Py_EQ)
     # tests it for in, index() and count(): a branch to hit (where phi ph, if any, takes value)
     # where it is, and on in a new block where it is not; False if no branch can reach hit
-    if not self.comparable(item.t, a.t):
+    u = unopt(item.t)
+    identity = (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u) or is_vtuple(u)) and self.isref(a.t)
+    if identity:
+        # (an object, list, dict, set or tuple, also one that may be None, is found
+        # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
+        # with xs = [nan]; a number has no identity here, see the deviation about NaN,
+        # and a str's is its value)
+        nx = self.label()
+        if ph is not None:
+            self.incoming(ph, value, self.cur)
+        self.cbr(self.ptr_cmp('==', item, a).v, hit, nx)
+        self.place(nx)
+    # Named tuples and homogeneous runtime tuples compare as tuples, including
+    # numeric and optional element layouts accepted by ordinary equality.
+    if item.t in self.nts and "__eq__" not in self.classes[item.t].methods:
+        item = self.ntup(item)
+    if a.t in self.nts and "__eq__" not in self.classes[a.t].methods:
+        a = self.ntup(a)
+    paired = item.t != a.t and self.ueq_type(item.t) and self.ueq_type(a.t) and not (self.isnum(item.t) and self.isnum(a.t))
+    setpair = is_set(item.t) and is_set(a.t) and self.wider(selem(item.t), selem(a.t)) != ""
+    if not paired and not setpair and not self.comparable(item.t, a.t) and self.boxwider(item.t, a.t) == "":
         # item == x of types whose values are never equal: CPython still calls the
         # item's __eq__(x), or where the item's class has none (a builtin type's
         # declines) x's __eq__(item); with neither, they are not equal
@@ -2327,19 +2347,12 @@ def gen_titem_eq(self, item: Val, a: Val, hit: str, ph: Ins | None, value: str) 
                 self.incoming(ph, value, self.cur)
             self.cbr(c.v, hit, nx)
             self.place(nx)
-        return c.t != ""
-    u = unopt(item.t)
-    if (item.t in self.classes or is_list(u) or is_dict(u) or is_set(u) or is_tuple(u)) and self.isref(a.t):
-        # (an object, list, dict, set or tuple, also one that may be None, is found
-        # by identity first, as the runtime's eqitem finds a list's item: xs in (xs,)
-        # with xs = [nan]; a number has no identity here, see the deviation about NaN,
-        # and a str's is its value)
-        nx = self.label()
-        if ph is not None:
-            self.incoming(ph, value, self.cur)
-        self.cbr(self.ptr_cmp('==', item, a).v, hit, nx)
-        self.place(nx)
-    c = self.cmp2("==", item, a)
+        return identity or c.t != ""
+    if paired:
+        r = self.rt("pys_eq_pair", "i64", ["i64 " + self.to_slot(item), "i64 " + self.to_slot(a), f"ptr {self.sconst(self.desc(item.t, '=='))}", f"ptr {self.sconst(self.desc(a.t, '=='))}"])
+        c = self.num_cmp('!=', Val(r, "int"), Val('0', "int"))
+    else:
+        c = self.cmp2("==", item, a)
     nx = self.label()
     if ph is not None:
         self.incoming(ph, value, self.cur)

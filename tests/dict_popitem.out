@@ -23,4 +23,17 @@ KeyError 'popitem(): dictionary is empty'
 {0: 0, 2: 2, 3: 3, 9: 9, 10: 10}
 249466500 0 0
 (19, 19) 19
+{'999': 999} False None
+{0: 0, 184963: 4999} {0: 0, 184963: 4999} {0: 0, 184963: 4999} [184963, 0] False
+1 RuntimeError dictionary keys changed during iteration [100]
+2 [0, 101] {1000: 0, 1101: 101}
+3 [0, 1, 102] {1000: 0, 1001: 1, 1102: 102}
+4 RuntimeError dictionary keys changed during iteration [0, 1, 2, 103]
+5 RuntimeError dictionary keys changed during iteration [0, 1, 104, 1000, 1001]
+6 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 1002, 1003]
+7 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 106]
+8 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 6, 107]
+9 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 1003, 1004, 1005]
+10 RuntimeError dictionary keys changed during iteration [0, 1, 2, 6, 7, 8, 109, 1000, 1001, 1002]
+11 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 110] {1000: 0, 1001: 1, 1002: 2, 1003: 3, 1004: 4, 1005: 5, 1006: 6, 1007: 7, 1008: 8, 1009: 9, 1110: 110}
 [exit 0]

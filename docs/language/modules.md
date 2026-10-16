@@ -232,7 +232,11 @@ are documented in [CPython deviations](../language.md#deviations-from-cpython).
 mixing ints and floats. `dist()` accepts two lists or tuples of numbers, NamedTuples, or objects
 with `__iter__`. It copies the first point's items before iterating the second, as CPython's
 `tuple(p)` does. `prod()`'s `start` may also be a str or list, repeated by each int item in
-turn, or a dict or set, returned when there are no items.
+turn, or a dict or set, returned when there are no items. Class items may supply `__index__`
+for repetition or `__rmul__` returning the same type as the start; products that change the
+start type are rejected. Subclasses that change the selected multiplication protocol need
+`isinstance()` narrowing. With these starts, generators and `map()` are consumed one item at
+a time, stopping at the first failed multiplication.
 
 `gamma()` and `lgamma()` are CPython's own Lanczos implementation, so their results match
 CPython's bit for bit. `isclose()` takes `rel_tol=` and `abs_tol=`. `gcd()`, `lcm()` and

@@ -250,6 +250,12 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if npos != 1:
             self.err(f"prod() takes exactly 1 positional argument ({npos} given)")
         args = [a.kids[0] if a.kind == "kw" and a.s == "start" else a for a in args]
+        # A nonnumeric product must consume lazy inputs one item at a time: the
+        # first multiplication may raise or invoke user code before the next item.
+        if len(args) == 2 and (self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")):
+            stt = self.dry(args[1])
+            if stt == "str" or is_list(stt) or is_dict(stt) or is_set(stt):
+                return self.reduce(name, args, stt)
     npos = 0
     for a in args:
         if a.kind != "kw":
@@ -762,7 +768,10 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
     self.place(arg.split)
     if r.t == "":
         self.err("cannot infer the element type of this comprehension")
-    if name == "sum":
+    if name == "math.prod":
+        sv = self.expr(args[1], "")
+        self.mstore(r.stt, self.coerce(sv, r.stt).v, r.acc)
+    elif name == "sum":
         sv = self.expr(args[1], "") if len(args) == 2 else Val("0" if r.t != "float" else fbits("0.0"), "int" if r.t != "float" else "float")
         if r.t == "float":
             self.mstore('float', self.as_float(sv).v, r.acc)
@@ -779,6 +788,8 @@ def gen_reduce(self, name: str, args: list[Node], stt: str) -> Val:
         self.mstore('bool', 'true', r.first)
     self.br(arg.trav)
     self.place(back)
+    if name == "math.prod":
+        return Val(self.mload(r.stt, r.acc), r.stt)
     if name != "sum" and r.collect:
         d = self.sconst(self.desc(r.t, ">" if name == "max" else "<"))
         lv = self.mload('%ptr', r.acc)
@@ -805,7 +816,9 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
         r.t = v.t
         if r.name == "sum" and v.t != "int" and v.t != "bool" and v.t != "float":
             self.err(f"unsupported call sum(list[{v.t}]{',' + r.stt if r.stt != '' else ''})")
-        if r.name == "sum":
+        if r.name == "math.prod":
+            r.acc = self.alloca(r.stt, "")
+        elif r.name == "sum":
             r.acc = self.alloca("float" if v.t == "float" or r.stt == "float" else "int", "")
             if v.t == "float":
                 r.comp = self.alloca("float", "")
@@ -817,6 +830,10 @@ def gen_reduce_item(self, r: Reduce, e: Node) -> None:
         else:
             r.collect = True
             r.acc = self.alloca(self.ctype("list", [v.t]), "")
+    if r.name == "math.prod":
+        result = self.prod_item(Val(self.mload(r.stt, r.acc), r.stt), v)
+        self.mstore(r.stt, self.coerce(result, r.stt, "math.prod() must preserve its start type").v, r.acc)
+        return
     if r.collect:
         self.rt("pys_list_append", "void", [f"ptr {self.mload('%ptr', r.acc)}", "i64 " + self.to_slot(self.coerce(v, r.t))])
         return
@@ -1370,13 +1387,6 @@ def gen_prod_seq(self, xs: Val, s: Val) -> Val:
     # emptied by an x < 1, after which it stays empty). For no item the result is s itself, and a
     # start that the items cannot multiply raises CPython's TypeError at the first
     et = elem(xs.t)
-    seq = s.t == "str" or is_list(s.t)
-    if is_opt(et) or "?" in et or (seq and is_union(et)):
-        self.err(f"math.prod() of a {typestr(xs.t)} with a {typestr(s.t)} start is not supported")
-    if not seq or (et != "int" and et != "bool"):
-        bad = f"can't multiply sequence by non-int of type '{tname(et)}'" if seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(et)}'"
-        self.guard(self.num_cmp('!=', Val(self.mload('int', xs.v), "int"), Val('0', "int")).v, "TypeError: " + bad)
-        return s
     acc = self.alloca(s.t, "")
     self.mstore(s.t, s.v, acc)
     ctr = self.alloca("int", "")
@@ -1390,11 +1400,88 @@ def gen_prod_seq(self, xs: Val, s: Val) -> Val:
     self.cbr(self.num_cmp('<', Val(i, "int"), Val(self.mload('int', xs.v), "int")).v, lb, le)
     self.place(lb)
     item = self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), et)
-    self.mstore(s.t, self.arith("*", Val(self.mload(s.t, acc), s.t), item).v, acc)
+    self.mstore(s.t, self.coerce(self.prod_item(Val(self.mload(s.t, acc), s.t), item), s.t, "math.prod() must preserve its start type").v, acc)
     self.mstore('int', self.scalar('add', [Val(i, 'int'), Val('1', 'int')]), ctr)
     self.br(lc)
     self.place(le)
     return Val(self.mload(s.t, acc), s.t)
+
+def gen_prod_item(self, s: Val, item: Val) -> Val:
+    # PyNumber_Multiply for a nonnumeric start. Keep the accumulator's static
+    # type; unsupported type-changing reflected methods are diagnosed explicitly.
+    if is_opt(item.t) or is_union(unopt(item.t)):
+        members = umembers(unopt(item.t)) if is_union(unopt(item.t)) else [unopt(item.t)]
+        if is_opt(item.t):
+            members = ["None"] + members
+        end = self.label()
+        ph = Ins("phi", s.t, "")
+        for i in range(len(members)):
+            member = members[i]
+            hit = self.label()
+            miss = self.label() if i + 1 < len(members) else ""
+            if miss == "":
+                self.br(hit)
+            elif member == "None":
+                self.cbr(self.ptr_cmp('==', item, Val('null', 'None')).v, hit, miss)
+            else:
+                self.cbr(self.utest(item, [member], False), hit, miss)
+            self.place(hit)
+            value = Val("null", "None") if member == "None" else self.uget(Val(item.v, unopt(item.t)), member) if is_union(unopt(item.t)) else self.deref(item)
+            result = self.prod_item(s, value)
+            if not self.term:
+                self.incoming(ph, self.coerce(result, s.t, "math.prod() must preserve its start type").v, self.cur)
+                self.br(end)
+            if miss != "":
+                self.place(miss)
+        self.place(end)
+        if len(ph.a) == 0:
+            self.unreachable()
+            return s
+        return Val(self.phi(ph), s.t)
+    seq = s.t == "str" or is_list(s.t)
+    if item.t in self.classes:
+        methods = self.classes[item.t].methods
+        protocol = "__rmul__" if "__rmul__" in methods else "__index__" if seq and "__index__" in methods else ""
+        if self.classes[item.t].tag > 0:
+            for cls in self.classes.values():
+                if cls.tag > 0 and self.derives(cls.name, item.t):
+                    selected = "__rmul__" if "__rmul__" in cls.methods else "__index__" if seq and "__index__" in cls.methods else ""
+                    if selected != protocol:
+                        self.err("math.prod() with subclass-dependent multiplication protocols requires narrowing with isinstance() first")
+        # Class values are nullable in this subset; None has neither protocol.
+        null = self.label()
+        call = self.label()
+        end = self.label()
+        self.cbr(self.isnull(item), null, call)
+        self.place(null)
+        self.prod_item(s, Val("null", "None"))
+        self.br(end)
+        self.place(call)
+        self.nn[item.v] = True
+        if "__rmul__" in methods:
+            result = self.protocol(item, "__rmul__", [s])
+            if result.t != s.t:
+                self.err("math.prod() must preserve its start type; type-changing __rmul__ is not supported")
+        elif seq and "__index__" in methods:
+            index = self.protocol(item, "__index__", [])
+            if index.t != "int" and index.t != "bool":
+                self.raise_("TypeError", self.sconst(f"__index__ returned non-int (type {tname(index.t)})"))
+                result = s
+            else:
+                result = self.arith("*", s, index)
+        else:
+            bad = f"can't multiply sequence by non-int of type '{tname(item.t)}'" if seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(item.t)}'"
+            self.raise_("TypeError", self.sconst(bad))
+            result = s
+        self.br(end)
+        self.place(end)
+        return result
+    if seq and (item.t == "int" or item.t == "bool"):
+        return self.arith("*", s, item)
+    other_seq = item.t == "str" or is_list(item.t) or is_tuple(item.t) or is_vtuple(item.t)
+    bad = f"can't multiply sequence by non-int of type '{tname(item.t) if seq else tname(s.t)}'" if seq or other_seq else f"unsupported operand type(s) for *: '{tname(s.t)}' and '{tname(item.t)}'"
+    self.raise_("TypeError", self.sconst(bad))
+    return s
 
 def gen_dict_pairs(self, v: Val) -> Val:
     # dict(pairs) of a list of (key, value) tuples: a new dict, each pair inserted in turn, as
@@ -1416,8 +1503,7 @@ def gen_tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
     # tuple_index_impl and tuple_count: each item in turn (of index()'s span, from start
     # and stop as they clamp to the tuple) is compared as x in t compares it (titem_eq);
     # index() stops at the first that is x or equals it. The arguments are evaluated first.
-    # Of a runtime-length tuple, Val("", "") once the arguments are checked: bmethod calls
-    # runtime.c's pys_vtuple_index or pys_vtuple_count, as it calls list's
+    # A runtime-length tuple uses the same equality and identity rules in a loop.
     for a in args:
         if a.kind == "kw":
             self.err(f"tuple.{m}() takes no keyword arguments")
@@ -1425,14 +1511,56 @@ def gen_tmethod(self, o: Val, m: str, args: list[Node]) -> Val:
         self.err(f"tuple.count() takes exactly one argument ({len(args)} given)")
     if m == "index" and (len(args) == 0 or len(args) > 3):
         self.err(f"index expected at {'least 1 argument' if len(args) == 0 else 'most 3 arguments'}, got {len(args)}")
-    if is_vtuple(o.t):
-        return Val("", "")
     x = self.expr(args[0], "", resultsoft=True)
     if "?" in x.t:
         self.err(f"cannot infer the type of the argument of tuple.{m}(): give it a type")
     bounds: list[Val] = []
     for j in range(1, len(args)):
         bounds.append(self.coerce(self.as_int(self.expr(args[j], "int")), "int", f"argument {j + 1} of tuple.index()"))
+    if is_vtuple(o.t):
+        size = Val(self.mload('int', o.v), "int")
+        span = [Val("0", "int"), size]
+        for j in range(len(bounds)):
+            b = bounds[j]
+            adjusted = Val(self.scalar('add', [b, size]), "int")
+            b = Val(self.select(self.num_cmp('<', b, Val('0', "int")).v, adjusted, b), "int")
+            b = Val(self.select(self.num_cmp('<', b, Val('0', "int")).v, Val('0', "int"), b), "int")
+            span[j] = Val(self.select(self.num_cmp('>', b, size).v, size, b), "int")
+        index = self.alloca("int", "")
+        count = self.alloca("int", "")
+        self.mstore('int', span[0].v, index)
+        self.mstore('int', '0', count)
+        cond = self.label()
+        body = self.label()
+        hit = self.label()
+        step = self.label()
+        done = self.label()
+        end = self.label()
+        self.br(cond)
+        self.place(cond)
+        vi = self.mload('int', index)
+        self.cbr(self.num_cmp('<', Val(vi, "int"), span[1]).v, body, done)
+        self.place(body)
+        item = self.from_slot(self.rt("pys_vtuple_get", "i64", [f"ptr {o.v}", f"i64 {vi}"]), targs(o.t)[0])
+        matched = self.titem_eq(item, x, hit, None, "")
+        self.br(step)
+        if matched:
+            self.place(hit)
+            if m == "index":
+                self.br(end)
+            else:
+                self.mstore('int', self.scalar('add', [Val(self.mload('int', count), 'int'), Val('1', 'int')]), count)
+                self.br(step)
+        self.place(step)
+        self.mstore('int', self.scalar('add', [Val(vi, 'int'), Val('1', 'int')]), index)
+        self.br(cond)
+        self.place(done)
+        if m == "index":
+            self.raise_("ValueError", self.sconst("tuple.index(x): x not in tuple"))
+        else:
+            self.br(end)
+        self.place(end)
+        return Val(self.mload('int', index if m == "index" else count), "int")
     n = len(targs(o.t))
     if m == "count":
         ctr = self.alloca("int", "")
