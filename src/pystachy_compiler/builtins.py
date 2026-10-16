@@ -512,6 +512,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err(f"'{name}' is not callable")
     if (name == "hex" or name == "oct" or name == "bin") and t in self.classes and "__index__" in self.classes[t].methods:
         self.err(f"{name}() of an object is not supported: Pystachy does not call __index__")
+    if name == "dict" and t in self.classes and ("keys" in self.classes[t].methods or "__iter__" in self.classes[t].methods):
+        # (CPython copies a mapping by its keys() and __getitem__, else the pairs it iterates over)
+        self.err(f"dict() of an object ('{tname(t)}') is not supported: make the dict with a comprehension ({{k: v for k, v in x.items()}})")
     if t in self.classes and name in NONEARG:
         self.err(NONEARG[name].replace("NoneType", tname(t)))  # (CPython's TypeError: its class has no __len__, __abs__, ...)
     if name == "hex" or name == "oct" or name == "bin":
