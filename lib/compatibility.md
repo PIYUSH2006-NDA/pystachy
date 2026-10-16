@@ -820,8 +820,11 @@ functions are templates: each call's argument types make its code
   ([error test](../tests/errors/lib_itertools_accumulate_type.py)) and a `zip_longest()`
   `fillvalue` of another type than an iterable's items
   ([error test](../tests/errors/lib_itertools_zip_longest_fillvalue.py)) are compile-time
-  errors. `accumulate()` of bools gives a bool and then ints, as in CPython, and `zip_longest()`
-  without `fillvalue` gives optional items.
+  errors, as is an `accumulate()` `initial` of another type than its sums, such as `initial=0`
+  of floats, where CPython yields the int `0` and then floats (`initial=0.0` is not an error)
+  ([error test](../tests/errors/lib_itertools_accumulate_initial.py)). `accumulate()` of bools
+  gives a bool and then ints, as in CPython, and `zip_longest()` without `fillvalue` gives
+  optional items.
 - `batched()`, `permutations()`, `combinations()`, `combinations_with_replacement()` and
   `product(..., repeat=n)` yield tuples whose length the program knows only as it runs, whose
   items must be ints, floats, bools, strs or their optional types
@@ -843,7 +846,15 @@ functions are templates: each call's argument types make its code
   in a variable may be `None`, so its keys must have the items' type unless it is made in the
   call ([error test](../tests/errors/lib_itertools_groupby_key_object.py)). Its groups are
   generators that share the `groupby()`'s iterator, as the C type's do: advancing the
-  `groupby()` ends the group before it ([test](../tests/lib_itertools_groupby.py)).
+  `groupby()` ends the group before it ([test](../tests/lib_itertools_groupby.py)). A key that
+  is not equal to itself (a NaN) still makes a group of its item, as in CPython; but a float
+  has no identity, so the same NaN object twice makes two groups, where CPython makes one
+  ([deviation](../tests/deviations/lib_itertools_groupby_nan.py)).
+- An argument whose type the C function rejects (`permutations()`' `r` of another type than
+  `int`, `count()` of something other than a number) and `islice()` or `tee()` with too few or
+  too many arguments raise CPython's `TypeError` as the program runs
+  ([test](../tests/lib_itertools_argtypes.py)); other wrong numbers of arguments, keywords a
+  function has not, and non-iterables are compile-time errors.
 - An iterator that an exception has left (from its function, predicate or key, or from its
   input) is finished, as a generator is, where CPython's C iterators can go on
   ([deviation](../tests/deviations/lib_itertools_exception.py)). So is an iterator whose input
@@ -856,7 +867,10 @@ functions are templates: each call's argument types make its code
   ([deviation](../tests/deviations/lib_itertools_reenter.py)); `tee()` raises CPython's
   `RuntimeError`.
 - An input generator is not closed when the iterator reading it is dropped, as a generator the
-  program drops is not ([deviation](../tests/deviations/lib_itertools_close.py)).
+  program drops is not ([deviation](../tests/deviations/lib_itertools_close.py)). As generators,
+  the iterators have the generator's attributes for `hasattr()` (`send`, `close`, `gi_frame`,
+  ...), which CPython's have not
+  ([deviation](../tests/deviations/lib_itertools_hasattr.py)).
 - `chain` is an object whose calls make generators, with `from_iterable()` as a method and the C
   type's repr, not a class: `isinstance(x, itertools.chain)` is a compile-time error
   ([error test](../tests/errors/lib_itertools_isinstance.py)), as are the other functions as

@@ -49,9 +49,18 @@ def _empty():
     yield None
 
 
+def _type_error(message: str) -> int:
+    # the C function's TypeError, for an argument whose type decides it at compile time: an int
+    # call, so that the function that raises it keeps the type of the iterator it returns
+    raise TypeError(message)
+
+
 def _ssize(x) -> int:
     # an argument that the C function reads as a Py_ssize_t (PyNumber_AsSsize_t())
-    if isinstance(x, int):
+    if x is None:
+        # (an optional int is an int after this)
+        raise TypeError("'NoneType' object cannot be interpreted as an integer")
+    elif isinstance(x, int):
         return int(x)
     elif hasattr(x, "__index__"):
         return x.__index__()
@@ -70,13 +79,18 @@ Equivalent to:
         while 1:
             yield x
             x += step"""
+    if start is None:
+        # (an optional number is the number after this)
+        return _count(_type_error("a number is required"), 1)
+    if step is None:
+        return _count(_type_error("a number is required"), 1)
     if not isinstance(start, (int, float)) or not isinstance(step, (int, float)):
         # PyNumber_Check(): an object with the numeric protocol, which counts by its + (no
         # other type compiles)
         if not (isinstance(start, (int, float)) or hasattr(start, "__index__") or hasattr(start, "__int__") or hasattr(start, "__float__")):
-            raise TypeError("a number is required")
+            return _count(_type_error("a number is required"), 1)
         elif not (isinstance(step, (int, float)) or hasattr(step, "__index__") or hasattr(step, "__int__") or hasattr(step, "__float__")):
-            raise TypeError("a number is required")
+            return _count(_type_error("a number is required"), 1)
         else:
             return _count(start, step)
     elif isinstance(start, bool) and not isinstance(step, float):
@@ -361,6 +375,9 @@ class _GroupbyState:
         self.has_tgt = False
         self.has_curr = True
         self.grouper = 0
+        # currkey is the object tgtkey was taken from, which the C code's comparison finds equal
+        # to itself (a float has no identity here: a NaN key would not be)
+        self.curr_is_tgt = False
 
 
 def _groupby_step(st: _GroupbyState, keyfunc) -> bool:
@@ -371,6 +388,7 @@ def _groupby_step(st: _GroupbyState, keyfunc) -> bool:
         st.currvalue = newvalue
         st.currkey = newkey
         st.has_curr = True
+        st.curr_is_tgt = False
         return True
     return False
 
@@ -384,6 +402,12 @@ def _same(a, b) -> bool:
     # PyObject_RichCompareBool(a, b, Py_EQ), which takes an object as equal to itself, as tuple
     # equality does with its items
     return (a,) == (b,)
+
+
+def _same_key(st: _GroupbyState, tgtkey) -> bool:
+    # the C code's comparison of a target key with the current key: equal where the current key
+    # is the target key itself, so that a group has at least its first item
+    return st.curr_is_tgt or _same(tgtkey, st.currkey)
 
 
 def groupby(iterable, key=None):
@@ -419,12 +443,13 @@ def _groupby(iterator, keyfunc):
                 pass
             elif not st.has_tgt:
                 break
-            elif not _same(st.tgtkey, st.currkey):
+            elif not _same_key(st, st.tgtkey):
                 break
             if not _groupby_step(st, keyfunc):
                 return
         st.tgtkey = st.currkey
         st.has_tgt = True
+        st.curr_is_tgt = True
         yield (st.currkey, _grouper(st, keyfunc, st.tgtkey, st.grouper))
 
 
@@ -434,7 +459,7 @@ def _grouper(st: _GroupbyState, keyfunc, tgtkey, grouper: int):
         if not st.has_curr:
             if not _groupby_step(st, keyfunc):
                 return
-        if not _same(tgtkey, st.currkey):
+        if not _same_key(st, tgtkey):
             return
         r = st.currvalue
         st.has_curr = False
@@ -476,7 +501,8 @@ skipped between successive calls.  Works like a slice() on a list
 but returns an iterator."""
     # the C type's islice_new(); stop is -1 for None
     if len(args) == 0 or len(args) > 3:
-        raise TypeError(f"islice expected {'at least' if len(args) == 0 else 'at most'} {2 if len(args) == 0 else 4} arguments, got {len(args) + 1}")
+        n = _type_error(f"islice expected {'at least' if len(args) == 0 else 'at most'} {2 if len(args) == 0 else 4} arguments, got {len(args) + 1}")
+        return _islice(iter(iterable), n, -1, 1)
     start = 0
     stop = -1
     step = 1
@@ -649,7 +675,7 @@ def _tee_from(it):
 def tee(iterable, *args):
     """Returns a tuple of n independent iterators."""
     if len(args) > 1:
-        raise TypeError(f"tee expected at most 2 arguments, got {len(args) + 1}")
+        _type_error(f"tee expected at most 2 arguments, got {len(args) + 1}")
     if len(args) == 0:
         to = _tee_fromiterable(iterable)
         return (to, to.__copy__())
@@ -844,14 +870,19 @@ def permutations(iterable, r=None):
 
 permutations(range(3), 2) --> (0,1), (0,2), (1,0), (1,2), (2,0), (2,1)"""
     pool = list(iterable)
+    return _permutations(pool, _permutations_r(r, len(pool)))
+
+
+def _permutations_r(r, n: int) -> int:
+    # the length of the permutations: n for None, else r, an int
     if r is None:
-        return _permutations(pool, len(pool))
+        return n
     elif not isinstance(r, int):
         raise TypeError("Expected int as r")
+    elif r < 0:
+        raise ValueError("r must be non-negative")
     else:
-        if r < 0:
-            raise ValueError("r must be non-negative")
-        return _permutations(pool, int(r))
+        return int(r)
 
 
 def _permutations(pool, r: int):

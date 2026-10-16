@@ -65,3 +65,19 @@ a = Key("a1")
 keys = [a, a, Key("a2"), Key("b1")]
 print([(k.name, len(list(g))) for k, g in groupby(keys)])
 print([k.name for k, g in groupby(keys)])
+
+# a key that is not equal to itself (a NaN that a key function makes anew) still makes a group of
+# its item, as in CPython, where the key compares as the very object it is
+print([len(list(g)) for k, g in groupby([float("nan"), float("nan"), 1.0, 1.0])])
+print([len(list(g)) for k, g in groupby([1, 2, 3], key=lambda v: float("nan"))])
+
+
+def score(v: int) -> float:
+    return float("nan") if v % 3 == 0 else float(v // 2)
+
+
+print([(k, list(g)) for k, g in groupby(range(10), key=score)][1:4])
+nans = groupby([float("nan"), float("nan")])
+nan_key1, nan_group1 = next(nans)
+nan_key2, nan_group2 = next(nans)
+print(list(nan_group1), list(nan_group2), len(list(nans)))
