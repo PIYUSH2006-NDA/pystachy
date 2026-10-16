@@ -1692,8 +1692,10 @@ class Parser:
             sp = mk("fstr", "", line, [])
             incut = self.incut
             incutline = self.incutline
-            if convmsg != "" and incut == "":
-                self.incut = convmsg  # (CPython parses the spec first, see limit())
+            if convmsg != "" and (incut == "" or self.spec_end(s, j + 1, raw) < len(s)):
+                # (CPython parses the spec first, see limit(), and checks the character once its
+                # field ends, before it meets an error that cut the f-string short after it)
+                self.incut = convmsg
                 self.incutline = at
             j = self.fparts(s, j + 1, raw, line, sp, 1)
             self.incut = incut
@@ -1721,6 +1723,41 @@ class Parser:
             e = mk("call", "", line, [mk("name", fn, line, []), e])
         n.kids.append(mk("fmt", "", line, [e, spec]))
         return j + 1
+
+    def spec_end(self, s: str, i: int, raw: bool) -> int:
+        # the index of the '}' that ends the format spec from s[i] (len(s) if the text ends first:
+        # in an f-string cut short, where the tokenizer's error cut it), as fparts() reads it
+        after = False  # (after a field in it, '{{' is a brace)
+        while i < len(s) and s[i] != "}":
+            if s[i] == "{" and s[i + 1 : i + 2] == "{" and after:
+                i += 2
+            elif s[i] == "{":
+                # a field (see field()): its expression, conversion character and spec
+                i += 1
+                depth = 0
+                while i < len(s) and (depth > 0 or not (s[i] == "}" or s[i] == ":" or (s[i] == "!" and s[i + 1 : i + 2] != "="))):
+                    if s[i] == "'" or s[i] == '"':
+                        i = string_end(s, i)
+                    elif s[i] == "#":
+                        k = s.find("\n", i)
+                        i = len(s) if k < 0 else k
+                    else:
+                        depth += 1 if s[i] == "(" or s[i] == "[" or s[i] == "{" else 0
+                        depth -= 1 if s[i] == ")" or s[i] == "]" or s[i] == "}" else 0
+                        i += 1
+                while i < len(s) and s[i] != ":" and s[i] != "}":
+                    i += 1  # (past its conversion character)
+                if i < len(s) and s[i] == ":":
+                    i = self.spec_end(s, i + 1, raw)
+                i += 1
+                after = True
+            elif s[i] == "\\" and s[i + 1 : i + 2] != "{" and s[i + 1 : i + 2] != "}":
+                # an escaped character, or a \N{...} escape, whose '}' closes no field
+                k = s.find("}", i) if not raw and s[i + 1 : i + 3] == "N{" else i + 1
+                i = len(s) if k < 0 else k + 1
+            else:
+                i += 1
+        return min(i, len(s))
 
     def fline(self, line: int, i: int) -> int:
         # the line of character i of the f-string being parsed, whose first line is line
