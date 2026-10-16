@@ -192,7 +192,8 @@ which its `finally`, `with` and `except GeneratorExit` see; the generator's land
 it, and reports anything else, as `pys.gen.drop` reports a `yield` after `GeneratorExit`. A
 suspended generator keeps none of its exception state among its consumer's: it sets its `with`
 blocks' unwind actions aside (`pys_gen_leave`, `pys_gen_enter`), its `try` statements' marks
-are relative to the depth where it was last resumed, and the exception it handles in an
+(and those of the `StopIteration` catches of its loops over iterator objects) are relative to the
+depth where it was last resumed, and the exception it handles in an
 `except` clause or a `finally` block is its own again when it resumes.
 
 A generator expression that no consumer takes directly becomes an anonymous generator

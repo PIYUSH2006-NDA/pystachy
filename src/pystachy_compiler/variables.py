@@ -34,6 +34,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fset,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -1513,6 +1514,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
                 self.assign(t.kids[i], self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
         for i in range(len(items)):
             self.assign(t.kids[i], items[i])
+    elif k == "tuple" and is_gen(v.t):
+        self.gen_unpack(t, v)  # (a, b = g: an item from g for each target)
     elif k == "tuple" and v.t in self.nts:
         # a, b = p: a NamedTuple's fields in order
         fs = self.classes[v.t].fields
@@ -1526,6 +1529,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
         it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
         if is_list(it.t):
             self.assign(t, it)
+        elif is_gen(it.t):
+            self.gen_unpack(t, it)  # (an __iter__ that yields)
         else:
             self.unpack_next(t, it)
     elif k == "tuple":
@@ -1656,6 +1661,8 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
     else:
         if v.t in self.classes:
             xs = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            if is_gen(xs.t):
+                xs = self.gen_list(xs, "")  # (an __iter__ that yields: all its items, as list() takes them)
             if not is_list(xs.t):
                 # (UNPACK_EX takes list() of the iterator, which calls iter() of it again)
                 xs = self.obj_iterator(xs, "", f"'{tname(xs.t)}' object is not iterable")

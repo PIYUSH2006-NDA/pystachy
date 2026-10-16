@@ -375,10 +375,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             first = self.rt("pys_file_readline", "ptr", [f"ptr {v0.v}"])
             return self.num_cmp('!=', Val(self.mload('int', first), "int"), Val('0', "int"))
         kv = [kvals[j] for j in range(len(kws)) if kws[j].s == "key" and kvals[j].t != "None"]
-        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max"):
+        if self.iter_object(v0.t) and (name == "any" or name == "all" or name == "sum" or name == "min" or name == "max") and not (len(kv) > 0 and name != "sum" and self.classes[v0.t].methods["__iter__"].gen):
             # an object whose __iter__ returns an iterator object: its items as they come, as
             # CPython takes them (any() and all() stop at the deciding one)
-            if len(kv) > 0 and name != "sum" and not self.classes[v0.t].methods["__iter__"].gen:
+            if len(kv) > 0 and name != "sum":
                 self.key_check(kv[0], f"{name}()")
                 return self.key_minmax_next(v0, kv[0], name)
             item = mk("name", "__item", self.line, [])

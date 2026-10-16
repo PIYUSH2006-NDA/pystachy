@@ -575,6 +575,36 @@ def gen_gen_stream(self, name: str, v: Val, args: list[Node], want: str, results
     return self.builtin(name, [g] + args, want, resultsoft)
 
 
+def gen_gen_unpack(self, t: Node, g: Val) -> None:
+    # a, b = g of generator g: an item for each target, then one more step, which must find g
+    # finished (else there are too many values); CPython takes them all before it stores the
+    # first (the targets of t, a tuple or list node with no starred one)
+    n = len(t.kids)
+    y = gelem(g.t)
+    got = self.alloca("int", "")
+    few = self.label()
+    ok = self.label()
+    items: list[Val] = []
+    for i in range(n + 1):
+        self.mstore("int", str(i), got)
+        p = self.gen_next(g, few if i < n else ok)
+        if i == n:
+            self.raise_("ValueError", self.sconst(f"too many values to unpack (expected {n})"))
+        elif y == "None":
+            items.append(Val("null", "None"))
+        else:
+            sl = self.alloca(y, "")
+            self.mstore(y, self.from_slot(self.mload("int", p), y).v, sl)
+            items.append(Val(sl, y))
+    self.place(few)
+    k = self.to_str(Val(self.mload("int", got), "int"))
+    msg = self.cat(self.cat(Val(self.sconst(f"not enough values to unpack (expected {n}, got "), "str"), k), Val(self.sconst(")"), "str"))
+    self.raise_("ValueError", msg.v)
+    self.place(ok)
+    for i in range(n):
+        self.assign(t.kids[i], items[i] if y == "None" else Val(self.mload(y, items[i].v), y))
+
+
 def gen_gen_contains(self, x: Val, g: Val) -> Val:
     # x in g of generator g: it is iterated until an item equals x (CPython's == of the item and x)
     gn = self.owned_node(g)

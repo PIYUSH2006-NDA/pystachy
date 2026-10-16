@@ -474,6 +474,7 @@ from src.pystachy_compiler.generators import (
     gen_gen_begin as generators_gen_begin,
     gen_gen_cleanup as generators_gen_cleanup,
     gen_gen_contains as generators_gen_contains,
+    gen_gen_unpack as generators_gen_unpack,
     gen_gen_declare as generators_gen_declare,
     gen_gen_drop as generators_gen_drop,
     gen_gen_end as generators_gen_end,
@@ -1614,6 +1615,9 @@ class Gen:
 
     def gen_cleanup(self) -> int:
         return generators_gen_cleanup(self)
+
+    def gen_unpack(self, t: Node, g: Val) -> None:
+        return generators_gen_unpack(self, t, g)
 
     def gen_contains(self, x: Val, g: Val) -> Val:
         return generators_gen_contains(self, x, g)

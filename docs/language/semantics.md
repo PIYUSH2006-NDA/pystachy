@@ -158,8 +158,10 @@ each time a consumer asks for an item. Generator functions that yield one type s
 type (`Generator[T]` in messages). A generator function's return annotation is `Iterator[T]`,
 `Iterable[T]` or `Generator[Y, None, R]`, from `typing` or `collections.abc`; elsewhere
 `Iterator[T]` and `Iterable[T]` type nothing (see [iterators](#iterators)), so a parameter
-annotated so takes generators as well as iterator objects. An unannotated generator function is
-a template: its first `yield` gives the type for each call's argument types.
+annotated so takes generators as well as iterator objects, and `Generator[T, None, None]` names
+a generator's type (`holder: list[Generator[int, None, None]] = []`). An unannotated generator
+function is a template: its first `yield` gives the type for each call's argument types. An
+`__iter__` or `__reversed__` that yields makes the generator that iterates its object.
 
 | Use | Behavior |
 |---|---|
@@ -169,6 +171,7 @@ a template: its first `yield` gives the type for each call's argument types.
 | `sum`, `min`, `max`, `any`, `all`, `math.fsum`, `math.prod` | The items as they come; `any()` and `all()` stop at the deciding item |
 | `list`, `tuple`, `sorted`, `set`, `frozenset`, `str.join`, `list.extend` | All the items |
 | `x in g` | Iterates until an item equals `x` |
+| `a, b = g`, `a, *rest = g` | One item for each target, then one more step that must find `g` finished; with a starred target, all the items |
 | `yield from x` | Each item of `x`; for a generator, delegation, and `r = yield from g()` is `g`'s return value |
 
 A generator expression that no consumer takes directly, such as one stored in a variable or
