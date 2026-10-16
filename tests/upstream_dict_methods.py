@@ -13,10 +13,10 @@
 # classes. dict(zip(...)) and dict(items), dict() of pairs (not supported), are the equal
 # displays or a loop. test_copy_fuzz's random sizes come from random.randrange(), seeded here
 # so that they are the same on every run, and its new key is -1, an int as the dict's keys, where
-# upstream adds 'key'. test_copy_noncompact's dict comprehension is a loop. test_tuple_keyerror checks
-# repr() of the KeyError, as its args are not supported. test_hash_collision_remove_add's
-# CustomHash(h) keys are ints that hash to h in CPython (h, and h + 2**61 - 1 for the colliding
-# pair), and its values are strs (str(h) where upstream has h), as a dict holds one value type.
+# upstream adds 'key'. test_tuple_keyerror checks repr() of the KeyError, as its args are not
+# supported. test_hash_collision_remove_add's CustomHash(h) keys are ints that hash to h in
+# CPython (h, and h + 2**61 - 1 for the colliding pair), and its values are strs (str(h) where
+# upstream has h), as a dict holds one value type.
 # EXCLUDED upstream cases (see also tests/upstream_dict_iteration.py):
 # - test_invalid_keyword_arguments (`**` of a dict with an int key, dict subclasses),
 #   test_literal_constructor (eval(), random strings), test_views_mapping (.mapping, subclasses)
@@ -209,9 +209,7 @@ def test_copy_noncompact() -> None:
     # keys-space (to optimize memory footprint).
     # In this test we want to hit the slow/compacting
     # branch of dict.copy() and make sure it works OK.
-    d: dict[int, int] = {}
-    for k in range(1000):  # {k: k for k in range(1000)}
-        d[k] = k
+    d = {k: k for k in range(1000)}
     for k in range(950):
         del d[k]
     d2 = d.copy()

@@ -712,7 +712,7 @@ class Parser:
         k = e.kind
         if k == "walrus" or k == "yield" or k == "await":
             self.later(0, f"{'named' if k == 'walrus' else k} expression cannot be used within {what}", e.line)
-        if (k == "listcomp" or k == "nestedcomp" or k == "asynccomp" or k == "setcomp" or k == "dictcomp") and has_kind(e, "walrus"):
+        if (k == "listcomp" or k == "asynccomp" or k == "setcomp" or k == "dictcomp") and has_kind(e, "walrus"):
             where = "within " + what if what.startswith("the") else "in " + (what if what == "a type alias" else "a TypeVar bound")
             self.later(0, f"assignment expression within a comprehension cannot be used {where}", e.line)
         elif k != "lambda":
@@ -1343,10 +1343,10 @@ class Parser:
         return n
 
     def comp(self, e: Node, line: int) -> Node:
-        # [e for t in it if c]; with more for and if clauses a "nestedcomp" node, with async for
-        # an "asynccomp" one, whose clauses after the first iterable are "compif" (kids: the
-        # condition) and "compfor" (the target, the iterable) nodes; s is "async" for an async for
-        # clause (the first: of the node itself, until a generator expression's is "gen")
+        # [e for t in it if c]; with more for and if clauses (or with async for, an "asynccomp"
+        # node), the clauses after the first iterable are "compif" (kids: the condition) and
+        # "compfor" (the target, the iterable) nodes; s is "async" for an async for clause (the
+        # first: of the node itself, until a generator expression's is "gen")
         if e.kind == "starred":
             self.fail("iterable unpacking cannot be used in comprehension", e.line)
         aio = self.eat("async")
@@ -1365,9 +1365,7 @@ class Parser:
                 ts.append(self.targets())
                 self.expect("in")
                 n.kids.append(mk("compfor", "async" if a else "", line, [ts[-1], self.or_test()]))
-        if len(n.kids) > 4 or len(ts) > 1:
-            n.kind = "nestedcomp"
-        elif len(n.kids) == 4 and not aio:
+        if len(n.kids) == 4 and len(ts) == 1 and not aio:
             n.kids[3] = n.kids[3].kids[0]  # [e for t in it if c]
         if aio:
             n.kind = "asynccomp"

@@ -470,9 +470,7 @@ class OrderedSet:  # Pystachy port: no MutableSet and Sequence bases, str for T 
         self.map accordingly.
         """
         self.items = items
-        self.map = {}  # Pystachy port: a loop for the dict comprehension (M7)
-        for (idx, item) in enumerate(items):
-            self.map[item] = idx
+        self.map = {item: idx for (idx, item) in enumerate(items)}
 
     def difference_update(self, *sets: List[str]) -> None:  # Pystachy port: lists of str (M4)
         """

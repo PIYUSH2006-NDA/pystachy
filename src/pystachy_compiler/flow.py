@@ -755,13 +755,18 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
         elif "." + e.s not in fl.defd and " dead" not in fl.defd:
             fl.unsafe[e.s] = True
     elif k == "listcomp":
-        # [elt for target in iter if cond]: iter is read outside, the rest with target bound
+        # [elt for target in iter if cond]: iter is read outside, the rest with target bound;
+        # a later for clause reads its iterable, then binds its target
         self.fl_expr(fl, e.kids[2])
         mark = len(fl.log)
         self.fl_target(fl, e.kids[1])
-        for i in range(len(e.kids)):
-            if i != 1 and i != 2:
-                self.fl_expr(fl, e.kids[i])
+        for c in e.kids[3:]:
+            if c.kind == "compfor":
+                self.fl_expr(fl, c.kids[1])
+                self.fl_target(fl, c.kids[0])
+            else:
+                self.fl_expr(fl, c)
+        self.fl_expr(fl, e.kids[0])
         fl.undo(mark)
     elif k == "call":
         c = e.kids[0]

@@ -52,10 +52,19 @@ of list slices. Integer `//` and `%` floor as in Python;
 true division is correctly rounded, and int/float comparisons are exact within the
 supported types.
 
-Container expressions include list, dict, set and tuple displays; list and set
+Container expressions include list, dict, set and tuple displays; list, set and dict
 comprehensions; and tuple concatenation or repetition by a constant. Set and frozenset
 operations support union, intersection, difference, symmetric difference, subset ordering
 and in-place forms.
+
+A comprehension or generator expression may have several `for` and `if` clauses. As in
+CPython, its first iterable is evaluated once in the enclosing scope; each later iterable and
+condition is evaluated for every item of the clauses before it, and the clauses' variables
+belong to the comprehension: a later `for` clause that binds an earlier clause's variable
+binds the same variable. A dict comprehension evaluates each key before its value; a repeated
+key keeps its first position and takes the last value. A clause or `for` target that reads a
+variable which only its own or a later `for` clause binds is rejected (CPython raises
+`UnboundLocalError`), as is a rebinding to another type that a clause between the two can read.
 
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.
@@ -64,8 +73,12 @@ Comparisons with `None` are supported where the static types permit them.
 ## Iterator-like expressions
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
-`filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`, `all`,
-`math.fsum`, `math.prod`, `str.join` and `list.extend`, and the value assigned to a list slice.
+`filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`,
+`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, and the value assigned to a
+list slice, subject to each consumer's item types. `tuple()` also accepts generator
+expressions and `range`/`map`/`filter`/`reversed` calls producing supported scalar or optional
+scalar items. Direct `enumerate`/`zip` items are tuples; project a scalar in a generator
+expression first ([runtime-length tuples](typing.md)).
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.

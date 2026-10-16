@@ -32,8 +32,13 @@ optional elements copies its slots rather than reinterpreting numeric bits as po
 
 Runtime-length tuples currently do not support concatenation, repetition,
 membership, unpacking, dictionary keys, or set elements. Their annotation is distinct
-from the fixed shape used by `*args`; arbitrary iterators and generators are not yet
-accepted by `tuple()`. This enables the existing `re.Match.groups()` implementation
+from the fixed shape used by `*args`; `tuple()` takes a list, string, tuple, generator
+expression or `range`/`map`/`filter`/`reversed` call whose items are `int`, `float`,
+`bool`, `str` or optional versions of those types. Direct `enumerate` and `zip`
+produce tuple-valued items, which runtime-length tuples cannot hold. Project a scalar
+first, for example `tuple(value for index, value in enumerate("ab"))` or
+`tuple(left + right for left, right in zip([1, 2], [3, 4]))`. Other iterable
+objects are not yet supported. This enables the existing `re.Match.groups()` implementation
 without rewriting its capture loop or knowing the pattern's capture count at compile time.
 
 Dict keys are `int`, `str`, or tuples containing `int`, `bool`, `str`, `str | None`, and
@@ -320,7 +325,7 @@ list or dictionary, so identity, aliases and mutations are preserved. The collec
 traces the box and its container using existing allocation rules. Concrete values
 keep their ordinary native representation; boxing occurs at a union boundary.
 
-A fresh list/dict display or list comprehension uses the expected union's single
+A fresh list/dict display or list/dict comprehension uses the expected union's single
 matching container member, including empty displays. Existing mutable containers
 remain invariant: `list[int]` cannot become `list[int | str]`, even through a union.
 `isinstance(value, list)` cannot distinguish `list[int]` from `list[str]`; a union

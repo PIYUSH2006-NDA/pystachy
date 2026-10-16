@@ -147,16 +147,16 @@ arbitrary context managers are not supported. Exceptions use the normal
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
 | Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
-| Containers | List, dictionary, set and tuple displays; list and set comprehensions |
+| Containers | List, dictionary, set and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
 | Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
-| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join` |
+| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join` |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
 Generator expressions consumed this way do not provide general generator objects. Functions
-using `yield`, standalone iterators with `__next__`, dict comprehensions and multi-clause
-comprehensions are not supported. See [execution rules](language/semantics.md) for consumer
-restrictions, evaluation order and protocols.
+using `yield` and standalone iterators with `__next__` are not supported. See
+[execution rules](language/semantics.md) for consumer restrictions, evaluation order and
+protocols.
 
 <a id="exception-classes"></a>
 

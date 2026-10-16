@@ -1,7 +1,7 @@
 """Expressions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.analysis import collect, deleted, only_none, stack_aliases, stack_kept
+from src.pystachy_compiler.analysis import collect, comp_shared, comp_unbound, deleted, only_none, stack_aliases, stack_kept
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Val
 from src.pystachy_compiler.names import short
@@ -25,7 +25,7 @@ from src.pystachy_compiler.specs import (
     UNARY,
     UNSUPPORTED,
 )
-from src.pystachy_compiler.syntax import Node, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, mk, names_in
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
@@ -563,10 +563,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         self.ltype[n.s] = t0 if t0 != "" else want
     if is_opt(want) and k != "ifexp" and k != "boolop":
         want = unopt(want)  # (what types an empty display is the type a value would hold)
-    if is_union(want) and (k == "list" or k == "listcomp" or k == "dict"):
+    if is_union(want) and (k == "list" or k == "listcomp" or k == "dict" or k == "dictcomp"):
         # A fresh display can use its one declared container member's element
         # storage. Existing mutable containers are never widened or copied.
-        candidates = [m for m in umembers(want) if is_dict(m)] if k == "dict" else [m for m in umembers(want) if is_list(m)]
+        candidates = [m for m in umembers(want) if is_dict(m)] if k == "dict" or k == "dictcomp" else [m for m in umembers(want) if is_list(m)]
         if len(candidates) == 1:
             want = candidates[0]
     if k == "name":
@@ -580,10 +580,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.closure(n)
     if k == "set":
         return self.set_display(n, want, False, returnctx, resultsoft)
-    if k == "setcomp":
+    if k == "setcomp" or k == "dictcomp":
         if n.kids[0].kind != "listcomp":
             self.err(UNSUPPORTED[n.kids[0].kind])
-        return self.listcomp(n.kids[0], want, "", "", None, "set", resultsoft)
+        return self.listcomp(n.kids[0], want, "", "", None, k[:-4], resultsoft)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
@@ -796,7 +796,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend(), or as the value assigned to a list slice")
+            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), tuple(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend(), or as the value assigned to a list slice")
         return self.listcomp(n, want, resultsoft=resultsoft)
     if k == "fstr":
         parts: list[Val] = []
@@ -1711,7 +1711,9 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     # want, as xs.extend(e for ...) does item by item); t is scoped to it. mode any/all:
     # any(e for ...) / all(...) instead, stopping at the deciding element. kind "set": {e for
     # t in it if c}, adding to a fresh set (or to set into, as s.update(e for ...) does); kind
-    # "discard": discarding each from set into, as s.difference_update(e for ...) does
+    # "discard": discarding each from set into, as s.difference_update(e for ...) does; kind
+    # "dict": {k: v for ...} (e is the tuple of k and v), setting d[k] = v in a fresh dict.
+    # Later for and if clauses are loops and tests nested in the first loop, in their order
     h = Ins("", "", "")
     if mode == "any" or mode == "all":
         res = self.alloca("bool", "")
@@ -1724,20 +1726,39 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
         h = self.hole(kind)
         res = f"%t{h.r[0]}"
     names: list[str] = []
-    names_in(n.kids[1], names)
+    comp_names(n, names)
+    if comp_unbound(n, names) != "":
+        self.err(comp_unbound(n, names))
     saved: list[str] = []
+    held: list[int] = []
     for nm in names:
         saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
+        held.append(self.compvars.get(nm, 0))
     app = mk("lcappend" if mode == "" else "reduce" if mode.startswith("#") else "anyall", mode[1:] if mode.startswith("#") else mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
     body = [app]
-    if len(n.kids) == 4:
-        body = [mk("if", "", n.line, [n.kids[3], mk("block", "", n.line, [app]), mk("block", "", n.line, [])])]
+    for j in range(len(n.kids) - 1, 2, -1):
+        # (a later for clause hides its own targets' names, but those it binds into an earlier
+        # clause's variable; one that any() or all() decided in leaves the loop around it too:
+        # see "compfor")
+        c = n.kids[j]
+        inner = mk("block", "", n.line, body)
+        if c.kind == "compfor":
+            shared: list[str] = []
+            comp_shared(n, j, shared)
+            body = [mk("compfor", mode if mode == "any" or mode == "all" else "", n.line, [c.kids[0], c.kids[1], inner, mk("names", " ".join(shared), n.line, [])])]
+        else:
+            body = [mk("if", "", n.line, [c.kids[0] if c.kind == "compif" else c, inner, mk("block", "", n.line, [])])]
     self.lcs.append(res)
-    self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else selem(want) if is_set(want) and kind != "list" and "?" not in want else "")
+    self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else want if is_dict(want) and kind == "dict" and "?" not in want else selem(want) if is_set(want) and kind != "list" and kind != "dict" and "?" not in want else "")
     self.lcsoft.append(resultsoft)
     pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
-    self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), names, arg)
+    share = self.compshare
+    self.compshare = {}
+    own: list[str] = []
+    names_in(n.kids[1], own)
+    self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), own, arg)
     self.narrowed = pre
+    self.compshare = share
     et = self.lct.pop()
     self.lcs.pop()
     self.lcsoft.pop()
@@ -1750,8 +1771,9 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
         else:
             self.ltype[nm] = saved[i][:sp]
             self.lreg[nm] = saved[i][sp + 1 :]
-        self.compvars[nm] -= 1
-        if self.compvars[nm] == 0:
+        if held[i] > 0:
+            self.compvars[nm] = held[i]
+        elif nm in self.compvars:
             del self.compvars[nm]
     if mode == "any" or mode == "all":
         return Val(self.mload('bool', res), "bool")
@@ -1759,11 +1781,12 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
         return Val("", "")
     if et == "":
         self.err("cannot infer the element type of this comprehension")
+    t = et if kind == "dict" else self.ctype("list" if kind == "list" else "set", [et])
     if into == "":
-        self.holes[h.k] = self.ctype(kind, [et])
-        if kind == "set":
-            self.key_kind(et)  # (a tuple element's descriptor, a string constant, which lowering prints)
-    return Val(res, self.ctype("list" if kind == "list" else "set", [et]))
+        self.holes[h.k] = t
+        if kind != "list":
+            self.key_kind(targs(et)[0] if kind == "dict" else et)  # (a tuple key's descriptor, a string constant, which lowering prints)
+    return Val(res, t)
 
 def gen_ifexp(self, n: Node, want: str, resultsoft: bool = False) -> Val:
     st = self.static(n.kids[0])

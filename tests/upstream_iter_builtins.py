@@ -24,8 +24,7 @@
 #   test_iter_string, test_unicode_join_endcase, test_in_and_not_in, test_sinkstate_*,
 #   test_3720, test_iter_overflow, test_iter_neg_setstate, test_free_after_iterating,
 #   test_error_iter, test_exception_locations, test_ref_counting_behavior (also __new__, __del__)
-# - test_iter_independence: a range as a value, iter(); test_nested_comprehensions_*: a
-#   comprehension with three for clauses
+# - test_iter_independence and test_nested_comprehensions_*: a range as a value, iter()
 # - test_builtin_tuple: tuple() of an iterable (not supported)
 # - test_builtin_list's, test_builtin_filter's and test_builtin_zip's TypeErrors (list(42),
 #   filter(None, 42), zip(None), ...): compile-time errors here; their SequenceClass and

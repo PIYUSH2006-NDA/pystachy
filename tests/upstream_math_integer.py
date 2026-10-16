@@ -9,8 +9,7 @@
 # deviation): the loops run where their values fit, as each says (factorial(n) for n up to 20,
 # perm(n, k) and comb(n, k) where they fit, which the added fits_perm() and a Pascal's triangle
 # with overflow checks decide). assertIs(type(s), int) is isinstance(s, int) (type() is not
-# supported), and testIsqrt's comprehension of two for clauses is two loops (multi-clause
-# comprehensions are not supported).
+# supported).
 # EXCLUDED upstream cases:
 # - testFactorial's i from 21 to 999 and -10**100; testGcd's and test_lcm's operands of 100 to
 #   230 bits (1216342683557601535506311712, x * c and the like); testIsqrt's 2**e + i for e from
@@ -174,10 +173,8 @@ def testIsqrt() -> None:
     test_values = (
         list(range(1000))
         + list(range(10**6 - 1000, 10**6 + 1000))
-    )
-    for e in range(60, 63):  # range(60, 200) upstream, and 3**9999, 10**5001
-        for i in range(-40, 40):
-            test_values.append(2**e + i)
+        + [2**e + i for e in range(60, 63) for i in range(-40, 40)]  # range(60, 200) upstream
+    )  # (and 3**9999, 10**5001 upstream)
 
     n = 0
     for value in test_values:

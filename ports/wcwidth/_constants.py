@@ -26,7 +26,7 @@ from .table_ambiguous import AMBIGUOUS_EASTASIAN
 #                               WIDE_OVERRIDES,
 #                               NARROW_OVERRIDES)
 from .unicode_versions import list_versions
-# Pystachy port: not imported: KNOWN_TERMINALS is a frozenset (sets are M7, #12), and only
+# Pystachy port: not imported: table_term_programs is left out of the port, as only
 # list_term_programs() and resolve_terminal() read these.
 # from .table_term_programs import ALIASES, KNOWN_TERMINALS
 
@@ -51,26 +51,19 @@ __all__ = (
 _REGIONAL_INDICATOR_SET = frozenset(
     range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1)
 )
-# Pystachy port: this frozenset and _EMOJI_ZWJ_SET below are dicts that map each code point to
-# True, filled by loops: a generator with two for clauses (nested comprehensions) is M7 (#12).
-_ISC_VIRAMA_SET: dict[int, bool] = {}
-for _lo, _hi in ISC_VIRAMA:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
-for _lo, _hi in ISC_INVISIBLE_STACKER:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
+_ISC_VIRAMA_SET = frozenset(
+    # Pystachy port: the tables concatenated: a starred tuple display is M7 (#12)
+    cp for lo, hi in ISC_VIRAMA + ISC_INVISIBLE_STACKER
+    for cp in range(lo, hi + 1)
+)
 # pylint: disable=invalid-name
 _LATEST_VERSION = list_versions()[-1]
 # Pystachy port: list() of each table bisearch() reads, here and below: a tuple is indexed only by
 # constants (M1, #6, item 8).
 _CATEGORY_MC_TABLE = list(CATEGORY_MC[_LATEST_VERSION])
-_EMOJI_ZWJ_SET: dict[int, bool] = {}  # Pystachy port: a dict filled by loops, as above
-for _lo, _hi in EXTENDED_PICTOGRAPHIC:
-    for _cp in range(_lo, _hi + 1):
-        _EMOJI_ZWJ_SET[_cp] = True
-for _cp in _REGIONAL_INDICATOR_SET:
-    _EMOJI_ZWJ_SET[_cp] = True
+_EMOJI_ZWJ_SET = frozenset(
+    cp for lo, hi in EXTENDED_PICTOGRAPHIC for cp in range(lo, hi + 1)
+) | _REGIONAL_INDICATOR_SET
 _FITZPATRICK_RANGE = (0x1F3FB, 0x1F3FF)
 
 _ZERO_WIDTH_TABLE = list(ZERO_WIDTH[_LATEST_VERSION])  # Pystachy port: list()

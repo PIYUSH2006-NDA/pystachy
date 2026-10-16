@@ -2,7 +2,7 @@
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODULES, NOREF, TYPING
-from src.pystachy_compiler.syntax import Node, mentions, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, mentions, mk, names_in
 from src.pystachy_compiler.utils import int_fits
 
 
@@ -367,7 +367,7 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
 def targets(st: Node, out: dict[str, bool]) -> None:
     # the names statement st assigns itself (not in its blocks)
     k = st.kind
-    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "with":
+    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "compfor" or k == "with":
         names: list[str] = []
         if k == "with":
             for it in st.kids[:-1]:
@@ -532,7 +532,7 @@ def reads(n: Node, name: str) -> bool:
         return False
     if k == "listcomp":
         names: list[str] = []
-        names_in(n.kids[1], names)
+        comp_names(n, names)
         if name in names:
             return reads(n.kids[2], name)
     for i in range(len(n.kids)):
@@ -554,10 +554,10 @@ def read_names(n: Node, out: dict[str, bool]) -> None:
         return
     names: list[str] = []
     if k == "listcomp":
-        names_in(n.kids[1], names)
+        comp_names(n, names)
     for i in range(len(n.kids)):
         if k == "listcomp" and i != 2:
-            # (a name its target binds counts only in its iterable)
+            # (a name its targets bind counts only in its first iterable)
             inner: dict[str, bool] = {}
             read_names(n.kids[i], inner)
             for nm in inner:
@@ -722,7 +722,7 @@ def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
         free_reads(n.kids[2], bound, out)
         own = dict(bound)
         names: list[str] = []
-        names_in(n.kids[1], names)
+        comp_names(n, names)
         for nm in names:
             own[nm] = True
         for i in range(len(n.kids)):
@@ -739,6 +739,81 @@ def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
         return
     for kid in n.kids:
         free_reads(kid, bound, out)
+
+
+def target_unbound(t: Node, names: list[str], bound: list[str]) -> str:
+    # the first of names that assigning to target t reads (in an attribute's object, or in a
+    # subscript) before a name it binds is bound, or "": bound has the names bound so far, and
+    # gets t's own, in the order t assigns them (left to right)
+    k = t.kind
+    if k == "name":
+        bound.append(t.s)
+        return ""
+    if k == "tuple" or k == "list" or k == "starred":
+        for x in t.kids:
+            nm = target_unbound(x, names, bound)
+            if nm != "":
+                return nm
+        return ""
+    out: dict[str, bool] = {}
+    for x in t.kids:
+        free_reads(x, {}, out)
+    for nm in names:
+        if nm in out and nm not in bound:
+            return nm
+    return ""
+
+
+def comp_unbound(c: Node, names: list[str]) -> str:
+    # why comprehension c, whose variables are names, is not supported, or "": a clause (a
+    # condition, a later for clause's iterable, or a for clause's target) reads one of them that
+    # only that clause's target or a later one binds, which CPython finds unbound (UnboundLocalError)
+    bound: list[str] = []
+    nm = target_unbound(c.kids[1], names, bound)
+    for x in c.kids[3:] if len(c.kids) > 3 and (c.kids[3].kind == "compfor" or c.kids[3].kind == "compif") else c.kids[:0]:
+        if nm != "":
+            break
+        out: dict[str, bool] = {}
+        free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, out)
+        for v in names:
+            if v in out and v not in bound and nm == "":
+                nm = v
+        if nm == "" and x.kind == "compfor":
+            nm = target_unbound(x.kids[0], names, bound)
+    return "" if nm == "" else f"'{nm}' is read before the comprehension's for clause that binds it, where CPython raises UnboundLocalError (not supported)"
+
+
+def comp_shared(c: Node, j: int, out: list[str]) -> None:
+    # the names that comprehension c's later for clause c.kids[j] binds into the variable of the
+    # latest earlier for clause that binds them too, as CPython's comprehension has one variable of
+    # each name: those that a clause between the two (or this one's target) reads once a loop
+    # between them has run, where it can see this clause's value. Elsewhere this clause's value
+    # can go to a new variable, which may have another type
+    mine: list[str] = []
+    names_in(c.kids[j].kids[0], mine)
+    for nm in mine:
+        q = -1  # (2: the first for clause, whose iterable is c.kids[2])
+        first: list[str] = []
+        names_in(c.kids[1], first)
+        if nm in first:
+            q = 2
+        for i in range(3, j):
+            b: list[str] = []
+            if c.kids[i].kind == "compfor":
+                names_in(c.kids[i].kids[0], b)
+            if nm in b:
+                q = i
+        if q < 0 or nm in out:
+            continue
+        loop = False
+        for i in range(q + 1, j + 1):
+            x = c.kids[i]
+            rd: dict[str, bool] = {}
+            free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, rd)
+            if (loop and nm in rd) or (x.kind == "compfor" and target_unbound(x.kids[0], [nm], []) != ""):
+                out.append(nm)
+                break
+            loop = loop or x.kind == "compfor"
 
 
 def closure_free(d: Node, out: dict[str, bool]) -> None:

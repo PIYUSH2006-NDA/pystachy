@@ -23,7 +23,7 @@ from src.pystachy_compiler.diagnostics import MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
-from src.pystachy_compiler.syntax import Node, mk, name_targets, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, mk, name_targets
 from src.pystachy_compiler.utils import (
     elem,
     elem_problem,
@@ -1152,7 +1152,7 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
     if e.kind == "listcomp":
         # [x for t in it if c]: x and c read the variables in t too, which the items of it type
         names: list[str] = []
-        names_in(e.kids[1], names)
+        comp_names(e, names)
         inner = own + " " + " ".join(names)
         for i in range(len(e.kids)):
             if i != 1 and not self.typed_now(e.kids[i], own if i == 2 else inner):
@@ -1323,6 +1323,10 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         if name in self.gflag:
             self.mem_store(Val(f"@g.{name}.def", "*bool"), Val("true", "bool"))
     else:
+        if name in self.compshare and name in self.compvars and not self.widens(v.t, self.compshare[name]):
+            # (a comprehension's for clause that binds it into an earlier clause's variable, which
+            # keeps its type: see the statement "compfor")
+            self.err(f"comprehension variable '{name}' is {typestr(self.compshare[name])} in an earlier for clause and {typestr(v.t)} in a later one, and a clause between them can read either (not supported)")
         if name in self.nonevars and name not in self.ltype and name not in self.compvars:
             # a parameter whose argument is None: assigning None keeps it so; any other value
             # gives it that type from here on, which only code outside branches and loops can do
