@@ -81,6 +81,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   early, CPython 3.13 keeps its read-ahead across a write, so the next `read()` returns the
   text from before the write.
 
+- The text a debug field (`f"{expr=}"`) prints is its expression as written, without its
+  comments. CPython 3.13 also takes a `#` after a quote inside a triple-quoted string, or inside
+  a nested f-string that reuses its quote, for a comment, and drops the text from there with
+  the `=`: `f"{'''a'#'''=}"` prints `'''a'#'''="a'#"`, where CPython prints `'''a'"a'#"`.
+
 ### Containers and evaluation order
 
 - `dict.keys()`, `.values()` and `.items()` return list snapshots, so `enumerate()`, `zip()`
@@ -548,5 +553,5 @@ supported alternatives.
 - source nested more than 5,000 levels deep (expressions, statements and `elif` branches; a `**`
   or `lambda` counts twice), and source whose nesting would overflow CPython's parser stack of
   6,000 levels of its grammar rules (a MemoryError in CPython), counted as measured on CPython
-  3.13 (a bracket 24 to 33 levels, a block 7, a comparison's operand 3, ...) so that Pystachy
-  stops at most a few dozen levels before CPython does
+  3.13 (a bracket 24 to 33 levels, an f-string's replacement field 33, a block 7, a comparison's
+  operand 3, ...) so that Pystachy stops at most a few dozen levels before CPython does
