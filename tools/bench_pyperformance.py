@@ -57,30 +57,48 @@ BENCHMARKS = {
     "unpack_sequence": (["50000"], ["1"]),
 }
 
-# SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not.
+# SHA-256 of each upstream bm_NAME/run_benchmark.py tried, ported or not: the 31 that this port
+# set out to try, and the other 21 that need no third-party package (bench/pyperformance/README.md).
 UPSTREAM = {
+    "2to3": "a491c6dfe070a073cae07fc07f903afcc6d795207f2c70ab96f0ac0d9363d916",
+    "argparse": "f914991901e5a24d536753c3b2b5229b1e9e5d4d982ba82da2e1cfbbf3677feb",
+    "async_generators": "0441979a5ffc49c1e44539f5cb5a082bb70fcef5627619872feb4f3901351de5",
+    "async_tree": "7c1493bc27c5c41f70f51cbf46a33c77b791915364ce619231461441f042178b",
+    "asyncio_tcp": "fa993861ad75dcd724d282442e671095ad708a9dcb87e4314831d04006ad4a23",
     "barnes_hut": "802a1c170b82a5d82ea69b7a893f09d4b50b4f232e20a8e1c1bb8b2c04e6af1d",
+    "base64": "e2f1e7d4dbfbb2c722833081496497344550e4367f85f67f373fb8aa22cd35ed",
     "bpe_tokeniser": "c7255345499e118181785370b0996e8cc1056491b9678b3fbeb02421e3f9b2df",
     "chaos": "5d20fd29c8ea89e0ebe4040ae4c05f26f1a620cd2a7fc654d9d7f8cb205651ac",
     "comprehensions": "6047efc06287a24a646f00fc8a8d47429f7cdeab3e942230e13cf6d7cefa6343",
+    "concurrent_imap": "d5bfb854e7a1d754f3033132dca397704ea7ed2aabfd6d625396b61b82a9e316",
     "coroutines": "9358a7d967ed16859b5a163a4e416d897d6f104b3603c56ad77903791211fc7f",
     "crypto_pyaes": "236222412fd81b5e13d9c818574b575809eccff17419d667f34cf0e9148aa724",
+    "decimal_factorial": "0b88119beb7a2151ef59f0d7d969e655850d9aeef143426efd0e0a656b2bbcc6",
+    "decimal_pi": "eb3974785e602143f16fcfbd07ffd8b742b326096d9fd914c59a79531175104c",
     "deepcopy": "9e1550442cbccfaff8a4988936487c091ac18bcc9c8ebdc41c1cb747c14ea078",
     "deltablue": "70da5e16cd5b14f2f398ccc066794b83a30d997c2d91150695b8f938f934dc30",
     "fannkuch": "2a8e4bc4c5e7e8ac605a4ca8246cc4baeab5336ac986d976e33657162750e8bf",
     "float": "b4f61a0978f5b0af2c0d07544ae26422868992e62b8f40e2967e3c694fc1b9a9",
+    "gc_collect": "7886042f07e517abb79c58643a4b488710f3079936c6990522624bfb9c2acb9b",
+    "gc_traversal": "0798ab87ca12687c68e101d14ae9ac0c50eaa9b4f14ecee3882f7e499191828f",
     "generators": "46c59dc44cb63b2c0fed75e6d82875daa237a92d03c87861078513c7b10d4621",
     "go": "ea4c0ebaf32515f8549c64c9291ab13d47bb802e01a82203c37b5066d1bfb463",
     "hexiom": "d7518220380d27449b8951bc9ca2e19593569d9bd9f5cb6d86867f354f22e115",
     "json_dumps": "023c991ff827fdcbfcfb2b7e3cadf023352a61d1903643d8af0ef302a0db1bf7",
+    "json_loads": "16c41ff06bf3173d30158c767340d389c459a656e997e306719891d50f09646f",
     "logging": "6ff62fdc4c6b520b01475407b526ed609299402ed8ad8d344038b559a120159a",
     "mdp": "3db5bfb8c9e2602f181cee809c24b2bd61e7c088e89e8e22867b8d46c4d0fcf1",
     "meteor_contest": "b616f5f87e129a6b35650452951f40a7812cf22efff5a0777e51287da13c2f48",
     "nbody": "d1385e816d7cfea361b7915e2cf70138cd6b84f40df8bd5152638851f7bcac2b",
     "nqueens": "f50ef0d82036790c99f5469b9cffc368e097de860231b328caa6652183af059e",
+    "pathlib": "113a1cbbec13165dfdb84db649d8114279460110733957a3749ffb9c9527612d",
+    "pickle": "31c0e30be79514b45db0d4e858632eb429b0fea3edbac6463ad5f34d92f3cab8",
     "pidigits": "4bf89183acb8651623676ece6e10787b6c71eec549fe53ce17a62a812ef7447d",
     "pprint": "07ef57201c7919aedf9e340c7fb1561a40dfee698818c9694930f3e427091d6d",
+    "pyflate": "ec5347c7045af86ba33e1b2c6f64bc4b506d0ade3b77391d7e41863fe25fb464",
+    "python_startup": "4cc396c9fe32d633a5e902c8ca738391a4cfe80b6d7658a9d9048989fc796d0c",
     "raytrace": "88ef4d9060d8e8f6ce40f376477aaf89cc808fa44813225a3071a05a1467f017",
+    "regex_compile": "cdbc509e515840e469209ed5fc77ca3fe352278203cc1a7dad874db4e863dc6c",
     "regex_dna": "d820dbdf12262cd11a543ae3dc3fd85793a20220d5a15ef687d8ef57a75c97c6",
     "regex_effbot": "0823b6507f8babea2238847562d9c9af31000ea57cbb695e5d47053321ea68c7",
     "regex_v8": "c22f820cb9a031a892ec0341eecca81c758dc25ee5413613d18eddfdff54a491",
@@ -88,27 +106,47 @@ UPSTREAM = {
     "richards_super": "665b3d5551171e147c127b6f8671edc9a7703c736d317cc4a991bb00f599dc36",
     "scimark": "427b21b8a3802418ea3c2fe584335658a6c91c7f74fce4df9410efa60cd84d6e",
     "spectral_norm": "a3390ec6d75606fec30c4b59ad5f77d5292cd8e36f445197232a34560a880b18",
+    "sqlite_synth": "dcba7a6889e66f08480f4332860208d624678fc42a03be5c8f3b6f1f894231fd",
+    "telco": "a3acb202b3d4eb750aca977ce354f8ecc1f6adae17a695ed2e5be615e4797605",
     "tomli_loads": "a94f7368f9656044f45244eb71da4f29a785c154c4a75aa15ca5c0e3c609c0d0",
+    "typing_runtime_protocols": "dfc0cbd25f2968ee6982ff93adde92a1fa2a56ffbed6dde2d1f9cb853c340961",
     "unpack_sequence": "0dafe97531abc4a5baf30fe011db7acb3bf1e64cd4e41acb0c7db2bb141a8382",
+    "xml_etree": "1d824c4d4dd92a7598e085dbdf7beed3809a75e4d6972c90377822c78f73477c",
 }
 
 # --census: the statements that stand in for each upstream main, calling what its pyperf
 # runner would time with the default arguments.
 CENSUS_CALLS = {
+    "2to3": ("datadir = os.path.join(os.path.dirname(__file__), 'data', '2to3')\n"
+             "pyfiles = glob.glob(os.path.join(datadir, '*.py.txt'))\n"
+             "subprocess.run([sys.executable, '-m', 'lib2to3', '-f', 'all'] + pyfiles, check=True)"),
+    "argparse": "for name in sorted(BENCHMARKS):\n    BENCHMARKS[name]()",
+    "async_generators": "bench_async_generators()",
+    "async_tree": "asyncio.run(BENCHMARKS['none'](use_task_groups=False).run())",
+    "asyncio_tcp": "asyncio.run(main(False))",
     "barnes_hut": "bench_quadtree_nbody(1, DEFAULT_PARTICLES, DEFAULT_ITERATIONS, DEFAULT_THETA)",
+    "base64": ("for bench in (bench_b64_small, bench_b64_large, bench_urlsafe_b64_small, bench_b32_small,\n"
+               "              bench_b32_large, bench_b16_small, bench_b16_large, bench_a85_small,\n"
+               "              bench_a85_large, bench_b85_small, bench_b85_large):\n    bench(1)"),
     "bpe_tokeniser": "bench_bpe_tokeniser(1)",
     "chaos": "main(None, None)",
     "comprehensions": "bench_comprehensions(1)",
+    "concurrent_imap": "bench_mp_pool(2, 1000, 10)\nbench_thread_pool(2, 1000, 10)",
     "coroutines": "bench_coroutines(1)",
     "crypto_pyaes": "bench_pyaes(1)",
+    "decimal_factorial": "bench_decimal_factorial()",
+    "decimal_pi": "bench_decimal_pi()",
     "deepcopy": "benchmark(1)\nbenchmark_reduce(1)\nbenchmark_memo(1)",
     "deltablue": "delta_blue(100)",
     "fannkuch": "fannkuch(DEFAULT_ARG)",
     "float": "benchmark(POINTS)",
+    "gc_collect": "benchamark_collection(1, CYCLES, LINKS)",
+    "gc_traversal": "benchamark_collection(1, N_LEVELS)",
     "generators": "bench_generators(1)",
     "go": "versus_cpu()",
     "hexiom": "main(1, DEFAULT_LEVEL)",
     "json_dumps": "bench_json_dumps([(obj, range(count)) for obj, count in [EMPTY, SIMPLE, NESTED, HUGE]])",
+    "json_loads": "bench_json_loads((json.dumps(DICT), json.dumps(TUPLE), json.dumps(DICT_GROUP)))",
     "logging": ("stream = io.StringIO()\nhandler = logging.StreamHandler(stream=stream)\n"
                 "logger = logging.getLogger('benchlogger')\nlogger.propagate = False\n"
                 "logger.addHandler(handler)\nlogger.setLevel(logging.WARNING)\n"
@@ -119,9 +157,15 @@ CENSUS_CALLS = {
                        "                     get_footprints(board, cti, pieces), get_senh(board, cti))"),
     "nbody": "bench_nbody(1, DEFAULT_REFERENCE, DEFAULT_ITERATIONS)",
     "nqueens": "bench_n_queens(8)",
+    "pathlib": "tmp_path = setup(NUM_FILES)\ntry:\n    bench_pathlib(1, tmp_path)\nfinally:\n    shutil.rmtree(tmp_path)",
+    "pickle": ("import pickle\nimport types\noptions = types.SimpleNamespace(protocol=pickle.HIGHEST_PROTOCOL)\n"
+               "for name in sorted(BENCHMARKS):\n    BENCHMARKS[name][0](1, pickle, options)"),
     "pidigits": "calc_ndigits(DEFAULT_DIGITS)",
     "pprint": "p.pformat(printable)",
+    "pyflate": "bench_pyflake(1, os.path.join(os.path.dirname(__file__), 'data', 'interpreter.tar.bz2'))",
+    "python_startup": "import subprocess\nsubprocess.run([sys.executable, '-c', 'pass'], check=True)",
     "raytrace": "bench_raytrace(1, DEFAULT_WIDTH, DEFAULT_HEIGHT, None)",
+    "regex_compile": "bench_regex_compile(1, capture_regexes())",
     "regex_dna": "bench_regex_dna(1, init_benchmarks(DEFAULT_INIT_LEN, DEFAULT_RNG_SEED), None)",
     "regex_effbot": "bench_regex_effbot(1)",
     "regex_v8": "bench_regex_v8(1)",
@@ -129,9 +173,15 @@ CENSUS_CALLS = {
     "richards_super": "Richards().run(1)",
     "scimark": "for bench in sorted(BENCHMARKS):\n    BENCHMARKS[bench][0](1, *BENCHMARKS[bench][1:])",
     "spectral_norm": "bench_spectral_norm(1)",
+    "sqlite_synth": "bench_sqlite(1)",
+    "telco": "bench_telco(1, rel_path('data', 'telco-bench.b'))",
     "tomli_loads": "bench_tomli_loads(1)",
+    "typing_runtime_protocols": "bench_protocols(1)",
     "unpack_sequence": "bench_all(1)",
+    "xml_etree": ("import xml.etree.ElementTree as et\nfor bench in BENCHMARKS:\n"
+                  "    bench_etree(1, et, globals()['bench_%s' % bench])"),
 }
+
 
 # What pyperf times in each ported benchmark, which --census reads from the upstream main: the
 # function that runner.bench_func() calls, whose calls the port's main times in one loop; or the
