@@ -1,4 +1,4 @@
-# error: mutable default P for dataclass field 'p' is not allowed
+# error: mutable default <class '__main__.P'> for field p is not allowed: use default_factory
 from dataclasses import dataclass
 
 

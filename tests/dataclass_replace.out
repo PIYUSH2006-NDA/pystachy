@@ -1,0 +1,13 @@
+post_init example.org 80
+arg port
+post_init example.org 8080
+post_init ünïcode.example 8080
+Settings(host='example.org', port=80, paths=[], hits=[0], debug=False)
+Settings(host='example.org', port=8080, paths=[], hits=[0], debug=True)
+Settings(host='ünïcode.example', port=8080, paths=[], hits=[0], debug=True)
+post_init example.org 80
+True False True
+Node(name='root', children=[Node(name='leaf', children=[]), Node(name='added', children=[])]) copy 2
+renamed
+TypeError replace() should be called on dataclass instances
+[exit 0]

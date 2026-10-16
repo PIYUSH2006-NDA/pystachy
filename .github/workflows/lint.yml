@@ -46,6 +46,9 @@ jobs:
       - name: Router benchmark validation tests
         run: python3 -m unittest discover -s tools -p test_route_bench.py
 
+      - name: pyperformance runner and port record tests
+        run: python3 -m unittest discover -s tools -p test_bench_pyperformance.py
+
       - name: Compiler effect summary tests
         run: python3 -m unittest discover -s tools -p test_function_summaries.py
 

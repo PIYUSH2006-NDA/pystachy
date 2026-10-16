@@ -13,7 +13,7 @@ from src.pystachy_compiler.utils import clone
 def versionable(n: Node, blocked: dict[str, bool]) -> bool:
     # These constructs can expose cells, defer reads, bind outside this walk, or
     # observe a partly executed assignment. Retain the existing compiler path.
-    if n.kind in "def lambda class subclass try with global nonlocal walrus yield await listcomp nestedcomp asynccomp setcomp dictcomp match import bound typealias async".split():
+    if n.kind in "def lambda class subclass try with global nonlocal walrus yield await listcomp asynccomp setcomp dictcomp match import bound typealias async".split():
         return False
     if n.kind == "annassign" and n.kids[0].kind == "name":
         blocked[n.kids[0].s] = True

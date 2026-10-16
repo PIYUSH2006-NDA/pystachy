@@ -51,15 +51,20 @@ print("lineof:", config.lineof("missing"), config.lineof("section"), config.line
 print("lineof:", config.lineof("section", "value"), config.lineof("section2", "value"))
 print("lineof:", config["section"].lineof("value"), config["section2"].lineof("value"))
 
-# test_iniconfig_get_convert and test_iniconfig_get_missing (str defaults: see PORT.md)
+# test_iniconfig_get_convert and test_iniconfig_get_missing, and str defaults
 config = IniConfig("x", data="[section]\nint = 1\nfloat = 1.1")
 print("get:", config.get("section", "int"), config.get("section", "missing", default="1"))
-print("get missing:", config.get("section", "missing"), config.get("other", "int"))
+print("get convert:", repr(config.get("section", "int", convert=int)),
+      repr(config.get("section", "float", convert=float)), config.get("section", "missing", convert=int))
+print("get missing:", config.get("section", "missing"), config.get("other", "int"),
+      config.get("section", "missing", 2.5, float), config.get("section", "float", 2.5, float))
 
-# test_section_get
+# test_section_get, and str defaults
 config = IniConfig("x", data="[section]\nvalue=1")
 section = config["section"]
 print("section get:", section.get("value"), section.get("value", "2"), section.get("missing", "2"))
+print("section get:", repr(section.get("value", convert=int)), section.get("missing", None, int),
+      section.get("value", 0, len), section.get("missing", 0, len))
 
 # test_missing_section
 try:

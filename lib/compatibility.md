@@ -16,9 +16,23 @@ for supported operand types. `call()` forwards a supported callable's arguments.
 In-place functions require a result that keeps its input type: `itruediv(1.0, 2.0)`
 works; rebinding an integer to a float does not.
 
-`attrgetter`, `itemgetter` and `methodcaller` are not supported. `length_hint`
-and `index` are not general substitutes for CPython's versions: for example,
-`length_hint([1, 2])` and `index(2)` fail compilation.
+`itemgetter`, `attrgetter` and `methodcaller` are callable objects: call them
+directly, store them, or pass them as `key=` to `sorted`, `min`, `max`, `list.sort`
+and the library's key parameters. A getter specializes on its literal arguments,
+so `itemgetter(1)` reads a fixed tuple's or NamedTuple's item with its static type
+and `attrgetter("name")` reads `o.name`; each literal value makes a getter type of
+its own, so `itemgetter(0)` and `itemgetter(1)` cannot share a list or variable.
+`itemgetter(i)` of a variable `i` indexes lists, strings and dicts, and a fixed
+tuple at run time with the union of its items' types. Dotted names, several
+items or names (a tuple result) and `methodcaller` arguments work as in CPython,
+and reprs match C's. A literal getter's constants cannot be assigned.
+
+Attribute and method names must be string literals: a missing attribute and a
+name that is not a string fail compilation, rather than raising `AttributeError`
+or `TypeError` when the getter runs (a single non-string literal still raises
+CPython's `TypeError` when the getter is made). Pickling is unsupported.
+`length_hint` and `index` are not general substitutes for CPython's versions:
+for example, `length_hint([1, 2])` and `index(2)` fail compilation.
 
 ## Path modules
 
@@ -44,6 +58,13 @@ from CPython's accelerated modules:
 - `stat` tests use the module's constants rather than `_stat`'s separate constants.
 - For more than 2,500 items, `heapify` compares in a different order from `_heapq`'s
   cache-friendly loop, with the same result.
+- `operator.__doc__` is the Python module's docstring, which CPython replaces with
+  `_operator`'s.
+
+## Module docstrings
+
+A module's `__doc__` is its docstring, as in CPython, but for the modules written for
+Pystachy: `collections`, `curses`, `functools` and `io` have docstrings of their own.
 
 ## Html and HTMLParser
 
@@ -125,19 +146,70 @@ does not change the predicates.
 
 ## Collections
 
-The shipped module provides `deque` only. It supports both ends, optional `maxlen`,
-extension, rotation, insertion/removal, indexing, containment/search, copies,
-comparisons and repetition. The item type comes from a supported iterable argument,
-an annotation (`q: deque[int] = deque()`), or an explicit constructor
-(`deque[int]()`). Parameters, returns and fields can name `deque[T]`. The compiled
-item type is fixed, and may be an explicitly supported union such as `int | str`.
+The shipped module provides `deque`, `defaultdict`, `OrderedDict` and `Counter`.
+Each is a generic class whose item types (`deque[T]`, `Counter[T]`,
+`defaultdict[K, V]`, `OrderedDict[K, V]`) come from supported constructor
+arguments, an annotation (`q: deque[int] = deque()`,
+`d: defaultdict[str, list[int]] = defaultdict(list)`) or an explicit constructor
+(`Counter[str]()`). Parameters, returns and fields can name them. The compiled
+types are fixed; a deque's items may be an explicitly supported union such as
+`int | str`, and mapping keys are the supported dict key types. The package binds `abc` to
+the builtin `collections.abc`, as CPython's binds it to `_collections_abc`, and its
+`__doc__` is its own docstring.
 
-Iteration is a snapshot, and `maxlen` is writable. Rich comparisons also use
-snapshots when item comparison callbacks mutate a queue. Searches (`count`,
-`index`, containment and `remove`) read live items and detect structural mutations
-with CPython's operation-specific errors; same-size replacements are preserved.
-`reversed`, reflected multiplication, comparisons with other containers, pickling,
-`namedtuple`, `Counter`, `defaultdict` and `OrderedDict` are unavailable.
+`deque` supports both ends, optional `maxlen`, extension, rotation,
+insertion/removal, indexing, containment/search, copies, comparisons, repetition
+and `reversed()`. Iteration reads live items and rejects endpoint mutations, while
+`reversed()` iterates over a snapshot; `maxlen` is writable. Rich comparisons use
+snapshots when item comparison callbacks mutate a queue. Searches (`count`, `index`,
+containment and `remove`) read live items and detect structural mutations with
+CPython's operation-specific errors; same-size replacements are preserved.
+
+The mappings hold dicts rather than derive from `dict`, so `isinstance(x, dict)`
+is false. They support indexing, assignment, `del`, `in`, `len`, iteration,
+`reversed()`, `keys()`, `values()`, `items()`, `get`, `pop`, `popitem`,
+`setdefault`, `clear`, `update`, `copy` and equality with each other and with a
+dict on the right; any other operand, such as `None`, is unequal, as CPython's
+identity fallback finds. An empty display operand (`d == {}`) has no type: test
+`not d`. Views are lists, as a dict's are here, and iteration is a snapshot
+rather than CPython's iterator that raises when the mapping changes size.
+Constructors and `update` take a dict, a list, tuple or set of pairs, or another
+of these mappings (a `Counter` types only the keys of an `OrderedDict` or
+`defaultdict`: the `int` values need an annotation); other iterable objects of
+pairs need `list(...)` first, and a generator expression a list comprehension.
+Keyword arguments are accepted by `update` and `subtract`, not by constructors.
+`dict(m)` of a mapping is not supported: `{k: v for k, v in m.items()}` copies it.
+
+- `defaultdict(factory)` accepts builtin classes such as `int`, `list`, `set`,
+  `str`, `float` and `dict`, functions, lambdas and `None`. A factory types
+  nothing unless it is a function with a return annotation, so the key and value
+  types come from an annotation or explicit types (`defaultdict[str, int](int)`)
+  where no mapping argument gives them; a factory that makes another mapping
+  (`defaultdict(lambda: defaultdict(int))`) takes the value type from them. Only
+  indexing calls the factory, keeping a value the factory itself stored for the
+  key. `__missing__`, a writable `default_factory`, `copy`, `|` and `|=` follow
+  the C type: `|` takes a dict or another of these mappings, raising CPython's
+  `TypeError` for `None` and builtin values that are not, and `|=` also pairs.
+  The repr names a builtin class given to the constructor as CPython does, and
+  other factories, and a class assigned to `default_factory` later, as
+  `<function>`.
+- `OrderedDict` supports `move_to_end(key, last=True)`, `popitem(last=True)`,
+  `fromkeys(iterable, value)` with a value that types the items, `|` and `|=` (as
+  defaultdict's), and order-sensitive equality between OrderedDicts. Two dicts
+  hold its items, the first ones in reverse order, so that operations at either
+  end take amortized constant time, as with CPython's linked list. Moving a key
+  reinserts the key object given.
+- `Counter` counts with ints. It supports missing counts of zero, `update` and
+  `subtract` from iterables and mappings, `most_common(n)`, `elements()`,
+  `total()`, `+ - | &`, unary `+` and `-`, their in-place forms, and the 3.10
+  comparisons, which raise CPython's `TypeError` for a `None` operand.
+  `elements()` returns a list rather than an iterator, and an empty `Counter()`
+  operand on the left of an operator needs its type.
+
+A deque compares with deques: `==` with `None` is false and `<` raises CPython's
+`TypeError`. Its reflected multiplication and comparisons with other containers,
+pickling, `namedtuple`, `ChainMap` and the `User*` classes are unavailable. A `deque` is
+not a `collections.abc.Sequence` to `isinstance`.
 
 ## Shlex
 
@@ -146,8 +218,8 @@ quotes, escapes, whitespace splitting, punctuation, token pushback and source
 stacking. Input text is read through `StringIO`; Unicode characters are read whole.
 
 Files are read eagerly. Pushed files are closed on push rather than on source
-pop; constructor files remain the caller's responsibility. Iteration materializes
-remaining tokens. `punctuation_chars` is writable;
+pop; constructor files remain the caller's responsibility. Iteration and `next()` read
+one token at a time from a shared position. `punctuation_chars` is writable;
 its constructor accepts bools or strings, while lists fail compilation. Lexer
 subclasses and arbitrary stream types are outside the compiled surface.
 
@@ -161,7 +233,7 @@ works. Newline translation, NUL padding after seeking past the end, and closed
 stream errors follow CPython's implementation.
 
 - Sizes and positions count bytes rather than Unicode characters.
-- Iteration returns the remaining lines as a batch when the loop starts.
+- Iteration and `next()` read one line at a time from the shared stream position.
 - `with StringIO()` is unsupported; `with` handles files only.
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
@@ -181,10 +253,8 @@ Writer fields may be strings, integers, floats, booleans, `None`, or objects
 converted with `str`. A tuple row may mix types; a list row must be homogeneous.
 `writerow` returns the result of the output object's `write`.
 
-- A reader parses all input when iteration begins. Errors occur before the loop
-  receives a row; `line_num` stays at the final line; rows remain in memory.
-  A second iteration has no rows, even if the first stopped early. `next(reader)`
-  is unsupported; use `list(reader)` or `DictReader` for a header.
+- A reader and `next(reader)` parse one record at a time, update `line_num` as input
+  is consumed, and retain their position after an early loop exit.
 - Reader rows are `list[str]`. `QUOTE_NONNUMERIC` and `QUOTE_STRINGS` raise
   `NotImplementedError` at construction; `QUOTE_NOTNULL` raises it when a row
   would contain `None`. Writers support all six quoting styles.
@@ -197,7 +267,7 @@ converted with `str`. A tuple row may mix types; a list row must be homogeneous.
   them in dict order, rather than CPython's set order.
 - Dialects are objects, rather than classes. Use registered names or keyword
   settings instead of dialect subclasses. Dialect fields are writable: writers
-  snapshot settings at construction; readers use settings at iteration start.
+  snapshot settings at construction; readers use settings when each record starts.
   `dialect=` accepts a registered name, `Dialect`, or `None`.
 - Uncaught errors name `csv.Error`, rather than `_csv.Error`. A missing `write`,
   a format parameter of a user class, an unsupported iterable row type, or a
@@ -256,7 +326,9 @@ Bare `@lru_cache` works. Wrappers expose `cache_info`, `cache_clear`, `__wrapped
 `currsize`. Clearing resets entries and statistics.
 
 Each wrapper specializes its argument and result types. Accepted key types are
-`int`, `bool`, `str`, `str | None`, and tuples of supported key types. Defaults
+`int`, `bool`, `str`, `str | None`, objects, and tuples of supported key types. An
+object argument is keyed by identity, or by its class's `__hash__` and `__eq__`, which
+a call may run more than once where CPython's hashes the key once. Defaults
 and keyword arguments bind against the original signature, evaluate arguments
 in source order, and retain defaults evaluated when the function was defined,
 including closure defaults. Functions with nine parameters are supported.
@@ -274,7 +346,7 @@ entry. Cached results retain object identity, including falsy results and option
 `None` values.
 
 Unsupported cases are unannotated parameters/results, a result annotated solely
-`-> None`, float/object keys, variadic functions, builtin/method/lambda targets,
+`-> None`, float and NamedTuple keys, variadic functions, builtin/method/lambda targets,
 and decorators on class-body methods. Required keyword-only parameters and
 explicit keyword-only arguments are unsupported; a keyword-only default may be
 omitted. `cache_parameters` is unavailable.
@@ -290,10 +362,25 @@ exceptions follow CPython; integer results retain checked 64-bit arithmetic.
 
 `cmp_to_key(comparator)` returns a key function for `sorted` and list sorting.
 The comparator accepts two values of one supported type and returns an int.
-Key objects expose writable `obj` and the five comparison methods. Hashing is
-rejected at compile time. The factory is a function rather than CPython's
+Key objects expose writable `obj` and the five comparison methods. `hash()` of one
+raises CPython's `TypeError: unhashable type: 'functools.KeyWrapper'`, also where it is
+used as a dict key or set element. The factory is a function rather than CPython's
 `KeyWrapper`, so factory attributes, reflection and pickling are unavailable.
-`partial`, `wraps`, `update_wrapper` and `total_ordering` remain unsupported.
+
+`partial(func, *args, **keywords)` stores a function, bound method, builtin,
+closure or callable object with positional and keyword arguments. A call passes
+the stored positional arguments first, and its own keywords replace stored ones.
+A partial of a partial is flattened, as in CPython: `func`, `args` (a tuple) and
+`keywords` (printing as a dict) hold the merged values. A first argument that is
+not callable raises CPython's `TypeError`. Each call is checked against the
+function's signature where it is compiled, so a wrong call fails compilation
+rather than raising `TypeError`. The attributes can be assigned, unlike C's
+read-only ones. `repr()` gives the default `<functools.partial object at ...>`
+rather than CPython's call form; pickling, `__dict__` and `partialmethod` are
+unsupported.
+
+`wraps`, `update_wrapper` and `total_ordering` remain unsupported: function
+attributes cannot be assigned, and class decorators are not compiled.
 
 ## Textwrap
 
@@ -314,10 +401,27 @@ Constants, `capwords` and `Template` work. Templates support mapping inputs
 precedence. `substitute`, `safe_substitute`, `is_valid` and `get_identifiers`,
 plus the template and pattern attributes, are available.
 
-`Formatter` and template subclasses are unsupported. Keyword values accessed by
-computed names must share a type, so `substitute(name="Ann", count=3)` is rejected.
+Template subclasses are unsupported. Keyword values of different types, as in
+`substitute(name="Ann", count=3)`, are looked up as values of their union type.
 `Template.flags` is an int, invalid-placeholder columns count bytes, and
 `capwords` capitalizes ASCII letters only.
+
+`Formatter` supports `format`, `vformat`, `parse`, `get_field`, `get_value`,
+`check_unused_args`, `format_field` and `convert_field`, and subclasses that
+override them. `lib/_pystachy_string.py` implements the parsers of CPython's
+`_string`, with its errors; `parse()` returns a list, so a malformed format string
+raises before its first field is looked up. Automatic and manual numbering,
+conversions, nested format specs and recursion limits follow CPython.
+Positional arguments may have different types (as may keyword ones): a field's
+value has their union type, which formats as its value does. When a call has
+both, their types must agree, so `format("{0} {x}", 1, x="s")` is rejected.
+`vformat` takes a tuple and a dict, or a `**kwargs` record; type an empty dict.
+
+Field names with attributes or indexes (`{0.x}`, `{0[1]}`) raise `ValueError`,
+and `check_unused_args` receives the keys used as a list in first-use order
+rather than a set. Overrides compile for every call's argument types in the
+program; an override, like other functions, must return one type for each.
+Field names count UTF-8 bytes, so only ASCII digits make positional ones.
 
 ## Statistics
 
@@ -338,7 +442,46 @@ for the compatible sequence types. Weighted `fmean` uses the port of CPython's
 Unsupported APIs are `mean`, `harmonic_mean`, variance/stdev and their population
 variants, `covariance`, `correlation`, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
-iterators, properties or other features beyond the port's compiled paths.
+iterators, properties or other features beyond the port's compiled paths. Only
+CPython runs the module's import of `random`, which `kde_random` and
+`NormalDist.samples` use.
+
+## Random
+
+`Random` objects and the module's functions, which share a hidden instance, give
+CPython's values for int, bool and float seeds: `seed`, `random`, `getrandbits`,
+`getstate`/`setstate`, `randrange`, `randint`, `choice`, `shuffle`, `sample`
+(including `counts=`), `choices` (weights or cumulative weights) and the `uniform`,
+`triangular`, `normalvariate`, `gauss`, `lognormvariate`, `expovariate`,
+`vonmisesvariate`, `gammavariate`, `betavariate`, `paretovariate`, `weibullvariate`
+and `binomialvariate` distributions. `_pyrandom` is the Mersenne Twister of
+`_random.Random` in the subset, which CPython builds in, so no `_random.py` can
+replace it. `binomialvariate` uses a port of CPython's `math.lgamma` algorithm,
+as Pystachy's `math` has none.
+
+- `seed()`, `seed(None)` and `Random()` use the time, process id and monotonic
+  clock, CPython's fallback when it cannot read `os.urandom()`.
+- A float seeds with its hash, as in CPython; a NaN's hash is 0 rather than
+  CPython's object-dependent value.
+- `getrandbits(k)` takes at most 63 bits and raises `OverflowError` for more,
+  before drawing. `randrange` and `randint` raise `OverflowError` where the width,
+  `b + 1` or the width plus the step leaves 64 bits (`randint(a, 2**63 - 1)`).
+- Populations are lists, strings and runtime-length tuples; a `range` is not a
+  value, so pass `list(range(n))`. Strings are sequences of bytes past ASCII.
+  Weights and counts share one numeric type. `sample` raises `TypeError` for a
+  `deque`, which `isinstance` does not find a `Sequence`, and takes a dict view,
+  which is a list.
+- Of the module functions, only `random` and `getrandbits` convert to a typed
+  `Callable`; the others are unannotated upstream methods, which unannotated
+  parameters or a lambda can take.
+- `randrange` and `randint` take ints or bools, and `triangular` floats: with int
+  bounds, its `low == high` case would return an int.
+
+Seeds of `str`, `bytes` or `bytearray` (SHA-512 into a long integer), `randbytes`,
+`SystemRandom` (absent from `__all__`), subclasses of `Random` (its
+`__init_subclass__` chooses how they draw integers) and pickling are unsupported.
+An integer passed as `choices`' weights is a compile error rather than CPython's
+hint to pass `k=`.
 
 ## Urllib.parse
 
@@ -375,3 +518,57 @@ CPython error for `None`.
   Sets use Pystachy's iteration order. `allow_fragments` must be a bool.
 - Deprecated splitting functions, `to_bytes` and `Quoter` are unsupported.
 
+
+## Datetime
+
+`timedelta`, `date`, `time`, `datetime`, `timezone`, `tzinfo` subclasses, `MINYEAR`,
+`MAXYEAR` and `UTC` are supported. The module is CPython's `_pydatetime`; where CPython's
+`_datetime` accelerator behaves differently, the port follows it: error messages, float
+`timedelta` arguments (each unit added exactly, fractions rounded once), exact `timedelta`
+products and quotients with floats, ISO 8601 parsing, aware `time` comparisons, `repr()` with
+`fold` and the `strftime()` format scan.
+
+Supported operations include construction with keywords and range checks; `+`, `-`, unary
+operators, `abs()`, `*` and `/` by ints and floats, `//`, `%` and `divmod()` of timedeltas;
+comparisons, sorting, `min()` and `max()`; `str()`, `repr()` and `format()`;
+`total_seconds()`, `toordinal()`, `fromordinal()`, `weekday()`, `isoweekday()`,
+`isocalendar()`, `fromisocalendar()`, `fromisoformat()`, `isoformat()` with `sep` and
+`timespec`, `ctime()`, `replace()`, `combine()`, `date()`, `time()`, `timetz()`,
+`timetuple()`, `utctimetuple()`, `utcoffset()`, `tzname()` and `dst()`. Aware datetimes
+support `timestamp()`, `astimezone(tz)`, `fromtimestamp(t, tz)` and `now(tz)`.
+`strftime()` gives CPython's result on Linux: glibc's C-locale directives with flags, widths
+and `E`/`O` modifiers, and datetime's `%f`, `%z`, `%:z` and `%Z`. A `tzinfo` subclass
+overrides `utcoffset()`, `dst()` and `tzname()`, whose `dt` is a `datetime` or `None`, and
+can use the inherited `fromutc()`.
+
+- Pystachy's `time` module has no `localtime()` or `mktime()`. `date.today()`,
+  `date.fromtimestamp()`, `datetime.today()`, `now()` and `fromtimestamp()` without a time
+  zone, `timestamp()` of a naive datetime, `astimezone()` of a naive datetime or without a
+  time zone, `strftime("%s")`, and a `%Z` with flags or a width where `dst()` is not `None`,
+  raise `NotImplementedError`.
+- `strptime()`, the deprecated `utcnow()` and `utcfromtimestamp()`, pickling and
+  `copy.replace()` are unsupported. `hash()` of these objects hashes the fields that
+  `_getstate()` packs into bytes upstream (Pystachy has none), so they are dict keys and set
+  elements, equal objects hashing alike; the values differ from CPython's.
+- `timetuple()` returns a NamedTuple with `time.struct_time`'s nine fields and repr, without
+  `tm_zone` and `tm_gmtoff`. `isocalendar()`'s result is a NamedTuple: index or unpack it, as
+  `tuple()` of it is unsupported.
+- Reflected operators are unsupported: write `timedelta * 2` and `date + timedelta`, not
+  `2 * timedelta` or `timedelta + date`.
+- `datetime.min` and `datetime.max` are typed `date` (a subclass's class attribute keeps its
+  base's type). `fromisoformat()` and `fromtimestamp()` must be called through their class,
+  not a `date` object.
+- Integers are 64-bit: `total_seconds()`, division, `%` and `divmod()` raise `OverflowError`
+  beyond about 106,751,991 days, as does a float count of microseconds of `2**63` or more.
+- `timezone(timedelta(0))` is a new object equal to `timezone.utc`, and a `name` of `None`
+  means no name. Subclasses of `timezone` are rejected.
+- The Python fallback's replacement sentinels remain: an explicit `None` for a numeric
+  field in `date.replace()`, `time.replace()` or `datetime.replace()` preserves that field;
+  explicit `tzinfo=True` in `time.replace()`, `datetime.replace()` or `datetime.combine()`
+  preserves the original time zone. CPython's C implementations reject those explicit
+  values with `TypeError`; `tzinfo=None` still removes the time zone.
+- Objects of subclasses of `date`, `time` and `datetime` print as their base class, and
+  arithmetic and `replace()` return objects of the base class.
+- Ordering a `date` with a `datetime` raises the `TypeError` of the reflected comparison.
+- Strings are UTF-8 bytes: `fromisoformat()` rejects a non-ASCII separator, and its length
+  checks count bytes, as `_datetime`'s parser does.

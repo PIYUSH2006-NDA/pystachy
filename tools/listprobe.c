@@ -57,7 +57,18 @@ static void operations(void) {
     pys_list_extend(l, l);
     if (l->len != 2 || l->a[0] != 9 || l->a[1] != 9) bad("self-extend after empty");
   }
+  for (I how = 0; how < 3; how++) {    /* slice assignment and deletion that empty a list */
+    List *l = pys_list_new(65536), *none = pys_list_new(0);
+    for (I i = 0; i < 9; i++) pys_list_append(l, i);
+    if (how == 0) pys_list_set_slice(l, NONE, NONE, 1, none);
+    else pys_list_del_slice(l, NONE, NONE, how == 1 ? 1 : -1);
+    check_empty(l);
+  }
   List l = {0, 0, sorting};
+  pys_list_del_slice(&l, NONE, NONE, 1);
+  pys_list_del_slice(&l, NONE, NONE, 2);
+  pys_list_set_slice(&l, NONE, NONE, 1, &l);
+  if (l.a != sorting || l.len) bad("an empty slice change modifies the sort sentinel");
   pys_list_clear(&l);
   if (l.a != sorting) bad("clear modifies untouched sort sentinel");
   pys_list_append(&l, 1);
@@ -100,6 +111,16 @@ static void ranges(void) {
   List *descending = pys_range_list(7, -3, -3);
   kinds(descending, 1);
   if (descending->len != 4 || descending->a[0] != 7 || descending->a[3] != -2) bad("descending range-list");
+  List *r = pys_range_list(0, 6, 1), *two = pys_list_new(2), *seven = pys_range_list(0, 7, 1);
+  pys_list_append(two, 7); pys_list_append(two, 8);
+  pys_list_set_slice(r, 1, NONE, 3, two);         /* r[1::3] = [7, 8] */
+  pys_list_del_slice(r, NONE, NONE, -2);          /* del r[::-2] */
+  pys_list_set_slice(r, 1, 2, 1, two);            /* r[1:2] = [7, 8], within the capacity */
+  kinds(r, 1);                                    /* changes within the backing keep its kind */
+  if (r->len != 4 || r->a[0] != 0 || r->a[1] != 7 || r->a[2] != 8 || r->a[3] != 8) bad("range-list slice changes");
+  pys_list_set_slice(r, NONE, NONE, 1, seven);
+  kinds(r, 0);                                    /* growth past it is scanned */
+  if (r->len != 7 || r->a[6] != 6) bad("range-list slice growth");
 }
 int main(void) {
   gc_init(__builtin_frame_address(0), roots, 1);

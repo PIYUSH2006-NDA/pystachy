@@ -1,6 +1,3 @@
-from .among import Among  # Pystachy port: for list[Among] below
-
-
 class BaseStemmer:
     # Pystachy port: the fields set_current() assigns (a field is declared in the
     # class body or assigned in __init__ itself)
@@ -14,7 +11,7 @@ class BaseStemmer:
     def __init__(self):
         self.set_current("")
 
-    def set_current(self, value: str):  # Pystachy port: annotated
+    def set_current(self, value):
         '''
         Set the self.current string.
         '''
@@ -25,13 +22,13 @@ class BaseStemmer:
         self.bra = self.cursor
         self.ket = self.limit
 
-    def get_current(self) -> str:  # Pystachy port: annotated
+    def get_current(self):
         '''
         Get the self.current string.
         '''
         return self.current
 
-    def copy_from(self, other: "BaseStemmer"):  # Pystachy port: annotated
+    def copy_from(self, other):
         self.current          = other.current
         self.cursor           = other.cursor
         self.limit            = other.limit
@@ -39,7 +36,7 @@ class BaseStemmer:
         self.bra              = other.bra
         self.ket              = other.ket
 
-    def in_grouping(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def in_grouping(self, s):
         if self.cursor >= self.limit:
             return False
         if self.current[self.cursor] not in s:
@@ -47,14 +44,14 @@ class BaseStemmer:
         self.cursor += 1
         return True
 
-    def go_in_grouping(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def go_in_grouping(self, s):
         while self.cursor < self.limit:
             if self.current[self.cursor] not in s:
                 return True
             self.cursor += 1
         return False
 
-    def in_grouping_b(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def in_grouping_b(self, s):
         if self.cursor <= self.limit_backward:
             return False
         if self.current[self.cursor - 1] not in s:
@@ -62,14 +59,14 @@ class BaseStemmer:
         self.cursor -= 1
         return True
 
-    def go_in_grouping_b(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def go_in_grouping_b(self, s):
         while self.cursor > self.limit_backward:
             if self.current[self.cursor - 1] not in s:
                 return True
             self.cursor -= 1
         return False
 
-    def out_grouping(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def out_grouping(self, s):
         if self.cursor >= self.limit:
             return False
         if self.current[self.cursor] not in s:
@@ -77,14 +74,14 @@ class BaseStemmer:
             return True
         return False
 
-    def go_out_grouping(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def go_out_grouping(self, s):
         while self.cursor < self.limit:
             if self.current[self.cursor] in s:
                 return True
             self.cursor += 1
         return False
 
-    def out_grouping_b(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def out_grouping_b(self, s):
         if self.cursor <= self.limit_backward:
             return False
         if self.current[self.cursor - 1] not in s:
@@ -92,26 +89,26 @@ class BaseStemmer:
             return True
         return False
 
-    def go_out_grouping_b(self, s: list[str]) -> bool:  # Pystachy port: annotated
+    def go_out_grouping_b(self, s):
         while self.cursor > self.limit_backward:
             if self.current[self.cursor - 1] in s:
                 return True
             self.cursor -= 1
         return False
 
-    def eq_s(self, s: str) -> bool:  # Pystachy port: annotated
+    def eq_s(self, s):
         if self.current.startswith(s, self.cursor, self.limit):
             self.cursor += len(s)
             return True
         return False
 
-    def eq_s_b(self, s: str) -> bool:  # Pystachy port: annotated
+    def eq_s_b(self, s):
         if self.current.endswith(s, self.limit_backward, self.cursor):
             self.cursor -= len(s)
             return True
         return False
 
-    def find_among(self, v: list[Among]) -> int:  # Pystachy port: annotated
+    def find_among(self, v):
         i = 0
         j = len(v)
 
@@ -163,7 +160,7 @@ class BaseStemmer:
                 return 0
         return -1 # not reachable
 
-    def find_among_b(self, v: list[Among]) -> int:  # Pystachy port: annotated
+    def find_among_b(self, v):
         '''
         find_among_b is for backwards processing. Same comments apply
         '''
@@ -215,7 +212,7 @@ class BaseStemmer:
                 return 0
         return -1 # not reachable
 
-    def replace_s(self, c_bra: int, c_ket: int, s: str) -> int:  # Pystachy port: annotated
+    def replace_s(self, c_bra, c_ket, s):
         '''
         to replace chars between c_bra and c_ket in self.current by the
         chars in s.
@@ -233,7 +230,7 @@ class BaseStemmer:
             self.cursor = c_bra
         return adjustment
 
-    def slice_from(self, s: str):  # Pystachy port: annotated
+    def slice_from(self, s):
         '''
         @type s string
         '''
@@ -247,7 +244,7 @@ class BaseStemmer:
     def slice_del(self):
         return self.slice_from("")
 
-    def insert(self, c_bra: int, c_ket: int, s: str):  # Pystachy port: annotated
+    def insert(self, c_bra, c_ket, s):
         '''
         @type c_bra int
         @type c_ket int
@@ -259,7 +256,7 @@ class BaseStemmer:
         if c_bra <= self.ket:
             self.ket += adjustment
 
-    def slice_to(self) -> str:  # Pystachy port: annotated
+    def slice_to(self):
         '''
         Return the slice as a string.
         '''
@@ -269,16 +266,16 @@ class BaseStemmer:
         assert self.limit <= len(self.current)
         return self.current[self.bra:self.ket]
 
-    def assign_to(self) -> str:  # Pystachy port: annotated
+    def assign_to(self):
         '''
         Return the current string up to the limit.
         '''
         return self.current[0:self.limit]
 
-    def stemWord(self, word: str) -> str:  # Pystachy port: annotated
+    def stemWord(self, word):
         self.set_current(word)
         self._stem()
         return self.get_current()
 
-    def stemWords(self, words: list[str]) -> list[str]:  # Pystachy port: annotated
+    def stemWords(self, words: list[str]):  # Pystachy port: annotated, so that [] has a type
         return [self.stemWord(word) for word in words]

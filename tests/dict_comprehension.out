@@ -1,0 +1,40 @@
+key 0
+value 0
+key 1
+value 1
+key 2
+value 2
+key 3
+value 3
+{0: 2, 1: 3}
+{0: 9, 1: 7, 2: 8}
+{'a': 'avocado', 'b': 'blueberry', 'c': 'cherry'}
+{'héllo': None, 'wörld': None, 'abc': None, 'x': 5}
+{'a': [1], 'b': []}
+{0: 0.0, 1: 0.5, 2: 1.0}
+{'ab': 2, 'c': 1}
+{('x', 0): 0, ('y', 1): 1} 1
+{'ab': {'a': 0, 'b': 1}, 'ba': {'b': 0, 'a': 1}}
+{} 0
+{'a': 1, 'c': 3}
+{'a': 10, 'b': 20}
+{9: 81, 3: 9, 5: 25}
+[1, 2, 3] 2 True
+{'a': 1, 'b': 1}
+{'a': None, 'b': None} 2 {'a': 1.5, 'b': 1.5}
+True True
+{'a': 1} outer k -1
+{'a': 1, 'bb': 2} [1, 2]
+RuntimeError dictionary changed size during iteration
+{'b': 2}
+ZeroDivisionError integer division or modulo by zero
+KeyError 'b'
+{1: 'a', 2: 'b'} {'x': 1}
+{'ab': 2, 'world': 5} {0: [], 1: [0], 2: [0, 1]}
+4.5
+{'b': 2, 'a': 1} {'b': 2, 'a': 1}
+{3: 0, 1: 1}
+{0: 0, 1: 1, 2: 4, 3: 9} {0: 0, 1: 1, 2: 8}
+{'a': 1, 'b': 1} {'z': 0}
+{'zero': 0, 'one': 1, 'two': 2} {1: 'one', 2: 'two'}
+[exit 0]

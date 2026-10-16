@@ -1,0 +1,4 @@
+deque([3, 4]) deque([])
+3
+Queue(values=deque([4]))
+[exit 0]

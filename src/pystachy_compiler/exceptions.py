@@ -14,6 +14,7 @@ from src.pystachy_compiler.ir import Data, Exit, FnInfo, Ins, Try, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     EXCBASES,
+    FROZENERR,
     EXCEPTIONS,
     EXCKW,
     PYBUILTINS,
@@ -310,10 +311,14 @@ def gen_catch_set(self, t: Node) -> str:
     for c in t.kids if t.kind == "tuple" else [t] if t.kind != "omit" else t.kids:
         if c.kind == "attr" and (self.dotted(c) == "builtins." + c.s or self.dotted(c) == "os.error"):
             c = mk("name", "OSError" if c.s == "error" else c.s, c.line, [])  # (builtins.ValueError, os.error)
+        if self.dotted(c) == FROZENERR or (c.kind == "name" and c.s not in self.ltype and c.s not in self.gtypes and self.imported(c.s) == FROZENERR):
+            c = mk("name", FROZENERR, c.line, [])
         if c.kind != "name" or c.s in self.ltype or c.s in self.gtypes or c.s in self.funcs or c.s in self.assigned:
             self.err("an except clause needs exception classes: a name, or a tuple of names")
         if c.s in self.unsupported:
             self.err(self.unsupported[c.s])
+        if c.s in self.taliases:
+            self.err(f"type alias '{short(c.s)}' cannot be used as a value (only annotations may name it)")
         if c.s in self.classes and self.classes[c.s].exc == "":
             self.err("catching classes that do not inherit from BaseException is not allowed")
         if c.s in self.classes and self.classes[c.s].hook != "":
@@ -333,6 +338,8 @@ def gen_catch_set(self, t: Node) -> str:
         return ""
     out: list[str] = []
     for k in EXCBASES:
+        if k == FROZENERR and not self.hasfrozen:
+            continue  # (no object of the program can raise it)
         for b in names:
             if b in EXCBASES and exc_derives(k, b):
                 out.append(k)

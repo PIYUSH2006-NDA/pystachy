@@ -1,0 +1,57 @@
+iter(range(10)) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+it is it2 True
+for val in iter(range(10)) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+triple loop [(0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 1, 0), (0, 1, 1), (0, 1, 2), (0, 2, 0), (0, 2, 1), (0, 2, 2), (1, 0, 0), (1, 0, 1), (1, 0, 2), (1, 1, 0), (1, 1, 1), (1, 1, 2), (1, 2, 0), (1, 2, 1), (1, 2, 2), (2, 0, 0), (2, 0, 1), (2, 0, 2), (2, 1, 0), (2, 1, 1), (2, 1, 2), (2, 2, 0), (2, 2, 1), (2, 2, 2)]
+for val in IteratingSequenceClass(10) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+iter(IteratingSequenceClass(10)) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+len(iter(range(10000))) 10000
+for val in iter([]) []
+for val in iter((0, ..., 9)) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+for val in iter(range(10)) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+for val in iter('abcde') ['a', 'b', 'c', 'd', 'e']
+list(filter(lambda x: not x, seq)) [Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False)]
+list(filter(lambda x: not x, iter(seq))) [Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False), Boolean(False)]
+min(iter(d.values())) 1
+max(iter(d)) 'two'
+list(zip(IteratingSequenceClass(3))) [(0,), (1,), (2,)]
+list(zip(IntsFrom(0), f, IntsFrom(-100))) [(0, 'a\n', -100), (1, 'bbb\n', -99), (2, 'cc\n', -98)]
+' - '.join(OhPhooey(f)) 'a\n - b\n - fooled you! - c\n'
+0 in sc5 True
+1 in sc5 True
+2 in sc5 True
+3 in sc5 True
+4 in sc5 True
+-1 not in sc5 True
+5 not in sc5 True
+1 in IteratorProxyClass(iter([1])) True
+indexOf(fiter, 'b\n') 1
+indexOf(fiter, 'd\n') 1
+indexOf(fiter, 'e\n') 0
+indexOf(fiter, 'a\n'): ValueError
+indexOf(iclass, 0) 0
+indexOf(iclass, 1) 1
+indexOf(iclass, 2) 2
+indexOf(iclass, -1): ValueError
+(a, b) (1, 2)
+(a, b, c) (0, 1, 2)
+too many values: ValueError
+not enough values: ValueError
+(a, b, c) (42, 42, 42)
+(a, b, c) (0, 1, 42)
+list(b) [0, 1, 2, 3, 4]
+list(b) []
+list(b) [0, 1, 2, 3, 4]
+list(b) []
+list(b) ['a', 'b', 'c', 'd', 'e']
+list(b) []
+len(list(b)) 5
+list(b) []
+len(list(k)) 5
+list(k) []
+len(list(i)) 5
+list(i) []
+len(list(v)) 5
+list(v) []
+list(b) [0, 1, 2, 3, 4]
+list(b) []
+[exit 0]

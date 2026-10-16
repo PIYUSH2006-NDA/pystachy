@@ -16,7 +16,7 @@ print(figlet_format("Hi", font="small", width=80))
 ## Coverage
 
 - `figlet_format()` and `Figlet.renderText()`; `Figlet.setFont(font=...)` switches among the three embedded fonts.
-- Explicit `direction`, `justify` and `width` arguments. Rendering returns a plain `str`; `direction()` and `justify()` are methods in the adapted class.
+- `direction`, `justify` and `width` keyword arguments, which `figlet_format()` passes on to `Figlet` as upstream does. Rendering returns a plain `str`; `Figlet.direction` and `Figlet.justify` are read-only properties.
 - Font discovery/installation, external or zipped fonts, color helpers, CLI and `FigletString` transformations are outside this port’s coverage.
 
 <a id="deviations-it-hits"></a>
@@ -24,7 +24,8 @@ print(figlet_format("Hi", font="small", width=80))
 ## Compatibility
 
 - A helper decodes UTF-8 input into characters before selecting glyphs. Unsupported glyphs are skipped as upstream does. Only ASCII-drawn fonts are embedded.
-- `setFont(font=None)` reloads the current font rather than treating `None` as a font name.
+- `setFont()` takes its font as a `str` keyword argument, as upstream reads it; `setFont(font=None)`, on which upstream fails, is a compile-time error.
+- Until the re-baseline (#262), the port took `figlet_format()`'s and `setFont()`'s arguments by position too, and had `direction()` and `justify()` methods; such calls, which upstream rejects, are now compile-time errors.
 - Very large widths can overflow or exhaust native memory; measuring output strings still counts UTF-8 bytes.
 
 <a id="tests"></a>
@@ -46,7 +47,7 @@ Cases: [port_pyfiglet_render.py](../../tests/port_pyfiglet_render.py), [port_pyf
 
 ## Performance snapshot
 
-Recorded AOT runs were about **2.7× faster** than CPython 3.13.16 on upstream for both load-and-render and render-only workloads. Font loading differs: the port reads embedded strings and upstream reads files.
+Recorded AOT runs were about **2.7× faster** than CPython 3.13.16 on upstream for both load-and-render and render-only workloads, and **2.0×** after the re-baseline, whose font parser uses upstream's regular expressions. Font loading differs: the port reads embedded strings and upstream reads files.
 
 These are recorded port measurements, not a fresh benchmark of the current compiler.
 See the [benchmark record](PORT_REFERENCE.md#benchmark-snapshot) for workloads, raw timings,

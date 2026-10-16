@@ -8,38 +8,37 @@
 # a == b, assertRaises a try statement. check_for_loop() leaves out its pickle round trip.
 # TESTFN is a file in a tempfile.mkdtemp() directory; files have no seek() here, so where
 # upstream rewinds with f.seek(0, 0), the file is opened again. test_indexOf's `fiter = iter(f)`
-# is f itself (a file is its own iterator; iter() is not supported). An empty display that
+# is f itself (a file is its own iterator, as iter(f) returns it). An empty display that
 # nothing types is an annotated variable. test_extending_list_with_iterator_does_not_segfault's
 # gen() is a generator function, which the subset does not have: a generator expression gives
 # the same items, also without a length hint.
 # EXCLUDED upstream cases (Lib/test/test_iter.py has no other test this subset can run):
-# - every test of iter(), next(), iter(callable, sentinel), iterator classes (an __iter__ that
-#   returns an object with __next__: BasicIterClass, IteratingSequenceClass, IteratorProxyClass,
-#   IntsFrom, OhPhooey, Iterator), sequence classes (iteration through __getitem__ alone:
+# - the tests of iter(), next() and iterator classes (an __iter__ that returns an object with
+#   __next__: BasicIterClass, IteratingSequenceClass, IteratorProxyClass, IntsFrom, OhPhooey),
+#   which tests/upstream_iter_classes.py adapts: test_iter_basic, test_iter_idempotency,
+#   test_iter_for_loop, test_iter_independence, test_iter_class_*, test_iter_big_range,
+#   test_iter_empty, test_iter_tuple, test_iter_range, test_iter_string,
+#   test_unicode_join_endcase, test_in_and_not_in, test_sinkstate_*, and the iterator parts of
+#   the tests below
+# - iter(callable, sentinel), sequence classes (iteration through __getitem__ alone:
 #   SequenceClass, NoGuessLen5, ...), generators, pickle, __setstate__ and __reduce__:
-#   test_iter_basic, test_iter_idempotency, test_iter_for_loop, test_iter_class_*,
 #   test_seq_class_*, test_mutating_seq_class_*, test_reduce_mutating_builtins_iter,
 #   test_new_style_iter_class, test_iter_callable, test_iter_function*, test_exception_*,
-#   test_stop_sequence, test_iter_big_range, test_iter_empty, test_iter_tuple, test_iter_range,
-#   test_iter_string, test_unicode_join_endcase, test_in_and_not_in, test_sinkstate_*,
-#   test_3720, test_iter_overflow, test_iter_neg_setstate, test_free_after_iterating,
-#   test_error_iter, test_exception_locations, test_ref_counting_behavior (also __new__, __del__)
-# - test_iter_independence: a range as a value, iter(); test_nested_comprehensions_*: a
-#   comprehension with three for clauses
+#   test_stop_sequence, test_3720, test_iter_overflow, test_iter_neg_setstate,
+#   test_free_after_iterating, test_error_iter, test_exception_locations,
+#   test_ref_counting_behavior (also __new__, __del__)
+# - test_nested_comprehensions_*: a range as a value
 # - test_builtin_tuple: tuple() of an iterable (not supported)
 # - test_builtin_list's, test_builtin_filter's and test_builtin_zip's TypeErrors (list(42),
-#   filter(None, 42), zip(None), ...): compile-time errors here; their SequenceClass and
-#   IteratingSequenceClass parts; the Boolean/Seq part of test_builtin_filter (an iterator class,
-#   and `*` of a list repetition)
-# - test_builtin_max_min's min(iter(d.values())) (iter()); test_builtin_map's `expected`, which
-#   upstream computes and never checks; test_builtin_zip's list(zip(range(5))) (rejected: range()
-#   nested in zip() as list()'s argument, which docs/language.md lists only for for loops: bug
-#   #276)
+#   filter(None, 42), zip(None), ...): compile-time errors here; their SequenceClass parts
+# - test_builtin_map's `expected`, which upstream computes and never checks; test_builtin_zip's
+#   list(zip(range(5))) (rejected: range() nested in zip() as list()'s argument, which
+#   docs/language.md lists only for for loops: bug #276)
 # - test_countOf's and test_in_and_not_in's dicts with a complex key (1j: 2j)
 # - test_writelines: writelines() of a tuple, a dict and an object with __iter__ (writelines()
 #   takes a list[str] here: rejected at compile time)
-# - test_unpack_iter: the IteratingSequenceClass cases (iterator class), `a, b, c = len`, and
-#   `a, b, c = f` (unpacking a file: rejected at compile time)
+# - test_unpack_iter: `a, b, c = len`, and `a, b, c = f` (unpacking a file: rejected at
+#   compile time)
 import os
 import tempfile
 from operator import countOf, indexOf

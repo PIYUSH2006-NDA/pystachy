@@ -1,4 +1,4 @@
-# error: dict keys must be int or str, or tuples of int, bool, str and str | None items, not tuple[float] (specializing functools._lru_cache_wrapper(<function half
+# error: dict keys must be int or str, objects, or tuples of int, bool, str, str | None and objects, not tuple[float] (specializing functools._lru_cache_wrapper(<function half
 from functools import lru_cache
 
 

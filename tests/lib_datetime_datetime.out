@@ -1,0 +1,116 @@
+0001-01-01 00:00:00 9999-12-31 23:59:59.999999 0:00:00.000001 datetime.datetime(1, 1, 1, 0, 0) datetime.datetime(9999, 12, 31, 23, 59, 59, 999999)
+datetime(2024, 2, 29, 0, 0, 0, 0) datetime.datetime(2024, 2, 29, 0, 0)
+datetime(2023, 2, 29, 0, 0, 0, 0) ValueError: day is out of range for month
+datetime(2024, 13, 1, 0, 0, 0, 0) ValueError: month must be in 1..12
+datetime(0, 1, 1, 0, 0, 0, 0) ValueError: year 0 is out of range
+datetime(2024, 1, 1, 24, 0, 0, 0) ValueError: hour must be in 0..23
+datetime(2024, 1, 1, 0, 60, 0, 0) ValueError: minute must be in 0..59
+datetime(2024, 1, 1, 0, 0, 60, 0) ValueError: second must be in 0..59
+datetime(2024, 1, 1, 0, 0, 0, 1000000) ValueError: microsecond must be in 0..999999
+datetime(9999, 12, 31, 23, 59, 59, 999999) datetime.datetime(9999, 12, 31, 23, 59, 59, 999999)
+datetime(1, 1, 1, 0, 0, 0, 1) datetime.datetime(1, 1, 1, 0, 0, 0, 1)
+fold=2 ValueError: fold must be either 0 or 1
+datetime.datetime(2024, 2, 29, 13, 5, 7, 25000, fold=1, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800))) 2024-02-29 13:05:07.025000+05:30 2024 2 29 13 5 7 25000 UTC+05:30 1
+2024-02-29 datetime.time(13, 5, 7, 25000, fold=1) datetime.time(13, 5, 7, 25000, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800)), fold=1) 738945 3 4 datetime.IsoCalendarDate(year=2024, week=9, weekday=4) Thu Feb 29 13:05:07 2024
+auto 2024-02-29T13:05:07.025000+05:30 2024-02-29 13:05:07.025000+05:30 2024-01-01_00:00:00
+hours 2024-02-29T13+05:30 2024-02-29 13+05:30 2024-01-01_00
+minutes 2024-02-29T13:05+05:30 2024-02-29 13:05+05:30 2024-01-01_00:00
+seconds 2024-02-29T13:05:07+05:30 2024-02-29 13:05:07+05:30 2024-01-01_00:00:00
+milliseconds 2024-02-29T13:05:07.025+05:30 2024-02-29 13:05:07.025+05:30 2024-01-01_00:00:00.000
+microseconds 2024-02-29T13:05:07.025000+05:30 2024-02-29 13:05:07.025000+05:30 2024-01-01_00:00:00.000000
+x ValueError: Unknown timespec value
+2024-02-29é13:05:07.025000+05:30 0001-01-01T00:00:00 2024-02-29 13:05:07.025000+05:30 29/02/2024 13:05
+time.struct_time(tm_year=2024, tm_mon=2, tm_mday=29, tm_hour=13, tm_min=5, tm_sec=7, tm_wday=3, tm_yday=60, tm_isdst=-1) time.struct_time(tm_year=2024, tm_mon=2, tm_mday=29, tm_hour=7, tm_min=35, tm_sec=7, tm_wday=3, tm_yday=60, tm_isdst=0) time.struct_time(tm_year=2024, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=0, tm_yday=1, tm_isdst=0)
+datetime.datetime(2020, 5, 17, 1, 2, 3, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.datetime(2020, 5, 17, 1, 2, 3) datetime.datetime(2020, 5, 17, 1, 2, fold=1, tzinfo=datetime.timezone.utc) datetime.datetime(2024, 2, 29, 13, 5, 7, 25000, fold=1, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800)))
+fromisoformat('2024-02-29T13:05:07') datetime.datetime(2024, 2, 29, 13, 5, 7)
+fromisoformat('2024-02-29 13:05:07.5+05:30') datetime.datetime(2024, 2, 29, 13, 5, 7, 500000, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800)))
+fromisoformat('20240229T130507Z') datetime.datetime(2024, 2, 29, 13, 5, 7, tzinfo=datetime.timezone.utc)
+fromisoformat('2024-02-29') datetime.datetime(2024, 2, 29, 0, 0)
+fromisoformat('2024-W09-4T12') datetime.datetime(2024, 2, 29, 12, 0)
+fromisoformat('2024W094T12:00') datetime.datetime(2024, 2, 29, 12, 0)
+fromisoformat('2024-W09T12') datetime.datetime(2024, 2, 26, 12, 0)
+fromisoformat('2024W09T12') datetime.datetime(2024, 2, 26, 12, 0)
+fromisoformat('2024-02-29T') ValueError: Invalid isoformat string: '2024-02-29T'
+fromisoformat('2024-02-29X12:30') datetime.datetime(2024, 2, 29, 12, 30)
+fromisoformat('2024-02-2912:30') ValueError: Invalid isoformat string: '2024-02-2912:30'
+fromisoformat('2024-02-29T25:00') ValueError: hour must be in 0..23
+fromisoformat('2024-02-30T12:00') ValueError: day is out of range for month
+fromisoformat('2024-02-29T12:00+24:00') ValueError: offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=1).
+fromisoformat('2024-02-29T12:00-23:59:59.999999') datetime.datetime(2024, 2, 29, 12, 0, tzinfo=datetime.timezone(datetime.timedelta(days=-1, microseconds=1)))
+fromisoformat('2024-02-29T12:30:45.') ValueError: Invalid isoformat string: '2024-02-29T12:30:45.'
+fromisoformat('2024-02-29T1230') datetime.datetime(2024, 2, 29, 12, 30)
+fromisoformat('2024-02-29 12:30:45,123456789') datetime.datetime(2024, 2, 29, 12, 30, 45, 123456)
+fromisoformat('2024') ValueError: Invalid isoformat string: '2024'
+fromisoformat('2024-02') ValueError: Invalid isoformat string: '2024-02'
+fromisoformat('2024-W01-') ValueError: Invalid isoformat string: '2024-W01-'
+fromisoformat('2024-W1') ValueError: Invalid isoformat string: '2024-W1'
+fromisoformat('') ValueError: Invalid isoformat string: ''
+fromisoformat('0001-01-01T00:00:00') datetime.datetime(1, 1, 1, 0, 0)
+fromisoformat('9999-12-31T23:59:59.999999') datetime.datetime(9999, 12, 31, 23, 59, 59, 999999)
+fromisoformat('2024-02-29T12:00Z00') ValueError: Invalid isoformat string: '2024-02-29T12:00Z00'
+fromisoformat('2024-02-29T12:00z') ValueError: Invalid isoformat string: '2024-02-29T12:00z'
+fromisoformat('2024-02-29T12:00 ') ValueError: Invalid isoformat string: '2024-02-29T12:00 '
+fromisoformat('2024-02-29T12é') ValueError: Invalid isoformat string: '2024-02-29T12é'
+d2 + datetime.timedelta(microseconds=1) datetime.datetime(2024, 1, 1, 0, 0) datetime.datetime(2023, 12, 31, 23, 59, 59, 999998)
+d2 + datetime.timedelta(days=-365) datetime.datetime(2022, 12, 31, 23, 59, 59, 999999) datetime.datetime(2024, 12, 30, 23, 59, 59, 999999)
+d2 + datetime.timedelta(days=-1, seconds=1) datetime.datetime(2023, 12, 31, 0, 0, 0, 999999) datetime.datetime(2024, 1, 1, 23, 59, 58, 999999)
+d2 + datetime.timedelta(days=363, seconds=86399, microseconds=999999) datetime.datetime(2024, 12, 29, 23, 59, 59, 999998) datetime.datetime(2023, 1, 2, 0, 0)
+d2 + datetime.timedelta(days=3652058) OverflowError: date value out of range
+max + 1us OverflowError: date value out of range
+min - 1us OverflowError: date value out of range
+aware max + 1 OverflowError: date value out of range
+364 days, 23:59:59.999999 -365 days, 0:00:00.000001 3652058 days, 23:59:59.999999
+0:00:00 0:00:00 0:00:00 0:00:00
+naive - aware TypeError: can't subtract offset-naive and offset-aware datetimes
+aware - naive TypeError: can't subtract offset-naive and offset-aware datetimes
+[True, True, True, False, False] [False, False, False, True, True]
+[True, True, True, False, False] [False, False, False, True, True]
+[True, True, True, False, False] [False, False, False, True, True]
+[False, False, False, True, False] [True, True, True, False, True]
+[False, False, False, False, True] [True, True, True, True, False]
+[False, False, False, True] [True, True, True, False]
+[False, False, False, True] [True, True, True, False]
+[False, False, False, True] [True, True, True, False]
+naive < aware TypeError: can't compare offset-naive and offset-aware datetimes
+aware >= naive TypeError: can't compare offset-naive and offset-aware datetimes
+[datetime.datetime(2000, 2, 29, 1, 0), datetime.datetime(2023, 12, 31, 23, 59, 59, 999999), datetime.datetime(2024, 1, 1, 0, 0)] 2024-01-01 12:00:00+00:00 2024-01-01 12:00:00+00:00
+1704110400.0 1704110400.0 -62135596800.0 253402318800.0
+fromtimestamp(0) datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 19, 0, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(1700000000) datetime.datetime(2023, 11, 14, 22, 13, 20, tzinfo=datetime.timezone.utc) datetime.datetime(2023, 11, 14, 17, 13, 20, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(-1) datetime.datetime(1969, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 18, 59, 59, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(1000000000.5) datetime.datetime(2001, 9, 9, 1, 46, 40, 500000, tzinfo=datetime.timezone.utc) datetime.datetime(2001, 9, 8, 20, 46, 40, 500000, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(1.0000005) datetime.datetime(1970, 1, 1, 0, 0, 1, 1, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 19, 0, 1, 1, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(-0.5) datetime.datetime(1969, 12, 31, 23, 59, 59, 500000, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 18, 59, 59, 500000, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(-1e-07) datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 19, 0, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(1e-07) datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 19, 0, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(253402300800.0) ValueError: year 10000 is out of range
+fromtimestamp(-62135596800) OverflowError: date value out of range
+fromtimestamp(-62135596801) ValueError: year 0 is out of range
+fromtimestamp(253402300800) ValueError: year 10000 is out of range
+fromtimestamp(1e+20) OverflowError: timestamp out of range for platform time_t
+fromtimestamp(-10000000000000.0) ValueError: year -314918 is out of range
+fromtimestamp(nan) ValueError: Invalid value NaN (not a number)
+fromtimestamp(4611686018427387904) OSError: [Errno 75] Value too large for defined data type
+fromtimestamp(0.1234565) datetime.datetime(1970, 1, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc) datetime.datetime(1969, 12, 31, 19, 0, 0, 123456, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(1234567890.9999995) datetime.datetime(2009, 2, 13, 23, 31, 31, tzinfo=datetime.timezone.utc) datetime.datetime(2009, 2, 13, 18, 31, 31, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(-1234567890.0000005) datetime.datetime(1930, 11, 18, 0, 28, 30, tzinfo=datetime.timezone.utc) datetime.datetime(1930, 11, 17, 19, 28, 30, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+fromtimestamp(9.3e+18) OverflowError: timestamp out of range for platform time_t
+fromtimestamp(-9.3e+18) OverflowError: timestamp out of range for platform time_t
+fromtimestamp(1e+17) OSError: [Errno 75] Value too large for defined data type
+datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone.utc) datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone.utc) datetime.datetime(2024, 3, 10, 1, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone.utc)
+datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.datetime(2024, 3, 10, 11, 59, 59, 999999, tzinfo=datetime.timezone.utc) datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST'))
+datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800))) datetime.datetime(2024, 3, 10, 1, 29, 59, 999999, tzinfo=datetime.timezone.utc) datetime.datetime(2024, 3, 9, 20, 29, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=68400), 'EST')) datetime.datetime(2024, 3, 10, 6, 59, 59, 999999, tzinfo=datetime.timezone(datetime.timedelta(seconds=19800)))
+astimezone(max) OverflowError: date value out of range
+'2024-02-29 13:05:07.025000 +0530 +05:30 UTC+05:30 %z Thu Feb 29 13:05:07 2024 060 08 2024-09-4|%E'
+'2023-12-31 23:59:59.999999    %z Sun Dec 31 23:59:59 2023 365 53 2023-52-7|%E'
+'2024-01-01 07:00:00.000000 -0500 -05:00 EST %z Mon Jan  1 07:00:00 2024 001 00 2024-01-1|%E'
+'1-01-01 00:00:00.000000    %z Mon Jan  1 00:00:00 1 001 00 1-01-1|%E'
+'1-02-03 04:05:06.000007 -030007.000008 -03:00:07.000008 odd%name %z Sat Feb  3 04:05:06 1 034 04 1-05-6|%E'
+datetime.datetime(2024, 3, 10, 1, 59, tzinfo=Eastern()) EST 0:00:00 -1 day, 19:00:00 2024-03-10T01:59:00-05:00 EST -0500 0 2024-03-10 06:59:00+00:00
+datetime.datetime(2024, 3, 10, 3, 0, tzinfo=Eastern()) EDT 1:00:00 -1 day, 20:00:00 2024-03-10T03:00:00-04:00 EDT -0400 1 2024-03-10 07:00:00+00:00
+datetime.datetime(2024, 11, 3, 1, 30, tzinfo=Eastern()) EST 0:00:00 -1 day, 19:00:00 2024-11-03T01:30:00-05:00 EST -0500 0 2024-11-03 06:30:00+00:00
+datetime.datetime(2024, 11, 3, 1, 30, tzinfo=Eastern()) EST 0:00:00 -1 day, 19:00:00 2024-11-03T01:30:00-05:00 EST -0500 0 2024-11-03 06:30:00+00:00
+datetime.datetime(2024, 7, 4, 12, 0, tzinfo=Eastern()) EDT 1:00:00 -1 day, 20:00:00 2024-07-04T12:00:00-04:00 EDT -0400 1 2024-07-04 16:00:00+00:00
+True 0:00:00 -1 day, 19:00:00 -1 day, 19:00:00 True
+True True True -1 day, 19:00:00 UTC
+[exit 0]

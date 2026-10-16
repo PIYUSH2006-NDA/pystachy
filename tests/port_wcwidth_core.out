@@ -88,7 +88,7 @@ clamped -1 1 1
 clamped 0 1 1
 clamped 3 2 2
 clamped 99 2 2
-versions 1 18.0.0 ('18.0.0',)
+versions 1 18.0.0 ('18.0.0',) 18.0.0
 wcmatch latest True
 wcmatch auto True
 wcmatch 4.1.0 True

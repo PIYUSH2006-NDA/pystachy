@@ -1,0 +1,38 @@
+1|2|3
+1|2|3
+1|3
+1|3
+1|\d5
+abc|yes|empty
+a, b, c|A-B-C|key=1, k'q=2, a"b=3
+ü|éé|ü€|'ü'|'\u20ac'
+abc3
+Ignored error getting __notes__: <__notes__ ValueError('v')> (x, y)
+5|6|5
+innerquote|     5
+5|56!
+5 1
+a
+b
+c
+'a\tb\tc'|\|Aé|\d+
+'\n'|'\\n'|\n
+\5|\\5|5\|"q"|'q'
+\5|\}|\{
+6|1|x 
+=5|   5
+a, b
+6
+**5***|000005|abc   |'''5|   5|
+  5   | 1|3.14
+     5}|{5}|{}|{5}|5
+  5|{A}|5}	|{é
+d["key"]=1|"q"='q'|x = 5|x=5|"q"=q|"q"=   q|"q"=     q|x=5|
+"a" + 'b'='ab'|f"{x}"='5'|len("ab") * 2 = 4
+abc  d'f'
+['a', 'b', 'c', 'd', '>3', 'f']
+hello 'Ann' box[a:1, b:2] box <b@n@n@>
+  12  |1212  'ab' |abab   1.5  |1.51.5 <b\n\n\>
+KeyError KeyError('missing')
+ValueError Invalid format specifier 'bad' for object of type 'int'
+[exit 0]

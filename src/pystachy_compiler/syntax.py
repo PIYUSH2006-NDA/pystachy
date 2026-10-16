@@ -62,22 +62,34 @@ def as_target(n: Node) -> Node:
         n.kind = "tuple"
         for k in n.kids:
             as_target(k)
+    elif n.kind == "starred":
+        as_target(n.kids[0])  # (a, *[b, c] = ...)
     return n
 
 
+# @dataclass's options that Pystachy supports, and their defaults
+DCOPTS: dict[str, bool] = {"init": True, "repr": True, "eq": True, "order": False, "unsafe_hash": False, "frozen": False,
+                           "match_args": True, "kw_only": False}
+
+
 def dc_args(d: Node) -> str:
-    # the arguments of a @dataclass(...) decorator d: "kw" for kw_only=True, "" for none (or
-    # kw_only=False), "!" and the error for any other
-    r = ""
+    # the arguments of a @dataclass(...) decorator d: the options it turns on ("kw_only",
+    # "frozen", "order", "unsafe_hash") or off ("no-init", "no-repr", "no-eq", "no-match_args"),
+    # each a word; "!" and the error for any other
+    on: dict[str, bool] = {}
     if len(d.kids) > 0 and d.kids[0].kind != "call":
         return "!@dataclass(...) with arguments is not supported"
     for a in d.kids[0].kids[1:] if len(d.kids) > 0 else []:
-        if a.kind != "kw" or a.s != "kw_only":
-            return "!@dataclass(" + (a.s + "=..." if a.kind == "kw" else "...") + ") is not supported: of its arguments, only kw_only= is"
+        if a.kind != "kw" or a.s not in DCOPTS:
+            return "!@dataclass(" + (a.s + "=..." if a.kind == "kw" else "...") + ") is not supported: its supported arguments are " + ", ".join([k + "=" for k in DCOPTS])
         if a.kids[0].kind != "True" and a.kids[0].kind != "False":
-            return "!@dataclass(kw_only=...) needs True or False"
-        r = "kw" if a.kids[0].kind == "True" else ""
-    return r
+            return f"!@dataclass({a.s}=...) needs True or False"
+        on[a.s] = a.kids[0].kind == "True"
+    r: list[str] = []
+    for k in DCOPTS:
+        if k in on and on[k] != DCOPTS[k]:
+            r.append(k if on[k] else "no-" + k)
+    return " ".join(r)
 
 
 def name_targets(t: Node) -> bool:
@@ -88,6 +100,11 @@ def name_targets(t: Node) -> bool:
                 return False
         return True
     return t.kind == "name"
+
+
+def starred_target(t: Node) -> bool:
+    # is t a tuple or list target with a starred item (a, *b = ...)
+    return t.kind == "tuple" and len([k for k in t.kids if k.kind == "starred"]) > 0
 
 
 # CPython's name for an expression in its "cannot assign to" errors (_PyPegen_get_expr_name)
@@ -103,7 +120,7 @@ EXPRNAMES: dict[str, str] = {
 
 
 def expr_name(n: Node) -> str:
-    if n.kind == "listcomp" or n.kind == "nestedcomp" or n.kind == "asynccomp":
+    if n.kind == "listcomp" or n.kind == "asynccomp":
         return "generator expression" if n.s == "gen" else "list comprehension"
     return EXPRNAMES.get(n.kind, "expression")
 
@@ -152,6 +169,13 @@ def names_in(t: Node, out: list[str]) -> None:
         for k in t.kids:
             names_in(k, out)
 
+def comp_names(c: Node, out: list[str]) -> None:
+    # the names comprehension c binds, its own variables: those of its for clauses' targets
+    names_in(c.kids[1], out)
+    for x in c.kids[3:]:
+        if x.kind == "compfor":
+            names_in(x.kids[0], out)
+
 def has_kind(n: Node, kind: str) -> bool:
     # does n hold a node of kind (outside the functions, classes and lambdas it defines)
     if n.kind == kind:
@@ -173,5 +197,21 @@ def has_value_return(n: Node) -> bool:
         return False
     for k in n.kids:
         if has_value_return(k):
+            return True
+    return False
+
+
+def other_return(n: Node) -> bool:
+    # does n return a value other than iter(x) or reversed(x) (outside the functions, classes and
+    # lambdas it defines): an __iter__ annotated -> Iterator[T] that does returns its iterator
+    # object, as an unannotated one does, rather than the list iter(x) steps through, or the new
+    # list of reversed(x)'s items (Gen.iter_ret)
+    if n.kind == "return":
+        e = n.kids[0] if len(n.kids) > 0 else n
+        return e.kind != "return" and e.kind != "None" and not (e.kind == "call" and e.kids[0].kind == "name" and (e.kids[0].s == "iter" or e.kids[0].s == "reversed") and len(e.kids) == 2)
+    if n.kind in ["def", "class", "subclass", "lambda"]:
+        return False
+    for k in n.kids:
+        if other_return(k):
             return True
     return False

@@ -9,20 +9,12 @@
 # deviation): the loops run where their values fit, as each says (factorial(n) for n up to 20,
 # perm(n, k) and comb(n, k) where they fit, which the added fits_perm() and a Pascal's triangle
 # with overflow checks decide). assertIs(type(s), int) is isinstance(s, int) (type() is not
-# supported), and testIsqrt's comprehension of two for clauses is two loops (multi-clause
-# comprehensions are not supported).
+# supported), and the loops over bool pairs (n, k) are written out.
 # EXCLUDED upstream cases:
 # - testFactorial's i from 21 to 999 and -10**100; testGcd's and test_lcm's operands of 100 to
 #   230 bits (1216342683557601535506311712, x * c and the like); testIsqrt's 2**e + i for e from
 #   63 to 199, 3**9999 and 10**5001; testPerm's and testComb's n of 2**1000 and -2**1000, and
 #   their loops past the n and k whose results fit in 64 bits
-# - testGcd's gcd(), gcd(120), gcd(-120), gcd(120, 84, 102) and gcd(120, 1, 84), and test_lcm's
-#   lcm(), lcm(120), lcm(-120), lcm(120, 84, 102) and lcm(120, 0, 84): math.gcd() and math.lcm()
-#   of other than two arguments are rejected at compile time ("unsupported call
-#   math.gcd(float)", which also names an int argument float; bug, NEW)
-# - testPerm's one-argument form, perm(n) and perm(n, None), and testPerm's, testComb's and
-#   testIsqrt's bool arguments (perm(True, True), comb(True, False), isqrt(True)): rejected at
-#   compile time, "unsupported call math.perm(float,float)" (the same bug, NEW)
 # - the TypeErrors of non-integer and missing arguments (testFactorialNonIntegers,
 #   math.gcd(120.0), perm(10, 1.0), comb("10", 1), isqrt(3.5), ...): compile-time errors here,
 #   worded "unsupported call ..." (as #277's), and decimal.Decimal; testFactorialHugeInputs
@@ -154,6 +146,12 @@ def testGcd() -> None:
     check("gcd(120, 84)", gcd(120, 84), 12)
     check("gcd(84, -120)", gcd(84, -120), 12)
 
+    check("gcd()", gcd(), 0)
+    check("gcd(120)", gcd(120), 120)
+    check("gcd(-120)", gcd(-120), 120)
+    check("gcd(120, 84, 102)", gcd(120, 84, 102), 6)
+    check("gcd(120, 1, 84)", gcd(120, 1, 84), 1)
+
 
 def test_lcm() -> None:
     lcm = math.lcm
@@ -168,16 +166,20 @@ def test_lcm() -> None:
     check("lcm(120, 84)", lcm(120, 84), 840)
     check("lcm(84, -120)", lcm(84, -120), 840)
 
+    check("lcm()", lcm(), 1)
+    check("lcm(120)", lcm(120), 120)
+    check("lcm(-120)", lcm(-120), 120)
+    check("lcm(120, 84, 102)", lcm(120, 84, 102), 14280)
+    check("lcm(120, 0, 84)", lcm(120, 0, 84), 0)
+
 
 def testIsqrt() -> None:
     # Test a variety of inputs, large and small.
     test_values = (
         list(range(1000))
         + list(range(10**6 - 1000, 10**6 + 1000))
-    )
-    for e in range(60, 63):  # range(60, 200) upstream, and 3**9999, 10**5001
-        for i in range(-40, 40):
-            test_values.append(2**e + i)
+        + [2**e + i for e in range(60, 63) for i in range(-40, 40)]  # range(60, 200) upstream
+    )  # (and 3**9999, 10**5001 upstream)
 
     n = 0
     for value in test_values:
@@ -196,6 +198,15 @@ def testIsqrt() -> None:
         print("isqrt(-1) ValueError:", e)
     else:
         assert False, "expected ValueError"
+
+    # Integer-like things
+    s = math.isqrt(True)
+    assert isinstance(s, int)
+    check("isqrt(True)", s, 1)
+
+    s = math.isqrt(False)
+    assert isinstance(s, int)
+    check("isqrt(False)", s, 0)
 
 
 def testPerm() -> None:
@@ -226,6 +237,12 @@ def testPerm() -> None:
             assert perm(n, n) == factorial(n)
     print("testPerm: perm(n, 0), perm(n, 1) for n in range(1, 100); perm(20, 20) =", perm(20, 20))
 
+    # Test one argument form
+    for n in range(20):
+        assert perm(n) == factorial(n)
+        assert perm(n, None) == factorial(n)
+    print("testPerm: perm(n) == perm(n, None) == factorial(n) for n in range(20); perm(19) =", perm(19))
+
     # Raises Value error if not k or n are negative numbers
     try:
         perm(-1, 1)
@@ -242,6 +259,14 @@ def testPerm() -> None:
 
     # Returns zero if k is greater than n
     check("perm(1, 2)", perm(1, 2), 0)
+
+    # for n, k in (True, True), (True, False), (False, False):
+    check("perm(True, True)", perm(True, True), 1)
+    assert isinstance(perm(True, True), int)
+    check("perm(True, False)", perm(True, False), 1)
+    assert isinstance(perm(True, False), int)
+    check("perm(False, False)", perm(False, False), 1)
+    assert isinstance(perm(False, False), int)
 
 
 def testComb() -> None:
@@ -300,6 +325,14 @@ def testComb() -> None:
 
     # Returns zero if k is greater than n
     check("comb(1, 2)", comb(1, 2), 0)
+
+    # for n, k in (True, True), (True, False), (False, False):
+    check("comb(True, True)", comb(True, True), 1)
+    assert isinstance(comb(True, True), int)
+    check("comb(True, False)", comb(True, False), 1)
+    assert isinstance(comb(True, False), int)
+    check("comb(False, False)", comb(False, False), 1)
+    assert isinstance(comb(False, False), int)
 
 
 testFactorial()

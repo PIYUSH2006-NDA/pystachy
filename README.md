@@ -109,6 +109,7 @@ Early AOT benchmark results against CPython, rounded for readability:
 | Selected compute workloads | Up to about **70× faster** |
 | `fnmatch` event router, with only compiled-pattern caching | **About the same speed** in the paired launch check |
 | [Event router, with each event name's classification cached](examples/route/README.md#current-paired-snapshot) | About **1.9× faster** in the paired launch check |
+| [18 adapted pyperformance benchmarks](docs/pyperformance.md) | **1.5× to 84× faster** for 14; the 3 regex benchmarks **2.5–2.7× slower** |
 
 Both router comparisons use the same caching policy for CPython and Pystachy.
 The `fnmatch` variant still caches compiled patterns; caching classifications lets repeated
@@ -128,7 +129,7 @@ closures, decorators and limited generic typing. Unannotated functions can be sp
 for their argument types.
 
 Some standard-library modules compile unchanged. Others, including `fnmatch`, `textwrap`,
-`difflib` and `statistics`, use localized adaptations marked `# Pystachy port:`.
+`difflib`, `statistics` and `random`, use localized adaptations marked `# Pystachy port:`.
 The adapted code remains valid Python and can be diffed against upstream.
 The library also includes `re` and `functools.cache` / `lru_cache` implementations in the
 typed subset. See [library coverage and port notes](lib/README.md) for each module's scope.

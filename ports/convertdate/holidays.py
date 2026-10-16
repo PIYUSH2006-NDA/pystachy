@@ -93,14 +93,10 @@ def easter(year, church=None):
         return _easter_western(year)
 
     if church == "orthodox":
-        # Pystachy port: the tuple unpacked, as there are no star arguments in calls yet (M3, #8)
-        jy, jm, jd = _easter_julian(year)
-        return julian.to_gregorian(jy, jm, jd)
+        return julian.to_gregorian(*_easter_julian(year))
 
     if church == "eastern":
-        # Pystachy port: the tuple unpacked, as there are no star arguments in calls yet (M3, #8)
-        jy, jm, jd = _easter_julian(year, mode="eastern")
-        return julian.to_gregorian(jy, jm, jd)
+        return julian.to_gregorian(*_easter_julian(year, mode="eastern"))
 
     raise ValueError("Unknown value for 'church'")
 

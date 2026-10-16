@@ -27,7 +27,6 @@ print(identifier, sqids.decode(identifier))
 
 - Encoded values round-trip within 64 bits. Decoding arbitrary oversized/noncanonical IDs can overflow, even if upstream returns a small value after leading zero digits.
 - Non-ASCII alphabet characters are rejected. Blocklist case normalization is ASCII-only, so Unicode characters such as Kelvin sign can change filtering results.
-- List-backed custom blocklists may retain duplicates, which do not change generated IDs.
 
 <a id="tests"></a>
 

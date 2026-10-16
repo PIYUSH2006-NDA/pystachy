@@ -1,0 +1,26 @@
+1-?-p
+used 1 ['a'] True False
+ValueError unused: b
+used 2 ['a', 'b'] True False
+used 2 ['0', '1'] False True
+121 xyx
+convert_field 'ab' None
+format_field 'ab' ''
+convert_field 'ab' 'u'
+format_field 'AB' ''
+convert_field 'cd' None
+convert_field '4' None
+format_field '4' ''
+format_field 'cd' '>4'
+AB AB   CD!
+convert_field 'x' 'z'
+ValueError Unknown conversion specifier z
+parse '{0:{1}}|{n!r}'
+get_value 0
+parse '{1}'
+get_value 1
+parse ''
+get_value 'n'
+parse ''
+  é|'m'
+[exit 0]

@@ -21,6 +21,11 @@ def lower_data(d: Data) -> str:
         n = len(d.text) + 1
         # Bytes are immutable; runtime.c's Str dictionary hash cache is writable.
         return f'{d.name} = private unnamed_addr global {{i64, i64, [{n} x i8]}} {{i64 {n - 1}, i64 0, [{n} x i8] c"{llstr(d.text)}\\00"}}, align 8'
+    if d.kind == "tuple":
+        # Fixed tuples use one i64 slot per item. These literals refer only to static strings,
+        # so no heap allocation or collector root is needed; keep their address significant.
+        slots = ["i64 ptrtoint (ptr " + v.v + " to i64)" if v.t == "str" else "i64 " + v.v for v in d.items]
+        return f"{d.name} = private constant [{len(slots)} x i64] [{', '.join(slots)}], align 8"
     if d.kind == "callable" or d.kind == "exception":
         return f"{d.name} = private constant {{{', '.join(['ptr' for _ in d.refs])}}} {{{', '.join(['ptr ' + x for x in d.refs])}}}"
     fail(f"internal error: no LLVM lowering for module data {d.kind}", 0)
@@ -181,13 +186,16 @@ def gen_pyext(self) -> list[str]:
     return o
 
 def gen_dispatch(self, op: str) -> None:
-    # pys_obj_<op>(class id, [op code,] a, b), called by the runtime for "O<id>" descriptors
+    # pys_obj_<op>(class id, [op code,] a, b), called by the runtime for "O<id>" descriptors;
+    # pys_obj_eq(-1 - id, a, 0) is the hash of a, for "H<id>" (hcls: hash_helper)
     r = "ptr" if op == "repr" else "i64"
+    hs = [c for c in self.hcls] if op == "eq" else []
     self.out.append(f"define {r} @pys_obj_{op}(i64 %c, {'i64 %op, ' if op == 'cmp' else ''}i64 %a, i64 %b) {{")
     self.out.append("entry:")
     self.out.append("  %pa = inttoptr i64 %a to ptr")
     self.out.append("  %pb = inttoptr i64 %b to ptr")
-    self.out.append(f"  switch i64 %c, label %none [{' '.join([f'i64 {self.ocls[c]}, label %k{self.ocls[c]}' for c in self.ocls])}]")
+    cases = [f"i64 {self.ocls[c]}, label %k{self.ocls[c]}" for c in self.ocls] + [f"i64 {-1 - self.ocls[c]}, label %h{self.ocls[c]}" for c in hs]
+    self.out.append(f"  switch i64 %c, label %none [{' '.join(cases)}]")
     for c in self.ocls:
         i = self.ocls[c]
         self.out.append(f"k{i}:")
@@ -198,6 +206,11 @@ def gen_dispatch(self, op: str) -> None:
             self.out.append(f"  %r{i} = call i1 @o.{op}.{c}({'i64 %op, ' if op == 'cmp' else ''}ptr %pa, ptr %pb)")
             self.out.append(f"  %z{i} = zext i1 %r{i} to i64")
             self.out.append(f"  ret i64 %z{i}")
+    for c in hs:
+        i = self.ocls[c]
+        self.out.append(f"h{i}:")
+        self.out.append(f"  %x{i} = call i64 @o.hash.{c}(ptr %pa)")
+        self.out.append(f"  ret i64 %x{i}")
     self.out.append("none:")
     self.out.append("  unreachable")
     self.out.append("}")

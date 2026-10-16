@@ -17,10 +17,10 @@ adaptations, deviations and tests. The [language guide](language.md) explains th
 
 | Approach | Modules and useful APIs |
 |---|---|
-| Unchanged CPython sources | `bisect`, `colorsys`, selected `operator` functions, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this` |
-| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template`, selected `statistics` operations, `urllib.parse`, `html`, `keyword`, `shlex` and the incremental `html.parser` probe |
+| Unchanged CPython sources | `bisect`, `colorsys`, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this` |
+| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template` / `Formatter`, selected `operator` functions and getters, selected `statistics` operations, `random`, `urllib.parse`, `html`, `keyword`, `shlex`, `datetime` (without the local time zone) and the incremental `html.parser` probe |
 | Larger port | `re`: CPython's Python parser/compiler plus a matcher adapted from its C engine |
-| Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key`, `collections.deque`, `io.StringIO`, `csv` |
+| Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key` / `partial`, `collections` `deque` / `defaultdict` / `OrderedDict` / `Counter`, `io.StringIO`, `csv`, `_string`'s format parsers, and `_pyrandom`, the Mersenne Twister under `random` |
 
 The library reference is the authority for each module's limits. For example, `difflib`
 supports matching strings and lists of strings, while its generator-based diff APIs do not
@@ -28,7 +28,8 @@ compile. `textwrap` supports its public operations, but widths count UTF-8 bytes
 
 Selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile` are compiler builtins.
 `typing`, `collections.abc` and `dataclasses` also have compiler support; this does not provide
-the full dynamic `collections` package; its shipped subset provides `deque` only.
+the full dynamic `collections` package; its shipped subset provides `deque`, `defaultdict`,
+`OrderedDict` and `Counter`, without `namedtuple`.
 See the [builtin module table](language/modules.md#builtin-modules-and-files).
 
 <a id="1-the-changes"></a>

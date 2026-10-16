@@ -44,10 +44,6 @@
 #     fixture's first two lines), and the UTF-8 BOM before #coding: utf8 (a BOM must start the
 #     file, where a fixture's first line goes)
 #   - case {**rest, "key": value} (match statements are rejected, documented)
-#   - f'{6 0}': "f-string: invalid syntax", where CPython says "invalid syntax. Perhaps you forgot
-#     a comma?"; the three f-strings over several lines with an error in a replacement field
-#     ((123_a) twice, 6 then 0=): reported at the f-string's first line, where CPython reports
-#     the error's line, and the last worded "f-string: expecting '}'" (bugs, NEW)
 #   - test_error_offset_continuation_characters' "\\\n"(1 for c in I,\\\n\\: "Generator
 #     expression must be parenthesized", where CPython reports "'(' was never closed" (bug, NEW)
 # - testMemoryErrorBigSource (bigmemtest), testSettingException and test_MemoryError (_testcapi),

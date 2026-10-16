@@ -1,0 +1,85 @@
+stamp
+Shape.__post_init__ blob
+Shape.__post_init__ tri
+stamp
+Shape.__post_init__ sq
+Square.__post_init__ 2.5
+Shape(name='blob', tags=['new'], sides=0, seen=1)
+Polygon(name='tri', tags=['a'], sides=3, seen=1, color='red', filled=True)
+Square(name='sq', tags=['new'], sides=4, seen=1, color='black', filled=False, size=2.5)
+blob with 0 sides tri with 3 sides sq with 4 sides 1
+Shape.__post_init__ tri
+stamp
+Shape.__post_init__ tri
+stamp
+Shape.__post_init__ sq
+Square.__post_init__ 2.5
+True False True
+Shape.__post_init__ tri
+Shape(name='blob', tags=['new'], sides=0, seen=1) False True False blob with 0 sides
+Polygon(name='tri', tags=['a'], sides=3, seen=1, color='red', filled=True) True False True tri with 3 sides
+Square(name='sq', tags=['new'], sides=4, seen=1, color='black', filled=False, size=2.5) False True False sq with 4 sides
+Polygon(name='tri', tags=['a'], sides=3, seen=1, color='red', filled=True) True False True tri with 3 sides
+stamp
+Shape.__post_init__ x
+stamp
+Shape.__post_init__ x
+stamp
+Shape.__post_init__ x
+stamp
+Shape.__post_init__ x
+Square.__post_init__ 1.0
+False True
+stamp
+Shape.__post_init__ b
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 3.0
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 2.0
+[Square(name='a', tags=['new'], sides=4, seen=1, color='black', filled=False, size=2.0), Square(name='a', tags=['new'], sides=4, seen=1, color='black', filled=False, size=3.0), Square(name='b', tags=['new'], sides=4, seen=1, color='black', filled=False, size=1.0)]
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ b
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 1.0
+True True
+stamp
+Shape.__post_init__ a
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ a
+TypeError '<' not supported between instances of 'Square' and 'Polygon'
+stamp
+Shape.__post_init__ z
+Square.__post_init__ 1.0
+stamp
+Shape.__post_init__ z
+TypeError '<=' not supported between instances of 'Square' and 'Polygon'
+Shape.__post_init__ copy
+Shape(name='copy', tags=['new'], sides=0, seen=1) False False False
+Shape.__post_init__ copy
+Polygon(name='copy', tags=['a'], sides=3, seen=1, color='red', filled=True) True False False
+Shape.__post_init__ copy
+Square.__post_init__ 2.5
+Square(name='copy', tags=['new'], sides=4, seen=1, color='black', filled=False, size=2.5) True True False
+Shape.__post_init__ copy
+Polygon(name='copy', tags=['a'], sides=3, seen=1, color='red', filled=True) True False False
+Shape.__post_init__ sq
+Square.__post_init__ 9.0
+Square(name='sq', tags=['new'], sides=4, seen=1, color='black', filled=True, size=9.0)
+Point3(x=1, y=7, z=0) Point3(x=1, y=2, z=3) True False
+True False Labeled(x=5, y=7, z=1, label='p')
+True True
+frozen cannot assign to field 'kind'
+Version(kind='app', major=1, minor=2) True [Version(kind='a', major=1, minor=5), Version(kind='a', major=2, minor=0), Version(kind='b', major=1, minor=0)]
+[exit 0]

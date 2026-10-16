@@ -10,7 +10,7 @@ class EnglishStemmer(BaseStemmer):
     Generated from english.sbl by Snowball 3.1.1 - https://snowballstem.org/
     '''
 
-    g_aeo = ["a", "e", "o"]  # Pystachy port: a list, as the sets are
+    g_aeo = "aeo"
     g_v = ["a", "e", "i", "o", "u", "y"]  # Pystachy port: a list, not a set (#12)
 
     g_v_WXY = ["Y", "a", "e", "i", "o", "u", "w", "x", "y"]  # Pystachy port: a list, not a set (#12)
@@ -21,7 +21,7 @@ class EnglishStemmer(BaseStemmer):
     I_p2 = 0
     I_p1 = 0
 
-    def __r_prelude(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_prelude(self):
         self.B_Y_found = False
         v_1 = self.cursor
         try:
@@ -76,7 +76,7 @@ class EnglishStemmer(BaseStemmer):
         self.cursor = v_3
         return True
 
-    def __r_mark_regions(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_mark_regions(self):
         self.I_p1 = self.limit
         self.I_p2 = self.limit
         v_1 = self.cursor
@@ -108,7 +108,7 @@ class EnglishStemmer(BaseStemmer):
         self.cursor = v_1
         return True
 
-    def __r_shortv(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_shortv(self):
         while True:
             v_1 = self.limit - self.cursor
             try:
@@ -136,13 +136,13 @@ class EnglishStemmer(BaseStemmer):
             break
         return True
 
-    def __r_R1(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_R1(self):
         return self.I_p1 <= self.cursor
 
-    def __r_R2(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_R2(self):
         return self.I_p2 <= self.cursor
 
-    def __r_Step_1a(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1a(self):
         v_1 = self.limit - self.cursor
         try:
             self.ket = self.cursor
@@ -182,7 +182,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_Step_1b(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1b(self):
         self.ket = self.cursor
         among_var = self.find_among_b(EnglishStemmer.a_5)
         self.bra = self.cursor
@@ -271,7 +271,7 @@ class EnglishStemmer(BaseStemmer):
             break
         return True
 
-    def __r_Step_1c(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1c(self):
         self.ket = self.cursor
         while True:
             try:
@@ -292,7 +292,7 @@ class EnglishStemmer(BaseStemmer):
         self.slice_from("i")
         return True
 
-    def __r_Step_2(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_2(self):
         self.ket = self.cursor
         among_var = self.find_among_b(EnglishStemmer.a_7)
         if among_var == 0:
@@ -339,7 +339,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_Step_3(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_3(self):
         self.ket = self.cursor
         among_var = self.find_among_b(EnglishStemmer.a_8)
         if among_var == 0:
@@ -363,7 +363,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_Step_4(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_4(self):
         self.ket = self.cursor
         among_var = self.find_among_b(EnglishStemmer.a_9)
         if among_var == 0:
@@ -388,7 +388,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_Step_5(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_5(self):
         self.ket = self.cursor
         among_var = self.find_among_b(EnglishStemmer.a_10)
         if among_var == 0:
@@ -421,7 +421,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_exception1(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_exception1(self):
         self.bra = self.cursor
         among_var = self.find_among(EnglishStemmer.a_11)
         if among_var == 0:
@@ -433,7 +433,7 @@ class EnglishStemmer(BaseStemmer):
             self.slice_from(EnglishStemmer.as_11[among_var - 1])
         return True
 
-    def __r_postlude(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_postlude(self):
         if not self.B_Y_found:
             return False
         while True:
@@ -461,7 +461,7 @@ class EnglishStemmer(BaseStemmer):
             break
         return True
 
-    def _stem(self) -> bool:  # Pystachy port: -> bool (#7)
+    def _stem(self):
         while True:
             v_1 = self.cursor
             try:

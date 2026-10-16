@@ -1,0 +1,7 @@
+Derived(x=1, y=2) True False
+AttributeError 'Derived' object has no attribute 'extra'
+Base(x=3) 30 True
+Own.__init__ zoë
+Own.__init__ ü n ï
+Own(name='ü n ï!') 2 Derived(x=1, y=5)
+[exit 0]

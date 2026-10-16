@@ -1,9 +1,9 @@
 """Statements component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
-from src.pystachy_compiler.analysis import builtin_has
+from src.pystachy_compiler.analysis import builtin_has, local_names
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, Val
+from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, StopCatch, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     ABCS,
@@ -19,11 +19,10 @@ from src.pystachy_compiler.specs import (
     TYPING,
     UNSUPPORTED,
 )
-from src.pystachy_compiler.syntax import Node, mk, names_in
+from src.pystachy_compiler.syntax import Node, mk, names_in, starred_target
 from src.pystachy_compiler.utils import (
     bool_for_int,
     elem,
-    elem_problem,
     empty_result_type,
     folds,
     is_const,
@@ -54,6 +53,25 @@ def gen_stmts(self, body: list[Node]) -> None:
             return
         self.stmt(s)
 
+def gen_callable_guard(self, st: Node, f: FnInfo) -> str:
+    # if not callable(p): ..., ending in raise or return, with no else, a statement of f's body
+    # for its parameter p, which the body never assigns: p, which code after it knows is not
+    # None (callable(None) is false); else ""
+    if st.kind != "if" or len(st.kids[2].kids) > 0 or len(st.kids[1].kids) == 0 or st.kids[1].kids[-1].kind not in ["raise", "return"]:
+        return ""
+    t = st.kids[0]
+    if t.kind != "unary" or t.s != "not" or t.kids[0].kind != "call" or len(t.kids[0].kids) != 2:
+        return ""
+    c = t.kids[0]
+    if c.kids[0].kind != "name" or c.kids[0].s != "callable" or c.kids[1].kind != "name" or c.kids[1].s not in f.params:
+        return ""
+    body = f.node.kids[2].kids if f.node.kind == "def" else []
+    asg: dict[str, bool] = {}
+    local_names(body, asg)
+    if len([x for x in body if x is st]) == 0 or c.kids[1].s in asg or "callable" in f.params or "callable" in asg or "callable" in self.funcs or "callable" in self.classes or "callable" in self.mvars:
+        return ""
+    return c.kids[1].s
+
 def gen_obj_helpers(self, c: str) -> None:
     # @o.eq/cmp/repr.<class>: what the runtime's generic ==, ordering and repr do with objects
     # of class c. They are compiled leniently: an operation the class does not support
@@ -79,6 +97,20 @@ def gen_obj_helpers(self, c: str) -> None:
         self.function(f, bodies[i])
     self.lenient = False
 
+def gen_hash_helper(self, c: str) -> None:
+    # @o.hash.<class>: the hash of an object of class c, which runtime.c takes for a key whose
+    # class hashes it (H<id>: obj_hash), through the program's pys_obj_eq(-1 - id, a, 0); compiled
+    # leniently, as obj_helpers' are
+    line = self.classes[c].node.line
+    a = mk("name", "a", line, [])
+    f = FnInfo("hash", f"@o.hash.{c}", self.classes[c].node, "")
+    f.params = ["a"]
+    f.ptypes = [c]
+    f.ret = "int"
+    self.lenient = True
+    self.function(f, [mk("return", "", line, [mk("call", "", line, [mk("name", "__pys_hash", line, []), a])])])
+    self.lenient = False
+
 def gen_check_special(self, f: FnInfo) -> None:
     # the special methods Pystachy calls implicitly must have the shape it relies on; in an
     # imported module's class, a wrong one is an error where the method is called, as is a
@@ -96,8 +128,8 @@ def gen_check_special(self, f: FnInfo) -> None:
         pass  # (a template: each instance's return type is checked where it is compiled, see instance)
     elif f.name == "__bool__" and f.ret != "bool":
         f.bad = f"__bool__ should return bool, returned {tname(f.ret)}"  # (CPython's TypeError)
-    elif ret != "" and f.ret != ret and not (f.name == "__len__" and f.ret == "bool"):
-        f.bad = f"{f.name} must return {ret}"  # (a bool is an int to len())
+    elif ret != "" and f.ret != ret and not ((f.name == "__len__" or f.name == "__hash__") and f.ret == "bool"):
+        f.bad = f"{f.name} must return {ret}"  # (a bool is an int to len() and hash())
     elif f.name == "__format__" and f.ptypes[1] != "str":
         f.bad = "__format__ takes the format spec as a str"
     if f.bad != "" and self.classes[f.cls].mod == "":
@@ -140,7 +172,7 @@ def gen_check_import(self, a: Node) -> None:
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
     elif mod == "dataclasses":
-        if x != "dataclass":
+        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace"]:
             self.err(f"dataclasses.{x} is not supported")
     elif not builtin_has(mod, x):
         self.err(f"cannot import name '{x}' from '{mod}': Pystachy's {mod} module has no '{x}'")
@@ -261,7 +293,7 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
         self.left_out(self.cnodes[ci.node.line], ci.bad)
         return
     bound: dict[str, bool] = {}
-    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann"  # (a dataclass's)
+    syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann" and ci.methods["__init__"].cls == ci.name  # (a dataclass's)
     later = ""
     for st in ci.node.kids[0].kids:
         self.line = st.line
@@ -271,8 +303,10 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
             bound[fl] = True
             t = ci.ftypes[fl]
             u = unopt(t)  # (a default of a T | None field that is not None is a T)
-            if self.is_dc(ci.name) and ci.name not in self.nts and not is_const(st.kids[2]) and (is_list(u) or is_dict(u) or self.unhashable(u) or (self.is_dc(u) and u not in self.nts)):
-                self.err(f"mutable default {u} for dataclass field '{fl}' is not allowed")
+            if self.is_dc(ci.name) and ci.name not in self.nts and not is_const(st.kids[2]) and (is_list(u) or is_dict(u) or (is_set(u) and not is_fset(u)) or self.unhashable(u)):
+                # (CPython's ValueError where it creates the class: the default's class has __hash__ = None)
+                c = u[: u.find("[")] if "[" in u else f"{self.classes[u].mod if self.classes[u].mod != '' else '__main__'}.{short(u)}"
+                self.err(f"mutable default <class '{c}'> for field {fl} is not allowed: use default_factory")
             for m in ["__set_name__", "__get__", "__set__", "__delete__"] if t in self.classes and not is_const(st.kids[2]) else []:
                 # (__set_name__ runs when CPython creates the class, __get__ too with @dataclass)
                 now = m == "__set_name__" or (m == "__get__" and self.is_dc(ci.name))
@@ -289,6 +323,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
                 ci.fglob[fl] = self.hidden(f"@d.c.{ci.name}.{fl}", self.coerce(self.expr(st.kids[2], t), t))
         elif st.kind == "def":
             f = ci.methods[st.s]
+            for k in [st.s + ".setter", st.s + ".deleter"]:
+                f = ci.methods[k] if k in ci.methods and ci.methods[k].node is st else f  # (a property's setter or deleter)
             for d in f.defaults:
                 self.no_class_names(d, bound, ci)
             bound[st.s] = True
@@ -297,7 +333,8 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
     if syn:
         init = ci.methods["__init__"]
         for j in range(1, len(init.params)):
-            init.dglob[j] = ci.fglob.get(init.params[j], "")
+            h = self.default_home(ci, init.params[j])  # (a base dataclass's field: the global of its class's default)
+            init.dglob[j] = h.fglob.get(init.params[j], "") if init.dglob[j] != "()" else "()"
     ci.bad = later if later != "" else ci.hook  # (an imported module's class: an error where the program uses it)
 
 def gen_no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> None:
@@ -309,8 +346,14 @@ def gen_no_class_names(self, e: Node, bound: dict[str, bool], ci: ClassInfo) -> 
 
 def gen_unhashable(self, t: str) -> bool:
     # a class that defines __eq__ without __hash__ has __hash__ = None in CPython (a NamedTuple
-    # has a tuple's)
-    return t in self.classes and "__eq__" in self.classes[t].methods and "__hash__" not in self.classes[t].methods and t not in self.nts
+    # has a tuple's), as has a dataclass with eq=True but for frozen=True or unsafe_hash=True,
+    # whose __hash__ @dataclass writes
+    if t not in self.classes or t in self.nts:
+        return False
+    ci = self.classes[t]
+    if self.is_dc(t) and ("unsafe_hash" in ci.dcopts or ("frozen" in ci.dcopts and "no-eq" not in ci.dcopts)):
+        return False
+    return "__eq__" in ci.methods and "__hash__" not in ci.methods
 
 def gen_while_(self, n: Node) -> None:
     l1 = self.label()
@@ -318,7 +361,7 @@ def gen_while_(self, n: Node) -> None:
     l3 = self.label()
     lp = Loop("while", l1, l2, l1, l3)
     self.fn.loops.append(lp)
-    after = self.forget(n.kids[1].kids, n.kids[1])
+    after = self.forget(n.kids[1].kids + [mk("expr", "", n.line, [n.kids[0]])], n.kids[1])  # (and what a := in its test binds)
     self.place(l1)
     self.cbr(self.cond(n.kids[0]), l2, l3)
     self.place(l2)
@@ -446,16 +489,23 @@ def gen_stmt(self, n: Node) -> None:
             self.assign(t0, self.read(val))
             self.allowq = False
             self.twin(t0.s, val.s)
-        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids):
+        elif len(n.kids) == 2 and t0.kind == "tuple" and (val.kind == "tuple" or val.kind == "list") and len(t0.kids) == len(val.kids) and not starred_target(t0) and len([x for x in val.kids if x.kind == "starred"]) == 0:
             vs: list[Val] = []
             for i in range(len(val.kids)):
                 vs.append(self.expr(val.kids[i], self.target_type(t0.kids[i])))
             for i in range(len(vs)):
                 self.assign(t0.kids[i], vs[i])
+        elif len(n.kids) == 2 and t0.kind == "slice" and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
+            self.slice_assign(t0, val)  # (xs[a:b] = range(n), = (f(x) for x in ys), ...)
+        elif len(n.kids) == 2 and t0.kind == "slice" and val.kind == "list" and len(val.kids) == 0 and self.target_type(t0) == "":
+            self.assign(t0, Val("null", "tuple[]"))  # (f()[a:b] = []: no item to type, as ())
         else:
             if t0.kind == "index" and t0.kids[0].kind == "name" and "?" in self.rtype(t0.kids[0].s) and self.empty_of(val) != "":
                 self.no_type(t0.kids[0].s)  # (d[k] = [] shows nothing of what d holds)
-            v = self.expr(val, self.target_type(t0))
+            if len(n.kids) == 2 and starred_target(t0) and (self.iterator_call(val) or self.is_mapcall(val) or (val.kind == "listcomp" and val.s == "gen")):
+                v = self.consume(val, "")  # (a, *b = range(n): UNPACK_EX takes every item first)
+            else:
+                v = self.expr(val, self.target_type(t0))
             if n.s == "local-retype":
                 self.store_name(t0.s, v, True)
             else:
@@ -510,6 +560,8 @@ def gen_stmt(self, n: Node) -> None:
             self.narrowed = yes
         elif ygo and ngo and len(yes) + len(self.narrowed) > 0:
             self.narrowed = meet([yes, self.narrowed])
+        if not ygo and self.callable_guard(n, self.curfn) != "":
+            self.curfn.nnp[self.callable_guard(n, self.curfn)] = True  # (its isinstance() tests are static)
     elif k == "while" and self.static(n.kids[0]) == 0:
         # a loop whose test is false from the start (while x: with x None): only its else block runs
         self.static_reads(n.kids[0])
@@ -641,7 +693,12 @@ def gen_stmt(self, n: Node) -> None:
         l2 = self.label()
         self.cbr(self.cond(n.kids[0]), l2, l1)
         self.place(l1)
+        pre = self.narrowed
+        self.narrowed = dict(pre)  # (what a := in the message binds is not bound where the assertion holds)
+        self.branch += 1
         self.assert_fails(n)
+        self.branch -= 1
+        self.narrowed = pre
         self.place(l2)
         self.narrow_by(n.kids[0], True)
     elif k == "raise":
@@ -653,6 +710,19 @@ def gen_stmt(self, n: Node) -> None:
             if dt.kind == "name":
                 self.del_name(dt)
                 continue
+            if dt.kind == "attr" and self.dotted(dt) == "" and not (dt.kids[0].kind == "name" and dt.kids[0].s in self.classes and dt.kids[0].s not in self.ltype):
+                o = self.expr(dt.kids[0], "")
+                if self.is_prop(o.t, dt.s):
+                    self.prop_store(o, dt.s, None)  # (del o.x of a property x: its deleter)
+                    continue
+                if o.t in self.classes and dt.s in self.classes[o.t].ftypes and self.frozen_store(o, dt.s, True):
+                    continue
+                self.err("del of an attribute is only supported for a property (which calls its deleter)")
+            if dt.kind == "slice":
+                bnd: list[str] = []
+                o = self.slice_target(dt, bnd, "TypeError: 'NoneType' object does not support item deletion")
+                self.rt("pys_list_del_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {bnd[2]}"])
+                continue
             o = self.expr(dt.kids[0], "") if dt.kind == "index" else Val("", "")
             nodel = "TypeError: 'NoneType' object does not support item deletion"
             if is_list(unopt(o.t)):
@@ -660,7 +730,9 @@ def gen_stmt(self, n: Node) -> None:
                 self.rt("pys_list_del", "void", [f"ptr {self.unwrap(o, nodel).v}", f"i64 {ix.v}"])
             elif is_dict(unopt(o.t)):
                 # del d[k] looks k up as d[k] does (dkey): a key that may be None raises
-                # KeyError: None (nonekey), and a bool deletes the int key it equals
+                # KeyError: None (nonekey), and a bool deletes the int key it equals. A key
+                # hashed by its class is hashed also where d is empty (pys_dict_del, as CPython's
+                # del, unlike its d.pop(k)); other keys' hashes run no code
                 kt = targs(unopt(o.t))[0]
                 kval = self.expr(dt.kids[1], kt)
                 kx = self.dkey(kval, kt)
@@ -668,7 +740,8 @@ def gen_stmt(self, n: Node) -> None:
                 o = self.unwrap(o, nodel)
                 if bool_for_int(kval.t, kt):
                     self.bool_find(o.v, kval, key)
-                self.nonekey(kx, "", "pys_dict_pop", [f"ptr {o.v}", "i64 " + key])
+                fx = self.key_fx(kt)
+                self.nonekey(kx, "", "pys_dict_del" if "H" in fx else "pys_dict_pop", [f"ptr {o.v}", "i64 " + key], fx)
             elif o.t in self.classes:
                 # del o[k]: o.__delitem__(k)
                 ik = self.expr(dt.kids[1], self.argtype(o.t, "__delitem__", 1, f"'{tname(o.t)}' object doesn't support item deletion"))
@@ -715,16 +788,57 @@ def gen_stmt(self, n: Node) -> None:
         self.mstore('bool', 'true' if n.s == 'any' else 'false', self.lcs[-1])
         self.br(self.loops[-1].exit)
         self.place(go)
+    elif k == "compfor":
+        # a comprehension's later for clause (gen_listcomp): a loop whose target is the
+        # comprehension's. The names in kids[3] keep the variable an earlier clause binds them in
+        # (and so its type: see store_name), the others are new ones. Where any() or all() (s) has
+        # decided in it, the loop around it ends too
+        own: list[str] = []
+        names_in(n.kids[0], own)
+        names: list[str] = []
+        for tn in own:
+            if tn not in n.kids[3].s.split() or tn not in self.ltype:
+                names.append(tn)
+        share = self.compshare
+        self.compshare = {}
+        for tn in share:
+            if tn not in names:
+                self.compshare[tn] = share[tn]
+        for tn in own:
+            if tn not in names:
+                self.compshare[tn] = self.ltype[tn]
+        self.for_(n, names)
+        self.compshare = share
+        if n.s != "" and not self.term:
+            go = self.label()
+            done = self.mload('bool', self.lcs[-1])
+            if n.s == "any":
+                self.cbr(done, self.loops[-1].exit, go)
+            else:
+                self.cbr(done, go, self.loops[-1].exit)
+            self.place(go)
+    elif k == "lcappend" and n.s == "dict":
+        # {k: v for ...}: the key, then the value (as CPython evaluates them since 3.8), stored as
+        # d[k] = v stores them; the first ones give the dict its type, unless one is expected
+        kv = targs(self.lct[-1]) if self.lct[-1] != "" else ["", ""]
+        kx = self.expr(n.kids[0].kids[0], kv[0], resultsoft=self.lcsoft[-1])
+        vx = self.expr(n.kids[0].kids[1], kv[1], resultsoft=self.lcsoft[-1])
+        if self.lct[-1] == "":
+            kv = [self.none_items(kx.t) if is_tuple(kx.t) else kx.t, vx.t]
+            if self.key_problem(kv[0]) != "":
+                self.err(self.key_problem(kv[0]))
+            self.lct[-1] = self.ctype("dict", kv)
+        self.rt("pys_dict_set", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_key(kx, kv[0])), "i64 " + self.to_slot(self.coerce(vx, kv[1]))], self.key_fx(kv[0]))
     elif k == "lcappend":
         et = self.lct[-1]
         v = self.expr(n.kids[0], et, resultsoft=self.lcsoft[-1])
         if et == "":
             self.lct[-1] = self.none_items(v.t) if n.s == "set" and is_tuple(v.t) else v.t
             et = self.lct[-1]
-            if n.s == "set" and elem_problem(et) != "":
-                self.err(elem_problem(et))
+            if n.s == "set" and self.elem_problem(et) != "":
+                self.err(self.elem_problem(et))
         if n.s == "set":
-            self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))])
+            self.rt("pys_set_add", "void", [f"ptr {self.lcs[-1]}", "i64 " + self.to_slot(self.store_elem(v, et))], self.key_fx(et))
         elif n.s == "discard":
             self.sdiscard(f"ptr {self.lcs[-1]}", v, et)
         else:
@@ -848,7 +962,7 @@ def gen_augassign(self, n: Node) -> None:
         if not is_set(v.t):
             self.err(f"unsupported operand type(s) for |=: 'set' and '{tname(v.t)}'")
         self.refine(t.s, self.ctype("set", [selem(v.t)]))
-        self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"])
+        self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"], self.key_fx(selem(self.qtype(t.s))))
         self.store_name(t.s, Val(cur.v, self.qtype(t.s)))
     elif t.kind == "name":
         cur = self.read(t)
@@ -861,6 +975,10 @@ def gen_augassign(self, n: Node) -> None:
         self.class_store(ci, t.s, self.inplace(op, self.class_attr(t.kids[0], t.s), n.kids[1]))
     elif t.kind == "attr":
         o = self.expr(t.kids[0], "")
+        if self.is_prop(o.t, t.s):
+            # o.x op= v of a property x: its getter, then its setter
+            self.prop_store(o, t.s, self.inplace(op, self.method_value(o, t.s), n.kids[1]))
+            return
         p = self.field(o, t.s, False)
         self.frozen(o.t, t.s)
         cur = self.getfield(o, p, t.s)
@@ -869,7 +987,18 @@ def gen_augassign(self, n: Node) -> None:
             self.err(f"field '{t.s}' is outside __slots__ of '{short(ci.name)}'")
         if t.s == "__slots__" and t.s not in ci.fpos:
             self.err("rebinding __slots__ through an instance is not supported")
-        self.setfield(o, p, t.s, self.inplace(op, cur, n.kids[1]))
+        nv = self.inplace(op, cur, n.kids[1])
+        if not self.frozen_store(o, t.s):
+            self.setfield(o, p, t.s, nv)
+    elif t.kind == "slice":
+        # xs[a:b] op= v: the slice (a new list, which += extends and *= repeats) stored back
+        bnd: list[str] = []
+        o = self.slice_target(t, bnd, "TypeError: 'NoneType' object is not subscriptable")
+        av = [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]
+        if bnd[2] != "1":
+            av.append(f"i64 {bnd[2]}")
+        cur = Val(self.rt("pys_list_slice" if bnd[2] == "1" else "pys_list_slice_step", "ptr", av), o.t)
+        self.slice_store(o, bnd, self.inplace(op, cur, n.kids[1]))
     elif t.kind == "index":
         o = self.expr(t.kids[0], "")
         sub = "TypeError: 'NoneType' object is not subscriptable"
@@ -906,9 +1035,9 @@ def gen_augassign(self, n: Node) -> None:
                 self.guard(self.ptr_cmp('==', kx, Val('null', 'None')).v, "KeyError: None")
                 if is_sopt(kx.t):
                     key = self.to_slot(self.deref(kx))  # (an int key is the int its box holds)
-            cur = self.from_slot(self.rt("pys_dict_getitem", "i64", [f"ptr {o.v}", f"i64 {key}"]), kv[1])
+            cur = self.from_slot(self.rt("pys_dict_getitem", "i64", [f"ptr {o.v}", f"i64 {key}"], self.key_fx(kv[0])), kv[1])
             r = self.coerce(self.inplace(op, cur, n.kids[1]), kv[1])
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(r)])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(r)], self.key_fx(kv[0]))
         elif o.t in self.classes:
             # o[k] op= v: o.__setitem__(k, o.__getitem__(k) op v), k evaluated once
             ik = self.expr(t.kids[1], self.argtype(o.t, "__getitem__", 1, f"'{tname(o.t)}' object is not subscriptable"))
@@ -946,7 +1075,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             self.none_operands(op, cur, b, "+=")
             cur = Val(cur.v, unopt(cur.t))
             b = Val(b.v, unopt(b.t))
-        if is_list(b.t) and b.t != cur.t and self.wider(b.t, cur.t) == cur.t:
+        if is_list(b.t) and b.t != cur.t and self.widens_items(b.t, cur.t):
             b = Val(b.v, cur.t)  # (as extend: the items are copied)
         self.rt("pys_list_extend", "void", [f"ptr {cur.v}", f"ptr {self.coerce(b, cur.t).v}"])
         return cur
@@ -969,14 +1098,25 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             self.err(f"unsupported operand type(s) for {op}=: '{tname(cur.t)}' and '{tname(b.t)}'")
         if self.wider(selem(b.t), selem(cur.t)) != selem(cur.t):
             self.err(f"unsupported operand types for {op}=: {typestr(cur.t)} and {typestr(b.t)} (a set holds elements of one type)")
+        kx = self.key_fx(selem(cur.t)) + self.key_fx(selem(b.t))
         if op == "&":
-            self.rt("pys_set_assign", "void", [f"ptr {cur.v}", f"ptr {self.rt('pys_set_and', 'ptr', [f'ptr {cur.v}', f'ptr {b.v}'])}"])
+            self.rt("pys_set_assign", "void", [f"ptr {cur.v}", f"ptr {self.rt('pys_set_and', 'ptr', [f'ptr {cur.v}', f'ptr {b.v}'], kx)}"])
         else:
-            self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"])
+            self.rt("pys_set_update" if op == "|" else "pys_set_isub" if op == "-" else "pys_set_ixor", "void", [f"ptr {cur.v}", f"ptr {b.v}"], kx)
+        return cur
+    if is_dict(unopt(cur.t)) and op == "|":
+        # d |= x: d.update(x) (dict_ior), of a dict of d's type or a list of key/value pairs
+        if is_opt(cur.t):
+            # (None |= x: CPython's TypeError, once x is evaluated; x None is update()'s)
+            b = self.expr(rhs, self.ctype("list", [self.ctype("tuple", targs(unopt(cur.t)))]) if rhs.kind == "list" or rhs.kind == "listcomp" else unopt(cur.t))
+            self.none_operands(op, cur, b, "|=", False)
+            cur = Val(cur.v, unopt(cur.t))
+            rhs = self.vnode(b)
+        self.update(cur, [rhs])
         return cur
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:
-        b = self.expr(rhs, "")
+        b = self.expr(rhs, cur.t)  # (as for cur op rhs: c += Counter() types the empty Counter)
         self.none_operand(op + "=", cur, b)
         return self.call_fn(self.classes[cur.t].methods[im], [cur, b], [])
     return self.arith(op, cur, self.expr(rhs, cur.t), op + "=")
@@ -999,9 +1139,10 @@ def gen_none_operand(self, op: str, a: Val, b: Val) -> None:
     self.raise_("TypeError", self.select(self.isnull(b), Val(m1, "str"), Val(m2, "str")))
     self.place(lok)
 
-def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
+def gen_none_operands(self, op: str, a: Val, b: Val, shown: str, right: bool = True) -> None:
     # a op b with an optional operand that is None: CPython's TypeError, which names the other
-    # operand's run-time type, or for str + None and list + None its own message
+    # operand's run-time type, or for str + None and list + None its own message (not right:
+    # only a is tested, as b None is what the operation itself raises for)
     sh = shown if shown != "" else "** or pow()" if op == "**" else op
     x = unopt(a.t)
     y = unopt(b.t)
@@ -1016,7 +1157,7 @@ def gen_none_operands(self, op: str, a: Val, b: Val, shown: str) -> None:
         self.place(lerr)
         self.raise_("TypeError", self.select(self.ptr_cmp('==', b, Val('null', 'None')).v, Val(m1, "str"), Val(m2, "str")) if is_opt(b.t) else m2)
         self.place(lok)
-    if is_opt(b.t):
+    if is_opt(b.t) and right:
         msg = f"unsupported operand type(s) for {sh}: '{tname(x)}' and 'NoneType'"
         if op == "+" and x == y and (x == "str" or is_list(x)):
             msg = "'NoneType' object is not iterable" if sh == "+=" and is_list(x) else f'can only concatenate {tname(x)} (not "NoneType") to {tname(x)}'
@@ -1069,6 +1210,11 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
             evs: list[Val] = []
             for a in args:
                 v = self.expr(a, "")
+                if fn == "reversed" and v.t in self.classes and v.t not in self.nts and "__reversed__" in self.classes[v.t].methods:
+                    # (CPython calls __reversed__, whose iterator the loop steps through forwards)
+                    seq = self.obj_iter(v, "TypeError: 'NoneType' object is not reversible", "", "__reversed__")
+                    self.for_seq(tgt, [seq], "", body, "0", hide, arg)
+                    return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts:
                     # (CPython calls __reversed__, or __len__ and __getitem__, never __iter__)
                     self.err(f"'{tname(v.t)}' object is not reversible" if "__getitem__" not in self.classes[v.t].methods else f"reversed() of {short(v.t)} by its __len__ and __getitem__ is not supported")
@@ -1126,6 +1272,10 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
         seq = self.set_display(it, "", True)
     else:
         seq = self.iterable(self.expr(it, ""))
+    if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(seq.t):
+        # a comprehension's iterator object (of any of its for clauses): CPython 3.13 takes iter()
+        # of it again, its __iter__
+        seq = self.obj_iterator(seq, "", f"'{tname(seq.t)}' object is not iterable")
     if seq.t == "tuple[]":
         self.iterarg(arg)
         self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
@@ -1136,7 +1286,7 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
 def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not iterable") -> Val:
     # what a for loop steps through (for_seq): a tuple as it is, whose items must then share
     # one type (with PYSTACHY_OPT=-tupleiter, a list of them), an object the list its __iter__
-    # steps through; None raises msg
+    # steps through or the iterator object it returns (obj_iterator); None raises msg
     v = self.unwrap(v, msg)
     if is_kw(v.t):
         return self.kw_list(v)  # (iterating **kwargs gives the names)
@@ -1144,7 +1294,7 @@ def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not i
         self.notnone(v, msg)
         v = self.ntup(v, True)  # (the tuple of its fields)
     if v.t in self.classes:
-        return self.obj_iter(v, msg, f"'{tname(v.t)}' object is not iterable")
+        return self.obj_iterator(v, msg, f"'{tname(v.t)}' object is not iterable")
     if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
         return v  # (no list: for_seq reads its slots, as many as its type has)
     if not is_tuple(v.t) or v.t == "tuple[]":
@@ -1254,12 +1404,13 @@ def gen_for_rrange(self, tgt: Node, vs: list[str], body: list[Node], hide: list[
     self.narrowed = after
 
 def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], start: str, hide: list[str], arg: IterArg | None = None, made: SeqStart | None = None) -> None:
-    # One loop serves lists, strings, tuples, dicts, sets, enumerate, zip and reversed. Each
-    # round takes the next item of every sequence, in order, the way its CPython iterator
-    # would: lists and strings by index, checked against their current length (reversed:
-    # counting down from the length at the start), tuples by index below the length their type
-    # gives; dicts by entry position, skipping deleted entries and failing if the dict changed
-    # size; sets by slot, failing if the set changed size. The loop ends at the first
+    # One loop serves lists, strings, tuples, dicts, sets, iterator objects, enumerate, zip and
+    # reversed. Each round takes the next item of every sequence, in order, the way its CPython
+    # iterator would: lists and strings by index, checked against their current length
+    # (reversed: counting down from the length at the start), tuples by index below the length
+    # their type gives; dicts by entry position, skipping deleted entries and failing if the
+    # dict changed size; sets by slot, failing if the set changed size; an iterator object by
+    # its __next__, whose StopIteration ends the loop (stop_catch). The loop ends at the first
     # exhausted sequence. made: the state of each iterator, taken as it was made (seq_start),
     # else taken now
     ctr = self.alloca("int", "")
@@ -1273,6 +1424,10 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     self.iterarg(arg)
     self.hide(hide)
     after = self.forget(body, tgt)
+    # with an iterator object, each sequence's item is taken where its test passes, before
+    # the next sequence's __next__ runs (which may change it), as zip() takes them
+    nexts = len([s for s in seqs if self.is_iterator(s.t)]) > 0
+    c = self.stop_catch() if nexts else None
     lc = self.label()
     ls = self.label()
     le = self.label()
@@ -1284,8 +1439,20 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     self.place(lc)
     i = self.mload('int', ctr)
     at: list[str] = []
+    vals: list[Val] = []
+    if mode == "enumerate" and nexts:
+        vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
     for k in range(len(seqs)):
         s = seqs[k]
+        if c is not None and self.is_iterator(s.t):
+            vals.append(self.next_in(s, c))
+            go = self.label()
+            self.place(go)
+            lp.body = go
+            lp.tests.append(go)
+            lp.idx.append("")
+            at.append("")
+            continue
         if s.t == "file":
             j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
             ok = self.num_cmp('!=', Val(self.mload('int', j), "int"), Val('0', "int")).v
@@ -1320,34 +1487,15 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         if is_dict(s.t) or is_set(s.t):
             self.mstore('int', nx, st[k])
         at.append(j)
-    vals: list[Val] = []
-    if mode == "enumerate":
+        if c is not None:
+            vals.extend(self.seq_item(s, j, mode))
+    if mode == "enumerate" and not nexts:
         vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
-    for k in range(len(seqs)):
-        s = seqs[k]
-        j = at[k]
-        if is_list(s.t):
-            vals.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t)))
-        elif is_vtuple(s.t):
-            off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
-            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{off}')), targs(s.t)[0]))
-        elif is_tuple(s.t):
-            vals.append(self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0]))
-        elif s.t == "str":
-            vals.append(Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str"))
-        elif s.t == "file":
-            vals.append(Val(j, "str"))
-        elif is_set(s.t):
-            vals.append(self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t)))
-        else:
-            kv = targs(s.t)
-            if mode != "values":
-                vals.append(self.from_slot(self.rt("pys_dict_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[0]))
-            if mode == "values" or mode == "items":
-                vals.append(self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[1]))
+    for k in range(len(seqs) if not nexts else 0):
+        vals.extend(self.seq_item(seqs[k], at[k], mode))
     if len(vals) == 1 and mode != "zip":
         self.assign(tgt, vals[0])
-    elif (tgt.kind == "tuple" or tgt.kind == "list") and len(tgt.kids) == len(vals):
+    elif (tgt.kind == "tuple" or tgt.kind == "list") and len(tgt.kids) == len(vals) and not starred_target(tgt):
         for k2 in range(len(vals)):
             self.assign(tgt.kids[k2], vals[k2])
     else:
@@ -1357,15 +1505,45 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     nx2 = self.scalar('add', [Val(i, 'int'), Val('1', 'int')])
     self.mstore('int', nx2, ctr)
     self.br(lc)
+    if c is not None:
+        self.stop_landing(c, le)
     self.place(le)
     self.narrowed = after
+
+def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
+    # the item of sequence s at index (or slot, entry) j, which a for loop (for_seq) takes; a
+    # dict's items() give its key and value
+    if is_list(s.t):
+        return [self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), elem(s.t))]
+    if is_vtuple(s.t):
+        off = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
+        return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{off}')), targs(s.t)[0])]
+    if is_tuple(s.t):
+        return [self.from_slot(self.mload('int', self.maddr('int', f'{s.v}', f'{j}')), targs(s.t)[0])]
+    if s.t == "str":
+        return [Val(self.rt("pys_str_get", "ptr", [f"ptr {s.v}", f"i64 {j}"]), "str")]
+    if s.t == "file":
+        return [Val(j, "str")]
+    if is_set(s.t):
+        return [self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t))]
+    kv = targs(s.t)
+    out: list[Val] = []
+    if mode != "values":
+        out.append(self.from_slot(self.rt("pys_dict_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[0]))
+    if mode == "values" or mode == "items":
+        out.append(self.from_slot(self.rt("pys_dict_val", "i64", [f"ptr {s.v}", f"i64 {j}"]), kv[1]))
+    return out
 
 def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
     # the state of an iterator over sequence s (for_seq, in mode), as CPython's takes it when it
     # is made: a dict's or a set's size, and the slot it reads first; a list's or a str's
-    # length, from which reversed() counts down
+    # length, from which reversed() counts down (an iterator object keeps its own)
     if is_set(s.t) and mode == "reversed":
         self.err(f"'{tname(s.t)}' object is not reversible")
+    if self.is_iterator(s.t) and mode != "reversed":
+        made.st.append("")
+        made.used.append("")
+        return
     if not (s.t == "str" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
     if s.t == "file":
@@ -1383,5 +1561,74 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
         made.st.append(pos)
     else:
         made.st.append(n0)
+
+def gen_stop_catch(self) -> StopCatch:
+    # a handler for the StopIteration that ends the items of the iterator objects a loop (or
+    # next(it, default)) takes: the try's mark and the exception being handled are taken now,
+    # before the first __next__ call (next_in); stop_landing places its landing block
+    if not self.eh:
+        self.err("internal error: an iterator's __next__ needs exception handling (needs_eh)")
+    c = StopCatch(Val(self.rt("pys_try_mark", "i64", []), "int"), self.rt("pys_exc_handled", "ptr", []), self.alloca("exc", ""), self.label())
+    c.tr.landing = c.landing
+    self.fn.tries.append(c.tr)
+    return c
+
+def gen_next_in(self, it: Val, c: StopCatch) -> Val:
+    # it.__next__(), of an iterator object known not to be None, in a block of its own that the
+    # landing block of c covers; the caller places the block the call goes on to
+    outer = self.handler
+    self.handler = c.landing
+    l = self.label()
+    if c.tr.body == "":
+        c.tr.body = l
+    self.place(l)
+    v = self.protocol(it, "__next__", [])
+    self.handler = outer
+    return v
+
+def gen_stop_landing(self, c: StopCatch, stop: str) -> None:
+    # the landing block of c, placed where no code falls through to it: a StopIteration (or an
+    # exception of a class derived from it) goes on at stop, once the exception being handled
+    # is again the one before; any other is raised again
+    e = self.landing(c.landing, c.slot, c.mark)
+    yes = self.label()
+    no = self.label()
+    self.cbr(self.exc_match(e, self.stop_classes()), yes, no)
+    self.place(no)
+    self.throw(e)
+    self.place(yes)
+    self.rt("pys_exc_restore", "void", [f"ptr {c.old}"])
+    self.br(stop)
+    c.tr.exit = stop
+
+def gen_stop_classes(self) -> str:
+    # the exception classes a loop over an iterator object catches (pys_exc_in): StopIteration
+    # and the program's classes derived from it
+    out = ["StopIteration"]
+    for k in self.classes:
+        if self.classes[k].exc != "" and self.derives(k, "StopIteration"):
+            out.append(k)
+    return "\x01" + "\x01".join(out) + "\x01"
+
+def gen_drain(self, it: Val) -> Val:
+    # a new list of the items of iterator object it, which list(it) takes at once: its __next__
+    # until StopIteration (the list's type is decided by the first item's, see listcomp)
+    h = self.hole("list")
+    res = f"%t{h.r[0]}"
+    c = self.stop_catch()
+    lc = self.label()
+    le = self.label()
+    self.fn.loops.append(Loop("while", lc, lc, lc, le))
+    self.place(lc)
+    v = self.next_in(it, c)
+    if v.t == "None" or "?" in v.t:
+        self.err(f"the items of {short(it.t)}'s __next__ ({typestr(v.t)}) cannot be a list's")
+    self.place(self.label())
+    self.rt("pys_list_append", "void", [f"ptr {res}", "i64 " + self.to_slot(v)])
+    self.br(lc)
+    self.stop_landing(c, le)
+    self.place(le)
+    self.holes[h.k] = self.ctype("list", [v.t])
+    return Val(res, self.ctype("list", [v.t]))
 
 # ---- narrowing: optional locals known not to be None

@@ -6,15 +6,14 @@
 # Each test method becomes a function of the same name; assertEqual(a, b) prints a and asserts
 # a == b, assertRaises a try statement that prints the exception, and assertAlmostEqual(a, b)
 # prints a and asserts round(abs(a - b), 7) == 0. Where upstream loops over thousands of values,
-# each assertion is an assert and the loop prints how many it checked. getran() and
-# random.randrange() draw from a fixed linear congruential sequence (no random module), and
-# getran(n) is called for n of 1 and 2 digits only (MAXDIGITS is 2: 60 bits), as ints are 64-bit
-# here. check_format_1's (base, mapper) pairs are a list of tuple[int, Callable[[int], str]]:
-# the tuple of pairs upstream iterates holds a different function type in each pair.
+# each assertion is an assert and the loop prints how many it checked. random is seeded, so that
+# getran() and random.randrange() draw the same values on every run, and getran(n) is called for
+# n of 1 and 2 digits only (MAXDIGITS is 2: 60 bits), as ints are 64-bit here. check_format_1's
+# (base, mapper) pairs are a list of tuple[int, Callable[[int], str]]: the tuple of pairs
+# upstream iterates holds a different function type in each pair.
 # assertIs(type(got), int) is isinstance(got, int) (type() is not supported).
 # check_float_conversion compares reprs, as one variable holds the float or 'overflow' upstream
-# (a variable has one type here), and formats its message with % (str.format() is not
-# supported). int_to_float's q * 2**shift is q * 2.0**shift: 2**shift of a
+# (a variable has one type here). int_to_float's q * 2**shift is q * 2.0**shift: 2**shift of a
 # negative shift is a float in CPython, and int ** negative int a ValueError here (a documented
 # deviation).
 # EXCLUDED upstream cases (ints are 64-bit here; a value that needs more raises OverflowError, a
@@ -37,6 +36,7 @@
 # - the other LongTest methods are in tests/upstream_int_arith.py and
 #   tests/upstream_int_construct.py, or listed there
 import math
+import random
 import sys
 from typing import Callable
 
@@ -71,19 +71,7 @@ def almost_equal(label: str, got, expected) -> None:
     assert round(abs(got - expected), 7) == 0, label
 
 
-def random(state: list[int]) -> float:
-    # stands in for random.random(): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return state[0] / 2147483648
-
-
-def randrange(state: list[int], start: int, stop: int) -> int:
-    # stands in for random.randrange(start, stop)
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return start + state[0] % (stop - start)
-
-
-RANDOM = [11]
+random.seed(11)
 
 
 # Pure Python version of correctly-rounded integer-to-float conversion.
@@ -139,7 +127,7 @@ def getran(ndigits: int) -> int:
     nbits_lo = nbits_hi - SHIFT + 1
     answer = 0
     nbits = 0
-    r = int(random(RANDOM) * (SHIFT * 2)) | 1  # force 1 bits to start
+    r = int(random.random() * (SHIFT * 2)) | 1  # force 1 bits to start
     while nbits < nbits_lo:
         bits = (r >> 1) + 1
         bits = min(bits, nbits_hi - nbits)
@@ -148,9 +136,9 @@ def getran(ndigits: int) -> int:
         answer = answer << bits
         if r & 1:
             answer = answer | ((1 << bits) - 1)
-        r = int(random(RANDOM) * (SHIFT * 2))
+        r = int(random.random() * (SHIFT * 2))
     assert nbits_lo <= nbits <= nbits_hi
-    if random(RANDOM) < 0.5:
+    if random.random() < 0.5:
         answer = -answer
     return answer
 
@@ -369,7 +357,7 @@ def test_round() -> None:
     n = 0
     for nd in range(5):
         for i in range(100):
-            x = randrange(RANDOM, -10000, 10000)
+            x = random.randrange(-10000, 10000)
             got = round(x, nd)
             assert got == x, (x, nd, got)
             assert isinstance(got, int)
@@ -381,7 +369,7 @@ def test_round() -> None:
     # omitted second argument
     n = 0
     for i in range(100):
-        x = randrange(RANDOM, -10000, 10000)
+        x = random.randrange(-10000, 10000)
         got = round(x)
         assert got == x, (x, got)
         assert isinstance(got, int)
@@ -402,8 +390,8 @@ def check_float_conversion(n: int) -> int:
     except OverflowError:
         expected = 'overflow'
 
-    msg = ("Error in conversion of integer %d to float.  "  # {} and str.format() upstream
-           "Got %s, expected %s." % (n, actual, expected))
+    msg = ("Error in conversion of integer {} to float.  "
+           "Got {}, expected {}.".format(n, actual, expected))
     assert actual == expected, msg
     return 1
 

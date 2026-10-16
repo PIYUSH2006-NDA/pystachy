@@ -25,16 +25,31 @@ observable contract.
 | `fnmatch` | `Lib/fnmatch.py` | `95391dac2ce9f60084d65eba2f4b9d9735e28136d55b684e1fde7d6342555963` |
 | `textwrap` | `Lib/textwrap.py` | `30f3d833950d53e168cc021961574b553f56aed84458712b2eb29c6495843d46` |
 | `string` | `Lib/string.py` | `c000d9c4340c910b869399f0f0acc1b70e39391ad9344c4e08d8d0f80210a916` |
+| `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` |
 | `statistics` | `Lib/statistics.py` | `80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18` |
 | `urllib.parse` | `Lib/urllib/parse.py` | `491b233e8d87a2ab73964afff029717177d53ad8def328ed9b00575db983da27` |
 | `html` | `Lib/html/__init__.py` | `923d82d821e75e8d235392c10c145ab8587927b3faf9c952bbd48081eebd8522` |
 | `html.entities` | `Lib/html/entities.py` | `d9c65fb2828dbc1f3e399058a341d51e9375ec5bca95a8e92599c41bd5b78bde` |
 | `keyword` | `Lib/keyword.py` | `18c2be738c04ad20ad375f6a71db34b3823c7f40b0340f5294d0e89f3c9b093b` |
 | `shlex` | `Lib/shlex.py` | `f927227de5ba5b1b2bdd75e3d9c8cb72b602b3bba3cc8edbf8fb554de0dc1fd7` |
+| `random` | `Lib/random.py` | `fb2625eb54412c880e8f1af449785a74e125556159fc7997814e51dd054cc5da` |
+| `datetime` | `Lib/_pydatetime.py` | `9a6652ecbdc8bcb9774136febc36b13f99aa926c7b42c19ac77e6c84128560a4` |
 
 `heapq` adapts its top-k routines while retaining the other upstream code.
+`datetime` is `_pydatetime`, which CPython's `Lib/datetime.py` re-exports when its C
+accelerator is missing. Where CPython's accelerator behaves differently, the edits follow
+`Modules/_datetimemodule.c` (SHA-256
+`56cb991f5244e79edb81de4a0b45ae4138fe4270bd82920e4ed9eb957dc08e5a`): messages, float
+`timedelta` arguments, ISO 8601 parsing, comparisons and the `strftime()` format scan.
+Its `strftime()` reproduces `Modules/timemodule.c` (SHA-256
+`695d4f627d2ff472c0bf4df4583bf97ea832b96b0cc9a7eb1f13ddd51ee19deb`) on glibc: ASCII runs
+formatted as glibc 2.39's C-locale `wcsftime()` formats them, within its growing buffer.
+`operator` adapts only its getter classes, whose closures become `__call__` code
+reading constants. `string` adapts `Formatter` and takes `_string`'s parsers
+from `_pystachy_string`.
 `statistics` also ports `math_sumprod_impl` from `Modules/mathmodule.c` for
-weighted means. `urllib.parse` includes codec logic corresponding to CPython's
+weighted means, and `random` ports its `m_lgamma`, `lanczos_sum` and `m_sinpi`
+for `binomialvariate`. `urllib.parse` includes codec logic corresponding to CPython's
 `unicodeobject.c`, `stringlib/codecs.h` and `codecs.c`, plus bracketed-host and
 NFKC-delimiter validation. These modules keep CPython-only paths available when
 CPython runs the source.
@@ -46,8 +61,14 @@ CPython runs the source.
 | `io` | `Modules/_io/stringio.c` | Typed `StringIO`, with append chunks joined when read |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
-| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction and comparison-key fallbacks |
+| `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
+| `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
+| `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
+| `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks |
+| `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
+| `_pyrandom` | `Modules/_randommodule.c`, `Python/pyhash.c` | `_random.Random`'s Mersenne Twister, seeding and state; float hashing for float seeds |
+| `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
 generates `re/_unicode.py` from CPython's Unicode functions, including group-name
@@ -77,19 +98,36 @@ Historical upstream-suite checks recorded with the ports:
 | `html` | `test_html` | Both tests passed |
 | `keyword` | `test_keyword` | All 11 tests passed |
 | `shlex` | `test_shlex` | 43 of 44 passed; punctuation field is writable |
+| `random` | `test_random` | 106 passed, two memory-limited skips; with `_pyrandom`, 96: nine need over 63 bits, one pickles `_random.Random` |
+| `datetime` | `test_datetime`'s pure-Python cases | 1209 of 1775 passed, 27 skipped; the others need local time, pickling, hashing, subclass construction, `NotImplemented` reflection, the `timezone.utc` singleton or dynamic argument types |
 
 These counts describe specific recorded checks of the adapted source under
 CPython, not the number of APIs or upstream tests executed by the compiled
 subset. Current test commands and CI coverage are in
 [the testing guide](../docs/testing.md).
 
-The deque reference at the same pinned CPython commit has SHA-256
-`02d5bcaea730fc7af1fed5f50f87eacad710022dbebb1efebbbd1737ec940cae`.
+The deque and defaultdict reference at the same pinned CPython commit,
+`Modules/_collectionsmodule.c`, has SHA-256
+`02d5bcaea730fc7af1fed5f50f87eacad710022dbebb1efebbbd1737ec940cae`;
+`Lib/collections/__init__.py` has
+`f1bcb4869aeb72253315fcf04646eb3a87e7140afec65bda6500aa609fc2f641`, and
+`Objects/odictobject.c` has
+`bc7d7009221eed5d7be4124bfd5f9ff9cd05650a543fdc56e0a1da3bc330714a`.
 `tests/lib_collections.py` and `tests/lib_collections_mutation.py` exercise compiled
-queue operations, callback mutation and bounded repetition. Shlex's differential
+queue operations, callback mutation and bounded repetition;
+`tests/lib_collections_counter.py`, `_defaultdict.py`, `_ordereddict.py` and
+`_reversed.py` the mappings and `reversed()`. Shlex's differential
 upstream selection retains its three split/join table methods; HTML retains both
 upstream methods, and keyword retains nine methods while excluding dynamic `exec`.
 Test headers record source-test hashes and exclusions.
+
+`tools/random_check.py` runs the adapted `lib/random.py` on CPython, with the C `_random`
+and with `_pyrandom` in its place, and compares the values of every supported method with
+CPython's `random` for 1,352 int, bool and float seeds. It also compares `_pyrandom`'s float
+hash with `hash()` and the `lgamma` port with `math.lgamma()`. Its `--upstream DIR` option
+runs the pinned `test_random` (SHA-256
+`04ffe61561421e6cf3b85edcea3ebaca995e6a5def1267cf3562acbb3b9b1337`) and its `randv*.pck`
+files from DIR on both generators, as recorded above.
 
 Regex validation also includes `tests/upstream_re_*.py`, deterministic
 `tools/re_fuzz.py` comparisons against CPython, and `tools/re_probe.py` checks of

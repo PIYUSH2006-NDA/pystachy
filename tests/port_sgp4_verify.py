@@ -5,7 +5,6 @@
 # (positions and velocities to 2e-7, the other fields as text).
 from math import isnan, pi
 
-from sgp4.alpha5 import from_alpha5
 from sgp4.api import SGP4_ERRORS, Satrec
 from sgp4.earth_gravity import wgs72
 from sgp4.ext import invjday, rv2coe
@@ -103,8 +102,7 @@ mismatches = 0
 error_list: list[int] = []
 for line1, line2, times in CASES:
     satrec = Satrec.twoline2rv(line1, line2)
-    # tests.py prints satrec.satnum, a property that is from_alpha5(satrec.satnum_str)
-    print('%d xx' % from_alpha5(satrec.satnum_str))
+    print('%d xx' % satrec.satnum)
     for tsince, expected in times:
         e, r, v = invoke(satrec, tsince)
         if e != 0:

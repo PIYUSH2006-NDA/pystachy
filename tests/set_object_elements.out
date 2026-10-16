@@ -1,0 +1,23 @@
+['a', 'b', 'c', 'd'] ['é'] 4
+3 True False False True {<a>} True False
+4 ['a', 'b', 'c', 'd']
+['b', 'c', 'd']
+KeyError <a>
+['c', 'd'] True 1
+set() 0
+['a', 'b', 'c', 'd'] ['b', 'c'] ['a'] ['a', 'd']
+False True True True True False
+True True False
+['a', 'b', 'c', 'd', 'é'] ['b'] ['c']
+['a', 'b', 'd']
+['a', 'é']
+['b']
+['c']
+2 True ['a', 'b', 'c'] ['b'] ['a'] True True
+frozenset({<a>}) True ['c']
+['a', 'c'] 2
+['a', 'b'] ['c', 'd'] ['c']
+2 True False False
+3000 True False
+2999 False
+[exit 0]

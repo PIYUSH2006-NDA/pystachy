@@ -5,6 +5,7 @@ import os
 from src.pystachy_compiler.analysis import (
     aliases,
     assigns,
+    bind_count,
     chk_names,
     closure_free,
     deleted,
@@ -18,15 +19,15 @@ from src.pystachy_compiler.analysis import (
     shows_items,
     stmt_binds,
     typed_default,
+    walrus_values,
 )
 from src.pystachy_compiler.diagnostics import MODDUNDERS, where
-from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, Val
+from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
-from src.pystachy_compiler.syntax import Node, mk, name_targets, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, mk, name_targets, starred_target
 from src.pystachy_compiler.utils import (
     elem,
-    elem_problem,
     empty_ann,
     empty_default,
     empty_display,
@@ -38,7 +39,7 @@ from src.pystachy_compiler.utils import (
     is_opt,
     is_set,
     is_tuple,
-    key_problem,
+    is_vtuple,
     lt,
     same_kind,
     selem,
@@ -145,10 +146,14 @@ def gen_load_name(self, name: str) -> Val:
         return Val("null", f"fn[b:{name}]")  # (a builtin function, or a class such as int: calling it calls it)
     if name in PYBUILTINS:
         self.err(f"the builtin '{name}' cannot be used as a value (not supported)")
+    if name == "__doc__":
+        self.err("reading '__doc__' in a class body is not supported (a class's docstring cannot be read)")  # (Loader.qstmts)
     if name in MODDUNDERS.split():
         self.err(f"'{name}' is not supported")  # (a module attribute that CPython defines)
     if name in self.typevars:
         self.err(f"TypeVar '{short(name)}' cannot be used as a value (only annotations may name it)")
+    if name in self.taliases:
+        self.err(f"type alias '{short(name)}' cannot be used as a value (only annotations may name it)")
     self.err(f"name '{short(name)}' is not defined")
     return Val("", "")
 
@@ -396,6 +401,10 @@ def gen_none_read(self, name: str) -> str:
     if only_none(body, name):
         return "None"  # (it is None wherever it is assigned)
     if not self.nonecmp:
+        gone: dict[str, bool] = {}
+        deleted(body, gone)
+        if bind_count(body, name) == 1 and name not in gone and name not in self.nlw and name not in self.curfn.params:
+            return "None"  # (its one assignment, compiled already, gave it a value of type None)
         self.err(f"cannot infer the type of '{name}' from None here, before a value of another type is assigned to it; annotate it ({name}: T | None)")
     return NONEVAR
 
@@ -423,7 +432,7 @@ def gen_none_type(self, name: str) -> str:
 
 def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
     # the values that statements in body (into blocks, in order) assign to variable name: of
-    # a, b = e the item of e (an index node if e is not a display)
+    # a, b = e the item of e (an index node if e is not a display), of name := v v
     for st in body:
         if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
             continue
@@ -435,8 +444,14 @@ def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
                 elif t.kind == "tuple" or t.kind == "list":
                     for i in range(len(t.kids)):
                         if t.kids[i].kind == "name" and t.kids[i].s == name:
-                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids)
-                            out.append(e.kids[i] if disp else mk("index", "", e.line, [e, mk("int", str(i), e.line, [])]))
+                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
+                            # (after a starred target, the item counted from the end)
+                            after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
+                            at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
+                            out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
+        for kid in st.kids:
+            if kid.kind != "block" and kid.kind != "except":
+                walrus_values(kid, name, out)  # (name := v)
         for kid in st.kids:
             if kid.kind == "block":
                 self.none_values(kid.kids, name, out)
@@ -607,18 +622,34 @@ def gen_unpacked(self, st: Node, name: str) -> str:
     t0 = st.kids[0]
     e = st.kids[1]
     i = 0
-    while i < len(t0.kids) and not (t0.kids[i].kind == "name" and t0.kids[i].s == name):
+    while i < len(t0.kids) and not (t0.kids[i].kind == "name" and t0.kids[i].s == name) and not (t0.kids[i].kind == "starred" and t0.kids[i].kids[0].kind == "name" and t0.kids[i].kids[0].s == name):
         i += 1
     if i == len(t0.kids):
         return ""
-    if (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t0.kids):
+    s = 0
+    while s < len(t0.kids) and t0.kids[s].kind != "starred":
+        s += 1
+    if (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t0.kids) and s == len(t0.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0:
         e = e.kids[i]  # (each item is assigned on its own, see stmt)
         return self.dry(e) if self.typed_now(e) and not self.calls_open(e, {}) else ""
     if not self.typed_now(e) or self.calls_open(e, {}):
         return ""
     t = self.dry(e)
+    if is_tuple(t) and s < len(t0.kids):
+        # a, *b, c = t: the items before the star, the list of those it takes, those after it
+        ts = targs(t)
+        if len(ts) < len(t0.kids) - 1:
+            return ""
+        mid = ts[s : len(ts) - (len(t0.kids) - s - 1)]
+        if len(mid) == 0:
+            mid = ts  # (none left for it: see star_assign)
+        if i == s:
+            return self.ctype("list", [mid[0]]) if len(mid) > 0 and all(x == mid[0] for x in mid) else ""
+        return ts[i] if i < s else ts[len(ts) - (len(t0.kids) - i)]
     if is_tuple(t):
         return targs(t)[i] if len(targs(t)) == len(t0.kids) else ""
+    if i == s:
+        return t if is_list(t) else "list[str]" if t == "str" else ""
     return elem(t) if is_list(t) else t if t == "str" else ""
 
 def gen_twin(self, x: str, y: str) -> None:
@@ -874,10 +905,10 @@ def gen_refine(self, name: str, t: str, glob: bool = False) -> None:
             if nm == name or "?" in self.gtypes[nm]:
                 self.gtypes[nm] = t
                 toks += " " + self.gkk.pop(nm, "")
-    if is_dict(t) and key_problem(targs(t)[0]) != "":
-        self.err(key_problem(targs(t)[0]))
-    if is_set(t) and elem_problem(selem(t)) != "":
-        self.err(elem_problem(selem(t)))
+    if is_dict(t) and self.key_problem(targs(t)[0]) != "":
+        self.err(self.key_problem(targs(t)[0]))
+    if is_set(t) and self.elem_problem(selem(t)) != "":
+        self.err(self.elem_problem(selem(t)))
     for h in toks.split():
         self.holes[int(h)] = t
         if is_dict(t) or is_set(t):
@@ -917,7 +948,11 @@ def gen_lookahead(self, name: str, ahead: bool = False) -> str:
             return ""
     if found[0].kind == "omit" and not is_list(t) and not is_set(t):
         return ""  # (d += ... or d.extend(...) on a dict: an error where it is compiled)
+    if found[0].kind == "omit" and not self.bound("list") and (self.iterator_call(e) or self.is_mapcall(e) or (e.kind == "listcomp" and e.s == "gen")):
+        e = mk("call", "", e.line, [mk("name", "list", e.line, []), e])  # (its items, which the fill takes at once)
     it = self.dry(e)
+    if found[0].kind == "omit" and found[0].s == "slice" and not is_list(it) and it != "tuple[]" and not self.bound("list"):
+        it = self.dry(mk("call", "", e.line, [mk("name", "list", e.line, []), e]))  # (xs[a:b] = v: v's items, as list(v) has them)
     if found[0].kind == "omit" and is_list(t):
         if not is_list(it):
             return ""
@@ -1062,6 +1097,9 @@ def gen_fills(self, body: list[Node], name: str, found: list[Node]) -> bool:
         if (k == "assign" or k == "augassign") and st.kids[0].kind == "index" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name and k == "assign":
             found.append(st.kids[0].kids[1])
             found.append(st.kids[-1])
+        elif k == "assign" and st.kids[0].kind == "slice" and st.kids[0].kids[0].kind == "name" and st.kids[0].kids[0].s == name:
+            found.append(mk("omit", "slice", st.line, []))  # (xs[a:b] = ys, as xs.extend(ys))
+            found.append(st.kids[-1])
         elif k == "assign" and len(st.kids) == 2 and st.kids[0].kind == "index" and empty_default(st.kids[0].kids[0], name, "dict"):
             # name.setdefault(k, {})[k2] = v: the item is {k2: v} (see default_want)
             found.append(st.kids[0].kids[0].kids[1])
@@ -1143,7 +1181,7 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
     if e.kind == "listcomp":
         # [x for t in it if c]: x and c read the variables in t too, which the items of it type
         names: list[str] = []
-        names_in(e.kids[1], names)
+        comp_names(e, names)
         inner = own + " " + " ".join(names)
         for i in range(len(e.kids)):
             if i != 1 and not self.typed_now(e.kids[i], own if i == 2 else inner):
@@ -1151,7 +1189,7 @@ def gen_typed_now(self, e: Node, own: str = "") -> bool:
         return True
     if e.kind == "lambda" or e.kind in UNSUPPORTED:
         return False
-    for k in e.kids:
+    for k in e.kids:  # (x := v as v: typing it assigns nothing, see walrus)
         if not self.typed_now(k, own):
             return False
     return True
@@ -1216,7 +1254,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         v = self.expr(args[0], "")
         self.refine(name, self.ctype("set", [v.t]))
         t = self.qtype(name)
-        self.rt("pys_set_add", "void", [f"ptr {o.v}", "i64 " + self.to_slot(self.store_elem(v, selem(t)))])
+        self.rt("pys_set_add", "void", [f"ptr {o.v}", "i64 " + self.to_slot(self.store_elem(v, selem(t)))], self.key_fx(selem(t)))
         return Val("null", "None")
     if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind == "listcomp" and args[0].s == "gen":
         # (item by item, as smethod's)
@@ -1225,7 +1263,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
     if is_set(o.t) and m == "update" and len(args) == 1 and args[0].kind != "kw":
         v = self.siter(args[0], "", "set.update()")
         self.refine(name, self.ctype("set", [self.iter_elem(v.t)]))
-        self.supdate(o.v, v)
+        self.supdate(o.v, v, selem(self.qtype(name)))
         return Val("null", "None")
     if is_set(o.t) and m == "update" and len(args) > 1 and args[0].kind != "kw":
         # s.update(xs, ys, ...): the first one's elements decide the type, then smethod runs it
@@ -1238,8 +1276,8 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         g = a if a.kind == "listcomp" else mk("listcomp", "gen", a.line, [item, item, a])
         et = elem(self.dry(mk("listcomp", "", a.line, g.kids)))  # (the type of a list of its items)
         et = self.none_items(et) if is_tuple(et) else et
-        if elem_problem(et) != "":
-            self.err(elem_problem(et))
+        if self.elem_problem(et) != "":
+            self.err(self.elem_problem(et))
         self.refine(name, self.ctype("set", [et]))
         return self.smethod(Val(o.v, self.qtype(name)), m, [a] + args[1:])
     if is_dict(o.t) and (m == "setdefault" or m == "get") and len(args) == 2:
@@ -1248,7 +1286,7 @@ def gen_fill(self, n: Node, m: str, args: list[Node], want: str = "") -> Val:
         k = self.expr(args[0], "")
         v = self.expr(args[1], want if "?" not in want else "")
         self.refine(name, self.ctype("dict", [k.t, v.t]))
-        return self.from_slot(self.rt(f"pys_dict_{m}", "i64", [f"ptr {o.v}", "i64 " + self.to_slot(k), "i64 " + self.to_slot(v)]), v.t)
+        return self.from_slot(self.rt(f"pys_dict_{m}", "i64", [f"ptr {o.v}", "i64 " + self.to_slot(k), "i64 " + self.to_slot(v)], self.key_fx(targs(self.qtype(name))[0])), v.t)
     # any other method: the type a later use shows (or an error), then the method as usual
     return self.method(self.load_name(name), m, args)
 
@@ -1314,6 +1352,10 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         if name in self.gflag:
             self.mem_store(Val(f"@g.{name}.def", "*bool"), Val("true", "bool"))
     else:
+        if name in self.compshare and name in self.compvars and not self.widens(v.t, self.compshare[name]):
+            # (a comprehension's for clause that binds it into an earlier clause's variable, which
+            # keeps its type: see the statement "compfor")
+            self.err(f"comprehension variable '{name}' is {typestr(self.compshare[name])} in an earlier for clause and {typestr(v.t)} in a later one, and a clause between them can read either (not supported)")
         if name in self.nonevars and name not in self.ltype and name not in self.compvars:
             # a parameter whose argument is None: assigning None keeps it so; any other value
             # gives it that type from here on, which only code outside branches and loops can do
@@ -1371,9 +1413,14 @@ def gen_target_type(self, n: Node, base: bool = False) -> str:
             return self.gtypes.get(n.s, "")
         return self.ltype.get(n.s, self.gtypes.get(n.s, "") if self.is_global(n.s) else "")
     if n.kind == "slice":
-        self.err("assignment to a slice is not supported")
+        t = unopt(self.target_type(n.kids[0], True))
+        return t if is_list(t) else ""
     if n.kind == "attr" or n.kind == "index":
         t = self.target_type(n.kids[0], True)
+        if n.kind == "attr" and self.is_prop(t, n.s):
+            ms = self.classes[t].methods
+            s = n.s + ".setter"
+            return ms[s].ptypes[1] if s in ms and len(ms[s].ptypes) > 1 else ""  # (its setter's value)
         if n.kind == "attr" and t in self.classes:
             return self.classes[t].ftypes.get(n.s, "")
         if n.kind == "index" and is_list(t):
@@ -1390,9 +1437,9 @@ def gen_assign(self, t: Node, v: Val) -> None:
         self.err(t.s)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
-    if k == "tuple" and len([x for x in t.kids if x.kind == "starred"]) > 0:
-        self.err(UNSUPPORTED["starred"])  # (before the number of targets is checked)
-    if k == "name":
+    if starred_target(t):
+        self.star_assign(t, v)
+    elif k == "name":
         self.store_name(t.s, v)
     elif k == "attr" and self.dotted(t) != "":
         self.err(f"assigning to {self.dotted(t)} is not supported; change its value in place")
@@ -1400,9 +1447,13 @@ def gen_assign(self, t: Node, v: Val) -> None:
         self.class_store(self.cvar(t.kids[0], t.s), t.s, v)
     elif k == "attr":
         o = self.expr(t.kids[0], "")
+        if self.is_prop(o.t, t.s):
+            self.prop_store(o, t.s, v)
+            return
         p = self.field(o, t.s, True)
         self.frozen(o.t, t.s)
-        self.setfield(o, p, t.s, v)
+        if not self.frozen_store(o, t.s):
+            self.setfield(o, p, t.s, v)
     elif k == "index" and t.kids[0].kind == "name" and "?" in self.rtype(t.kids[0].s):
         # d[k] = v or xs[i] = v on an empty dict or list without a type: k and v decide it
         self.allowq = True
@@ -1411,7 +1462,7 @@ def gen_assign(self, t: Node, v: Val) -> None:
         if is_dict(o.t):
             kval = self.expr(t.kids[1], "")
             self.refine(t.kids[0].s, self.ctype("dict", [kval.t, v.t]))
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", "i64 " + self.to_slot(kval), "i64 " + self.to_slot(v)])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", "i64 " + self.to_slot(kval), "i64 " + self.to_slot(v)], self.key_fx(targs(self.qtype(t.kids[0].s))[0]))
         else:
             ix = self.ival(t.kids[1])
             self.refine(t.kids[0].s, self.ctype("list", [v.t]))
@@ -1428,7 +1479,7 @@ def gen_assign(self, t: Node, v: Val) -> None:
             kv = targs(unopt(o.t))
             key = self.to_slot(self.store_key(self.expr(t.kids[1], kv[0]), kv[0]))
             o = self.unwrap(o, nosub)
-            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(self.coerce(v, kv[1]))])
+            self.rt("pys_dict_set", "void", [f"ptr {o.v}", f"i64 {key}", "i64 " + self.to_slot(self.coerce(v, kv[1]))], self.key_fx(kv[0]))
         elif o.t in self.classes:
             # o[k] = v: o.__setitem__(k, v), once v, o and k are evaluated
             ik = self.expr(t.kids[1], self.argtype(o.t, "__setitem__", 1, f"'{tname(o.t)}' object does not support item assignment"))
@@ -1438,8 +1489,14 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.err("changing **kwargs is not supported: copy it to a dict first (d = dict(kwargs))")
         else:
             self.err(f"'{o.t}' does not support item assignment")
+    elif k == "slice":
+        bnd: list[str] = []
+        o = self.slice_target(t, bnd, "TypeError: 'NoneType' object does not support item assignment")
+        self.slice_store(o, bnd, v)
     elif k == "tuple" and is_opt(v.t):
         self.assign(t, self.unwrap(v, "TypeError: cannot unpack non-iterable NoneType object"))
+    elif k == "tuple" and is_vtuple(v.t):
+        self.assign(t, Val(self.rt("pys_vtuple_list", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]])))  # (its items, as a list's)
     elif k == "tuple" and (is_list(v.t) or v.t == "str"):
         # a, b = xs: the length is checked when it runs, as CPython does. CPython takes every
         # item before it stores the first, so where a store may change the list (xs[1], xs[0] =
@@ -1465,8 +1522,12 @@ def gen_assign(self, t: Node, v: Val) -> None:
         for i in range(len(fs)):
             self.assign(t.kids[i], self.getfield(v, self.field(v, fs[i]), fs[i]))
     elif k == "tuple" and v.t in self.classes:
-        # a, b = o: what o's __iter__ steps through
-        self.assign(t, self.obj_iter(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object"))
+        # a, b = o: what o's __iter__ steps through, or the items its iterator object gives
+        it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+        if is_list(it.t):
+            self.assign(t, it)
+        else:
+            self.unpack_next(t, it)
     elif k == "tuple":
         if not is_tuple(v.t) or len(targs(v.t)) != len(t.kids):
             self.err(f"cannot unpack {v.t} into {len(t.kids)} targets")
@@ -1474,5 +1535,181 @@ def gen_assign(self, t: Node, v: Val) -> None:
             self.assign(t.kids[i], self.tget(v, i))
     else:
         self.err("cannot assign to this expression")
+
+def gen_slice_target(self, t: Node, bnd: list[str], nosub: str) -> Val:
+    # the list that slice t (xs[lo:hi:st]) assigns to or deletes from: xs, then the bounds (into
+    # bnd: start, stop and step, see Gen.slice_bound), are evaluated, and xs being None raises
+    # nosub. Strs and tuples cannot change, and Pystachy has no slice objects for __setitem__
+    o = self.expr(t.kids[0], "")
+    bnd.append(self.slice_bound(t.kids[1]))
+    bnd.append(self.slice_bound(t.kids[2]))
+    bnd.append(self.slice_step(t.kids[3]) if len(t.kids) == 4 else "1")
+    o = self.unwrap(o, nosub)
+    if is_list(o.t):
+        return o
+    what = "deletion" if "deletion" in nosub else "assignment"
+    m = "__delitem__" if what == "deletion" else "__setitem__"
+    if o.t in self.classes and o.t not in self.nts and m in self.classes[o.t].methods:
+        self.err(f"slicing an object is not supported: {short(o.t)}.{m} would take a slice object, which Pystachy does not have")
+    if is_dict(o.t):
+        self.err("a slice as a dict key is not supported")
+    self.err(f"'{tname(o.t)}' object does not support item {what}")
+    return o
+
+def gen_slice_check(self, step: str) -> None:
+    # a slice's step that is 0 raises CPython's ValueError, here before code that would run later
+    if step.startswith("%") or step == "0":
+        self.guard(self.num_cmp('==', Val(step, "int"), Val('0', "int")).v, "ValueError: slice step cannot be zero")
+
+def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
+    # o[lo:hi:st] = v for list o and its slice's bounds bnd (slice_target): v's items, taken as
+    # CPython's PySequence_Fast takes them (a list as it is, which the runtime copies first where
+    # it is o itself; any other iterable's by iterating it, see as_list) once the step is checked
+    st = bnd[2]
+    if not is_list(v.t):
+        self.slice_check(st)  # (before None raises, __iter__ runs or a file is consumed)
+    v = self.unwrap(v, "TypeError: must assign iterable to extended slice")  # (CPython 3.13's, for any step)
+    if v.t == "str":
+        v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "tuple[]":
+        v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() and [] have no item to type)
+    elif not is_list(v.t):
+        v = self.as_list(v, "slice")
+    if not is_list(v.t):
+        self.err(f"must assign iterable to extended slice, not {typestr(v.t)}")
+    if v.t != o.t and self.widens_items(v.t, o.t):
+        v = Val(v.v, o.t)  # (its items are copied: a list[str] into a list[str | None], as extend())
+    v = self.coerce(v, o.t)
+    self.rt("pys_list_set_slice", "void", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {st}", f"ptr {v.v}"])
+
+def gen_slice_assign(self, t: Node, g: Node) -> None:
+    # t[lo:hi:st] = g, an iterator call (range(), zip(), ...), map(), filter() or a generator
+    # expression, as CPython runs it: its iterator is made, then the target and the bounds are
+    # evaluated (and None or a step of 0 raises), then its items are taken
+    arg = IterArg(t)
+    arg.split = self.label()
+    v = self.consume(g, self.target_type(t), arg)
+    back = self.label()
+    self.br(back)
+    self.place(arg.split)
+    bnd: list[str] = []
+    o = self.slice_target(t, bnd, "TypeError: 'NoneType' object does not support item assignment")
+    self.slice_check(bnd[2])
+    self.br(arg.trav)
+    self.place(back)
+    self.slice_store(o, bnd, v)
+def gen_walrus(self, n: Node, want: str) -> Val:
+    # (x := v): v, assigned to x as x = v assigns it, in the function or module code around the
+    # expression (also from a comprehension, as PEP 572 has it); its value is v. While dry()
+    # types an expression from further on, nothing is assigned
+    e = n.kids[0]
+    if self.drying > 0:
+        return self.expr(e, want)
+    t = mk("name", n.s, n.line, [])
+    tt = self.target_type(t)
+    if self.empty_of(e) != "" and (tt == "" or "?" in tt):
+        v = self.empty(self.empty_of(e), n.s)
+    else:
+        v = self.expr(e, tt if tt != "" else want)
+    self.assign(t, v)
+    return v
+
+def gen_star_assign(self, t: Node, v: Val) -> None:
+    # a, *b, c = v: as CPython's UNPACK_EX, the items before the star, a new list of the rest and
+    # the items after the star taken from its end (too few raises ValueError), all before the
+    # first store; then each target in order, the starred one that list. A tuple's items are
+    # known here: the starred list is a display of those its type gives
+    s = 0
+    while t.kids[s].kind != "starred":
+        s += 1
+    after = len(t.kids) - s - 1
+    star = t.kids[s].kids[0]
+    v = self.unwrap(v, "TypeError: cannot unpack non-iterable NoneType object")
+    if v.t in self.nts:
+        self.notnone(v, "TypeError: cannot unpack non-iterable NoneType object")
+        v = self.ntup(v, True)
+    items: list[Val] = []
+    if is_tuple(v.t):
+        n = len(targs(v.t))
+        if n < s + after:
+            self.err(f"cannot unpack {v.t} into {s + after} or more targets")
+        vals = [self.tget(v, i) for i in range(n)]
+        want = self.target_type(star)
+        ts = targs(v.t)
+        if n == s + after and (want == "" or "?" in want) and n > 0 and all(x == ts[0] for x in ts):
+            want = self.ctype("list", [ts[0]])  # (none left for it: a list of the type of the items, as of a list's)
+        mid: list[str] = []
+        j = ts[s] if n > s + after else ""
+        for x in ts[s : n - after]:
+            j = self.join(j, x) if j != "" else ""
+            if x not in mid:
+                mid.append(x)
+        if (want == "" or "?" in want) and len(mid) > 1 and j == "":
+            # (items of types no one type holds: as a list display of them, it needs list[A | B])
+            who = star.s if star.kind == "name" else "x"
+            self.err(f"cannot infer the type of starred target '{who}', a list of {' and '.join([typestr(x) for x in mid])} items; annotate it ({who}: list[{' | '.join([typestr(x) for x in mid])}])")
+        if n == s + after and star.kind == "name" and (want == "" or "?" in want):
+            rest = self.empty("list", star.s)  # (as star = [] would be)
+        else:
+            rest = self.expr(mk("list", "", t.line, [self.vnode(x) for x in vals[s : n - after]]), want)
+        items = vals[:s] + [rest] + vals[n - after :]
+    else:
+        if v.t in self.classes:
+            xs = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            if not is_list(xs.t):
+                # (UNPACK_EX takes list() of the iterator, which calls iter() of it again)
+                xs = self.obj_iterator(xs, "", f"'{tname(xs.t)}' object is not iterable")
+            xs = xs if is_list(xs.t) else self.drain(xs)
+        elif v.t == "str":
+            xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        else:
+            xs = self.as_list(v, "unpack")
+        if not is_list(xs.t):
+            self.err(f"cannot unpack non-iterable {tname(v.t)} object")
+        size = self.mload('int', xs.v)
+        self.rt("pys_unpack_ex_check", "void", [f"i64 {size}", f"i64 {s + after}"])
+        for i in range(s):
+            items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {i}"]), elem(xs.t)))
+        end = self.scalar('sub', [Val(size, 'int'), Val(str(after), 'int')])
+        items.append(Val(self.rt("pys_list_slice", "ptr", [f"ptr {xs.v}", f"i64 {s}", f"i64 {end}"]), xs.t))
+        for i in range(after):
+            at = self.scalar('add', [Val(end, 'int'), Val(str(i), 'int')])
+            items.append(self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {xs.v}", f"i64 {at}"]), elem(xs.t)))
+    for i in range(len(t.kids)):
+        self.assign(star if i == s else t.kids[i], items[i])
+def gen_unpack_next(self, t: Node, it: Val) -> None:
+    # a, b = o of an object whose __iter__ returns iterator object it: an item from __next__ for
+    # each target, then one more call, which must raise StopIteration (else there are too many
+    # values); CPython takes them all before it stores the first
+    n = len(t.kids)
+    c = self.stop_catch()
+    got = self.alloca("int", "")
+    items: list[Val] = []
+    for i in range(n + 1):
+        self.mstore('int', str(i), got)
+        v = self.next_in(it, c)
+        self.place(self.label())
+        if i == n:
+            self.raise_("ValueError", self.sconst(f"too many values to unpack (expected {n})"))
+        elif v.t == "None":
+            items.append(v)
+        else:
+            # (in a slot: the landing block, where they are stored, follows every call)
+            sl = self.alloca(v.t, "")
+            self.mstore(v.t, v.v, sl)
+            items.append(Val(sl, v.t))
+    stop = self.label()
+    self.stop_landing(c, stop)
+    self.place(stop)
+    g = Val(self.mload('int', got), "int")
+    few = self.label()
+    ok = self.label()
+    self.cbr(self.num_cmp('<', g, Val(str(n), "int")).v, few, ok)
+    self.place(few)
+    msg = self.cat(self.cat(Val(self.sconst(f"not enough values to unpack (expected {n}, got "), "str"), self.to_str(g)), Val(self.sconst(")"), "str"))
+    self.raise_("ValueError", msg.v)
+    self.place(ok)
+    for i in range(n):
+        self.assign(t.kids[i], items[i] if items[i].t == "None" else Val(self.mload(items[i].t, items[i].v), items[i].t))
 
 # ---- functions and the module

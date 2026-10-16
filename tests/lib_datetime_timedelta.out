@@ -1,0 +1,139 @@
+datetime.timedelta(0) datetime.timedelta(0) 1 day, 0:00:00 0:00:01 0:00:00.000001
+datetime.timedelta(days=-1) datetime.timedelta(days=-1, seconds=86399) datetime.timedelta(days=-1, seconds=86399, microseconds=999999)
+datetime.timedelta(seconds=1, microseconds=500000) datetime.timedelta(days=-1, seconds=81000) datetime.timedelta(days=1, seconds=3600)
+datetime.timedelta(days=19, seconds=3661, microseconds=1001)
+datetime.timedelta(days=2, seconds=86398)
+datetime.timedelta(days=11574, seconds=6400) datetime.timedelta(days=-11575, seconds=80000)
+-1 day, 0:00:00 | datetime.timedelta(days=-1) | -1 0 0
+-1 day, 23:59:59 | datetime.timedelta(days=-1, seconds=86399) | -1 86399 0
+-1 day, 23:59:59 | datetime.timedelta(days=-1, seconds=86399) | -1 86399 0
+2 days, 3:00:00 | datetime.timedelta(days=2, seconds=10800) | 2 10800 0
+-2 days, 0:00:00.000005 | datetime.timedelta(days=-2, microseconds=5) | -2 0 5
+1 day, 0:00:00 | datetime.timedelta(days=1) | 1 0 0
+0:00:00.000001 | datetime.timedelta(microseconds=1) | 0 0 1
+10:05:07 | datetime.timedelta(seconds=36307) | 0 36307 0
+999999999 days, 0:00:00 | datetime.timedelta(days=999999999) | 999999999 0 0
+-999999999 days, 0:00:00 | datetime.timedelta(days=-999999999) | -999999999 0 0
+datetime.timedelta(days=1, seconds=43200)
+datetime.timedelta(microseconds=500000)
+datetime.timedelta(0)
+datetime.timedelta(microseconds=2)
+datetime.timedelta(microseconds=2)
+datetime.timedelta(0)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999998)
+datetime.timedelta(0)
+datetime.timedelta(microseconds=1)
+datetime.timedelta(0)
+datetime.timedelta(seconds=1, microseconds=1)
+datetime.timedelta(days=2990714, seconds=16577, microseconds=790357)
+datetime.timedelta(days=-16601313, seconds=83349, microseconds=884667)
+datetime.timedelta(seconds=6, microseconds=100000)
+datetime.timedelta(days=-28, microseconds=43033)
+datetime.timedelta(seconds=69486, microseconds=100100)
+datetime.timedelta(microseconds=86)
+datetime.timedelta(days=-1, seconds=86399, microseconds=999999)
+datetime.timedelta(days=-782813, microseconds=76)
+datetime.timedelta(days=-67394, seconds=17667, microseconds=875793) datetime.timedelta(days=-2333, seconds=23452, microseconds=802933)
+datetime.timedelta(days=335178, seconds=18311, microseconds=687958) datetime.timedelta(days=6966, seconds=36535, microseconds=854676)
+datetime.timedelta(days=188310, seconds=40434, microseconds=307648) datetime.timedelta(days=2140, seconds=4825, microseconds=603531)
+datetime.timedelta(days=546081, seconds=23302, microseconds=444764) datetime.timedelta(days=5005, seconds=46231, microseconds=598141)
+datetime.timedelta(days=212845, seconds=75952, microseconds=543151) datetime.timedelta(days=-647, seconds=80571, microseconds=220325)
+datetime.timedelta(days=-146438, seconds=24451, microseconds=851709) datetime.timedelta(days=-6465, seconds=71306, microseconds=540142)
+datetime.timedelta(days=-431290, seconds=18502, microseconds=571815) datetime.timedelta(days=-1364, seconds=62073, microseconds=269722)
+datetime.timedelta(days=38353, seconds=47092, microseconds=175883) datetime.timedelta(days=5070, seconds=33287, microseconds=597509)
+datetime.timedelta(days=-23267, seconds=82498, microseconds=223293) datetime.timedelta(days=6449, seconds=23390, microseconds=30747)
+datetime.timedelta(days=518313, seconds=85520, microseconds=626517) datetime.timedelta(days=5737, seconds=5332, microseconds=332285)
+datetime.timedelta(days=-141578, seconds=35454, microseconds=103424) datetime.timedelta(days=3095, seconds=24774, microseconds=381046)
+datetime.timedelta(days=704002, seconds=27014, microseconds=158705) datetime.timedelta(days=4622, seconds=49254, microseconds=74042)
+datetime.timedelta(days=-11571, seconds=81494, microseconds=372111) datetime.timedelta(days=-1353, seconds=81679, microseconds=399745)
+datetime.timedelta(days=-855719, seconds=42725, microseconds=387354) datetime.timedelta(days=-2136, seconds=4444, microseconds=645390)
+datetime.timedelta(days=133285, seconds=78348, microseconds=772660) datetime.timedelta(days=-3990, seconds=36559, microseconds=112166)
+datetime.timedelta(days=-21711, seconds=22422, microseconds=933976) datetime.timedelta(days=3324, seconds=33181, microseconds=488476)
+datetime.timedelta(days=349309, seconds=31311, microseconds=219298) datetime.timedelta(days=5799, seconds=83374, microseconds=488981)
+datetime.timedelta(days=693769, seconds=16288, microseconds=78549) datetime.timedelta(days=5876, seconds=10675, microseconds=350386)
+datetime.timedelta(days=-798635, seconds=48432, microseconds=685486) datetime.timedelta(days=-4779, seconds=59489, microseconds=282586)
+datetime.timedelta(days=289890, seconds=7590, microseconds=171673) datetime.timedelta(days=2653, seconds=81819, microseconds=294032)
+datetime.timedelta(days=771629, seconds=16882, microseconds=354703) datetime.timedelta(days=-2836, seconds=30755, microseconds=343623)
+datetime.timedelta(days=-933446, seconds=29382, microseconds=214185) datetime.timedelta(days=-4612, seconds=12485, microseconds=751886)
+datetime.timedelta(days=-574330, seconds=23431, microseconds=389270) datetime.timedelta(days=527, seconds=42128, microseconds=106182)
+datetime.timedelta(days=-534639, seconds=49978, microseconds=511931) datetime.timedelta(days=1312, seconds=21728, microseconds=664518)
+datetime.timedelta(days=-566050, seconds=7062, microseconds=399913) datetime.timedelta(days=3673, seconds=58399, microseconds=976186)
+datetime.timedelta(days=-44695, seconds=68541, microseconds=236430) datetime.timedelta(days=-2678, seconds=42524, microseconds=316175)
+datetime.timedelta(days=-34891, seconds=4990, microseconds=533032) datetime.timedelta(days=4257, seconds=76207, microseconds=6345)
+datetime.timedelta(days=-997183, seconds=81198, microseconds=975886) datetime.timedelta(days=-5311, seconds=4897, microseconds=498909)
+datetime.timedelta(days=738446, seconds=37163, microseconds=516015) datetime.timedelta(days=-5951, seconds=41022, microseconds=430976)
+datetime.timedelta(days=-364390, seconds=27359, microseconds=623784) datetime.timedelta(days=-1617, seconds=33781, microseconds=108199)
+datetime.timedelta(days=-821019, seconds=59180, microseconds=957048) datetime.timedelta(days=-673, seconds=50301, microseconds=465218)
+datetime.timedelta(days=410993, seconds=29279, microseconds=777998) datetime.timedelta(days=4481, seconds=22175, microseconds=39429)
+datetime.timedelta(days=682686, seconds=68993, microseconds=517147) datetime.timedelta(days=1995, seconds=43459, microseconds=963188)
+datetime.timedelta(days=-760375, seconds=84219, microseconds=177971) datetime.timedelta(days=4065, seconds=12466, microseconds=829)
+datetime.timedelta(days=900629, seconds=84118, microseconds=141251) datetime.timedelta(days=2203, seconds=38862, microseconds=638433)
+datetime.timedelta(days=450210, seconds=17881, microseconds=240152) datetime.timedelta(days=2033, seconds=82118, microseconds=585824)
+datetime.timedelta(days=-866707, seconds=41590, microseconds=959566) datetime.timedelta(days=-5953, seconds=45437, microseconds=392701)
+datetime.timedelta(days=-839430, seconds=29929, microseconds=95659) datetime.timedelta(days=6745, seconds=5820, microseconds=146239)
+datetime.timedelta(days=-256186, seconds=54725, microseconds=970975) datetime.timedelta(days=-2999, seconds=55470, microseconds=373965)
+datetime.timedelta(days=-463150, seconds=37936, microseconds=405555) datetime.timedelta(days=-5794, seconds=56148, microseconds=937046)
+datetime.timedelta(days=-351330, seconds=71093, microseconds=639613) datetime.timedelta(days=2495, seconds=5118, microseconds=160235)
+datetime.timedelta(days=293673, seconds=68707, microseconds=734835) datetime.timedelta(days=-3993, seconds=4106, microseconds=82292)
+datetime.timedelta(days=-107274, seconds=34524, microseconds=819024) datetime.timedelta(days=554, seconds=42911, microseconds=563110)
+datetime.timedelta(days=-499327, seconds=77287, microseconds=775762) datetime.timedelta(days=-5784, seconds=57171, microseconds=465547)
+datetime.timedelta(days=-698291, seconds=10202, microseconds=682957) datetime.timedelta(days=-4189, seconds=47640, microseconds=928429)
+datetime.timedelta(days=-657447, seconds=13635, microseconds=2140) datetime.timedelta(days=-3850, seconds=76668, microseconds=603452)
+datetime.timedelta(days=-493530, seconds=67560, microseconds=759508) datetime.timedelta(days=237, seconds=26666, microseconds=273251)
+datetime.timedelta(days=-76111, seconds=5707, microseconds=983869) datetime.timedelta(days=-2060, seconds=10332, microseconds=852894)
+datetime.timedelta(days=437117, seconds=30829, microseconds=480403) datetime.timedelta(days=872, seconds=63542, microseconds=69705)
+datetime.timedelta(days=-325367, seconds=51157, microseconds=871656) datetime.timedelta(days=-3106, seconds=57257, microseconds=526522)
+datetime.timedelta(days=410966, seconds=56571, microseconds=948487) datetime.timedelta(days=1146, seconds=82288, microseconds=498081)
+datetime.timedelta(days=-101535, seconds=45234, microseconds=111845) datetime.timedelta(days=445, seconds=31605, microseconds=372722)
+datetime.timedelta(days=108589, seconds=59476, microseconds=38507) datetime.timedelta(days=-2034, seconds=23776, microseconds=736848)
+datetime.timedelta(days=-856135, seconds=38590, microseconds=892051) datetime.timedelta(days=-5833, seconds=9887, microseconds=111568)
+datetime.timedelta(days=-12923, seconds=17727, microseconds=377253) datetime.timedelta(days=1693, seconds=78229, microseconds=118110)
+datetime.timedelta(days=430610, seconds=63268, microseconds=297643) datetime.timedelta(days=2564, seconds=47680, microseconds=210211)
+datetime.timedelta(days=-745634, seconds=17408, microseconds=421522) datetime.timedelta(days=-1490, seconds=36317, microseconds=763822)
+datetime.timedelta(days=-668310, seconds=23512, microseconds=98989) datetime.timedelta(days=-1743, seconds=68416, microseconds=121230)
+datetime.timedelta(days=-39371, seconds=64412, microseconds=887321) datetime.timedelta(days=-4643, seconds=36430, microseconds=612395)
+datetime.timedelta(days=-318270, seconds=82240, microseconds=664179) datetime.timedelta(days=1527, seconds=43868, microseconds=648560)
+max+ OverflowError: days=1000000000; must have magnitude <= 999999999
+days OverflowError: days=1000000000; must have magnitude <= 999999999
+neg OverflowError: days=-1000000000; must have magnitude <= 999999999
+float OverflowError: days=1000000000; must have magnitude <= 999999999
+C int OverflowError: Python int too large to convert to C int
+C int2 OverflowError: Python int too large to convert to C int
+nan ValueError: cannot convert float NaN to integer
+inf OverflowError: cannot convert float infinity to integer
+-max OverflowError: days=-1000000000; must have magnitude <= 999999999
+max*2 OverflowError: days=1999999999; must have magnitude <= 999999999
+max+max OverflowError: days=1999999999; must have magnitude <= 999999999
+-999999999 days, 0:00:00 | 999999999 days, 23:59:59.999999 | 0:00:00.000001 | datetime.timedelta(days=999999999)
+23:00:59.000007 3 days, 10:59:01.000007 -4 days, 13:00:58.999993 -3 days, 18:59:59.999993 -2 days, 18:00:59 1 day, 5:59:01 2 days, 5:00:00.000007
+6 days, 15:00:00.000021 -5 days, 13:59:59.999986 0:00:00 -1249318 days, 20:53:20 2 days, 5:00:00.000007
+1 day, 2:30:00.000004 2 days, 10:18:00.000008 -1 day, 18:41:59.999999 -1 day, 23:59:59.892059 2315605 days, 8:00:07.340032
+17:40:00.000002 -1 day, 16:25:42.857142 -1 day, 23:59:59.892059 7 days, 8:40:00.000023 11:59:36.400000 0:00:00 0:00:00
+17:40:00.000002 -1 day, 19:42:59.857142 4:17:00.142857 -2 -1 -1.7676323177198654 -1 day, 17:01:58.000007 23:00:59.000007
+(-2, datetime.timedelta(days=-1, seconds=61318, microseconds=7)) (-30, datetime.timedelta(seconds=59)) (63600000002, datetime.timedelta(microseconds=1))
+0:00:00.100000 0:00:00.333333 0:00:00.000002 0:00:00.000002 -1 day, 23:59:59.999998 3:25:42.857143
+x/0 ZeroDivisionError: integer division or modulo by zero
+x//0 ZeroDivisionError: integer division or modulo by zero
+x/0.0 ZeroDivisionError: integer division or modulo by zero
+x/td0 ZeroDivisionError: division by zero
+x//td0 ZeroDivisionError: integer division or modulo by zero
+x%td0 ZeroDivisionError: integer modulo by zero
+x*inf OverflowError: cannot convert Infinity to integer ratio
+x*nan ValueError: cannot convert NaN to integer ratio
+x/nan ValueError: cannot convert NaN to integer ratio
+x*1e300 OverflowError: Python int too large to convert to C int
+x/1e-300 OverflowError: Python int too large to convert to C int
+[False, False, True, True, False] [True, False, False, False, False] [True, True, False, False, True] False
+[True, False, True, True, False] [False, True, False, False, True] [False, True, False, False, True] True
+[False, False, False, False, False] [False, False, True, True, False] [True, True, True, True, True] True
+[False, False, False, False, False] [False, False, True, True, False] [True, True, True, True, True] True
+[True, False, True, True, False] [False, True, False, False, True] [False, True, False, False, True] True
+1 day, 0:00:00 -1 day, 23:59:59.999999 [datetime.timedelta(days=-1, seconds=86399, microseconds=999999), datetime.timedelta(days=-1, seconds=86399, microseconds=999999), datetime.timedelta(0), datetime.timedelta(days=1), datetime.timedelta(days=1)]
+86401.0 -1e-06 9223286400.0 1e-06
+[False, False, False, True] 0:01:00.000001
+0:30:00 0:00:00.000002 -1 day, 23:59:59.999998
+td == None False True
+td < None TypeError: '<' not supported between instances of 'datetime.timedelta' and 'NoneType'
+td + None TypeError: unsupported operand type(s) for +: 'datetime.timedelta' and 'NoneType'
+td // float TypeError: unsupported operand type(s) for //: 'datetime.timedelta' and 'float'
+[exit 0]

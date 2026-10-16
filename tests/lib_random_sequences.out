@@ -1,0 +1,136 @@
+randrange and randint
+0 [6, 6, 0, 4, 8, 7, 6, 4] [0, 0, 0]
+[3, -3, -1, -3, -4, 4, -1, 3] [3, 3, 3]
+[77, 7, 98, 91, 70, 35] [37, 28, 91, 55, 46, 55]
+[-39, -41, -13, -35, -31, -29] [5, 5, 5]
+[1, 6, 4, 6, 6, 6, 1, 5, 4, 3, 2, 6] [-2, -2]
+2044857532908331599 7409550268663459575 -3297407222623979566 396512346289023869 1261978014288864973
+1 3 1 1
+1 [2, 9, 1, 4, 1, 7, 7, 7] [0, 0, 0]
+[2, -5, 1, 1, 4, -5, 2, -1] [3, 3, 3]
+[0, 0, 0, 70, 56, 0] [46, 10, 73, 46, 1, 100]
+[-33, -15, -49, -29, -31, -35] [5, 5, 5]
+[6, 2, 4, 3, 1, 4, 5, 6, 1, 2, 6, 6] [-2, -2]
+3068571458339789834 6654519064075202004 1947900280031350606 4025453899848902838 5839874887443891979
+8 2 1 4
+-3 [3, 9, 8, 2, 5, 9, 7, 9] [0, 0, 0]
+[-1, 3, -2, -2, 2, 3, 3, 2] [3, 3, 3]
+[70, 14, 91, 98, 56, 42] [1, 100, 10, 91, 82, 19]
+[-3, -19, -49, -1, -17, -31] [5, 5, 5]
+[6, 5, 4, 2, 3, 1, 1, 2, 4, 2, 3, 6] [-2, -2]
+3558988034518991269 3236577963913979771 784670160538237657 777085660066931803 2256492740138350870
+5 1 0 9
+99 [6, 6, 3, 9, 2, 3, 3, 2] [0, 0, 0]
+[3, 3, -4, 4, 2, -2, 1, 4] [3, 3, 3]
+[91, 70, 21, 14, 49, 70] [82, 19, 55, 91, 1, 28]
+[-43, -49, -5, -31, -21, -25] [5, 5, 5]
+[4, 2, 3, 5, 1, 4, 5, 2, 5, 4, 1, 3] [-2, -2]
+1483228514492855495 7303426697026384963 880071240735536529 4453856544186090846 9135284080868605966
+2 1 0 0
+1099511627779 [3, 0, 8, 1, 9, 4, 6, 3] [0, 0, 0]
+[4, -1, -1, 2, 0, 3, 0, -4] [3, 3, 3]
+[91, 49, 7, 0, 35, 7] [64, 73, 10, 28, 73, 1]
+[-19, -27, -49, -11, -19, -31] [5, 5, 5]
+[6, 5, 2, 1, 2, 1, 6, 4, 4, 4, 4, 1] [-2, -2]
+3059408547420731422 1985611747884641985 3992356821449209247 1519925495879430595 7573779759736139242
+6 3 0 1
+9223372036854775807 [5, 2, 7, 7, 1, 7, 9, 4] [0, 0, 0]
+[3, -4, -5, -2, -3, 3, 1, -3] [3, 3, 3]
+[77, 42, 35, 91, 7, 63] [73, 55, 28, 28, 28, 82]
+[-21, -15, -41, -7, -29, -47] [5, 5, 5]
+[3, 3, 4, 5, 1, 4, 4, 6, 5, 1, 1, 2] [-2, -2]
+3638738787803681557 2889661687076113567 -299772551060073046 -2328946567474448827 2633767288166116795
+2 3 0 5
+choice
+['gamma', 'beta', 'delta', 'ζήτα', 'alpha', 'alpha', 'η', 'épsilon', 'alpha', 'gamma']
+[-0.5, 1.5, -0.5, 1.5, 1.5] ['a', 'd', 'd', 'a', 'b', 'a']
+[40, 10, 10, 20, 10, 40] True
+[Card(2, 'hearts'), Card(1, 'hearts'), Card(2, 'hearts'), Card(12, 'spades')]
+[[2, 3], [1], [1], [2, 3]]
+shuffle
+0 [10, 18, 16, 14, 0, 17, 11, 2, 3, 9, 5, 7, 4, 19, 6, 15, 8, 1, 13, 12] ['Bob', 'Dana', 'Émile', 'Ann', 'Çelik'] [5] []
+1 [11, 5, 17, 19, 9, 0, 16, 1, 15, 6, 10, 13, 14, 12, 7, 3, 8, 2, 18, 4] ['Bob', 'Ann', 'Émile', 'Çelik', 'Dana'] [5] []
+2 [7, 6, 17, 8, 19, 15, 13, 0, 3, 9, 14, 4, 10, 12, 16, 5, 11, 18, 2, 1] ['Ann', 'Bob', 'Dana', 'Çelik', 'Émile'] [5] []
+3 [8, 3, 6, 5, 15, 16, 2, 12, 0, 1, 13, 10, 19, 9, 14, 11, 4, 17, 18, 7] ['Çelik', 'Ann', 'Bob', 'Dana', 'Émile'] [5] []
+12345 [16, 18, 3, 8, 19, 10, 7, 14, 12, 1, 5, 2, 15, 17, 4, 6, 11, 9, 0, 13] ['Bob', 'Ann', 'Çelik', 'Dana', 'Émile'] [5] []
+-12345 [16, 18, 3, 8, 19, 10, 7, 14, 12, 1, 5, 2, 15, 17, 4, 6, 11, 9, 0, 13] ['Bob', 'Ann', 'Çelik', 'Dana', 'Émile'] [5] []
+[Card(12, 'spades'), Card(1, 'hearts'), Card(13, 'clubs'), Card(2, 'hearts')]
+[627, 752, 993, 423, 388, 560, 983, 787, 882, 317] [503, 832, 473, 211, 15, 591, 494, 439, 33, 585] 499500 True
+sample
+0 [6, 9, 0] [4, 8, 7, 3, 2, 6, 5, 9, 0, 1] []
+[9, 4, 3, 8, 19] [9, 3, 2, 21, 10] [60, 71, 12, 45, 55, 40] [625, 655, 934, 209, 989, 565, 488, 453, 886, 533, 266, 63]
+['η', 'épsilon', 'alpha', 'ζήτα'] ['g', 'f', 'h'] [10, 30]
+['red', 'red', 'red', 'blue', 'blue'] ['y', 'y', 'z', 'z']
+[1954, 1167, 4448, 3669, 747] 4000
+1 [2, 1, 4] [1, 7, 8, 3, 5, 6, 9, 0, 4, 2] []
+[12, 13, 0, 14, 8] [7, 18, 3, 10, 0] [2, 3, 83, 69, 1, 48] [702, 221, 992, 432, 743, 29, 540, 227, 782, 448, 961, 507]
+['épsilon', 'beta', 'gamma', 'ζήτα'] ['d', 'g', 'h'] [30, 10]
+['red', 'blue', 'red', 'blue', 'red'] ['y', 'z', 'z', 'y']
+[4159, 1555, 2485, 2327, 4813] 4000
+5 [9, 4, 5] [8, 0, 7, 6, 1, 9, 5, 4, 3, 2] []
+[7, 12, 17, 3, 20] [0, 6, 13, 8, 5] [98, 49, 20, 97, 9, 17] [632, 455, 129, 135, 1, 995, 892, 5, 214, 792, 220, 983]
+['beta', 'η', 'gamma', 'épsilon'] ['d', 'e', 'f'] [20, 10]
+['blue', 'red', 'red', 'blue', 'red'] ['z', 'z', 'y', 'z']
+[2161, 533, 2718, 2468, 4940] 4000
+77 [4, 5, 3] [3, 9, 1, 2, 8, 4, 7, 0, 6, 5] []
+[0, 15, 5, 6, 16] [12, 5, 10, 3, 2] [70, 99, 33, 68, 60, 26] [231, 196, 73, 82, 865, 204, 713, 573, 922, 448, 609, 721]
+['épsilon', 'alpha', 'ζήτα', 'beta'] ['f', 'g', 'a'] [10, 30]
+['red', 'red', 'blue', 'red', 'red'] ['z', 'y', 'y', 'z']
+[3310, 4771, 4961, 4349, 2030] 4000
+[] []
+['b', 'b', 'b', 'a', 'a', 'a', 'b', 'b', 'a', 'b'] ['b', 'a', 'b', 'b', 'b', 'a', 'b', 'a', 'b', 'b'] ['a', 'a', 'a', 'a', 'a']
+['blue', 'blue', 'blue', 'red', 'blue'] ['x', 'x', 'z', 'z', 'z', 'x', 'x', 'x', 'x', 'z', 'x', 'z', 'z', 'x', 'z', 'z', 'x', 'z', 'z', 'x', 'z', 'x', 'z', 'z', 'x', 'x', 'x', 'z', 'x', 'x', 'z', 'z', 'z', 'z', 'z', 'x', 'z', 'x', 'z', 'z']
+choices
+0 ['ζήτα', 'ζήτα', 'gamma', 'beta', 'delta'] [2] []
+['a', 'a', 'a', 'a', 'b', 'a'] ['c', 'c', 'c', 'c', 'c', 'c']
+['c', 'c', 'c', 'c', 'c', 'c'] ['b', 'a', 'b', 'b']
+['c', 'c', 'a', 'c'] [Card(2, 'hearts'), Card(13, 'clubs')]
+1 ['alpha', 'ζήτα', 'ζήτα', 'beta', 'delta'] [2] []
+['a', 'a', 'a', 'a', 'b', 'a'] ['c', 'a', 'c', 'c', 'c', 'c']
+['c', 'a', 'a', 'c', 'c', 'c'] ['a', 'b', 'a', 'a']
+['a', 'a', 'a', 'a'] [Card(1, 'hearts'), Card(2, 'hearts')]
+8 ['beta', 'η', 'alpha', 'épsilon', 'alpha'] [1] []
+['c', 'a', 'a', 'a', 'a', 'a'] ['c', 'c', 'a', 'c', 'a', 'c']
+['c', 'c', 'c', 'a', 'c', 'c'] ['a', 'b', 'b', 'b']
+['a', 'c', 'a', 'c'] [Card(13, 'clubs'), Card(12, 'spades')]
+2024 ['delta', 'ζήτα', 'gamma', 'η', 'gamma'] [3] []
+['a', 'a', 'a', 'a', 'a', 'a'] ['c', 'c', 'c', 'c', 'c', 'c']
+['c', 'c', 'c', 'c', 'c', 'a'] ['a', 'b', 'a', 'b']
+['a', 'a', 'c', 'c'] [Card(2, 'hearts'), Card(2, 'hearts')]
+{'a': 979, 'b': 1984, 'c': 7037}
+module functions
+81 2 alpha
+[7, 6, 2, 9, 0, 5, 1, 8, 3, 4] [7, 4, 6, 8] [2, 1, 5, 8] [8, 9, 9]
+errors
+randrange(0) ValueError empty range for randrange()
+randrange(-3) ValueError empty range for randrange()
+randrange(5, 5) ValueError empty range in randrange(5, 5)
+randrange(7, 2) ValueError empty range in randrange(7, 2)
+randrange(5, 5, 2) ValueError empty range in randrange(5, 5, 2)
+randrange(0, 10, -3) ValueError empty range in randrange(0, 10, -3)
+randrange(1, 5, 0) ValueError zero step for randrange()
+randrange(10, None, 2) TypeError Missing a non-None stop argument
+randrange(10, step=True) TypeError Missing a non-None stop argument
+randrange(10, None, 1.0) TypeError Missing a non-None stop argument
+randint(5, 4) ValueError empty range in randrange(5, 5)
+choice([]) IndexError Cannot choose from an empty sequence
+choice('') IndexError Cannot choose from an empty sequence
+sample(k=4) ValueError Sample larger than population or is negative
+sample(k=-1) ValueError Sample larger than population or is negative
+sample(set) TypeError Population must be a sequence.  For dicts or sets, use sorted(d).
+sample(dict) TypeError Population must be a sequence.  For dicts or sets, use sorted(d).
+counts length ValueError The number of counts does not match the population
+counts negative ValueError Counts must be non-negative
+counts k ValueError Sample larger than population or is negative
+counts floats TypeError Counts must be integers
+choices both TypeError Cannot specify both weights and cumulative weights
+choices length ValueError The number of weights does not match the population
+cum_weights length ValueError The number of weights does not match the population
+choices zero ValueError Total of weights must be greater than zero
+choices negative ValueError Total of weights must be greater than zero
+choices inf ValueError Total of weights must be finite
+choices nan ValueError Total of weights must be finite
+choices empty IndexError list index out of range
+choices empty k=0 []
+choices empty weights IndexError list index out of range
+[exit 0]

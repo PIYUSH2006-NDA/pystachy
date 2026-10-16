@@ -3,18 +3,16 @@
 This is a minimally-edited copy of "sgp4io.cpp".
 
 """
-# Pystachy port: re and datetime are not Pystachy modules (#11). re only compiles INT_RE and
-# FLOAT_RE, which nothing uses; datetime only builds the legacy satrec.epoch, and
-# _check_datetime() makes its checks (below).
-# import re
+import re
+# Pystachy port: datetime is not a Pystachy module (#11). It only builds the legacy
+# satrec.epoch, and _check_datetime() makes its checks (below).
 # from datetime import datetime
 from math import pi, pow
 from sgp4.ext import days2mdhms, invjday, jday
 from sgp4.propagation import sgp4init
 
-# Pystachy port: re, as above
-# INT_RE = re.compile(r'[+-]?\d*')
-# FLOAT_RE = re.compile(r'[+-]?\d*(\.\d*)?')
+INT_RE = re.compile(r'[+-]?\d*')
+FLOAT_RE = re.compile(r'[+-]?\d*(\.\d*)?')
 
 LINE1 = '1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN'
 LINE2 = '2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN'
@@ -192,8 +190,7 @@ def twoline2rv(longstr1, longstr2, whichconst, opsmode='i', satrec=None):
         ephtype = line[62]  # Pystachy port: converted at the end (see there)
         satrec.elnum = int(line[64:68])
     else:
-        # Pystachy port: str.format (M7) as the same three substitutions
-        raise ValueError(error_message.replace('{0}', '1').replace('{1}', LINE1).replace('{2}', line))
+        raise ValueError(error_message.format(1, LINE1, line))
 
     line = longstr2.rstrip()
 
@@ -222,8 +219,7 @@ def twoline2rv(longstr1, longstr2, whichconst, opsmode='i', satrec=None):
         revnum = line[63:68]  # Pystachy port: converted at the end (see there)
     #except (AssertionError, IndexError, ValueError):
     else:
-        # Pystachy port: str.format (M7) as the same three substitutions
-        raise ValueError(error_message.replace('{0}', '2').replace('{1}', LINE2).replace('{2}', line))
+        raise ValueError(error_message.format(2, LINE2, line))
 
     #  ---- find no, ndot, nddot ----
     satrec.no_kozai = satrec.no_kozai / xpdotp; #   rad/min

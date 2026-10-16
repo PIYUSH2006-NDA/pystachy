@@ -4,19 +4,15 @@ from collections.abc import Mapping
 # Pystachy port: no datetime and types modules (#11): no date and time values, and
 # COMPACT_ESCAPES is a dict instead of a MappingProxyType
 
-# Pystachy port: was `TYPE_CHECKING = False`, a flag that Pystachy does not fold, so that it
-# would compile the imports below (M1); it folds typing's TYPE_CHECKING
-from typing import TYPE_CHECKING
+TYPE_CHECKING = False
 if TYPE_CHECKING:
     from collections.abc import Generator
     from decimal import Decimal
     from typing import IO, Any, Final
 
-# Pystachy port: no frozensets (M7): each set of characters is a str of them, which
-# `char in ...` tests the same way
-ASCII_CTRL = "".join(chr(i) for i in range(32)) + chr(127)
-ILLEGAL_BASIC_STR_CHARS = '"\\' + ASCII_CTRL.replace("\t", "")
-BARE_KEY_CHARS = (
+ASCII_CTRL = frozenset(chr(i) for i in range(32)) | frozenset(chr(127))
+ILLEGAL_BASIC_STR_CHARS = frozenset('"\\') | ASCII_CTRL - frozenset("\t")
+BARE_KEY_CHARS = frozenset(
     "abcdefghijklmnopqrstuvwxyz" "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789" "-_"
 )
 # Pystachy port: no ARRAY_TYPES = (list, tuple): classes are not values (M2)
@@ -197,9 +193,9 @@ def format_inline_array(obj, ctx: Context, nest_level: int) -> str:
 
 
 def format_key_part(part: str) -> str:
-    # Pystachy port: no frozenset.issuperset() (M7); and part is a str, so the TypeError
-    # for a key of another type, which names type(part) (M2), is not raised
-    only_bare_key_chars = all(c in BARE_KEY_CHARS for c in part)
+    # Pystachy port: no try for the TypeError of a key that is no str (M2: its message names
+    # type(part), and type() of a str is no value); part is a str
+    only_bare_key_chars = BARE_KEY_CHARS.issuperset(part)
 
     if part and only_bare_key_chars:
         return part
@@ -231,8 +227,7 @@ def format_string(s: str, *, allow_multiline: bool) -> str:
                 else:
                     result += COMPACT_ESCAPES[char]
             else:
-                # Pystachy port: no hex() (M1): format(n, "x") is hex(n)[2:]
-                result += "\\u" + format(ord(char), "x").rjust(4, "0")
+                result += "\\u" + hex(ord(char))[2:].rjust(4, "0")
             seq_start = pos + 1
         pos += 1
 

@@ -50,7 +50,7 @@ Python Software Foundation License Version 2 and copyright notice below.
 CPython's standard library modules (lib/)
 -----------------------------------------
 
-lib/bisect.py, lib/colorsys.py, lib/genericpath.py, lib/operator.py,
+lib/bisect.py, lib/colorsys.py, lib/genericpath.py,
 lib/posixpath.py, lib/stat.py, lib/this.py and lib/curses/ascii.py are unmodified copies of the files of the same names in CPython 3.13.16's
 Lib/ directory (lib/README.md lists their SHA-256 sums). They are part of Python and are used
 under the Python Software Foundation License Version 2, reproduced below, with the copyright
@@ -60,6 +60,10 @@ lib/difflib.py is CPython 3.13.16's Lib/difflib.py with the edits lib/README.md 
 marked in the source; it is derived from Python and is used under the same license and copyright
 notice.
 
+lib/operator.py is CPython 3.13.16's Lib/operator.py with its classes attrgetter, itemgetter and
+methodcaller edited as lib/compatibility.md describes, each edit marked in the source; it is
+derived from Python and is used under the same license and copyright notice.
+
 lib/getopt.py is CPython 3.13.16's Lib/getopt.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and copyright
 notice.
@@ -67,6 +71,11 @@ notice.
 lib/io.py is Pystachy's own StringIO, written after CPython 3.13.16's Modules/_io/stringio.c,
 whose behaviour and messages it follows and whose docstrings it keeps; it is derived from Python
 and is used under the same license and copyright notice.
+
+lib/_pystachy_iterators.py is Pystachy's own, written after the iterator types of CPython
+3.13.16's Objects/listobject.c, tupleobject.c, unicodeobject.c, rangeobject.c, dictobject.c and
+setobject.c, whose behaviour and messages it follows; it is derived from Python and is used under
+the same license and copyright notice.
 
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
@@ -81,8 +90,8 @@ copyright notice.
 
 lib/functools.py is Pystachy's own code for cache() and lru_cache(), which follows the C
 wrapper of CPython 3.13.16's Modules/_functoolsmodule.c (_lru_cache_wrapper) and keeps
-docstrings of Lib/functools.py (lib/README.md). Its reduce() and cmp_to_key() adapt the
-Python fallbacks in Lib/functools.py. It is derived from Python and is used under the
+docstrings of Lib/functools.py (lib/README.md). Its reduce(), cmp_to_key() and partial adapt
+the Python fallbacks in Lib/functools.py. It is derived from Python and is used under the
 same license and copyright notice.
 
 lib/textwrap.py is CPython 3.13.16's Lib/textwrap.py with the edits lib/README.md lists, each
@@ -95,6 +104,10 @@ used under the same license and copyright notice.
 
 lib/string.py is CPython 3.13.16's Lib/string.py with the edits lib/README.md lists, each marked
 in the source; it is derived from Python and is used under the same license and copyright notice.
+lib/_pystachy_string.py is Pystachy's own code for the parsers of CPython 3.13.16's C module
+_string, written after Objects/stringlib/unicode_format.h (MarkupIterator_next(), parse_field(),
+field_name_split() and FieldNameIterator_next()), whose behaviour and messages it follows; it is
+derived from Python and is used under the same license and copyright notice.
 
 lib/csv.py is Pystachy's own code, written after CPython 3.13.16's Modules/_csv.c and Lib/csv.py
 (lib/README.md); it keeps the docstrings and comments it copies from them (the module's docstring,
@@ -105,6 +118,13 @@ notice.
 lib/statistics.py is CPython 3.13.16's Lib/statistics.py with the edits lib/README.md lists, each
 marked in the source; it is derived from Python and is used under the same license and copyright
 notice.
+
+lib/random.py is CPython 3.13.16's Lib/random.py with the edits lib/README.md lists, each
+marked in the source, including a port of m_lgamma() from Modules/mathmodule.c. lib/_pyrandom.py
+is Pystachy's own _random.Random for it, written after Modules/_randommodule.c and the float hash
+of Python/pyhash.c, whose docstrings and comments it keeps. They are derived from Python and are
+used under the same license and copyright notice; the Mersenne Twister in lib/_pyrandom.py is
+also under the notice below.
 
 lib/urllib/parse.py is CPython 3.13.16's Lib/urllib/parse.py with the edits lib/README.md lists,
 each marked in the source; it is derived from Python and is used under the same license and
@@ -117,11 +137,63 @@ and Lib/test/test_keyword.py from the same commit; their headers pin the source 
 and identify exclusions. These sources and tests use the same PSF license and copyright
 notice. Every source adaptation is marked # Pystachy port:.
 
+lib/datetime.py is CPython 3.13.16's Lib/_pydatetime.py (which Lib/datetime.py re-exports) with
+the edits lib/README.md lists, each marked # Pystachy port:. Where CPython's C module differs, the
+edits follow Modules/_datetimemodule.c and the strftime() of Modules/timemodule.c at commit
+cbc944f4bc59639a444dd971c737788ba2283a91. It is derived from Python and is used under the same
+license and copyright notice.
+
 lib/shlex.py adapts CPython 3.13.16's Lib/shlex.py at the same commit. Its upstream
 table assertions in tests/lib_shlex_upstream.py derive from Lib/test/test_shlex.py.
-lib/collections/__init__.py implements a typed deque after Modules/_collectionsmodule.c,
-including its comparison mutation checks and messages. These sources, their retained
-docstrings and upstream-derived tests use the same PSF license and copyright notice.
+lib/collections/__init__.py implements a typed deque and defaultdict after
+Modules/_collectionsmodule.c, including the deque's comparison mutation checks and their
+messages, and an OrderedDict and a Counter after Lib/collections/__init__.py, whose
+docstrings, comments and Counter method bodies it keeps, with the messages of
+Objects/odictobject.c. These sources, their retained docstrings and upstream-derived tests
+use the same PSF license and copyright notice.
+
+Mersenne Twister (lib/_pyrandom.py)
+-----------------------------------
+
+lib/_pyrandom.py's init_genrand(), init_by_array() and genrand_uint32() follow CPython's
+Modules/_randommodule.c, which is based on the MT19937 reference code. Its notice, as CPython's
+documentation reproduces it from the original code:
+
+     A C-program for MT19937, with initialization improved 2002/1/26.
+     Coded by Takuji Nishimura and Makoto Matsumoto.
+
+     Before using, initialize the state by using init_genrand(seed)
+     or init_by_array(init_key, key_length).
+
+     Copyright (C) 1997 - 2002, Makoto Matsumoto and Takuji Nishimura,
+     All rights reserved.
+
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+     are met:
+
+      1. Redistributions of source code must retain the above copyright
+         notice, this list of conditions and the following disclaimer.
+
+      2. Redistributions in binary form must reproduce the above copyright
+         notice, this list of conditions and the following disclaimer in the
+         documentation and/or other materials provided with the distribution.
+
+      3. The names of its contributors may not be used to endorse or promote
+         products derived from this software without specific prior written
+         permission.
+
+     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+     A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+     OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+     TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+     PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 CPython's math tests (tests/)
 ----------------------------
@@ -140,7 +212,7 @@ convertdate (ports/convertdate/)
 --------------------------------
 
 ports/convertdate/ holds convertdate 2.5.1's modules (its package src/convertdate without bahai.py,
-dublin.py, french_republican.py, persian.py and data/french_republican_days.py), edited where
+french_republican.py, persian.py and data/french_republican_days.py), edited where
 ports/convertdate/PORT.md lists (each edit is marked "Pystachy port:"). convertdate is used under
 the MIT License, whose text and copyright notice ("Copyright (c) 2014-2022 Neil Freeman") are in
 ports/convertdate/LICENSE. ports/convertdate/_calendar.py, which stands in for CPython's calendar
@@ -310,6 +382,25 @@ License, whose text and copyright notice ("Copyright (c) 2014 Jeff Quast
 <contact@jeffquast.com>") are in ports/wcwidth/LICENSE, with the permission notice of Markus
 Kuhn's code that wcwidth derives from.
 
+pyperformance (bench/pyperformance/)
+------------------------------------
+
+The Python files in bench/pyperformance/ are the run_benchmark.py files of 18 benchmarks from
+pyperformance 1.14.0 (https://github.com/python/pyperformance), edited where
+bench/pyperformance/README.md lists (each edit is marked "Pystachy port:"); that README records
+the sdist's and each file's SHA-256. pyperformance is used under the MIT License, whose text is in
+bench/pyperformance/LICENSE, with its list of authors in bench/pyperformance/AUTHORS. Each file
+keeps its upstream header: regex_v8.py's holds the V8 project's BSD license ("Copyright 2009 the
+V8 project authors"), and raytrace.py's says it may be redistributed under the MIT License
+("Copyright Callum and Tony Garnock-Jones, 2008"). deltablue is excluded from the delivered suite
+pending a separate provenance decision. fannkuch.py, meteor_contest.py,
+nbody.py, regex_dna.py and spectral_norm.py say they come from The Computer Language Benchmarks
+Game, whose programs are published under the 3-clause BSD License; richards.py and
+richards_super.py credit a Java version "Copyright (C) 1995 Sun Microsystems, Inc."; chaos.py says
+"Copyright (C) 2005 Carl Friedrich Bolz". pyperformance distributes all of these files under its
+MIT License; their origins are listed here so that a license review can confirm that this
+suffices.
+
 Ryu (ryu/)
 ----------
 
@@ -342,6 +433,20 @@ compiled program's __lt__ methods) instead of PyObject_RichCompare, in the same 
 CPython makes them; key= and the type-specialized compare functions are left out; ints and
 floats are merged with branch-free selects; and the merge buffer is memory that Pystachy's
 garbage collector scans.
+
+CPython's gamma functions and isclose() (runtime.c)
+---------------------------------------------------
+
+math.gamma() and math.lgamma() in runtime.c (the section that starts with "math.gamma and
+math.lgamma are CPython 3.13.16's m_tgamma and m_lgamma") are CPython 3.13.16's m_sinpi,
+lanczos_sum, m_tgamma and m_lgamma from Modules/mathmodule.c (SHA-256
+e9370d6380c154d620ab7d5b54727aedb6c19e786156974445b965d1dd9a233a), with their constants and
+comments; pys_m_isclose, just before them, is that file's math_isclose_impl.
+They are a derivative work of Python and are used under the Python Software Foundation License
+Version 2, reproduced below. The changes: Python's Py_IS_FINITE, Py_IS_NAN, Py_IS_INFINITY,
+Py_NAN, Py_HUGE_VAL and Py_INFINITY are C99's, the asserts are dropped, Py_UNREACHABLE() is
+__builtin_unreachable(), errno is a parameter that pys_m_gamma and pys_m_lgamma test as
+math_1a() and is_error() test errno, and each function forbids fused multiply-adds.
 
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
 --------------------------------------------
@@ -389,6 +494,21 @@ products or services of Licensee, or any third party.
 8. By copying, installing or otherwise using Python, Licensee
 agrees to be bound by the terms and conditions of this License
 Agreement.
+
+CPython's str.format() parser (src/pystachy_compiler/expressions.py)
+--------------------------------------------------------------------
+
+The compile-time reading of a literal str.format() format string (gen_str_fields, gen_str_field
+and gen_format_arg in src/pystachy_compiler/expressions.py, and fmt_index in
+src/pystachy_compiler/utils.py) is written after CPython 3.13.16's
+Objects/stringlib/unicode_format.h (MarkupIterator_next, parse_field, field_name_split,
+FieldNameIterator_next, get_integer, output_markup), whose order of steps and error messages it
+follows. It is derived from Python and is used under the Python Software Foundation License
+Version 2 above.
+
+Summary of changes: the compiler reads the format, over the literal's UTF-8 bytes, and emits for
+each field the lookups, conversion and format() call that CPython makes when the call runs, or
+the exception CPython raises where it reaches an error.
 
 CPython's sum regression tests (tests/upstream_sum_start.py)
 -----------------------------------------------------------

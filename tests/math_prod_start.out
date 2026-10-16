@@ -1,0 +1,14 @@
+abababababab [] [1, 2, 1, 2, 1, 2] ''
+x [] éééééé ['日', '日', '日', '日']
+{2: 3} ab True False {1, 2}
+------ oooooo
+TypeError unsupported operand type(s) for *: 'dict' and 'int'
+TypeError unsupported operand type(s) for *: 'set' and 'int'
+TypeError unsupported operand type(s) for *: 'dict' and 'int'
+TypeError unsupported operand type(s) for *: 'set' and 'int'
+ab [0]
+TypeError can't multiply sequence by non-int of type 'float'
+TypeError can't multiply sequence by non-int of type 'str'
+eval iterable; eval start; abababab
+eval start; item 1; item 3; ababab
+[exit 0]

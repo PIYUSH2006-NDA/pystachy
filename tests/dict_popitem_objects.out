@@ -1,0 +1,19 @@
+(K(11), 11) (K(10), 10) 10 []
+K(9) 9; K(8) 8; K(7) 7; K(6) 6; K(5) 5; K(4) 4; K(3) 3; K(2) 2; K(1) 1; K(0) 0; {} []
+(K(9), 'c') {K(1): 'a', K(5): 'b'} True False
+{K(299): 299} True False {K(299): 299} {K(299): 299}
+1 RuntimeError dictionary keys changed during iteration [100]
+2 [0, 101] [1000, 1101]
+3 [0, 1, 102] [1000, 1001, 1102]
+4 RuntimeError dictionary keys changed during iteration [0, 1, 2, 103]
+5 RuntimeError dictionary keys changed during iteration [0, 1, 104, 1000, 1001]
+6 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 1002, 1003]
+7 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 106]
+8 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 6, 107]
+9 RuntimeError dictionary keys changed during iteration [0, 1, 2, 3, 4, 5, 1003, 1004, 1005]
+(Plain(19), 19) (Plain(18), 18) (Plain(17), 17) (Plain(16), 16) (Plain(15), 15) 15 True False
+1
+((K(9), 9), '9') ((K(8), 8), '8') 8
+7 True
+KeyError 'popitem(): dictionary is empty' []
+[exit 0]

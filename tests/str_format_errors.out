@@ -1,0 +1,105 @@
+malformed
+  ValueError "Single '{' encountered in format string"
+  ValueError "Single '}' encountered in format string"
+  format a ''
+  ValueError "Single '}' encountered in format string"
+  ValueError "Single '}' encountered in format string"
+  ValueError "expected '}' before end of string"
+  ValueError "expected '}' before end of string"
+  ValueError "expected '}' before end of string"
+  ValueError 'end of string while looking for conversion specifier'
+  ValueError "unmatched '{' in format spec"
+  ValueError "unmatched '{' in format spec"
+  ValueError "expected ':' after conversion specifier"
+  ValueError "expected ':' after conversion specifier"
+  ValueError "unmatched '{' in format spec"
+  ValueError "unmatched '{' in format spec"
+  ValueError "unexpected '{' in field name"
+  ValueError "Only '.' or '[' may follow ']' in format field specifier"
+  ValueError 'Empty attribute in format string'
+  ValueError 'Empty attribute in format string'
+  ValueError 'Empty attribute in format string'
+  ValueError 'Too many decimal digits in format string'
+  ValueError 'Too many decimal digits in format string'
+  ValueError 'Too many decimal digits in format string'
+numbering
+  format a ''
+  ValueError 'cannot switch from automatic field numbering to manual field specification'
+  format a ''
+  ValueError 'cannot switch from manual field specification to automatic field numbering'
+  ValueError 'cannot switch from manual field specification to automatic field numbering'
+  ValueError 'cannot switch from automatic field numbering to manual field specification'
+A1B2
+A1B2
+missing arguments
+  arg x
+  arg y
+  IndexError 'Replacement index 2 out of range for positional args tuple'
+  format a ''
+  IndexError 'Replacement index 9 out of range for positional args tuple'
+  IndexError 'Replacement index 0 out of range for positional args tuple'
+  format a ''
+  KeyError "'b'"
+  KeyError "' 0'"
+  KeyError "'é'"
+  KeyError "'-1'"
+  IndexError 'Replacement index 2 out of range for positional args tuple'
+  IndexError 'Replacement index 4 out of range for positional args tuple'
+  KeyError "'b'"
+  KeyError "'x'"
+  ValueError 'Format string contains positional fields'
+  ValueError 'Format string contains positional fields'
+lookups
+  IndexError 'list index out of range'
+1
+  IndexError 'string index out of range'
+conversions
+  arg v
+  ValueError 'Unknown conversion specifier x'
+  ValueError 'Unknown conversion specifier q'
+  IndexError 'Replacement index 9 out of range for positional args tuple'
+  ValueError 'Unknown conversion specifier \\xe9'
+  ValueError 'Unknown conversion specifier \\x20ac'
+  ValueError 'Unknown conversion specifier \\xa'
+  ValueError 'Unknown conversion specifier \\x7f'
+  ValueError "unmatched '{' in format spec"
+specs
+  ValueError 'Max string recursion exceeded'
+  ValueError 'Max string recursion exceeded'
+  ValueError "Invalid format specifier '{}' for object of type 'int'"
+  ValueError "Unknown format code 'd' for object of type 'str'"
+  arg spec
+  format a 'spec'
+a
+  TypeError 'unsupported format string passed to NoneType.__format__'
+  format a ''
+  ValueError "Unknown format code 'd' for object of type 'float'"
+keywords
+  arg 1
+  arg 2
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 4
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 5
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 6
+  arg 7
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 8
+  arg 9
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg 10
+  arg 11
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  arg p1
+  arg p2
+  arg k1
+  arg d1
+  arg k2
+  arg k3
+k2k1
+  TypeError "str.format() got multiple values for keyword argument 'b'"
+  TypeError "str.format() got multiple values for keyword argument 'a'"
+  TypeError 'str.format() argument after * must be an iterable, not NoneType'
+  TypeError 'str.format() argument after ** must be a mapping, not NoneType'
+[exit 0]

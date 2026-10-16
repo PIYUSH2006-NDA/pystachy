@@ -14,7 +14,8 @@ For Python modules, `import NAME` searches for `NAME/__init__.py` or `NAME.py` i
 3. `lib/` beside the compiler.
 
 Builtin modules such as `sys`, `os` and `math` are handled by the compiler. A program's own
-`ffi.py` takes precedence over the builtin `ffi` module.
+`ffi.py` takes precedence over the builtin `ffi` module. A file named like a module built into
+CPython, such as `_weakref.py` or `itertools.py`, is never imported, as CPython imports its own.
 
 Packages, namespace packages, submodules, relative imports, `import a.b as x`,
 `from ... import`, `from m import *` and circular imports are supported. A Python module's
@@ -22,7 +23,15 @@ top-level code runs once, when its first import executes; after a failed import,
 import runs that code again.
 
 `__name__` and `m.__name__` are the module's name, and `__debug__` is `True`.
-`__file__`, `__doc__`, `__spec__` and CPython's other module metadata are unsupported.
+`__doc__`, `m.__doc__` and `from m import __doc__` give the module's docstring, cleaned as
+CPython 3.13 cleans it, or `None`. A module may bind its own `__doc__`, as `datetime` does;
+until it does, its code reads the docstring. Without a docstring, it reads `None` only where
+the first statement that names `__doc__` is module-level code; where that statement is a `def`
+or `class`, a read before the module binds `__doc__` raises `NameError`. Deleting a module's
+`__doc__`, assigning another module's, and reading `__doc__` in a class body (but in its
+lambdas and comprehensions) are not supported. Some `lib/` modules' docstrings differ from
+CPython's (see the [library reference](../../lib/compatibility.md)).
+`__file__`, `__spec__` and CPython's other module metadata are unsupported.
 An imported module cannot bind `__name__`.
 
 ## Module scope
@@ -42,6 +51,7 @@ Builtin-module imports have a [documented scope deviation](../language.md#deviat
 | `from m import *` | Uses `__all__` when present; otherwise takes public names bound when the module's code ends. `__all__` may be extended with `+=`, `append()` and `extend()`. |
 | A package's own binding, such as `from .parse import parse` | Takes precedence over a submodule with the same name. |
 | A module-level alias, `name = function` | Names that function, including a from-imported function or class, for later from-imports and star imports. |
+| A module-level [type alias](typing.md#type-aliases), `Row = list[str]` or `type Row = ...` | Names that type in the annotations of modules that import it, as `m.Row` or by a from-import or star import. |
 
 A global that module code may leave unbound is checked when a function or another module
 reads it. A missing binding raises `NameError` or `AttributeError`. This includes a global
@@ -54,6 +64,8 @@ by that code. The runtime binding check still applies.
 
 `import pkg.util as u` binds `u` to `pkg.util`, as CPython does. Usually this is the submodule;
 it can instead be a value the package binds after importing that submodule.
+`import collections.abc` binds `collections` to the `lib/` package and runs its code, although
+`collections.abc` itself is builtin; the package binds `abc` to that module, as CPython's does.
 
 ## Compile-time branches
 
@@ -66,6 +78,9 @@ Pystachy resolves these guards while compiling:
 | Module-level `if False:` or `if 0:` | Drops the body outside functions and classes. |
 | Module-level `TYPE_CHECKING = False` followed by `if TYPE_CHECKING:` | Drops the body when that is the name's only binding; other assignments, deletion, imports, star imports or `global` declarations disable this rule. |
 | Windows tests of `sys.platform` or tests of `os.name` | Resolves them for POSIX. `sys.platform` tests support `==`, `!=`, `startswith()` (including tuple prefixes), and membership in a tuple or list of Windows names. |
+| Version tests: `sys.version_info`, a slice, an item or an attribute of it compared with a literal int, str or tuple of those | Resolves them for CPython 3.13.16, as in `if sys.version_info < (3,):`. |
+| A module-level `try:` without `finally` whose first statement reads or assigns a name (or a tuple of names) that is no builtin and that nothing but the `try` binds (no other module-level statement, `global` declaration, star import or, in a package, submodule of that name; and where the `try` binds it, no import of a Python module before the `try`, whose code could assign it through the module), with a handler that catches `NameError` without naming it or re-raising | Runs that handler instead of the `try`, as CPython does: shims such as `try: unicode` / `except NameError: unicode = str`. |
+| A module-level `try:` without `finally` whose statements only read builtins or assign them to names, such as `try: text_type = str`, which nothing else binds | Runs its body and `else` block; its handlers never run. |
 
 These tests work inside `not`, `and` and `or`, while preserving the other operands' evaluation
 order. For example, `effect()` still runs in `if effect() and os.name == "nt":`.
@@ -147,8 +162,8 @@ the builtin at that point. Class creation checks that Pystachy skips are listed 
 ## Library code
 
 Pystachy reuses CPython library code in several ways. Some files, such as `bisect` and
-`colorsys`, are unchanged upstream sources. Others, such as `textwrap`, `fnmatch`, `difflib`
-and `urllib.parse`, are adapted sources with marked edits. `re` substantially ports Python
+`colorsys`, are unchanged upstream sources. Others, such as `textwrap`, `fnmatch`, `difflib`,
+`urllib.parse` and `datetime`, are adapted sources with marked edits. `re` substantially ports Python
 and C components to the subset; `functools`, `io` and `csv` have implementations written for
 Pystachy. The [library reference](../../lib/README.md) records provenance, available APIs,
 restrictions and tests for each module.
@@ -169,37 +184,50 @@ determine whether a particular call compiles.
 | Numeric operations | `abs`, `round`, `divmod`, `pow` (including modular powers and inverses), `sum` |
 | Containers and selection | `len`, `list`, `tuple`, `dict`, `set`, `frozenset`, `sorted`, `min`, `max`, `any`, `all` |
 | Iteration in supported contexts | `range`, `reversed`, `enumerate`, `zip`, `map`, `filter` |
-| Types and attributes | `isinstance`, `hasattr` with a literal attribute name, `super` in supported instance methods |
+| Iterators | `iter` (one argument), `next` (with or without a default) |
+| Types and attributes | `isinstance`, `callable`, `hasattr` and two-argument `getattr` with a literal attribute name, `super` in supported instance methods, `hash` |
 | Input and files | `input`, `open` |
 
-`iter()` is supported as the return value of a supported `__iter__` method, not as a general
-first-class iterator constructor. General `next()`, `hash()` and `type()` calls are unsupported;
-`type(e).__name__` is supported for an exception `e`.
+`iter()` and `next()` follow the [iterator rules](semantics.md#iterators). General `type()`
+calls are unsupported; `type(e).__name__` is supported for an exception `e`. `hash()` takes the
+values that can be [dict keys](typing.md#supported-types), floats too, and raises CPython's
+`TypeError` for a list, dict, set or unhashable object.
 
 `print()` accepts `sep`, `end`, `file` and `flush`. Its `file` may be a file or an object with
 `write()`, such as `io.StringIO`; it receives one call for each piece, as in CPython.
-`min()` and `max()` accept `key=`, and `sorted()` and `list.sort()` accept `key=` and `reverse=`.
+`min()` and `max()` accept `key=`, and `sorted()` and `list.sort()` accept `key=` and `reverse=`;
+a key is a function, a `Callable`, or an object whose class defines `__call__`.
 `set()` and `frozenset()` take supported iterables of their element type. Their methods support
 multiple iterable arguments where CPython's do.
 
-The common `str`, `list` and `dict` methods are implemented, including:
+The common `str`, `list`, `dict` and `tuple` methods are implemented, including:
 
 - `find`, `index` and `count` with start and end bounds, including `None`.
 - `startswith` and `endswith`, including a tuple of strings.
 - `split`, `rsplit`, `partition`, `rpartition`, `splitlines`, `removeprefix` and `removesuffix`.
+- `replace` with a count, also given as `count=`.
 - `center`, `ljust` and `rjust` with a fill character; `zfill`, `expandtabs`, `capitalize`,
   `title` and `swapcase`.
-- `dict.pop()` with a default; `dict.update()` from a dict of its type, a list of key/value
-  tuples, or keyword arguments for string keys; and `dict.fromkeys(xs, v)`.
+- `dict.pop()` with a default; `dict.popitem()`; `dict.update()` from a dict of its type, a list
+  of key/value tuples, or keyword arguments for string keys; and `dict.fromkeys(xs, v)`.
+- `tuple.index()` with start and stop, and `tuple.count()`, also of NamedTuples and
+  runtime-length tuples.
 - `int.bit_length()` and `int.bit_count()`, including on a `bool`.
+- `str.format()` and `str.format_map()` of a string literal (see
+  [formatting](semantics.md#literals-and-formatting)).
+
+`a | b` of two dicts of one type is a new dict, and `a |= b` updates `a` as `a.update(b)` does.
+`dict()` takes a dict, a list or tuple of key/value tuples, or the pairs of a generator
+expression, list comprehension, `zip()`, `enumerate()`, `reversed()`, `map()` or `filter()`.
 
 `dict.fromkeys()` can omit `v`, or use `None`, when an annotation provides an optional value
 type. Its keys cannot be a generator expression, `zip()`, `enumerate()` or `reversed()`;
 an empty `()` or `{}` takes the expected dict's key type.
 
-Unsupported operations include dict union (`a | b`), dict displays with `**`,
-`str.replace(old, new, count)`, `str.format()`, `dict.popitem()`, `dict()` from pairs, and tuple
-`index()` and `count()`. Supported iteration contexts and other restrictions are in the
+A dict display with `**` merges dicts of one type into a new dict, or `**kwargs` records
+(with string keys) into a record that prints as a dict and can be forwarded.
+Unsupported operations include `a | b` of dicts of different types and `dict()` with keyword
+arguments. Supported iteration contexts and other restrictions are in the
 [language guide](../language.md#expressions).
 
 ## Builtin modules and files
@@ -207,6 +235,7 @@ Unsupported operations include dict union (`a | b`), dict displays with `**`,
 | Module | Supported surface |
 |---|---|
 | `sys` | `argv`, `exit`, `stdin`, `stdout`, `stderr`, `maxsize`, `platform`, `setrecursionlimit`, `getrecursionlimit`; the streams are files. |
+| `sys.version_info` | CPython 3.13.16's, a tuple of its items, and `major`, `minor`, `micro`, `releaselevel`, `serial` read as `sys.version_info.major` and the like; `str()` shows the tuple. |
 | `sys.float_info` | `max`, `max_exp`, `max_10_exp`, `min`, `min_exp`, `min_10_exp`, `dig`, `mant_dig`, `epsilon`, `radix`, `rounds`, matching CPython for IEEE 754 doubles. `sys.float_info` itself is not a value. |
 | `os` | `system`, `execv`, `getpid`, `getenv`, `remove`, `rmdir`, `fspath`; `name`, `sep`, `curdir`, `pardir`, `extsep`, `pathsep`, `linesep`, `devnull`. |
 | `os.path` | `exists`, `realpath`, `join`, `normcase`, `getsize`, `getmtime`, `getctime`. |
@@ -225,4 +254,14 @@ are documented in [CPython deviations](../language.md#deviations-from-cpython).
 `fsum()` and `prod()` accept the iterables accepted by `sum()`; `fsum()` also accepts a tuple
 mixing ints and floats. `dist()` accepts two lists or tuples of numbers, NamedTuples, or objects
 with `__iter__`. It copies the first point's items before iterating the second, as CPython's
-`tuple(p)` does. `gamma`, `isclose`, `lgamma` and `sumprod` are unsupported.
+`tuple(p)` does. `prod()`'s `start` may also be a str or list, repeated by each int item in
+turn, or a dict or set, returned when there are no items. Class items may supply `__index__`
+for repetition or `__rmul__` returning the same type as the start; products that change the
+start type are rejected. Subclasses that change the selected multiplication protocol need
+`isinstance()` narrowing. With these starts, generators and `map()` are consumed one item at
+a time, stopping at the first failed multiplication.
+
+`gamma()` and `lgamma()` are CPython's own Lanczos implementation, so their results match
+CPython's bit for bit. `isclose()` takes `rel_tol=` and `abs_tol=`. `gcd()`, `lcm()` and
+`hypot()` take any number of arguments, `perm(n)` and `perm(n, None)` are `factorial(n)`,
+and the integer functions accept bools. `sumprod` is unsupported.

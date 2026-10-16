@@ -8,7 +8,7 @@ closures and class fields are described in [typing](typing.md); imports and buil
 
 | Category | Supported statements |
 |---|---|
-| Assignment | Simple, chained, annotated and augmented assignment; fixed-shape tuple/list unpacking and swaps |
+| Assignment | Simple, chained, annotated and augmented assignment; tuple/list unpacking, with one starred target or none, and swaps |
 | Control flow | `if` / `elif` / `else`, `while`, `for`, loop `else`, `break`, `continue`, `return` |
 | Scope and definitions | `global`, `nonlocal`, `def`, nested function definitions, lambdas, supported class definitions |
 | Runtime checks | `assert`, `raise`, `try` / `except` / `else` / `finally` |
@@ -19,6 +19,12 @@ closures and class fields are described in [typing](typing.md); imports and buil
 `+=` on a list extends it in place. Object in-place operators use `__iadd__` and the
 corresponding methods when supported. Deleting a variable makes later reads raise
 `NameError` or `UnboundLocalError`; deleting a global from a function is unsupported.
+
+A starred target, as in `head, *body, tail = xs`, gets a new list of the items the other targets
+leave. It takes what a `for` loop iterates, and `range()`, `enumerate()`, `zip()`, `map()`,
+`filter()` and generator expressions; every item is taken before the first target is assigned.
+Too few items raise CPython's `ValueError`. Of a tuple, the starred list holds its items'
+common type; items of types no one type holds need an annotation (`body: list[int | str]`).
 
 Loops can consume ranges, lists, strings, dictionaries, sets, files, homogeneous tuples and
 NamedTuples, supported objects, and dictionary `items()`, `keys()` and `values()`.
@@ -36,23 +42,60 @@ Strings support raw and triple-quoted literals, implicit concatenation and escap
 than `\N{...}`.
 
 F-strings support `!r`, `!s`, `!a`, debug `=`, nested format specifications and the
-format-spec mini-language. `%` formatting requires a literal format string. It supports
-`s r a d i u x X o e E f F g G c`, flags, widths and precisions, but not named substitutions,
-`*` widths or precisions, or integer precisions. A variable format string such as
-`fmt % value` is rejected.
+format-spec mini-language. Replacement fields follow Python 3.12's grammar (PEP 701): they may
+reuse the f-string's quote, nest f-strings, and hold backslashes, newlines and comments.
+
+`%` formatting requires a literal format string, or a module global that one module-level
+assignment binds to one (`FMT = "%8.3f"`, also `Final`) where nothing else in the program, not
+even a function's local, binds its name. It supports `s r a d i u x X o e E f F g G c`, flags,
+widths and precisions, but not named substitutions, `*` widths or precisions, or integer
+precisions. A variable format string such as `fmt % value` is rejected.
+
+`str.format()` and `str.format_map()` (also `str.format(FMT, ...)`) also require a literal format
+string or such a module global, compiled like an f-string: automatic and manual numbering, keyword
+fields, `.attr` and `[key]` lookups, `!r`, `!s`, `!a` and nested fields in a spec. The arguments
+are evaluated first, then the fields are formatted left to right; a malformed format, mixed
+numbering, a missing argument or an unknown conversion raises CPython's error when that field is
+reached. `*` unpacks a tuple, or a list after the other positional arguments; `**` unpacks a
+function's `**kwargs`, a dict display with string keys or one `dict[str, T]`. `"...".format` can
+be `map()`'s function, but neither method is otherwise a value, and `fmt.format(value)` of another
+variable format string is rejected.
 
 ## Operators and containers
 
 Supported operations include arithmetic, bitwise operations, chained comparisons,
 `in` / `not in`, boolean operations returning operands, conditional expressions, negative
-indices, and string/list slices without a step. Integer `//` and `%` floor as in Python;
+indices, string, list and tuple slices with optional steps, and assignment to and deletion
+of list slices. Integer `//` and `%` floor as in Python;
 true division is correctly rounded, and int/float comparisons are exact within the
 supported types.
 
-Container expressions include list, dict, set and tuple displays; list and set
+Container expressions include list, dict, set and tuple displays; list, set and dict
 comprehensions; and tuple concatenation or repetition by a constant. Set and frozenset
 operations support union, intersection, difference, symmetric difference, subset ordering
 and in-place forms.
+
+A comprehension or generator expression may have several `for` and `if` clauses. As in
+CPython, its first iterable is evaluated once in the enclosing scope; each later iterable and
+condition is evaluated for every item of the clauses before it, and the clauses' variables
+belong to the comprehension: a later `for` clause that binds an earlier clause's variable
+binds the same variable. A dict comprehension evaluates each key before its value; a repeated
+key keeps its first position and takes the last value. A clause or `for` target that reads a
+variable which only its own or a later `for` clause binds is rejected (CPython raises
+`UnboundLocalError`), as is a rebinding to another type that a clause between the two can read.
+A starred item in a list or tuple display, `[a, *xs, *range(n)]`, takes the iterable's items
+where it stands. A tuple display whose starred items are tuples is a tuple of their items;
+with another iterable, it is a runtime-length tuple.
+
+An assignment expression, `x := v`, assigns `v` to `x` as `x = v` would, in the function or
+module code around it, also from a comprehension or generator expression (PEP 572); its value is
+`v`. Tests such as `if (m := pattern.match(s)) is not None:` narrow `x` as a test of the name
+does. Where the expression may not have run (after `and` or `or`, in one arm of a conditional
+expression, in a comprehension over nothing), a later read of `x` raises `UnboundLocalError` or
+`NameError`. This also covers assignment expressions in lambda defaults: the defaults run
+when the lambda is created. A comprehension's filters run before its element. An unannotated
+template parameter specialized to `None` cannot be rebound by a conditional assignment
+expression; annotate that parameter as `T | None` to allow both values.
 
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.
@@ -61,17 +104,51 @@ Comparisons with `None` are supported where the static types permit them.
 ## Iterator-like expressions
 
 Generator expressions, `range()`, `reversed()`, `enumerate()`, `zip()`, `map()` and
-`filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`, `all`,
-`math.fsum`, `math.prod`, `str.join` and `list.extend`.
+`filter()` can be direct arguments of `list`, `sorted`, `sum`, `min`, `max`, `any`,
+`all`, `math.fsum`, `math.prod`, `str.join` and `list.extend`, those that give key/value pairs
+of `dict`, the value assigned to a list slice or to a starred target, or a `*` item of a list
+or tuple display, subject to each consumer's item types. `tuple()` also accepts generator
+expressions and `range`/`map`/`filter`/`reversed` calls producing supported scalar or optional
+scalar items. Direct `enumerate`/`zip` items are tuples; project a scalar in a generator
+expression first ([runtime-length tuples](typing.md)).
 
 These expressions are compiled for their consumer rather than creating a general generator.
 `map()` and `filter()` evaluate their function before iteration.
 `any()` and `all()` stop at the deciding item, including over files.
-`list.extend()` appends each generated item as it is produced.
+`list.extend()` appends each generated item as it is produced; a slice assignment takes the
+items once the list and the slice's bounds are evaluated.
 `x in range(...)` is also supported.
 
 Some consumers materialize input before processing it; see the
 [evaluation-order differences](compatibility.md#containers-and-evaluation-order).
+
+## Iterators
+
+`iter(x)` returns an iterator object that shares its position with every use, as CPython's:
+
+```python
+it = iter(lines)
+header = next(it)
+for line in it:  # the lines after the header
+    print(line)
+```
+
+`iter()` accepts lists, strings, homogeneous tuples, dictionaries and their `keys()`,
+`values()` and `items()`, sets, `range(...)`, files and objects with `__iter__`. A file is its
+own iterator. A builtin container's iterator is an object of a class in
+[`lib/_pystachy_iterators.py`](../../lib/_pystachy_iterators.py): it reads a list's current
+length at each step, fails if a dictionary or set changes size, and stays exhausted once
+`StopIteration` is raised. `next(it)` calls `it.__next__()` (a file's next line);
+`next(it, default)` returns the default instead of raising `StopIteration`, and has the type
+of both, such as `T | None` for a `None` default. `iter(callable, sentinel)` and `iter()` of
+`enumerate()`, `zip()`, `map()`, `filter()`, `reversed()` or a generator expression are
+unsupported.
+
+An iterator's type is its class. `Iterator[T]` and `Iterable[T]` annotations (`typing`'s or
+`collections.abc`'s) therefore type nothing, as a class template's name does: a function with
+such a parameter or return is compiled for each call's argument types, a class whose
+`__init__` takes one or calls `iter()` is a class template, and an annotated variable or field
+has its value's type. A `Generic[T]` class's `Iterable[T]` parameter binds `T` to the items.
 
 ## Object protocols
 
@@ -84,14 +161,17 @@ and fields are available. See [single inheritance](typing.md#single-inheritance)
 | Binary operators `+ - * / // % @ & \| ^ << >>` | `__add__` and the corresponding methods |
 | In-place operators | `__iadd__` and counterparts, otherwise the binary method |
 | Unary `-`, `+`, `~` | `__neg__`, `__pos__`, `__invert__` |
+| `abs(o)`, `divmod(o, x)` | `__abs__`, `__divmod__` |
 | Equality and ordering | `__eq__`, `__ne__` and rich comparisons |
 | Truth and length | `__bool__`, `__len__` |
 | Representation | `__str__`, `__repr__`, `__format__` |
 | Call, indexing, assignment, deletion | `__call__`, `__getitem__`, `__setitem__`, `__delitem__` |
 | Membership and iteration | `__contains__`, or supported `__iter__` |
+| `reversed()` | Supported `__reversed__` |
 
 Rich comparisons use reflection, such as trying `b.__gt__(a)` for `a < b`.
-Reflected arithmetic methods such as `__radd__` and object `__pow__` are unsupported.
+Reflected arithmetic methods such as `__radd__` and `__rdivmod__`, and object `__pow__`, are
+unsupported.
 Objects in containers compare, sort and print through their methods.
 Lists and tuples test items with equality before ordering them, then compare length if all
 common items are equal. Sorting and `min()` use `<`; `max()` uses `>`.
@@ -101,12 +181,24 @@ For `o[k] += value`, both indexing and assignment methods are used.
 Membership uses `__contains__`, taking its result's truth; without it, membership searches
 the supported iterator.
 
-A supported `__iter__` is annotated `-> Iterator[T]` or `-> Iterable[T]` and returns
-`iter(xs)` for a list, tuple, string or another object with the same supported protocol.
-It works in loops, comprehensions, unpacking and the consumers above, plus `math.dist()`.
-`list()`, `sorted()` and `list.extend()` call its `__len__`, if present, as a length hint.
-Generator implementations, general `__next__` iterator classes, and direct calls of
-`o.__iter__()` are unsupported.
+An `__iter__` returns an iterator object: its own object or another class's object with a
+`__next__` method, whose return type gives the items. Its return annotation may be omitted
+(the returns decide it), name the class (`-> "C"`, `-> Self`) or be `Iterator[T]`. Loops,
+comprehensions, unpacking, `x in o`, `math.dist()` and the consumers above call `__next__`
+until it raises `StopIteration` or a subclass, also from a nested `next()`; any other
+exception propagates.
+`__iter__` runs once before the loop, and `__next__` once per item. A comprehension also calls
+the iterator's own `__iter__`, as CPython 3.13 does. `any()`, `all()`, `sum()`, `min()`,
+`max()` and `in` take items as they come; `list()`, `tuple()`, `sorted()`, `str.join()` and
+`set()` take them all first. `list()`, `tuple()`, `sorted()` and `list.extend()` call the
+iterable's `__len__`, if present, as a length hint; a slice assignment does not, as in CPython.
+
+An `__iter__` annotated `-> Iterator[T]` or `-> Iterable[T]` whose returns are all `iter(xs)`
+of a list, tuple, string or object with such an `__iter__` keeps a faster form: a loop
+steps through that list directly. A supported `__reversed__` has that form, or returns
+`reversed(xs)`, whose items it copies when it returns; every consumer of `reversed(o)` steps
+through the iterator it returns. Calling `o.__iter__()` is unsupported. Generator
+implementations are unsupported.
 
 A missing protocol method produces a compilation error using CPython's message.
 An object that is `None` when the operation executes raises the corresponding runtime error.

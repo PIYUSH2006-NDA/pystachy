@@ -1,0 +1,9 @@
+mods: init mods
+mods.shapes: init mods.shapes
+module 4 3 [4, 7] 7
+3 3 [4, 7] 7 4
+5 5 10 10
+twice
+xx 18 ['a', 'b']
+(1, 'a') [(2, 'b')]
+[exit 0]

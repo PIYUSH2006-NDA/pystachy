@@ -1,7 +1,7 @@
-from typing import Iterable
+from typing import Collection
 
 
-def total(xs: Iterable[int]) -> int:
+def total(xs: Collection[int]) -> int:
     return sum(xs)
 
 
@@ -13,16 +13,16 @@ def count() -> int:
     return 3
 
 
-def with_default(xs: Iterable[int] = [1, 2]) -> int:
+def with_default(xs: Collection[int] = [1, 2]) -> int:
     return 0
 
 
-def mixed(x, ys: Iterable[int]) -> int:
+def mixed(x, ys: Collection[int]) -> int:
     return x + sum(ys)
 
 
 class Holder:
-    def helper(self) -> Iterable[int]:
+    def helper(self) -> Collection[int]:
         return [3]
 
     def __init__(self) -> None:

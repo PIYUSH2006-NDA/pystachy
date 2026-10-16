@@ -18,6 +18,7 @@ are linked from the relevant guide.
 | [Caching](caching.md) | Memoization, regex and text-processing workloads |
 | [Performance](performance.md) | Published speed, memory and startup measurements |
 | [Extended benchmarks](extended-performance.md) | Reproducing diagnostic benchmark runs |
+| [pyperformance results](pyperformance.md) | Ported pyperformance benchmarks under CPython, JIT and AOT |
 | [Application examples](../examples/) | Small compiled command-line applications |
 
 ## Work on the compiler

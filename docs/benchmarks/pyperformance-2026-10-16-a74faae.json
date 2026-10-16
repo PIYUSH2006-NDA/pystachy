@@ -1,0 +1,2232 @@
+{
+  "schema_version": 1,
+  "description": "tools/bench_pyperformance.py --runs 5, trimmed: per-run samples without commands or stderr",
+  "note": "measured at a74faae with the native compiler built from main bdc20a2",
+  "metadata": {
+    "created_utc": "2026-10-16T00:46:50Z",
+    "git_revision": "a74faaee0f108430bf3c04fa851a2c6f37c190f7",
+    "git_status": "",
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 4,
+    "load_average": [
+      10.1513671875,
+      10.89208984375,
+      10.87255859375
+    ],
+    "host_python": "3.13.16 (main, Oct  1 2026, 15:40:24) [GCC 13.3.0]",
+    "compiler_binary_sha256": "5a14409bfe527ae9211a320f7ddee25ef58a4a3e59d7daed7216a55b581ade2b",
+    "environment": {
+      "PYTHONHASHSEED": "0"
+    },
+    "sources_sha256": {
+      "bench/pyperformance/barnes_hut.py": "e68bffb93b84c4fb44d50dd0de057af886533efc969a5ea9424c1feff381ac3d",
+      "bench/pyperformance/chaos.py": "228afbb7b936034eb83a616fb8ef88a267653d55906af6bd2f0e117faa4fb702",
+      "bench/pyperformance/deltablue.py": "5722cb9966870caa5a45984fa8f839a64376d29d438bb5c07a919c1000e62925",
+      "bench/pyperformance/fannkuch.py": "40f4f6b5d81f3ddedfd02d19ba909ea8912babb42c23e62756429b4e1709af48",
+      "bench/pyperformance/float.py": "cc19566e50f47bc26d78324475260ff9808509266b70fffeff0091d1144388d0",
+      "bench/pyperformance/go.py": "521cffbc4d15cdd93e0693230143aa274e4e190dd3e5f49cb45c9745565c5a13",
+      "bench/pyperformance/hexiom.py": "988d2adb90f8ab6a67180200436e93290fdb077e218b7339bb4ac7caf1cd2502",
+      "bench/pyperformance/meteor_contest.py": "876ffc333e293ab11d19298002da139b6ccf88dd50e3e92b9384d4485c3a7340",
+      "bench/pyperformance/nbody.py": "2ec9c9e9c36cf2e819dc1026debbb7f9f901410ae36032795d60057c9f447e30",
+      "bench/pyperformance/nqueens.py": "5ccc5d1f8724daf6550b870d8031120653eef6df0fa93bddeb7afaa5e28f4b53",
+      "bench/pyperformance/raytrace.py": "e5f71075698d02ac3e91fe99bf43799905c03651be4a41ff574c99790f5d2213",
+      "bench/pyperformance/regex_dna.py": "8f02c6b44688f6c1e3a96bbd0155367f3bf9327e65f42be2967008891e1aa2aa",
+      "bench/pyperformance/regex_effbot.py": "91ead8e732223797be1ed75d57d781ad6682ec25fc9464e41f336e73c842ef5a",
+      "bench/pyperformance/regex_v8.py": "03bb169cee837115dc9747218253f348cc1df7e40a2f00ad20265549d289727c",
+      "bench/pyperformance/richards.py": "f290fb528a0086dc5fd98bdf866c591252d8c8a31c80415c051a6ae69c7e0c82",
+      "bench/pyperformance/richards_super.py": "376e2407aaaf91f880d2e53b0853455272183130e157afc56d1539a5f259496f",
+      "bench/pyperformance/scimark.py": "dd34b452b124fb104750aed8c82082fca734695561e221de47147ec13bec7629",
+      "bench/pyperformance/spectral_norm.py": "1f55b1a0cb7931bbdec446be916b762c7fd60cc0e34a3b76cfd02ec4b10bba79",
+      "bench/pyperformance/unpack_sequence.py": "a4c67ad1e0fc2c7dcc102c98042c0b9e08bf1b46ac980b7e1916294e34997a67",
+      "tools/bench_pyperformance.py": "27718c28ede5358871973ea4f2ca874ae9e7b80ceb1ed5560c7e6be08423c201"
+    },
+    "load_average_end": [
+      11.6728515625,
+      12.046875,
+      11.48681640625
+    ]
+  },
+  "settings": {
+    "runs": 5,
+    "smoke": false
+  },
+  "conditions": {
+    "wall_spread": {
+      "value": 3.17223,
+      "where": "unpack_sequence aot"
+    },
+    "cpu_share_min": {
+      "value": 0.121972,
+      "where": "unpack_sequence aot"
+    }
+  },
+  "benchmarks": [
+    {
+      "name": "barnes_hut",
+      "arguments": [
+        "1"
+      ],
+      "output": "barnes_hut 1 100 200 3386.616186065438\n",
+      "aot_build_s": 1.12952,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.24508,
+          "cpu_s": 0.892997,
+          "loop_s": 1.20121,
+          "wall_spread": 0.287504,
+          "cpu_share_min": 0.630448
+        },
+        "jit": {
+          "wall_s": 0.340031,
+          "cpu_s": 0.185112,
+          "loop_s": 0.0836591,
+          "wall_spread": 0.747149,
+          "cpu_share_min": 0.447762
+        },
+        "aot": {
+          "wall_s": 0.075857,
+          "cpu_s": 0.0401,
+          "loop_s": 0.066185,
+          "wall_spread": 0.54658,
+          "cpu_share_min": 0.45395
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.43509,
+            "cpu_s": 0.90475,
+            "loop_s": 1.40295
+          },
+          {
+            "wall_s": 1.07713,
+            "cpu_s": 0.820451,
+            "loop_s": 1.02666
+          },
+          {
+            "wall_s": 1.24508,
+            "cpu_s": 0.925167,
+            "loop_s": 1.20121
+          },
+          {
+            "wall_s": 1.33994,
+            "cpu_s": 0.892997,
+            "loop_s": 1.31735
+          },
+          {
+            "wall_s": 1.07772,
+            "cpu_s": 0.84586,
+            "loop_s": 1.04889
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.340031,
+            "cpu_s": 0.182716,
+            "loop_s": 0.0876599
+          },
+          {
+            "wall_s": 0.50806,
+            "cpu_s": 0.22749,
+            "loop_s": 0.0836591
+          },
+          {
+            "wall_s": 0.280011,
+            "cpu_s": 0.185112,
+            "loop_s": 0.0624246
+          },
+          {
+            "wall_s": 0.394569,
+            "cpu_s": 0.17952,
+            "loop_s": 0.0900794
+          },
+          {
+            "wall_s": 0.254007,
+            "cpu_s": 0.208344,
+            "loop_s": 0.0546645
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.075857,
+            "cpu_s": 0.0401,
+            "loop_s": 0.066185
+          },
+          {
+            "wall_s": 0.090669,
+            "cpu_s": 0.041598,
+            "loop_s": 0.0764606
+          },
+          {
+            "wall_s": 0.0826477,
+            "cpu_s": 0.063746,
+            "loop_s": 0.0734284
+          },
+          {
+            "wall_s": 0.0752793,
+            "cpu_s": 0.034173,
+            "loop_s": 0.0630675
+          },
+          {
+            "wall_s": 0.0492071,
+            "cpu_s": 0.039023,
+            "loop_s": 0.0442163
+          }
+        ]
+      }
+    },
+    {
+      "name": "chaos",
+      "arguments": [
+        "10"
+      ],
+      "output": "chaos 10 5000 62273\n",
+      "aot_build_s": 1.80996,
+      "summary": {
+        "cpython": {
+          "wall_s": 0.739112,
+          "cpu_s": 0.561052,
+          "loop_s": 0.690337,
+          "wall_spread": 0.457516,
+          "cpu_share_min": 0.525373
+        },
+        "jit": {
+          "wall_s": 0.311321,
+          "cpu_s": 0.21066,
+          "loop_s": 0.0634169,
+          "wall_spread": 0.297112,
+          "cpu_share_min": 0.576984
+        },
+        "aot": {
+          "wall_s": 0.0480941,
+          "cpu_s": 0.035767,
+          "loop_s": 0.0423072,
+          "wall_spread": 0.795394,
+          "cpu_share_min": 0.486832
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 0.730113,
+            "cpu_s": 0.556627,
+            "loop_s": 0.685278
+          },
+          {
+            "wall_s": 0.944091,
+            "cpu_s": 0.569676,
+            "loop_s": 0.895737
+          },
+          {
+            "wall_s": 0.739112,
+            "cpu_s": 0.561592,
+            "loop_s": 0.690337
+          },
+          {
+            "wall_s": 0.72262,
+            "cpu_s": 0.561052,
+            "loop_s": 0.684427
+          },
+          {
+            "wall_s": 1.06078,
+            "cpu_s": 0.557303,
+            "loop_s": 1.00359
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.280764,
+            "cpu_s": 0.193231,
+            "loop_s": 0.0568717
+          },
+          {
+            "wall_s": 0.353435,
+            "cpu_s": 0.203926,
+            "loop_s": 0.0634169
+          },
+          {
+            "wall_s": 0.306334,
+            "cpu_s": 0.21066,
+            "loop_s": 0.0493557
+          },
+          {
+            "wall_s": 0.373261,
+            "cpu_s": 0.247261,
+            "loop_s": 0.0665009
+          },
+          {
+            "wall_s": 0.311321,
+            "cpu_s": 0.214513,
+            "loop_s": 0.0862136
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0466441,
+            "cpu_s": 0.03402,
+            "loop_s": 0.0423072
+          },
+          {
+            "wall_s": 0.0480941,
+            "cpu_s": 0.035767,
+            "loop_s": 0.039347
+          },
+          {
+            "wall_s": 0.055123,
+            "cpu_s": 0.037686,
+            "loop_s": 0.0482028
+          },
+          {
+            "wall_s": 0.0445263,
+            "cpu_s": 0.034531,
+            "loop_s": 0.0387044
+          },
+          {
+            "wall_s": 0.0827801,
+            "cpu_s": 0.0403,
+            "loop_s": 0.0729509
+          }
+        ]
+      }
+    },
+    {
+      "name": "deltablue",
+      "arguments": [
+        "200"
+      ],
+      "output": "deltablue 200 100 208\n",
+      "aot_build_s": 2.43733,
+      "summary": {
+        "cpython": {
+          "wall_s": 0.754848,
+          "cpu_s": 0.593088,
+          "loop_s": 0.71753,
+          "wall_spread": 0.539512,
+          "cpu_share_min": 0.590615
+        },
+        "jit": {
+          "wall_s": 0.692035,
+          "cpu_s": 0.501301,
+          "loop_s": 0.0542079,
+          "wall_spread": 0.490422,
+          "cpu_share_min": 0.559843
+        },
+        "aot": {
+          "wall_s": 0.0689352,
+          "cpu_s": 0.042462,
+          "loop_s": 0.0504318,
+          "wall_spread": 0.329745,
+          "cpu_share_min": 0.564005
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.07047,
+            "cpu_s": 0.632239,
+            "loop_s": 1.01751
+          },
+          {
+            "wall_s": 0.754848,
+            "cpu_s": 0.58628,
+            "loop_s": 0.71753
+          },
+          {
+            "wall_s": 0.663225,
+            "cpu_s": 0.546527,
+            "loop_s": 0.628443
+          },
+          {
+            "wall_s": 0.707043,
+            "cpu_s": 0.593088,
+            "loop_s": 0.679945
+          },
+          {
+            "wall_s": 0.909547,
+            "cpu_s": 0.697025,
+            "loop_s": 0.879227
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.810864,
+            "cpu_s": 0.526424,
+            "loop_s": 0.0667334
+          },
+          {
+            "wall_s": 0.692035,
+            "cpu_s": 0.448146,
+            "loop_s": 0.037563
+          },
+          {
+            "wall_s": 0.592313,
+            "cpu_s": 0.448614,
+            "loop_s": 0.052478
+          },
+          {
+            "wall_s": 0.931702,
+            "cpu_s": 0.521607,
+            "loop_s": 0.0542079
+          },
+          {
+            "wall_s": 0.68809,
+            "cpu_s": 0.501301,
+            "loop_s": 0.0593799
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0558072,
+            "cpu_s": 0.041269,
+            "loop_s": 0.0437415
+          },
+          {
+            "wall_s": 0.0718596,
+            "cpu_s": 0.041004,
+            "loop_s": 0.0499707
+          },
+          {
+            "wall_s": 0.0785383,
+            "cpu_s": 0.044296,
+            "loop_s": 0.0702827
+          },
+          {
+            "wall_s": 0.0689352,
+            "cpu_s": 0.042462,
+            "loop_s": 0.0504318
+          },
+          {
+            "wall_s": 0.0566406,
+            "cpu_s": 0.042685,
+            "loop_s": 0.0515371
+          }
+        ]
+      }
+    },
+    {
+      "name": "fannkuch",
+      "arguments": [
+        "2"
+      ],
+      "output": "fannkuch 2 9 30\n",
+      "aot_build_s": 0.692062,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.21772,
+          "cpu_s": 0.854164,
+          "loop_s": 1.19506,
+          "wall_spread": 0.54066,
+          "cpu_share_min": 0.556202
+        },
+        "jit": {
+          "wall_s": 0.600881,
+          "cpu_s": 0.402172,
+          "loop_s": 0.443499,
+          "wall_spread": 0.537436,
+          "cpu_share_min": 0.523784
+        },
+        "aot": {
+          "wall_s": 0.483387,
+          "cpu_s": 0.283948,
+          "loop_s": 0.473988,
+          "wall_spread": 0.372635,
+          "cpu_share_min": 0.5732
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.05153,
+            "cpu_s": 0.772236,
+            "loop_s": 1.03384
+          },
+          {
+            "wall_s": 1.36219,
+            "cpu_s": 0.787743,
+            "loop_s": 1.33585
+          },
+          {
+            "wall_s": 1.7099,
+            "cpu_s": 0.951052,
+            "loop_s": 1.67357
+          },
+          {
+            "wall_s": 1.20834,
+            "cpu_s": 0.854164,
+            "loop_s": 1.18108
+          },
+          {
+            "wall_s": 1.21772,
+            "cpu_s": 0.859842,
+            "loop_s": 1.19506
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.687859,
+            "cpu_s": 0.409072,
+            "loop_s": 0.568654
+          },
+          {
+            "wall_s": 0.76782,
+            "cpu_s": 0.402172,
+            "loop_s": 0.613513
+          },
+          {
+            "wall_s": 0.600881,
+            "cpu_s": 0.419485,
+            "loop_s": 0.443499
+          },
+          {
+            "wall_s": 0.596822,
+            "cpu_s": 0.401017,
+            "loop_s": 0.411728
+          },
+          {
+            "wall_s": 0.444885,
+            "cpu_s": 0.343729,
+            "loop_s": 0.321635
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.495374,
+            "cpu_s": 0.283948,
+            "loop_s": 0.478412
+          },
+          {
+            "wall_s": 0.483387,
+            "cpu_s": 0.304731,
+            "loop_s": 0.473988
+          },
+          {
+            "wall_s": 0.492062,
+            "cpu_s": 0.295213,
+            "loop_s": 0.480843
+          },
+          {
+            "wall_s": 0.315247,
+            "cpu_s": 0.26798,
+            "loop_s": 0.309236
+          },
+          {
+            "wall_s": 0.344496,
+            "cpu_s": 0.271561,
+            "loop_s": 0.335859
+          }
+        ]
+      }
+    },
+    {
+      "name": "float",
+      "arguments": [
+        "10"
+      ],
+      "output": "float 10 100000 <Point: x=0.8944271890997864, y=1.0, z=0.4472135954456972>\n",
+      "aot_build_s": 0.678977,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.2718,
+          "cpu_s": 0.725029,
+          "loop_s": 1.25013,
+          "wall_spread": 0.36,
+          "cpu_share_min": 0.565684
+        },
+        "jit": {
+          "wall_s": 0.326955,
+          "cpu_s": 0.162401,
+          "loop_s": 0.122869,
+          "wall_spread": 0.270784,
+          "cpu_share_min": 0.451068
+        },
+        "aot": {
+          "wall_s": 0.0817628,
+          "cpu_s": 0.054293,
+          "loop_s": 0.076073,
+          "wall_spread": 0.504452,
+          "cpu_share_min": 0.5137
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.17938,
+            "cpu_s": 0.771847,
+            "loop_s": 1.15869
+          },
+          {
+            "wall_s": 1.38091,
+            "cpu_s": 0.795778,
+            "loop_s": 1.35489
+          },
+          {
+            "wall_s": 1.2718,
+            "cpu_s": 0.721664,
+            "loop_s": 1.25013
+          },
+          {
+            "wall_s": 1.28169,
+            "cpu_s": 0.725029,
+            "loop_s": 1.25662
+          },
+          {
+            "wall_s": 0.923065,
+            "cpu_s": 0.670288,
+            "loop_s": 0.907931
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.326955,
+            "cpu_s": 0.163994,
+            "loop_s": 0.122869
+          },
+          {
+            "wall_s": 0.369501,
+            "cpu_s": 0.16667,
+            "loop_s": 0.133346
+          },
+          {
+            "wall_s": 0.280967,
+            "cpu_s": 0.150469,
+            "loop_s": 0.117255
+          },
+          {
+            "wall_s": 0.33823,
+            "cpu_s": 0.162401,
+            "loop_s": 0.136645
+          },
+          {
+            "wall_s": 0.293948,
+            "cpu_s": 0.147507,
+            "loop_s": 0.101273
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.103435,
+            "cpu_s": 0.054293,
+            "loop_s": 0.0988968
+          },
+          {
+            "wall_s": 0.0817628,
+            "cpu_s": 0.058082,
+            "loop_s": 0.0744291
+          },
+          {
+            "wall_s": 0.080279,
+            "cpu_s": 0.048753,
+            "loop_s": 0.076073
+          },
+          {
+            "wall_s": 0.106895,
+            "cpu_s": 0.054912,
+            "loop_s": 0.0960742
+          },
+          {
+            "wall_s": 0.0656496,
+            "cpu_s": 0.048021,
+            "loop_s": 0.0571634
+          }
+        ]
+      }
+    },
+    {
+      "name": "go",
+      "arguments": [
+        "4"
+      ],
+      "output": "go 4 0 84484\n",
+      "aot_build_s": 1.51693,
+      "summary": {
+        "cpython": {
+          "wall_s": 0.993219,
+          "cpu_s": 0.648025,
+          "loop_s": 0.95167,
+          "wall_spread": 0.289262,
+          "cpu_share_min": 0.562419
+        },
+        "jit": {
+          "wall_s": 0.414644,
+          "cpu_s": 0.232581,
+          "loop_s": 0.0680369,
+          "wall_spread": 0.169018,
+          "cpu_share_min": 0.52184
+        },
+        "aot": {
+          "wall_s": 0.0729853,
+          "cpu_s": 0.043288,
+          "loop_s": 0.0613347,
+          "wall_spread": 0.775804,
+          "cpu_share_min": 0.344054
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 0.86491,
+            "cpu_s": 0.607432,
+            "loop_s": 0.82733
+          },
+          {
+            "wall_s": 0.993219,
+            "cpu_s": 0.672083,
+            "loop_s": 0.95167
+          },
+          {
+            "wall_s": 1.15221,
+            "cpu_s": 0.648025,
+            "loop_s": 1.10218
+          },
+          {
+            "wall_s": 1.09433,
+            "cpu_s": 0.662561,
+            "loop_s": 1.06516
+          },
+          {
+            "wall_s": 0.950056,
+            "cpu_s": 0.559781,
+            "loop_s": 0.923162
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.434123,
+            "cpu_s": 0.242287,
+            "loop_s": 0.062587
+          },
+          {
+            "wall_s": 0.422893,
+            "cpu_s": 0.233917,
+            "loop_s": 0.0606276
+          },
+          {
+            "wall_s": 0.364041,
+            "cpu_s": 0.227672,
+            "loop_s": 0.0738836
+          },
+          {
+            "wall_s": 0.41297,
+            "cpu_s": 0.232581,
+            "loop_s": 0.0713284
+          },
+          {
+            "wall_s": 0.414644,
+            "cpu_s": 0.216378,
+            "loop_s": 0.0680369
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0729853,
+            "cpu_s": 0.043412,
+            "loop_s": 0.0613347
+          },
+          {
+            "wall_s": 0.0595164,
+            "cpu_s": 0.043288,
+            "loop_s": 0.0554351
+          },
+          {
+            "wall_s": 0.0853162,
+            "cpu_s": 0.043973,
+            "loop_s": 0.0739692
+          },
+          {
+            "wall_s": 0.0552294,
+            "cpu_s": 0.040271,
+            "loop_s": 0.0503831
+          },
+          {
+            "wall_s": 0.111852,
+            "cpu_s": 0.038483,
+            "loop_s": 0.0919308
+          }
+        ]
+      }
+    },
+    {
+      "name": "hexiom",
+      "arguments": [
+        "100"
+      ],
+      "output": "hexiom 100 25\n  3 4 2\n 2 4 4 .\n. . . 4 2\n . 2 4 3\n  . 2 .\n",
+      "aot_build_s": 2.74091,
+      "summary": {
+        "cpython": {
+          "wall_s": 0.964408,
+          "cpu_s": 0.605755,
+          "loop_s": 0.933209,
+          "wall_spread": 0.117225,
+          "cpu_share_min": 0.56219
+        },
+        "jit": {
+          "wall_s": 0.60905,
+          "cpu_s": 0.360674,
+          "loop_s": 0.131256,
+          "wall_spread": 0.287459,
+          "cpu_share_min": 0.536484
+        },
+        "aot": {
+          "wall_s": 0.137565,
+          "cpu_s": 0.07716,
+          "loop_s": 0.121355,
+          "wall_spread": 0.268951,
+          "cpu_share_min": 0.550925
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 0.971946,
+            "cpu_s": 0.678048,
+            "loop_s": 0.933209
+          },
+          {
+            "wall_s": 0.964408,
+            "cpu_s": 0.611151,
+            "loop_s": 0.937653
+          },
+          {
+            "wall_s": 1.0564,
+            "cpu_s": 0.593899,
+            "loop_s": 1.01688
+          },
+          {
+            "wall_s": 0.94335,
+            "cpu_s": 0.594521,
+            "loop_s": 0.89777
+          },
+          {
+            "wall_s": 0.953291,
+            "cpu_s": 0.605755,
+            "loop_s": 0.923618
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.652066,
+            "cpu_s": 0.419712,
+            "loop_s": 0.165427
+          },
+          {
+            "wall_s": 0.679808,
+            "cpu_s": 0.364706,
+            "loop_s": 0.131256
+          },
+          {
+            "wall_s": 0.60905,
+            "cpu_s": 0.328476,
+            "loop_s": 0.147201
+          },
+          {
+            "wall_s": 0.504731,
+            "cpu_s": 0.360674,
+            "loop_s": 0.107929
+          },
+          {
+            "wall_s": 0.547491,
+            "cpu_s": 0.33769,
+            "loop_s": 0.125351
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.147306,
+            "cpu_s": 0.08752,
+            "loop_s": 0.14037
+          },
+          {
+            "wall_s": 0.124076,
+            "cpu_s": 0.077884,
+            "loop_s": 0.119607
+          },
+          {
+            "wall_s": 0.138451,
+            "cpu_s": 0.07716,
+            "loop_s": 0.130154
+          },
+          {
+            "wall_s": 0.137565,
+            "cpu_s": 0.075788,
+            "loop_s": 0.121355
+          },
+          {
+            "wall_s": 0.110307,
+            "cpu_s": 0.076012,
+            "loop_s": 0.105333
+          }
+        ]
+      }
+    },
+    {
+      "name": "meteor_contest",
+      "arguments": [
+        "6"
+      ],
+      "output": "meteor_contest 6 60 00001222012661126155865558633348893448934747977799 99997988878857765474655446532466132113321032210000\n",
+      "aot_build_s": 2.12481,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.30548,
+          "cpu_s": 0.665648,
+          "loop_s": 1.26782,
+          "wall_spread": 0.291629,
+          "cpu_share_min": 0.413833
+        },
+        "jit": {
+          "wall_s": 1.2056,
+          "cpu_s": 0.564605,
+          "loop_s": 0.92959,
+          "wall_spread": 0.208219,
+          "cpu_share_min": 0.425495
+        },
+        "aot": {
+          "wall_s": 0.85349,
+          "cpu_s": 0.453029,
+          "loop_s": 0.834346,
+          "wall_spread": 0.302123,
+          "cpu_share_min": 0.422732
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.15223,
+            "cpu_s": 0.683885,
+            "loop_s": 1.11496
+          },
+          {
+            "wall_s": 1.25521,
+            "cpu_s": 0.665648,
+            "loop_s": 1.21956
+          },
+          {
+            "wall_s": 1.30548,
+            "cpu_s": 0.685919,
+            "loop_s": 1.26782
+          },
+          {
+            "wall_s": 1.53294,
+            "cpu_s": 0.634383,
+            "loop_s": 1.48295
+          },
+          {
+            "wall_s": 1.35393,
+            "cpu_s": 0.653039,
+            "loop_s": 1.2932
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 1.09743,
+            "cpu_s": 0.561106,
+            "loop_s": 0.782365
+          },
+          {
+            "wall_s": 1.12693,
+            "cpu_s": 0.543193,
+            "loop_s": 0.866831
+          },
+          {
+            "wall_s": 1.2056,
+            "cpu_s": 0.586967,
+            "loop_s": 0.92959
+          },
+          {
+            "wall_s": 1.32694,
+            "cpu_s": 0.564605,
+            "loop_s": 1.02627
+          },
+          {
+            "wall_s": 1.34846,
+            "cpu_s": 0.600605,
+            "loop_s": 0.958596
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.834874,
+            "cpu_s": 0.455338,
+            "loop_s": 0.824834
+          },
+          {
+            "wall_s": 0.85349,
+            "cpu_s": 0.453029,
+            "loop_s": 0.834346
+          },
+          {
+            "wall_s": 0.788567,
+            "cpu_s": 0.433493,
+            "loop_s": 0.776625
+          },
+          {
+            "wall_s": 1.04643,
+            "cpu_s": 0.442358,
+            "loop_s": 1.02537
+          },
+          {
+            "wall_s": 1.00105,
+            "cpu_s": 0.457448,
+            "loop_s": 0.982486
+          }
+        ]
+      }
+    },
+    {
+      "name": "nbody",
+      "arguments": [
+        "10"
+      ],
+      "output": "nbody 10 20000 -0.16908371256964036\n",
+      "aot_build_s": 1.64131,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.47376,
+          "cpu_s": 0.802153,
+          "loop_s": 1.44835,
+          "wall_spread": 0.553312,
+          "cpu_share_min": 0.467559
+        },
+        "jit": {
+          "wall_s": 0.383624,
+          "cpu_s": 0.19115,
+          "loop_s": 0.169854,
+          "wall_spread": 0.328224,
+          "cpu_share_min": 0.406581
+        },
+        "aot": {
+          "wall_s": 0.0936316,
+          "cpu_s": 0.053684,
+          "loop_s": 0.0918062,
+          "wall_spread": 0.434762,
+          "cpu_share_min": 0.475481
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.63608,
+            "cpu_s": 0.772155,
+            "loop_s": 1.60097
+          },
+          {
+            "wall_s": 1.47376,
+            "cpu_s": 0.8035,
+            "loop_s": 1.44835
+          },
+          {
+            "wall_s": 1.0936,
+            "cpu_s": 0.802153,
+            "loop_s": 1.06036
+          },
+          {
+            "wall_s": 1.90905,
+            "cpu_s": 0.892593,
+            "loop_s": 1.87598
+          },
+          {
+            "wall_s": 1.099,
+            "cpu_s": 0.727458,
+            "loop_s": 1.07054
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.359461,
+            "cpu_s": 0.19115,
+            "loop_s": 0.127691
+          },
+          {
+            "wall_s": 0.398365,
+            "cpu_s": 0.195687,
+            "loop_s": 0.169854
+          },
+          {
+            "wall_s": 0.452736,
+            "cpu_s": 0.184074,
+            "loop_s": 0.185333
+          },
+          {
+            "wall_s": 0.326822,
+            "cpu_s": 0.187075,
+            "loop_s": 0.141794
+          },
+          {
+            "wall_s": 0.383624,
+            "cpu_s": 0.206139,
+            "loop_s": 0.173587
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0935569,
+            "cpu_s": 0.046656,
+            "loop_s": 0.0803463
+          },
+          {
+            "wall_s": 0.0967392,
+            "cpu_s": 0.057357,
+            "loop_s": 0.0935909
+          },
+          {
+            "wall_s": 0.0936316,
+            "cpu_s": 0.053012,
+            "loop_s": 0.0918062
+          },
+          {
+            "wall_s": 0.129418,
+            "cpu_s": 0.061536,
+            "loop_s": 0.122414
+          },
+          {
+            "wall_s": 0.088711,
+            "cpu_s": 0.053684,
+            "loop_s": 0.0856769
+          }
+        ]
+      }
+    },
+    {
+      "name": "nqueens",
+      "arguments": [
+        "10"
+      ],
+      "output": "nqueens 10 8 92 (0, 4, 7, 5, 2, 6, 1, 3) (7, 3, 0, 2, 5, 1, 6, 4)\n",
+      "aot_build_s": 1.35487,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.10814,
+          "cpu_s": 0.643447,
+          "loop_s": 1.07062,
+          "wall_spread": 0.152633,
+          "cpu_share_min": 0.559571
+        },
+        "jit": {
+          "wall_s": 0.744969,
+          "cpu_s": 0.363488,
+          "loop_s": 0.511916,
+          "wall_spread": 0.375617,
+          "cpu_share_min": 0.462332
+        },
+        "aot": {
+          "wall_s": 0.443282,
+          "cpu_s": 0.245472,
+          "loop_s": 0.431636,
+          "wall_spread": 0.83876,
+          "cpu_share_min": 0.417577
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.10814,
+            "cpu_s": 0.681881,
+            "loop_s": 1.07062
+          },
+          {
+            "wall_s": 1.08387,
+            "cpu_s": 0.643126,
+            "loop_s": 1.04218
+          },
+          {
+            "wall_s": 1.14989,
+            "cpu_s": 0.643447,
+            "loop_s": 1.12605
+          },
+          {
+            "wall_s": 1.14938,
+            "cpu_s": 0.682322,
+            "loop_s": 1.126
+          },
+          {
+            "wall_s": 0.980754,
+            "cpu_s": 0.63058,
+            "loop_s": 0.957378
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.744969,
+            "cpu_s": 0.363488,
+            "loop_s": 0.511916
+          },
+          {
+            "wall_s": 0.81158,
+            "cpu_s": 0.375219,
+            "loop_s": 0.618171
+          },
+          {
+            "wall_s": 0.813242,
+            "cpu_s": 0.389749,
+            "loop_s": 0.535327
+          },
+          {
+            "wall_s": 0.533419,
+            "cpu_s": 0.344952,
+            "loop_s": 0.374111
+          },
+          {
+            "wall_s": 0.687832,
+            "cpu_s": 0.333462,
+            "loop_s": 0.481246
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.443282,
+            "cpu_s": 0.273107,
+            "loop_s": 0.431636
+          },
+          {
+            "wall_s": 0.695584,
+            "cpu_s": 0.29046,
+            "loop_s": 0.676215
+          },
+          {
+            "wall_s": 0.480523,
+            "cpu_s": 0.245472,
+            "loop_s": 0.471297
+          },
+          {
+            "wall_s": 0.393253,
+            "cpu_s": 0.238474,
+            "loop_s": 0.380302
+          },
+          {
+            "wall_s": 0.323776,
+            "cpu_s": 0.206059,
+            "loop_s": 0.315696
+          }
+        ]
+      }
+    },
+    {
+      "name": "raytrace",
+      "arguments": [
+        "4"
+      ],
+      "output": "raytrace 4 100 100 1128218\n",
+      "aot_build_s": 1.69177,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.57003,
+          "cpu_s": 0.879617,
+          "loop_s": 1.52873,
+          "wall_spread": 0.293451,
+          "cpu_share_min": 0.51759
+        },
+        "jit": {
+          "wall_s": 0.583893,
+          "cpu_s": 0.272249,
+          "loop_s": 0.129612,
+          "wall_spread": 0.438878,
+          "cpu_share_min": 0.407391
+        },
+        "aot": {
+          "wall_s": 0.116336,
+          "cpu_s": 0.063713,
+          "loop_s": 0.102986,
+          "wall_spread": 0.152188,
+          "cpu_share_min": 0.490498
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.57003,
+            "cpu_s": 0.841473,
+            "loop_s": 1.52873
+          },
+          {
+            "wall_s": 1.69945,
+            "cpu_s": 0.879617,
+            "loop_s": 1.65552
+          },
+          {
+            "wall_s": 1.84642,
+            "cpu_s": 0.975591,
+            "loop_s": 1.81935
+          },
+          {
+            "wall_s": 1.47968,
+            "cpu_s": 0.84174,
+            "loop_s": 1.4412
+          },
+          {
+            "wall_s": 1.38569,
+            "cpu_s": 0.943862,
+            "loop_s": 1.35451
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.683913,
+            "cpu_s": 0.27862,
+            "loop_s": 0.140665
+          },
+          {
+            "wall_s": 0.658227,
+            "cpu_s": 0.272249,
+            "loop_s": 0.129612
+          },
+          {
+            "wall_s": 0.427655,
+            "cpu_s": 0.242959,
+            "loop_s": 0.100457
+          },
+          {
+            "wall_s": 0.443933,
+            "cpu_s": 0.229628,
+            "loop_s": 0.0899658
+          },
+          {
+            "wall_s": 0.583893,
+            "cpu_s": 0.279265,
+            "loop_s": 0.129757
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.121732,
+            "cpu_s": 0.063887,
+            "loop_s": 0.11246
+          },
+          {
+            "wall_s": 0.129895,
+            "cpu_s": 0.063713,
+            "loop_s": 0.121301
+          },
+          {
+            "wall_s": 0.116336,
+            "cpu_s": 0.063396,
+            "loop_s": 0.0971218
+          },
+          {
+            "wall_s": 0.11219,
+            "cpu_s": 0.060449,
+            "loop_s": 0.0974672
+          },
+          {
+            "wall_s": 0.114745,
+            "cpu_s": 0.07701,
+            "loop_s": 0.102986
+          }
+        ]
+      }
+    },
+    {
+      "name": "regex_dna",
+      "arguments": [
+        "4"
+      ],
+      "output": "regex_dna 4 100000 ([6, 26, 86, 58, 113, 31, 31, 32, 43], 1016745, 1000000, 1336326)\n",
+      "aot_build_s": 6.51399,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.37315,
+          "cpu_s": 0.850775,
+          "loop_s": 1.21889,
+          "wall_spread": 0.405862,
+          "cpu_share_min": 0.534007
+        },
+        "jit": {
+          "wall_s": 5.77081,
+          "cpu_s": 3.25121,
+          "loop_s": 4.30433,
+          "wall_spread": 0.308926,
+          "cpu_share_min": 0.542123
+        },
+        "aot": {
+          "wall_s": 3.369,
+          "cpu_s": 2.02218,
+          "loop_s": 3.30185,
+          "wall_spread": 0.45851,
+          "cpu_share_min": 0.503969
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.03588,
+            "cpu_s": 0.790226,
+            "loop_s": 0.92579
+          },
+          {
+            "wall_s": 1.44149,
+            "cpu_s": 0.898218,
+            "loop_s": 1.21889
+          },
+          {
+            "wall_s": 1.59319,
+            "cpu_s": 0.850775,
+            "loop_s": 1.37828
+          },
+          {
+            "wall_s": 1.37315,
+            "cpu_s": 0.859319,
+            "loop_s": 1.22783
+          },
+          {
+            "wall_s": 1.08594,
+            "cpu_s": 0.760304,
+            "loop_s": 0.951792
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 4.28804,
+            "cpu_s": 3.25121,
+            "loop_s": 2.79952
+          },
+          {
+            "wall_s": 5.72465,
+            "cpu_s": 3.19851,
+            "loop_s": 4.30433
+          },
+          {
+            "wall_s": 5.77081,
+            "cpu_s": 3.12849,
+            "loop_s": 3.76232
+          },
+          {
+            "wall_s": 5.90956,
+            "cpu_s": 3.25502,
+            "loop_s": 4.37646
+          },
+          {
+            "wall_s": 6.07079,
+            "cpu_s": 3.38478,
+            "loop_s": 4.43912
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 2.51521,
+            "cpu_s": 1.89358,
+            "loop_s": 2.44789
+          },
+          {
+            "wall_s": 3.35581,
+            "cpu_s": 1.9655,
+            "loop_s": 3.29277
+          },
+          {
+            "wall_s": 3.55152,
+            "cpu_s": 2.02218,
+            "loop_s": 3.48944
+          },
+          {
+            "wall_s": 3.369,
+            "cpu_s": 2.02284,
+            "loop_s": 3.30185
+          },
+          {
+            "wall_s": 4.05993,
+            "cpu_s": 2.04608,
+            "loop_s": 3.99778
+          }
+        ]
+      }
+    },
+    {
+      "name": "regex_effbot",
+      "arguments": [
+        "20"
+      ],
+      "output": "regex_effbot 20 636833\n",
+      "aot_build_s": 7.07721,
+      "summary": {
+        "cpython": {
+          "wall_s": 0.785847,
+          "cpu_s": 0.478016,
+          "loop_s": 0.732543,
+          "wall_spread": 0.178598,
+          "cpu_share_min": 0.580031
+        },
+        "jit": {
+          "wall_s": 4.25102,
+          "cpu_s": 2.40556,
+          "loop_s": 2.67188,
+          "wall_spread": 0.151302,
+          "cpu_share_min": 0.540619
+        },
+        "aot": {
+          "wall_s": 2.03396,
+          "cpu_s": 1.21985,
+          "loop_s": 1.98888,
+          "wall_spread": 0.214227,
+          "cpu_share_min": 0.571485
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 0.785847,
+            "cpu_s": 0.455816,
+            "loop_s": 0.732543
+          },
+          {
+            "wall_s": 0.826277,
+            "cpu_s": 0.512098,
+            "loop_s": 0.777084
+          },
+          {
+            "wall_s": 0.819943,
+            "cpu_s": 0.478016,
+            "loop_s": 0.784312
+          },
+          {
+            "wall_s": 0.758149,
+            "cpu_s": 0.473087,
+            "loop_s": 0.705492
+          },
+          {
+            "wall_s": 0.685926,
+            "cpu_s": 0.507177,
+            "loop_s": 0.626654
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 4.50214,
+            "cpu_s": 2.43394,
+            "loop_s": 3.04861
+          },
+          {
+            "wall_s": 3.85895,
+            "cpu_s": 2.27986,
+            "loop_s": 2.25028
+          },
+          {
+            "wall_s": 4.25102,
+            "cpu_s": 2.46306,
+            "loop_s": 2.77902
+          },
+          {
+            "wall_s": 4.05475,
+            "cpu_s": 2.40556,
+            "loop_s": 2.40833
+          },
+          {
+            "wall_s": 4.28407,
+            "cpu_s": 2.36235,
+            "loop_s": 2.67188
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 2.03396,
+            "cpu_s": 1.16238,
+            "loop_s": 1.98888
+          },
+          {
+            "wall_s": 1.82088,
+            "cpu_s": 1.21057,
+            "loop_s": 1.78226
+          },
+          {
+            "wall_s": 2.25661,
+            "cpu_s": 1.38526,
+            "loop_s": 2.23007
+          },
+          {
+            "wall_s": 2.07967,
+            "cpu_s": 1.21985,
+            "loop_s": 2.04192
+          },
+          {
+            "wall_s": 1.85664,
+            "cpu_s": 1.41664,
+            "loop_s": 1.82219
+          }
+        ]
+      }
+    },
+    {
+      "name": "regex_v8",
+      "arguments": [
+        "20"
+      ],
+      "output": "regex_v8 20 4250425\n",
+      "aot_build_s": 14.0407,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.04474,
+          "cpu_s": 0.621338,
+          "loop_s": 0.656971,
+          "wall_spread": 0.253242,
+          "cpu_share_min": 0.592284
+        },
+        "jit": {
+          "wall_s": 6.53427,
+          "cpu_s": 4.25788,
+          "loop_s": 2.42086,
+          "wall_spread": 0.176107,
+          "cpu_share_min": 0.598609
+        },
+        "aot": {
+          "wall_s": 2.81057,
+          "cpu_s": 1.97357,
+          "loop_s": 2.07049,
+          "wall_spread": 0.244042,
+          "cpu_share_min": 0.594616
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.04905,
+            "cpu_s": 0.621338,
+            "loop_s": 0.662788
+          },
+          {
+            "wall_s": 0.825291,
+            "cpu_s": 0.553248,
+            "loop_s": 0.45878
+          },
+          {
+            "wall_s": 1.08986,
+            "cpu_s": 0.68649,
+            "loop_s": 0.705323
+          },
+          {
+            "wall_s": 0.921077,
+            "cpu_s": 0.617704,
+            "loop_s": 0.537017
+          },
+          {
+            "wall_s": 1.04474,
+            "cpu_s": 0.669891,
+            "loop_s": 0.656971
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 6.97722,
+            "cpu_s": 4.20431,
+            "loop_s": 2.42086
+          },
+          {
+            "wall_s": 6.03328,
+            "cpu_s": 4.20684,
+            "loop_s": 2.4171
+          },
+          {
+            "wall_s": 7.18401,
+            "cpu_s": 4.30041,
+            "loop_s": 2.79727
+          },
+          {
+            "wall_s": 6.33406,
+            "cpu_s": 4.25788,
+            "loop_s": 2.10717
+          },
+          {
+            "wall_s": 6.53427,
+            "cpu_s": 4.31734,
+            "loop_s": 2.57839
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 2.81057,
+            "cpu_s": 1.98297,
+            "loop_s": 2.07049
+          },
+          {
+            "wall_s": 2.80901,
+            "cpu_s": 1.82257,
+            "loop_s": 2.13635
+          },
+          {
+            "wall_s": 2.90745,
+            "cpu_s": 1.84927,
+            "loop_s": 1.9901
+          },
+          {
+            "wall_s": 2.63318,
+            "cpu_s": 1.9959,
+            "loop_s": 1.94904
+          },
+          {
+            "wall_s": 3.31907,
+            "cpu_s": 1.97357,
+            "loop_s": 2.45409
+          }
+        ]
+      }
+    },
+    {
+      "name": "richards",
+      "arguments": [
+        "20"
+      ],
+      "output": "richards 20 9297 23246\n",
+      "aot_build_s": 1.92168,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.50823,
+          "cpu_s": 0.950762,
+          "loop_s": 1.48154,
+          "wall_spread": 0.300193,
+          "cpu_share_min": 0.535413
+        },
+        "jit": {
+          "wall_s": 0.521236,
+          "cpu_s": 0.275604,
+          "loop_s": 0.025125,
+          "wall_spread": 0.428853,
+          "cpu_share_min": 0.449222
+        },
+        "aot": {
+          "wall_s": 0.0178539,
+          "cpu_s": 0.012102,
+          "loop_s": 0.014766,
+          "wall_spread": 1.14805,
+          "cpu_share_min": 0.333709
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.8021,
+            "cpu_s": 0.96487,
+            "loop_s": 1.74937
+          },
+          {
+            "wall_s": 1.42875,
+            "cpu_s": 0.952315,
+            "loop_s": 1.40642
+          },
+          {
+            "wall_s": 1.34934,
+            "cpu_s": 0.921078,
+            "loop_s": 1.31962
+          },
+          {
+            "wall_s": 1.50823,
+            "cpu_s": 0.935369,
+            "loop_s": 1.48154
+          },
+          {
+            "wall_s": 1.57151,
+            "cpu_s": 0.950762,
+            "loop_s": 1.5511
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.578776,
+            "cpu_s": 0.28055,
+            "loop_s": 0.0349949
+          },
+          {
+            "wall_s": 0.521236,
+            "cpu_s": 0.275503,
+            "loop_s": 0.0245106
+          },
+          {
+            "wall_s": 0.638155,
+            "cpu_s": 0.286673,
+            "loop_s": 0.0270987
+          },
+          {
+            "wall_s": 0.414621,
+            "cpu_s": 0.270222,
+            "loop_s": 0.0242026
+          },
+          {
+            "wall_s": 0.457473,
+            "cpu_s": 0.275604,
+            "loop_s": 0.025125
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0358936,
+            "cpu_s": 0.011978,
+            "loop_s": 0.0186555
+          },
+          {
+            "wall_s": 0.0178539,
+            "cpu_s": 0.012102,
+            "loop_s": 0.014766
+          },
+          {
+            "wall_s": 0.0173941,
+            "cpu_s": 0.011671,
+            "loop_s": 0.014519
+          },
+          {
+            "wall_s": 0.0332243,
+            "cpu_s": 0.013886,
+            "loop_s": 0.0174316
+          },
+          {
+            "wall_s": 0.0153965,
+            "cpu_s": 0.01221,
+            "loop_s": 0.0123297
+          }
+        ]
+      }
+    },
+    {
+      "name": "richards_super",
+      "arguments": [
+        "20"
+      ],
+      "output": "richards_super 20 9297 23246\n",
+      "aot_build_s": 1.75296,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.59202,
+          "cpu_s": 1.04754,
+          "loop_s": 1.56,
+          "wall_spread": 0.296449,
+          "cpu_share_min": 0.577737
+        },
+        "jit": {
+          "wall_s": 0.491874,
+          "cpu_s": 0.287112,
+          "loop_s": 0.0239145,
+          "wall_spread": 0.488278,
+          "cpu_share_min": 0.445732
+        },
+        "aot": {
+          "wall_s": 0.0223053,
+          "cpu_s": 0.012419,
+          "loop_s": 0.0176092,
+          "wall_spread": 0.586056,
+          "cpu_share_min": 0.477123
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.81318,
+            "cpu_s": 1.04754,
+            "loop_s": 1.78019
+          },
+          {
+            "wall_s": 1.59202,
+            "cpu_s": 1.07299,
+            "loop_s": 1.56
+          },
+          {
+            "wall_s": 1.41725,
+            "cpu_s": 1.01853,
+            "loop_s": 1.38751
+          },
+          {
+            "wall_s": 1.34123,
+            "cpu_s": 0.95247,
+            "loop_s": 1.3167
+          },
+          {
+            "wall_s": 1.7787,
+            "cpu_s": 1.18531,
+            "loop_s": 1.74912
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.576575,
+            "cpu_s": 0.256998,
+            "loop_s": 0.0239145
+          },
+          {
+            "wall_s": 0.491874,
+            "cpu_s": 0.289406,
+            "loop_s": 0.0271485
+          },
+          {
+            "wall_s": 0.396063,
+            "cpu_s": 0.294254,
+            "loop_s": 0.019892
+          },
+          {
+            "wall_s": 0.384813,
+            "cpu_s": 0.249669,
+            "loop_s": 0.0233088
+          },
+          {
+            "wall_s": 0.624984,
+            "cpu_s": 0.287112,
+            "loop_s": 0.0354399
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0252556,
+            "cpu_s": 0.01205,
+            "loop_s": 0.013007
+          },
+          {
+            "wall_s": 0.0204887,
+            "cpu_s": 0.012419,
+            "loop_s": 0.0176092
+          },
+          {
+            "wall_s": 0.0257865,
+            "cpu_s": 0.018412,
+            "loop_s": 0.0220191
+          },
+          {
+            "wall_s": 0.0127144,
+            "cpu_s": 0.010822,
+            "loop_s": 0.0097437
+          },
+          {
+            "wall_s": 0.0223053,
+            "cpu_s": 0.014965,
+            "loop_s": 0.0191541
+          }
+        ]
+      }
+    },
+    {
+      "name": "scimark",
+      "arguments": [
+        "2"
+      ],
+      "output": "scimark 2 1014.1847047522592 8107.719855829322 3.14852 0.0 0.0\n",
+      "aot_build_s": 1.41887,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.18559,
+          "cpu_s": 0.756459,
+          "loop_s": 1.13962,
+          "wall_spread": 0.275949,
+          "cpu_share_min": 0.544322
+        },
+        "jit": {
+          "wall_s": 0.423514,
+          "cpu_s": 0.221029,
+          "loop_s": 0.0966436,
+          "wall_spread": 0.29638,
+          "cpu_share_min": 0.463739
+        },
+        "aot": {
+          "wall_s": 0.0496411,
+          "cpu_s": 0.031067,
+          "loop_s": 0.0373904,
+          "wall_spread": 0.48971,
+          "cpu_share_min": 0.506396
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.13117,
+            "cpu_s": 0.757915,
+            "loop_s": 1.08784
+          },
+          {
+            "wall_s": 1.18559,
+            "cpu_s": 0.8413,
+            "loop_s": 1.13962
+          },
+          {
+            "wall_s": 1.05236,
+            "cpu_s": 0.756459,
+            "loop_s": 1.02436
+          },
+          {
+            "wall_s": 1.37952,
+            "cpu_s": 0.750904,
+            "loop_s": 1.3138
+          },
+          {
+            "wall_s": 1.27782,
+            "cpu_s": 0.741828,
+            "loop_s": 1.22098
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.509169,
+            "cpu_s": 0.249468,
+            "loop_s": 0.111146
+          },
+          {
+            "wall_s": 0.522663,
+            "cpu_s": 0.270369,
+            "loop_s": 0.103192
+          },
+          {
+            "wall_s": 0.405346,
+            "cpu_s": 0.221029,
+            "loop_s": 0.0734582
+          },
+          {
+            "wall_s": 0.397142,
+            "cpu_s": 0.220079,
+            "loop_s": 0.0667605
+          },
+          {
+            "wall_s": 0.423514,
+            "cpu_s": 0.1964,
+            "loop_s": 0.0966436
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0496411,
+            "cpu_s": 0.030147,
+            "loop_s": 0.03552
+          },
+          {
+            "wall_s": 0.0665332,
+            "cpu_s": 0.041161,
+            "loop_s": 0.051418
+          },
+          {
+            "wall_s": 0.0422234,
+            "cpu_s": 0.031243,
+            "loop_s": 0.0354736
+          },
+          {
+            "wall_s": 0.0425779,
+            "cpu_s": 0.026985,
+            "loop_s": 0.0373904
+          },
+          {
+            "wall_s": 0.0613493,
+            "cpu_s": 0.031067,
+            "loop_s": 0.0501323
+          }
+        ]
+      }
+    },
+    {
+      "name": "spectral_norm",
+      "arguments": [
+        "10"
+      ],
+      "output": "spectral_norm 10 1.6236422398020804\n",
+      "aot_build_s": 0.917589,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.38332,
+          "cpu_s": 0.861423,
+          "loop_s": 1.36272,
+          "wall_spread": 0.0858748,
+          "cpu_share_min": 0.606455
+        },
+        "jit": {
+          "wall_s": 0.148633,
+          "cpu_s": 0.102199,
+          "loop_s": 0.0427751,
+          "wall_spread": 0.761506,
+          "cpu_share_min": 0.489063
+        },
+        "aot": {
+          "wall_s": 0.0287158,
+          "cpu_s": 0.014307,
+          "loop_s": 0.0186048,
+          "wall_spread": 1.05155,
+          "cpu_share_min": 0.418986
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.38145,
+            "cpu_s": 0.853047,
+            "loop_s": 1.35738
+          },
+          {
+            "wall_s": 1.46653,
+            "cpu_s": 0.928097,
+            "loop_s": 1.43843
+          },
+          {
+            "wall_s": 1.38332,
+            "cpu_s": 0.838921,
+            "loop_s": 1.36272
+          },
+          {
+            "wall_s": 1.34774,
+            "cpu_s": 0.861423,
+            "loop_s": 1.32852
+          },
+          {
+            "wall_s": 1.44153,
+            "cpu_s": 0.939447,
+            "loop_s": 1.42518
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 0.0988266,
+            "cpu_s": 0.094476,
+            "loop_s": 0.0221653
+          },
+          {
+            "wall_s": 0.175098,
+            "cpu_s": 0.100235,
+            "loop_s": 0.0428583
+          },
+          {
+            "wall_s": 0.148633,
+            "cpu_s": 0.10798,
+            "loop_s": 0.0321053
+          },
+          {
+            "wall_s": 0.212012,
+            "cpu_s": 0.103687,
+            "loop_s": 0.0427751
+          },
+          {
+            "wall_s": 0.147138,
+            "cpu_s": 0.102199,
+            "loop_s": 0.0432668
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0188947,
+            "cpu_s": 0.013178,
+            "loop_s": 0.016043
+          },
+          {
+            "wall_s": 0.0287158,
+            "cpu_s": 0.021,
+            "loop_s": 0.0235796
+          },
+          {
+            "wall_s": 0.04577,
+            "cpu_s": 0.019177,
+            "loop_s": 0.0258583
+          },
+          {
+            "wall_s": 0.0155739,
+            "cpu_s": 0.013404,
+            "loop_s": 0.0125708
+          },
+          {
+            "wall_s": 0.0333454,
+            "cpu_s": 0.014307,
+            "loop_s": 0.0186048
+          }
+        ]
+      }
+    },
+    {
+      "name": "unpack_sequence",
+      "arguments": [
+        "50000"
+      ],
+      "output": "unpack_sequence 50000 90\n",
+      "aot_build_s": 19.0606,
+      "summary": {
+        "cpython": {
+          "wall_s": 1.09183,
+          "cpu_s": 0.77472,
+          "loop_s": 1.05421,
+          "wall_spread": 0.126433,
+          "cpu_share_min": 0.586914
+        },
+        "jit": {
+          "wall_s": 1.08543,
+          "cpu_s": 0.72989,
+          "loop_s": 0.469233,
+          "wall_spread": 0.0212283,
+          "cpu_share_min": 0.636779
+        },
+        "aot": {
+          "wall_s": 0.00358745,
+          "cpu_s": 0.001572,
+          "loop_s": 2.17e-07,
+          "wall_spread": 3.17223,
+          "cpu_share_min": 0.121972
+        }
+      },
+      "runs": {
+        "cpython": [
+          {
+            "wall_s": 1.09183,
+            "cpu_s": 0.735175,
+            "loop_s": 1.05421
+          },
+          {
+            "wall_s": 1.11942,
+            "cpu_s": 0.77472,
+            "loop_s": 1.09049
+          },
+          {
+            "wall_s": 1.1695,
+            "cpu_s": 0.686394,
+            "loop_s": 1.13691
+          },
+          {
+            "wall_s": 1.05449,
+            "cpu_s": 0.786611,
+            "loop_s": 1.01993
+          },
+          {
+            "wall_s": 1.03145,
+            "cpu_s": 0.784611,
+            "loop_s": 0.990008
+          }
+        ],
+        "jit": [
+          {
+            "wall_s": 1.083,
+            "cpu_s": 0.752036,
+            "loop_s": 0.432209
+          },
+          {
+            "wall_s": 1.08543,
+            "cpu_s": 0.731744,
+            "loop_s": 0.469233
+          },
+          {
+            "wall_s": 1.08118,
+            "cpu_s": 0.72989,
+            "loop_s": 0.486017
+          },
+          {
+            "wall_s": 1.10133,
+            "cpu_s": 0.701306,
+            "loop_s": 0.52251
+          },
+          {
+            "wall_s": 1.10422,
+            "cpu_s": 0.724068,
+            "loop_s": 0.440046
+          }
+        ],
+        "aot": [
+          {
+            "wall_s": 0.0145853,
+            "cpu_s": 0.001779,
+            "loop_s": 2.18e-07
+          },
+          {
+            "wall_s": 0.00323768,
+            "cpu_s": 0.001552,
+            "loop_s": 2.16001e-07
+          },
+          {
+            "wall_s": 0.0113492,
+            "cpu_s": 0.001575,
+            "loop_s": 2.17e-07
+          },
+          {
+            "wall_s": 0.00358745,
+            "cpu_s": 0.001569,
+            "loop_s": 3.54999e-07
+          },
+          {
+            "wall_s": 0.00320511,
+            "cpu_s": 0.001572,
+            "loop_s": 2.05e-07
+          }
+        ]
+      }
+    }
+  ]
+}

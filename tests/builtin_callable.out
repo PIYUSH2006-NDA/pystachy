@@ -1,0 +1,10 @@
+True True True True True True
+True False True False False
+False False False False False False
+True
+adder 3
+adder 6
+function 2
+TypeError: not callable
+TypeError: not callable
+[exit 0]

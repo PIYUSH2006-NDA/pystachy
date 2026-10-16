@@ -1,0 +1,7 @@
+mods: init mods
+mods.shapes: init mods.shapes
+Point(x=1, name='p') 1 True 0
+Labeled(x=-2, name='p', label='é') 2 False 0
+Point(x=3, name='q') 3 False 0
+True Labeled(x=1, name='n', label='ł')
+[exit 0]

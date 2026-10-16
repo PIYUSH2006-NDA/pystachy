@@ -1,0 +1,5 @@
+ValueError: Pystachy's string.Formatter does not look up attributes of arguments: '0.x'
+ValueError: Pystachy's string.Formatter does not look up attributes of arguments: 'p.x'
+ValueError: Pystachy's string.Formatter does not look up items of arguments: '0[1]'
+list [1, 0]
+[exit 0]

@@ -16,24 +16,27 @@ Imports search builtin modules first, then the program's directory,
 | Module | Origin | Supported APIs | Main limitation |
 |---|---|---|---|
 | `bisect`, `colorsys`, `curses.ascii`, `this` | Unchanged CPython | See the pinned-copy table below | Subset string and type rules apply |
-| `operator`, `stat`, `posixpath`, `genericpath` | Unchanged CPython | Operator functions, mode tests and string path operations | Partial API coverage |
+| `stat`, `posixpath`, `genericpath` | Unchanged CPython | Mode tests and string path operations | Partial API coverage |
+| `operator` | Adapted CPython | Operator functions, `itemgetter`, `attrgetter`, `methodcaller` | Getters specialize on literal items and names |
 | `html`, `html.entities` | Adapted CPython | `escape`, `unescape`, HTML4 and HTML5 entity tables | UTF-8 byte indexing; no configurable integer digit limit |
 | `html.parser` | Adapted CPython | Incremental HTMLParser with typed subclass callbacks | Byte columns; ASCII name case conversion; see [probe](../docs/html-parser-probe.md) |
 | `difflib` | Adapted CPython | `SequenceMatcher`, `get_close_matches`, junk predicates and `Match` | String items; generator APIs unavailable |
 | `getopt` | Adapted CPython | `getopt`, `gnu_getopt`, `GetoptError` | `longopts` must be `list[str]`; untranslated messages |
 | `heapq` | Adapted CPython | Heap operations, `nlargest`, `nsmallest`, `key=` | `merge` unavailable; non-list inputs are materialized |
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
-| `collections` | Subset implementation | Typed `deque`, both ends, bounded queues, searches and comparisons | Items share one type; iteration is a snapshot |
+| `collections` | Subset implementation | Typed `deque` (both ends, bounded queues, searches and comparisons), `defaultdict`, `OrderedDict` and `Counter` | Items share one type; mappings hold dicts; deque iterators check mutation, other iteration is a snapshot |
 | `shlex` | Adapted CPython | `split`, `quote`, `join`, lexer options and source stacking | Files are read eagerly; punctuation field is writable |
-| `io` | Subset implementation | `StringIO` and seek constants | Byte positions; eager line iteration |
+| `io` | Subset implementation | `StringIO` and seek constants | Byte positions; lazy line iteration |
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |
 | `re` | Subset port of parser/compiler and C engine | String regex syntax and matching, substitution, caches, runtime-length `Match.groups()` | Byte positions; other selected variable-length result APIs unavailable |
 | `fnmatch` | Adapted CPython | `fnmatch`, `fnmatchcase`, `filter`, `translate` | String patterns; POSIX case handling |
-| `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key` | Typed callables and supported value/key types |
+| `functools` | Typed subset implementation | `cache`, `lru_cache`, statistics, clearing, `reduce`, `cmp_to_key`, `partial` | Typed callables and supported value/key types |
 | `textwrap` | Adapted CPython | `TextWrapper`, `wrap`, `fill`, `shorten`, `dedent`, `indent` | Byte widths; no subclassing |
-| `string` | Adapted CPython | Constants, `capwords`, `Template` | No compiled `Formatter` or `Template` subclasses |
+| `string` | Adapted CPython | Constants, `capwords`, `Template`, `Formatter` and its subclasses | No `Template` subclasses; `Formatter` arguments of one union, no attribute or item fields |
 | `statistics` | Adapted CPython | `fmean`, geometric mean, medians, quantiles, mode | Selected numeric types and APIs |
+| `random` | Adapted CPython on a subset `_random` (`_pyrandom`) | Seeded `Random` and module functions, integers, sequences, distributions, state | Int, bool and float seeds; 63-bit `getrandbits`; no subclasses |
 | `urllib.parse` | Adapted CPython | String quoting, query parsing/encoding and cached URL parsing/joining | Three codecs; no bytes or result properties |
+| `datetime` | Adapted CPython (`_pydatetime`, following `_datetime`) | `timedelta`, `date`, `time`, `datetime`, fixed-offset `timezone`, `tzinfo` subclasses, ISO 8601, `strftime()` | No local time zone; no `strptime()` or pickling |
 
 The [compatibility reference](compatibility.md) defines each module's accepted
 inputs, unsupported APIs and observable differences from CPython. The
@@ -67,7 +70,6 @@ to the compiled paths listed here and in the compatibility reference.
 |---|---|---|---|
 | `bisect` | `Lib/bisect.py` | `f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999` | Bisection and insertion, including `key=`. |
 | `colorsys` | `Lib/colorsys.py` | `65e3dfbf7bad61d4d7d7731a69dd7e75a347fd350d91327a51010a94e6fd2f1d` | All conversion functions. |
-| `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` | Operator functions and fixed-call `call()`; see [limits](compatibility.md#operator). |
 | `stat` | `Lib/stat.py` | `07217986d9b2172b509dab3578d18ac05ba768b418e1f1e8c90e38a8f7c2b3c6` | Constants, `S_IS*()`, `S_IMODE()` and `S_IFMT()`. |
 | `this` | `Lib/this.py` | `481d0cb3de511eae0b5713dad18542b07eafd9c013bb7690f7497bad49923a71` | Prints the Zen of Python. |
 | `posixpath` | `Lib/posixpath.py` | `69acb9e294987cd6056a2237048373cf8d6201faf1e43a49c38889b47d2fb28e` | String path operations, including `join()`; see [limits](compatibility.md#path-modules). |
@@ -77,6 +79,10 @@ to the compiled paths listed here and in the compatibility reference.
 
 `curses/__init__.py` is a Pystachy stand-in for the package that normally imports
 `_curses`; it does not provide terminal control.
+
+`_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers
+(`list_iterator`, `dict_keyiterator`, ...). The compiler loads it for a program that calls
+`iter()`; programs do not import it. See [iterators](../docs/language/semantics.md#iterators).
 
 ## Examples and measurements
 
@@ -91,6 +97,7 @@ to the compiled paths listed here and in the compatibility reference.
 | [Field selection](../examples/cut/README.md) | `getopt` |
 | [Message rendering](../examples/mailmerge/README.md) | `string.Template` |
 | [Latency reports](../examples/latency/README.md) | `statistics` |
+| [Monte Carlo estimates](../examples/montecarlo/README.md) | `random`, `statistics` |
 | [URL reports](../examples/urlstats/README.md) | `urllib.parse` |
 
 See [performance](../docs/performance.md) for the overall benchmark protocol and

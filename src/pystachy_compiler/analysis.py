@@ -1,8 +1,8 @@
 """Analysis component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODULES, NOREF, TYPING
-from src.pystachy_compiler.syntax import Node, mentions, mk, names_in
+from src.pystachy_compiler.specs import ABCS, CALLS, CTYPES, ERRNO, FUTURE, MODATTRS, MODFUNCS, MODULES, NOREF, TYPING
+from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mentions, mk, names_in, other_return
 from src.pystachy_compiler.utils import int_fits
 
 
@@ -25,6 +25,31 @@ def walrus_names(e: Node, out: dict[str, bool]) -> None:
     else:
         for k in e.kids:
             walrus_names(k, out)
+
+
+def walrus_values(e: Node, name: str, out: list[Node]) -> None:
+    # the values that the := of name in expression e assign, in the order they run (as
+    # walrus_names finds them)
+    for k in e.kids if e.kind != "lambda" else [p.kids[1] for p in e.kids[0].kids]:
+        walrus_values(k, name, out)
+    if e.kind == "walrus" and e.s == name:
+        out.append(e.kids[0])
+
+
+def stmt_walrus(st: Node, out: dict[str, bool]) -> None:
+    # the names that the := in statement st's own expressions bind (not in its blocks, nor in the
+    # body of the class or function it defines)
+    if st.kind == "subclass":
+        for x in st.kids[0].kids[1:] + st.kids[1:]:
+            walrus_names(x, out)
+        return
+    for kid in st.kids:
+        if kid.kind == "except":
+            walrus_names(kid.kids[0], out)
+        elif st.kind == "async":
+            stmt_walrus(kid, out)
+        elif kid.kind != "block":
+            walrus_names(kid, out)
 
 
 def scope_binds(body: list[Node], out: dict[str, bool], decl: dict[str, str]) -> None:
@@ -86,10 +111,97 @@ def builtin_module(path: str) -> bool:
     return path in MODULES or root in MODULES or path == "collections.abc"
 
 
+def clean_doc(s: str) -> str:
+    # a docstring as CPython 3.13's compiler keeps it (_PyCompile_CleanDoc): tabs expanded (in
+    # columns of characters, which UTF-8 continuation bytes do not start), the first line's leading
+    # spaces and the indentation that the other lines with text share removed
+    out: list[str] = []
+    col = 0
+    for i in range(len(s)):
+        c = s[i]
+        if c == "\t":
+            out.append(" " * (8 - col % 8))
+            col += 8 - col % 8
+        else:
+            out.append(c)
+            col = 0 if c == "\n" or c == "\r" else col if ord(c) & 192 == 128 else col + 1
+    lines = "".join(out).split("\n")
+    margin = -1
+    for ln in lines[1:]:
+        k = len(ln) - len(ln.lstrip(" "))
+        if k < len(ln) and (margin < 0 or k < margin):
+            margin = k
+    kept = [lines[0].lstrip(" ")]
+    for ln in lines[1:]:
+        kept.append(ln[min(margin, len(ln) - len(ln.lstrip(" "))) if margin > 0 else 0 :])
+    return "\n".join(kept)
+
+
+def names_name(n: Node, name: str) -> bool:
+    # does code n name name anywhere: reads, binds or declares it, also in the functions and
+    # classes it defines (an import's alias of that name too)
+    if (n.kind == "name" or n.kind == "alias") and n.s == name:
+        return True
+    for k in n.kids:
+        if names_name(k, name):
+            return True
+    return False
+
+
+def binds_first(st: Node, name: str) -> bool:
+    # does module-level statement st bind name for sure without reading it first: name = v (also
+    # among other names), name: T = v, or an import of that name
+    if st.kind == "import":
+        return True  # (its alias: names_name())
+    if st.kind != "assign" and not (st.kind == "annassign" and len(st.kids) == 3):
+        return False
+    for t in st.kids[:-1] if st.kind == "assign" else st.kids[:1]:
+        if t.kind != "name":
+            return False
+    return not names_name(st.kids[-1], name)
+
+
+def del_line(n: Node, name: str, fn: bool) -> int:
+    # the line of a del statement in code n that deletes the module's name: outside functions and
+    # classes (not fn), or in a function that declares it global; 0 if there is none
+    if n.kind == "def":
+        decl: dict[str, bool] = {}
+        globals_in(n.kids[2].kids, decl)
+        fn = name not in decl
+    elif n.kind == "class" or n.kind == "subclass":
+        fn = True
+    elif n.kind == "del" and not fn:
+        for t in n.kids:
+            names: list[str] = []
+            if t.kind == "name" or t.kind == "tuple" or t.kind == "list":
+                names_in(t, names)
+            if name in names:
+                return n.line
+    for k in n.kids:
+        r = del_line(k, name, fn)
+        if r > 0:
+            return r
+    return 0
+
+
+def builtin_import(st: Node, a: Node) -> bool:
+    # does alias a of import statement st bind a builtin module or a name of one: import os.path
+    # binds os, a builtin module, but import collections.abc the Python package collections
+    return not st.s.startswith("from.") and builtin_module(a.kids[0].s if st.s == "" else a.kids[1].s)
+
+
+def builtin_of(path: str) -> str:
+    # the builtin module that path, a builtin module or a name of one, is in
+    if path == "collections.abc" or path.startswith("collections.abc."):
+        return "collections.abc"
+    return path[: path.find(".")] if "." in path else path
+
+
 def known_path(p: str) -> bool:
     # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
-    # function builtin() handles itself, or sys.float_info (whose attributes are modattr() values)
-    if p in MODULES or p in MODATTRS or p == "sys.exit" or p == "sys.float_info" or p == "os.fspath" or p == "os.path.normcase" or p == "os.path.join" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    # function builtin() handles itself (MODFUNCS), sys.float_info (whose attributes are
+    # modattr() values), or sys.version_info
+    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "sys.version_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):
@@ -194,7 +306,7 @@ def special_import(st: Node, a: Node) -> bool:
     # an import the loader recognizes where the name it binds is read: of a builtin module (import
     # os, import os.path as p), or from typing import TYPE_CHECKING
     if st.s == "":
-        return builtin_module(a.kids[1].s)
+        return builtin_import(st, a)
     return st.s == "from" and (a.kids[0].s == "typing.TYPE_CHECKING" or a.kids[0].s == "typing_extensions.TYPE_CHECKING")
 
 
@@ -232,7 +344,7 @@ def builtin_try(st: Node) -> bool:
     # ImportError: TYPE_CHECKING = False), whose except clauses never run (Loader.optional())
     for x in st.kids[0].kids if accel_try(st) else st.kids[:0]:
         for a in x.kids if x.kind == "import" else x.kids[:0]:
-            if x.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+            if x.s.startswith("from.") or not (builtin_import(x, a) or a.kids[1].s == "typing_extensions"):
                 return False
     return accel_try(st)
 
@@ -243,7 +355,7 @@ def surely_binds(st: Node, out: dict[str, bool], bound: dict[str, bool], deep: b
     # out and bound. Not deep: the statements in st's blocks have been through it already, with
     # the same bound (Loader.imports), so only a with block's are looked at again (for out)
     if st.kind != "for" and not (st.kind == "annassign" and len(st.kids) < 3):
-        targets(st, out)
+        targets(st, out, False)  # (a := may not run: and, or, an if-else's arm)
     gone: dict[str, bool] = {}
     if st.kind == "import":
         for a in st.kids:
@@ -364,10 +476,10 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
         bound_in(k, out)
 
 
-def targets(st: Node, out: dict[str, bool]) -> None:
-    # the names statement st assigns itself (not in its blocks)
+def targets(st: Node, out: dict[str, bool], walrus: bool = True) -> None:
+    # the names statement st assigns itself (not in its blocks), with walrus those its := bind
     k = st.kind
-    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "with":
+    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "compfor" or k == "with":
         names: list[str] = []
         if k == "with":
             for it in st.kids[:-1]:
@@ -377,6 +489,8 @@ def targets(st: Node, out: dict[str, bool]) -> None:
             names_in(st.kids[i], names)
         for nm in names:
             out[nm] = True
+    if walrus:
+        stmt_walrus(st, out)
 
 
 def collect(body: list[Node], out: dict[str, bool]) -> None:
@@ -420,7 +534,7 @@ def top_bindings(body: list[Node]) -> dict[str, int]:
     count: dict[str, int] = {}
     for st in body:
         names: dict[str, bool] = {}
-        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass" or st.kind == "typealias":
             names[st.s] = True
         elif st.kind != "import":
             collect([st], names)
@@ -436,7 +550,7 @@ def constant_writes(n: Node, count: dict[str, int]) -> None:
     # modules. Local bindings with the same spelling as a main-module name conservatively count
     # too. A global declaration or deletion excludes a name even without an accompanying store.
     names: dict[str, bool] = {}
-    targets(n, names)
+    targets(n, names, False)  # (this traversal counts each walrus node itself, once)
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "except" or n.kind == "walrus" or n.kind == "typealias":
         if n.s != "":
             names[n.s] = True
@@ -489,11 +603,61 @@ def module_ints(mods: list[Mod], at: dict[str, int]) -> dict[str, str]:
     return out
 
 
+def module_strs(mods: list[Mod]) -> dict[str, str]:
+    # The module globals that one direct module-level assignment binds to a str literal, or a
+    # from-import of another such name: their text, which str.format() of the name reads as
+    # a literal format (Gen.str_format). The name is still read, with its usual checks.
+    count: dict[str, int] = {}
+    for m in mods:
+        constant_writes(m.body, count)
+    out: dict[str, str] = {}
+    copies: list[Node] = []
+    for m in mods:
+        for st in m.body.kids:
+            if not ((st.kind == "assign" and len(st.kids) == 2) or (st.kind == "annassign" and len(st.kids) == 3)) or st.kids[0].kind != "name" or count.get(st.kids[0].s, 0) != 1:
+                continue
+            if st.kids[-1].kind == "str":
+                out[st.kids[0].s] = st.kids[-1].s
+            elif st.kind == "assign" and st.s == "from" and st.kids[1].kind == "name":
+                copies.append(st)
+    more = True
+    while more:
+        more = False
+        for st in copies:
+            if st.kids[0].s not in out and st.kids[1].s in out:
+                out[st.kids[0].s] = out[st.kids[1].s]
+                more = True
+    return out
+def calls_iter(n: Node, listed: bool) -> bool:
+    # may n call iter() (it names it, or builtins.iter), which then makes an iterator object of
+    # a builtin container (lib/_pystachy_iterators.py)? Not where an __iter__ annotated
+    # -> Iterator[T] returns iter(x) (listed, see Gen.iter_ret), which steps through a list
+    if n.kind == "def" and n.s == "__iter__":
+        a = n.kids[1]
+        t = a.s if a.kind == "str" else ""
+        if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr"):
+            t = a.kids[0].s + "["
+        t = t[: t.find("[")] if "[" in t else ""
+        t = t[t.rfind(".") + 1 :]
+        listed = (t == "Iterator" or t == "Iterable") and not other_return(n.kids[2])
+    elif n.kind == "def" or n.kind == "lambda":
+        listed = False
+    if listed and n.kind == "return" and len(n.kids) == 1 and n.kids[0].kind == "call" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "iter":
+        return calls_iter(n.kids[0], False) if len(n.kids[0].kids) != 2 else calls_iter(n.kids[0].kids[1], listed)
+    if (n.kind == "name" and n.s == "iter") or (n.kind == "attr" and n.s == "iter"):
+        return True
+    for k in n.kids:
+        if calls_iter(k, listed):
+            return True
+    return False
+
+
 def needs_eh(body: list[Node]) -> bool:
     # does body need exception handling or with-file cleanup, also in the functions and classes
-    # it defines (a class with bases is a subclass node whose first kid is the class)
+    # it defines (a class with bases is a subclass node whose first kid is the class); a
+    # __next__ method too, whose StopIteration a loop over its object catches
     for st in body:
-        if st.kind == "try" or st.kind == "with":
+        if st.kind == "try" or st.kind == "with" or (st.kind == "def" and st.s == "__next__"):
             return True
         for kid in st.kids if st.kind != "subclass" else st.kids[0].kids:
             if kid.kind == "block" and needs_eh(kid.kids):
@@ -532,7 +696,7 @@ def reads(n: Node, name: str) -> bool:
         return False
     if k == "listcomp":
         names: list[str] = []
-        names_in(n.kids[1], names)
+        comp_names(n, names)
         if name in names:
             return reads(n.kids[2], name)
     for i in range(len(n.kids)):
@@ -554,10 +718,10 @@ def read_names(n: Node, out: dict[str, bool]) -> None:
         return
     names: list[str] = []
     if k == "listcomp":
-        names_in(n.kids[1], names)
+        comp_names(n, names)
     for i in range(len(n.kids)):
         if k == "listcomp" and i != 2:
-            # (a name its target binds counts only in its iterable)
+            # (a name its targets bind counts only in its first iterable)
             inner: dict[str, bool] = {}
             read_names(n.kids[i], inner)
             for nm in inner:
@@ -615,6 +779,18 @@ def all_imports(body: list[Node], out: list[str]) -> None:
                 all_imports(kid.kids[1].kids, out)
 
 
+def imports_user(n: Node) -> bool:
+    # does code n (also in its functions and classes) import a module that is not builtin, whose
+    # code, or that of the modules it imports, may run there
+    for a in n.kids if n.kind == "import" else n.kids[:0]:
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
+            return True
+    for k in n.kids:
+        if imports_user(k):
+            return True
+    return False
+
+
 def top_imports(body: list[Node]) -> list[str]:
     # the user modules that module-level code (body, not its functions) imports
     out: list[str] = []
@@ -657,7 +833,7 @@ def deleted(body: list[Node], out: dict[str, bool], defs: bool = False) -> None:
 
 def none_assigns(body: list[Node], out: dict[str, list[Node]]) -> None:
     # every value module-level code (body, not its functions) assigns to each name; a name bound
-    # any other way (for, with, +=, an annotation, unpacking) gets an "omit" node
+    # any other way (for, with, +=, an annotation, unpacking, :=) gets an "omit" node
     for st in body:
         k = st.kind
         if k == "assign":
@@ -675,6 +851,12 @@ def none_assigns(body: list[Node], out: dict[str, list[Node]]) -> None:
                 if nm not in out:
                     out[nm] = []
                 out[nm].append(mk("omit", "", st.line, []))
+        w: dict[str, bool] = {}
+        stmt_walrus(st, w)  # (x := v)
+        for nm in w:
+            if nm not in out:
+                out[nm] = []
+            out[nm].append(mk("omit", "", st.line, []))
         for kid in st.kids:
             if kid.kind == "block" and st.kind != "def" and st.kind != "class":
                 none_assigns(kid.kids, out)
@@ -722,7 +904,7 @@ def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
         free_reads(n.kids[2], bound, out)
         own = dict(bound)
         names: list[str] = []
-        names_in(n.kids[1], names)
+        comp_names(n, names)
         for nm in names:
             own[nm] = True
         for i in range(len(n.kids)):
@@ -739,6 +921,81 @@ def free_reads(n: Node, bound: dict[str, bool], out: dict[str, bool]) -> None:
         return
     for kid in n.kids:
         free_reads(kid, bound, out)
+
+
+def target_unbound(t: Node, names: list[str], bound: list[str]) -> str:
+    # the first of names that assigning to target t reads (in an attribute's object, or in a
+    # subscript) before a name it binds is bound, or "": bound has the names bound so far, and
+    # gets t's own, in the order t assigns them (left to right)
+    k = t.kind
+    if k == "name":
+        bound.append(t.s)
+        return ""
+    if k == "tuple" or k == "list" or k == "starred":
+        for x in t.kids:
+            nm = target_unbound(x, names, bound)
+            if nm != "":
+                return nm
+        return ""
+    out: dict[str, bool] = {}
+    for x in t.kids:
+        free_reads(x, {}, out)
+    for nm in names:
+        if nm in out and nm not in bound:
+            return nm
+    return ""
+
+
+def comp_unbound(c: Node, names: list[str]) -> str:
+    # why comprehension c, whose variables are names, is not supported, or "": a clause (a
+    # condition, a later for clause's iterable, or a for clause's target) reads one of them that
+    # only that clause's target or a later one binds, which CPython finds unbound (UnboundLocalError)
+    bound: list[str] = []
+    nm = target_unbound(c.kids[1], names, bound)
+    for x in c.kids[3:] if len(c.kids) > 3 and (c.kids[3].kind == "compfor" or c.kids[3].kind == "compif") else c.kids[:0]:
+        if nm != "":
+            break
+        out: dict[str, bool] = {}
+        free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, out)
+        for v in names:
+            if v in out and v not in bound and nm == "":
+                nm = v
+        if nm == "" and x.kind == "compfor":
+            nm = target_unbound(x.kids[0], names, bound)
+    return "" if nm == "" else f"'{nm}' is read before the comprehension's for clause that binds it, where CPython raises UnboundLocalError (not supported)"
+
+
+def comp_shared(c: Node, j: int, out: list[str]) -> None:
+    # the names that comprehension c's later for clause c.kids[j] binds into the variable of the
+    # latest earlier for clause that binds them too, as CPython's comprehension has one variable of
+    # each name: those that a clause between the two (or this one's target) reads once a loop
+    # between them has run, where it can see this clause's value. Elsewhere this clause's value
+    # can go to a new variable, which may have another type
+    mine: list[str] = []
+    names_in(c.kids[j].kids[0], mine)
+    for nm in mine:
+        q = -1  # (2: the first for clause, whose iterable is c.kids[2])
+        first: list[str] = []
+        names_in(c.kids[1], first)
+        if nm in first:
+            q = 2
+        for i in range(3, j):
+            b: list[str] = []
+            if c.kids[i].kind == "compfor":
+                names_in(c.kids[i].kids[0], b)
+            if nm in b:
+                q = i
+        if q < 0 or nm in out:
+            continue
+        loop = False
+        for i in range(q + 1, j + 1):
+            x = c.kids[i]
+            rd: dict[str, bool] = {}
+            free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, rd)
+            if (loop and nm in rd) or (x.kind == "compfor" and target_unbound(x.kids[0], [nm], []) != ""):
+                out.append(nm)
+                break
+            loop = loop or x.kind == "compfor"
 
 
 def closure_free(d: Node, out: dict[str, bool]) -> None:
@@ -859,6 +1116,8 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
     # (sure: those an import before n has bound, to which n adds those it surely binds: in both
     # branches of an if, in a with block, not in a loop), and those its imports of Python modules
     # bind (user)
+    if n.kind == "global":
+        return  # (it names them, but reads none)
     if n.kind == "name" and n.s not in sure:
         out[n.s] = True
     if n.kind == "def":
@@ -872,7 +1131,7 @@ def import_reads(n: Node, sure: dict[str, bool], out: dict[str, bool], user: dic
                 out[nm] = True
     for a in n.kids if n.kind == "import" else n.kids[:0]:
         sure[a.s] = True
-        if n.s.startswith("from.") or not (builtin_module(a.kids[1].s) or a.kids[1].s == "typing_extensions"):
+        if n.s.startswith("from.") or not (builtin_import(n, a) or a.kids[1].s == "typing_extensions"):
             user[a.s] = True
     if n.kind == "if":
         import_reads(n.kids[0], sure, out, user)
@@ -949,6 +1208,15 @@ def global_assigns(body: list[Node], out: dict[str, bool], imports: bool = False
             global_assigns(d.kids[2].kids, out, imports)
 
 
+def fn_globals(n: Node, out: dict[str, bool]) -> None:
+    # the names of the module that the functions code n defines anywhere (in its blocks, classes
+    # and functions too) assign, also by an import, declared global (global_assigns())
+    if n.kind == "def":
+        global_assigns(n.kids[2].kids, out, True)
+    for k in n.kids:
+        fn_globals(k, out)
+
+
 def scope_globals(body: list[Node], out: dict[str, int]) -> None:
     # the names that the global statements of a scope (body: its statements) declare, not those of
     # the functions and classes it defines, each with the line of its first global statement
@@ -978,7 +1246,11 @@ def stmt_binds(st: Node, name: str) -> bool:
         for it in st.kids[:-1]:
             if len(it.kids) == 2:
                 names_in(it.kids[1], names)
-    return name in names
+    if name in names:
+        return True
+    w: dict[str, bool] = {}
+    stmt_walrus(st, w)
+    return name in w
 
 
 def only_none(body: list[Node], name: str) -> bool:
@@ -998,6 +1270,29 @@ def only_none(body: list[Node], name: str) -> bool:
             if kid.kind == "except" and not only_none(kid.kids[1].kids, name):
                 return False
     return True
+
+
+def bind_count(body: list[Node], name: str) -> int:
+    # how many statements in body (into blocks, not into defs and classes) bind variable name:
+    # an assignment counts once, another binding (a for loop's, an import's, an except clause's,
+    # a def's) twice
+    n = 0
+    for st in body:
+        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
+            n += 2 if st.s == name else 0
+            continue
+        if stmt_binds(st, name):
+            n += 1 if st.kind == "assign" else 2
+        if has_kind(st, "walrus"):
+            n += 2
+        for a in st.kids if st.kind == "import" else st.kids[:0]:
+            n += 2 if a.s == name else 0
+        for kid in st.kids:
+            if kid.kind == "block":
+                n += bind_count(kid.kids, name)
+            if kid.kind == "except":
+                n += (2 if kid.s == name else 0) + bind_count(kid.kids[1].kids, name)
+    return n
 
 
 def nonexpr(e: Node) -> bool:
@@ -1088,15 +1383,15 @@ def aliases(n: Node, name: str) -> bool:
 
 def shows_items(n: Node, name: str) -> bool:
     # does n (outside the functions and classes it defines) assign variable name, or fill the
-    # container it holds: name[k] = v, name += xs, name.append(v), insert, extend, setdefault, get,
-    # and a set's add and update
+    # container it holds: name[k] = v, name[a:b] = xs, name += xs, name.append(v), insert,
+    # extend, setdefault, get, and a set's add and update
     if n.kind == "def" or n.kind == "class" or n.kind == "subclass" or n.kind == "lambda":
         return False
     if stmt_binds(n, name):
         return True
     if n.kind == "assign":
         for t in n.kids[:-1]:
-            if t.kind == "index" and t.kids[0].kind == "name" and t.kids[0].s == name:
+            if (t.kind == "index" or t.kind == "slice") and t.kids[0].kind == "name" and t.kids[0].s == name:
                 return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == name:
         if n.kids[0].s in "append insert extend setdefault get add update".split():

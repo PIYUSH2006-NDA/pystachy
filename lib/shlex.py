@@ -11,7 +11,6 @@ import os
 import posixpath  # Pystachy port: (see sourcehook())
 import re
 import sys
-from typing import Iterator  # Pystachy port: (see __iter__())
 from collections import deque
 
 from io import StringIO
@@ -330,20 +329,12 @@ class shlex:
             lineno = self.lineno
         return "\"%s\", line %d: " % (infile, lineno)
 
-    def __iter__(self) -> Iterator[str]:
-        # Pystachy port: annotated, and the tokens left, read when the loop starts (an iterator
-        # class, which reads each token as the loop asks for it, is not supported)
-        tokens = []
-        while True:
-            token = self.get_token()
-            if token is None or token == self.eof:
-                break
-            tokens.append(token)
-        return iter(tokens)
+    def __iter__(self):
+        return self
 
-    def __next__(self) -> str | None:  # Pystachy port: annotated (a special method of a class template)
+    def __next__(self) -> str:  # Pystachy port: annotated; get_token's EOF is not an item
         token = self.get_token()
-        if token == self.eof:
+        if token is None or token == self.eof:
             raise StopIteration
         return token
 

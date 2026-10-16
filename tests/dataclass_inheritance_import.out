@@ -1,0 +1,16 @@
+default of weight
+imported
+default of alarm weight
+Silent.__init__ s
+Event(name='e', weight=6) 6 []
+Timed(name='t', weight=6, seconds=1.5) 6 []
+Alarm(name='a', weight=12, seconds=0.0, loud=True) 12 []
+Silent(name='s', weight=1, seconds=0.5) 1 []
+Timed(name='t', weight=0, seconds=1.5) 0 []
+Silent.__init__ s
+False True True
+FrozenInstanceError cannot assign to field 'name'
+AttributeError cannot delete field 'name'
+Alarm(name='a', weight=12, seconds=0.0, loud=True)
+Sub(a=1, b='b', c=2.0) True 1 b 2.0
+[exit 0]

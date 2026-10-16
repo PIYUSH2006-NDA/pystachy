@@ -67,8 +67,9 @@ that assumption.
 List headers remain scanned so their backing arrays stay reachable. `list(range(...))`
 initially uses pointer-free backing because every element is an unboxed integer, including
 for an empty range's minimum-capacity buffer. The list layout and mutation interface are
-unchanged. Generic growth, copies and slices still allocate scanned backing; preserving
-element kinds through those operations is a separate follow-up.
+unchanged. Generic growth, copies and slices (stepped too) still allocate scanned backing;
+preserving element kinds through those operations is a separate follow-up. Slice assignment
+and deletion move items within a list's backing, which keeps its kind unless the list grows.
 
 ## Build and cache
 
@@ -78,7 +79,10 @@ part is built with `-fexceptions` so exceptions can unwind through runtime frame
 JIT uses an object compiled from the combined bitcode; AOT links that runtime into
 the program.
 
-Cache names have the form `build/runtime-py-<L>-<K>.bc` and `.o`. The content key
+Cache names have the form `build/runtime-py-<L>-<K>.bc`, `.o` and `.target`.
+The small `.target` file preserves the runtime's target triple and data layout;
+JIT optimization applies them before folding object sizes and field offsets.
+The content key
 includes runtime and compiler bytes, C flags, disabled `PYSTACHY_OPT` passes and
 LLVM tool identities. Host CPU information is included for flags such as
 `-march=native`. The path/flag group `L` separates compiler and tool configurations.

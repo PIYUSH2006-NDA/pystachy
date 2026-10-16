@@ -237,36 +237,32 @@ class attrgetter:
     After h = attrgetter('name.first', 'name.last'), the call h(r) returns
     (r.name.first, r.name.last).
     """
-    __slots__ = ('_attrs', '_call')
+    __slots__ = ('_attrs',)  # Pystachy port: no _call (see __call__)
 
     def __init__(self, attr, /, *attrs):
-        if not attrs:
-            if not isinstance(attr, str):
+        # Pystachy port: no closures in _call: __call__ runs their code with the names in
+        # _attrs, which an attrgetter of literal names holds as constants (each makes a class
+        # of its own); every name is tested as attrgetter(name) tests it
+        self._attrs = (attr,) + attrs
+        for name in self._attrs:
+            if not isinstance(name, str):
                 raise TypeError('attribute name must be a string')
-            self._attrs = (attr,)
-            names = attr.split('.')
-            def func(obj):
-                for name in names:
-                    obj = getattr(obj, name)
-                return obj
-            self._call = func
-        else:
-            self._attrs = (attr,) + attrs
-            getters = tuple(map(attrgetter, self._attrs))
-            def func(obj):
-                return tuple(getter(obj) for getter in getters)
-            self._call = func
 
     def __call__(self, obj, /):
-        return self._call(obj)
+        # Pystachy port: the closures' code: a tuple of each name's getter's value, or the
+        # attribute of the first part of a dotted name, then of the rest
+        if len(self._attrs) > 1:
+            return tuple(attrgetter(name)(obj) for name in self._attrs)
+        if '.' in self._attrs[0]:
+            return attrgetter(self._attrs[0].partition('.')[2])(getattr(obj, self._attrs[0].partition('.')[0]))
+        return getattr(obj, self._attrs[0])
 
     def __repr__(self):
-        return '%s.%s(%s)' % (self.__class__.__module__,
-                              self.__class__.__qualname__,
+        # Pystachy port: the class's names, which no attribute of the class gives
+        return '%s.%s(%s)' % ('operator', 'attrgetter',
                               ', '.join(map(repr, self._attrs)))
 
-    def __reduce__(self):
-        return self.__class__, self._attrs
+    # Pystachy port: no __reduce__, as the subset has no pickling (or class objects as values)
 
 class itemgetter:
     """
@@ -274,30 +270,26 @@ class itemgetter:
     After f = itemgetter(2), the call f(r) returns r[2].
     After g = itemgetter(2, 5, 3), the call g(r) returns (r[2], r[5], r[3])
     """
-    __slots__ = ('_items', '_call')
+    __slots__ = ('_items',)  # Pystachy port: no _call (see __call__)
 
     def __init__(self, item, /, *items):
-        if not items:
-            self._items = (item,)
-            def func(obj):
-                return obj[item]
-            self._call = func
-        else:
-            self._items = items = (item,) + items
-            def func(obj):
-                return tuple(obj[i] for i in items)
-            self._call = func
+        # Pystachy port: no closures in _call: __call__ runs their code with the items in
+        # _items, which an itemgetter of literal items holds as constants (each makes a class
+        # of its own)
+        self._items = (item,) + items
 
     def __call__(self, obj, /):
-        return self._call(obj)
+        # Pystachy port: the closures' code
+        if len(self._items) == 1:
+            return obj[self._items[0]]
+        return tuple(obj[i] for i in self._items)
 
     def __repr__(self):
-        return '%s.%s(%s)' % (self.__class__.__module__,
-                              self.__class__.__name__,
+        # Pystachy port: the class's names, which no attribute of the class gives
+        return '%s.%s(%s)' % ('operator', 'itemgetter',
                               ', '.join(map(repr, self._items)))
 
-    def __reduce__(self):
-        return self.__class__, self._items
+    # Pystachy port: no __reduce__, as the subset has no pickling (or class objects as values)
 
 class methodcaller:
     """
@@ -320,18 +312,14 @@ class methodcaller:
 
     def __repr__(self):
         args = [repr(self._name)]
-        args.extend(map(repr, self._args))
-        args.extend('%s=%r' % (k, v) for k, v in self._kwargs.items())
-        return '%s.%s(%s)' % (self.__class__.__module__,
-                              self.__class__.__name__,
+        # Pystachy port: list displays of the arguments, which may have different types, and
+        # the class's names, which no attribute of the class gives
+        args.extend([repr(x) for x in self._args])
+        args.extend(['%s=%r' % (k, v) for k, v in self._kwargs.items()])
+        return '%s.%s(%s)' % ('operator', 'methodcaller',
                               ', '.join(args))
 
-    def __reduce__(self):
-        if not self._kwargs:
-            return self.__class__, (self._name,) + self._args
-        else:
-            from functools import partial
-            return partial(self.__class__, self._name, **self._kwargs), self._args
+    # Pystachy port: no __reduce__, as the subset has no pickling (or class objects as values)
 
 
 # In-place Operations *********************************************************#
