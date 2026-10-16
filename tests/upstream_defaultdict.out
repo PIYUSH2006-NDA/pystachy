@@ -1,0 +1,29 @@
+d1 True
+d1 True
+d1 True
+is not True
+d2 True
+foo 1
+bar 2
+in True
+in keys True
+not in False
+True
+KeyError 15
+repr "defaultdict(<class 'int'>, {12: 42})"
+repr 'defaultdict(None, {})'
+repr 'defaultdict(None, {11: 41})'
+d3 True
+d4 True
+d4 True
+e['a'] 42
+KeyError (1,)
+i_s True
+list [1, 2, 0]
+s_i True
+list [0, 1, 2]
+i_ds True
+list [1, 2, 0]
+i True
+list [1, 2, 0]
+[exit 0]

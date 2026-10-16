@@ -24,8 +24,8 @@
 #   filename2, msg, text, lineno, offset, end_lineno, end_offset, print_file_and_line, name,
 #   obj: not supported), type(e).__module__ and its pickle round trips; its cases
 #   OSError('foo', 'bar', 'baz', None, 'quux') (more than three arguments for OSError: not
-#   supported), SyntaxError() of several arguments, UnicodeEncodeError, UnicodeDecodeError
-#   (also of a bytearray and bytes) and UnicodeTranslateError (not supported), and
+#   supported), SyntaxError() of several arguments, the attributes of UnicodeEncodeError and
+#   UnicodeDecodeError (also of a bytearray and bytes) and UnicodeTranslateError (not supported), and
 #   WindowsError (Windows only)
 # - testKeywordArgs' BaseException(a=1): a compile-time error with CPython's message
 #   (tests/errors/upstream_exceptions_keyword_args.py)

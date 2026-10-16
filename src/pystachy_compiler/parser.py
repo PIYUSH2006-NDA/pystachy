@@ -578,7 +578,9 @@ class Parser:
         if self.tp_mentions(ret, tps):
             self.dropped(line, mk("annotation", "", line, [ret]))
             ret = mk("noann", " ".join(tps), line, [ret])
-        return mk("def", name, line, [params, ret, self.scope(True)])
+        body = self.scope(True)
+        body.s = " ".join(tps)  # (which name type variables of their own in it: Loader.qstmts)
+        return mk("def", name, line, [params, ret, body])
 
     def tp_mentions(self, a: Node, tps: list[str]) -> bool:
         # (funcdef) does annotation a mention one of type parameters tps, also in a string, a
@@ -1398,11 +1400,13 @@ class Parser:
             n = mk("fstr", "", line, [])
             nb = 0
             parts = 0
+            bs: list[str] = []  # (the bytes of each bytes literal, a character per byte)
             pt = t
             while True:
                 parts += 1
                 if pt.kind == "bytes":
                     self.bytes_check(pt)
+                    bs.append(self.bytes_unescape(pt.text) if pt.esc else pt.text)
                     nb += 1
                 elif pt.kind == "str":
                     n.kids.append(mk("str", self.unescape(pt.text, pt.line) if pt.esc else pt.text, pt.line, []))
@@ -1436,7 +1440,7 @@ class Parser:
             if nb > 0 and nb < parts:
                 self.fail("cannot mix bytes and nonbytes literals", self.line())
             if nb > 0:
-                return mk("bytes", "", line, [])
+                return mk("bytes", "".join(bs), line, [])
             plain = True
             for kd in n.kids:
                 if kd.kind != "str":
@@ -1888,6 +1892,40 @@ class Parser:
             else:
                 out.append("\\" + e)
             at += i - b
+        return "".join(out)
+
+    def bytes_unescape(self, s: str) -> str:
+        # decode the backslash escapes of a bytes literal's source text, which bytes_check has
+        # checked: a character per byte. \x, an octal escape (CPython keeps its low 8 bits, with
+        # a SyntaxWarning above \377) and the named escapes give a byte; \u, \U, \N and any other
+        # escape are none (their backslash stays), and a backslash ends a line in the literal
+        out: list[str] = []
+        i = 0
+        n = len(s)
+        while i < n:
+            c = s[i]
+            if c != "\\" or i + 1 >= n:
+                out.append(c)
+                i += 1
+                continue
+            e = s[i + 1]
+            i += 2
+            if e == "x":
+                out.append(chr(int(s[i : i + 2], 16)))
+                i += 2
+            elif e >= "0" and e <= "7":
+                v = ord(e) - 48
+                for _ in range(2):
+                    if i < n and s[i] >= "0" and s[i] <= "7":
+                        v = v * 8 + ord(s[i]) - 48
+                        i += 1
+                out.append(chr(v & 255))
+            elif e == "\n":
+                pass
+            elif e in ESCAPES:
+                out.append(ESCAPES[e])
+            else:
+                out.append("\\" + e)
         return "".join(out)
 
     def bytes_check(self, t: Tok) -> None:

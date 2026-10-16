@@ -150,6 +150,52 @@ such a parameter or return is compiled for each call's argument types, a class w
 `__init__` takes one or calls `iter()` is a class template, and an annotated variable or field
 has its value's type. A `Generic[T]` class's `Iterable[T]` parameter binds `T` to the items.
 
+## Generators
+
+A function or method whose body contains `yield` or `yield from` is a generator function.
+Calling one runs none of its body: it makes a generator object, which runs to its next `yield`
+each time a consumer asks for an item. Generator functions that yield one type share one static
+type (`Generator[T]` in messages). A generator function's return annotation is `Iterator[T]`,
+`Iterable[T]` or `Generator[Y, None, R]`, from `typing` or `collections.abc`; elsewhere
+`Iterator[T]` and `Iterable[T]` type nothing (see [iterators](#iterators)), so a parameter
+annotated so takes generators as well as iterator objects, and `Generator[T, None, None]` names
+a generator's type (`holder: list[Generator[int, None, None]] = []`). An unannotated generator
+function is a template: its first `yield` gives the type for each call's argument types. An
+`__iter__` or `__reversed__` that yields makes the generator that iterates its object.
+
+| Use | Behavior |
+|---|---|
+| `for` loops, `enumerate()`, `zip()`, comprehensions | Each item as the generator yields it; a finished generator yields nothing |
+| `next(g)`, `next(g, default)`, `g.__next__()` | The next item; `StopIteration` (or the default) once it has finished |
+| `iter(g)`, `g.__iter__()`, `iter(o)` | `g` itself; the generator `o.__iter__()` makes |
+| `sum`, `min`, `max`, `any`, `all`, `math.fsum`, `math.prod` | The items as they come; `any()` and `all()` stop at the deciding item |
+| `list`, `tuple`, `sorted`, `set`, `frozenset`, `str.join`, `list.extend` | All the items |
+| `x in g` | Iterates until an item equals `x` |
+| `a, b = g`, `a, *rest = g` | One item for each target, then one more step that must find `g` finished; with a starred target, all the items |
+| `yield from x` | Each item of `x`; for a generator, delegation, and `r = yield from g()` is `g`'s return value |
+
+A generator expression that no consumer takes directly, such as one stored in a variable or
+returned, is an anonymous generator: its first iterable is evaluated where it is written and
+the rest as it runs. Globals are read when it runs. Variables of the enclosing function that it
+reads must not be bound again (and must be assigned) where it is written: it reads their values
+then.
+
+A `for` loop over a generator that its iterable expression has just made (a call of a generator
+function, or of an `__iter__` or `__reversed__` that yields, also inside `enumerate()`, `zip()`
+or `reversed()`) closes the generator when the loop is left by its
+end, `break`, `return` or an exception, before the code after the loop runs. Closing raises
+`GeneratorExit` at the suspended `yield`, so `finally` blocks, `with` blocks and
+`except GeneratorExit` run, as in CPython. What the close raises, and a `yield` after
+`GeneratorExit`, are reported on stderr as CPython reports exceptions it ignores, and the loop's
+exit goes on. Exceptions raised in a loop's body never enter the generator. An exception that
+leaves a generator's body finishes the generator; a `StopIteration` becomes
+`RuntimeError: generator raised StopIteration` (PEP 479). A generator that resumes itself raises
+`ValueError: generator already executing`.
+
+`send()`, `throw()`, `close()`, the value of a `yield` expression, `async` generators and frame
+introspection are not supported. A generator the program drops while it is suspended is not
+closed (see [deviations](compatibility.md#memory-and-resource-lifetime)).
+
 ## Object protocols
 
 Object operations use the following methods. In supported ordinary hierarchies, instance-method
@@ -203,6 +249,131 @@ implementations are unsupported.
 A missing protocol method produces a compilation error using CPython's message.
 An object that is `None` when the operation executes raises the corresponding runtime error.
 
+<a id="reflection"></a>
+
+## Reflection
+
+Reflection works on values whose possible classes the compiler knows: one class, an ordinary
+hierarchy (the object's class tag selects its class), or a reference union (its member tag,
+then the class tag). The program's own classes and dataclasses are supported, and so are the
+builtin types where noted; exception objects, NamedTuples and file objects are not, nor are
+classes with private attributes (`__x`), whose names CPython mangles and Pystachy does not
+(see [compatibility](compatibility.md#functions-and-object-identity)). What Pystachy cannot
+match is a compile-time error that names the missing feature: a value whose type only the run
+time knows (#487), names that need per-object storage (#489), or a class object as a value (#7). The compiler's side is described in [internals](../internals.md#reflection).
+
+### Types and their names
+
+`type(x).__name__`, `__qualname__` and `__module__`, and `x.__class__.__name__` (also
+`self.__class__.__name__` in a method), give CPython's names: the class's own name, `int`,
+`str`, `bytes`, `list`, `NoneType`, ... for builtin values, and `builtins` as their module. Inside an
+expression, `type(a) is C`, `type(a) == type(b)`, their negations and `x.__class__ is C` compare
+the exact classes (`type(True) is bool`, `type(True) is int` is false). `str()` and `repr()` of a
+reference union print each object as its own class prints it. `type(x)` as a value (a class
+object) is unsupported.
+
+### Attribute names the compiler knows
+
+`getattr(o, "name")`, `setattr(o, "name", value)` and `hasattr(o, "name")` with a literal name
+read, assign and test the attribute as `o.name` would; `setattr()` evaluates `o` and the value
+first, as CPython evaluates its arguments, and then assigns through a property's setter, checks
+`__slots__` and raises `FrozenInstanceError` as an assignment does. `getattr(o, "name", default)`
+evaluates the default first, then gives the attribute where the object's exact class has it
+(a field that `__init__` may leave unassigned: where its flag says it is set) and the default
+where it has not; a property's getter that raises `AttributeError` gives the default, as
+CPython catches it. `hasattr()` of a property runs its getter likewise, and `hasattr()` of a value
+that may be an object of one of several classes (a union of classes) answers for its class. On a
+hierarchy's base,
+`getattr(o, "name")` of an attribute only a subclass has reads it where the object has it and
+raises CPython's `AttributeError` elsewhere.
+
+A `for` loop, or a list comprehension, over a constant set of names unrolls where its body uses
+the name with `getattr`, `setattr`, `hasattr` or `operator.attrgetter`/`methodcaller`: a tuple
+or list display of `str` literals, a variable bound once to one and only iterated (a local, or a
+variable of the main program), `dir(x)` and `sorted(dir(x))`, `dataclasses.fields(X)` (whose
+items' `.name` is the field's name) and `vars(x).items()`. The body is compiled once per name
+with the name read as that literal; the loop variable is still assigned, and `continue`, `break`
+and an `else` block keep their meaning. Tests of the literal (`name.startswith("test_")`,
+`name == "x"`, `name in ("a", "b")`) are decided in each copy. A function's parameter is not a
+variable bound once (a loop may iterate its argument before the function binds it again). Over
+`dir(x)` and `vars(x)`, one run of copies is compiled per exact class `x` may have, with a
+variable `x` narrowed to that class; `dir(x)`'s list is made as the loop starts, a field
+`__init__` may leave unassigned in it where it is set then. One loop, and the loops nested in
+it, compile at most 256 copies of a body.
+
+### `vars()`, `__dict__` and `dir()`
+
+`vars(x)` and `x.__dict__` are supported where they are consumed at once: printed (`print()`,
+`str()`, `repr()`, f-strings), iterated (`for k, v in vars(x).items()`, `.keys()`,
+`.values()`), formatted (`"%(name)s" % vars(x)` and `"...".format_map(vars(x))` of a constant
+format) or copied (`dict(vars(x))`, `vars(x).copy()`). Its keys are the attributes the object
+holds in CPython's order: the order its `__init__` (a dataclass's: its fields) first assigns
+them, with a field `__init__` may leave unassigned only where it is set; a class attribute is not
+in it. Iteration reads each attribute as its turn comes, as CPython's iterator over the live
+`__dict__` does: where the body assigns a field that was unassigned as the loop began, the next
+step raises `RuntimeError: dictionary changed size during iteration`. Its values (where the loop
+binds them, and in a copy) have the join of the fields' types; a loop over the names alone takes
+fields of any types. A `__dict__` kept as a value, an order that depends on the run (two
+attributes first assigned in one branch, or a field `__init__` may leave unassigned that other
+code may assign, which CPython then inserts last, unless it is last anyway), an attribute
+`__post_init__` adds, a class with `__slots__` (CPython raises) and a class attribute that the
+program may also assign through an object are rejected. `hasattr(x, "__dict__")` and `"__weakref__"` are false for a class whose
+names `__slots__` closes.
+
+`dir(x)` makes a new sorted list of the names CPython lists for the object: its fields and
+slots, the methods, properties and class attributes of its class and bases, the attributes
+every object has, and those a class body or `@dataclass` adds (`__module__`, `__dict__`,
+`__weakref__`, `__firstlineno__`, `__static_attributes__`, `__annotations__` where a class body
+annotates a name, `__dataclass_fields__`, a generic class's `__orig_bases__`, `__parameters__`,
+`__class_getitem__` and, with PEP 695's syntax, `__type_params__`, ...). A slot is listed whether
+or not it is assigned (its descriptor is the class's). It also takes `int`, `float`, `bool`, `str`,
+`bytes`, containers and `None`.
+
+### `dataclasses`
+
+`dataclasses.fields(X)` (of a class or an object) is supported as the iterable of a `for` loop or
+list comprehension that reads each field's `.name`. `asdict()` and `astuple()` are made for the
+class: they copy recursively into nested dataclasses (also of a hierarchy, by the object's
+class), lists, dicts and tuples, as CPython's `_asdict_inner` does, and keep `None`, numbers,
+strings and `bytes` (immutable: `copy.deepcopy()` returns them themselves);
+`asdict()`'s values of different types join in a union, so a dataclass holding a tuple and
+another type, or objects and scalars, is rejected. `is_dataclass()` is decided by the static
+type. `dict_factory=` and `tuple_factory=` are not supported.
+
+`string.Formatter().format()` of a constant template whose fields read attributes (`"{0.x}"`)
+formats as `str.format()` does, which the base `Formatter`'s methods do; a loop over a constant
+list of templates unrolls.
+
+### Names only the run time knows
+
+A `str` name computed at run time (read from input, taken from a list) is supported where its
+consumer needs no value of the attribute, for objects whose possible classes are known:
+
+- `hasattr(o, name)`: true for the names `dir()` lists, but for a field `__init__` may leave
+  unassigned (its flag), a slot no code assigns (false) and a property (its getter runs;
+  `AttributeError` means false).
+- the text of `getattr(o, name)` and `getattr(o, name, default)` in `print()`, `str()`, `repr()`
+  and f-string fields without a format spec: a field's or property's value, a bound method
+  (`<bound method C.m of ...>`, with the object's `repr()`), the attributes of the object and its
+  type (`__class__`, `__module__`, `__doc__` as CPython 3.13 cleans a docstring, `__dict__`,
+  `__firstlineno__`, `__static_attributes__`: the sorted names its functions store as `self.x`,
+  method wrappers), the default for a name the object does not have, and CPython's
+  `AttributeError` otherwise. The lookup runs where the argument is evaluated, and the text is
+  made where `print()` converts it, as CPython does. Dataclasses, generic classes, classes with
+  annotated class attributes and builtin values are rejected (their `__annotations__`,
+  `__dataclass_fields__`, `__orig_bases__` and methods are not printed).
+- `setattr(o, name, value)` on objects whose class closes its names with `__slots__`: a slot
+  field stores the value, which must fit every slot field (a run-time check would raise where
+  CPython does not), a property calls its setter, a method's or other attribute's name raises
+  `AttributeError: 'P' object attribute 'm' is read-only`, `__class__` raises CPython's
+  `TypeError`, and a name the class does not have raises `AttributeError: 'P' object has no
+  attribute 'z' and no __dict__ for setting new attributes`.
+
+Each name is found by a binary search of the sorted name table in the class's reflection
+record, and the site then switches on its index. Any other use of a run-time name (its value
+kept or passed on, `setattr()` that may add an attribute, `delattr()`), and
+`dataclasses.replace(obj, **changes)` of a `dict[str, T]`, is a compile-time error.
+
 ## Exceptions
 
 ### Builtin exceptions
@@ -227,8 +398,11 @@ with `isinstance()` or `type(e).__name__`. An annotation such as `Exception` nam
 builtin exception value type; it does not accept arbitrary user exception objects.
 
 `OSError(errno, strerror[, filename])` selects the subclass associated with the errno.
-`ImportError`, `AttributeError` and `NameError` accept their supported keyword arguments.
-Exception attributes such as `args` are unsupported.
+`UnicodeDecodeError(encoding, object, start, end, reason)` (of a bytes object) and
+`UnicodeEncodeError(...)` (of a str, whose characters `start` and `end` count) take CPython's
+five arguments and give its message, which names the byte or character at `start` or the range
+to `end`. `ImportError`, `AttributeError` and `NameError` accept their supported keyword
+arguments. Exception attributes such as `args` are unsupported.
 
 ### Control flow
 

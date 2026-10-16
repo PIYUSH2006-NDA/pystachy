@@ -1,0 +1,127 @@
+abs(0) 0
+abs(1234) 1234
+abs(-1234) 1234
+abs(-maxsize) True
+abs(0.0) 0.0
+abs(3.14) 3.14
+abs(-3.14) 3.14
+abs(True) 1
+abs(False) 0
+abs(AbsClass()) -5
+len True
+'a' False
+callable True
+lambda True
+f True
+c.meth True
+c False
+c2 True
+c3 True
+chr(0) '\x00'
+chr(32) ' '
+chr(65) 'A'
+chr(97) 'a'
+0xFFFF '\uffff'
+0x10000 '𐀀'
+0x10001 '𐀁'
+0xFFFFE '\U000ffffe'
+0xFFFFF '\U000fffff'
+0x100000 '\U00100000'
+0x100001 '\U00100001'
+0x10FFFE '\U0010fffe'
+0x10FFFF '\U0010ffff'
+ValueError: chr() arg not in range(0x110000)
+ValueError: chr() arg not in range(0x110000)
+ValueError: chr() arg not in range(0x110000)
+ValueError: chr() arg not in range(0x110000)
+ValueError: chr() arg not in range(0x110000)
+divmod(12, 7) (1, 5)
+divmod(-12, 7) (-2, 2)
+divmod(12, -7) (-2, -2)
+divmod(-12, -7) (1, -5)
+q True
+r True
+q True
+r True
+q True
+r True
+q True
+r True
+hash(1) True
+hash(1.0) True
+hash(b'spam') True
+ok
+hex(16) '0x10'
+hex(-16) '-0x10'
+oct(100) '0o144'
+oct(-100) '-0o144'
+bin(0) '0b0'
+bin(1) '0b1'
+bin(-1) '-0b1'
+bin(2**65) '0b100000000000000000000000000000000000000000000000000000000000000'
+bin(2**65-1) '0b11111111111111111111111111111111111111111111111111111111111111'
+bin(-(2**65)) '-0b100000000000000000000000000000000000000000000000000000000000000'
+bin(-(2**65-1)) '-0b11111111111111111111111111111111111111111111111111111111111111'
+c C True
+d C True
+e C True
+c D True
+foo E True
+len('123') 3
+len(()) 0
+len((1, 2, 3, 4)) 4
+len([1, 2, 3, 4]) 4
+len({}) 0
+len({'a':1, 'b': 2}) 2
+ValueError 
+ValueError __len__() should return >= 0
+next 0
+next 1
+StopIteration
+StopIteration
+next default 42
+next default 42
+StopIteration
+ord(' ') 32
+ord('A') 65
+ord('a') 97
+ord('') 128
+ord('ÿ') 255
+0x10FFFF 1114111
+0xFFFF 65535
+0x10000 65536
+0x10001 65537
+0xFFFFE 1048574
+0xFFFFF 1048575
+0x100000 1048576
+0x100001 1048577
+0x10FFFE 1114110
+0x10FFFF 1114111
+pow(0,0) 1
+pow(0,1) 0
+pow(1,0) 1
+pow(1,1) 1
+pow(2,0) 1
+pow(2,10) 1024
+pow(2,20) 1048576
+pow(2,30) 1073741824
+pow(-2,0) 1
+pow(-2,1) -2
+pow(-2,2) 4
+pow(-2,3) -8
+pow(0.,0) 1.0
+pow(0.,1) 0.0
+pow(1.,0) 1.0
+pow(1.,1) 1.0
+pow(2.,0) 1.0
+pow(2.,10) 1024.0
+pow(2.,20) 1048576.0
+pow(2.,30) 1073741824.0
+pow(-2.,0) 1.0
+pow(-2.,1) -2.0
+pow(-2.,2) 4.0
+pow(-2.,3) -8.0
+pow(2, 10, 1000) 24
+pow(-1, -2, 3) 1
+ValueError: pow() 3rd argument cannot be 0
+[exit 0]

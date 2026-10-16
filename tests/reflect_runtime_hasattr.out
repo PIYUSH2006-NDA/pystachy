@@ -1,0 +1,22 @@
+x True True False
+z False True False
+norm True True False
+__class__ True True True
+scaled True False False
+a False False True
+b False False False
+__dict__ True True False
+__weakref__ True True False
+__slots__ False False True
+__module__ True True True
+__doc__ True True True
+__init__ True True True
+__bool__ False False False
+missing False False False
+base [True, True] [False, False] False False False
+derived [False, True] [False, False] False False False
+meow [False, False] [True, False] False False False
+woof [False, False] [False, True] False False False
+__dict__ [True, True] [True, True] False False False
+__slots__ [False, False] [False, False] False False False
+[exit 0]

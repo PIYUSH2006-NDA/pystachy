@@ -38,6 +38,14 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
            "_weakref array atexit binascii cmath faulthandler fcntl gc grp itertools marshal posix pwd pyexpat select "
            "syslog unicodedata zlib").split():
     CBUILTIN[_k] = True
+# abc's decorators of abstract methods, which the compiler applies (Gen.abstract_defs): what each
+# deprecated one is, besides (abstractproperty: @property @abstractmethod)
+ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractproperty": "property",
+                                  "abc$abstractclassmethod": "classmethod", "abc$abstractstaticmethod": "staticmethod"}
+# the modules built into CPython that lib/ has a stand-in for, in the typed subset: Pystachy loads
+# that file as the module (Loader.modpath), where CPython imports its C module
+STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
+                            "abc": "_pystachy_abc", "_struct": "_pystachy_struct"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -81,7 +89,7 @@ UNARY: dict[str, str] = {"-": "__neg__", "+": "__pos__", "~": "__invert__"}
 CALLS: dict[str, str] = {
     "ord(str)": "pys_ord:int", "chr(int)": "pys_chr:str", "int(float)": "pys_f2i:int", "int(str,int)": "pys_int_str:int",
     "float(str)": "pys_float_str:float", "round(float)": "pys_round:int", "round(float,int)": "pys_round_n:float", "input(str)": "pys_input:str",
-    "abs(float)": "fabs:float", "list(str)": "pys_str_list:list[str]",
+    "abs(float)": "fabs:float", "list(str)": "pys_str_list:list[str]", "list(bytes)": "pys_bytes_list:list[int]",
     "sum(list[int],int)": "pys_sum_int:int", "sum(list[float],float)": "pys_sum_float:float", "sum(list[bool],int)": "pys_sum_int:int",
     "sum(list[float],int)": "pys_sum_float_int:float", "sum(list[int],float)": "pys_sum_int_float:float",
     "sum(list[bool],float)": "pys_sum_int_float:float", "any(list[bool])": "pys_any:bool",
@@ -115,12 +123,15 @@ CALLS: dict[str, str] = {
 # (TBAA), so that a loop that builds one str keeps the lengths it reads in registers. udiv and
 # urem divide 64-bit patterns as unsigned ints, and mul_ovf tells whether a * b would overflow.
 # find_sub(h, n, st, en) is the first index of n in h[st:en], or -1 (memmem, linear in glibc).
+# fail(kind, msg) raises builtin exception kind (a str literal) with message msg, as pys_raise
+# does: for those a raise statement cannot give a message to (UnicodeDecodeError's constructor
+# takes the parts of its message).
 RTL: dict[str, str] = {
     "byte": "str,int:int", "str_new": "int:str", "str_put": "str,int,int:None", "str_done": "str:str",
     "copy": "str,int,str,int,int:None", "wrap_add": "int,int:int", "wrap_sub": "int,int:int",
     "wrap_mul": "int,int:int", "shl": "int,int:int", "lshr": "int,int:int", "null": "str:bool",
     "same": "str,int,str,int,int:bool", "find_byte": "str,int,int,int:int", "udiv": "int,int:int",
-    "urem": "int,int:int", "mul_ovf": "int,int:bool", "find_sub": "str,str,int,int:int",
+    "urem": "int,int:int", "mul_ovf": "int,int:bool", "find_sub": "str,str,int,int:int", "fail": "str,str:None",
 }
 TBAA_LEN = 3
 TBAA_BYTES = 4
@@ -162,7 +173,7 @@ CTYPES: dict[str, str] = {"c_int": "i32 signext:0", "c_uint": "i32 zeroext:1", "
 for _k in "sys os os.path math tempfile typing dataclasses __future__ builtins time errno ffi".split():
     MODULES[_k] = True
 MODATTRS: dict[str, bool] = {}
-for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform math.pi math.e math.inf math.tau math.nan "
+for _k in ("sys.argv sys.maxsize sys.stdin sys.stdout sys.stderr sys.platform sys.byteorder math.pi math.e math.inf math.tau math.nan "
            "os.name os.sep os.curdir os.pardir os.extsep os.pathsep os.linesep os.devnull").split():
     MODATTRS[_k] = True
 # the os module's constants on POSIX systems
@@ -211,7 +222,7 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
     ABCS[_k] = True
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
-OPTTYPES = "class types, str, int, float, bool, list, dict and tuple"
+OPTTYPES = "class types, str, bytes, int, float, bool, list, dict and tuple"
 TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template, and of a generic class (Generic[T]) with an __init__, whose objects bind it"
 STUB = "an @overload stub of 'NAME' must be followed by the def that implements it (calling a stub raises NotImplementedError)"
 PATHLIKE = "os.PathLike is only supported in a union with str (str | os.PathLike[str] is a str: Pystachy has no other path type)"
@@ -238,8 +249,11 @@ for _k in ("OSError IOError EnvironmentError BlockingIOError ChildProcessError C
            "InterruptedError IsADirectoryError NotADirectoryError PermissionError ProcessLookupError TimeoutError "
            "SyntaxError IndentationError TabError").split():
     EXCEPTIONS[_k] = "x"
-for _k in "UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
+for _k in "UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
     EXCEPTIONS[_k] = "-"
+# (made of CPython's five arguments, which give their message: Gen.unicode_error)
+EXCEPTIONS["UnicodeDecodeError"] = "u"
+EXCEPTIONS["UnicodeEncodeError"] = "u"
 # the builtin exception classes, each with its bases (CPython 3.13's: tools/check_runtime.py
 # checks them), io.UnsupportedOperation, which the runtime raises too, and
 # dataclasses.FrozenInstanceError. IOError and EnvironmentError are other names of OSError. An
@@ -311,6 +325,8 @@ HASATTR: dict[str, str] = {
     "any": "__class__ __delattr__ __dir__ __doc__ __eq__ __format__ __ge__ __getattribute__ __getstate__ __gt__ __hash__ __init__ "
            "__init_subclass__ __le__ __lt__ __ne__ __new__ __reduce__ __reduce_ex__ __repr__ __setattr__ __sizeof__ __str__ __subclasshook__",
     "obj": "__dict__ __firstlineno__ __module__ __static_attributes__ __weakref__",
+    "generator": "__class_getitem__ __del__ __iter__ __name__ __next__ __qualname__ close gi_code gi_frame gi_running "
+                 "gi_suspended gi_yieldfrom send throw",
     "int": "__abs__ __add__ __and__ __bool__ __ceil__ __divmod__ __float__ __floor__ __floordiv__ __getnewargs__ __index__ __int__ "
            "__invert__ __lshift__ __mod__ __mul__ __neg__ __or__ __pos__ __pow__ __radd__ __rand__ __rdivmod__ __rfloordiv__ "
            "__rlshift__ __rmod__ __rmul__ __ror__ __round__ __rpow__ __rrshift__ __rshift__ __rsub__ __rtruediv__ __rxor__ __sub__ "
@@ -327,6 +343,10 @@ HASATTR: dict[str, str] = {
     "list": "__add__ __class_getitem__ __contains__ __delitem__ __getitem__ __iadd__ __imul__ __iter__ __len__ __mul__ __reversed__ "
             "__rmul__ __setitem__ append clear copy count extend index insert pop remove reverse sort",
     "tuple": "__add__ __class_getitem__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mul__ __rmul__ count index",
+    "bytes": "__add__ __buffer__ __bytes__ __contains__ __getitem__ __getnewargs__ __iter__ __len__ __mod__ __mul__ __rmod__ __rmul__ "
+             "capitalize center count decode endswith expandtabs find fromhex hex index isalnum isalpha isascii isdigit islower isspace "
+             "istitle isupper join ljust lower lstrip maketrans partition removeprefix removesuffix replace rfind rindex rjust rpartition "
+             "rsplit rstrip split splitlines startswith strip swapcase title translate upper zfill",
     "dict": "__class_getitem__ __contains__ __delitem__ __getitem__ __ior__ __iter__ __len__ __or__ __reversed__ __ror__ __setitem__ "
             "clear copy fromkeys get items keys pop popitem setdefault update values",
     "set": "__and__ __class_getitem__ __contains__ __iand__ __ior__ __isub__ __iter__ __ixor__ __len__ __or__ __rand__ __ror__ "
@@ -362,10 +382,10 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
     "subclass": "class inheritance is not supported",
-    "yield": "'yield' is not supported (there are no generator functions)",
+    "yield": "the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)",
     "starred": "starred expressions (*x) are not supported",
     "dictstar": "dict displays with ** are not supported",
-    "dstar": "star arguments are not supported", "bytes": "bytes literals are not supported (there is no bytes type)",
+    "dstar": "star arguments are not supported",
     "ellipsis": "Ellipsis (...) is not supported", "complex": "complex numbers are not supported",
     "await": "'await' is not supported",
     "async": "'async' statements are not supported",
@@ -430,6 +450,20 @@ METHODS: dict[str, str] = {
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
+    # bytes (runtime.py's pys_bytes_*: their RUNTIME entries take strs, the Strs a bytes is)
+    "bytes.decode": "str:str=null,str=null", "bytes.hex": "str:", "bytes.join": "bytes:list[bytes]",
+    "bytes.split": "list[bytes]:bytes=null,int=-1", "bytes.rsplit": "list[bytes]:bytes=null,int=-1", "bytes.strip": "bytes:bytes=null",
+    "bytes.lstrip": "bytes:bytes=null", "bytes.rstrip": "bytes:bytes=null", "bytes.startswith": "bool:bytes,int=0,int=9223372036854775807",
+    "bytes.endswith": "bool:bytes,int=0,int=9223372036854775807", "bytes.find": "int:bytes,int=0,int=9223372036854775807", "bytes.rfind": "int:bytes,int=0,int=9223372036854775807",
+    "bytes.index": "int:bytes,int=0,int=9223372036854775807", "bytes.rindex": "int:bytes,int=0,int=9223372036854775807", "bytes.count": "int:bytes,int=0,int=9223372036854775807",
+    "bytes.replace": "bytes:bytes,bytes", "bytes.upper": "bytes:", "bytes.lower": "bytes:",
+    "bytes.swapcase": "bytes:", "bytes.capitalize": "bytes:", "bytes.isdigit": "bool:",
+    "bytes.isalpha": "bool:", "bytes.isalnum": "bool:", "bytes.isspace": "bool:",
+    "bytes.isupper": "bool:", "bytes.islower": "bool:", "bytes.isascii": "bool:",
+    "bytes.ljust": "bytes:int,bytes=null", "bytes.rjust": "bytes:int,bytes=null", "bytes.center": "bytes:int,bytes=null",
+    "bytes.zfill": "bytes:int", "bytes.partition": "tuple[bytes,bytes,bytes]:bytes", "bytes.rpartition": "tuple[bytes,bytes,bytes]:bytes",
+    "bytes.removeprefix": "bytes:bytes", "bytes.removesuffix": "bytes:bytes", "bytes.splitlines": "list[bytes]:bool=0",
+    "str.encode": "bytes:str=null,str=null",
 }
 # Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
 # These are conservative: even a byte-correct delimiter search is a porting audit hit.
@@ -458,7 +492,28 @@ IROPS: dict[str, str] = {
     "empty.kind": "wD",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
+    # generators (LLVM switched-resume coroutines, docs/internals.md#generators): gen.start ends a
+    # generator function's entry block (the frame, its promise and the initial suspend), gen.yield
+    # and gen.ret suspend it (gen.ret finally); gen.promise is the address of its promise (of the
+    # generator's own, or of a handle's), gen.resume runs it to its next suspend, and gen.drop
+    # closes a generator a loop owns and destroys it (it reports what closing raises, as CPython
+    # reports an exception it ignores, so it never raises itself)
+    "gen.start": "T A", "gen.yield": "T U", "gen.ret": "T", "gen.promise": "", "gen.resume": "U",
+    "gen.drop": "A I rL wL rD wD rO wO rG wG rF wF",
 }
+# a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
+# state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
+# what closing it raises). State: suspended where closing it runs no code of its, suspended
+# where it does (a yield in try, with or yield from), finished, running
+GENVAL = 0
+GENRET = 1
+GENSTATE = 2
+GENCMD = 3
+GENNAME = 4
+GENSLOTS = 5
+GENCLEAN = 1
+GENDONE = 2
+GENRUN = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -589,6 +644,25 @@ RUNTIME: dict[str, str] = {
     "str.rpartition": "tuple[str,str,str]:S,str|R A|", "str.removeprefix": "str:S,str|A|", "str.removesuffix": "str:S,str|A|",
     "str.expandtabs": "str:S,int|R A|", "str.int": "str:int|A|", "str.float": "str:float|A|", "str.list": "list[str]:str|R A|",
     "chr": "str:int|R A|", "ord": "int:str|R|", "ascii": "str:str|A|", "pct_char": "str:str|R|", "pct_chr": "str:int|R A|",
+    # bytes: a Str, its bytes as a str's (see bytes in runtime.c)
+    "bytes.get": "int:S,int|R|", "bytes.list": "list[int]:bytes|A|", "bytes.add": "bytes:S,bytes|A|", "bytes.mul": "bytes:S,int|R A|",
+    "bytes.slice": "bytes:S,int,int|A|", "bytes.slice_step": "bytes:S,int,int,int|R A|", "bytes.has": "bool:str,int|R|",
+    "bytes.contains": "bool:str,str|R|", "bytes.decode": "str:str,str,str|R A|", "str.encode": "str:str,str,str|R A|",
+    "unicode_error_str": "str:int,str,str,int,int,str|R A|",
+    "bytes.hex": "str:str|R A|", "bytes.hex_sep": "str:str,str,int,int|R A|", "bytes.maketrans": "str:str,str|R A|",
+    "bytes.translate": "str:str,str,str|R A|", "bytes.fromhex": "str:str|R A|", "bytes.from_list": "str:list[int]|R A rL|",
+    "bytes.zeros": "str:int|R A|", "bytes.join": "str:str,list[str]|R A rL|", "bytes.split": "list[str]:str,str,int|R A|",
+    "bytes.rsplit": "list[str]:str,str,int|R A|", "bytes.strip": "str:str,str|R A|", "bytes.lstrip": "str:str,str|R A|",
+    "bytes.rstrip": "str:str,str|R A|", "bytes.startswith": "bool:str,str,int,int|R|", "bytes.endswith": "bool:str,str,int,int|R|",
+    "bytes.find": "int:str,str,int,int|R|", "bytes.rfind": "int:str,str,int,int|R|", "bytes.count": "int:str,str,int,int|R|",
+    "bytes.index": "int:str,str,int,int|R|", "bytes.rindex": "int:str,str,int,int|R|", "bytes.replace": "str:str,str,str|R A|",
+    "bytes.replace_count": "str:str,str,str,int|R A|", "bytes.upper": "str:str|A|", "bytes.lower": "str:str|A|",
+    "bytes.swapcase": "str:str|A|", "bytes.capitalize": "str:str|A|", "bytes.isdigit": "bool:str||",
+    "bytes.isalpha": "bool:str||", "bytes.isalnum": "bool:str||", "bytes.isspace": "bool:str||",
+    "bytes.isupper": "bool:str||", "bytes.islower": "bool:str||", "bytes.isascii": "bool:str||",
+    "bytes.ljust": "str:str,int,str|R A|", "bytes.rjust": "str:str,int,str|R A|", "bytes.center": "str:str,int,str|R A|",
+    "bytes.zfill": "str:str,int|R A|", "bytes.partition": "tuple[str,str,str]:str,str|R A|", "bytes.rpartition": "tuple[str,str,str]:str,str|R A|",
+    "bytes.removeprefix": "str:str,str|R A|", "bytes.removesuffix": "str:str,str|R A|", "bytes.splitlines": "list[str]:str,bool|R A|",
     # numbers
     "floordiv": "int:int,int|R|", "mod": "int:int,int|R|", "pow": "int:int,int|R|", "powmod": "int:int,int,int|R|",
     "shl": "int:int,int|R|", "shr": "int:int,int|R|", "idiv": "float:int,int|R|", "fdiv": "float:float,float|R|",
@@ -620,6 +694,8 @@ RUNTIME: dict[str, str] = {
     "eq.pair": "bool:*T,*T,%ptr,%ptr|rL rD U|",  # conservative: dict lookup's call graph reaches user equality
     "hash": "int:*T,#|U?|", "hash.id": "int:%ptr||",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
+    # reflection records (reflection.py): a name's index in a record's name table, and repr(vars(o))
+    "refl.find": "int:%ptr,str||", "refl.vars": "str:%ptr,%ptr|A I rO rL rD U|",
     "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "ubox": "%ptr:int,*T|A|", "ubox_opt": "%ptr:int,%ptr,int|A|", "unpack_check": "None:int,int|R|", "unpack_ex_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
@@ -638,8 +714,13 @@ RUNTIME: dict[str, str] = {
     "exc.user": "exc:%ptr|A|", "exc.obj": "%ptr:exc||", "exc.id": "%ptr:exc||", "exc.ostr": "str:%ptr|U|", "exc.orepr": "str:%ptr|U|",
     "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
+    # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
+    # again when it resumes (gen.enter, which returns their depth below them); the reports of a
+    # generator closed by its loop that yielded again or raised
+    "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
-    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|I rF wF|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
+    "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams
     "write": "None:str,int|R I rF wF|", "input": "str:str|R A I rF wF|", "open": "file:str,str,str,str,int|R A I rF|", "std": "file:int||",
     "file.read": "str:S,int|R A I rF wF|", "file.readline": "str:S|R A I rF wF|", "file.readlines": "list[str]:S|R A I rF wF|",

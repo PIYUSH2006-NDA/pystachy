@@ -14,6 +14,7 @@ from src.pystachy_compiler.analysis import (
     lambda_flags,
     local_names,
     nested_defs,
+    none_sites,
     only_none,
     scope_binds,
     shows_items,
@@ -21,7 +22,7 @@ from src.pystachy_compiler.analysis import (
     typed_default,
     walrus_values,
 )
-from src.pystachy_compiler.diagnostics import MODDUNDERS, where
+from src.pystachy_compiler.diagnostics import FILES, LINES, MODDUNDERS, where
 from src.pystachy_compiler.ir import Blk, Closure, FnInfo, Frame, Ins, IterArg, Val
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import INERT_DECOS, NONEVAR, OPTTYPES, PYBUILTINS, UNSUPPORTED
@@ -33,7 +34,9 @@ from src.pystachy_compiler.utils import (
     empty_display,
     is_const,
     is_dict,
+    is_fn,
     is_fset,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -189,19 +192,120 @@ def gen_scope_names(self) -> dict[str, bool]:
 def gen_decorate(self, n: Node) -> Val:
     # def n with decorators: CPython evaluates the decorators, from the top (a call, @d(args), runs
     # then), makes the function (its defaults first), and calls each decorator, from the bottom,
-    # with what the one below gave; n's name binds the last result
+    # with what the one below gave; n's name binds the last result. @functools.wraps(wrapped, ...)
+    # evaluates its arguments, and its decorator gives the function the wrapped one's names
+    # (wrap_names), as CPython's update_wrapper() does
     callees: list[Node] = []
+    wraps: list[list[Val]] = []  # (of each decorator, @wraps(...)'s argument values, else none)
     decos = [x for x in n.kids[3:] if x.s != "async"]  # (from the bottom up, as the parser adds them)
     for i in range(len(decos) - 1, -1, -1):
         self.line = decos[i].line
         self.modchk(decos[i])  # (a name that an import in a try statement binds: Loader.qdeco)
         e = self.deco_callee(decos[i], self.curfn.mod)
-        callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
+        if len(decos[i].kids) > 0 and self.lib_fn(e.kids[0], "functools$wraps"):
+            vals: list[Val] = []
+            for a in e.kids[1:]:
+                if a.kind == "starred" or a.kind == "dstar":
+                    self.err("wraps() of unpacked arguments is not supported")
+                vals.append(self.expr(a.kids[0] if a.kind == "kw" else a, ""))
+            wraps.append(vals if len(vals) > 0 else [Val("", "")])
+            callees.append(e)
+        else:
+            wraps.append([])
+            callees.append(self.vnode(self.call(e, "")) if len(decos[i].kids) > 0 else e)
     v = self.closure(n)
     for j in range(len(callees) - 1, -1, -1):
         self.line = callees[j].line
-        v = self.call(mk("call", "", callees[j].line, [callees[j], self.vnode(v)]), "")
+        if len(wraps[j]) > 0:
+            self.wrap_names(v, callees[j].kids[1:], wraps[j] if wraps[j][0].t != "" else [], "wraps")
+        else:
+            v = self.call(mk("call", "", callees[j].line, [callees[j], self.vnode(v)]), "")
     return v
+
+def gen_lib_fn(self, e: Node, qual: str) -> bool:
+    # does e name lib/'s function qual (functools$wraps), not a local or the function of a module
+    # of the program's of that name
+    if e.kind != "name" or e.s != qual or e.s in self.ltype or e.s not in self.funcs or self.libdir == "":
+        return False
+    p = self.libdir + "/" + qual[: qual.find("$")] + ".py"
+    return FILES[self.funcs[e.s].node.line // LINES] == (p[2:] if p.startswith("./") else p)  # (as Loader records it)
+
+def gen_fn_names(self, t: str) -> list[str]:
+    # [__name__, __qualname__] of a value of type t, a function's, where its type tells them: []
+    # where it does not (a Callable value; a method of a class that others derive from, whose
+    # __qualname__ the object's class decides)
+    if not is_fn(t):
+        return []
+    fk = t[5:-1]
+    if t.startswith("fn[u:"):
+        return [fk[fk.find(".") + 1 :], fk]
+    if t.startswith("fn[m:"):
+        mn = fk[fk.rfind(".") + 1 :]
+        cn = fk[: fk.rfind(".")]
+        if self.classes[cn].tag > 0:
+            return []
+        return [mn, short(self.classes[cn].methods[mn].cls) + "." + mn]
+    if t.startswith("fn[d:"):
+        mn = fk[: fk.find(":")]
+        return [mn, tname(fk[fk.find(":") + 1 :]) + "." + mn]
+    if t.startswith("fn[c:"):
+        clo = self.closures[int(fk[: fk.find(":")])]
+        if clo.wunknown != "":
+            return []
+        return [clo.wname, clo.wqual] if clo.wname != "" else [clo.name, clo.qual]
+    nm = short(fk) if t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]
+    return [nm, nm]
+
+def gen_wrap_names(self, v: Val, args: list[Node], vals: list[Val], what: str) -> None:
+    # functools.wraps(wrapped, assigned, updated) of function v, or update_wrapper(v, wrapped,
+    # assigned, updated) (what: its name), args those arguments after v and vals their values,
+    # evaluated: v's __name__ and __qualname__ are wrapped's, those of them that assigned names
+    # (a tuple or list of str constants, or a module's tuple of them, as WRAPPER_ASSIGNMENTS:
+    # module_strs), as CPython's update_wrapper() sets them. Pystachy's functions have none of the
+    # other attributes, and a wrapped object without the two leaves v's own, as CPython's
+    # getattr() raises AttributeError for them there
+    names = ["wrapped", "assigned", "updated"]
+    given: list[int] = [-1, -1, -1]  # (the index in args of each)
+    off = 1 if what == "update_wrapper" else 0  # (its wrapper, which args leaves out)
+    npos = len([a for a in args if a.kind != "kw"])
+    if npos > 3:
+        self.err(f"{what}() takes from {1 + off} to {3 + off} positional arguments but {npos + off} were given")
+    pos = 0
+    for i in range(len(args)):
+        a = args[i]
+        if a.kind == "kw" and a.s == "wrapper" and off == 1:
+            self.err("update_wrapper() got multiple values for argument 'wrapper'")
+        if a.kind == "kw" and a.s not in names:
+            self.err(f"{what}() got an unexpected keyword argument '{a.s}'")
+        k = names.index(a.s) if a.kind == "kw" else pos
+        if given[k] >= 0:
+            self.err(f"{what}() got multiple values for argument '{names[k]}'")
+        given[k] = i
+        pos += 0 if a.kind == "kw" else 1
+    if given[0] < 0:
+        self.err(f"{what}() missing 1 required positional argument: 'wrapped'")
+    assigned = ["__name__", "__qualname__"]
+    if given[1] >= 0:
+        an = args[given[1]].kids[0] if args[given[1]].kind == "kw" else args[given[1]]
+        if (an.kind == "tuple" or an.kind == "list") and all(x.kind == "str" for x in an.kids):
+            assigned = [x.s for x in an.kids]
+        elif an.kind == "name" and an.s in self.strtuples and self.globread(an.s):
+            assigned = self.strtuples[an.s]
+        else:
+            self.err(f"{what}()'s assigned is supported as a tuple of str constants, or a module's name that one assignment binds to one (WRAPPER_ASSIGNMENTS): the attributes it names are known as Pystachy compiles")
+    if not v.t.startswith("fn[c:"):
+        self.err(f"{what}() of {typestr(v.t)} is not supported: of a function a def or lambda makes in a function, or a decorated def, it is")
+    fk = v.t[5:-1]
+    clo = self.closures[int(fk[: fk.find(":")])]
+    w = vals[given[0]]
+    if w.t in self.classes and "__name__" not in self.classes[w.t].ftypes and "__qualname__" not in self.classes[w.t].ftypes:
+        return
+    ns = self.fn_names(w.t)
+    if len(ns) == 0:
+        clo.wunknown = f"the __name__ and __qualname__ of a function that functools.{what}() gives those of a {typestr(w.t)} are not supported: they are not known as Pystachy compiles"
+        return
+    clo.wname = ns[0] if "__name__" in assigned else clo.name
+    clo.wqual = ns[1] if "__qualname__" in assigned else clo.qual
 
 def gen_deco_callee(self, x: Node, mod: str) -> Node:
     # what decorator x, of module mod, evaluates to the function it calls: its call @d(args), or
@@ -413,8 +517,12 @@ def gen_none_type(self, name: str) -> str:
     # the code of its function (or module) assigns it, also by unpacking, that can be typed here
     # (as lookahead does); "" if there is none
     body = self.curfn.node.kids[2].kids if self.curfn.node.kind == "def" else self.curfn.node.kids
+    if "" not in self.nonesites:
+        none_sites(body, self.nonesites)  # (once for the function: each variable asks for its own)
+        self.nonesites[""] = []
     found: list[Node] = []
-    self.none_values(body, name, found)
+    for st in self.nonesites[name] if name in self.nonesites else []:
+        self.none_values(st, name, found)
     for e in found:
         if e.kind != "None" and not empty_display(e) and self.typed_now(e) and not self.calls_open(e, {}):
             # (typed as where it is assigned, under tests of the optional locals it reads)
@@ -430,33 +538,25 @@ def gen_none_type(self, name: str) -> str:
                 return self.optional(t)
     return ""
 
-def gen_none_values(self, body: list[Node], name: str, out: list[Node]) -> None:
-    # the values that statements in body (into blocks, in order) assign to variable name: of
-    # a, b = e the item of e (an index node if e is not a display), of name := v v
-    for st in body:
-        if st.kind == "def" or st.kind == "class" or st.kind == "subclass":
-            continue
-        if st.kind == "assign":
-            e = st.kids[-1]
-            for t in st.kids[:-1]:
-                if t.kind == "name" and t.s == name:
-                    out.append(e)
-                elif t.kind == "tuple" or t.kind == "list":
-                    for i in range(len(t.kids)):
-                        if t.kids[i].kind == "name" and t.kids[i].s == name:
-                            disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
-                            # (after a starred target, the item counted from the end)
-                            after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
-                            at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
-                            out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
-        for kid in st.kids:
-            if kid.kind != "block" and kid.kind != "except":
-                walrus_values(kid, name, out)  # (name := v)
-        for kid in st.kids:
-            if kid.kind == "block":
-                self.none_values(kid.kids, name, out)
-            elif kid.kind == "except":
-                self.none_values(kid.kids[1].kids, name, out)
+def gen_none_values(self, st: Node, name: str, out: list[Node]) -> None:
+    # the values that statement st itself (not its blocks: see none_sites) assigns to variable
+    # name: of a, b = e the item of e (an index node if e is not a display), of name := v v
+    if st.kind == "assign":
+        e = st.kids[-1]
+        for t in st.kids[:-1]:
+            if t.kind == "name" and t.s == name:
+                out.append(e)
+            elif t.kind == "tuple" or t.kind == "list":
+                for i in range(len(t.kids)):
+                    if t.kids[i].kind == "name" and t.kids[i].s == name:
+                        disp = (e.kind == "tuple" or e.kind == "list") and len(e.kids) == len(t.kids) and len([x for x in e.kids if x.kind == "starred"]) == 0
+                        # (after a starred target, the item counted from the end)
+                        after = len([x for x in t.kids[:i] if x.kind == "starred"]) > 0
+                        at = mk("unary", "-", e.line, [mk("int", str(len(t.kids) - i), e.line, [])]) if after else mk("int", str(i), e.line, [])
+                        out.append(e.kids[i] if disp else mk("index", "", e.line, [e, at]))
+    for kid in st.kids:
+        if kid.kind != "block" and kid.kind != "except":
+            walrus_values(kid, name, out)  # (name := v)
 
 def gen_read(self, n: Node) -> Val:
     # a variable read; if flow analysis found it may be unassigned, check at run time
@@ -1514,6 +1614,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
                 self.assign(t.kids[i], self.from_slot(self.rt("pys_list_get", "i64", [f"ptr {v.v}", f"i64 {i}"]), elem(v.t)))
         for i in range(len(items)):
             self.assign(t.kids[i], items[i])
+    elif k == "tuple" and is_gen(v.t):
+        self.gen_unpack(t, v)  # (a, b = g: an item from g for each target)
     elif k == "tuple" and v.t in self.nts:
         # a, b = p: a NamedTuple's fields in order
         fs = self.classes[v.t].fields
@@ -1527,6 +1629,8 @@ def gen_assign(self, t: Node, v: Val) -> None:
         it = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
         if is_list(it.t):
             self.assign(t, it)
+        elif is_gen(it.t):
+            self.gen_unpack(t, it)  # (an __iter__ that yields)
         else:
             self.unpack_next(t, it)
     elif k == "tuple":
@@ -1572,6 +1676,8 @@ def gen_slice_store(self, o: Val, bnd: list[str], v: Val) -> None:
     v = self.unwrap(v, "TypeError: must assign iterable to extended slice")  # (CPython 3.13's, for any step)
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif v.t == "bytes":
+        v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     elif v.t == "tuple[]":
         v = Val(self.rt("pys_list_new", "ptr", ["i64 0"]), o.t)  # (() and [] have no item to type)
     elif not is_list(v.t):
@@ -1657,12 +1763,16 @@ def gen_star_assign(self, t: Node, v: Val) -> None:
     else:
         if v.t in self.classes:
             xs = self.obj_iterator(v, "TypeError: cannot unpack non-iterable NoneType object", f"cannot unpack non-iterable {tname(v.t)} object")
+            if is_gen(xs.t):
+                xs = self.gen_list(xs, "")  # (an __iter__ that yields: all its items, as list() takes them)
             if not is_list(xs.t):
                 # (UNPACK_EX takes list() of the iterator, which calls iter() of it again)
                 xs = self.obj_iterator(xs, "", f"'{tname(xs.t)}' object is not iterable")
             xs = xs if is_list(xs.t) else self.drain(xs)
         elif v.t == "str":
             xs = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        elif v.t == "bytes":
+            xs = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
         else:
             xs = self.as_list(v, "unpack")
         if not is_list(xs.t):

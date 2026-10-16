@@ -1,0 +1,113 @@
+lt False
+lt False
+lt False
+lt False
+lt True
+lt True
+le False
+le False
+le True
+le True
+le True
+le True
+eq False
+eq False
+eq True
+eq True
+eq False
+eq False
+ne True
+ne True
+ne False
+ne False
+ne True
+ne True
+ge True
+ge True
+ge True
+ge True
+ge False
+ge False
+gt True
+gt True
+gt False
+gt False
+gt False
+gt False
+SyntaxError
+SyntaxError
+abs 1
+abs 1
+add 7
+and_ 10
+floordiv 2
+truediv 2.5
+inv -5
+lshift 10
+lshift 5
+mod 1
+mul 10
+neg -5
+neg 5
+neg 0
+neg 0
+or_ 15
+pos 5
+pos -5
+pos 0
+pos 0
+pow 243
+rshift 2
+rshift 5
+sub 3
+xor 7
+ValueError: negative shift count
+ValueError: negative shift count
+M() @ 42 41
+str 'python'
+list [1, 2, 3, 4]
+Seq1 [5, 6, 7]
+None None
+a [4, 2, 1]
+getitem 2
+3 1
+ValueError: sequence.index(x): x not in sequence
+a 2
+next 'v'
+2 True
+5 False
+None None
+a [2, 1, 2]
+IndexError: list assignment index out of range
+SyntaxError
+5 True
+[0] True
+0 False
+[] False
+is_ True
+is_ False
+is_not False
+is_not True
+SyntaxError
+not 5 False
+not [0] False
+not 0 True
+not [] True
+f(a) 'arthur'
+xzy ('X', 'Z', 'Y')
+f(a) 'thomas'
+f(a) ('arthur', 'thomas')
+f(a) 'C'
+IndexError: string index out of range
+g(d) 'val'
+KeyError: 'nonkey'
+map [3, 2, 5, 1]
+sorted [('orange', 1), ('banana', 2), ('apple', 3), ('pear', 5)]
+multiple ('2', '10', '5')
+-1 'e'
+list 'a'
+foo 3
+bar 42
+bar f=5 5
+baz ('spam', 'eggs')
+[exit 0]

@@ -5,6 +5,7 @@ from src.pystachy_compiler.analysis import collect, comp_shared, comp_unbound, d
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FmtArgs, FnInfo, Ins, IterArg, Loop, Val
 from src.pystachy_compiler.names import short
+from src.pystachy_compiler.reflection import VARS_USES, refl_annotated, refl_body, refl_fold, refl_reflective
 from src.pystachy_compiler.specs import (
     CHECKED,
     DUNDER,
@@ -38,6 +39,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fn,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -158,6 +160,8 @@ def gen_static(self, n: Node) -> int:
     # its argument types, can so dispatch on them as unannotated code does, also with None is
     # x, x == None and x != None for its parameter x (not where x's class defines __eq__ or
     # __ne__). Elsewhere == runs: the branch it would remove may give a list its item type.
+    if self.reflcopies > 1 and refl_fold(n) >= 0:
+        return refl_fold(n)  # (a test of the literals an unrolled copy reads: reflection.py)
     k = n.kind
     c = self.const_of(n, {}, True) if self.lit_context() and k != "name" else None
     if c is not None:
@@ -202,6 +206,8 @@ def gen_static(self, n: Node) -> int:
         t = self.static_type(n.kids[1], True)
         if t in self.classes and self.classes[t].tag > 0:
             return -1  # the concrete class may add attributes beyond the static type
+        if t != "" and (self.refl_prop_in(t, n.kids[2].s) or self.reference_union(t)):
+            return -1  # (a property's getter, or the union's member, decides: reflection.py)
         h = self.has(t, n.kids[2].s) if t != "" else -1
         return 1 if h == -1 and self.knownobj(n.kids[1]) else max(h, -1)
     if k == "call" and n.kids[0].kind == "name" and n.kids[0].s == "isinstance" and not self.bound("isinstance") and len(n.kids) == 3:
@@ -263,8 +269,30 @@ def gen_has(self, t: str, a: str) -> int:
             return -1
         if t in self.nts:
             self.err(f"hasattr() of '{a}' on a NamedTuple is not supported")
+        if (a == "__dict__" or a == "__weakref__") and ci.slotlimit:
+            return 0  # (__slots__ without them: CPython's objects have neither)
         if a in HASATTR["obj"].split():
             return -1
+        if a == "__annotations__" or (a == "__replace__" and self.is_dc(t)):
+            # (a dataclass's __replace__, and the annotations of a class body, its or a base's: a
+            # dataclass without fields has none)
+            c = t
+            while c in self.classes and a == "__annotations__":
+                if refl_annotated(refl_body(self.classes[c].node)):
+                    return -1
+                c = self.classes[c].base
+            return -1 if a == "__replace__" else 0
+        if a == "__abstractmethods__" or a == "_abc_impl":
+            return -1 if self.abc_class(t) else 0  # (ABCMeta's, on each class it makes)
+        if a in ["__class_getitem__", "__orig_bases__", "__parameters__", "__type_params__"]:
+            # (a generic class's, Generic[T] or class C[T], and its subclasses')
+            c = t
+            while c in self.classes:
+                o = self.classes[c].origin if self.classes[c].origin != "" else c
+                if o in self.tparams and (a != "__type_params__" or o in self.pep695):
+                    return -1
+                c = self.classes[c].base
+            return 0
         if self.is_dc(t) and a == "__match_args__":
             # (but for match_args=False, which leaves the one a base dataclass writes, if any)
             c = t
@@ -272,7 +300,7 @@ def gen_has(self, t: str, a: str) -> int:
                 c = self.classes[c].base
             return -1 if c in self.classes else 0
         return -1 if self.is_dc(t) and a in "__dataclass_fields__ __dataclass_params__".split() else 0
-    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else t
+    b = "list" if is_list(t) else "dict" if is_dict(t) else "tuple" if is_tuple(t) or is_vtuple(t) else "int" if t == "bool" else "generator" if is_gen(t) else t
     b = t[: t.find("[")] if is_set(t) else b
     if b in HASATTR:
         return 1 if a in HASATTR[b].split() else 0
@@ -363,7 +391,7 @@ def gen_isinst(self, t: str, c: Node) -> int:
         return 1
     if c.s == "int":
         return 1 if t == "int" or t == "bool" else 0
-    if c.s == "bool" or c.s == "float" or c.s == "str":
+    if c.s == "bool" or c.s == "float" or c.s == "str" or c.s == "bytes":
         return 1 if t == c.s else 0
     if c.s == "tuple" and t in self.nts:
         return -2  # (a tuple, unless it is None)
@@ -374,7 +402,7 @@ def gen_isinst(self, t: str, c: Node) -> int:
     if c.s == "type" and t.startswith("fn[b:"):
         # a builtin's value: one of CPython's builtin classes (int, list, ...) is a type
         return 1 if t[5:-1] in "bool bytearray bytes classmethod complex dict enumerate filter float frozenset int list map memoryview object property range reversed set slice staticmethod str super tuple type zip".split() else 0
-    if c.s in "bytes bytearray memoryview complex range slice type".split():
+    if c.s in "bytearray memoryview complex range slice type".split():
         return 0
     return -1
 
@@ -471,7 +499,7 @@ def gen_truth(self, v: Val) -> str:
         return self.num_cmp("!=", v, Val("0", "int")).v
     if t == "float":
         return self.num_cmp("!=", v, Val("0.0", "float")).v
-    if t == "str" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
+    if t == "str" or t == "bytes" or is_list(t) or is_dict(t) or is_set(t) or is_vtuple(t):
         return self.num_cmp('!=', Val(self.mload('int', v.v), "int"), Val('0', "int")).v
     if t == "None":
         return "false"
@@ -584,6 +612,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "str":
         self.modchk(n)
         return Val(self.sconst(n.s), "str")
+    if k == "bytes":
+        self.modchk(n)
+        return Val(self.bconst(n.s), "bytes")
     if k == "True" or k == "False":
         return Val(k.lower(), "bool")
     if k == "None":
@@ -607,6 +638,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.read(n)
     if k == "badattr":
         self.err(n.s)  # a module attribute that does not exist, or a module used as a value
+    if k == "dcfield":
+        self.err("a dataclasses.Field object as a value is not supported; its .name is (#486)")
     if k == "lambda":
         return self.closure(n)
     if k == "set":
@@ -617,10 +650,16 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.listcomp(n.kids[0], want, "", "", None, k[:-4], resultsoft)
     if k == "dictstar":
         return self.dict_merge(n, want)
+    if k == "yield" and n.s == "from":
+        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
+    if k == "yield":
+        self.err("the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)")
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "walrus":
         return self.walrus(n, want)
+    if k == "binop" and n.s == "%" and self.refl_dict_of(n.kids[1]) is not None and (n.kids[0].kind == "str" or (n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str")):
+        return self.refl_percent(n.kids[0].s if n.kids[0].kind == "str" else self.strglobals[n.kids[0].s], n.kids[1])  # (fmt % vars(x): reflection.py)
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
         return self.percent(n.kids[0].s, n.kids[1])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "name" and self.const_str(n.kids[0]).kind == "str":
@@ -650,14 +689,18 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         tc = n.kids[0]
         if is_super(tc) and not self.bound("super"):
             return self.super_call(tc, n.s, [], read=True)
-        if n.s == "__name__" and tc.kind == "call" and len(tc.kids) == 2 and tc.kids[0].kind == "name" and tc.kids[0].s == "type" and not self.bound("type"):
-            # type(e).__name__ of an exception: its class's name
-            v = self.expr(tc.kids[1], "")
-            if v.t == "exc":
-                return Val(self.rt("pys_exc_name", "ptr", [f"ptr {v.v}"]), "str")
-            if v.t in self.classes and self.classes[v.t].exc != "":
-                return Val(self.rt("pys_exc_cls", "ptr", [f"ptr {v.v}"]), "str")
-            self.err("type(x).__name__ is only supported for exceptions")
+        if n.s == "__dict__" and self.refl_dict_of(n) is not None:
+            self.err(VARS_USES)
+        if tc.kind == "dcfield":
+            if n.s != "name":
+                self.err(f"the attribute {n.s} of a dataclasses.Field is not supported; its name is (#486)")
+            return Val(self.sconst(tc.s), "str")
+        if (n.s == "__name__" or n.s == "__qualname__" or n.s == "__module__") and self.refl_typeof(tc) is not None:
+            # type(x).__name__ and x.__class__.__name__: its class's name (an exception's, its
+            # ExcClass's), see refl_type_attr
+            x = self.refl_typeof(tc)
+            if x is not None:
+                return self.refl_type_attr(x, n.s)
         c = n.kids[0].s if n.kids[0].kind == "name" and n.kids[0].s not in self.ltype else ""
         if c in self.classes and ((c in self.nts and n.s == "_fields") or (c not in self.nts and n.s in self.classes[c].fdefault)):
             return self.class_attr(n.kids[0], n.s)
@@ -693,6 +736,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
                 return Val(self.sconst(mn if n.s == "__name__" else tname(fk[fk.find(":") + 1 :]) + "." + mn), "str")
             if o.t.startswith("fn[c:"):
                 clo = self.closures[int(fk[: fk.find(":")])]
+                if clo.wunknown != "":
+                    self.err(clo.wunknown)
+                if clo.wname != "":
+                    return Val(self.sconst(clo.wname if n.s == "__name__" else clo.wqual), "str")  # (functools.wraps())
                 return Val(self.sconst(clo.name if n.s == "__name__" else clo.qual), "str")
             return Val(self.sconst(short(fk) if o.t.startswith("fn[f:") else fk[fk.rfind(".") + 1 :]), "str")
         if o.t in self.nts and n.s == "_fields":
@@ -723,12 +770,12 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
             return self.slice_tuple(o, bnd, step)
         if is_vtuple(o.t):
             return Val(self.rt("pys_vtuple_slice", "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
-        if o.t != "str" and not is_list(o.t):
+        if o.t != "str" and o.t != "bytes" and not is_list(o.t):
             self.err(f"'{o.t}' cannot be sliced")
         if step == "1":
-            fn = "pys_str_slice" if o.t == "str" else "pys_list_slice"
+            fn = "pys_str_slice" if o.t == "str" else "pys_bytes_slice" if o.t == "bytes" else "pys_list_slice"
             return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}"]), o.t)
-        fn = "pys_str_slice_step" if o.t == "str" else "pys_list_slice_step"
+        fn = "pys_str_slice_step" if o.t == "str" else "pys_bytes_slice_step" if o.t == "bytes" else "pys_list_slice_step"
         return Val(self.rt(fn, "ptr", [f"ptr {o.v}", f"i64 {bnd[0]}", f"i64 {bnd[1]}", f"i64 {step}"]), o.t)
     if (k == "list" or k == "tuple") and len([x for x in n.kids if x.kind == "starred"]) > 0:
         return self.star_display(n, want)  # ([a, *xs], (a, *xs))
@@ -841,7 +888,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.stack_tuple(vals) if n is self.stkkey else self.tuple_(vals)
     if k == "listcomp":
         if n.s == "gen":
-            self.err("a generator expression is only supported as the argument of sum(), min(), max(), sorted(), list(), tuple(), any(), all(), math.fsum(), math.prod(), str.join() or list.extend(), or as the value assigned to a list slice")
+            return self.genexp_value(n)  # (where no consumer takes its items at once: a generator)
         unrolled = self.unroll(n)
         if unrolled is not None:
             return self.expr(mk("list", "", n.line, unrolled), want, resultsoft=resultsoft)
@@ -849,7 +896,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
     if k == "fstr":
         parts: list[Val] = []
         for part in n.kids:
-            if part.kind == "fmt":
+            if part.kind == "fmt" and self.refl_textual(part.kids[0]) and part.kids[1].kind == "str" and part.kids[1].s == "":
+                parts.append(self.refl_finish(self.refl_defer(part.kids[0]), "str"))  # (f"{vars(o)}": reflection.py)
+            elif part.kind == "fmt":
                 parts.append(self.format_(self.expr(part.kids[0], ""), part.kids[1]))
             elif part.kind == "str":
                 parts.append(Val(self.sconst(part.s), "str"))
@@ -950,6 +999,8 @@ def gen_class_call(self, cn: Node, m: str, args: list[Node], want: str, resultso
     ci = self.class_ready(cn)
     if m not in ci.methods and m in ci.fdefault and cn.s not in self.nts:
         return self.obj_call(self.class_attr(cn, m), args, want, resultsoft)  # (C.k(args) of a class attribute k)
+    if m not in ci.methods and m == "register" and self.abc_class(cn.s):
+        self.err(f"{short(cn.s)}.register() is not supported: isinstance() and issubclass() of an ABC are decided by the class statements, so no class can become a virtual subclass")
     if m not in ci.methods:
         self.err(f"type object '{short(cn.s)}' has no attribute '{m}'")
     f = ci.methods[m]
@@ -1749,7 +1800,15 @@ def gen_unroll(self, g: Node, every: bool = False) -> list[Node] | None:
     it = g.kids[2]
     c = self.const_of(it, {}, True) if self.lit_context() else None
     items: list[Node] = []
-    if c is not None and c.kind == "tuple":
+    fns = self.refl_dc_names(it)
+    cns = self.refl_const_names(it) if fns is None and g.kids[1].kind == "name" and refl_reflective(g.kids[0], g.kids[1].s) and self.refl_dir_of(it) is None else None
+    if fns is not None:
+        items = [mk("dcfield", x, it.line, []) for x in fns]  # (dataclasses.fields(X): reflection.py)
+    elif cns is not None and len(cns) > 0:
+        if it.kind == "name":
+            self.expr(it, "")  # (its read checks it is assigned)
+        items = [mk("str", x, it.line, []) for x in cns]  # (constant attribute names: reflection.py)
+    elif c is not None and c.kind == "tuple":
         items = c.kids
     elif it.kind == "call" and len(it.kids) == 1 and it.kids[0].kind == "attr" and (it.kids[0].s == "items" or it.kids[0].s == "values") and is_kw(self.iter_static(it.kids[0].kids[0])):
         t = self.iter_static(it.kids[0].kids[0])
@@ -2091,6 +2150,10 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         i = self.ival(n.kids[1], "TypeError: tuple indices must be integers or slices, not NoneType")
         o = self.unwrap(o, sub)
         return self.from_slot(self.rt("pys_vtuple_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), targs(t)[0])
+    if t == "bytes":
+        i = self.ival(n.kids[1], "TypeError: byte indices must be integers or slices, not NoneType")
+        o = self.unwrap(o, sub)
+        return Val(self.rt("pys_bytes_get", "i64", [f"ptr {o.v}", f"i64 {i.v}"]), "int")
     if is_list(t) or t == "str":
         i = self.ival(n.kids[1], "TypeError: list indices must be integers or slices, not NoneType" if is_list(t) else "TypeError: string indices must be integers, not 'NoneType'")
         o = self.unwrap(o, sub)
@@ -2140,7 +2203,7 @@ def gen_subscript(self, n: Node, o: Val, want: str = "") -> Val:
         ik = self.expr(n.kids[1], self.argtype(t, "__getitem__", 1, f"'{tname(t)}' object is not subscriptable"))
         self.notnone(o, sub)
         return self.protocol(o, "__getitem__", [ik])
-    self.err(f"'{t}' object is not subscriptable")
+    self.err(f"'{tname(t) if is_gen(t) else t}' object is not subscriptable")
     return o
 
 def gen_pick(self, o: Val, tests: list[Val], exc: str, msg: str, what: str, want: str, dflt: Val | None = None) -> Val:
@@ -2227,7 +2290,7 @@ def gen_obj_iter(self, v: Val, none: str, missing: str, name: str = "__iter__") 
     # its __iter__ (or __reversed__) returns the iterator of (see iter_ret), or a new list of the
     # items its iterator object's __next__ gives (obj_iterator)
     it = self.obj_iterator(v, none, missing, name)
-    return it if is_list(it.t) else self.drain(it)
+    return it if is_list(it.t) or is_gen(it.t) else self.drain(it)
 
 def gen_obj_iterator(self, v: Val, none: str, missing: str, name: str = "__iter__") -> Val:
     # iter(v) of object v: the list its __iter__ returns the iterator of (see iter_ret), or the
@@ -2243,6 +2306,10 @@ def gen_obj_iterator(self, v: Val, none: str, missing: str, name: str = "__iter_
     f = ms[name]
     if f.bad != "":
         self.err(f.bad)  # (an imported module's generator __iter__: its own error, not its type's)
+    if f.gen:
+        # (an __iter__ that yields: the generator its call makes)
+        self.notnone(v, none)
+        return self.protocol(v, name, [])
     if not f.iters and name == "__reversed__":
         # (CPython iterates over what it returns, which need not be an iterator)
         self.err(f"{short(v.t)}.__reversed__ returning {typestr(f.ret)} is not supported: return iter(xs) of a list xs of the items (-> Iterator[T])")
@@ -2300,6 +2367,8 @@ def gen_iter_ret(self, e: Node) -> Val:
         self.err(f"iter() of a dict's {last.s[5:]}() in {self.curfn.name} is not supported: its iterator raises if the dict changes size; return iter(list(...)) of a copy")
     if v.t == "str":
         v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    if v.t == "bytes":
+        v = Val(self.rt("pys_bytes_list", "ptr", [f"ptr {v.v}"]), "list[int]")
     if not is_list(v.t):
         self.err(f"iter() of {typestr(v.t)} in {self.curfn.name} is not supported: return iter(xs) of a list xs of the items")
     return v
@@ -2773,7 +2842,11 @@ def gen_inherit_contains(self, op: str, a: Val, b: Val) -> Val:
             result = Val(hit if op == "in" else self.scalar('xor', [Val(hit, 'bool'), Val('true', 'bool')]), "bool")
         elif "__iter__" in ci.methods or "__getitem__" in ci.methods:
             items = self.obj_iterator(obj, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{short(ci.name)}' is not iterable")
-            result = self.cmp2(op, a, items) if is_list(items.t) else self.iter_in(op, a, items)
+            if is_gen(items.t):
+                hit = self.gen_contains(a, items).v  # (an __iter__ that yields)
+                result = Val(hit if op == "in" else self.scalar('xor', [Val(hit, 'bool'), Val('true', 'bool')]), "bool")
+            else:
+                result = self.cmp2(op, a, items) if is_list(items.t) else self.iter_in(op, a, items)
         else:
             self.raise_("TypeError", self.sconst(f"argument of type '{short(ci.name)}' is not iterable"))
         if not self.term:
@@ -2918,14 +2991,14 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
             return Val(self.scalar(FOPS[op], [Val(x.v, 'float'), Val(y.v, 'float')]), "float")
         if op in FRT:
             return Val(self.rt(FRT[op], "double", [f"double {x.v}", f"double {y.v}"]), "float")
-    seq = a.t == "str" or is_list(a.t)
+    seq = a.t == "str" or a.t == "bytes" or is_list(a.t)
     if op == "+" and seq and a.t == b.t:
-        return Val(self.rt("pys_str_add" if a.t == "str" else "pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), a.t)
+        return Val(self.rt("pys_str_add" if a.t == "str" else "pys_bytes_add" if a.t == "bytes" else "pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), a.t)
     lw = self.wider(a.t, b.t) if op == "+" and is_list(a.t) and is_list(b.t) else ""
     if lw != "" and self.widens_items(a.t, lw) and self.widens_items(b.t, lw):
         return Val(self.rt("pys_list_add", "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), lw)  # (a new list of the items of both)
     if op == "*" and seq and b.t == "int":
-        return Val(self.rt("pys_str_mul" if a.t == "str" else "pys_list_mul", "ptr", [f"ptr {a.v}", f"i64 {b.v}"]), a.t)
+        return Val(self.rt("pys_str_mul" if a.t == "str" else "pys_bytes_mul" if a.t == "bytes" else "pys_list_mul", "ptr", [f"ptr {a.v}", f"i64 {b.v}"]), a.t)
     if op == "+" and is_tuple(a.t) and is_tuple(b.t):
         return self.tuple_([self.tget(a, i) for i in range(len(targs(a.t)))] + [self.tget(b, i) for i in range(len(targs(b.t)))])
     if op == "*" and is_tuple(a.t) and b.t == "int":
@@ -2938,7 +3011,7 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
         if len(ts) > 0 and count > (TYPE_SIZE - 6) // (len(a.t) - 6):
             self.err(f"type representation exceeds {TYPE_SIZE} bytes; simplify the type or annotate template parameters")
         return self.tuple_([self.tget(a, i % len(ts)) for i in range(len(ts) * count)])
-    if op == "*" and a.t == "int" and (b.t == "str" or is_list(b.t) or is_tuple(b.t)):
+    if op == "*" and a.t == "int" and (b.t == "str" or b.t == "bytes" or is_list(b.t) or is_tuple(b.t)):
         return self.arith(op, b, a)
     if op == "+" and is_list(a.t) and is_list(b.t):
         self.err(f"unsupported operand types for +: {typestr(a.t)} and {typestr(b.t)} (a list holds items of one type)")
@@ -2957,12 +3030,18 @@ def gen_arith(self, op: str, a: Val, b: Val, shown: str = "") -> Val:
     bn = tname(b.t)
     if op == "+" and (a.t == "str" or is_list(a.t) or is_tuple(a.t)):
         self.err(f'can only concatenate {an} (not "{bn}") to {an}')
-    if op == "*" and (a.t == "str" or is_list(a.t) or is_tuple(a.t) or b.t == "str" or is_list(b.t) or is_tuple(b.t)):
-        self.err(f"can't multiply sequence by non-int of type '{bn if a.t == 'str' or is_list(a.t) or is_tuple(a.t) else an}'")
+    if op == "+" and a.t == "bytes":
+        self.err(f"can't concat {bn} to bytes")
+    sq = a.t == "str" or a.t == "bytes" or is_list(a.t) or is_tuple(a.t)
+    if op == "*" and (sq or b.t == "str" or b.t == "bytes" or is_list(b.t) or is_tuple(b.t)):
+        self.err(f"can't multiply sequence by non-int of type '{bn if sq else an}'")
     self.err(f"unsupported operand type(s) for {shown if shown != '' else '** or pow()' if op == '**' else op}: '{an}' and '{bn}'")
     return a
 
 def gen_compare(self, n: Node) -> Val:
+    tc = self.refl_type_cmp(n)  # (type(a) is C, type(a) == type(b): reflection.py)
+    if tc is not None:
+        return tc
     ops = n.s.split(",")
     if len(ops) == 1 and (n.kids[0].kind == "list" or n.kids[0].kind == "dict") and (len(n.kids[0].kids) == 0 or nones(n.kids[0])):
         # [] == xs, {} in ds, [None] == xs: an empty display, or one of None, takes its type
@@ -3207,12 +3286,15 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         # steps through
         if "__contains__" not in self.classes[b.t].methods:
             b = self.obj_iterator(b, "TypeError: argument of type 'NoneType' is not iterable", f"argument of type '{tname(b.t)}' is not iterable")
-            if not is_list(b.t):
+            if not is_list(b.t) and not is_gen(b.t):
                 return self.iter_in(op, a, b)
         else:
             self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
             r = self.truth(self.protocol(b, "__contains__", [a]))
             return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
+    if (op == "in" or op == "not in") and is_gen(b.t):
+        r = self.gen_contains(a, b).v  # (x in g: it runs until an item equals x)
+        return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
     if (op == "in" or op == "not in") and b.t == "str":
         a = self.unwrap(a, "TypeError: 'in <string>' requires string as left operand, not NoneType")
     if (op == "in" or op == "not in") and a.t == "None" and ((is_dict(b.t) and targs(b.t)[0] not in self.classes) or (is_set(b.t) and selem(b.t) not in self.classes) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
@@ -3250,6 +3332,12 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         r = ""
         if b.t == "str":
             r = self.rt("pys_str_contains", "i64", [f"ptr {b.v}", f"ptr {self.coerce(a, 'str').v}"])
+        elif b.t == "bytes" and (a.t == "int" or a.t == "bool"):
+            r = self.rt("pys_bytes_has", "i64", [f"ptr {b.v}", f"i64 {self.as_int(a).v}"])  # (a byte's value)
+        elif b.t == "bytes" and a.t == "bytes":
+            r = self.rt("pys_bytes_contains", "i64", [f"ptr {b.v}", f"ptr {a.v}"])
+        elif b.t == "bytes":
+            self.err(f"a bytes-like object is required, not '{tname(a.t)}'")
         elif is_list(b.t):
             if a.t != elem(b.t) and (is_list(a.t) or is_dict(a.t) or is_tuple(a.t)) and self.numeric_comparable(a.t, elem(b.t)):
                 # A read-only search can compare the two item layouts directly;
@@ -3331,7 +3419,7 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
         a = self.boxto(a, ct)
         b = self.boxto(b, ct)
     u = unopt(ct)
-    if ct != "" and (u == "str" or is_list(u) or is_tuple(u) or is_vtuple(u) or (eq and is_dict(u)) or is_set(u) or u == "exc"):
+    if ct != "" and (u == "str" or u == "bytes" or is_list(u) or is_tuple(u) or is_vtuple(u) or (eq and is_dict(u)) or is_set(u) or u == "exc"):
         self.exc_eq(ct)
         d = f"ptr {self.sconst(self.desc(ct, '==' if eq else op))}"
         sa = self.to_slot(a)

@@ -8,7 +8,7 @@ from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Data, FnInfo
 from src.pystachy_compiler.llvm_abi import llstr
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.specs import CTYPES, LINKDL, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
+from src.pystachy_compiler.specs import CTYPES, GENCLEAN, GENCMD, GENDONE, GENNAME, GENRUN, GENSTATE, LINKDL, RTSYM, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
 from src.pystachy_compiler.utils import RtFn, lt, runtime_decl, typestr
 
 
@@ -28,6 +28,27 @@ def lower_data(d: Data) -> str:
         return f"{d.name} = private constant [{len(slots)} x i64] [{', '.join(slots)}], align 8"
     if d.kind == "callable" or d.kind == "exception":
         return f"{d.name} = private constant {{{', '.join(['ptr' for _ in d.refs])}}} {{{', '.join(['ptr ' + x for x in d.refs])}}}"
+    if d.kind == "classrec":
+        # a class's reflection record (reflection.py): name, qualified name and module, flags,
+        # the sorted name table and the field table with their lengths (null and 0 until a site
+        # needs them). Internal, and its address is the class's identity: never merged
+        r = d.refs
+        return (f"{d.name} = internal constant {{ptr, ptr, ptr, i64, i64, ptr, i64, ptr}} {{ptr {r[0]}, ptr {r[1]}, ptr {r[2]}, "
+                f"i64 {d.items[0].v}, i64 {d.items[1].v}, ptr {r[3]}, i64 {d.items[2].v}, ptr {r[4]}}}, align 8")
+    if d.kind == "classnames":
+        # the names a class's objects answer to, sorted by their bytes, each with its kind
+        es = ["{ptr, i64} {ptr " + d.refs[j] + ", i64 " + d.items[j].v + "}" for j in range(len(d.refs))]
+        return f"{d.name} = internal constant [{len(es)} x {{ptr, i64}}] [{', '.join(es)}], align 8"
+    if d.kind == "classfields":
+        # the fields of an object's __dict__ in their order: name, type descriptor, byte offset in
+        # the class's layout (d.text) and that of its "is assigned" flag (-1: always assigned)
+        es: list[str] = []
+        for j in range(len(d.refs) // 2):
+            off = f"ptrtoint (ptr getelementptr ({d.text}, ptr null, i32 0, i32 {d.items[2 * j].v}) to i64)"
+            fl = d.items[2 * j + 1].v
+            flo = "-1" if fl == "-1" else f"ptrtoint (ptr getelementptr ({d.text}, ptr null, i32 0, i32 {fl}) to i64)"
+            es.append("{ptr, ptr, i64, i64} {ptr " + d.refs[2 * j] + ", ptr " + d.refs[2 * j + 1] + ", i64 " + off + ", i64 " + flo + "}")
+        return f"{d.name} = internal constant [{len(es)} x {{ptr, ptr, i64, i64}}] [{', '.join(es)}], align 8"
     fail(f"internal error: no LLVM lowering for module data {d.kind}", 0)
     return ""
 
@@ -215,6 +236,49 @@ def gen_dispatch(self, op: str) -> None:
     self.out.append("  unreachable")
     self.out.append("}")
 
+def gen_gen_module(self) -> list[str]:
+    # what generators need of the module (docs/internals.md#generators): LLVM's coroutine
+    # intrinsics, and pys.gen.drop, which closes a generator a loop owns as the loop is left and
+    # destroys it. Closing one suspended where that runs code of its (state 1) resumes it with
+    # the close command, which raises GeneratorExit at its yield; its landing block reports
+    # anything else it raises, and if it yields instead, CPython's RuntimeError is reported here
+    o: list[str] = [
+        "declare token @llvm.coro.id(i32, ptr, ptr, ptr)", "declare i1 @llvm.coro.alloc(token)",
+        "declare i64 @llvm.coro.size.i64()", "declare ptr @llvm.coro.begin(token, ptr)",
+        "declare i8 @llvm.coro.suspend(token, i1)", "declare ptr @llvm.coro.free(token, ptr)",
+        "declare i1 @llvm.coro.end(ptr, i1, token)", "declare void @llvm.coro.resume(ptr)",
+        "declare void @llvm.coro.destroy(ptr)", "declare ptr @llvm.coro.promise(ptr, i32, i1)"]
+    if not self.gendrops:
+        return o
+    return o + [
+        "define internal void @pys.gen.drop(ptr %h) {",
+        "entry:",
+        "  %p = call ptr @llvm.coro.promise(ptr %h, i32 8, i1 false)",
+        f"  %sa = getelementptr i64, ptr %p, i64 {GENSTATE}",
+        "  %s = load i64, ptr %sa",
+        f"  %c = icmp eq i64 %s, {GENCLEAN}",
+        "  br i1 %c, label %close, label %done",
+        "close:",
+        f"  %ca = getelementptr i64, ptr %p, i64 {GENCMD}",
+        "  store i64 1, ptr %ca",
+        f"  store i64 {GENRUN}, ptr %sa",
+        "  %x = call ptr @pys_exc_handled()",
+        "  call void @llvm.coro.resume(ptr %h)",
+        "  call void @pys_exc_restore(ptr %x)",
+        "  %s2 = load i64, ptr %sa",
+        f"  %ok = icmp eq i64 %s2, {GENDONE}",
+        "  br i1 %ok, label %done, label %ignored",
+        "ignored:",
+        f"  %na = getelementptr i64, ptr %p, i64 {GENNAME}",
+        "  %n = load ptr, ptr %na",
+        "  call void @pys_gen_ignored(ptr %n, ptr %p)",
+        "  br label %done",
+        "done:",  # (finished, as close() leaves it, for a yield from's consumer that holds it too)
+        f"  store i64 {GENDONE}, ptr %sa",
+        "  call void @llvm.coro.destroy(ptr %h)",
+        "  ret void",
+        "}"]
+
 def gen_lower_module(self) -> str:
     hdr: list[str] = ["; generated by pystachy"]
     for ci in self.classes.values():
@@ -238,6 +302,8 @@ def gen_lower_module(self) -> str:
     for x in self.externs.values():
         if x != "":
             hdr.append(x)
+    if self.coros or self.gendrops:
+        hdr.extend(self.gen_module())
     if self.rtmode:
         for ci in self.classes.values():
             self.err(f"runtime.py may not define classes ({ci.name})")
@@ -255,6 +321,10 @@ def gen_lower_module(self) -> str:
     # covers @main.init if inlined here) and the table of pointer-typed globals
     hdr.append(runtime_decl("init"))
     hdr.append(runtime_decl("finish"))
+    # (atexit's callbacks: pys_finish runs the Callable its _hook holds, once its module has run)
+    hook = "@g.atexit$_hook" if any(g.v == "@g.atexit$_hook" for g in self.globs) else ""
+    if hook != "":
+        hdr.append(runtime_decl("exit_hook"))
     hdr.append(runtime_decl("frameaddress"))
     if self.eh:
         hdr.append(runtime_decl("eh_on"))
@@ -263,6 +333,8 @@ def gen_lower_module(self) -> str:
     hdr.append(f"  call void @pys_init(i32 %argc, ptr %argv, ptr %sb, ptr @pys.roots, i64 {len(self.gcroots)})")
     if self.eh:
         hdr.append("  call void @pys_eh_on()")  # (from now on, the runtime raises exceptions)
+    if hook != "":
+        hdr.append(f"  call void @pys_exit_hook(ptr {hook})")
     hdr.append("  call void @main.init()")
     hdr.append("  call void @pys_finish()")
     hdr.append("  ret i32 0")

@@ -1,0 +1,54 @@
+166650
+[(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (1, 3), (2, 0), (2, 1), (2, 2), (2, 3)]
+[(1, 0), (2, 0), (2, 1), (3, 0), (3, 1), (3, 2)]
+[1, 4, 9, 16]
+[2, 6, 12, 20]
+[2, 6, 12, 20]
+[0, 1, 4, 9]
+[0, 1, 4, 9]
+328350
+20
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[None, None, None, None, None, None, None, None, None, None]
+y [0, 1, 2, 3, 4]
+y [2]
+x -1
+x 1
+y 2
+items [1]
+x 1
+y 2
+items [2]
+x 2
+x [1]
+x 1
+y [[0, 1], [0, 1, 4]]
+y [3, 3, 3]
+y [1, 3, 5]
+y [1]
+UnboundLocalError cannot access local variable 'x' where it is not associated with a value
+items [1]
+items [1]
+items [(0, []), (1, [1])]
+a [1]
+value ['ab']
+result [2]
+snapshot None
+ValueError
+value ['ab']
+result None
+snapshot ['ab']
+value ['ab']
+result [2]
+snapshot ['ab']
+ValueError
+value ['ab']
+result None
+snapshot ['ab']
+y [3]
+x 3
+y [3]
+x 2
+y [2]
+[exit 0]
