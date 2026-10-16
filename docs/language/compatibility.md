@@ -249,6 +249,9 @@ supported alternatives.
 - in a comprehension, an iterable, condition or `for` target (`d[k]`, `o.a[k]`) that reads a
   variable which only its own or a later `for` clause binds (`[a for x in xs for a in b for b in
   ys]`: CPython raises `UnboundLocalError` once a clause runs it)
+- in a comprehension, a later `for` clause that binds an earlier clause's variable to a value of
+  another type, where a clause between them reads it after a loop between them (`[y for b in
+  [[1, 2]] for y in b if len(b) > 1 for b in [3]]`)
 - calling a builtin whose name the module also binds as a variable (`sum = 0` ... `sum(xs)`,
   which CPython would reject at run time)
 

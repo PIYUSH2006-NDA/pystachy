@@ -93,6 +93,31 @@ def consumers() -> None:
     print(tuple(range(3)), tuple(reversed(ys)), tuple(map(str, ys)), tuple(filter(None, [0, 2])))
 
 
+def rebinding() -> None:
+    # a later for clause that binds an earlier clause's variable binds the same variable: once the
+    # loop between them has run, the clauses between them read the later clause's value
+    print([x for x in ["ab"] for _ in range(2) for x in x])
+    print([1 for x in "ab" for _ in range(2) if x == "a" for x in "zz"])
+    print([b for b in [3] for a in range(2) for b in range(b)])
+    print({x: n for x in ["ab"] for n in range(2) for x in x}, sorted({x for x in ["ab"] for n in range(3) for x in x}))
+    print(sum(1 for x in ["ab"] for _ in range(2) for x in x), tuple(x for x in ["ab"] for _ in range(2) for x in x))
+    print(any(x == "b" for x in ["ab"] for _ in range(2) if x != "a" for x in x), all(x != "b" for x in ["ab"] for _ in range(2) for x in x))
+    print([x for x in ["abc"] for _ in range(2) for x in x for _ in range(2) for x in x + x])
+    print([(x, y) for x in [1, 2] for y in [10, 20] for x in [x + y]])
+    d: dict[str, int] = {}
+    print([0 for x in ["a", "b"] for d[x] in [1, 2] for x in ["z"]], d)
+    e: dict[str, int] = {}
+    print([x for x in "ab" for e[x], x in [(1, "p"), (2, "q")]], e)
+    f: dict[str, int] = {}
+    print([x for x in "ab" for x, f[x] in [("p", 1), ("q", 2)]], f)
+    xs: list[int | None] = [None, 1]
+    ys: list[int | None] = [None]
+    try:
+        print([x for x in xs if x is not None for _ in range(2) if x + 1 > 0 for x in ys])
+    except TypeError as exc:
+        print("TypeError", exc)
+
+
 def mutation() -> None:
     xs = [1, 2]
     print([y for _ in [0] for y in xs if len(xs) < 5 and xs.append(y) is None], xs)
@@ -173,6 +198,7 @@ order()
 scope()
 early()
 consumers()
+rebinding()
 mutation()
 print(products(1, 2, 3), products(), cells(3))
 files()
@@ -188,3 +214,4 @@ y = "global y"
 x = 5
 print([(x, y) for x in range(3) for y in range(x)], x, y)
 print({y: x for x in range(2) for y in "ab"}, x, y)
+print([x for x in [7] for _ in range(2) for x in range(x - 5)], x)

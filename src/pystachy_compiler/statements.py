@@ -718,10 +718,25 @@ def gen_stmt(self, n: Node) -> None:
         self.place(go)
     elif k == "compfor":
         # a comprehension's later for clause (gen_listcomp): a loop whose target is the
-        # comprehension's; where any() or all() (s) has decided in it, the loop around it ends too
+        # comprehension's. The names in kids[3] keep the variable an earlier clause binds them in
+        # (and so its type: see store_name), the others are new ones. Where any() or all() (s) has
+        # decided in it, the loop around it ends too
+        own: list[str] = []
+        names_in(n.kids[0], own)
         names: list[str] = []
-        names_in(n.kids[0], names)
+        for tn in own:
+            if tn not in n.kids[3].s.split() or tn not in self.ltype:
+                names.append(tn)
+        share = self.compshare
+        self.compshare = {}
+        for tn in share:
+            if tn not in names:
+                self.compshare[tn] = share[tn]
+        for tn in own:
+            if tn not in names:
+                self.compshare[tn] = self.ltype[tn]
         self.for_(n, names)
+        self.compshare = share
         if n.s != "" and not self.term:
             go = self.label()
             done = self.mload('bool', self.lcs[-1])

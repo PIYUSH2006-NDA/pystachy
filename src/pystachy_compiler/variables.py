@@ -1314,6 +1314,10 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
         if name in self.gflag:
             self.mem_store(Val(f"@g.{name}.def", "*bool"), Val("true", "bool"))
     else:
+        if name in self.compshare and name in self.compvars and not self.widens(v.t, self.compshare[name]):
+            # (a comprehension's for clause that binds it into an earlier clause's variable, which
+            # keeps its type: see the statement "compfor")
+            self.err(f"comprehension variable '{name}' is {typestr(self.compshare[name])} in an earlier for clause and {typestr(v.t)} in a later one, and a clause between them can read either (not supported)")
         if name in self.nonevars and name not in self.ltype and name not in self.compvars:
             # a parameter whose argument is None: assigning None keeps it so; any other value
             # gives it that type from here on, which only code outside branches and loops can do

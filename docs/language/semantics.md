@@ -57,10 +57,11 @@ and in-place forms.
 A comprehension or generator expression may have several `for` and `if` clauses. As in
 CPython, its first iterable is evaluated once in the enclosing scope; each later iterable and
 condition is evaluated for every item of the clauses before it, and the clauses' variables
-belong to the comprehension. A dict comprehension evaluates each key before its value; a
-repeated key keeps its first position and takes the last value. A clause that reads a variable
-which only its own or a later `for` clause binds is rejected (CPython raises
-`UnboundLocalError`).
+belong to the comprehension: a later `for` clause that binds an earlier clause's variable
+binds the same variable. A dict comprehension evaluates each key before its value; a repeated
+key keeps its first position and takes the last value. A clause or `for` target that reads a
+variable which only its own or a later `for` clause binds is rejected (CPython raises
+`UnboundLocalError`), as is a rebinding to another type that a clause between the two can read.
 
 `is` and `is not` are supported for identity-bearing values, not numbers.
 Booleans use their two fixed values, so `flag is True` behaves as equality.

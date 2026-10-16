@@ -1,7 +1,7 @@
 """Expressions component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union, umembers
-from src.pystachy_compiler.analysis import collect, comp_unbound, deleted, only_none, stack_aliases, stack_kept
+from src.pystachy_compiler.analysis import collect, comp_shared, comp_unbound, deleted, only_none, stack_aliases, stack_kept
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, IterArg, Val
 from src.pystachy_compiler.names import short
@@ -1660,22 +1660,28 @@ def gen_listcomp(self, n: Node, want: str, mode: str = "", into: str = "", arg: 
     app = mk("lcappend" if mode == "" else "reduce" if mode.startswith("#") else "anyall", mode[1:] if mode.startswith("#") else mode if mode != "" or kind == "list" else kind, n.line, [n.kids[0]])
     body = [app]
     for j in range(len(n.kids) - 1, 2, -1):
-        # (a later for clause hides its own targets' names; one that any() or all() decided in
-        # leaves the loop around it too: see "compfor")
+        # (a later for clause hides its own targets' names, but those it binds into an earlier
+        # clause's variable; one that any() or all() decided in leaves the loop around it too:
+        # see "compfor")
         c = n.kids[j]
         inner = mk("block", "", n.line, body)
         if c.kind == "compfor":
-            body = [mk("compfor", mode if mode == "any" or mode == "all" else "", n.line, [c.kids[0], c.kids[1], inner])]
+            shared: list[str] = []
+            comp_shared(n, j, shared)
+            body = [mk("compfor", mode if mode == "any" or mode == "all" else "", n.line, [c.kids[0], c.kids[1], inner, mk("names", " ".join(shared), n.line, [])])]
         else:
             body = [mk("if", "", n.line, [c.kids[0] if c.kind == "compif" else c, inner, mk("block", "", n.line, [])])]
     self.lcs.append(res)
     self.lct.append(elem(want) if is_list(want) and kind == "list" and "?" not in want else want if is_dict(want) and kind == "dict" and "?" not in want else selem(want) if is_set(want) and kind != "list" and kind != "dict" and "?" not in want else "")
     self.lcsoft.append(resultsoft)
     pre = self.narrowed  # (its variables are its own: the loop binds no outer local)
+    share = self.compshare
+    self.compshare = {}
     own: list[str] = []
     names_in(n.kids[1], own)
     self.for_(mk("for", "", n.line, [n.kids[1], n.kids[2], mk("block", "", n.line, body)]), own, arg)
     self.narrowed = pre
+    self.compshare = share
     et = self.lct.pop()
     self.lcs.pop()
     self.lcsoft.pop()

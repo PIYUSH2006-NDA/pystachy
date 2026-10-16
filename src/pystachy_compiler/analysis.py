@@ -367,7 +367,7 @@ def bound_in(n: Node, out: dict[str, bool]) -> None:
 def targets(st: Node, out: dict[str, bool]) -> None:
     # the names statement st assigns itself (not in its blocks)
     k = st.kind
-    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "with":
+    if k == "assign" or k == "annassign" or k == "augassign" or k == "for" or k == "compfor" or k == "with":
         names: list[str] = []
         if k == "with":
             for it in st.kids[:-1]:
@@ -781,6 +781,39 @@ def comp_unbound(c: Node, names: list[str]) -> str:
         if nm == "" and x.kind == "compfor":
             nm = target_unbound(x.kids[0], names, bound)
     return "" if nm == "" else f"'{nm}' is read before the comprehension's for clause that binds it, where CPython raises UnboundLocalError (not supported)"
+
+
+def comp_shared(c: Node, j: int, out: list[str]) -> None:
+    # the names that comprehension c's later for clause c.kids[j] binds into the variable of the
+    # latest earlier for clause that binds them too, as CPython's comprehension has one variable of
+    # each name: those that a clause between the two (or this one's target) reads once a loop
+    # between them has run, where it can see this clause's value. Elsewhere this clause's value
+    # can go to a new variable, which may have another type
+    mine: list[str] = []
+    names_in(c.kids[j].kids[0], mine)
+    for nm in mine:
+        q = -1  # (2: the first for clause, whose iterable is c.kids[2])
+        first: list[str] = []
+        names_in(c.kids[1], first)
+        if nm in first:
+            q = 2
+        for i in range(3, j):
+            b: list[str] = []
+            if c.kids[i].kind == "compfor":
+                names_in(c.kids[i].kids[0], b)
+            if nm in b:
+                q = i
+        if q < 0 or nm in out:
+            continue
+        loop = False
+        for i in range(q + 1, j + 1):
+            x = c.kids[i]
+            rd: dict[str, bool] = {}
+            free_reads(x.kids[1] if x.kind == "compfor" else x.kids[0], {}, rd)
+            if (loop and nm in rd) or (x.kind == "compfor" and target_unbound(x.kids[0], [nm], []) != ""):
+                out.append(nm)
+                break
+            loop = loop or x.kind == "compfor"
 
 
 def closure_free(d: Node, out: dict[str, bool]) -> None:
