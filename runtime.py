@@ -1396,3 +1396,646 @@ def pys_format_int(v: int, isbool: int, spec: str) -> str:
 
 def pys_format_float(x: float, spec: str) -> str:
     return fmt(2, 0, x, "", spec)
+
+
+# ---------- bytes ----------
+# A bytes object is a Str, its bytes a str's (see bytes in runtime.c), so its parameters here are
+# strs. These are its operations: under names of their own where a str's does the same to the
+# bytes (searches, replace, a split at a separator), and apart where a bytes differs: its items
+# are ints, its whitespace, case and digits are ASCII's, and its widths count bytes
+def ascii_ws(c: int) -> bool:
+    # a bytes's whitespace: space, \t, \n, \v, \f and \r
+    return c == 32 or (c >= 9 and c <= 13)
+
+
+def pys_bytes_has(b: str, x: int) -> int:
+    # x in b, of an int x: a byte of b with that value
+    if x < 0 or x > 255:
+        raise ValueError("byte must be in range(0, 256)")
+    for i in range(len(b)):
+        if _rt.byte(b, i) == x:
+            return 1
+    return 0
+
+
+def pys_bytes_contains(h: str, n: str) -> int:
+    return pys_str_contains(h, n)
+
+
+def pys_bytes_find(h: str, n: str, st: int, en: int) -> int:
+    return pys_str_find(h, n, st, en)
+
+
+def pys_bytes_rfind(h: str, n: str, st: int, en: int) -> int:
+    return pys_str_rfind(h, n, st, en)
+
+
+def pys_bytes_count(h: str, n: str, st: int, en: int) -> int:
+    return pys_str_count(h, n, st, en)
+
+
+def pys_bytes_index(h: str, n: str, st: int, en: int) -> int:
+    i = pys_str_find(h, n, st, en)
+    if i < 0:
+        raise ValueError("subsection not found")
+    return i
+
+
+def pys_bytes_rindex(h: str, n: str, st: int, en: int) -> int:
+    i = pys_str_rfind(h, n, st, en)
+    if i < 0:
+        raise ValueError("subsection not found")
+    return i
+
+
+def pys_bytes_startswith(h: str, n: str, st: int, en: int) -> int:
+    return pys_str_startswith(h, n, st, en)
+
+
+def pys_bytes_endswith(h: str, n: str, st: int, en: int) -> int:
+    return pys_str_endswith(h, n, st, en)
+
+
+def pys_bytes_replace(s: str, a: str, b: str) -> str:
+    return pys_str_replace(s, a, b)
+
+
+def pys_bytes_replace_count(s: str, a: str, b: str, n: int) -> str:
+    return pys_str_replace_count(s, a, b, n)
+
+
+def pys_bytes_partition(s: str, sep: str) -> tuple[str, str, str]:
+    return pys_str_partition(s, sep)
+
+
+def pys_bytes_rpartition(s: str, sep: str) -> tuple[str, str, str]:
+    return pys_str_rpartition(s, sep)
+
+
+def pys_bytes_removeprefix(s: str, p: str) -> str:
+    return pys_str_removeprefix(s, p)
+
+
+def pys_bytes_removesuffix(s: str, p: str) -> str:
+    return pys_str_removesuffix(s, p)
+
+
+def pys_bytes_join(sep: str, l: list[str]) -> str:
+    for i in range(len(l)):
+        if _rt.null(l[i]):
+            # (an item of a list[bytes | None]: CPython's TypeError names a bytes-like object)
+            raise TypeError("sequence item " + str(i) + ": expected a bytes-like object, NoneType found")
+    return pys_str_join(sep, l)
+
+
+def ws_split(s: str, maxsplit: int, right: bool) -> list[str]:
+    # s.split() or s.rsplit() of a bytes, at runs of ASCII whitespace; past maxsplit parts (when
+    # it is not negative) the rest is one part, its whitespace at the far end kept
+    out: list[str] = []
+    n = len(s)
+    left = maxsplit if maxsplit >= 0 else 9223372036854775807
+    if not right:
+        i = 0
+        while True:
+            while i < n and ascii_ws(_rt.byte(s, i)):
+                i += 1
+            if i >= n:
+                return out
+            if left == 0:
+                out.append(s[i:])
+                return out
+            left -= 1
+            j = i
+            while j < n and not ascii_ws(_rt.byte(s, j)):
+                j += 1
+            out.append(s[i:j])
+            i = j
+    j = n
+    while True:
+        while j > 0 and ascii_ws(_rt.byte(s, j - 1)):
+            j -= 1
+        if j <= 0:
+            break
+        if left == 0:
+            out.append(s[:j])
+            break
+        left -= 1
+        i = j
+        while i > 0 and not ascii_ws(_rt.byte(s, i - 1)):
+            i -= 1
+        out.append(s[i:j])
+        j = i
+    out.reverse()
+    return out
+
+
+def pys_bytes_split(s: str, sep: str, maxsplit: int) -> list[str]:
+    if _rt.null(sep):
+        return ws_split(s, maxsplit, False)
+    return pys_str_split(s, sep, maxsplit)
+
+
+def pys_bytes_rsplit(s: str, sep: str, maxsplit: int) -> list[str]:
+    if _rt.null(sep):
+        return ws_split(s, maxsplit, True)
+    return pys_str_rsplit(s, sep, maxsplit)
+
+
+def bstrip(s: str, cs: str, m: int) -> str:
+    # m: 1 left, 2 right, 3 both; the bytes of cs (ASCII whitespace where cs is null)
+    i = 0
+    j = len(s)
+    if m & 1:
+        while i < j and (ascii_ws(_rt.byte(s, i)) if _rt.null(cs) else _rt.find_byte(cs, _rt.byte(s, i), 0, len(cs)) >= 0):
+            i += 1
+    if m & 2:
+        while j > i and (ascii_ws(_rt.byte(s, j - 1)) if _rt.null(cs) else _rt.find_byte(cs, _rt.byte(s, j - 1), 0, len(cs)) >= 0):
+            j -= 1
+    return s[i:j]
+
+
+def pys_bytes_strip(s: str, cs: str) -> str:
+    return bstrip(s, cs, 3)
+
+
+def pys_bytes_lstrip(s: str, cs: str) -> str:
+    return bstrip(s, cs, 1)
+
+
+def pys_bytes_rstrip(s: str, cs: str) -> str:
+    return bstrip(s, cs, 2)
+
+
+def pys_bytes_upper(s: str) -> str:
+    return mapcase(s, 1)
+
+
+def pys_bytes_lower(s: str) -> str:
+    return mapcase(s, 0)
+
+
+def pys_bytes_swapcase(s: str) -> str:
+    return mapcase(s, 2)
+
+
+def pys_bytes_capitalize(s: str) -> str:
+    r = _rt.str_new(len(s))
+    for i in range(len(s)):
+        c = _rt.byte(s, i)
+        if (i == 0 and lowc(c)) or (i > 0 and upc(c)):
+            c ^= 32
+        _rt.str_put(r, i, c)
+    return _rt.str_done(r)
+
+
+def bclass(s: str, k: int) -> int:
+    # every byte of s (and there is one) an ASCII letter (k 1), letter or digit (2), digit (0),
+    # or whitespace (3)
+    if len(s) == 0:
+        return 0
+    for i in range(len(s)):
+        c = _rt.byte(s, i)
+        ok = ascii_ws(c) if k == 3 else digit(c) or (k > 0 and (lowc(c) or upc(c))) if k == 2 else digit(c) if k == 0 else lowc(c) or upc(c)
+        if not ok:
+            return 0
+    return 1
+
+
+def pys_bytes_isalpha(s: str) -> int:
+    return bclass(s, 1)
+
+
+def pys_bytes_isalnum(s: str) -> int:
+    return bclass(s, 2)
+
+
+def pys_bytes_isdigit(s: str) -> int:
+    return bclass(s, 0)
+
+
+def pys_bytes_isspace(s: str) -> int:
+    return bclass(s, 3)
+
+
+def bcased(s: str, up: bool) -> int:
+    # b.isupper() (up) or b.islower(): a cased ASCII letter, and none of the other case
+    cased = False
+    for i in range(len(s)):
+        c = _rt.byte(s, i)
+        if (lowc(c) and up) or (upc(c) and not up):
+            return 0
+        cased = cased or lowc(c) or upc(c)
+    return 1 if cased else 0
+
+
+def pys_bytes_isupper(s: str) -> int:
+    return bcased(s, True)
+
+
+def pys_bytes_islower(s: str) -> int:
+    return bcased(s, False)
+
+
+def pys_bytes_isascii(s: str) -> int:
+    return pys_str_isascii(s)
+
+
+def bpad(s: str, w: int, fill: str, how: int, name: str) -> str:
+    # how: 0 right, 1 left, 2 center; widths count bytes; fill is null for a space, else one byte
+    if not _rt.null(fill) and len(fill) != 1:
+        raise TypeError(name + "() argument 2 must be a byte string of length 1, not bytes")
+    c = 32 if _rt.null(fill) else _rt.byte(fill, 0)
+    if len(s) >= w:
+        return s
+    gap = w - len(s)
+    left = 0 if how == 1 else gap if how == 0 else gap // 2 + (gap & w & 1)  # CPython's centering
+    r = _rt.str_new(w)
+    for i in range(left):
+        _rt.str_put(r, i, c)
+    _rt.copy(r, left, s, 0, len(s))
+    for i in range(left + len(s), w):
+        _rt.str_put(r, i, c)
+    return _rt.str_done(r)
+
+
+def pys_bytes_ljust(s: str, w: int, fill: str) -> str:
+    return bpad(s, w, fill, 1, "ljust")
+
+
+def pys_bytes_rjust(s: str, w: int, fill: str) -> str:
+    return bpad(s, w, fill, 0, "rjust")
+
+
+def pys_bytes_center(s: str, w: int, fill: str) -> str:
+    return bpad(s, w, fill, 2, "center")
+
+
+def pys_bytes_zfill(s: str, w: int) -> str:
+    if len(s) >= w:
+        return s
+    z = w - len(s)
+    r = _rt.str_new(w)
+    for i in range(z):
+        _rt.str_put(r, i, 48)
+    _rt.copy(r, z, s, 0, len(s))
+    if len(s) > 0 and (_rt.byte(s, 0) == 43 or _rt.byte(s, 0) == 45):
+        # a sign moves in front of the zeros
+        _rt.str_put(r, 0, _rt.byte(s, 0))
+        _rt.str_put(r, z, 48)
+    return _rt.str_done(r)
+
+
+def pys_bytes_splitlines(s: str, keep: int) -> list[str]:
+    # the lines of a bytes end at \n, \r or \r\n only
+    out: list[str] = []
+    i = 0
+    n = len(s)
+    while i < n:
+        j = i
+        while j < n and _rt.byte(s, j) != 10 and _rt.byte(s, j) != 13:
+            j += 1
+        e = j
+        if j < n:
+            e = j + 2 if _rt.byte(s, j) == 13 and j + 1 < n and _rt.byte(s, j + 1) == 10 else j + 1
+        out.append(s[i:e] if keep else s[i:j])
+        i = e
+    return out
+
+
+def pys_bytes_hex(s: str) -> str:
+    r = _rt.str_new(2 * len(s))
+    for i in range(len(s)):
+        c = _rt.byte(s, i)
+        _rt.str_put(r, 2 * i, (48 if c >> 4 < 10 else 87) + (c >> 4))
+        _rt.str_put(r, 2 * i + 1, (48 if c & 15 < 10 else 87) + (c & 15))
+    return _rt.str_done(r)
+
+
+def hexval(c: int) -> int:
+    return c - 48 if digit(c) else c - 87 if c >= 97 and c <= 102 else c - 55 if c >= 65 and c <= 70 else -1
+
+
+def pys_bytes_fromhex(s: str) -> str:
+    # bytes.fromhex(s): pairs of hexadecimal digits, ASCII whitespace between them
+    out: list[int] = []
+    i = 0
+    n = len(s)
+    while True:
+        while i < n and ascii_ws(_rt.byte(s, i)):
+            i += 1
+        if i >= n:
+            break
+        hi = hexval(_rt.byte(s, i))
+        lo = hexval(_rt.byte(s, i + 1)) if i + 1 < n else -1
+        if hi < 0 or lo < 0:
+            raise ValueError("non-hexadecimal number found in fromhex() arg at position " + str(i if hi < 0 else i + 1))
+        out.append(hi * 16 + lo)
+        i += 2
+    return pys_bytes_from_list(out)
+
+
+def pys_bytes_from_list(xs: list[int]) -> str:
+    # bytes(xs) of a list of ints
+    r = _rt.str_new(len(xs))
+    for i in range(len(xs)):
+        if xs[i] < 0 or xs[i] > 255:
+            raise ValueError("bytes must be in range(0, 256)")
+        _rt.str_put(r, i, xs[i])
+    return _rt.str_done(r)
+
+
+def pys_bytes_zeros(n: int) -> str:
+    # bytes(n): n zero bytes
+    if n < 0:
+        raise ValueError("negative count")
+    return _rt.str_done(_rt.str_new(n))
+
+
+# ---- codecs: str.encode() and bytes.decode() with CPython's UTF-8, Latin-1 and ASCII codecs
+# and error handlers. A str holds UTF-8, where a surrogate is its three bytes (ED A0 80 to ED BF
+# BF, which decode with "surrogateescape" or "surrogatepass" makes)
+def codec_of(encoding: str) -> int:
+    # the codec an encoding names, as codecs.lookup() finds it among encodings.aliases: 0 UTF-8,
+    # 1 Latin-1, 2 ASCII, else CPython's LookupError. The name is normalized as
+    # encodings.normalize_encoding does: lower case, other characters than letters, digits and
+    # '.' one '_' between the parts
+    norm = ""
+    punct = False
+    for i in range(len(encoding)):
+        c = _rt.byte(encoding, i)
+        if digit(c) or lowc(c) or upc(c) or c == 46:
+            if punct and len(norm) > 0:
+                norm += "_"
+            norm += chr(c | 32 if upc(c) else c)
+            punct = False
+        else:
+            punct = True
+    alias = norm.replace(".", "_")
+    for nm in [norm, alias]:
+        if nm in ["utf_8", "cp65001", "u8", "utf", "utf8", "utf8_ucs2", "utf8_ucs4"]:
+            return 0
+        if nm in ["latin_1", "8859", "cp819", "csisolatin1", "ibm819", "iso8859", "iso8859_1", "iso_8859_1",
+                  "iso_8859_1_1987", "iso_ir_100", "l1", "latin", "latin1"]:
+            return 1
+        if nm in ["ascii", "646", "ansi_x3.4_1968", "ansi_x3.4_1986", "ansi_x3_4_1968", "cp367", "csascii",
+                  "ibm367", "iso646_us", "iso_646.irv_1991", "iso_ir_6", "us", "us_ascii"]:
+            return 2
+    raise LookupError("unknown encoding: " + encoding)
+
+
+def codec_name(k: int) -> str:
+    return "utf-8" if k == 0 else "latin-1" if k == 1 else "ascii"
+
+
+def u8seq(s: str, i: int, n: int) -> int:
+    # the length of the UTF-8 character at s[i] (a surrogate's three bytes are one), as a str
+    # holds it; 1 for a byte that begins none
+    c = _rt.byte(s, i)
+    if c < 0xC2 or c > 0xF4:
+        return 1
+    k = 2 if c < 0xE0 else 3 if c < 0xF0 else 4
+    if i + k > n:
+        return 1
+    for j in range(i + 1, i + k):
+        if _rt.byte(s, j) & 0xC0 != 0x80:
+            return 1
+    return k
+
+
+def u8cp(s: str, i: int, k: int) -> int:
+    # the code point of the k bytes of UTF-8 at s[i] (k 1: the byte)
+    if k == 1:
+        return _rt.byte(s, i)
+    v = _rt.byte(s, i) & (0x1F if k == 2 else 0x0F if k == 3 else 0x07)
+    for j in range(i + 1, i + k):
+        v = (v << 6) | (_rt.byte(s, j) & 0x3F)
+    return v
+
+
+def u8put(out: list[str], cp: int) -> None:
+    # the UTF-8 bytes of code point cp (a surrogate's too), each as chr() writes a byte
+    if cp < 0x80:
+        out.append(chr(cp))
+    elif cp < 0x800:
+        out.append(chr(0xC0 | (cp >> 6)) + chr(0x80 | (cp & 0x3F)))
+    elif cp < 0x10000:
+        out.append(chr(0xE0 | (cp >> 12)) + chr(0x80 | ((cp >> 6) & 0x3F)) + chr(0x80 | (cp & 0x3F)))
+    else:
+        out.append(chr(0xF0 | (cp >> 18)) + chr(0x80 | ((cp >> 12) & 0x3F)) + chr(0x80 | ((cp >> 6) & 0x3F)) + chr(0x80 | (cp & 0x3F)))
+
+
+def hexpart(v: int, n: int) -> str:
+    # v as n lower-case hexadecimal digits
+    r = _rt.str_new(n)
+    for i in range(n):
+        d = (v >> (4 * (n - 1 - i))) & 15
+        _rt.str_put(r, i, (48 if d < 10 else 87) + d)
+    return _rt.str_done(r)
+
+
+def escaped(cp: int) -> str:
+    # \xNN, \uNNNN or \UNNNNNNNN, as CPython's UnicodeEncodeError message and "backslashreplace"
+    # write a code point
+    return "\\x" + hexpart(cp, 2) if cp < 0x100 else "\\u" + hexpart(cp, 4) if cp < 0x10000 else "\\U" + hexpart(cp, 8)
+
+
+def pys_str_encode(s: str, encoding: str, errors: str) -> str:
+    # s.encode(encoding, errors): the bytes; the characters the codec cannot encode (a surrogate
+    # in UTF-8, above U+00FF or U+007F) go to the error handler in runs, as CPython gives them.
+    # An omitted (null) encoding is UTF-8, omitted errors "strict"
+    k = 0 if _rt.null(encoding) else codec_of(encoding)
+    if _rt.null(errors):
+        errors = "strict"
+    if pys_str_isascii(s) == 1 or (k == 0 and _rt.find_byte(s, 0xED, 0, len(s)) < 0):
+        return s  # (only ED begins a surrogate's bytes)
+    limit = 0x80 if k == 2 else 0x100 if k == 1 else 0x110000
+    out: list[str] = []
+    n = len(s)
+    i = 0
+    start = 0
+    pos = 0  # out holds the bytes of s[:start]; s[:i] holds pos characters
+    while i < n:
+        m = u8seq(s, i, n)
+        cp = u8cp(s, i, m)
+        surr = cp >= 0xD800 and cp <= 0xDFFF and m == 3
+        if cp < 0x80 or (k == 0 and not surr):
+            i += m
+            pos += 1
+            continue
+        out.append(s[start:i])
+        if cp < limit and not surr:
+            out.append(chr(cp))  # (Latin-1: the byte)
+            i += m
+            pos += 1
+            start = i
+            continue
+        first = pos
+        cps: list[int] = []
+        while i < n:
+            m = u8seq(s, i, n)
+            cp = u8cp(s, i, m)
+            surr = cp >= 0xD800 and cp <= 0xDFFF and m == 3
+            if cp < limit and not surr:
+                break
+            cps.append(cp)
+            i += m
+            pos += 1
+        out.append(encode_error(cps, first, k, errors))
+        start = i
+    out.append(s[start:])
+    return "".join(out)
+
+
+def encode_error(cps: list[int], pos: int, k: int, errors: str) -> str:
+    # the bytes error handler errors makes of code points cps, from character pos of the str on,
+    # which codec k cannot encode, as CPython's handlers make them
+    if errors == "replace":
+        return "?" * len(cps)
+    if errors == "ignore":
+        return ""
+    out: list[str] = []
+    if errors == "backslashreplace":
+        for cp in cps:
+            out.append(escaped(cp))
+        return "".join(out)
+    if errors == "xmlcharrefreplace":
+        for cp in cps:
+            out.append("&#" + str(cp) + ";")
+        return "".join(out)
+    j = 0
+    if errors == "surrogateescape":
+        while j < len(cps) and cps[j] >= 0xDC80 and cps[j] <= 0xDCFF:
+            j += 1
+        if j == len(cps):
+            for cp in cps:
+                out.append(chr(cp - 0xDC00))
+            return "".join(out)
+    elif errors == "surrogatepass" and k == 0:
+        for cp in cps:
+            u8put(out, cp)
+        return "".join(out)
+    elif errors != "strict" and errors != "surrogatepass":
+        raise LookupError("unknown error handler name '" + errors + "'")
+    start = pos + j
+    end = pos + len(cps)
+    reason = "surrogates not allowed" if k == 0 else "ordinal not in range(256)" if k == 1 else "ordinal not in range(128)"
+    if end - start == 1:
+        _rt.fail("UnicodeEncodeError", "'" + codec_name(k) + "' codec can't encode character '" + escaped(cps[j]) + "' in position " + str(start) + ": " + reason)
+    _rt.fail("UnicodeEncodeError", "'" + codec_name(k) + "' codec can't encode characters in position " + str(start) + "-" + str(end - 1) + ": " + reason)
+    return ""
+
+
+def u8char(b: str, i: int, n: int) -> int:
+    # the length of the UTF-8 character at b[i], as CPython's decoder reads it (stringlib's
+    # utf8_decode), or 0 where the bytes from i on are none (u8bad tells why, and how many)
+    c = _rt.byte(b, i)
+    if c < 0xC2 or c > 0xF4:
+        return 0
+    k = 2 if c < 0xE0 else 3 if c < 0xF0 else 4
+    lo = 0xA0 if c == 0xE0 else 0x90 if c == 0xF0 else 0x80
+    hi = 0x9F if c == 0xED else 0x8F if c == 0xF4 else 0xBF
+    for j in range(i + 1, i + k):
+        if j >= n:
+            return 0
+        d = _rt.byte(b, j)
+        if d < lo or d > hi:
+            return 0
+        lo = 0x80
+        hi = 0xBF
+    return k
+
+
+def u8bad(b: str, i: int, n: int) -> int:
+    # where the bytes from b[i] on that are no character end (u8char 0), as CPython's decoder
+    # gives them to the error handler; minus that end where the data ends first
+    c = _rt.byte(b, i)
+    if c < 0xC2 or c > 0xF4:
+        return i + 1  # (invalid start byte)
+    k = 2 if c < 0xE0 else 3 if c < 0xF0 else 4
+    lo = 0xA0 if c == 0xE0 else 0x90 if c == 0xF0 else 0x80
+    hi = 0x9F if c == 0xED else 0x8F if c == 0xF4 else 0xBF
+    for j in range(i + 1, i + k):
+        if j >= n:
+            return -n  # (unexpected end of data)
+        d = _rt.byte(b, j)
+        if d < lo or d > hi:
+            return j  # (invalid continuation byte)
+        lo = 0x80
+        hi = 0xBF
+    return i + k
+
+
+def pys_bytes_decode(b: str, encoding: str, errors: str) -> str:
+    # b.decode(encoding, errors): the str; the bytes the codec cannot decode go to the error
+    # handler as CPython's decoder gives them (an omitted encoding is UTF-8, as in encode). An
+    # empty b is the empty str whatever its encoding names: CPython looks no codec up for it
+    if len(b) == 0:
+        return b
+    k = 0 if _rt.null(encoding) else codec_of(encoding)
+    if _rt.null(errors):
+        errors = "strict"
+    if pys_str_isascii(b) == 1:
+        return b
+    out: list[str] = []
+    n = len(b)
+    i = 0
+    start = 0  # out holds the characters of b[:start]
+    while i < n:
+        c = _rt.byte(b, i)
+        if c < 0x80:
+            i += 1
+            continue
+        if k == 1:
+            out.append(b[start:i])
+            u8put(out, c)
+            i += 1
+            start = i
+            continue
+        m = u8char(b, i, n) if k == 0 else 0
+        if m > 0:
+            i += m  # (its bytes are the str's)
+            continue
+        end = u8bad(b, i, n) if k == 0 else i + 1
+        why = "ordinal not in range(128)" if k == 2 else "invalid start byte" if end == i + 1 and (c < 0xC2 or c > 0xF4) else "unexpected end of data" if end < 0 else "invalid continuation byte"
+        end = -end if end < 0 else end
+        out.append(b[start:i])
+        rep = decode_error(b, i, end, k, errors, why)
+        out.append(rep[0])
+        i = rep[1]
+        start = i
+    out.append(b[start:])
+    return "".join(out)
+
+
+def decode_error(b: str, start: int, end: int, k: int, errors: str, why: str) -> tuple[str, int]:
+    # what error handler errors makes of the bytes b[start:end], which codec k cannot decode (for
+    # why), and where decoding goes on, as CPython's handlers do
+    out: list[str] = []
+    if errors == "replace":
+        u8put(out, 0xFFFD)
+        return ("".join(out), end)
+    if errors == "ignore":
+        return ("", end)
+    if errors == "backslashreplace":
+        for j in range(start, end):
+            out.append("\\x" + hexpart(_rt.byte(b, j), 2))
+        return ("".join(out), end)
+    if errors == "surrogateescape":
+        for j in range(start, end):
+            u8put(out, 0xDC00 + _rt.byte(b, j))
+        return ("".join(out), end)
+    if errors == "surrogatepass" and k == 0 and len(b) - start >= 3:
+        b1 = _rt.byte(b, start)
+        b2 = _rt.byte(b, start + 1)
+        b3 = _rt.byte(b, start + 2)
+        cp = ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
+        if b1 & 0xF0 == 0xE0 and b2 & 0xC0 == 0x80 and b3 & 0xC0 == 0x80 and cp >= 0xD800 and cp <= 0xDFFF:
+            return (b[start : start + 3], start + 3)  # (a surrogate's three bytes, as a str holds it)
+    if errors == "xmlcharrefreplace" or errors == "namereplace":
+        raise TypeError("don't know how to handle UnicodeDecodeError in error callback")
+    if errors != "strict" and errors != "surrogatepass":
+        raise LookupError("unknown error handler name '" + errors + "'")
+    if end - start == 1:
+        _rt.fail("UnicodeDecodeError", "'" + codec_name(k) + "' codec can't decode byte 0x" + hexpart(_rt.byte(b, start), 2) + " in position " + str(start) + ": " + why)
+    _rt.fail("UnicodeDecodeError", "'" + codec_name(k) + "' codec can't decode bytes in position " + str(start) + "-" + str(end - 1) + ": " + why)
+    return ("", end)
