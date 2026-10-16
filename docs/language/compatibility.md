@@ -168,6 +168,13 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   also where CPython raises `TypeError` (the fill character of `ljust()`, `rjust()` and
   `center()`).
 
+- A key object (an instance of a class that defines `__call__`) that is `None` when `sorted()`,
+  `list.sort()`, `min()` or `max()` runs is no key, as in CPython, but where the items are
+  objects (whose comparison methods the keyed call never compiles), or have no order without a
+  key here (a closed union, functions): it is called then, raising
+  `TypeError: 'NoneType' object is not callable`, where CPython orders the items. A
+  `Callable | None` key for such items is a compile-time error.
+
 - The text of `getattr(o, name)` with a run-time name (see [reflection](semantics.md#reflection))
   shows the addresses CPython shows, but not CPython's: a method wrapper's or builtin method's
   object address is the object's, a builtin method of the type (`__new__`, `__init_subclass__`)
@@ -680,6 +687,8 @@ supported alternatives.
   `reversed()` in supported loops or consumers, and `zip(strict=...)`. Materialize the inner
   expression as a list first. `reversed(range(...))` is supported.
 - a keyword argument Pystachy does not take (`os.path.realpath(p, strict=True)`)
+- a `key=` that may be `None` (`Callable | None`) of items that have no order without a key (a
+  closed union, functions)
 - `dict.update()` of a dict of other key or value types, of an iterable other than a list of
   `(key, value)` tuples of the dict's types (a generator could see the pairs set so far), or with
   keyword arguments where the keys are not `str`, and `dict.fromkeys()` of a generator, or without
