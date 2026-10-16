@@ -34,8 +34,7 @@ class Constant(Point):
 
 @dataclass
 class Static(Point):
-    @staticmethod
-    def origin() -> int:  # (a static method overridden)
+    def origin(self) -> int:  # (a static method overridden by an instance method)
         return 1
 
 

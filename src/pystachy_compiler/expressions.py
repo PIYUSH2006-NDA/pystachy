@@ -937,7 +937,7 @@ def gen_cls_bound(self, f: FnInfo, c: str, obj: bool) -> None:
     # not dispatched on an object's class.
     if f.deco != "" and obj:
         for x in self.classes.values():
-            if x.name != c and self.derives(x.name, c) and f.name in x.methods and x.methods[f.name].orig is not f.orig:
+            if x.name != c and not x.excluded and self.derives(x.name, c) and f.name in x.methods and x.methods[f.name].orig is not f.orig:
                 self.err(f"calling {'static' if f.deco == 'staticmethod' else 'class'} method {f.name}() on an object of {short(c)}, which may be one of {short(x.name)}, is not supported: {short(x.name)} overrides it (calls are not dispatched on the object's class; call {short(c)}.{f.name}() or {short(x.name)}.{f.name}())")
     if f.deco != "classmethod" or not f.clsuse:
         return
