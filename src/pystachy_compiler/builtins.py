@@ -30,6 +30,8 @@ from src.pystachy_compiler.utils import (
     is_callable,
     is_dict,
     is_fn,
+    gelem,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -123,6 +125,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             return self.coerce(v, want) if is_vtuple(unopt(want)) else v
         if v.t == "str":
             v = Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+        if is_gen(v.t):
+            v = self.gen_list(v, "")
         if not is_list(v.t):
             self.err(f"tuple() of {typestr(v.t)} is not supported: use a list, string or tuple")
         if unopt(elem(v.t)) not in ["int", "float", "bool", "str"]:
@@ -137,6 +141,16 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         return self.print_(args)
     if name == "open":
         return self.open_(args)
+    if (name == "next" or name == "iter") and 1 <= len(args) <= (2 if name == "next" else 1) and len([a for a in args if a.kind != "kw"]) == len(args) and self.gen_arg(args[0]):
+        # next(g), next(g, default) and iter(g) of a generator g, iter(o) of an object whose
+        # __iter__ yields (the others are not supported: #477)
+        gv = self.expr(args[0], "")
+        if gv.t in self.classes:
+            return self.obj_iter(gv, "TypeError: 'NoneType' object is not iterable", f"'{tname(gv.t)}' object is not iterable")
+        gv = self.unwrap(gv, f"TypeError: 'NoneType' object is not {'an iterator' if name == 'next' else 'iterable'}")
+        if name == "iter":
+            return gv
+        return self.gen_next_value(gv, self.expr(args[1], gelem(gv.t)) if len(args) == 2 else Val("", ""))
     if name == "set" or name == "frozenset":
         return self.set_new(name, args, want, resultsoft)
     if name == "map" or name == "filter":
@@ -272,7 +286,12 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         fresh = self.iterator_call(args[0]) or args[0].kind == "listcomp"
         lazy = self.iterator_call(args[0]) or (args[0].kind == "listcomp" and args[0].s == "gen")
         ka = IterArg(mk("tuple", "", self.line, [a.kids[0] for a in kws])) if len(kws) > 0 and lazy else None
+        self.gencall = ""
         v0 = self.consume(args[0], w, ka, resultsoft)
+        if is_gen(v0.t) and ka is None and (name == "sum" or name == "min" or name == "max" or name == "any" or name == "all" or name == "math.fsum" or name == "math.prod"):
+            # (a generator's items as they come, as of a generator expression: any() and all()
+            # stop at the deciding one, and nothing is kept)
+            return self.gen_stream(name, v0, args[1:], want, resultsoft)
         if ka is not None:
             kvals = [self.tget(ka.value, j) for j in range(len(kws))]
         elif len(kws) > 0:
@@ -314,7 +333,7 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
             self.key_check(keyv, f"{name}()")
     if (name == "sum" or name == "math.prod") and len(vals) == 2 and vals[1].t == "bool":
         self.err(f"{name}() with a bool start is not supported: it returns the bool for an empty iterable, else a number; use int(start) for a numeric result")
-    if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t)):
+    if (name == "sum" or name == "math.prod") and len(vals) == 2 and (vals[0].t in self.classes or is_tuple(vals[0].t) or is_dict(vals[0].t) or is_gen(vals[0].t)):
         vals[0] = self.as_list(vals[0], name)  # (sum(o, start) iterates o once start is evaluated)
     if name == "round" and len(vals) == 2 and vals[1].t == "None":
         vals = vals[:1]  # round(x, None) is round(x)
@@ -898,6 +917,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
                               "can only join an iterable" if name == "join" else f"'{tname(v.t)}' object is not iterable")
         if (name == "list" or name == "sorted" or name == "extend") and "__len__" in self.classes[v.t].methods:
             self.objlen(v)  # (a length hint: CPython's list() calls __len__ once __iter__ has run)
+        if is_gen(items.t):
+            return self.gen_list(items, "")  # (an __iter__ that yields: its generator's items)
         return items
     if is_dict(v.t):
         return Val(self.rt("pys_dict_keys", "ptr", [f"ptr {v.v}"]), self.ctype("list", [targs(v.t)[0]]))
@@ -922,6 +943,8 @@ def gen_as_list(self, v: Val, name: str) -> Val:
         return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
     if v.t == "file":
         return Val(self.rt("pys_file_readlines", "ptr", [f"ptr {v.v}"]), "list[str]")
+    if is_gen(v.t):
+        return self.gen_list(v, "")  # (its items, as CPython's list(), sorted(), join() take them)
     return v
 
 def gen_reverse_arg(self, n: Node, name: str) -> str:
@@ -1161,7 +1184,7 @@ def gen_bmethod(self, o: Val, m: str, args: list[Node], first: bool = False) -> 
                 v = Val("null", "str")  # (each item in its place, in affix_any)
             if is_opt(v.t) and (key == "str.join" or key == "list.extend" or key == "file.writelines"):
                 v = self.unwrap(v, "TypeError: can only join an iterable" if key == "str.join" else "TypeError: 'NoneType' object is not iterable")
-            if key == "str.join" or (key == "list.extend" and v.t in self.classes):
+            if key == "str.join" or (key == "list.extend" and (v.t in self.classes or is_gen(v.t))):
                 v = self.as_list(v, "join" if key == "str.join" else "extend")
             if (key == "str.join" or key == "file.writelines") and v.t == "list[opt[str]]":
                 v = Val(v.v, "list[str]")  # (an item that is None raises when it runs, as CPython's error)

@@ -25,7 +25,6 @@ from src.pystachy_compiler.specs import (
     TYPING,
     UNARY,
     UNCALLED,
-    UNSUPPORTED,
     exc_derives,
     is_excname,
 )
@@ -151,6 +150,11 @@ def gen_ann(self, n: Node) -> str:
         if base.startswith("!"):
             return base
         a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
+        if base == "iterator" or base == "generator":
+            # Iterator[T], Generator[Y, None, R] (typing's or collections.abc's): a generator object
+            # (an iterator of another kind, as #477 makes them, is not one of these)
+            yr = self.gen_ann_ret(n)
+            return "!" + yr[0] if len(yr) == 1 else self.ctype("gen", [yr[0]])
         if base == "callable":
             # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
             if len(a) != 2 or (a[0].kind != "list" and a[0].kind != "ellipsis"):
@@ -700,7 +704,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.generic = True  # (-> Box: what it returns is one of the class's specializations)
     if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
         f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
-    if d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
+    gbad = self.gen_declare(f, d) if has_kind(d.kids[2], "yield") and not self.rtmode else ""
+    if not f.gen and d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s)) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
         # The declared parameter types still coerce every call. Reuse return
         # inference even when all parameter types are already concrete.
         # Initializers and other implicit special methods keep their contracts.
@@ -805,12 +810,12 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         if f.clsuse:
             f.orig = clone(d)
         rename(d.kids[2], ps[0].s, cls)
-    if not inherited and bad == "" and has_kind(d.kids[2], "yield"):
-        bad = UNSUPPORTED["yield"]  # a generator function
-        if cls != "" and d.s == "__iter__":
-            bad += ": __iter__ can return iter(xs) of a list xs of the items"
-    tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s))
-    if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret:
+    if bad == "" and gbad != "":
+        bad = gbad  # (a generator function whose yield or annotation Pystachy does not support)
+    elif bad == "" and self.rtmode and has_kind(d.kids[2], "yield"):
+        bad = "generator functions are not supported in runtime.py"
+    tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s)) and not f.gen
+    if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret and not f.gen:
         it = self.iter_item(d.kids[1]) if cls != "" and d.s == "__iter__" else None  # (see iter_ann)
         why = self.ann_problem(d.kids[1], True) if it is None else self.ann_problem(it, False)
         if why != "":
@@ -822,6 +827,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
     f.bad = bad
     if bad != "" and self.lib:
         f.ret = "None"
+    elif f.gen:
+        pass  # (gen_declare: gen[Y] from its annotation, or decided by its first yield)
     elif d.kids[1].kind != "noann" and cls != "" and d.s == "__iter__" and self.iter_ann(d.kids[1]) != "":
         f.ret = self.iter_ann(d.kids[1])
         f.iters = True

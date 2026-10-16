@@ -508,6 +508,8 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
                 # programs valid, but fix their consumed ABI before emitting a call.
                 # The first-return path refuses any later non-None inference.
                 g.ret = "None"
+            elif f.gen:
+                self.err(f"cannot infer what {short(f.name)}() yields: it calls itself before its first yield; annotate its return type (-> Iterator[T])")
             else:
                 self.err(f"cannot infer what {short(f.name)}() returns: it calls itself before a return statement does; annotate its return type")
         if g.ll in self.building:
@@ -535,6 +537,11 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     g.clsuse = f.clsuse
     g.orig = f.orig
     g.iters = f.iters
+    g.gen = f.gen
+    g.gret = f.gret
+    g.gclose = f.gclose
+    g.gwith = f.gwith
+    g.gtry = f.gtry
     g.params = f.params
     g.ptypes = ts
     g.defaults = f.defaults

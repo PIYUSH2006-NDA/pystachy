@@ -193,6 +193,8 @@ def tname(t: str) -> str:
         return typestr(t)
     if t == "exc":
         return "BaseException"
+    if is_gen(t):
+        return "generator"
     if is_kw(t):
         return "dict"
     if is_fn(t):
@@ -295,6 +297,12 @@ def selem(t: str) -> str:
 
 def is_tuple(t: str) -> bool:
     return t.startswith("tuple[")
+
+
+def is_gen(t: str) -> bool:
+    # gen[Y]: a generator object that yields Y, the handle of an LLVM coroutine (a generator
+    # function's call makes one): generators of every function that yields Y share the type
+    return t.startswith("gen[")
 
 
 def is_vtuple(t: str) -> bool:
@@ -485,7 +493,7 @@ def typestr(t: str) -> str:
     w = ""
     for c in t + ",":
         if c == "[" or c == "]" or c == ",":
-            out.append("BaseException" if w == "exc" else SPECSHOW[w] if w in SPECSHOW else short(w))
+            out.append("BaseException" if w == "exc" else "Generator" if w == "gen" and c == "[" else SPECSHOW[w] if w in SPECSHOW else short(w))
             out.append(c)
             w = ""
         else:
@@ -607,6 +615,11 @@ def key_items(t: str) -> bool:
 
 def elem(t: str) -> str:
     return t[5:-1]
+
+
+def gelem(t: str) -> str:
+    # Y, of a generator gen[Y]
+    return t[4:-1]
 
 
 def targs(t: str) -> list[str]:

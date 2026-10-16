@@ -436,7 +436,28 @@ IROPS: dict[str, str] = {
     "empty.kind": "wD",
     "union.tag": "rL rD rO", "union.payload": "rL rD rO",
     "landing": "T", "throw": "T R N", "exc.match": "",
+    # generators (LLVM switched-resume coroutines, docs/internals.md#generators): gen.start ends a
+    # generator function's entry block (the frame, its promise and the initial suspend), gen.yield
+    # and gen.ret suspend it (gen.ret finally); gen.promise is the address of its promise (of the
+    # generator's own, or of a handle's), gen.resume runs it to its next suspend, and gen.drop
+    # closes a generator a loop owns and destroys it (it reports what closing raises, as CPython
+    # reports an exception it ignores, so it never raises itself)
+    "gen.start": "T A", "gen.yield": "T U", "gen.ret": "T", "gen.promise": "", "gen.resume": "U",
+    "gen.drop": "A I rL wL rD wD rO wO rG wG rF wF",
 }
+# a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
+# state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
+# what closing it raises). State: suspended where closing it runs no code of its, suspended
+# where it does (a yield in try, with or yield from), finished, running
+GENVAL = 0
+GENRET = 1
+GENSTATE = 2
+GENCMD = 3
+GENNAME = 4
+GENSLOTS = 5
+GENCLEAN = 1
+GENDONE = 2
+GENRUN = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -605,6 +626,11 @@ RUNTIME: dict[str, str] = {
     "exc.user": "exc:%ptr|A|", "exc.obj": "%ptr:exc||", "exc.id": "%ptr:exc||", "exc.ostr": "str:%ptr|U|", "exc.orepr": "str:%ptr|U|",
     "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
+    # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
+    # again when it resumes (gen.enter, which returns their depth below them); the reports of a
+    # generator closed by its loop that yielded again or raised
+    "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
     "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|I rF wF|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams

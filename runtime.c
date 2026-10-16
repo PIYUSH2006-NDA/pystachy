@@ -3102,6 +3102,48 @@ static void close_with(void *p) {      /* __exit__ of a with-file: a close that 
 void pys_unwind_file(File *f) { unwind_push(close_with, f); }   /* with open(...) as f */
 static void unwind_to(I mark) { while (nunw > mark) { Unwind u = unw[--nunw]; u.fn(u.arg); } }
 I pys_try_mark(void) { return nunw; }
+/* Generators (docs/internals.md#generators). A suspended generator leaves none of its unwind
+   actions (its with-files') among the program's: as it suspends it sets those above the depth
+   where it was resumed aside, in a scanned block of its own (pys_gen_leave), and takes them up
+   again where it is resumed next (pys_gen_enter, which returns the depth below them: its try
+   statements' marks are relative to it). So its consumer's try statements and with blocks
+   unwind only their own actions, and a generator resumed from another depth finds its own. */
+typedef struct { I n; Unwind u[]; } Aside;
+I pys_gen_enter(void *aside) {
+  I base = nunw;
+  Aside *a = aside;
+  for (I i = 0; a && i < a->n; i++) unwind_push(a->u[i].fn, a->u[i].arg);
+  return base;
+}
+void *pys_gen_leave(I base) {
+  if (nunw <= base) return 0;
+  Aside *a = pys_alloc(sizeof(Aside) + (size_t)(nunw - base) * sizeof(Unwind));
+  a->n = nunw - base;
+  memcpy(a->u, unw + base, (size_t)a->n * sizeof(Unwind));
+  nunw = base;
+  return a;
+}
+/* What closing a generator that a loop owns raises, and its yield after GeneratorExit, are
+   reported as CPython reports an exception it ignores (unraisable), and the loop goes on: the
+   first line names the generator by its __qualname__ (and its promise's address, where CPython
+   shows the object's), the last is the exception's, as an uncaught one's (no traceback lines) */
+static void gen_ignored_in(Str *name, void *p) {
+  out_flush();
+  fputs("Exception ignored in: <generator object ", stderr);
+  ewrite(name->s, name->len);
+  fprintf(stderr, " at %p>\n", p);
+}
+void pys_gen_ignored(Str *name, void *p) {
+  gen_ignored_in(name, p);
+  fputs("RuntimeError: generator ignored GeneratorExit\n", stderr);
+}
+void pys_gen_unraisable(Exc *e, Str *name, void *p) {
+  gen_ignored_in(name, p);
+  Str *k = e->obj ? XCLS(e)->disp : e->kind, *m = e->obj ? XCLS(e)->str(e->obj) : e->detail ? e->detail : e->msg;
+  fwrite(k->s, 1, k->len, stderr);
+  if (m->len || e->detail) { fputs(": ", stderr); ewrite(m->s, m->len); }
+  fputc('\n', stderr);
+}
 Exc *pys_exc_begin(void *ue, I mark) { /* a landing starts: put right what the raise left, handle the Exc */
   Exc *e = ue;
   xr.cur = e; io_busy = 0;

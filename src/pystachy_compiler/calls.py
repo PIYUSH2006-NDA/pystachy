@@ -15,6 +15,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fn,
+    is_gen,
     is_fset,
     is_kw,
     is_list,
@@ -565,6 +566,8 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         # e.__str__() is str(e): that of the class of e's object, which may derive from o.t's
         # (but for the ExcClass's own functions, see exc_helpers)
         return self.to_str(o) if m == "__str__" else self.repr(o)
+    if is_gen(o.t):
+        return self.gen_method(o, m, args)
     if o.t in self.classes and m == "__init__" and self.classes[o.t].exc != "":
         for c in self.classes.values():
             if c.name != o.t and self.derives(c.name, o.t) and "__init__" in c.methods and c.methods["__init__"].cls == c.name:
@@ -963,6 +966,8 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     if f.ll in self.guessed and f.ll != self.curfn.ll:
         self.guessed[self.curfn.ll] = self.guessed[f.ll]  # (what it returns may hold a guess)
     self.put(c, 1)
+    self.gencall = f"%t{c.r[0]}" if f.gen else ""  # (a new generator: a loop over it owns it, see owned_gen)
+    self.gencallf = f if f.gen else None
     if "?" in f.ret:
         v = self.typed_empty(Val(f"%t{c.r[0]}", f.ret), want, f)
         if f.ll in self.building:

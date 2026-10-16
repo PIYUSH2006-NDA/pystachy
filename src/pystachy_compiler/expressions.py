@@ -36,6 +36,7 @@ from src.pystachy_compiler.utils import (
     is_const,
     is_dict,
     is_fn,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -568,6 +569,10 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         if n.kids[0].kind != "listcomp":
             self.err(UNSUPPORTED[n.kids[0].kind])
         return self.listcomp(n.kids[0], want, "", "", None, "set", resultsoft)
+    if k == "yield" and n.s == "from":
+        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
+    if k == "yield":
+        self.err("the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)")
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "binop" and n.s == "%" and n.kids[0].kind == "str":
@@ -1602,6 +1607,10 @@ def gen_obj_iter(self, v: Val, none: str, missing: str) -> Val:
     f = ms["__iter__"]
     if f.bad != "":
         self.err(f.bad)  # (an imported module's generator __iter__: its own error, not its type's)
+    if f.gen:
+        # (an __iter__ that yields: the generator its call makes)
+        self.notnone(v, none)
+        return self.protocol(v, "__iter__", [])
     if not f.iters and f.ret in self.classes and "__next__" in self.classes[f.ret].methods:
         # (CPython's iterator protocol, which calls __next__ until StopIteration)
         self.err(f"an iterator class is not supported: {short(v.t)}.__iter__ returns a {short(f.ret)}, whose __next__ CPython would call until it raises StopIteration; return iter(xs) of a list xs of the items (-> Iterator[T])")
@@ -2417,6 +2426,9 @@ def gen_cmp2(self, op: str, a: Val, b: Val) -> Val:
             self.notnone(b, "TypeError: argument of type 'NoneType' is not iterable")
             r = self.truth(self.protocol(b, "__contains__", [a]))
             return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
+    if (op == "in" or op == "not in") and is_gen(b.t):
+        r = self.gen_contains(a, b).v  # (x in g: it runs until an item equals x)
+        return Val(r if op == "in" else self.scalar('xor', [Val(r, 'bool'), Val('true', 'bool')]), "bool")
     if (op == "in" or op == "not in") and b.t == "str":
         a = self.unwrap(a, "TypeError: 'in <string>' requires string as left operand, not NoneType")
     if (op == "in" or op == "not in") and a.t == "None" and (is_dict(b.t) or is_set(b.t) or (is_list(b.t) and (self.optional(elem(b.t)) == "" or self.isnum(elem(b.t))) and elem(b.t) not in self.classes)):
