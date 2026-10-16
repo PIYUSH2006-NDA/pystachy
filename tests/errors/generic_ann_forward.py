@@ -1,4 +1,4 @@
-# error: generic_ann_forward.py:7: error: Box[...] names a generic class that is declared further down: Pystachy needs its class statement before the annotation (or a generic class with an __init__)
+# error: generic_ann_forward.py:7: error: Box[...] names a generic class that is declared further down: Pystachy needs its class statement before the annotation
 from typing import Generic, Iterable, TypeVar
 
 T = TypeVar("T")
