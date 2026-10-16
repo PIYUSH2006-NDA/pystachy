@@ -1037,16 +1037,11 @@ def _parse_flags(source: Tokenizer, state: State, char: str) -> tuple[int, int]:
 
 
 def _isalpha(c: str) -> bool:
-    # str.isalpha() of a token (False for an escape's two characters). Past ASCII, a character an
-    # identifier may begin with stands for a letter: the two differ for 263 rare code points,
-    # where the message of a bad inline flag differs from CPython's
+    # str.isalpha() of a token (False for an escape's two characters)
     codes = _codes_of(c)
     if len(codes) != 1:
         return False
-    cp = codes[0]
-    if cp < 128:
-        return (65 <= cp and cp <= 90) or (97 <= cp and cp <= 122)
-    return _sre.uni_isidstart(cp)
+    return _sre.uni_isalpha(codes[0])
 
 
 def fix_flags(src: str, flags: int) -> int:

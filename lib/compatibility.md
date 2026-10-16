@@ -227,8 +227,6 @@ dictionaries, positions, spans and expansion.
   capturing group would add `None`.
 - `finditer` eagerly returns a list of matches.
 - `\N{...}` is a pattern error; character-name lookup is unavailable.
-- For 262 identifier characters where CPython's `str.isalpha` differs, an invalid
-  inline flag can receive a different error message (for example, `(?iⅠ)`).
 - Flags are ints, `groupindex` is a dict, and `re.error` is the base of
   `PatternError` rather than the same class. Replacement callbacks must return
   strings. Bytes patterns, warnings, `DEBUG` output, `Scanner` and `__index__`
