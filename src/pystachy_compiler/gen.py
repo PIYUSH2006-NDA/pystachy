@@ -1640,8 +1640,8 @@ class Gen:
     def gen_enter(self) -> None:
         return generators_gen_enter(self)
 
-    def hidden_loop(self, loop: Node, names: list[str]) -> None:
-        return generators_hidden_loop(self, loop, names)
+    def hidden_loop(self, loop: Node, own: list[str], names: list[str]) -> None:
+        return generators_hidden_loop(self, loop, own, names)
 
     def gen_list(self, v: Val, want: str) -> Val:
         return generators_gen_list(self, v, want)

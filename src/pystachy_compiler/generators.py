@@ -10,7 +10,7 @@ promise (gen.promise): the value yielded, the state, the value returned. See
 docs/internals.md#generators.
 """
 from __future__ import annotations
-from src.pystachy_compiler.analysis import closure_free
+from src.pystachy_compiler.analysis import closure_free, comp_shared, comp_unbound
 from src.pystachy_compiler.ir import Exit, FnInfo, Ins, IterArg, SeqStart, Try, Val
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
@@ -23,7 +23,7 @@ from src.pystachy_compiler.specs import (
     GENSTATE,
     exc_derives,
 )
-from src.pystachy_compiler.syntax import Node, has_kind, mk, names_in
+from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
 from src.pystachy_compiler.utils import gelem, is_gen, typestr
 
 
@@ -64,6 +64,26 @@ def yields_from(n: Node) -> bool:
         if yields_from(k):
             return True
     return False
+
+
+def comp_clauses(c: Node, body: list[Node], inline: bool) -> list[Node]:
+    # body inside the clauses of comprehension c after its first iterable (c.kids[3:]: if
+    # clauses, and for clauses nested in their order): if statements, and for loops of a
+    # function of its own (genexp_value) or, inline, compfor loops, whose targets are their own
+    # as gen_listcomp nests them
+    line = c.line
+    for j in range(len(c.kids) - 1, 2, -1):
+        x = c.kids[j]
+        inner = mk("block", "", line, body)
+        if x.kind == "compfor" and inline:
+            shared: list[str] = []
+            comp_shared(c, j, shared)
+            body = [mk("compfor", "", line, [x.kids[0], x.kids[1], inner, mk("names", " ".join(shared), line, [])])]
+        elif x.kind == "compfor":
+            body = [mk("for", "", line, [x.kids[0], x.kids[1], inner])]
+        else:
+            body = [mk("if", "", line, [x.kids[0] if x.kind == "compif" else x, inner, mk("block", "", line, [])])]
+    return body
 
 
 def gen_gen_declare(self, f: FnInfo, d: Node) -> str:
@@ -363,6 +383,7 @@ def gen_yield_stmt(self, n: Node) -> None:
     if n.s == "from":
         self.yield_from(n.kids[0])
         return
+    dead = self.term  # (after a return, raise, break or continue: it is never reached)
     y = gelem(f.ret) if f.ret != "" else ""
     v = self.expr(n.kids[0], y) if len(n.kids) > 0 else Val("null", "None")
     if y == "":
@@ -372,6 +393,11 @@ def gen_yield_stmt(self, n: Node) -> None:
         f.ret = self.ctype("gen", [y])
     elif v.t != y:
         v = self.coerce(v, y)
+    if dead:
+        # (return v; yield: the yield makes a generator function, which never suspends there,
+        # so the code after it is not reached either: not an end without a value, gen_end)
+        self.unreachable()
+        return
     self.gen_suspend("0" if y == "None" else self.to_slot(v), self.gen_cleanup(), Val("", ""))
 
 
@@ -382,22 +408,32 @@ def gen_yield_from(self, x: Node) -> Val:
     if not f.gen:
         self.err("'yield' outside function")
     y = gelem(f.ret) if f.ret != "" else ""
+    if self.is_mapcall(x):
+        x = self.mapgen(x)  # (map(f, xs) or filter(f, xs): the generator expression it is)
     if x.kind == "listcomp" and x.s == "gen":
-        # yield from (e for t in it if c): each e, as the loop the generator expression is would
-        # make it (its first iterable at once, the rest as it goes on; t its own variable)
+        # yield from (e for t in it if c ...): each e, as the loops the generator expression is
+        # would make it (its first iterable at once, the rest as it goes on; t its own variable)
+        own: list[str] = []
+        names_in(x.kids[1], own)
         names: list[str] = []
-        names_in(x.kids[1], names)
-        body = [mk("expr", "", x.line, [mk("yield", "", x.line, [x.kids[0]])])]
-        if len(x.kids) == 4:
-            body = [mk("if", "", x.line, [x.kids[3], mk("block", "", x.line, body), mk("block", "", x.line, [])])]
-        self.hidden_loop(mk("for", "", x.line, [x.kids[1], x.kids[2], mk("block", "", x.line, body)]), names)
+        comp_names(x, names)
+        if comp_unbound(x, names) != "":
+            self.err(comp_unbound(x, names))
+        body = comp_clauses(x, [mk("expr", "", x.line, [mk("yield", "", x.line, [x.kids[0]])])], True)
+        self.hidden_loop(mk("for", "", x.line, [x.kids[1], x.kids[2], mk("block", "", x.line, body)]), own, names)
+        return Val("null", "None")
+    if self.iterator_call(x):
+        # yield from range(...), enumerate(...), zip(...) or reversed(...): each item, as a for
+        # loop over the call takes it
+        it = mk("name", "__yf", x.line, [])
+        self.hidden_loop(mk("for", "", x.line, [it, x, mk("block", "", x.line, [mk("expr", "", x.line, [mk("yield", "", x.line, [mk("name", "__yf", x.line, [])])])])]), ["__yf"], ["__yf"])
         return Val("null", "None")
     self.gencall = ""
     v = self.expr(x, "")
     callee = self.gencallf if v.v == self.gencall and self.gencall != "" else None
     if not is_gen(v.t):
         it = mk("name", "__yf", x.line, [])
-        self.hidden_loop(mk("for", "", x.line, [it, self.vnode(v), mk("block", "", x.line, [mk("expr", "", x.line, [mk("yield", "", x.line, [mk("name", "__yf", x.line, [])])])])]), ["__yf"])
+        self.hidden_loop(mk("for", "", x.line, [it, self.vnode(v), mk("block", "", x.line, [mk("expr", "", x.line, [mk("yield", "", x.line, [mk("name", "__yf", x.line, [])])])])]), ["__yf"], ["__yf"])
         return Val("null", "None")
     t = gelem(v.t)
     if y == "":
@@ -426,13 +462,19 @@ def gen_yield_from(self, x: Node) -> Val:
     return res
 
 
-def gen_hidden_loop(self, loop: Node, names: list[str]) -> None:
-    # for loop loop, whose variables names are its own, as a comprehension's are (listcomp)
+def gen_hidden_loop(self, loop: Node, own: list[str], names: list[str]) -> None:
+    # for loop loop, whose variables are its own, as a comprehension's are (gen_listcomp): own,
+    # its target's, and names, those of the compfor loops in its body too
     saved: list[str] = []
+    held: list[int] = []
     for nm in names:
         saved.append(self.ltype.get(nm, "") + " " + self.lreg.get(nm, ""))
+        held.append(self.compvars.get(nm, 0))
     pre = self.narrowed
-    self.for_(loop, names)
+    share = self.compshare
+    self.compshare = {}
+    self.for_(loop, own)
+    self.compshare = share
     self.narrowed = pre
     for i in range(len(names)):
         nm = names[i]
@@ -443,8 +485,9 @@ def gen_hidden_loop(self, loop: Node, names: list[str]) -> None:
         else:
             self.ltype[nm] = saved[i][:sp]
             self.lreg[nm] = saved[i][sp + 1 :]
-        self.compvars[nm] -= 1
-        if self.compvars[nm] == 0:
+        if held[i] > 0:
+            self.compvars[nm] = held[i]
+        elif nm in self.compvars:
             del self.compvars[nm]
 
 
@@ -714,10 +757,7 @@ def gen_genexp_value(self, n: Node) -> Val:
     # loop), surely assigned here; another (a comprehension's, one bound again) is an error
     line = n.line
     noann = mk("noann", "", line, [])
-    yld = mk("expr", "", line, [mk("yield", "", line, [n.kids[0]])])
-    body = [yld]
-    if len(n.kids) == 4:
-        body = [mk("if", "", line, [n.kids[3], mk("block", "", line, body), mk("block", "", line, [])])]
+    body = comp_clauses(n, [mk("expr", "", line, [mk("yield", "", line, [n.kids[0]])])], False)
     # its first iterable: a value made here, or range(), enumerate(), zip() or reversed() of
     # arguments evaluated here (those are no values: the generator's loop makes them)
     first = n.kids[2]
