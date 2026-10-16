@@ -1,0 +1,5 @@
+[1, 2, 3]
+TypeError: 'NoneType' object is not callable
+[Item(2), Item(1)]
+TypeError: 'NoneType' object is not callable
+[exit 0]

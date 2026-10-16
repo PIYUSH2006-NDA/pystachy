@@ -1,0 +1,35 @@
+66
+65
+True
+65
+True
+RuntimeError 
+RuntimeError 
+RuntimeError 
+RuntimeError 
+RuntimeError 
+RuntimeError 
+RuntimeError 
+ZeroDivisionError 
+2
+ok
+3
+42
+42
+True
+True
+TypeError unhashable type: 'OnlyEquality'
+True
+True
+True
+True
+True
+True
+True
+True
+True
+True
+True
+True
+True
+[exit 0]

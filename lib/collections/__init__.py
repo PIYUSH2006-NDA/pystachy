@@ -410,7 +410,9 @@ class defaultdict(Generic[_KT, _VT]):
         # (the factory given and its repr, which a Callable no longer has)
         self._made = self.default_factory
         self._shown = _factory_repr(default_factory)
-        self._data: dict[_KT, _VT] = {}
+        # (made once, as by dict.__new__: calling __init__ again updates the items)
+        if not hasattr(self, "_data"):
+            self._data: dict[_KT, _VT] = {}
         _update(self, other)
 
     def __missing__(self, key: _KT) -> _VT:
@@ -559,9 +561,12 @@ class OrderedDict(Generic[_KT, _VT]):
         regular dictionaries.  Keyword argument order is preserved.
         '''
         # (keyword arguments are not taken: an annotation such as OrderedDict[str, int] names
-        # the types)
-        self._front: dict[_KT, _VT] = {}
-        self._back: dict[_KT, _VT] = {}
+        # the types; the dicts are made once, as by dict.__new__: calling __init__ again updates
+        # the items, as odict_init does)
+        if not hasattr(self, "_front"):
+            self._front: dict[_KT, _VT] = {}
+        if not hasattr(self, "_back"):
+            self._back: dict[_KT, _VT] = {}
         _update(self, other)
 
     def __setitem__(self, key: _KT, value: _VT) -> None:
@@ -807,7 +812,10 @@ class Counter(Generic[_T]):
 
         '''
         # (keyword arguments are not taken: an annotation such as Counter[str] names the type)
-        self._data: dict[_T, int] = {}
+        # Pystachy port: super().__init__(), which keeps a dict's items: the dict field is made
+        # once, as by dict.__new__, and calling __init__ again adds to the counts
+        if not hasattr(self, "_data"):
+            self._data: dict[_T, int] = {}
         self.update(iterable)
 
     def __missing__(self, key: _T) -> int:

@@ -1,0 +1,11 @@
+True
+main 10 decorated
+closure b
+closure a
+box 7
+builtin-1
+lambda
+kw 1 x 2
+count at exit 5
+decorated
+[exit 0]

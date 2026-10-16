@@ -10,7 +10,6 @@ from src.pystachy_compiler.analysis import (
     builtin_import,
     builtin_module,
     builtin_of,
-    calls_iter,
     calls,
     catches_import,
     clean_doc,
@@ -30,8 +29,10 @@ from src.pystachy_compiler.analysis import (
     local_types,
     mark,
     may_end,
+    module_reads,
     names_name,
     own_specials,
+    range_values,
     read_names,
     rebound,
     refers,
@@ -50,6 +51,7 @@ from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.parser import Parser
 from src.pystachy_compiler.specs import (
     ABCS,
+    ABSTRACT_DECOS,
     ANNKINDS,
     CBUILTIN,
     GENERICS,
@@ -58,9 +60,11 @@ from src.pystachy_compiler.specs import (
     MODULES,
     NOCALL,
     PYBUILTINS,
+    RANGES,
     STANDINS,
     TYPING,
     VERSIONINFO,
+    is_excname,
 )
 from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_in
 from src.pystachy_compiler.utils import clone, int_fits
@@ -146,8 +150,9 @@ class Loader:
         self.stars: list[Node] = []
         self.starm: list[Mod] = []
         self.qdef = False  # is qstmts() in a function
-        # the type parameters of the generic class (class C[T]) it is in, by name: the names of
-        # their own that they are qualified to (<class's qualified name>$$T, unlike any other)
+        # the type parameters of the generic classes and defs (class C[T], def f[T]) it is in, by
+        # name: the names of their own that they are qualified to (<class's or def's name>$$T,
+        # unlike any other)
         self.qren: dict[str, str] = {}
         # the function simplify() is in (own_specials()), and the names that its own imports which
         # special_import() recognizes have surely bound where simplify() is
@@ -202,7 +207,14 @@ class Loader:
                     b.kids = b.kids[:j] + out + b.kids[j + 1 :]
                     break
         self.intry = 0
-        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if calls_iter(x.body, False)]) > 0:
+        if not self.rtmode and len(self.dirs) > 0 and RANGES not in self.mods and len([x for x in self.order if range_values(x.body, 0) and module_reads(x.body, "range")]) > 0:
+            # range() as a value is an object of lib's class, whose module nothing imports: loaded
+            # for a program that may use one (where a loop or a consumer takes the numbers at once,
+            # the compiler steps through range(...) itself; the class's methods are compiled only
+            # if the program calls them)
+            self.load(RANGES, self.dirs[-1] + "/" + RANGES + ".py", "")
+            self.order = [self.order[-1]] + self.order[:-1]
+        if not self.rtmode and len(self.dirs) > 0 and ITERS not in self.mods and len([x for x in self.order if module_reads(x.body, "iter")]) > 0:
             # iter() makes iterator objects of builtin containers: of lib's classes, whose module
             # nothing imports (it imports nothing either, so it comes first)
             self.load(ITERS, self.dirs[-1] + "/" + ITERS + ".py", "")
@@ -340,8 +352,8 @@ class Loader:
             return self.dirs[-1] + "/" + STANDINS[name] + ".py"  # (lib's stand-in for a C module)
         if name in CBUILTIN:
             return ""  # a module built into CPython: no file on the path replaces it (find())
-        if name == ITERS:
-            return ""  # (iter()'s classes, which no program imports: see program)
+        if name == ITERS or name == RANGES:
+            return ""  # (iter()'s classes and range's, which no program imports: see program)
         return self.filepath(name)
 
     def filepath(self, name: str) -> str:
@@ -1867,6 +1879,8 @@ class Loader:
                 if a.s == "*":
                     fail(f"'from {path} import *' is not supported", line)
                 self.bind(m, a.s, "b:" + a.kids[0].s, infn, line)
+                if not infn and a.kids[0].s.startswith("builtins.") and is_excname(a.kids[0].s[9:]):
+                    continue  # (a builtin exception class, which qname() names itself)
                 keep.kids.append(a)
                 if not infn and a.kids[0].s == "builtins." + a.s:
                     continue  # the same builtin is available before the import too
@@ -2089,7 +2103,8 @@ class Loader:
         elif k.startswith("b:"):
             p = k[2:]
             self.bind(m, name, k, infn, line)
-            keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
+            if infn or not (p.startswith("builtins.") and is_excname(p[9:])):  # (qname() names a builtin exception class itself)
+                keep.kids.append(mk("alias", name, line, [mk("str", p, line, []), mk("str", builtin_of(p), line, [])]))
         elif k != "v":
             al = self.aliased.get(src.name + " " + x, None)
             if k.startswith("t:") and al is not None and not src.done and src.at > 0 and al.line > src.at:
@@ -2128,6 +2143,8 @@ class Loader:
         if s in self.qren:
             return self.qren[s]
         k = self.kind(m, s)
+        if k.startswith("b:builtins.") and is_excname(k[11:]) and s not in self.fk:
+            return k[11:]  # (a builtin exception class by another name: from builtins import RuntimeError as error)
         if k == "f" or k == "c" or k == "v" or k.startswith("b:"):
             if m.name == "" and s in PYBUILTINS:
                 return "__main__$" + s  # (other modules' code still sees the builtin)
@@ -2352,6 +2369,13 @@ class Loader:
         # A dotted name's first name that an import in a try statement binds is checked as a read
         # of it is (Node.mchk, which Gen.decorate tests where CPython evaluates the decorator)
         root = d.s[: d.s.find(".")] if "." in d.s else d.s
+        k = self.kind(m, root) if root not in loc else ""
+        q = k[2:] if k.startswith("a:") and root == d.s else "abc$" + d.s[len(root) + 1 :] if k == "m:abc" and "." in d.s else ""
+        if not fn and len(d.kids) == 0 and q in ABSTRACT_DECOS:
+            # (a method's @abstractmethod, or one of the decorators deprecated for it, as abc's:
+            # the compiler applies it, Gen.abstract_defs)
+            d.s = q
+            return
         alias = root not in loc and self.kind(m, root).startswith("a:") and not fn  # (shown as written: m$root)
         if fn and "." in d.s and root not in loc and self.kind(m, root).startswith("m:"):
             e = mk("name", root, d.line, [])
@@ -2438,6 +2462,14 @@ class Loader:
                 self.qdef = True
                 ren = self.qren
                 self.qren = dict(ren)
+                for nm in st.kids[2].s.split():
+                    # (a generic def's type parameters, in its body as a generic class's are in its
+                    # methods: CPython's TypeVars, not the module's or an enclosing function's
+                    # names, which they hide)
+                    self.qren[nm] = st.s + "$$" + nm
+                    m.deftps.append(self.qren[nm])
+                    if nm not in own:
+                        inner.pop(nm, False)
                 for nm in decl:
                     self.qren.pop(nm, "")  # (global T in a method of class C[T]: the module's T)
                 self.qstmts(m, st.kids[2].kids, inner, False)

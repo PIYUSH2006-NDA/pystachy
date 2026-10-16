@@ -196,6 +196,19 @@ def fuzz_bytes():
         same("bytes.from_list", outcome(rt.pys_bytes_from_list, xs), bref(lambda: bytes(xs)), (xs,))
         c = R.choice([-1, 0, 3])
         same("bytes.zeros", outcome(rt.pys_bytes_zeros, c), bref(lambda: bytes(c)), (c,))
+        frm = data(4)
+        to = bytes(R.choice(BYTES) for _ in range(len(frm) if R.randrange(6) else R.randrange(5)))
+        same("bytes.maketrans", outcome(rt.pys_bytes_maketrans, bt(frm), bt(to)), bref(lambda: bytes.maketrans(frm, to)), (frm, to))
+        tab = R.choice([None, bytes.maketrans(frm, to) if len(frm) == len(to) else bytes(range(256)),
+                        bytes(R.randrange(256) for _ in range(256)), data(3)])
+        dl = R.choice([None, b"", data(3)])
+        same("bytes.translate", outcome(rt.pys_bytes_translate, bt(s), None if tab is None else bt(tab), None if dl is None else bt(dl)),
+             bref(lambda: s.translate(tab) if dl is None else s.translate(tab, dl)), (s, tab, dl))
+        hs = R.choice([None, ":", "-", "", "::", "é", "€", b":", b"\xff", b"\x00", b"", b"ab"])
+        per = R.choice([1, 2, 3, -1, -2, -3, 0, 7, 2147483647, -2147483648, 2147483648, -2147483649])
+        same("bytes.hex_sep", outcome(rt.pys_bytes_hex_sep, bt(s), None if hs is None else bt(hs) if isinstance(hs, bytes) else b(hs),
+                                      1 if isinstance(hs, str) else 0, per),
+             bref(lambda: s.hex(bytes_per_sep=per) if hs is None else s.hex(hs, per)), (s, hs, per))
         enc = R.choice(["utf-8", "UTF8", "latin-1", "iso-8859-1", "ascii", "us-ascii", "nope"])
         errs = R.choice(["strict", "replace", "ignore", "backslashreplace", "surrogateescape", "surrogatepass", "xmlcharrefreplace", "nope"])
         same("bytes.decode", outcome(rt.pys_bytes_decode, bt(s), enc, errs), bref(lambda: s.decode(enc, errs)), (s, enc, errs))

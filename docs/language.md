@@ -105,8 +105,9 @@ Classes support fields, methods, class attributes, `@property` with `@x.setter` 
 `@x.deleter`, `@staticmethod`, `@classmethod` and supported operator and container methods.
 Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`,
 the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
-`kw_only`, and inheritance from another dataclass; `slots=True`, `asdict()`, `astuple()` and
-`fields()` are not supported.
+`kw_only`, inheritance from another dataclass, and `fields()`, `asdict()`, `astuple()` and
+`is_dataclass()` (see [reflection](language/semantics.md#reflection)); `slots=True` is not
+supported.
 
 Literal `__slots__` strings, tuples and lists restrict instance field writes when every
 base also declares slots. A subclass without slots, or with an unslotted base, may add
@@ -128,7 +129,10 @@ builtin types, or between a dataclass and a class that is not one, is unsupporte
 classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
 parameters (`class Box[T]`) declare a generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
-decorators remain outside the supported subset.
+decorators remain outside the supported subset. Reflection (`getattr`, `setattr`, `hasattr`,
+`vars`, `dir`, `type(x).__name__`) works on objects whose classes the compiler knows; an
+attribute name computed at run time is supported where only its text or a test is needed
+(see [reflection](language/semantics.md#reflection)).
 
 See [functions and classes](language/typing.md) and
 [object protocols](language/semantics.md#object-protocols) for the detailed rules.
@@ -154,13 +158,15 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Containers | List, dictionary, set and tuple displays, `*` items in list and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
 | Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
-| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join` |
+| Range objects | `range()` as a value: iteration, `len`, `in`, indexing and slicing, `start`, `stop` and `step`, `==`, `hash`, `index`, `count`; see [range objects](language/semantics.md#range-objects) |
+| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join`; a generator expression elsewhere is a generator object |
+| Generators | Functions and methods (including `__iter__`) that `yield` or `yield from`, consumed by `for`, `next()`, `iter()`, `in` and the builtins that take iterables |
 | Iterators | Classes with `__iter__` and `__next__`; `iter()` and `next()` values that share their position |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
-Generator expressions consumed this way do not provide general generator objects. Functions
-using `yield` are not supported. See [execution rules](language/semantics.md) for consumer
-restrictions, evaluation order, protocols and [iterators](language/semantics.md#iterators).
+[Generators](language/semantics.md#generators) do not support `send()`, `throw()` or
+`close()`. See [execution rules](language/semantics.md) for consumer restrictions, evaluation
+order, protocols and [iterators](language/semantics.md#iterators).
 
 <a id="exception-classes"></a>
 
@@ -227,9 +233,10 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 
 ## Unsupported features
 
-The main gaps are multiple inheritance, general object unions and `Any`, generators, `async`,
+The main gaps are multiple inheritance, general object unions and `Any`, generators' `send()`, `async`,
 `bytearray`, `memoryview` and binary files, complex and arbitrary-precision numbers, `match`,
-dynamic attribute access, slice objects and unrestricted argument expansion.
+attribute values looked up by names only the run time knows (their text and `hasattr()` are
+supported), slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.
 An unsupported feature that the program needs produces a compile-time error.

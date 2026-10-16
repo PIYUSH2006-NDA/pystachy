@@ -142,21 +142,23 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Eleven groups run in parallel, each with its own fixed-point bootstrap. The target is under
+Twenty-one groups run in parallel, each with its own fixed-point bootstrap. The target is under
 ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
 |---|---|
-| `hosted` | CPython-hosted differential suite. |
-| `native` | Native differential suite. |
-| `opt-off` | Native suite with IR optimizations disabled. |
-| `python-free` | Rebuild and run with no Python on `PATH`. |
-| `ubsan` | Sanitized compiler/runtime and JIT/AOT suite. |
+| `hosted-0`, `hosted-1` | Two disjoint halves of the CPython-hosted differential suite, JIT and AOT. |
+| `native-0`, `native-1` | Two disjoint halves of the native differential suite, JIT and AOT. |
+| `opt-off-0`, `opt-off-1` | Two disjoint halves of the native suite with IR optimizations disabled. |
+| `python-free-0`, `python-free-1` | Rebuild with no Python on `PATH`; two disjoint halves of the suite with that compiler. |
+| `ubsan-0`, `ubsan-1`, `ubsan-2` | Sanitized compiler/runtime; three disjoint thirds of the JIT/AOT suite. |
 | `gc-self` | Collector-stressed self-compilation and identical-IR check. |
-| `gc-jit` | Full JIT suite with compiler and program GC stress. |
-| `gc-aot-0`, `gc-aot-1` | Two disjoint halves of the full AOT suite, with compiler and program GC stress. |
+| `gc-jit-0`, `gc-jit-1` | Two disjoint halves of the full JIT suite, with compiler and program GC stress. |
+| `gc-aot-0`, `gc-aot-1`, `gc-aot-2` | Three disjoint thirds of the full AOT suite, with compiler and program GC stress. |
+| `runtime-cache` | The cached runtime's rules with both compilers. |
 | `contracts` | Runtime, IR, library and resource-bound checks. |
-| `benchmarks` | Benchmark correctness/timings and compiler scaling; extended correctness checks reuse the verified compiler. |
+| `benchmarks` | Benchmark correctness/timings and half of the compiler-scaling shapes; extended correctness checks reuse the verified compiler. |
+| `scaling-1` | The other compiler-scaling shapes. |
 
 A failed group leaves the others running. The required check remains
 `make verify (Linux x86-64, LLVM 18, Python 3.13)`. Its report gate requires every group to
@@ -172,12 +174,26 @@ At the former interval of 1,000, it spent 23 minutes on 15,543 full-heap collect
 the wider interval still exercises thousands of collections without dominating CI.
 The GC test suite keeps its compiler interval of 1,000 and collects at **every program
 allocation**. Both self-compilation IR identity and full suite counts remain required.
-Self-compilation, JIT and both AOT halves use separate runners and report their own durations.
-The AOT halves alternate files in a fixed order; together they run the full corpus, including
-rejection and syntax checks. The final gate requires all four groups, both execution modes,
-the stress intervals, distinct AOT shard identities and complete counts for every job.
-`tests/verify.sh gc-stress` still runs all GC checks locally with one bootstrap; `gc-aot`
-runs both AOT halves.
+Self-compilation, the two JIT halves and the three AOT thirds use separate runners and report
+their own durations. The JIT halves take every other file in a fixed order and the AOT thirds
+every third; the halves together, like the thirds, run the full corpus, including rejection and
+syntax checks. The final gate requires all six groups, both execution modes, the stress
+intervals, distinct shard identities and complete counts for every job: the JIT halves and the
+AOT thirds each make as many checks as `tests/verify.sh` counts in the whole corpus in one mode
+(each report's `sources.mode_checks`). `tests/verify.sh gc-stress` still runs all GC checks
+locally with one bootstrap; `gc-jit` runs the two JIT halves and `gc-aot` the three AOT thirds.
+The CPython-hosted, native, opt-off and python-free suites are split the same way, in halves, and
+the UBSan suite in thirds (`tests/verify.sh`'s `shard_cases`). The gate requires each shard's
+identity and complete count, and that the shards together make as many checks as an unsharded suite: the JIT and AOT
+halves as many as `tests/verify.sh` counts in the whole corpus (each report's
+`sources.suite_checks`; opt-off's once per `PYSTACHY_OPT` setting), and the UBSan thirds, which run
+in each mode, twice `sources.mode_checks`. Locally, `hosted`, `native` and `opt-off` run both of their halves,
+`python-free` rebuilds the compiler once and runs both of its halves, and `ubsan` builds the
+sanitized compiler once and runs its three thirds.
+The compiler-scaling check is split by shapes: `scaling-0` (in `benchmarks`) checks those of
+`SCALING_0`, about half of the lines the CPython-hosted compiler executes, and `scaling-1` every
+other shape of `tools/scaling.py` (its `-x`), so a new shape is checked as well; the gate requires
+the two to check every shape once. Locally, `scaling` runs both.
 The final report job allows ten minutes for artifact downloads and validation.
 
 The [Lint workflow](../.github/workflows/lint.yml) runs alongside CI: lint, report-gate tests

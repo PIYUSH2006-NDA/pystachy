@@ -38,6 +38,7 @@ class Mod:
         # the names only name = f(...) statements bind, with each f: a TypeVar if every f is typing's
         self.tvars: dict[str, list[Node]] = {}
         self.cbases: dict[str, Node] = {}
+        self.deftps: list[str] = []  # the type parameters of its generic defs, as Loader.qren names them: TypeVars
 
 
 # Python's builtin names: in an imported module, a name it does not bind is one of these or an

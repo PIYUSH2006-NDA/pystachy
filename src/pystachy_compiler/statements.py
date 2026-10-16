@@ -1,7 +1,7 @@
 """Statements component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.utils import is_union
-from src.pystachy_compiler.analysis import builtin_has, local_names
+from src.pystachy_compiler.analysis import appends_to, builtin_has, local_names
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg, Loop, SeqStart, StopCatch, Val
 from src.pystachy_compiler.names import owner, short
@@ -15,6 +15,7 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     ORDOP,
     PYBUILTINS,
+    RANGEC,
     SPECIAL,
     TYPING,
     UNSUPPORTED,
@@ -25,9 +26,11 @@ from src.pystachy_compiler.utils import (
     elem,
     empty_result_type,
     folds,
+    gelem,
     is_const,
     is_dict,
     is_fset,
+    is_gen,
     is_kw,
     is_list,
     is_opt,
@@ -172,7 +175,7 @@ def gen_check_import(self, a: Node) -> None:
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")
     elif mod == "dataclasses":
-        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace"]:
+        if x not in ["dataclass", "field", "FrozenInstanceError", "KW_ONLY", "replace", "fields", "asdict", "astuple", "is_dataclass"]:
             self.err(f"dataclasses.{x} is not supported")
     elif not builtin_has(mod, x):
         self.err(f"cannot import name '{x}' from '{mod}': Pystachy's {mod} module has no '{x}'")
@@ -465,8 +468,23 @@ def gen_stmt(self, n: Node) -> None:
     if self.curfn.vararg >= 0 and self.stack_ok(self.curfn):
         self.keep_stack(n)
     if k == "expr":
-        if n.kids[0].kind != "str" and n.kids[0].kind != "ellipsis":
+        if n.kids[0].kind == "yield":
+            self.yield_stmt(n.kids[0])  # (a generator's yield, or yield from)
+        elif n.kids[0].kind != "str" and n.kids[0].kind != "ellipsis":
             self.expr(n.kids[0], "")  # (a string or ... alone does nothing)
+    elif k == "gendrop":
+        self.gen_drop(self.expr(n.kids[0], ""))  # (a generator a loop owns: owned_loop)
+    elif (k == "assign" or k == "annassign") and n.kids[-1].kind == "yield" and n.kids[-1].s == "from" and (k == "annassign" or len(n.kids) == 2):
+        # r = yield from g(): what the generator g() makes returns
+        v = self.yield_from(n.kids[-1].kids[0])
+        if v.t == "":
+            self.err("the value of yield from is supported where it delegates to a call of a generator function (r = yield from g()), whose return type gives its type")
+        if k == "annassign":
+            t = self.vtype(n.kids[1])
+            if n.kids[0].kind == "name":
+                self.declare(n.kids[0].s, t)
+            v = self.coerce(v, t)
+        self.assign(n.kids[0], v)
     elif k == "assign":
         val = n.kids[-1]
         t0 = n.kids[0]
@@ -477,6 +495,8 @@ def gen_stmt(self, n: Node) -> None:
         if len(n.kids) == 2 and t0.kind == "name" and t0.s in self.curfn.rlocals and val.kind != "name":
             v = self.expr(val, self.curfn.rctx) if val.kind == "call" and ekind == "" else self.retval(val, self.target_type(t0))
             self.assign(t0, v)
+        elif appends_to(n) and self.owns(t0.s):
+            self.str_append(t0, val.kids[1], "")
         elif len(n.kids) == 2 and t0.kind == "name" and ekind != "" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
             self.assign(t0, self.empty(ekind, t0.s))
         elif len(n.kids) == 2 and t0.kind == "name" and val.kind == "call" and len(val.kids) == 2 and val.kids[0].kind == "name" and val.kids[0].s == "dict" and not self.bound("dict") and val.kids[1].kind == "name" and self.static_type(val.kids[1]) == "kw[]" and (self.target_type(t0) == "" or "?" in self.target_type(t0)):
@@ -595,6 +615,8 @@ def gen_stmt(self, n: Node) -> None:
         self.while_(n)
     elif k == "for":
         self.for_(n, [])
+    elif k == "return" and self.curfn.gen and not self.modlevel:
+        self.gen_return(n)
     elif k == "return":
         if self.modlevel:
             self.err("'return' outside function")
@@ -964,6 +986,8 @@ def gen_augassign(self, n: Node) -> None:
         self.refine(t.s, self.ctype("set", [selem(v.t)]))
         self.rt("pys_set_update", "void", [f"ptr {cur.v}", f"ptr {v.v}"], self.key_fx(selem(self.qtype(t.s))))
         self.store_name(t.s, Val(cur.v, self.qtype(t.s)))
+    elif t.kind == "name" and op == "+" and self.owns(t.s):
+        self.str_append(t, n.kids[1], "+=")
     elif t.kind == "name":
         cur = self.read(t)
         self.store_name(t.s, self.inplace(op, cur, n.kids[1]))
@@ -1051,6 +1075,31 @@ def gen_augassign(self, n: Node) -> None:
             self.err(f"'{o.t}' does not support item assignment")
     else:
         self.err("invalid target for augmented assignment")
+
+def gen_owns(self, name: str) -> bool:
+    # does str_append compile an append to name here: a str local with an owned flag
+    return name in self.owned and self.ltype.get(name, "") == "str" and name not in self.compvars
+
+def gen_str_append(self, t: Node, rhs: Node, shown: str) -> None:
+    # t += rhs, or t = t + rhs (shown ""), of a str local t that has an owned flag (owns). The
+    # flag is 1 where t holds a str that an append made and that nothing else holds, which
+    # pys_str_iadd then writes in place while its memory has room: every other read of t clears
+    # it before it loads t (load_name), as what reads t may keep its str (in a list, a field, a
+    # variable), and so does every other store (store_name). The flag is loaded once rhs has
+    # run, as rhs may read t (t += t copies t). A str is hashed only through a read, so an owned
+    # one's dict_hash is still 0
+    self.appending = True
+    cur = self.read(t)
+    self.appending = False
+    b = self.expr(rhs, "str")
+    own = Val(self.owned[t.s], "*int")
+    if b.t != "str":
+        self.mem_store(own, Val("0", "int"))  # (an optional str, or an error: arith's +, a read of cur as any other)
+        self.store_name(t.s, self.arith("+", cur, b, shown))
+        return
+    r = self.rt("pys_str_iadd", "ptr", [f"ptr {cur.v}", f"ptr {b.v}", f"i64 {self.mem_load(own).v}"])
+    self.store_name(t.s, Val(r, "str"))
+    self.mem_store(own, Val("1", "int"))
 
 def gen_may_change(self, b0: Blk, x0: int, n0: int) -> bool:
     # may an op built since position x0 of block b0, or in a block placed after the first n0
@@ -1186,6 +1235,8 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
     tgt = n.kids[0]
     it = n.kids[1]
     body = n.kids[2].kids
+    if arg is None and len(hide) == 0 and self.refl_unroll_for(n):
+        return  # (a loop over constant attribute names: reflection.py)
     names: list[str] = []
     names_in(tgt, names)
     for nm in names:
@@ -1202,18 +1253,32 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
             self.for_rrange(tgt, self.range_args(args[0].kids[1:]), body, hide, arg)
             return
         for a in args:
-            if self.iterator_call(a) and (fn == "enumerate" or fn == "zip" or fn == "reversed"):
+            if self.iterator_call(a) and (fn == "enumerate" or fn == "zip" or fn == "reversed") and not (a.kids[0].s == "range" and RANGEC in self.classes):
                 self.err(f"{a.kids[0].s}() cannot be nested in {fn}() here; make it a list first, list({a.kids[0].s}(...))")
             if a.kind == "kw" and fn == "zip":
                 self.err(f"zip({a.s}=...) is not supported")
         if ((fn == "enumerate" or fn == "reversed") and len(args) == 1) or (fn == "zip" and len(args) > 0):
             evs: list[Val] = []
+            ownk: list[int] = []  # (whether the loop owns each argument's generator: owned_gen)
             for a in args:
+                self.gencall = ""
                 v = self.expr(a, "")
+                ownk.append(self.owned_gen(v, a))
+                if fn == "reversed" and v.t == RANGEC:
+                    # (a range object's numbers from the last, as reversed(range(...)) takes them)
+                    self.notnone(v, "TypeError: 'NoneType' object is not reversible")
+                    self.for_rrange(tgt, self.range_fields(v), body, hide, arg)
+                    return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts and "__reversed__" in self.classes[v.t].methods:
-                    # (CPython calls __reversed__, whose iterator the loop steps through forwards)
+                    # (CPython calls __reversed__, whose iterator the loop steps through forwards;
+                    # a __reversed__ that yields makes a generator the loop owns)
+                    self.gencall = ""
                     seq = self.obj_iter(v, "TypeError: 'NoneType' object is not reversible", "", "__reversed__")
-                    self.for_seq(tgt, [seq], "", body, "0", hide, arg)
+                    own = self.owned_gen(seq, a)
+                    if own > 0:
+                        self.owned_loop([seq], own == 2, tgt, [seq], "", body, "0", hide, arg, None)
+                    else:
+                        self.for_seq(tgt, [seq], "", body, "0", hide, arg)
                     return
                 if fn == "reversed" and v.t in self.classes and v.t not in self.nts:
                     # (CPython calls __reversed__, or __len__ and __getitem__, never __iter__)
@@ -1221,27 +1286,40 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 evs.append(v if is_opt(v.t) or v.t in self.classes else self.iterable(v))  # (None raises, and __iter__ runs, once all are evaluated)
             notit = "TypeError: 'NoneType' object is not reversible" if fn == "reversed" else "TypeError: 'NoneType' object is not iterable"
             seqs: list[Val] = []
-            if len(evs) == 1:
-                seqs.append(self.iterable(evs[0], notit))
-                self.for_seq(tgt, seqs, fn, body, "0", hide, arg)
-            else:
-                # zip() makes its iterators in turn, and a dict's or a set's records its size
-                # then, before a later operand's __iter__ runs (which may change it)
-                made = SeqStart()
-                for v in evs:
-                    seqs.append(self.iterable(v, notit))
+            # (zip() makes its iterators in turn, and a dict's or a set's records its size then,
+            # before a later operand's __iter__ runs, which may change it)
+            made = SeqStart() if len(evs) > 1 else None
+            for k in range(len(evs)):
+                self.gencall = ""
+                seqs.append(self.iterable(evs[k], notit))
+                if ownk[k] == 0 and (evs[k].t in self.classes or is_opt(evs[k].t)):
+                    ownk[k] = self.owned_gen(seqs[k], args[k])  # (an __iter__ that yields: the generator it made)
+                if made is not None:
                     self.seq_start(seqs[-1], fn, made)
+            owned = [seqs[k] for k in range(len(seqs)) if ownk[k] > 0]
+            if len(owned) > 0:
+                self.owned_loop(owned, len([k for k in ownk if k == 2]) > 0, tgt, seqs, fn, body, "0", hide, arg, made)
+            else:
                 self.for_seq(tgt, seqs, fn, body, "0", hide, arg, made)
             for i in range(len(args)):
                 self.close_temp(args[i], seqs[i])
             return
         if fn == "enumerate" and len(args) == 2 and (args[1].kind != "kw" or args[1].s == "start"):
+            self.gencall = ""
             seq = self.expr(args[0], "")
             seq = seq if is_opt(seq.t) or seq.t in self.classes else self.iterable(seq)
+            own = self.owned_gen(seq, args[0])
+            obj = is_opt(seq.t) or seq.t in self.classes
             a1 = args[1].kids[0] if args[1].kind == "kw" else args[1]
             st = self.ival(a1).v
+            self.gencall = ""
             seq = self.iterable(seq)
-            self.for_seq(tgt, [seq], fn, body, st, hide, arg)
+            if own == 0 and obj:
+                own = self.owned_gen(seq, args[0])  # (an __iter__ that yields: the generator it made)
+            if own > 0:
+                self.owned_loop([seq], own == 2, tgt, [seq], fn, body, st, hide, arg, None)
+            else:
+                self.for_seq(tgt, [seq], fn, body, st, hide, arg)
             self.close_temp(args[0], seq)
             return
     if it.kind == "call" and len(it.kids) == 1 and it.kids[0].kind == "attr":
@@ -1265,13 +1343,35 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
                 self.hide(hide)
                 return  # nothing to iterate: the body never runs (and its types are unknown), as for ()
             else:
-                self.for_seq(tgt, [self.method(o, m, [])], "", body, "0", hide, arg)
+                v = self.method(o, m, [])
+                own = 0
+                if v.t in self.classes:
+                    # (an object it returns is iterated as any other: iter() calls its __iter__,
+                    # a comprehension's iter() its iterator's again, as below; an __iter__ that
+                    # yields makes a generator the loop owns)
+                    self.gencall = ""
+                    v = self.iterable(v)
+                    own = self.owned_gen(v, it)
+                    if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(v.t):
+                        v = self.obj_iterator(v, "", f"'{tname(v.t)}' object is not iterable")
+                if own > 0:
+                    self.owned_loop([v], own == 2, tgt, [v], "", body, "0", hide, arg, None)
+                else:
+                    self.for_seq(tgt, [v], "", body, "0", hide, arg)
             return
+    self.gencall = ""
     if it.kind == "set" and folds(mk("tuple", "", it.line, it.kids)):
         # (CPython iterates the frozenset constant it makes of a display of constants)
         seq = self.set_display(it, "", True)
     else:
-        seq = self.iterable(self.expr(it, ""))
+        ev = self.expr(it, "")
+        if ev.t == RANGEC:
+            # a range object: its numbers, as for x in range(start, stop, step) takes them
+            self.notnone(ev, "TypeError: 'NoneType' object is not iterable")
+            rf = self.range_fields(ev)
+            self.for_range(tgt, rf[0], rf[1], rf[2], body, hide, arg, False)
+            return
+        seq = self.iterable(ev)
     if (n.s == "comp" or n.kind == "compfor") and self.is_iterator(seq.t):
         # a comprehension's iterator object (of any of its for clauses): CPython 3.13 takes iter()
         # of it again, its __iter__
@@ -1280,6 +1380,10 @@ def gen_for_(self, n: Node, hide: list[str], arg: IterArg | None = None) -> None
         self.iterarg(arg)
         self.hide(hide)  # (a comprehension's variables, which it forgets after the loop)
         return  # nothing to iterate: the body never runs (and its types are unknown)
+    own = self.owned_gen(seq, it)
+    if own > 0:
+        self.owned_loop([seq], own == 2, tgt, [seq], "", body, "0", hide, arg, None)
+        return
     self.for_seq(tgt, [seq], "", body, "0", hide, arg)
     self.close_temp(it, seq)
 
@@ -1293,6 +1397,9 @@ def gen_iterable(self, v: Val, msg: str = "TypeError: 'NoneType' object is not i
     if v.t in self.nts:
         self.notnone(v, msg)
         v = self.ntup(v, True)  # (the tuple of its fields)
+    if v.t == RANGEC:
+        self.notnone(v, msg)
+        return v  # (for_seq steps through its numbers)
     if v.t in self.classes:
         return self.obj_iterator(v, msg, f"'{tname(v.t)}' object is not iterable")
     if is_tuple(v.t) and "tupleiter" in self.opts and all(x == targs(v.t)[0] for x in targs(v.t)):
@@ -1329,8 +1436,9 @@ def gen_range_args(self, args: list[Node]) -> list[str]:
         self.err("range() takes 1 to 3 arguments")
     return vs
 
-def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None = None) -> None:
-    if step.startswith("%") or int(step) == 0:
+def gen_for_range(self, tgt: Node, start: str, stop: str, step: str, body: list[Node], hide: list[str], arg: IterArg | None = None, check: bool = True) -> None:
+    # check: whether step may be 0 (not a range object's)
+    if check and (step.startswith("%") or int(step) == 0):
         self.guard(self.num_cmp('==', Val(step, "int"), Val('0', "int")).v, "ValueError: range() arg 3 must not be zero")
     self.iterarg(arg)
     self.hide(hide)
@@ -1428,6 +1536,8 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     # the next sequence's __next__ runs (which may change it), as zip() takes them
     nexts = len([s for s in seqs if self.is_iterator(s.t)]) > 0
     c = self.stop_catch() if nexts else None
+    # (so is a generator's, before another resumes it: zip(g, g) takes two of its items)
+    now = nexts or len([s for s in seqs if is_gen(s.t)]) > 0
     lc = self.label()
     ls = self.label()
     le = self.label()
@@ -1440,7 +1550,7 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
     i = self.mload('int', ctr)
     at: list[str] = []
     vals: list[Val] = []
-    if mode == "enumerate" and nexts:
+    if mode == "enumerate" and now:
         vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
     for k in range(len(seqs)):
         s = seqs[k]
@@ -1457,6 +1567,11 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
             j = self.rt("pys_file_readline", "ptr", [f"ptr {s.v}"])
             ok = self.num_cmp('!=', Val(self.mload('int', j), "int"), Val('0', "int")).v
             nx = ""
+        elif is_gen(s.t):
+            # a generator runs to its next yield (the address of its promise, which holds the value)
+            j = self.gen_next(s, le)
+            ok = "true"
+            nx = ""
         elif is_set(s.t):
             # the slot of the next element, as CPython's set iterator finds it
             j = self.rt("pys_set_next", "i64", [f"ptr {s.v}", f"i64 {self.mload('int', st[k])}", f"i64 {used[k]}"])
@@ -1471,6 +1586,10 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
                 j = self.rt("pys_dict_next", "i64", [f"ptr {s.v}", f"i64 {p}", f"i64 {used[k]}", f"i64 {i}"])
                 nx = self.scalar('add', [Val(j, 'int'), Val('1', 'int')])
             ok = self.num_cmp('>=', Val(j, "int"), Val('0', "int")).v
+        elif s.t == RANGEC:
+            # (item i of a range object, while i is below its count, which is unsigned)
+            j = i
+            ok = self.int_ucmp('<', Val(i, "int"), Val(st[k], "int")).v
         elif mode == "reversed":
             j = self.scalar('sub', [Val(self.scalar('sub', [Val(st[k], 'int'), Val('1', 'int')]), 'int'), Val(i, 'int')])
             # 0 <= j < the current length, as CPython's reversed iterator checks
@@ -1487,11 +1606,11 @@ def gen_for_seq(self, tgt: Node, seqs: list[Val], mode: str, body: list[Node], s
         if is_dict(s.t) or is_set(s.t):
             self.mstore('int', nx, st[k])
         at.append(j)
-        if c is not None:
+        if now:
             vals.extend(self.seq_item(s, j, mode))
-    if mode == "enumerate" and not nexts:
+    if mode == "enumerate" and not now:
         vals.append(Val(i if start == "0" else self.iop("+", i, start), "int"))
-    for k in range(len(seqs) if not nexts else 0):
+    for k in range(len(seqs) if not now else 0):
         vals.extend(self.seq_item(seqs[k], at[k], mode))
     if len(vals) == 1 and mode != "zip":
         self.assign(tgt, vals[0])
@@ -1526,8 +1645,14 @@ def gen_seq_item(self, s: Val, j: str, mode: str) -> list[Val]:
         return [Val(self.rt("pys_bytes_get", "i64", [f"ptr {s.v}", f"i64 {j}"]), "int")]
     if s.t == "file":
         return [Val(j, "str")]
+    if is_gen(s.t):
+        return [self.from_slot(self.mload('int', j), gelem(s.t))]  # (j: its promise, gen_next)
     if is_set(s.t):
         return [self.from_slot(self.rt("pys_set_key", "i64", [f"ptr {s.v}", f"i64 {j}"]), selem(s.t))]
+    if s.t == RANGEC:
+        # (start + j * step, which wraps: an item of the range fits)
+        rf = self.range_fields(s)
+        return [Val(self.scalar('add', [Val(rf[0], 'int'), Val(self.scalar('mul', [Val(j, 'int'), Val(rf[2], 'int')]), 'int')]), "int")]
     kv = targs(s.t)
     out: list[Val] = []
     if mode != "values":
@@ -1542,13 +1667,21 @@ def gen_seq_start(self, s: Val, mode: str, made: SeqStart) -> None:
     # length, from which reversed() counts down (an iterator object keeps its own)
     if is_set(s.t) and mode == "reversed":
         self.err(f"'{tname(s.t)}' object is not reversible")
+    if is_gen(s.t) and mode == "reversed":
+        self.err("'generator' object is not reversible")
     if self.is_iterator(s.t) and mode != "reversed":
         made.st.append("")
         made.used.append("")
         return
-    if not (s.t == "str" or s.t == "bytes" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]")):
+    if s.t == RANGEC and mode != "reversed":
+        # (a range object's count of numbers, unsigned: item i is start + i * step)
+        rf = self.range_fields(s)
+        made.st.append(self.rt("pys_range_len", "i64", [f"i64 {rf[0]}", f"i64 {rf[1]}", f"i64 {rf[2]}"]))
+        made.used.append("")
+        return
+    if not (s.t == "str" or s.t == "bytes" or is_list(s.t) or is_vtuple(s.t) or is_dict(s.t) or is_set(s.t) or (s.t == "file" and mode != "reversed") or (is_tuple(s.t) and s.t != "tuple[]") or is_gen(s.t)):
         self.err(f"cannot iterate over {s.t}" if s.t != "file" else "a file is not reversible")
-    if s.t == "file":
+    if s.t == "file" or is_gen(s.t):
         made.st.append("")
         made.used.append("")
         return
@@ -1570,7 +1703,10 @@ def gen_stop_catch(self) -> StopCatch:
     # before the first __next__ call (next_in); stop_landing places its landing block
     if not self.eh:
         self.err("internal error: an iterator's __next__ needs exception handling (needs_eh)")
-    c = StopCatch(Val(self.rt("pys_try_mark", "i64", []), "int"), self.rt("pys_exc_handled", "ptr", []), self.alloca("exc", ""), self.label())
+    mark = Val(self.rt("pys_try_mark", "i64", []), "int")
+    if self.fn.gbase != "":
+        mark = Val(self.scalar('sub', [mark, Val(self.mload('int', self.fn.gbase), 'int')]), "int")  # (see landing)
+    c = StopCatch(mark, self.rt("pys_exc_handled", "ptr", []), self.alloca("exc", ""), self.label())
     c.tr.landing = c.landing
     self.fn.tries.append(c.tr)
     return c

@@ -1,0 +1,90 @@
+c Counter({'a': 3, 'b': 2, 'c': 1})
+len 3
+sum 6
+values [3, 2, 1]
+keys ['a', 'b', 'c']
+list ['a', 'b', 'c']
+items [('a', 3), ('b', 2), ('c', 1)]
+c['b'] 2
+c['z'] 0
+'c' in c True
+'z' in c False
+get b 2
+get z 10
+== dict True
+repr "Counter({'a': 3, 'b': 2, 'c': 1})"
+most_common [('a', 3), ('b', 2), ('c', 1)]
+most_common(i) []
+most_common(i) [('a', 3)]
+most_common(i) [('a', 3), ('b', 2)]
+most_common(i) [('a', 3), ('b', 2), ('c', 1)]
+most_common(i) [('a', 3), ('b', 2), ('c', 1)]
+elements 'aaabbc'
+c True
+elements 'aaaaffff'
+pop 4
+'f' in c False
+elem in c False
+elem in c False
+elem in c False
+c == {} True
+repr 'Counter()'
+Counter({'a': 55, 'b': 33, 'c': 1})
+NotImplementedError: Counter.fromkeys() is undefined.  Use Counter(iterable) instead.
+total 15
+abracadabra [('a', 5), ('b', 2), ('r', 2), ('c', 1), ('d', 1)]
+xyz [('x', 2), ('y', 2), ('z', 2), ('p', 2), ('d', 2), ('q', 2)]
+elements ['a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'r', 'r', 'c', 'd', ' ', 's', 's', 'i', 'i', 'm', 'm', 'l']
++p True
+-p True
+p + q True
+p - q True
+p | q True
+p & q True
+p += q True
+p -= q True
+p |= q True
+p &= q True
+update True
+subtract True
+self [('self', 42)]
+iterable [('iterable', 42)]
+is not True
+== Counter({'which': 2, 'witch': 1, 'had': 1, 'witches': 1, 'wrist': 1, 'watch': 1})
+is not True
+== Counter({'which': 2, 'witch': 1, 'had': 1, 'witches': 1, 'wrist': 1, 'watch': 1})
+is not True
+== Counter({'which': 2, 'witch': 1, 'had': 1, 'witches': 1, 'wrist': 1, 'watch': 1})
+elements [' ', ' ', ' ', ' ', ' ', ' ', ' ', 'a', 'a', 'b', 'e', 'e', 'e', 'e', 'e', 'e', 'e', 'h', 'h', 'h', 'h', 'l', 'l', 'l', 'l', 'o', 'r', 's', 's', 's', 's', 's', 's', 's', 's', 't', 'y']
+sorted [' ', 'a', 'b', 'e', 'h', 'l', 'o', 'r', 's', 't', 'y']
+dict True
+set True
+in True
+in True
+in True
+c True
+ok
+ok
+is True
+is True
+is True
+is True
+c Counter({'h': 50, 'g': 40, 'c': 8, 'd': 0, 'b': -2, 'e': -5, 'a': -6, 'f': -30})
+c Counter({'h': 50, 'g': 40, 'c': 8, 'd': 0, 'b': -2, 'e': -5, 'a': -6, 'f': -30})
+c Counter({'d': 1, 'b': 0, 'a': -1, 'c': -1, 'e': -1})
+self [('self', -42)]
+iterable [('iterable', -42)]
++c True
+-c True
+d {'a': 5, 'b': 2, 'r': 2, 'c': 1, 'd': 1}
+eq True
+ne True
+le True
+not le False
+lt True
+not lt False
+ge True
+not ge False
+gt True
+not gt False
+[exit 0]

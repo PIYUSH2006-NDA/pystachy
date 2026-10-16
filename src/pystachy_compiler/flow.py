@@ -14,7 +14,7 @@ from src.pystachy_compiler.analysis import (
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.syntax import Node, mk
+from src.pystachy_compiler.syntax import Node, mentions, mk
 from src.pystachy_compiler.utils import is_const
 
 
@@ -44,10 +44,15 @@ class Flow:
         self.me = ""
         self.fields: list[str] = []
         self.unsafe: dict[str, bool] = {}
+        # hasattr(self, "f") is the builtin (probes): it reads f's flag (probed: where f may be
+        # unassigned), and f is assigned where it is true
+        self.probes = False
+        self.probed: dict[str, bool] = {}
         # in an exception class's __init__: the fields super().__init__() surely assigns, whether it
         # lets self escape, and whether this __init__ does
         self.sup: list[str] = []
         self.base = ""  # (the class's base, whose __init__ it may call as Base.__init__(self, ...))
+        self.sbase = ""  # (the base of the class defining __init__, whose methods super().m(...) calls)
         self.leak = False
         self.escaped = False
         # the variables of the function analysed (its locals and those it takes from around it),
@@ -157,6 +162,12 @@ class Flow:
         while len(self.log) > n:
             self.log.pop()
             self.was.pop()
+
+    def probe(self, e: Node) -> str:
+        # the field that test e, hasattr(self, "f") (probes), finds assigned when true, or ""
+        if self.probes and e.kind == "call" and len(e.kids) == 3 and e.kids[0].kind == "name" and e.kids[0].s == "hasattr" and e.kids[1].kind == "name" and e.kids[1].s == self.me and e.kids[2].kind == "str" and e.kids[2].s in self.fields:
+            return e.kids[2].s
+        return ""
 
 
 # ---------------------------------------------------------------- code generator
@@ -285,6 +296,44 @@ def gen_flow_function(self, f: FnInfo, gl: dict[str, bool], safe: dict[str, bool
         else:
             self.gflag[nm] = True
 
+def self_fields(n: Node, me: str, fields: list[str], out: dict[str, bool]) -> bool:
+    # whether code n uses the name me only as me.f, of a field f (each kept in out)
+    if n.kind == "attr" and n.kids[0].kind == "name" and n.kids[0].s == me:
+        if n.s not in fields:
+            return False
+        out[n.s] = True
+        return True
+    if (n.kind == "name" and n.s == me) or (n.kind == "deco" and (n.s == me or n.s.startswith(me + "."))):
+        return False
+    for k in n.kids:
+        if not self_fields(k, me, fields, out):
+            return False
+    return True
+
+
+def gen_fl_super(self, fl: Flow, m: str) -> bool:
+    # super().m(...) in __init__ (field mode): whether self escapes no further than to the fields
+    # it reads, which are marked. super() dispatches statically: the method m of the base (or
+    # BaseException's __str__ or __repr__, which read only hidden fields). One that uses self only
+    # as self.f, of fields f, reads only those (as a closure does, fl_nested); any other use
+    # (passing self on, self.m, str(self), super()) may call code that reads any field
+    if fl.sbase not in self.classes or m not in self.classes[fl.sbase].methods:
+        return True
+    f = self.classes[fl.sbase].methods[m]
+    if f.deco != "":
+        return True  # (a static or class method, given no object)
+    if f.prop or f.synthetic or f.node.kind != "def" or len(f.params) == 0 or mentions(f.node.kids[2], ["super"]):
+        return False
+    used: dict[str, bool] = {}
+    if not self_fields(f.node.kids[2], f.params[0], fl.fields, used):
+        return False
+    if " dead" not in fl.defd:
+        for x in used:
+            if "." + x not in fl.defd:
+                fl.unsafe[x] = True
+    return True
+
+
 def gen_fl_nested(self, fl: Flow, n: Node) -> None:
     # a def or lambda n in the code fl analyses: its defaults and decorators run here. The
     # variables of fl's function that it reads must be assigned here, but a def's own name: a
@@ -298,6 +347,19 @@ def gen_fl_nested(self, fl: Flow, n: Node) -> None:
             self.fl_expr(fl, mk("call", "", dx.line, [self.deco_callee(dx, self.flowmod)]))  # (its decorators, called)
     free: dict[str, bool] = {}
     closure_free(d, free)
+    if fl.me in free:
+        # (in __init__, fl_fields: a function that takes self may run later and read the fields
+        # not assigned here. One that uses self only as self.f, of fields f, reads only those (a
+        # flag tests each); any other use may pass self anywhere, which reads any field)
+        used: dict[str, bool] = {}
+        if self_fields(d, fl.me, fl.fields, used):
+            if " dead" not in fl.defd:
+                for f in used:
+                    if "." + f not in fl.defd:
+                        fl.unsafe[f] = True
+        else:
+            fl.exposed()
+            fl.escaped = True
     caps: dict[str, bool] = {}
     late: list[str] = []
     own = n.s if n.kind == "def" and not self.applies(n, False, fl.scope) else ""  # (a decorated def's name binds what the decorators give, later)
@@ -306,6 +368,11 @@ def gen_fl_nested(self, fl: Flow, n: Node) -> None:
             caps[x] = True
             if x != own and x in fl.tracked and x not in fl.defd and " dead" not in fl.defd:
                 late.append(x)
+    if fl.me != "":
+        # field mode (fl_fields): flow_function's pass over __init__ has set n.mchk and marked
+        # n's body, with the variables it takes; this Flow tracks no variable, so a pass here
+        # would clear n.mchk and mark the reads of those that share a global's name
+        return
     n.mchk = " ".join(late)
     if n.kind == "def":
         fl.put(n.s)
@@ -420,6 +487,9 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         if init.params[0] not in asg:
             # (if __init__ rebinds self, no assignment is known to reach the new object)
             fl.me = init.params[0]
+            fl.sbase = self.classes[init.cls].base if init.cls in self.classes else ""
+            # (outside a hierarchy, whose reads keep their flags' tests; the builtin hasattr)
+            fl.probes = ci.exc == "" and ci.tag == 0 and "hasattr" not in asg and "hasattr" not in init.params and not self.bound("hasattr")
             self.fl_stmts(fl, init.node.kids[2].kids)
         fl.exposed()
         ci.leak = fl.escaped
@@ -428,13 +498,15 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         # assigning its own fields. Keep assignment bits in the root layout so base-typed
         # reads remain safe for every ordinary subclass, including future call paths.
         checked = ci.tag > 0 and not f.startswith(" ")
-        if (checked or f in fl.unsafe or ci.name + "." + f in self.cvars) and f not in ci.fflag:
+        if (checked or f in fl.unsafe or f in fl.probed or ci.name + "." + f in self.cvars) and f not in ci.fflag:
             if ci.fpos[f] < nb and f in fl.unsafe:
                 # (the base's code, which reads it with no flag to test)
                 self.line = ci.node.line
                 self.err(f"{short(ci.name)}.__init__ may leave field '{f}' of {short(ci.base)} unassigned where it is read: assign it, or call super().__init__(...) first")
             ci.fflag[f] = len(ci.fields) + ci.nflag
             ci.nflag += 1
+            if not checked and f not in fl.unsafe and ci.name + "." + f not in self.cvars:
+                ci.fsure[f] = True  # (only hasattr tests its flag: no read finds it unassigned)
 
 def gen_default_home(self, ci: ClassInfo, fl: str) -> ClassInfo:
     # the class whose class body binds class attribute fl of ci: ci's, or the base's that an
@@ -532,6 +604,10 @@ def gen_user_call(self, n: Node) -> bool:
         return True
     if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s in self.classes:
         return True  # C.m(...): a static or class method
+    if n.kind == "raise":
+        for x in n.kids:
+            if x.kind == "name" and x.s in self.classes:
+                return True  # raise E (or from E): the class is called, which runs its __init__
     if n.kind == "uimport":
         # it runs a module's code, which can call this module's functions only if it imports
         # this module (circular imports): as this module imports it, only if both are in one
@@ -571,10 +647,16 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
         self.fl_target(fl, n.kids[0])
     elif k == "if":
         self.fl_expr(fl, n.kids[0])
+        neg = n.kids[0].kind == "unary" and n.kids[0].s == "not"
+        f = fl.probe(n.kids[0].kids[0] if neg else n.kids[0])  # (the branch where hasattr(self, "f") is true has f)
         mark = len(fl.log)
+        if f != "" and not neg:
+            fl.put("." + f)
         self.fl_stmts(fl, n.kids[1].kids)
         then = fl.since(mark)
         fl.undo(mark)
+        if f != "" and neg:
+            fl.put("." + f)
         self.fl_stmts(fl, n.kids[2].kids)
         fl.join(then, mark)
     elif k == "while" or k == "for":
@@ -794,17 +876,30 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
             for c in e.kids[n:]:
                 self.fl_expr(fl, c)
             fl.undo(mark)
+    elif fl.probe(e) != "":
+        # (hasattr(self, "f") reads f's flag and lets self escape no further)
+        if "." + e.kids[2].s not in fl.defd and " dead" not in fl.defd:
+            fl.probed[e.kids[2].s] = True
     elif k == "call":
         c = e.kids[0]
-        if c.kind == "attr":
+        # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
+        sup = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "call" and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super"
+        if sup:
+            for a in c.kids[0].kids[1:]:
+                self.fl_expr(fl, a)
+        elif fl.me != "" and c.kind == "attr" and c.kids[0].kind == "call" and len(c.kids[0].kids) == 1 and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super" and "super" not in self.funcs and self.fl_super(fl, c.s):
+            pass  # (super().m(...), which reads only the fields fl_super marks)
+        elif c.kind == "attr":
             self.fl_expr(fl, c.kids[0])
+        elif fl.me != "" and c.kind == "name" and c.s == "super" and c.s not in self.funcs:
+            # super() otherwise (super().m(...)): self, which the base's methods are given, as self.m(...)
+            fl.exposed()
+            fl.escaped = True
         elif c.kind != "name" or (c.s not in self.funcs and c.s not in self.classes) or c.s == fl.me:
             self.fl_expr(fl, c)  # (o(args) reads variable o, whose object is called; self shadows a function or class)
         elif c.s in fl.tracked and c.s not in fl.defd and " dead" not in fl.defd:
             c.chk = True
             fl.marks[c.s] = True
-        # super().__init__(...) in an exception class's __init__ (fl_fields), or Base.__init__(self, ...)
-        sup = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "call" and c.kids[0].kids[0].kind == "name" and c.kids[0].kids[0].s == "super"
         based = fl.me != "" and c.kind == "attr" and c.s == "__init__" and c.kids[0].kind == "name" and c.kids[0].s == fl.base and len(e.kids) > 1 and e.kids[1].kind == "name" and e.kids[1].s == fl.me
         for i in range(2 if based else 1, len(e.kids)):
             self.fl_expr(fl, e.kids[i])

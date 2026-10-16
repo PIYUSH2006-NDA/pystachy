@@ -1,0 +1,6 @@
+TypeError: object of type 'NoneType' has no len()
+True
+sub
+base
+one
+[exit 0]

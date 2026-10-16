@@ -1,0 +1,15 @@
+  eval 1
+  eval 2
+made
+100
+[2000] []
+0 30 0
+[2, 4] [3, 6]
+lazy made
+  eval 7
+got 7
+  eval 8
+got 8
+(2, 3) b none
+[(0, 'x'), (1, 'y')]
+[exit 0]

@@ -5,7 +5,7 @@ from src.pystachy_compiler.analysis import calls_init, local_names, stmt_walrus
 from src.pystachy_compiler.diagnostics import shown
 from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
-from src.pystachy_compiler.names import short
+from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     CLASSVAR,
     CTYPES,
@@ -20,7 +20,10 @@ from src.pystachy_compiler.specs import (
     OPTTYPES,
     PATHLIKE,
     PYBUILTINS,
+    RANGEC,
+    RANGES,
     SPECIAL,
+    STANDINS,
     STUB,
     TYPEARGS,
     TYPEVAR,
@@ -28,7 +31,6 @@ from src.pystachy_compiler.specs import (
     TYPING,
     UNARY,
     UNCALLED,
-    UNSUPPORTED,
     exc_derives,
     is_excname,
 )
@@ -36,10 +38,12 @@ from src.pystachy_compiler.syntax import Node, has_kind, has_value_return, menti
 from src.pystachy_compiler.utils import (
     clone,
     elem,
+    gelem,
     is_callable,
     is_const,
     is_dict,
     is_fset,
+    is_gen,
     is_list,
     is_opt,
     is_set,
@@ -117,6 +121,8 @@ def gen_ann(self, n: Node) -> str:
             return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
         if s == "int" or s == "float" or s == "bool" or s == "str" or s == "bytes" or s in self.classes:
             return s
+        if s == "range" and RANGEC in self.classes:
+            return RANGEC  # (the class of range objects, lib/_pystachy_range.py)
         if self.imported(s).startswith("ffi.") and self.imported(s)[4:] in CTYPES:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
         if self.imported(s) == "ffi.c_buf":
@@ -160,6 +166,11 @@ def gen_ann(self, n: Node) -> str:
         if base.startswith("!"):
             return base
         a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
+        if base == "iterator" or base == "generator":
+            # Iterator[T], Generator[Y, None, R] (typing's or collections.abc's): a generator object
+            # (an iterator of another kind, as #477 makes them, is not one of these)
+            yr = self.gen_ann_ret(n)
+            return "!" + yr[0] if len(yr) == 1 else self.ctype("gen", [yr[0]])
         if base == "callable":
             # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
             if len(a) != 2 or (a[0].kind != "list" and a[0].kind != "ellipsis"):
@@ -666,7 +677,7 @@ def gen_typing_forms(self, m: Mod, body: list[Node], cls: bool) -> list[Node]:
         elif a is not st and len(st.kids) == 3 and self.typing_ref(a) == "Final":
             # (a field, typed by its constant)
             v = st.kids[2]
-            if v.kind == "int" or v.kind == "float" or v.kind == "str":
+            if v.kind == "int" or v.kind == "float" or v.kind == "str" or v.kind == "bytes":
                 st.kids[1] = mk("name", v.kind, v.line, [])
             elif v.kind == "True" or v.kind == "False":
                 st.kids[1] = mk("name", "bool", v.line, [])
@@ -723,9 +734,25 @@ def gen_optional(self, t: str) -> str:
     if is_union(t):
         # (a union that holds a class's objects may be None, as the class's objects may)
         return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
-    if (t == "str" or t == "bytes" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t)) and "?" not in t:
+    if (t == "str" or t == "bytes" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t) or is_gen(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
+
+def gen_ann_none(self, n: Node, seen: list[str]) -> bool:
+    # does annotation n make None one of its members (C | None, Optional[C], Union[C, None]; in
+    # a string or a type alias's value too), which the type of a class C, including None
+    # already, does not tell (see optional). seen: the aliases being looked through
+    k = n.kind
+    if k == "str":
+        return self.ann_none(self.parse_expr(n.s), seen)
+    if k == "binop" and n.s == "|":
+        return self.ann_none(n.kids[0], seen) or self.ann_none(n.kids[1], seen)
+    b = n.kids[0] if k == "index" else n
+    if b.kind == "name" and b.s in self.taliases and b.s not in seen:
+        return self.ann_none(self.alias_value(b.s), seen + [b.s])
+    if k == "index" and (b.kind == "name" or b.kind == "attr") and (self.ann_base(b) == "optional" or self.ann_base(b) == "union"):
+        return self.ann_base(b) == "optional" or len([x for x in (n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]) if self.ann_none(x, seen)]) > 0
+    return k == "None"
 
 def gen_join(self, a: str, b: str) -> str:
     # the type of a value that is an a or a b, where None and optional types meet (T and None
@@ -968,12 +995,13 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         f.generic = True  # (-> Box: what it returns is one of the class's specializations)
     if cls in self.classes and self.classes[cls].origin != "" and (template_ok(d.s) or init):
         f.generic = True  # (a specialization's methods: compiled where they are called, see specialize)
+    gbad = self.gen_declare(f, d) if has_kind(d.kids[2], "yield") and not self.rtmode else ""
     # an __iter__ annotated -> Iterator[T] (or Iterable[T]) that returns something other than
     # iter(x), its own object or another iterator object: its return is inferred, as an
     # unannotated one's is (an iterator class's __next__ gives the items)
-    selfiter = cls != "" and d.s == "__iter__" and d.kids[1].kind != "noann" and self.iter_item(d.kids[1]) is not None and other_return(d.kids[2])
+    selfiter = cls != "" and d.s == "__iter__" and d.kids[1].kind != "noann" and self.iter_item(d.kids[1]) is not None and other_return(d.kids[2]) and not f.gen
     protocol = cls != "" and (d.s == "__iter__" or d.s == "__next__") and d.kids[1].kind == "noann" and d not in held
-    if ((d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s))) or selfiter or protocol) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
+    if not f.gen and ((d.kids[1].kind == "noann" and (cls == "" or template_ok(d.s))) or selfiter or protocol) and not f.extern and not f.export and not f.pyexport and has_value_return(d.kids[2]):
         # The declared parameter types still coerce every call. Reuse return
         # inference even when all parameter types are already concrete.
         # Initializers and other implicit special methods keep their contracts.
@@ -1080,12 +1108,12 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         if f.clsuse:
             f.orig = clone(d)
         rename(d.kids[2], ps[0].s, cls)
-    if not inherited and bad == "" and has_kind(d.kids[2], "yield"):
-        bad = UNSUPPORTED["yield"]  # a generator function
-        if cls != "" and (d.s == "__iter__" or d.s == "__reversed__"):
-            bad += f": {d.s} can return iter(xs) of a list xs of the items"
-    tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s))
-    if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret:
+    if bad == "" and gbad != "":
+        bad = gbad  # (a generator function whose yield or annotation Pystachy does not support)
+    elif bad == "" and self.rtmode and has_kind(d.kids[2], "yield"):
+        bad = "generator functions are not supported in runtime.py"
+    tret = d.kids[1].kind != "noann" and f.generic and self.tmpl_ann(d.kids[1]) and not (cls in self.classes and self.classes[cls].origin != "" and not template_ok(d.s)) and not f.gen
+    if bad == "" and self.lib and d.kids[1].kind != "noann" and not tret and not f.gen:
         it = self.iter_item(d.kids[1]) if cls != "" and (d.s == "__iter__" or d.s == "__reversed__") else None  # (see iter_ann)
         why = self.ann_problem(d.kids[1], True) if it is None else self.ann_problem(it, False)
         if why != "":
@@ -1097,6 +1125,8 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
     f.bad = bad
     if bad != "" and self.lib:
         f.ret = "None"
+    elif f.gen:
+        pass  # (gen_declare: gen[Y] from its annotation, or decided by its first yield)
     elif selfiter:
         f.ret = ""  # (its iterator object's class, decided by its first return)
     elif d.kids[1].kind != "noann" and cls != "" and (d.s == "__iter__" or d.s == "__reversed__") and self.iter_ann(d.kids[1]) != "":
@@ -1632,7 +1662,10 @@ def gen_frozen_store(self, o: Val, name: str, delete: bool = False) -> bool:
     return True
 
 def gen_frozen(self, t: str, name: str) -> None:
-    # a NamedTuple's fields are assigned only by its __init__
+    # a NamedTuple's fields are assigned only by its __init__, a range object's by none (as
+    # CPython's start, stop and step are read-only)
+    if t == RANGEC and self.curfn.mod != RANGES:
+        self.err("readonly attribute")
     if t in self.nts and not (self.curfn.name == "__init__" and self.curfn.cls == t):
         self.err(f"cannot assign to field '{name}' of NamedTuple {short(t)} (AttributeError: can't set attribute); make a new one with _replace({name}=...)")
     if t in self.classes and name in self.classes[t].fconst and not (self.curfn.name == "__init__" and self.curfn.cls == t):
@@ -1863,7 +1896,7 @@ def guess_scope(f: FnInfo) -> list[Node]:
 
 def gen_guess(self, e: Node, f: FnInfo) -> str:
     k = e.kind
-    if k == "int" or k == "float" or k == "str":
+    if k == "int" or k == "float" or k == "str" or k == "bytes":
         return k
     if k == "True" or k == "False":
         return "bool"
@@ -1993,6 +2026,8 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
             return helper.ret
         if c == "str" or c == "int" or c == "float" or c == "bool":
             return c
+        if c == "range" and RANGEC in self.classes and not self.bound(c):
+            return RANGEC  # (where it is a value)
         if c == "len" or c == "ord":
             return "int"
         if c == "input" or c == "repr" or c == "chr" or c == "ascii" or c == "hex" or c == "oct" or c == "bin":
@@ -2004,7 +2039,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if c == "next" and (len(e.kids) == 2 or len(e.kids) == 3) and not self.bound(c) and self.compiling:
             # (what the iterator's __next__ returns, or a file's line; with a default, both's)
             t = unopt(self.guess(e.kids[1], f))
-            r = "str" if t == "file" else self.next_type(t) if self.is_iterator(t) else ""
+            r = "str" if t == "file" else self.next_type(t) if self.is_iterator(t) else gelem(t) if is_gen(t) else ""
             return r if r == "" or len(e.kids) == 2 else self.join(r, self.guess(e.kids[2], f))
     if k == "call" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name" and e.kids[0].kids[0].s in self.classes:
         ms = self.classes[e.kids[0].kids[0].s].methods  # C.m(...): a static or class method
@@ -2036,7 +2071,7 @@ def gen_guess(self, e: Node, f: FnInfo) -> str:
         if arg.kind == "call" and arg.kids[0].kind == "name" and arg.kids[0].s == "range" and not self.bound("range"):
             return "list[int]"
         t = self.guess(arg, f)
-        return t if is_list(t) or t.startswith("!") else ""
+        return t if is_list(t) or t.startswith("!") else "list[int]" if t == RANGEC else ""
     if k == "binop":
         a = self.guess(e.kids[0], f)
         b = self.guess(e.kids[1], f)
@@ -2063,8 +2098,11 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
     m = a.kids[0].s if a.kind == "call" and len(a.kids) == 1 and a.kids[0].kind == "attr" else ""
     t = unopt(self.guess(a.kids[0].kids[0] if m == "keys" or m == "values" or m == "items" else a, f))
     name = ""
-    if t.startswith("!") or t == "file":
+    if t.startswith("!") or t == "file" or is_gen(t):
         return t
+    if t == RANGEC and m == "":
+        c = ITERS + "$range_iterator"
+        return self.specialize(c, ["int", "int", "int"], {}, False, {}) if c in self.tmpl else ""
     if is_dict(t) and (m == "keys" or m == "values" or m == "items"):
         name = "dict_keyiterator" if m == "keys" else "dict_valueiterator" if m == "values" else "dict_itemiterator"
     elif m == "keys" or m == "values" or m == "items":
@@ -2076,7 +2114,7 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
             t = it.ret
         else:
             r = self.instance(it, [t], []).ret if it.bad == "" and it.generic and it.ret == "" else it.ret
-            return r if it.bad == "" and self.is_iterator(r) else ""
+            return r if it.bad == "" and (self.is_iterator(r) or is_gen(r)) else ""
     elif is_list(t):
         name = "list_iterator"
     elif t == "str":
@@ -2108,6 +2146,9 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
             self.err(f'str.{name} is a method: call it on a string literal, "...".{name}(...) (methods are not values; map() takes "...".{name})')
         self.err(f"type {typestr(o.t)} has no attribute '{name}'")
     ci = self.classes[o.t]
+    if o.t == RANGEC and self.curfn.mod != RANGES and name not in ci.ftypes:
+        # (CPython's range has no other attributes, and its methods cannot be assigned)
+        self.err(f"'range' object attribute '{name}' is read-only" if store and name in ci.methods else f"'range' object has no attribute '{name}'" + (" and no __dict__ for setting new attributes" if store else ""))
     if name in ci.methods and ci.methods[name].prop:
         self.err(f"property '{name}' of '{short(o.t)}' is read-only")
     if store and ci.slotlimit and name not in ci.slots:
@@ -2140,9 +2181,13 @@ def gen_fn_attr_read(self, o: Val, name: str) -> None:
     # o.name read through object o, where its class binds name to a function in its body
     # (name = f): CPython binds o to the function's first parameter there, as for a method, which
     # is not supported. A builtin function (fn[b:...]) or a bound method that a class attribute
-    # holds is read as itself through an object, as in CPython
+    # holds is read as itself through an object, as in CPython, and so is a function of a
+    # stand-in for a C module (STANDINS: encodings.utf_8's _buffer_decode = codecs.utf_8_decode),
+    # which is CPython's builtin
     ci = self.classes[o.t]
     t = ci.ftypes.get(name, "")
+    if t.startswith("fn[f:") and owner(t[5:-1]) in STANDINS:
+        return
     if name in ci.fdefault and (t.startswith("fn[f:") or t.startswith("fn[c:") or t.startswith("fn[u:")):
         self.err(f"class attribute '{name}' of '{short(o.t)}' holds a function ({name} = ...): reading it through an object is not supported (CPython binds the object to the function's first parameter, as for a method); read it through the class ({short(o.t)}.{name}), or define {name} with def")
 
@@ -2212,7 +2257,7 @@ def gen_getfield(self, o: Val, p: Val, name: str) -> Val:
             if is_opt(p.t) or is_union(p.t):
                 self.wide[self.curfn.ll + r] = True  # (not narrowed, see coerce)
             return Val(r, p.t)
-    if name in ci.fflag:
+    if name in ci.fflag and name not in ci.fsure:
         f = self.fgep(o, ci.fflag[name])
         if bad == "":
             bad = self.scalar('xor', [Val(self.mem_load(Val(f, '*bool')).v, 'bool'), Val('true', 'bool')])
