@@ -6,7 +6,7 @@
 # from test_cmp_to_key, test_cmp_to_key_arguments and test_bad_cmp
 # are PARTIAL: mixed-type keys, invalid arguments as runtime failures, arbitrary
 # comparator results and collections.abc.Hashable reflection are unsupported.
-# test_hash maps to a compile rejection in errors/lib_functools_cmp_to_key_hash.py.
+# test_hash keeps its TypeError, whose message is printed; not its Hashable reflection.
 from functools import cmp_to_key
 
 
@@ -65,6 +65,18 @@ except ZeroDivisionError:
     pass
 else:
     raise AssertionError('comparator failure was swallowed')
+
+
+def mycmp(x: int, y: int) -> int:
+    return y - x
+
+
+try:
+    hash(cmp_to_key(mycmp)(10))
+except TypeError as e:
+    print(e)
+else:
+    raise AssertionError('key objects are hashable')
 
 # Additional subset cases exercise every comparison, obj writes, separate
 # factories, homogeneous strings, stable and reverse sorting, min/max, closures.

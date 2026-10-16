@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 import sys
-from src.pystachy_compiler.analysis import all_imports, collect, module_ints, needs_eh, none_assigns
+from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -12,6 +12,7 @@ from src.pystachy_compiler.specs import (
     EXCEPTIONS,
     INERT,
     INERT_DECOS,
+    ITERS,
     MODATTRS,
     PURE,
     PYBUILTINS,
@@ -51,18 +52,23 @@ def gen_subclass_problem(self, st: Node) -> str:
     # why class statement st, which names bases, cannot be compiled, or "": one ordinary
     # class declared before it, or one of the supported exception bases
     if st.kids[1].kind == "typeparams":
-        return "generic classes (class C[T]) are not supported: write class C(Generic[T]), with T = TypeVar(\"T\")"
+        return self.class_params(st)
     if st.kids[1].kind == "index" and self.imported_ref(st.kids[1].kids[0]) == "typing.Generic":
         return "a generic class's one base is Generic[...] of its TypeVars, and at most one TypeVarTuple, unpacked (Generic[T, *Ts]), each once" if len(st.kids) == 2 else "a generic class with another base than Generic[...] is not supported"
     if len(st.kids) > 2:
         return "multiple inheritance is not supported: a class may have only one base"
     if st.kids[1].kind == "name" and st.kids[1].s in self.classes and self.classes[st.kids[1].s].exc == "":
         base_ci = self.classes[st.kids[1].s]
-        if self.is_dc(base_ci.name) or base_ci.name in self.nts:
-            return "inheritance from a dataclass or NamedTuple is not supported"
+        dc = len(st.kids[0].kids) == 2 and self.imported(st.kids[0].kids[1].s) == "dataclasses.dataclass"
+        if base_ci.name in self.nts:
+            return "inheritance from a NamedTuple is not supported"
+        if self.is_dc(base_ci.name) and not dc:
+            return "inheritance from a dataclass is only supported by a @dataclass class"
         if base_ci.name in self.tparams or self.init_template(base_ci.node) or self.init_template(st.kids[0]):
-            return "inheritance with generic class templates is not supported: annotate __init__ parameters"
-        if len(st.kids[0].kids) > 1:
+            return "inheritance with generic class templates is not supported: " + self.template_fix([base_ci.node, st.kids[0]])
+        if dc and not self.is_dc(base_ci.name):
+            return "a @dataclass class whose base is not a dataclass is not supported"
+        if len(st.kids[0].kids) > 1 and not dc:
             return "a class with inheritance and a decorator is not supported"
         return ""
     b = self.exc_base(st.kids[1])
@@ -106,6 +112,8 @@ def gen_inherit(self, ci: ClassInfo) -> None:
     b = self.classes[ci.base]
     for m in b.methods:
         f = b.methods[m]
+        if f.acc != "" and m not in ci.methods and f.node.s in ci.methods and ci.methods[f.node.s].cls == ci.name:
+            continue  # (its own @property def makes a new property, without the base's setter and deleter)
         if m not in ci.methods and f.clsuse and f.mod == ci.mod and len([x for x in f.defaults if not is_const(x) and x.kind != "noann"]) == 0:
             self.line = f.node.line
             self.lib = f.mod != ""
@@ -129,13 +137,68 @@ def gen_inherit(self, ci: ClassInfo) -> None:
             ci.methods[m] = f
         elif f.prop != ci.methods[m].prop:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
-        elif ci.exc == "" and (f.deco != "" or ci.methods[m].deco != ""):
+            self.bad_class(ci, f"overriding '{m}' as a different kind of attribute (property or method) is not supported")
+        elif ci.exc == "" and f.deco != ci.methods[m].deco:
             self.line = ci.methods[m].node.line
-            self.err(f"overriding static or class method '{m}' in '{short(ci.name)}' is not supported")
+            self.bad_class(ci, f"overriding '{m}' of '{short(b.name)}' with another kind of method (instance, static or class method) in '{short(ci.name)}' is not supported")
         elif ci.exc != "" and m != "__init__" and m != "__str__" and m != "__repr__":
             self.line = ci.methods[m].node.line
             self.err(f"method '{m}' of '{short(ci.name)}' overrides that of '{short(b.methods[m].cls)}': only __init__, __str__ and __repr__ may be overridden")
+    for m in ci.methods:
+        f = ci.methods[m]
+        if f.cls == ci.name and f.acc != "" and short(f.accof) != f.node.s:
+            # @Base.x.setter: a new property x with the getter (and deleter) of Base's, the
+            # property this class inherits, and this method
+            p = f.node.s
+            bn = f.accof[: f.accof.rfind(".")]
+            if p not in ci.methods or not ci.methods[p].prop or ci.methods[p].cls == ci.name or bn not in self.classes or p not in self.classes[bn].methods or ci.methods[p] is not self.classes[bn].methods[p]:
+                self.line = f.node.line
+                self.bad_class(ci, f"@{short(f.accof)}.{f.acc} is not supported here: {short(bn)} must be the base class whose property {f.node.s} this class inherits")
+
+def gen_accessor(self, ci: ClassInfo, d: Node) -> str:
+    # method d of class ci, decorated @x.setter or @x.deleter (or @Base.x.setter, see inherit):
+    # ".setter" or ".deleter", which adds it to property x (its methods key is x.setter); else ""
+    s = d.kids[3].s if len(d.kids) == 4 and len(d.kids[3].kids) == 0 else ""
+    acc = s[s.rfind(".") + 1 :]
+    if "." in s and acc == "getter" and short(s[: s.rfind(".")]) == d.s:
+        self.err(f"unsupported decorator @{short(s)}: define the property's getter once, with @property")
+    if "." not in s or (acc != "setter" and acc != "deleter"):
+        return ""
+    of = short(s[: s.rfind(".")])
+    if of == d.s and (d.s not in ci.methods or not ci.methods[d.s].prop):
+        # (CPython's NameError, or AttributeError: 'function' object has no attribute 'setter')
+        self.err(f"@{of}.{acc} needs property {d.s}, a @property def {d.s} before it in the class body")
+    if of != d.s and (of[of.rfind(".") + 1 :] != d.s or ci.base not in self.classes):
+        self.err(f"@{of}.{acc} on method {d.s} is not supported: a property's {acc} takes its name ({of[of.rfind('.') + 1 :]}), and a base's property is named through the base class")
+    return "." + acc
+
+def gen_class_ref(self, m: Mod, s: str) -> str:
+    # the class that dotted name s names in module m's code, where the loader leaves a
+    # decorator's name of another module's class as written (see Loader.qdeco), else s
+    root = s[: s.find(".")] if "." in s else s
+    k = m.kinds.get(root[len(m.q) :] if root.startswith(m.q) else root, "")
+    if k.startswith("a:"):
+        return k[2:] + s[len(root) :]
+    if k.startswith("m:"):
+        return (k[2:] + s[len(root) :]).replace(".", "$")
+    return s
+
+def gen_dc_options(self, ci: ClassInfo) -> None:
+    # class ci's decorators: @dataclass, whose options (dc_args) it keeps, and no other
+    st = ci.node
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
+        self.err(dc_args(st.kids[1])[1:])
+    for o in dc_args(st.kids[1]).split() if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" else []:
+        ci.dcopts[o] = True
+    ci.kwonly = "kw_only" in ci.dcopts
+    if "order" in ci.dcopts and "no-eq" in ci.dcopts:
+        self.err("eq must be true if order is true")  # (CPython's ValueError where it creates the class)
+    if "frozen" in ci.dcopts:
+        self.hasfrozen = True
+    if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
+        self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
+    if len(st.kids) > 2:
+        self.err(f"unsupported decorator @{st.kids[2].s}")
 
 def gen_derives(self, c: str, base: str) -> bool:
     # is c, a class of the program or a builtin exception class, base or derived from it
@@ -166,9 +229,20 @@ def gen_init_template(self, st: Node) -> bool:
                 return True  # (a field may hold an object of a class template: typed where the object is made)
     return False
 
+def gen_template_fix(self, cs: list[Node]) -> str:
+    # what to change so that classes cs are no class templates: their __init__'s parameters,
+    # unless it calls iter() or takes an iterator (an iterator's type is its class)
+    for st in cs:
+        for d in st.kids[0].kids:
+            if d.kind == "def" and d.s == "__init__" and len(d.kids) == 3:
+                if calls_iter(d.kids[2], False) or len([p for p in d.kids[0].kids if p.kind == "param" and self.iter_item(p.kids[0]) is not None]) > 0:
+                    return "an __init__ that calls iter() or takes an Iterator[T] or Iterable[T] makes one (an iterator's type is its class)"
+    return "annotate __init__ parameters"
+
 def gen_makes_tmpl(self, n: Node) -> bool:
-    # does n call a class template, making an object of one of its specializations?
-    if n.kind == "call" and n.kids[0].kind == "name" and n.kids[0].s in self.tmpl:
+    # does n call a class template, making an object of one of its specializations? iter(x)
+    # makes one of lib's iterator classes (see guess_iter)
+    if n.kind == "call" and n.kids[0].kind == "name" and (n.kids[0].s in self.tmpl or (n.kids[0].s == "iter" and len(n.kids) == 2 and ITERS + "$list_iterator" in self.classes)):
         return True
     for k in n.kids:
         if self.makes_tmpl(k):
@@ -177,9 +251,14 @@ def gen_makes_tmpl(self, n: Node) -> bool:
 
 def gen_tmpl_ann(self, a: Node) -> bool:
     # does annotation a name a class template (Box, "Box", Box | None, list[Box])? Each of its
-    # specializations being a type of its own, the annotation then types nothing, as if left out
+    # specializations being a type of its own, the annotation then types nothing, as if left out;
+    # as Iterator[T] and Iterable[T] do, an iterator's type being its class (see iter_)
     if a.kind == "name":
         return a.s in self.tmpl
+    if a.kind == "index" and (a.kids[0].kind == "name" or a.kids[0].kind == "attr") and (self.ann_base(a.kids[0]) == "iterator" or self.ann_base(a.kids[0]) == "iterable"):
+        return True
+    if a.kind == "str" and ("Iterator" in a.s or "Iterable" in a.s):
+        return self.tmpl_ann(self.parse_expr(a.s))
     if a.kind == "str":
         w = ""
         for c in a.s + " ":
@@ -210,12 +289,21 @@ def gen_class_problem(self, m: Mod, st: Node, exc: bool) -> str:
     # docstring
     if len(st.kids) > 2 or (len(st.kids) > 1 and (dc_args(st.kids[1]).startswith("!") or self.imported(st.kids[1].s) != "dataclasses.dataclass")):
         return f"its decorator @{short(st.kids[1].s)} is not supported"
+    props: dict[str, bool] = {}  # (its properties, and their setters and deleters: x.setter)
     for b in st.kids[0].kids:
         if b.kind == "def":
             ps = b.kids[0].kids
             deco = b.kids[3].s if len(b.kids) == 4 and len(b.kids[3].kids) == 0 else ""
             static = deco == "staticmethod"
-            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property") or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
+            # @x.setter or @x.deleter on def x after @property def x, once each; @Base.x.setter
+            # in a subclass (see accessor and inherit)
+            of = deco[: deco.rfind(".")] if "." in deco else ""
+            acc = (deco.endswith(".setter") or deco.endswith(".deleter")) and (of == b.s and b.s in props or (exc and of.endswith("." + b.s))) and b.s + deco[deco.rfind(".") :] not in props
+            if acc:
+                props[b.s + deco[deco.rfind(".") :]] = True
+            elif deco == "property":
+                props[b.s] = True
+            if len(b.kids) > 3 and ((not static and deco != "classmethod" and deco != "property" and not acc) or (b.s.startswith("__") and b.s.endswith("__"))) and not self.stub(m, b):
                 return f"method {b.s}() has a decorator"  # (an @overload stub's calls are the error: see declare_fn)
             if len(ps) == 0 and not static:
                 return f"method {b.s}() has no {'cls' if deco != '' else 'self'} parameter"
@@ -476,7 +564,8 @@ def gen_effect(self, e: Node, local: dict[str, str], use: int) -> str:
         t = self.gtypes.get(e.s, "")
         if use == 3 and (e.s in self.funcs or e.s in self.hooks or ("$" not in e.s and (e.s in local or (e.s in PYBUILTINS and e.s not in PURE)))):
             return f"it passes {short(e.s)} to a function that may call it"
-        if use == 0 or "$" not in e.s or e.s in self.funcs or e.s in self.hooks or e.s in self.noneglobals or (t != "" and not self.objects(t, use)):
+        # (a generic class's type parameter, Class$$T, is typing's TypeVar: see Loader.qren)
+        if use == 0 or "$" not in e.s or "$$" in e.s or e.s in self.funcs or e.s in self.hooks or e.s in self.noneglobals or (t != "" and not self.objects(t, use)):
             return ""
         return f"'{short(e.s)}' may be an object of one of the program's classes, whose methods CPython calls then"
     if k == "attr" and e.kids[0].kind == "name" and (e.kids[0].s in self.hooks or ("$" not in e.kids[0].s and e.kids[0].s in local)):
@@ -539,11 +628,14 @@ def gen_program(self, mods: list[Mod]) -> str:
     self.opts = optimizations()
     if "moduleints" in self.opts:
         self.intglobals = module_ints(mods, self.intat)
+    self.strglobals = module_strs(mods)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        for q in m.taliases:
+            self.taliases[q] = m.taliases[q]
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
@@ -554,9 +646,27 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif st.kind == "subclass" and len(st.kids) == 2 and len(self.generic_base(st.kids[1])) > 0:
                 m.body.kids[i] = st.kids[0]  # class C(Generic[T]): a class whose objects bind T (see bind)
                 self.tparams[st.s] = self.generic_base(st.kids[1])
+            elif st.kind == "subclass" and st.kids[1].kind == "typeparams" and self.class_params(st) == "":
+                m.body.kids[i] = st.kids[0]  # class C[T]: as class C(Generic[T]) (see class_params)
+                self.tparams[st.s] = st.kids[1].s.split()
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])
+            elif st.kind == "typealias" and st.s in self.taliases:
+                m.body.kids[i] = mk("pass", "", st.line, [])  # (a type alias, which only annotations name)
+            elif st.kind == "assign" and st.kids[0].kind == "name" and st.kids[0].s in self.taliases and self.taliases[st.kids[0].s] is st and not self.alias_kept(st.kids[0].s):
+                m.body.kids[i] = mk("pass", "", st.line, [])
+    for q in self.taliases:
+        # (CPython evaluates an assigned alias's value where it assigns it, a type statement's
+        # only where its __value__ is read)
+        why = self.alias_problem(self.taliases[q].kids[1]) if self.taliases[q].kind == "assign" else ""
+        if why != "":
+            self.line = self.taliases[q].line
+            self.err(why[1:] if why.startswith("!") else f"{why} (CPython evaluates this type alias's value when the assignment runs)")
+    if len(self.taliases) > 0:
+        # an annotation that names a type alias is its value (unalias)
+        for m in mods:
+            self.unalias_all(m.body)
     class_counts: dict[str, int] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:
@@ -594,18 +704,19 @@ def gen_program(self, mods: list[Mod]) -> str:
                 ci.base = st.kids[1].s if st.kids[1].kind == "name" and st.kids[1].s in self.classes else self.exc_base(st.kids[1])
                 ci.exc = self.classes[ci.base].exc if ci.base in self.classes else ci.base
                 self.classes[st.s] = ci
+                if self.is_dc(st.s):
+                    # a dataclass deriving from another (subclass_problem): frozen as its base is
+                    self.dc_options(ci)
+                    if "frozen" in self.classes[ci.base].dcopts and "frozen" not in ci.dcopts:
+                        self.err("cannot inherit non-frozen dataclass from a frozen one")  # (CPython's TypeError where it creates the class)
+                    if "frozen" in ci.dcopts and "frozen" not in self.classes[ci.base].dcopts:
+                        self.err("cannot inherit frozen dataclass from a non-frozen one")
             elif st.kind == "class":
                 if st.s in self.classes:
                     self.err(f"redefinition of class '{st.s}' is not supported")
                 self.classes[st.s] = ClassInfo(st.s, st)
                 self.classes[st.s].mod = m.name
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) == "dataclasses.dataclass" and dc_args(st.kids[1]).startswith("!"):
-                    self.err(dc_args(st.kids[1])[1:])
-                self.classes[st.s].kwonly = len(st.kids) > 1 and dc_args(st.kids[1]) == "kw"
-                if len(st.kids) > 1 and self.imported(st.kids[1].s) != "dataclasses.dataclass":
-                    self.err(f"unsupported decorator @{st.kids[1].s}" + (" (import dataclass from dataclasses)" if st.kids[1].s == "dataclass" else ""))
-                if len(st.kids) > 2:
-                    self.err(f"unsupported decorator @{st.kids[2].s}")
+                self.dc_options(self.classes[st.s])
     # Only ordinary inheritance hierarchies need a runtime class tag. Keeping unrelated
     # classes unchanged preserves their compact layout, including dataclasses and tuples.
     for ci in self.classes.values():
@@ -629,7 +740,12 @@ def gen_program(self, mods: list[Mod]) -> str:
     for ci in self.classes.values():
         if ci.tag != 0 and ci.name in self.tmpl:
             self.line = ci.node.line
-            self.err("inheritance with generic class templates is not supported: annotate __init__ parameters")
+            self.err("inheritance with generic class templates is not supported: " + self.template_fix([ci.node]))
+    for m in mods:
+        # (made now: a specialization that a declaration's annotation names may compile a
+        # method whose call needs a default's type, which its module's frame gives, see modtype)
+        self.inits[m.name] = FnInfo("<module>", "@init." + m.name if m.name != "" else "@main.init", m.body, "")
+        self.inits[m.name].mod = m.name
     for m in mods:
         top: list[Node] = []
         for st in m.body.kids:
@@ -663,21 +779,27 @@ def gen_program(self, mods: list[Mod]) -> str:
                 for d in self.classes[st.s].node.kids[0].kids:
                     if d.kind == "def":
                         self.line = d.line
-                        if d.s in self.classes[st.s].methods:
+                        key = d.s + self.accessor(self.classes[st.s], d)
+                        if key in self.classes[st.s].methods:
                             self.err(f"redefinition of method '{st.s}.{d.s}' is not supported")
                         self.lib = m.name != ""
                         self.selfcls = st.s
-                        self.classes[st.s].methods[d.s] = self.declare_fn(d, st.s)
+                        g = self.declare_fn(d, st.s)
                         self.selfcls = ""
                         self.lib = False
-                        self.classes[st.s].methods[d.s].mod = m.name
+                        g.mod = m.name
+                        if "." in g.accof:
+                            g.accof = self.class_ref(m, g.accof[: g.accof.rfind(".")]) + g.accof[g.accof.rfind(".") :]  # (@Base.x.setter)
+                        self.classes[st.s].methods[key] = g
                 top.append(mk("cdefaults", st.s, st.line, []))
             else:
                 top.append(st)
         tops.append(top)
     for ci in self.classes.values():
         self.inherit(ci)
-    for ci in self.classes.values():
+    for ci in [x for x in self.classes.values()]:
+        # (a dataclass's field annotated C[X] makes that specialization of generic class C here,
+        # which specialize declares itself)
         self.selfcls = ci.name
         self.declare_fields(ci)
         self.selfcls = ""
@@ -729,24 +851,44 @@ def gen_program(self, mods: list[Mod]) -> str:
                 self.noneglobals[nm] = True
         if m.falseat >= 0:
             self.falseflags[m.q + "TYPE_CHECKING"] = True
+    docinfer: dict[str, bool] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:
+            if st.kind == "assign" and st.s == "docinit":
+                docinfer[st.kids[0].s] = True
+    for m in mods:
+        for st in m.body.kids if m.name != "" else []:
+            # The loader's implicit __doc__ value exists before a circular import can read
+            # it. Its optional type must precede the later literal's usual predeclaration.
+            if st.kind == "annassign" and st.s == "docinit":
+                self.declare(st.kids[0].s, self.vtype(st.kids[1]))
             # an imported module's constants (NAME = literal) are typed before any module code
             # compiles: a module it imports, which imports it back, may read them first
-            if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s not in self.gtypes and st.kids[0].s not in self.noneglobals:
+            if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s not in self.gtypes and st.kids[0].s not in self.noneglobals and st.kids[0].s not in docinfer:
                 k = st.kids[1].kids[0].kind if st.kids[1].kind == "unary" and is_const(st.kids[1]) else st.kids[1].kind  # (-1, -2.5)
                 if k == "int" or k == "float" or k == "str":
                     self.declare(st.kids[0].s, k)
                 elif k == "True" or k == "False":
                     self.declare(st.kids[0].s, "bool")
     for m in mods:
-        self.inits[m.name] = FnInfo("<module>", "@init." + m.name if m.name != "" else "@main.init", m.body, "")
-        self.inits[m.name].mod = m.name
         self.mfile[m.name] = m.path[2:] if m.path.startswith("./") else m.path
     self.compiling = True
     self.modlevel = True
+    for m in mods:
+        for st in m.body.kids if m.name != "" else []:
+            if st.kind == "assign" and st.s == "docinit" and st.kids[0].s not in self.noneglobals:
+                name = st.kids[0].s
+                fr = self.modframe(m.name, st.line)
+                t = self.none_type(name)
+                self.restore(fr)
+                self.line = st.line
+                if t == "":
+                    self.err(f"cannot infer the initial optional type of '{short(name)}'; annotate its later assignment")
+                self.declare(name, t)
     for i in range(len(mods)):
-        self.function(self.inits[mods[i].name], tops[i])
+        if mods[i].name != ITERS:
+            # (lib's module of iter()'s classes runs no code: nothing imports it, see Loader.program)
+            self.function(self.inits[mods[i].name], tops[i])
         self.inited[mods[i].name] = True
     self.modlevel = False
     # the functions and methods of imported modules are compiled only if the program calls
@@ -795,13 +937,18 @@ def gen_program(self, mods: list[Mod]) -> str:
             hpush(self.wake, i)
     done: dict[str, bool] = {}
     helped: dict[str, bool] = {}
+    hashed: dict[str, bool] = {}
     xmade: dict[str, bool] = {}
     while True:
-        before = len(done) + len(helped) + len(xmade)
+        before = len(done) + len(helped) + len(hashed) + len(xmade)
         for c in [x for x in self.ocls]:
             if c not in helped:
                 helped[c] = True
                 self.obj_helpers(c)
+        for c in [x for x in self.hcls]:
+            if c not in hashed:
+                hashed[c] = True
+                self.hash_helper(c)
         for c in [x for x in self.xcls]:
             if c not in xmade:
                 xmade[c] = True
@@ -819,7 +966,7 @@ def gen_program(self, mods: list[Mod]) -> str:
                     self.function(lz[i], lz[i].node.kids[2].kids)
         for i in later:
             hpush(self.wake, i)
-        if len(done) + len(helped) + len(xmade) == before:
+        if len(done) + len(helped) + len(hashed) + len(xmade) == before:
             break
     for nm in self.flagged:
         if nm not in self.gtypes and nm not in self.funcs and nm not in self.classes:

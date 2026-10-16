@@ -1,7 +1,7 @@
 # A generator that resumes itself raises ValueError: generator already executing (#490).
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
-holder: list[Iterator[int]] = []
+holder: list[Generator[int, None, None]] = []
 
 
 def selfish() -> Iterator[int]:

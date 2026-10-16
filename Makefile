@@ -56,10 +56,20 @@ bench-extended-check: $(BENCH_COMPILER)
 	$(PY) -m unittest discover -s tools -p test_bench_extended.py
 	$(PY) tools/bench_extended.py --compiler "$(BENCH_COMPILER)" --smoke --json build/extended-smoke.json
 
+# Ported pyperformance benchmarks (bench/pyperformance/README.md): CPython, JIT and AOT wall times,
+# each run's output compared with CPython's; advisory, no thresholds. The check runs small inputs
+# once (correctness only); --census needs the pinned sdist.
+bench-pyperformance: $(BENCH_COMPILER)
+	$(PY) tools/bench_pyperformance.py --compiler "$(BENCH_COMPILER)" $(BENCH_ARGS)
+
+bench-pyperformance-check: $(BENCH_COMPILER)
+	$(PY) -m unittest discover -s tools -p test_bench_pyperformance.py
+	$(PY) tools/bench_pyperformance.py --compiler "$(BENCH_COMPILER)" --smoke --json build/pyperformance-smoke.json
+
 # Slots that dict lookups visit for keys that defeat a weak hash (tools/dictprobe.c): deterministic
 # counts, so the run fails above a fixed limit; the timings it prints are for information only
 # (it includes runtime.c, whose hash functions are runtime.py's: llvm-link adds those). It also
-# checks that the collector scans no key table of ints, and those of strs and tuples
+# checks that the collector scans no key table of ints, and those of strs, tuples and objects
 LLVMBIN = $(if $(PYSTACHY_LLVM),"$(PYSTACHY_LLVM)/")
 dictprobe: tools/dictprobe.c runtime.c runtime.py pystachy
 	mkdir -p build
@@ -80,7 +90,8 @@ listprobe: tools/listprobe.c runtime.c runtime.py pystachy
 	build/listprobe
 	PYSTACHY_GC_STRESS=1 build/listprobe
 
-# Shared container DAGs compare without expanding into their logical trees.
+# Shared container DAGs compare without expanding into their logical trees; dicts and sets of objects
+# compare without hashing them again, and those hashed by identity without the program's __eq__.
 eqprobe: tools/eqprobe.c runtime.c runtime.py pystachy
 	mkdir -p build
 	./pystachy rt runtime.py -o build/eqprobe-rt.ll
@@ -218,4 +229,4 @@ uninstall:
 test-install:
 	$(PY) -m unittest discover -s tools -p test_install.py
 
-.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe unicode-audit verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install
+.PHONY: test test-py test-cache test-ffi bench bench-extended bench-extended-check bench-pyperformance bench-pyperformance-check dictprobe listprobe eqprobe fileprobe streamprobe jitprobe unicode-audit verify irsame irsame-py ref check-ir check-runtime check-recordings port-check test-cpython-subset port-check-large re-fuzz re-probe lint clean install uninstall test-install

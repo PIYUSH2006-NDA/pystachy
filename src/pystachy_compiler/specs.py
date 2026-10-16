@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
-PYBUILTINS: dict[str, bool] = {}
+PYBUILTINS: dict[str, bool] = {}  # dir(builtins) of CPython 3.13, but the module dunders (MODNAMES)
 for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExceptionGroup BlockingIOError BrokenPipeError "
            "BufferError BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError "
            "ConnectionResetError DeprecationWarning EOFError Ellipsis EncodingWarning EnvironmentError Exception ExceptionGroup "
@@ -14,7 +14,7 @@ for _k in ("ArithmeticError AssertionError AttributeError BaseException BaseExce
            "ReferenceError ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError "
            "SyntaxWarning SystemError SystemExit TabError TimeoutError True TypeError UnboundLocalError UnicodeDecodeError "
            "UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning "
-           "ZeroDivisionError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
+           "ZeroDivisionError _IncompleteInputError abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod "
            "compile complex copyright credits delattr dict dir divmod enumerate eval exec exit filter float format frozenset "
            "getattr globals hasattr hash help hex id input int isinstance issubclass iter len license list locals map max "
            "memoryview min next object oct open ord pow print property quit range repr reversed round set setattr slice "
@@ -43,7 +43,7 @@ for _k in ("_abc _ast _bisect _blake2 _codecs _collections _csv _datetime _eleme
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
 NOCALL: dict[str, bool] = {}
 for _k in ("name str int float None True False list tuple dict attr assign annassign expr pass global import alias "
-           "uimport guard bound badimport block raise def params param starparam dstarparam noann class").split():
+           "uimport guard bound badimport block raise def params param starparam dstarparam noann class moddoc").split():
     NOCALL[_k] = True
 
 
@@ -60,7 +60,8 @@ ICMP: dict[str, str] = {"==": "eq", "!=": "ne", "<": "slt", "<=": "sle", ">": "s
 FCMP: dict[str, str] = {"==": "oeq", "!=": "une", "<": "olt", "<=": "ole", ">": "ogt", ">=": "oge"}
 # special methods: "number of parameters (with self):required return type"
 SPECIAL: dict[str, str] = {"__str__": "1:str", "__repr__": "1:str", "__len__": "1:int", "__bool__": "1:bool", "__format__": "2:str",
-                           "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool"}
+                           "__eq__": "2:bool", "__ne__": "2:bool", "__lt__": "2:bool", "__le__": "2:bool", "__gt__": "2:bool", "__ge__": "2:bool",
+                           "__hash__": "1:int"}
 for _k in "add sub mul truediv floordiv mod matmul and or xor lshift rshift iadd isub imul itruediv ifloordiv imod imatmul iand ior ixor ilshift irshift".split():
     SPECIAL[f"__{_k}__"] = "2:"
 for _k in "neg pos invert".split():
@@ -135,7 +136,7 @@ for _k in ("EPERM ENOENT ESRCH EINTR EIO ENXIO E2BIG ENOEXEC EBADF ECHILD EAGAIN
            "ECANCELED EOWNERDEAD ENOTRECOVERABLE").split():
     ERRNO[_k] = True
 # math functions raise CPython's domain and range errors (runtime.c, pys_m_*)
-for _k in "sqrt sin cos tan asin acos atan sinh cosh tanh exp log log2 log10 fabs log1p expm1 exp2 cbrt degrees radians asinh acosh atanh erf erfc ulp".split():
+for _k in "sqrt sin cos tan asin acos atan sinh cosh tanh exp log log2 log10 fabs log1p expm1 exp2 cbrt degrees radians asinh acosh atanh erf erfc ulp gamma lgamma".split():
     CALLS[f"math.{_k}(float)"] = f"pys_m_{_k}:float"
 for _k in "pow atan2 hypot fmod copysign nextafter remainder".split():
     CALLS[f"math.{_k}(float,float)"] = f"pys_m_{_k}:float"
@@ -149,7 +150,7 @@ MODFUNCS: dict[str, bool] = {}
 for _k in CALLS:
     if "." in _k[: _k.find("(")]:
         MODFUNCS[_k[: _k.find("(")]] = True
-for _k in "os.path.join os.path.normcase os.fspath sys.exit math.fsum math.prod".split():
+for _k in "os.path.join os.path.normcase os.fspath sys.exit math.fsum math.prod math.isclose".split():
     MODFUNCS[_k] = True
 # the modules a program may import; their functions and attributes are the CALLS entries and modattr()
 MODULES: dict[str, bool] = {}
@@ -175,6 +176,12 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
 for _k in FLOATINFO:
     MODATTRS[_k] = True
+# sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which
+# tests/record.sh records with): its items, a value (a tuple) and attributes known at compile time
+VERSIONINFO: dict[str, str] = {"sys.version_info.major": "3", "sys.version_info.minor": "13", "sys.version_info.micro": "16",
+                               "sys.version_info.releaselevel": "'final'", "sys.version_info.serial": "0"}
+for _k in VERSIONINFO:
+    MODATTRS[_k] = True
 TYPING: dict[str, bool] = {}
 for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Iterable Iterator Sequence Mapping Final ClassVar NamedTuple "
            "TypeVar Generic cast IO BinaryIO AnyStr Literal Protocol TYPE_CHECKING overload NoReturn Never Self TypeAlias ParamSpec "
@@ -187,6 +194,15 @@ for _k in ("List Dict Tuple Optional TextIO Any Union Callable Set FrozenSet Ite
            "TypeAliasType TypeIs assert_type clear_overloads get_args get_origin get_overloads get_protocol_members is_protocol "
            "is_typeddict no_type_check_decorator").split():
     TYPING[_k] = True
+# how many type arguments a subscript of typing's generic aliases takes, which CPython checks
+# where it evaluates one ("1", or "1-3" where the others have defaults: Generator[int])
+TYPEARGS: dict[str, str] = {"Coroutine": "3", "Generator": "1-3", "AsyncGenerator": "1-2", "ContextManager": "1-2", "AsyncContextManager": "1-2"}
+for _k in ("List Set FrozenSet Type Deque Counter Iterable Iterator Reversible Container Collection Sequence MutableSequence "
+           "AbstractSet MutableSet MappingView KeysView ValuesView Awaitable AsyncIterable AsyncIterator Pattern Match IO "
+           "SupportsAbs SupportsRound").split():
+    TYPEARGS[_k] = "1"
+for _k in "Dict DefaultDict OrderedDict ChainMap Mapping MutableMapping ItemsView".split():
+    TYPEARGS[_k] = "2"
 # collections.abc: imported as typing's names are (Mapping[K, V] is dict[K, V], see typeof)
 ABCS: dict[str, bool] = {}
 for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hashable Iterable Iterator Generator Reversible Sized "
@@ -194,6 +210,7 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
            "MutableSequence ByteString Buffer").split():
     ABCS[_k] = True
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
+ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
 OPTTYPES = "class types, str, int, float, bool, list, dict and tuple"
 TYPEVAR = " is only supported in the annotations of a module-level function's parameters and return, which make the function a template, and of a generic class (Generic[T]) with an __init__, whose objects bind it"
 STUB = "an @overload stub of 'NAME' must be followed by the def that implements it (calling a stub raises NotImplementedError)"
@@ -224,9 +241,9 @@ for _k in ("OSError IOError EnvironmentError BlockingIOError ChildProcessError C
 for _k in "UnicodeDecodeError UnicodeEncodeError UnicodeTranslateError ExceptionGroup BaseExceptionGroup".split():
     EXCEPTIONS[_k] = "-"
 # the builtin exception classes, each with its bases (CPython 3.13's: tools/check_runtime.py
-# checks them), and io.UnsupportedOperation, which the runtime raises too. IOError and
-# EnvironmentError are other names of OSError. An except clause catches a class and the classes
-# deriving from it
+# checks them), io.UnsupportedOperation, which the runtime raises too, and
+# dataclasses.FrozenInstanceError. IOError and EnvironmentError are other names of OSError. An
+# except clause catches a class and the classes deriving from it
 EXCBASES: dict[str, str] = {"BaseException": ""}
 for _k in ("BaseExceptionGroup:BaseException GeneratorExit:BaseException KeyboardInterrupt:BaseException SystemExit:BaseException "
            "Exception:BaseException ArithmeticError:Exception FloatingPointError:ArithmeticError OverflowError:ArithmeticError "
@@ -244,8 +261,12 @@ for _k in ("BaseExceptionGroup:BaseException GeneratorExit:BaseException Keyboar
            "UnicodeTranslateError:UnicodeError Warning:Exception BytesWarning:Warning DeprecationWarning:Warning "
            "EncodingWarning:Warning FutureWarning:Warning ImportWarning:Warning PendingDeprecationWarning:Warning "
            "ResourceWarning:Warning RuntimeWarning:Warning SyntaxWarning:Warning UnicodeWarning:Warning UserWarning:Warning "
-           "io.UnsupportedOperation:OSError,ValueError").split():
+           "io.UnsupportedOperation:OSError,ValueError dataclasses.FrozenInstanceError:AttributeError").split():
     EXCBASES[_k[: _k.find(":")]] = _k[_k.find(":") + 1 :]
+# what assigning a field of a @dataclass(frozen=True) object raises (an except clause lists it
+# only in a program that has such a class: Gen.hasfrozen)
+FROZENERR = "dataclasses.FrozenInstanceError"
+FROZENUSE = "dataclasses.FrozenInstanceError is only supported in an except clause, which catches what assigning a field of a frozen dataclass raises"
 
 
 # the hidden fields an exception class's objects begin with (see Gen.declare_fields), with their types
@@ -343,16 +364,16 @@ NOREF: list[str] = "print str repr len bool sum sorted list tuple min max any al
 # imported module may use them in functions the program never calls
 UNSUPPORTED: dict[str, str] = {
     "subclass": "class inheritance is not supported",
-    "yield": "'yield' is not supported (there are no generator functions)", "dictcomp": "dict comprehensions are not supported",
-    "nestedcomp": "nested comprehensions are not supported", "starred": "starred expressions (*x) are not supported",
+    "yield": "'yield' is not supported (there are no generator functions)",
+    "starred": "starred expressions (*x) are not supported",
     "dictstar": "dict displays with ** are not supported",
     "dstar": "star arguments are not supported", "bytes": "bytes literals are not supported (there is no bytes type)",
     "ellipsis": "Ellipsis (...) is not supported", "complex": "complex numbers are not supported",
-    "walrus": "assignment expressions (:=) are not supported", "await": "'await' is not supported",
+    "await": "'await' is not supported",
     "async": "'async' statements are not supported",
     "asynccomp": "asynchronous comprehensions are not supported",
     "sliceitem": "a slice inside a tuple subscript (x[a:b, c]) is not supported", "match": "'match' statements are not supported",
-    "typealias": "'type' statements are not supported",
+    "typealias": "'type' statements are only supported at a module's top level, for a name that no other statement binds",
 }
 # decorators that an imported module may apply to a def ("f") or a class ("c") Pystachy leaves
 # uncompiled until the program uses it: applying them when the module's code runs calls no code
@@ -405,15 +426,16 @@ METHODS: dict[str, str] = {
     "list.append": "None:*T", "list.pop": "*T:int=-1", "list.insert": "None:int,*T", "list.extend": "None:S",
     "list.index": "int:*T,#,int=0,int=9223372036854775807", "list.count": "int:*T,#", "list.remove": "None:*T,#", "list.reverse": "None:",
     "list.copy": "S:", "list.clear": "None:",
-    "dict.get": "*V:*K,*V=0", "dict.pop": "*V:*K", "dict.setdefault": "*V:*K,*V", "dict.keys": "list[K]:",
+    "dict.get": "*V:*K,*V=0", "dict.pop": "*V:*K", "dict.popitem": "tuple[K,V]:", "dict.setdefault": "*V:*K,*V", "dict.keys": "list[K]:",
     "dict.values": "list[V]:", "dict.items": "list[tuple[K,V]]:", "dict.clear": "None:", "dict.copy": "S:",
+    "vtuple.index": "int:*T,#,int=0,int=9223372036854775807", "vtuple.count": "int:*T,#",
     "file.read": "str:int=-1", "file.readline": "str:", "file.readlines": "list[str]:", "file.write": "int:str",
     "file.writelines": "None:list[str]", "file.close": "None:", "file.flush": "None:",
     "float.hex": "str:", "float.is_integer": "bool:", "int.bit_length": "int:", "int.bit_count": "int:",
 }
 # Byte-oriented boundaries audited only in user/library code, not inside runtime.py.
 # These are conservative: even a byte-correct delimiter search is a porting audit hit.
-UNICODE_AUDIT: list[str] = ("get slice list find rfind index rindex count startswith endswith replace "
+UNICODE_AUDIT: list[str] = ("get slice slice_step list find rfind index rindex count startswith endswith replace replace_count "
                             "upper lower swapcase capitalize title casefold isdigit isalpha isalnum "
                             "isupper islower istitle isdecimal isnumeric expandtabs").split()
 
@@ -492,11 +514,12 @@ TEMPLATE_RETAINED = 16777216
 # collection may run before a handler takes it; if none does, the raise prints its message, flushes
 # stdout and exits); N never returns; A allocates on the way to returning (a collection may run, and
 # running out of memory ends the program); U may run user code, and so has every other letter (U?:
-# when the static type, the descriptor of a # parameter, holds a class); I does I/O, or uses the
-# process or global runtime state; rL wL, rD wD, rO wO, rG wG, rF wF read or write lists, dicts,
-# objects' fields and flags, globals and their flags, files. Strings and tuples are immutable, slots
-# are never address-taken, dict keys are ints, strs, or tuples of ints, bools, strs and None
-# (key_problem), whose hash and == run no user code, and what an operation writes into an object it
+# when the static type, the descriptor of a # parameter or a dict's keys, Ins.x, holds a class); I
+# does I/O, or uses the process or global runtime state; rL wL, rD wD, rO wO, rG wG, rF wF read or
+# write lists, dicts, objects' fields and flags, globals and their flags, files. Strings and tuples
+# are immutable, slots are never address-taken, dict keys are ints, strs, objects, or tuples of
+# these, bools and None (key_problem), whose hash and == run no user code but an object's (U?),
+# and what an operation writes into an object it
 # makes itself (list.copy, str.split, init's argument list) no other code has seen: they need no
 # letter. N is a property of one op: an effect summary (IFn.fx) leaves it out. The end of the
 # program (an error, an exit) flushes stdout and closes the open files: R and N stand for that. A
@@ -521,10 +544,14 @@ RUNTIME: dict[str, str] = {
     # homogeneous runtime-length tuples (immutable copied slots)
     "vtuple.new": "%ptr:list[T]|R A rL|", "vtuple.from": "%ptr:%ptr,int|R A|",
     "vtuple.get": "int:%ptr,int|R|", "vtuple.list": "list[T]:%ptr|R A|", "vtuple.box": "%ptr:%ptr|R A|",
+    "vtuple.slice": "%ptr:%ptr,int,int,int|R A|",
+    "vtuple.index": "int:%ptr,*T,#,int,int|R rL rD U?|", "vtuple.count": "int:%ptr,*T,#|rL rD U?|",
     # lists
     "list.new": "list[T]:int|A|", "list.get": "*T:S,int|R rL|", "list.set": "None:S,int,*T|R rL wL|",
     "list.append": "None:S,*T|A rL wL|", "list.pop": "*T:S,int|R rL wL|", "list.del": "None:S,int|R rL wL|",
     "list.insert": "None:S,int,*T|A rL wL|", "list.extend": "None:S,S|A rL wL|", "list.slice": "S:S,int,int|A rL|",
+    "list.slice_step": "S:S,int,int,int|R A rL|", "list.set_slice": "None:S,int,int,int,S|R A rL wL|",
+    "list.del_slice": "None:S,int,int,int|R rL wL|",
     "list.copy": "S:S|A rL|", "list.clear": "None:S|rL wL|", "list.add": "S:S,S|A rL|", "list.mul": "S:S,int|R A rL|",
     "list.imul": "None:S,int|R A rL wL|", "list.reverse": "None:S|rL wL|", "list.find": "int:S,*T,#|rL rD U?|",
     "list.find_pair": "int:S,*T,%ptr,%ptr|rL rD U|",
@@ -535,36 +562,40 @@ RUNTIME: dict[str, str] = {
     "any": "bool:list[T]|rL|", "all": "bool:list[T]|rL|", "sum.int": "int:list[T],int|R rL|",
     "sum.float": "float:list[float],float|rL|", "sum.float_int": "float:list[float],int|rL|", "sum.int_float": "float:list[T],float|rL|",
     "range.len": "int:int,int,int|R|", "range.has": "bool:int,int,int,int|R|", "range.list": "list[int]:int,int,int|R A|",
-    # dicts: keys are ints, strs, or tuples of int, bool, str, None and such tuples (Dict.kind 0, 1,
-    # or the tuple's descriptor, passed as an int), which hash, compare and print (a KeyError's
-    # message) without user code; that repr is runtime.c's, which can reach pys_repr_enter: I
-    "dict.new": "dict[K,V]:int,int|A|", "dict.has": "bool:S,*K|rD|", "dict.getitem": "*V:S,*K|R A I rD|",
-    "dict.get": "*V:S,*K,*V|rD|", "dict.set": "None:S,*K,*V|A rD wD|", "dict.pop": "*V:S,*K|R A I rD wD|",
-    "dict.pop_default": "*V:S,*K,*V|R A I rD wD|", "dict.setdefault": "*V:S,*K,*V|A rD wD|", "dict.clear": "None:S|wD|",
-    "dict.getbox": "*V:S,*K,*V|A rD|", "dict.popbox": "*V:S,*K,*V|R A I rD wD|",
-    "dict.copy": "S:S|A rD|", "dict.from": "S:S|A rD|", "dict.keys": "list[K]:S|A rD|", "dict.values": "list[V]:S|A rD|",
+    # dicts: keys are ints, strs, objects, or tuples of int, bool, str, None, objects and such tuples
+    # (Dict.kind 0, 1, or the key's descriptor, passed as an int), which hash, compare and print (a
+    # KeyError's message) without user code but an object's: U? holds where the op's Ins.x, the key
+    # descriptor (Gen.key_fx), has H<id> (__hash__, __eq__), or P<id> and the op has R (the
+    # KeyError's repr). That repr is runtime.c's, which can reach pys_repr_enter: I
+    "dict.new": "dict[K,V]:int,int|A|", "dict.has": "bool:S,*K|rD U?|", "dict.getitem": "*V:S,*K|R A I rD U?|",
+    "dict.get": "*V:S,*K,*V|rD U?|", "dict.set": "None:S,*K,*V|A rD wD U?|", "dict.pop": "*V:S,*K|R A I rD wD U?|",
+    "dict.del": "*V:S,*K|R A I rD wD U?|", "dict.pop_default": "*V:S,*K,*V|R A I rD wD U?|", "dict.popitem": "tuple[K,V]:S|R A rD wD|",
+    "dict.setdefault": "*V:S,*K,*V|A rD wD U?|", "dict.clear": "None:S|wD|",
+    "dict.getbox": "*V:S,*K,*V|A rD U?|", "dict.popbox": "*V:S,*K,*V|R A I rD wD U?|",
+    "dict.copy": "S:S|A rD U?|", "dict.from": "S:S|A rD U?|", "dict.keys": "list[K]:S|A rD|", "dict.values": "list[V]:S|A rD|",
     "dict.items": "list[tuple[K,V]]:S|A rD|", "dict.end": "int:S|rD|", "dict.next": "int:S,int,int,int|R rD|",
     "dict.prev": "int:S,int,int,int|R rD|", "dict.key": "*K:S,int|rD|", "dict.val": "*V:S,int|rD|",
-    "dict.find": "int:S,*K|rD|", "dict.entry": "int:S,*K|R A I rD|", "dict.entry_set": "None:S,int,*V|rD wD|",
-    "dict.update": "None:S,S|A rD wD|", "dict.update_pairs": "None:S,list[T]|A rL rD wD|",
-    "dict.fromkeys": "dict[K,V]:int,list[T],*V|A rL|", "dict.fromkeys_dict": "dict[K,V]:S,*V|A rD|",
+    "dict.find": "int:S,*K|rD U?|", "dict.entry": "int:S,*K|R A I rD U?|", "dict.entry_set": "None:S,int,*V|rD wD|",
+    "dict.update": "None:S,S|A rD wD U?|", "dict.update_pairs": "None:S,list[T]|A rL rD wD U?|",
+    "dict.fromkeys": "dict[K,V]:int,list[T],*V|A rL U?|", "dict.fromkeys_dict": "dict[K,V]:S,*V|A rD U?|",
     # sets and frozensets (CPython's tables; Set.kind as Dict.kind): their elements are a dict's
-    # keys, which hash, compare and print without user code. A set's memory counts as a dict's (rD
-    # wD: what changes a set may change a dict); what an operation makes, it alone has seen
-    "set.new": "set[T]:int|A|", "set.add": "None:S,*T|A rD wD|", "set.has": "bool:S,*T|rD|", "set.discard": "None:S,*T|rD wD|",
-    "set.remove": "None:S,*T|R A I rD wD|", "set.pop": "*T:S|R rD wD|", "set.clear": "None:S|A wD|", "set.copy": "S:S|A rD|",
-    "set.update": "None:S,S|A rD wD|", "set.update_list": "None:S,list[T]|A rL rD wD|", "set.update_dict": "None:S,dict[T,V]|A rD wD|",
-    "set.union_more": "None:S,S,S|A rD wD|", "set.or": "S:S,S|A rD|", "set.and": "S:S,S|A rD|", "set.and_list": "S:S,list[T]|A rL rD|",
-    "set.assign": "None:S,S|rD wD|", "set.isub": "None:S,S|A rD wD|", "set.isub_list": "None:S,list[T]|A rL rD wD|",
-    "set.sub": "S:S,S|A rD|", "set.sub_list": "S:S,list[T]|A rL rD|", "set.sub_dict": "S:S,dict[T,V]|A rD|",
-    "set.xor": "S:S,S|A rD|", "set.xor_list": "S:S,list[T]|A rL rD|", "set.xor_dict": "S:S,dict[T,V]|A rD|",
-    "set.ixor": "None:S,S|A rD wD|", "set.ixor_list": "None:S,list[T]|A rL rD wD|", "set.ixor_dict": "None:S,dict[T,V]|A rD wD|",
-    "set.cmp": "int:S,S,int|rD|", "set.le_list": "bool:S,list[T]|A rL rD|", "set.ge_list": "bool:S,list[T]|rL rD|",
-    "set.isdisjoint": "bool:S,S|rD|", "set.isdisjoint_list": "bool:S,list[T]|rL rD|", "set.next": "int:S,int,int|R rD|",
+    # keys, which hash, compare and print without user code but an object's (U?, as a dict's). A
+    # set's memory counts as a dict's (rD wD: what changes a set may change a dict); what an
+    # operation makes, it alone has seen
+    "set.new": "set[T]:int|A|", "set.add": "None:S,*T|A rD wD U?|", "set.has": "bool:S,*T|rD U?|", "set.discard": "None:S,*T|rD wD U?|",
+    "set.remove": "None:S,*T|R A I rD wD U?|", "set.pop": "*T:S|R rD wD|", "set.clear": "None:S|A wD|", "set.copy": "S:S|A rD|",
+    "set.update": "None:S,S|A rD wD U?|", "set.update_list": "None:S,list[T]|A rL rD wD U?|", "set.update_dict": "None:S,dict[T,V]|A rD wD U?|",
+    "set.union_more": "None:S,S,S|A rD wD U?|", "set.or": "S:S,S|A rD U?|", "set.and": "S:S,S|A rD U?|", "set.and_list": "S:S,list[T]|A rL rD U?|",
+    "set.assign": "None:S,S|rD wD|", "set.isub": "None:S,S|A rD wD U?|", "set.isub_list": "None:S,list[T]|A rL rD wD U?|",
+    "set.sub": "S:S,S|A rD U?|", "set.sub_list": "S:S,list[T]|A rL rD U?|", "set.sub_dict": "S:S,dict[T,V]|A rD U?|",
+    "set.xor": "S:S,S|A rD U?|", "set.xor_list": "S:S,list[T]|A rL rD U?|", "set.xor_dict": "S:S,dict[T,V]|A rD U?|",
+    "set.ixor": "None:S,S|A rD wD U?|", "set.ixor_list": "None:S,list[T]|A rL rD wD U?|", "set.ixor_dict": "None:S,dict[T,V]|A rD wD U?|",
+    "set.cmp": "int:S,S,int|rD U?|", "set.le_list": "bool:S,list[T]|A rL rD U?|", "set.ge_list": "bool:S,list[T]|rL rD U?|",
+    "set.isdisjoint": "bool:S,S|rD U?|", "set.isdisjoint_list": "bool:S,list[T]|rL rD U?|", "set.next": "int:S,int,int|R rD|",
     "set.key": "*T:S,int|rD|", "set.list": "list[T]:S|A rD|",
     # strings
     "str.audit": "None:str,str|R|",
-    "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
+    "str.get": "str:S,int|R A|", "str.slice": "str:S,int,int|A|", "str.slice_step": "str:S,int,int,int|R A|", "str.add": "str:S,str|A|", "str.mul": "str:S,int|R A|",
     "str.cat": "str:int,str,str,str,str,str,str,str,str|A|",  # (the first n of eight strs: Gen.concat)
     "str.contains": "bool:S,str|R|", "str.join": "str:S,list[str]|R A rL|", "str.split": "list[str]:S,str,int|R A|",
     "str.split_first": "str:S,str,int|R A|",  # (s.split(sep, n)[0]: Gen.index)
@@ -572,7 +603,7 @@ RUNTIME: dict[str, str] = {
     "str.lstrip": "str:S,str|A|", "str.rstrip": "str:S,str|A|", "str.startswith": "bool:S,str,int,int|R|",
     "str.endswith": "bool:S,str,int,int|R|", "str.find": "int:S,str,int,int|R|", "str.rfind": "int:S,str,int,int|R|",
     "str.count": "int:S,str,int,int|R|", "str.index": "int:S,str,int,int|R|", "str.rindex": "int:S,str,int,int|R|",
-    "str.replace": "str:S,str,str|R A|", "str.upper": "str:S|A|", "str.lower": "str:S|A|", "str.swapcase": "str:S|A|",
+    "str.replace": "str:S,str,str|R A|", "str.replace_count": "str:S,str,str,int|R A|", "str.upper": "str:S|A|", "str.lower": "str:S|A|", "str.swapcase": "str:S|A|",
     "str.capitalize": "str:S|A|", "str.title": "str:S|A|", "str.casefold": "str:S|A|", "str.isdigit": "bool:S||",
     "str.isalpha": "bool:S||", "str.isalnum": "bool:S||", "str.isspace": "bool:S||", "str.isupper": "bool:S||",
     "str.islower": "bool:S||", "str.istitle": "bool:S||", "str.isascii": "bool:S||", "str.isdecimal": "bool:S||",
@@ -605,12 +636,14 @@ RUNTIME: dict[str, str] = {
     "m.nextafter": "float:float,float||", "m.ulp": "float:float||", "m.remainder": "float:float,float|R|",
     "m.fma": "float:float,float,float|R|", "m.fsum": "float:list[float]|R A rL|", "m.prod_int": "int:list[T],int|R rL|",
     "m.prod_float": "float:list[float],float|rL|", "m.floats": "list[float]:list[T]|A rL|",
-    "m.dist": "float:list[float],list[float]|R A rL|",
+    "m.dist": "float:list[float],list[float]|R A rL|", "m.hypot_list": "float:list[float]|A rL|",
+    "m.isclose": "bool:float,float,float,float|R|", "m.gamma": "float:float|R|", "m.lgamma": "float:float|R|",
     # any type, by its descriptor
     "eq": "bool:*T,*T,#|rL rD U?|", "cmpop": "int:*T,*T,#,int|R rL rD U?|", "repr": "str:*T,#|A I rL rD U?|",
     "eq.pair": "bool:*T,*T,%ptr,%ptr|rL rD U|",  # conservative: dict lookup's call graph reaches user equality
+    "hash": "int:*T,#|U?|", "hash.id": "int:%ptr||",
     "format": "str:*T,#,str|R A I rL rD U?|", "default_repr": "str:str,%ptr|A|", "repr_enter": "bool:%ptr|I|",
-    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "ubox": "%ptr:int,*T|A|", "ubox_opt": "%ptr:int,%ptr,int|A|", "unpack_check": "None:int,int|R|",
+    "repr_leave": "None:%ptr|I|", "alloc": "%ptr:int|A|", "on_stack": "int:%ptr|I|", "box": "%ptr:*T|A|", "ubox": "%ptr:int,*T|A|", "ubox_opt": "%ptr:int,%ptr,int|A|", "unpack_check": "None:int,int|R|", "unpack_ex_check": "None:int,int|R|",
     # errors and the process
     "raise": "None:str,str|R N|", "exit": "None:int|R N I|", "exit_msg": "None:str|R N I|", "argv": "list[str]:|I|",
     "platform": "str:|A|", "errno": "int:str|R A|", "system": "int:str|R I|", "execv": "None:str,list[str]|R N A I rL|", "getpid": "int:|I|", "exists": "bool:str|I|",

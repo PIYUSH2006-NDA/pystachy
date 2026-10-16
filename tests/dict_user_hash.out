@@ -1,0 +1,61 @@
+set ['hash 1,2']
+overwrite ['hash 1,2', 'eq 1,2 1,2']
+{P(1, 2): 'b'} True False
+in ['hash 1,2', 'eq 1,2 1,2', 'hash 2,1']
+b None b
+getitem, get ['hash 1,2', 'eq 1,2 1,2', 'hash 9,9', 'hash 1,2', 'eq 1,2 1,2']
+KeyError P(3, 3)
+missing ['hash 3,3']
+del ['hash 1,2', 'eq 1,2 1,2']
+{}
+display ['hash 0,31', 'hash 1,0', 'eq 0,31 1,0', 'hash 0,31', 'eq 0,31 0,31']
+2 {P(1, 0), P(0, 31)}
+add ['hash 1,0', 'eq 0,31 1,0', 'eq 1,0 1,0']
+True
+in set ['hash 0,31', 'eq 0,31 0,31']
+discard ['hash 0,31', 'eq 0,31 0,31']
+{P(1, 0)} {P(1, 0)}
+or ['hash 1,0', 'eq 1,0 1,0']
+comprehension ['hash 0,0', 'hash 1,1', 'hash 2,2', 'hash 3,3', 'hash 4,4']
+{P(0, 0), P(1, 1), P(2, 2), P(3, 3), P(4, 4)} [P(0, 0), P(1, 1), P(2, 2), P(3, 3), P(4, 4)]
+count ['hash 1,1', 'hash 1,1', 'hash 1,1', 'eq 1,1 1,1', 'hash 1,1', 'eq 1,1 1,1', 'hash 2,2', 'hash 2,2']
+augmented ['hash 1,1', 'eq 1,1 1,1', 'hash 1,1', 'eq 1,1 1,1']
+{P(1, 1): 7, P(2, 2): 1}
+1
+in, then getitem ['hash 2,2', 'eq 2,2 2,2', 'hash 2,2', 'eq 2,2 2,2']
+0 0
+setdefault ['hash 3,3', 'hash 3,3', 'eq 3,3 3,3']
+0 -1
+pop ['hash 3,3', 'eq 3,3 3,3', 'hash 4,4']
+{P(5, 5)} {P(6, 6): 0}
+set(list), fromkeys ['hash 5,5', 'hash 5,5', 'eq 5,5 5,5', 'hash 6,6', 'hash 6,6', 'eq 6,6 6,6']
+tuple key ['hash 1,1']
+3 False
+tuple getitem ['hash 1,1', 'eq 1,1 1,1', 'hash 1,1']
+insert ['hash 0', 'hash 1', 'hash 2', 'hash 3', 'hash 4', 'eq 0 4', 'hash 5', 'eq 1 5']
+set(d) ['eq 0 4', 'eq 1 5']
+{K0, K1, K2, K3, K4, K5} [0, 1, 2, 3, 4, 5]
+5 5
+difference ['hash 0', 'eq 0 4', 'eq 1 5', 'hash 1', 'eq 0 4', 'eq 1 5']
+update(d) ['hash 0', 'hash 1', 'hash 2', 'hash 4', 'eq 0 4']
+^= d ['hash 4', 'hash 5', 'eq 0 4', 'eq 1 5', 'eq 1 5']
+[0, 1, 2, 5]
+dict(d) []
+True False
+== ['eq 0 4', 'eq 1 5', 'eq 0 4', 'eq 1 5']
+False False
+== differs ['hash 1', 'hash 0']
+copy, update ['eq 0 4', 'eq 1 5']
+False True True
+other types ['eq 2 2', 'hash 2', 'hash 2', 'eq 2 2']
+ValueError bad key -1
+raising __hash__ ['hash -1']
+ValueError bad key -2
+ValueError bad key -3
+raising __hash__ in a set, a tuple ['hash -2', 'hash -3']
+6 6
+mutating __eq__ ['cleared']
+2 [1, 2]
+-2 -2 4611686018427387904 0 1
+1 False 3
+[exit 0]

@@ -1768,7 +1768,8 @@ def sgp4(satrec, tsince, whichconst=None):
 
      if nm <= 0.0:
 
-         satrec.error_message = (f'mean motion {nm:f} is less than zero')  # Pystachy port: str.format (M7) as an f-string
+         satrec.error_message = ('mean motion {0:f} is less than zero'
+                                 .format(nm))
          satrec.error = 2;
          #  sgp4fix add return
          return false, false;
@@ -1781,8 +1782,8 @@ def sgp4(satrec, tsince, whichconst=None):
      #  sgp4fix am is fixed from the previous nm check
      if em >= 1.0 or em < -0.001:  # || (am < 0.95)
 
-         satrec.error_message = (f'mean eccentricity {em:f} not within'
-                                 ' range 0.0 <= e < 1.0')  # Pystachy port: str.format (M7) as an f-string
+         satrec.error_message = ('mean eccentricity {0:f} not within'
+                                 ' range 0.0 <= e < 1.0'.format(em))
          satrec.error = 1;
          #  sgp4fix to return if there is an error in eccentricity
          return false, false;
@@ -1835,8 +1836,8 @@ def sgp4(satrec, tsince, whichconst=None):
 
          if ep < 0.0 or ep > 1.0:
 
-             satrec.error_message = (f'perturbed eccentricity {ep:f} not within'
-                                     ' range 0.0 <= e <= 1.0')  # Pystachy port: str.format (M7) as an f-string
+             satrec.error_message = ('perturbed eccentricity {0:f} not within'
+                                     ' range 0.0 <= e <= 1.0'.format(ep))
              satrec.error = 3;
              #  sgp4fix add return
              return false, false;
@@ -1883,7 +1884,8 @@ def sgp4(satrec, tsince, whichconst=None):
      pl    = am*(1.0-el2);
      if pl < 0.0:
 
-         satrec.error_message = (f'semilatus rectum {pl:f} is less than zero')  # Pystachy port: str.format (M7) as an f-string
+         satrec.error_message = ('semilatus rectum {0:f} is less than zero'
+                                 .format(pl))
          satrec.error = 4;
          #  sgp4fix add return
          return false, false;
@@ -1947,8 +1949,8 @@ def sgp4(satrec, tsince, whichconst=None):
      #  sgp4fix for decaying satellites
      if mrt < 1.0:
 
-         satrec.error_message = (f'mrt {mrt:f} is less than 1.0 indicating'
-                                 ' the satellite has decayed')  # Pystachy port: str.format (M7) as an f-string
+         satrec.error_message = ('mrt {0:f} is less than 1.0 indicating'
+                                 ' the satellite has decayed'.format(mrt))
          satrec.error = 6;
 
      return r, v;

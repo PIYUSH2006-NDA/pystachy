@@ -408,8 +408,11 @@ def gen_fl_fields(self, ci: ClassInfo) -> None:
         fl.exposed()
         ci.leak = fl.leak
     elif ci.methods["__init__"].node.kids[0].kind == "noann":
-        if not self.is_dc(ci.name):
+        if not self.is_dc(ci.name) or "no-init" in ci.dcopts:
             fl.exposed()
+        for f in ci.fields:
+            if f in ci.fopts and "no-init" in ci.fopts[f] and f not in ci.fdefault and f not in ci.factory:
+                fl.unsafe[f] = True  # (a field(init=False) without a default, which the __init__ @dataclass writes leaves unassigned)
     else:
         init = ci.methods["__init__"]
         asg: dict[str, bool] = {}
@@ -649,9 +652,12 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
         self.fl_expr(fl, self.cnodes[n.line])  # (the reads of a class Pystachy leaves out, also in its methods)
     elif k == "expr" or k == "assert" or k == "del":
         for c in n.kids:
+            mark = len(fl.log)
             self.fl_expr(fl, c)
             if k == "del" and c.kind == "name":
                 fl.drop(c.s)  # unbound from here on
+            if k == "assert" and c is not n.kids[0]:
+                fl.undo(mark)  # (the message runs only where the assertion fails: its := bind nothing after it)
     elif k == "with":
         for it in n.kids[:-1]:
             self.fl_expr(fl, it.kids[0])
@@ -721,9 +727,12 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
 def gen_fl_target(self, fl: Flow, t: Node) -> None:
     if t.kind == "name":
         fl.put(t.s)
+    elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me and t.s not in fl.fields:
+        fl.exposed()  # (self.x = v of a property x: its setter takes self)
+        fl.escaped = True
     elif t.kind == "attr" and fl.me != "" and t.kids[0].kind == "name" and t.kids[0].s == fl.me:
         fl.put("." + t.s)
-    elif t.kind == "tuple":
+    elif t.kind == "tuple" or t.kind == "starred":
         for k in t.kids:
             self.fl_target(fl, k)
     else:
@@ -749,14 +758,42 @@ def gen_fl_expr(self, fl: Flow, e: Node) -> None:
         elif "." + e.s not in fl.defd and " dead" not in fl.defd:
             fl.unsafe[e.s] = True
     elif k == "listcomp":
-        # [elt for target in iter if cond]: iter is read outside, the rest with target bound
+        # [elt for target in iter if cond]: iter is read outside, the rest with target bound;
+        # a later for clause reads its iterable, then binds its target (what a := there binds is
+        # not surely bound after it)
         self.fl_expr(fl, e.kids[2])
         mark = len(fl.log)
         self.fl_target(fl, e.kids[1])
-        for i in range(len(e.kids)):
-            if i != 1 and i != 2:
-                self.fl_expr(fl, e.kids[i])
+        for c in e.kids[3:]:
+            if c.kind == "compfor":
+                self.fl_expr(fl, c.kids[1])
+                self.fl_target(fl, c.kids[0])
+            else:
+                self.fl_expr(fl, c)
+        self.fl_expr(fl, e.kids[0])
         fl.undo(mark)
+    elif k == "walrus":
+        self.fl_expr(fl, e.kids[0])
+        fl.put(e.s)
+    elif k == "boolop" or k == "ifexp" or k == "cmp":
+        # what may not run: the operands of and/or after the first, the arms of an if-else and
+        # the comparisons of a chain after the first. What a := there binds is not surely bound
+        # after it (each arm is analysed from the state after the test, and they are joined).
+        # Defaults of lambdas evaluated in an operand can bind names too; their bodies cannot.
+        n = 1 if k != "cmp" else 2
+        for c in e.kids[:n]:
+            self.fl_expr(fl, c)
+        mark = len(fl.log)
+        if k == "ifexp":
+            self.fl_expr(fl, e.kids[1])
+            then = fl.since(mark)
+            fl.undo(mark)
+            self.fl_expr(fl, e.kids[2])
+            fl.join(then, mark)
+        else:
+            for c in e.kids[n:]:
+                self.fl_expr(fl, c)
+            fl.undo(mark)
     elif k == "call":
         c = e.kids[0]
         if c.kind == "attr":

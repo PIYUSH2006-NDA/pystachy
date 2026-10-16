@@ -3,9 +3,9 @@
 # PSF License v2; see tests/upstream/CPYTHON-LICENSE.txt and THIRD_PARTY_NOTICES.
 # Each test method becomes a function of the same name; assertEqual(a, b) prints a and asserts
 # a == b, assertRaises a try statement that prints the exception. An empty list display is an
-# annotated variable. test_max and test_min draw their data with random.randrange(); here a
-# fixed linear congruential sequence stands in for it (no random module), and keys.__getitem__,
-# which the subset cannot bind as a value (issue #247), is a lambda that indexes keys.
+# annotated variable. test_max and test_min draw their data with random.randrange(), seeded
+# here so that the data are the same on every run, and keys.__getitem__, which the subset cannot
+# bind as a value (issue #247), is a lambda that indexes keys.
 # EXCLUDED upstream cases:
 # - max(1, 2, 3.0), max(1, 2.0, 3), max(1.0, 2, 3) and the min() ones: a result that is an int
 #   or a float by the values (rejected), and sum([0.5, 1]), sum([1, 0.5]): lists of ints and
@@ -20,17 +20,12 @@
 #   their own); max(42) and min(42) are tests/errors/upstream_builtin_*.py (CPython's messages)
 import math
 from operator import neg
+import random
 
 
 def check(label: str, got, expected) -> None:
     print(label, repr(got))
     assert got == expected, label
-
-
-def randrange(state: list[int], stop: int) -> int:
-    # stands in for random.randrange(stop): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return state[0] % stop
 
 
 def test_max() -> None:
@@ -52,11 +47,11 @@ def test_max() -> None:
 
     check("max((1, 2), key=None)", max((1, 2), key=None), 2)
 
-    state = [2024]
-    data = [randrange(state, 200) for i in range(100)]
+    random.seed(2024)
+    data = [random.randrange(200) for i in range(100)]
     keys: dict[int, int] = {}
     for elem in data:  # dict((elem, random.randrange(50)) for elem in data)
-        keys[elem] = randrange(state, 50)
+        keys[elem] = random.randrange(50)
     f = lambda elem: keys[elem]  # keys.__getitem__
     check("max(data, key=f)", max(data, key=f),
                      sorted(reversed(data), key=f)[-1])
@@ -81,11 +76,11 @@ def test_min() -> None:
 
     check("min((1, 2), key=None)", min((1, 2), key=None), 1)
 
-    state = [1913]
-    data = [randrange(state, 200) for i in range(100)]
+    random.seed(1913)
+    data = [random.randrange(200) for i in range(100)]
     keys: dict[int, int] = {}
     for elem in data:  # dict((elem, random.randrange(50)) for elem in data)
-        keys[elem] = randrange(state, 50)
+        keys[elem] = random.randrange(50)
     f = lambda elem: keys[elem]  # keys.__getitem__
     check("min(data, key=f)", min(data, key=f),
                      sorted(data, key=f)[0])

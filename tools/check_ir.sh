@@ -19,7 +19,7 @@ PYS=${1:-./pystachy}
 [ $# = 0 ] || shift
 for f; do [ -f "$f" ] || { echo "tools/check_ir.sh: no such program: $f" >&2; exit 2; }; done
 if [ $# = 0 ]; then
-  for f in pystachy.py runtime.py tests/*.py tests/deviations/*.py bench/*.py tests/ir/*.py; do
+  for f in pystachy.py runtime.py tests/*.py tests/deviations/*.py bench/*.py bench/pyperformance/*.py tests/ir/*.py; do
     [ -f "$f" ] && set -- "$@" "$f"
   done
 fi

@@ -1,0 +1,5 @@
+int str False {Box(1): 'int'} {Box('s'): 'str'}
+11 False {Cell(1): 11, Cell(5): 5} {Cell('a')} {Cell(1), Cell(2), Cell(3)}
+['Box(3)'] Cell(9)
+True True -3550055125485641917
+[exit 0]

@@ -45,7 +45,7 @@ def legal_date(year, month, day):
         daysinmonth = 30 if month in HAVE_30_DAYS else 31
 
     if not 0 < day <= daysinmonth:
-        raise ValueError(f"Month {month} doesn't have a day {day}")  # Pystachy port: no str.format() yet (M7, #12)
+        raise ValueError("Month {} doesn't have a day {}".format(month, day))
 
     return True
 

@@ -23,8 +23,9 @@ experienced programmers.  Visit http://diveintopython.org/ for the
 latest version.
 """
 
-# Pystachy port: `import argparse` moved into parse_args(), its only user, and
-# `import re` dropped: Pystachy has neither module (#11).
+# Pystachy port: `import argparse` moved into parse_args(), its only user:
+# Pystachy has no argparse module (#11).
+import re
 import sys
 
 
@@ -81,33 +82,17 @@ def toRoman(n: int) -> str:
 
 
 # Define pattern to detect valid Roman numerals
-# Pystachy port: without re (#11), this function stands in for
-# romanNumeralPattern.search(s), whose pattern was (in re.VERBOSE form)
-#     ^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$
-# where `$` also matches before a final newline. Taking the first alternative
-# that matches is enough: where another one matches too, it leaves a letter
-# that the rest of the pattern cannot match, so backtracking never succeeds.
-def _romanNumeralPattern_search(s: str) -> bool:
-    end = len(s)
-    if end > 0 and s[end - 1] == "\n":
-        end -= 1
-    i = 0
-    count = 0
-    while i < end and count < 4 and s[i] == "M":
-        i += 1
-        count += 1
-    for one, five, ten in (("C", "D", "M"), ("X", "L", "C"), ("I", "V", "X")):
-        pair = s[i:i + 2]
-        if pair == one + ten or pair == one + five:
-            i += 2
-        else:
-            if i < end and s[i] == five:
-                i += 1
-            count = 0
-            while i < end and count < 3 and s[i] == one:
-                i += 1
-                count += 1
-    return i == end
+romanNumeralPattern = re.compile("""
+    ^                   # beginning of string
+    M{0,4}              # thousands - 0 to 4 M's
+    (CM|CD|D?C{0,3})    # hundreds - 900 (CM), 400 (CD), 0-300 (0 to 3 C's),
+                        #            or 500-800 (D, followed by 0 to 3 C's)
+    (XC|XL|L?X{0,3})    # tens - 90 (XC), 40 (XL), 0-30 (0 to 3 X's),
+                        #        or 50-80 (L, followed by 0 to 3 X's)
+    (IX|IV|V?I{0,3})    # ones - 9 (IX), 4 (IV), 0-3 (0 to 3 I's),
+                        #        or 5-8 (V, followed by 0 to 3 I's)
+    $                   # end of string
+    """, re.VERBOSE)
 
 
 def fromRoman(s: str, special_case: bool = True) -> int:
@@ -135,7 +120,7 @@ def fromRoman(s: str, special_case: bool = True) -> int:
     if s == 'N' and special_case:
         return 0
 
-    if not _romanNumeralPattern_search(s):  # Pystachy port: see above
+    if not romanNumeralPattern.search(s):
         raise InvalidRomanNumeralError('Invalid Roman numeral: %s' % s)
 
     result = 0

@@ -97,7 +97,8 @@ for aw in [-1, 0, 3, 99]:
 
 # test_ucslevel.py
 versions = list_versions()
-print("versions", len(versions), versions[0], versions)
+(only,) = list_versions()
+print("versions", len(versions), versions[0], versions, only)
 latest = versions[-1]
 for v in ["latest", "auto", "4.1.0", "9.0.0", "invalid", "999.0.0", "x.y.z", "8", "5.0.5"]:
     print("wcmatch", v, wcwidth._wcmatch_version(v) == latest)

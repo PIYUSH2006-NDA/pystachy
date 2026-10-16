@@ -23,7 +23,7 @@ from . import (
     # bahai,  # Pystachy port: bahai, french_republican and persian need PyMeeus, not ported
     coptic,
     daycount,
-    # dublin,  # Pystachy port: its functions are DayCount's bound methods (M2, #7; M3, #8)
+    dublin,
     # french_republican,  # Pystachy port: PyMeeus, as bahai
     gregorian,
     hebrew,
@@ -47,7 +47,7 @@ __all__ = [
     # 'bahai',  # Pystachy port: left out above, where import * would look for it
     'coptic',
     'daycount',
-    # 'dublin',  # Pystachy port: left out above, as bahai
+    'dublin',
     # 'french_republican',  # Pystachy port: left out above, as bahai
     'gregorian',
     'hebrew',

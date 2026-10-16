@@ -1,0 +1,44 @@
+True 1 1 False
+1 {M(m): 2}
+False -1 False
+0 False
+changed hash ['hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m', 'hash m']
+True 2 2 1
+behind a ['hash a', 'hash m', 'hash m', 'a=m', 'hash m', 'a=m', 'hash m', 'a=m']
+780 40
+KeyError M(k)
+5 None
+pop new []
+KeyError M(k)
+del new ['hash k']
+KeyError M(k)
+5 None
+pop emptied []
+KeyError M(k)
+del emptied ['hash k']
+None 1.5 None
+pop float ['hash a', 'hash b', 'a=b', 'hash a', 'a=a']
+copy 10 2 ['k1=k3', 'k1=k5', 'k3=k5', 'k1=k7', 'k3=k7', 'k5=k7', 'k1=k9', 'k3=k9', 'k5=k9', 'k7=k9']
+dict 10 2 ['k1=k3', 'k1=k5', 'k3=k5', 'k1=k7', 'k3=k7', 'k5=k7', 'k1=k9', 'k3=k9', 'k5=k9', 'k7=k9']
+True True [M(k1), M(k3), M(k5), M(k7), M(k9)]
+insert ['hash new', 'hash new']
+6 6 [M(k9), M(new)]
+copy 10 3 []
+dict 10 3 ['k2=k4', 'k1=k5', 'k1=k7', 'k5=k7', 'k2=k8', 'k4=k8']
+True True [M(k1), M(k2), M(k4), M(k5), M(k7), M(k8)]
+insert ['hash new', 'k2=new', 'k4=new', 'k8=new', 'hash new', 'k2=new', 'k4=new', 'k8=new']
+7 7 [M(k8), M(new)]
+copy 12 4 []
+dict 12 4 ['k1=k3', 'k1=k5', 'k3=k5', 'k2=k6', 'k1=k7', 'k3=k7', 'k5=k7', 'k1=k9', 'k3=k9', 'k5=k9', 'k7=k9', 'k2=k10', 'k6=k10', 'k1=k11', 'k3=k11', 'k5=k11', 'k7=k11', 'k9=k11']
+True True [M(k1), M(k2), M(k3), M(k5), M(k6), M(k7), M(k9), M(k10), M(k11)]
+insert ['hash new', 'k2=new', 'k6=new', 'k10=new', 'hash new', 'k2=new', 'k6=new', 'k10=new']
+10 10 [M(k11), M(new)]
+copy 6 6 []
+dict 6 6 ['k1=k3', 'k2=k4', 'k1=k5', 'k3=k5']
+True True [M(k1), M(k2), M(k3), M(k4), M(k5)]
+insert ['hash new', 'k2=new', 'k4=new', 'hash new', 'k2=new', 'k4=new']
+6 6 [M(k5), M(new)]
+clean []
+{M(p): 1, M(q): 2, M(r): 3} {M(p): 1, M(q): 2, M(r): 3}
+{d: 6} {d: 6} 3
+[exit 0]

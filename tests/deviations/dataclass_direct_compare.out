@@ -1,0 +1,4 @@
+True False
+TypeError '<' not supported between instances of 'P' and 'NoneType'
+False False
+[exit 0]

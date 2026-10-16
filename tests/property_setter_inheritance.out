@@ -1,0 +1,38 @@
+Base.set 1
+Base.set 2
+Logged.set 3
+Own.set 4
+Base.set 5
+now 5 n=5
+Base.del
+removed -1
+Base.set 0
+n=0
+Base.set 5
+now 5 n=5
+Base.del
+removed -1
+Base.set 0
+n=0
+Logged.set 5
+now 105 n=105
+Base.del
+removed -1
+Logged.set 0
+n=100
+Own.set 5
+now 1010 n=1010
+error property 'n' of 'Own' object has no deleter
+Own.set 1011
+n=3022
+constructor property 'n' of 'ReadOnly' object has no setter
+Logged.set 7
+Logged.set 8
+108
+Base.set 9
+Base.set 5
+5
+Own.set 10
+Own.set 11
+1022
+[exit 1]

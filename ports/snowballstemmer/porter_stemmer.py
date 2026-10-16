@@ -17,20 +17,20 @@ class PorterStemmer(BaseStemmer):
     I_p2 = 0
     I_p1 = 0
 
-    def __r_shortv(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_shortv(self):
         if not self.out_grouping_b(PorterStemmer.g_v_WXY):
             return False
         if not self.in_grouping_b(PorterStemmer.g_v):
             return False
         return self.out_grouping_b(PorterStemmer.g_v)
 
-    def __r_R1(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_R1(self):
         return self.I_p1 <= self.cursor
 
-    def __r_R2(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_R2(self):
         return self.I_p2 <= self.cursor
 
-    def __r_Step_1a(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1a(self):
         self.ket = self.cursor
         among_var = self.find_among_b(PorterStemmer.a_0)
         if among_var == 0:
@@ -40,7 +40,7 @@ class PorterStemmer(BaseStemmer):
             self.slice_from(PorterStemmer.as_0[among_var - 1])
         return True
 
-    def __r_Step_1b(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1b(self):
         self.ket = self.cursor
         among_var = self.find_among_b(PorterStemmer.a_2)
         if among_var == 0:
@@ -83,7 +83,7 @@ class PorterStemmer(BaseStemmer):
                 self.cursor = c
         return True
 
-    def __r_Step_1c(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_1c(self):
         self.ket = self.cursor
         while True:
             try:
@@ -103,7 +103,7 @@ class PorterStemmer(BaseStemmer):
         self.slice_from("i")
         return True
 
-    def __r_Step_2(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_2(self):
         self.ket = self.cursor
         among_var = self.find_among_b(PorterStemmer.a_3)
         if among_var == 0:
@@ -114,7 +114,7 @@ class PorterStemmer(BaseStemmer):
         self.slice_from(PorterStemmer.as_3[among_var - 1])
         return True
 
-    def __r_Step_3(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_3(self):
         self.ket = self.cursor
         among_var = self.find_among_b(PorterStemmer.a_4)
         if among_var == 0:
@@ -125,7 +125,7 @@ class PorterStemmer(BaseStemmer):
         self.slice_from(PorterStemmer.as_4[among_var - 1])
         return True
 
-    def __r_Step_4(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_4(self):
         self.ket = self.cursor
         among_var = self.find_among_b(PorterStemmer.a_5)
         if among_var == 0:
@@ -150,7 +150,7 @@ class PorterStemmer(BaseStemmer):
             self.slice_del()
         return True
 
-    def __r_Step_5a(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_5a(self):
         self.ket = self.cursor
         if self.cursor <= self.limit_backward or self.current[self.cursor - 1] != "e":
             return False
@@ -175,7 +175,7 @@ class PorterStemmer(BaseStemmer):
         self.slice_del()
         return True
 
-    def __r_Step_5b(self) -> bool:  # Pystachy port: -> bool (#7)
+    def __r_Step_5b(self):
         self.ket = self.cursor
         if self.cursor <= self.limit_backward or self.current[self.cursor - 1] != "l":
             return False
@@ -189,7 +189,7 @@ class PorterStemmer(BaseStemmer):
         self.slice_del()
         return True
 
-    def _stem(self) -> bool:  # Pystachy port: -> bool (#7)
+    def _stem(self):
         B_Y_found = False
         v_1 = self.cursor
         try:

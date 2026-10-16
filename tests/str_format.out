@@ -1,0 +1,110 @@
+1 and x
+bab
+zero|one
+1-  ab-1
+1.5, None, True
+a-b
+x{y}z{}
+{42}
+}{
+no fields
+
+7|7|7
+"it's"
+  1|nul: no conversion
+     3.142
+ab   |    c
+     1|
+ff 0o10 1,234,567 1010 +1.23e+04 25.000000%
+****mid****|1     |-02.50
+---v---
+  width 7
+    1.5
+3 4 9
+4 3
+20 10 first
+bc
+5 str key n
+int one
+b pt
+1x
+ca
+1:b 1
+  Point.__format__ ''
+  Point.__format__ 'spec'
+  Point.__str__
+  Point.__repr__
+  Point.__str__
+  Point.__repr__
+<3,4|> <3,4|spec> P3 Point(3, 4)   P3 Point
+'\xe9' 'ü'   ö  |
+  '\xf1'|
+ä€ö名前ü
+value
+éééxééé
+zero|three|oneone
+threetwelve a AB
+  arg a
+  arg b
+  arg >3
+  Point.__format__ '>3'
+ba<1,2|>3>
+  width 4
+  Point.__format__ '4'
+  Point.__repr__
+<5,6|4>Point(7, 8)
+1 two 3.0
+3.0two1
+5+five
+0/1/2
+a-b
+xc
+0:2:4
+5.4
+a 
+12
+21
+1+2=3
+1
+  arg c
+  arg e
+1234 12ce
+1:2
+12
+nested-x
+plain
+5!6
+1
+  1 item  12 items
+$12.34 price: $0.05
+id#1 id#2
+[     1] [  'ab'] [   2.5]
+['00', '01', '02']
+a=1, b=2
+{} {}
+  arg a
+  arg k
+kapq
+  arg k
+  arg j
+kjp
+['  1|', ' 22|'] ['a1', 'b2']
+1-a   7 <  5> 1 2 3 4 h:ab
+IndexError Replacement index 1 out of range for positional args tuple
+1.5|2.25 3.75  1.52.25 |
+x None   1 None|None|None
+  width 3
+  inner of b
+  getitem b> 'k'
+  inner of b>[k]
+  Box.__repr__ b>[k]>
+  getitem b 'x'
+  Box.__format__ b[x] 's'
+Box(b>[k]>) b[x]
+  Upper[ a ]
+  Upper[ b ]
+  Upper[ a ]
+ABA
+aadded
+KeyError 'b' 2
+[exit 0]

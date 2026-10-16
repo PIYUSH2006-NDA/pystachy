@@ -462,21 +462,37 @@ def pys_str_endswith(s: str, p: str, st: int, en: int) -> int:
 
 
 def pys_str_replace(s: str, a: str, b: str) -> str:
+    return replaced(s, a, b, -1)
+
+
+def pys_str_replace_count(s: str, a: str, b: str, count: int) -> str:
+    return replaced(s, a, b, count)
+
+
+def replaced(s: str, a: str, b: str, count: int) -> str:
+    # the first count occurrences of a replaced (all of them for a negative count), as CPython's
+    # replace() makes them
     n = len(s)
+    if count == 0:
+        return s
+    if count < 0 or count > n:
+        count = n + 1  # (more than a can occur)
     if len(a) == 0:
-        # b before each byte and at the end
-        r = _rt.str_new(n + (n + 1) * len(b))
+        # b before each of the first count - 1 bytes, and then once more (at the end, if count
+        # reaches it)
+        r = _rt.str_new(n + count * len(b))
         at = 0
-        for i in range(n):
+        for i in range(count - 1):
             _rt.copy(r, at, b, 0, len(b))
             _rt.str_put(r, at + len(b), _rt.byte(s, i))
             at += len(b) + 1
         _rt.copy(r, at, b, 0, len(b))
+        _rt.copy(r, at + len(b), s, count - 1, n - count + 1)
         return _rt.str_done(r)
     pos: list[int] = []  # where a occurs: one search pass, not one to count and one to copy
     dense = False
     j = 0
-    while True:
+    while len(pos) < count:
         j = again(s, a, j, n, 0, dense)
         if j == -1:
             break

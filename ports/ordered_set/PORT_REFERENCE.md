@@ -16,14 +16,18 @@ Archive SHA-256: `694a8e44c87657c59292ede72891eb91d34131f6531463aab3009191c77364
 
 | file | upstream SHA-256 | edits |
 |---|---|---|
-| `__init__.py` | `cad6b380ab3204a8bdb85b41b7ddfcc97c50b5d6add55082ebcd6cf6cd0232a8` | 50 marked edits in 29 diff hunks |
+| `__init__.py` | `cad6b380ab3204a8bdb85b41b7ddfcc97c50b5d6add55082ebcd6cf6cd0232a8` | 46 marked edits |
 
 ## Adaptation record
 
 - The class is specialized to `str`, drops its `MutableSet`/`Sequence` bases and accepts typed lists in place of general iterables.
-- Method aliases become forwarding methods. One-list algebra uses ordered-set membership in place of temporary builtin sets; algorithms and stored indices otherwise follow upstream.
+- Method aliases become forwarding methods. `difference_update()` takes any number of lists,
+  including none; its temporary set is annotated so that case has an element type.
+  The update methods use upstream's temporary builtin sets; `union()`, `intersection()`
+  and `difference()` take one list, and the last two test membership in an ordered set.
+  Algorithms and stored indices otherwise follow upstream.
 - Fancy indexing, generic comparison branches, itertools-based multi-operand union and slice-object support are omitted.
-- Fifty marked edits occupy twenty-nine diff hunks. The test suite deliberately retains upstream’s stale-index and duplicate-list behavior.
+- Forty-six marked edits remain. The test suite deliberately retains upstream’s stale-index and duplicate-list behavior.
 
 ## Validation snapshot
 

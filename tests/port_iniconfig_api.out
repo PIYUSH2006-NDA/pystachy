@@ -9,8 +9,10 @@ lineof: None 1 3
 lineof: 2 5
 lineof: 2 5
 get: 1 1
-get missing: None None
+get convert: 1 1.1 None
+get missing: None None 2.5 1.1
 section get: 1 1 2
+section get: 1 None 1 0
 KeyError 'other'
 getitem: 1
 section iter: ['value'] [('value', '1')]

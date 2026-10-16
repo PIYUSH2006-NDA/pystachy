@@ -306,7 +306,10 @@ fixed-point oracle; `tests/summary_worklist.py` also executes the solver nativel
 `mem.load`/`mem.store` and `mach.load`/`mach.store` classify their addresses directly,
 using known field addresses where needed. Effect analysis never parses LLVM text.
 Effects describe observable behavior for optimization, not an ownership or alias type system.
-`U?` applies only when a static descriptor can contain user classes or custom exceptions.
+`U?` applies only when a static descriptor can contain user classes or custom exceptions;
+a dict or set operation carries its keys' descriptor in `Ins.x` for this, where an object
+hashed by its class (`H<id>`) runs `__hash__` and `__eq__`, and one hashed by identity
+(`P<id>`) runs only the `__repr__` of a `KeyError`.
 Allocation-triggered collection can close unreachable files; that unspecified cleanup timing
 is represented by `A`, rather than adding file or I/O effects to every allocation.
 
@@ -397,9 +400,9 @@ support explicitly declared class/file alternatives. General dynamic values rema
 outside the current language.
 
 Mixed scalar/list/dict unions permit finite, explicitly written nesting. Recursive
-JSON aliases remain a separate representation milestone: the parser currently
-discards PEP 695 alias bodies, and type operations compare expanded canonical
-strings. A recursive alias must retain its declaration and use a finite reference
+JSON aliases remain a separate representation milestone: annotations expand type
+aliases where they name them (a recursive alias is rejected), and type operations
+compare expanded canonical strings. A recursive alias must retain its declaration and use a finite reference
 to its type graph, with cycle-safe equivalence and descriptor traversal. Repeated
 string expansion or a chosen maximum JSON depth would not provide recursive
 types. Mutable list/dict element types must remain invariant through that change.

@@ -1,0 +1,4 @@
+ValueError Unknown format code '\x663' for object of type 'float'
+ValueError Format specifier missing precision
+ValueError Unknown format code '\x663' for object of type 'int'
+[exit 0]

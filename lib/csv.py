@@ -68,12 +68,11 @@ SETTINGS:
 # does, and a dialect is checked as dialect_new checks it, so that what csv accepts, writes and
 # rejects is CPython's, with CPython's errors and their messages.
 #
-# The subset has no inheritance, no classes as values and no iterator classes, so:
+# The port retains these bounded adaptations:
 # - excel, excel_tab and unix_dialect are Dialect objects (CPython's are subclasses of csv.Dialect),
 #   and Dialect is the type CPython calls _csv.Dialect: what get_dialect() returns, and a reader's
 #   or writer's dialect;
-# - a reader parses all of its input when its iteration starts, and its __iter__ steps through the
-#   list of rows; a DictReader reads its rows, and the header, when it is made;
+# - a DictReader reads its rows and header when it is made; Reader itself is lazy;
 # - a row is a list[str] (a list holds one type), and a DictReader's row a dict[str, str]: where
 #   CPython's would hold another type (a float of QUOTE_NONNUMERIC, a None, a list under restkey),
 #   NotImplementedError says so.
@@ -688,12 +687,10 @@ def _ncont(s: str, i: int, j: int) -> int:
 
 
 class Reader:
-    # _csv.Reader: what reader() returns. Its first iteration reads the input to its end and parses
-    # it into a list of rows, which it steps through; the iterations after it have no rows, as
-    # CPython's reader has none once it is exhausted
+    # _csv.Reader: one record at a time, through the shared input iterator.
 
     def __init__(self, f, dialect: Dialect) -> None:
-        self._f = f
+        self._f = iter(f)
         self.dialect = dialect
         self.line_num = 0
         self._started = False
@@ -712,9 +709,27 @@ class Reader:
             p.finish(self.line_num)
         return p
 
-    def __iter__(self) -> Iterator[list[str]]:
-        rows = self._parse().rows
-        return iter(rows)
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> list[str]:
+        # Keep only the current record. Each next call consumes through its ending line,
+        # preserving shared input position and raising later parse errors only when reached.
+        p = _Parser(self.dialect)
+        while len(p.rows) == 0:
+            try:
+                line = next(self._f)
+            except StopIteration:
+                p.finish(self.line_num)
+                if len(p.rows) == 0:
+                    raise StopIteration
+                return p.rows[0]
+            if isinstance(line, str):
+                self.line_num += 1
+                p.feed(line, self.line_num)
+            else:
+                raise Error("iterator should return strings, not %.200s (the file should be opened in text mode)" % _typename(line))
+        return p.rows[0]
 
 
 def reader(csvfile, /, dialect=None, **fmtparams):

@@ -572,9 +572,7 @@ DEFAULT_BLOCKLIST = [
     "zoccola",
 ]
 
-# Pystachy port: a list for a set, as is _match_anywhere below: Pystachy has no sets yet
-# (M7). Sqids only looks a word up in them with `in` or loops over them.
-_exact_match = [
+_exact_match = {
     "ass",
     "cum",
     "fag",
@@ -582,7 +580,7 @@ _exact_match = [
     "g0o",
     "go0",
     "goo",
-]  # Pystachy port: a list
+}
 
 _match_at_ends = (
     "0rgasm",
@@ -945,8 +943,7 @@ _match_at_ends = (
     "zocco1a",
 )
 
-# Pystachy port: a list for a set, as _exact_match above.
-_match_anywhere = [
+_match_anywhere = {
     "aand",
     "ahole",
     "allupato",
@@ -1142,4 +1139,4 @@ _match_anywhere = [
     "xochota",
     "zizi",
     "zoccola",
-]  # Pystachy port: a list
+}

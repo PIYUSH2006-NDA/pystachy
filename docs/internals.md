@@ -115,9 +115,13 @@ serve multiple static element types. Optional reference values use null for `Non
 numbers use boxes. Integers use checked 64-bit arithmetic rather than CPython's arbitrary
 precision.
 
-Generic operations such as comparison, representation and sorting receive a compact type
-descriptor. The runtime interprets nested container descriptors and calls generated helpers
-for supported object methods. Specialized code still has static types; these descriptors
+Generic operations such as comparison, hashing, representation and sorting receive a compact
+type descriptor. The runtime interprets nested container descriptors and calls generated helpers
+for supported object methods. A dict's or set's descriptor of its keys tells objects hashed by
+identity (their addresses, which the non-moving collector keeps stable) from those hashed by
+their class's `__hash__`; a dict of the latter keeps CPython's hashes and an index of CPython's
+size (other dicts' have twice the slots), so that its lookups probe CPython's slots in CPython's
+order and call `__eq__` as often. Specialized code still has static types; these descriptors
 do not introduce a dynamic `Any` type.
 
 The collector is conservative, non-moving mark-and-sweep. It scans stack/register roots and
@@ -142,6 +146,13 @@ personality routine; local raises can branch directly to their handler.
 Handlers match exception classes and rethrow unmatched exceptions. `finally` and `with`
 cleanup run on the relevant normal and exceptional exits. Nested `finally` handling avoids
 exponential duplication. The C runtime is compiled with exception support in both tiers.
+
+Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
+over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
+(and its subclasses), restores the exception being handled and leaves the loop; the loop
+body itself stays outside that handler. `iter()` of a builtin container makes an object of a
+class template in `lib/_pystachy_iterators.py`, which the loader adds to a program that calls
+`iter()` and whose classes compile only when specialized.
 
 <a id="generators"></a>
 

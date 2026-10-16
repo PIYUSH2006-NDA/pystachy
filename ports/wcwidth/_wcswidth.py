@@ -29,9 +29,8 @@ from .table_vs15 import VS15_WIDE_TO_NARROW
 from .table_vs16 import VS16_NARROW_TO_WIDE
 # from .table_grapheme import GRAPHEME_EXTEND  # Pystachy port: for wcstwidth() only; left out
 
-# Pystachy port: added. wcswidth()'s alias _bisearch is this import (a function is not a value: M3,
-# #8), and the variation-selector tables it reads are lists (see bisearch.py), made once.
-from .bisearch import bisearch as _bisearch
+# Pystachy port: added. The variation-selector tables wcswidth() reads are lists (see
+# bisearch.py), made once.
 _VS16_NW_TABLE = list(VS16_NARROW_TO_WIDE['9.0.0'])
 _VS15_WN_TABLE = list(VS15_WIDE_TO_NARROW['9.0.0'])
 
@@ -154,7 +153,7 @@ def wcswidth(
     cluster_width = 0
     vs16_nw_table = _VS16_NW_TABLE  # Pystachy port: for VS16_NARROW_TO_WIDE['9.0.0']
     vs15_wn_table = _VS15_WN_TABLE  # Pystachy port: for VS15_WIDE_TO_NARROW['9.0.0']
-    # _bisearch = bisearch  # Pystachy port: imported above
+    _bisearch = bisearch
 
     while idx < end:
         char = _chars[idx]  # Pystachy port: for pwcs[idx]

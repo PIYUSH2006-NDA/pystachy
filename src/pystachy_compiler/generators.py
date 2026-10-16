@@ -631,13 +631,6 @@ def gen_gen_next_value(self, g: Val, dflt: Val) -> Val:
     return Val(self.phi(ph), t)
 
 
-def gen_gen_arg(self, a: Node) -> bool:
-    # is a, the argument of next() or iter(), a generator, or an object whose __iter__ yields
-    # (typed by a dry compile: next() and iter() of other values are errors anyway)
-    t = self.dry(a)
-    return is_gen(unopt(t)) or (t in self.classes and "__iter__" in self.classes[t].methods and self.classes[t].methods["__iter__"].gen)
-
-
 def binds(n: Node, x: str, loop: bool) -> int:
     # how often code n binds name x as a local of its function: 2 where it may bind it again (in a
     # loop, a for loop's target, a global or nonlocal declaration), not counting the functions,

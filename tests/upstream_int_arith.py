@@ -9,9 +9,9 @@
 # a == b, assertRaises a try statement that prints the exception. Where upstream loops over
 # thousands of values, each assertion is an assert and the loop prints how many it checked.
 # SHIFT, BASE and MASK are CPython's 30-bit digits (sys.int_info is not supported). getran()
-# draws its bits with random.random(); here a fixed linear congruential sequence stands in for it
-# (no random module), and getran(n) is called for n of 1 and 2 digits only (MAXDIGITS is 2: 60
-# bits), as ints are 64-bit here. type(v) == int is checked as repr(v), an int's and not a
+# draws its bits with random.random(), seeded so that they are the same on every run, and
+# getran(n) is called for n of 1 and 2 digits only (MAXDIGITS is 2: 60 bits), as ints are 64-bit
+# here. type(v) == int is checked as repr(v), an int's and not a
 # bool's.
 # EXCLUDED upstream cases (ints are 64-bit here; a result that needs more raises OverflowError, a
 # documented deviation):
@@ -40,6 +40,7 @@
 # - the other LongTest methods are in tests/upstream_int_construct.py and
 #   tests/upstream_int_format.py, or listed there
 import math
+import random
 import sys
 
 # SHIFT should match the value in longintrepr.h for best testing.
@@ -68,13 +69,7 @@ def check(label: str, got, expected) -> None:
     assert got == expected, label
 
 
-def random(state: list[int]) -> float:
-    # stands in for random.random(): a fixed linear congruential sequence
-    state[0] = (state[0] * 1103515245 + 12345) % 2147483648
-    return state[0] / 2147483648
-
-
-RANDOM = [7]
+random.seed(7)
 
 
 # Get quasi-random long consisting of ndigits digits (in base BASE).
@@ -89,7 +84,7 @@ def getran(ndigits: int) -> int:
     nbits_lo = nbits_hi - SHIFT + 1
     answer = 0
     nbits = 0
-    r = int(random(RANDOM) * (SHIFT * 2)) | 1  # force 1 bits to start
+    r = int(random.random() * (SHIFT * 2)) | 1  # force 1 bits to start
     while nbits < nbits_lo:
         bits = (r >> 1) + 1
         bits = min(bits, nbits_hi - nbits)
@@ -98,9 +93,9 @@ def getran(ndigits: int) -> int:
         answer = answer << bits
         if r & 1:
             answer = answer | ((1 << bits) - 1)
-        r = int(random(RANDOM) * (SHIFT * 2))
+        r = int(random.random() * (SHIFT * 2))
     assert nbits_lo <= nbits <= nbits_hi
-    if random(RANDOM) < 0.5:
+    if random.random() < 0.5:
         answer = -answer
     return answer
 

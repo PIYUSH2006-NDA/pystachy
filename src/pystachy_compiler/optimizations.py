@@ -153,7 +153,9 @@ def gen_dictfuse(self, fn: IFn) -> int:
                         st[c] = False
         for x in range(len(b.code)):
             i = b.code[x]
-            if i.op == "rt" and (i.s == "dict.has" or i.s == "dict.getitem" or i.s == "dict.set"):
+            if i.op == "rt" and (i.s == "dict.has" or i.s == "dict.getitem" or i.s == "dict.set") and "H" not in i.x:
+                # (but a lookup of keys hashed by their class: CPython runs __hash__ and __eq__
+                # at each, which its effects, U, show)
                 d = self.canon(vs, i.a[0].v)
                 k = self.canon(vs, i.a[1].v)
                 m = -1
@@ -170,10 +172,12 @@ def gen_dictfuse(self, fn: IFn) -> int:
                         self.runtime("pys_dict_val")
                         i.s = "dict.val"
                         i.a = [i.a[0], ev]
+                        i.x = ""
                     else:
                         self.runtime("pys_dict_entry_set")
                         i.s = "dict.entry_set"
                         i.a = [i.a[0], ev, i.a[2]]
+                        i.x = ""
                     n += 1
                 elif i.s == "dict.set":
                     st = none
@@ -231,6 +235,7 @@ def gen_dictfuse(self, fn: IFn) -> int:
             self.runtime("pys_dict_find")
             fi = Ins("rt", "int", "dict.find")
             fi.a = [i.a[0], i.a[1]]
+            fi.x = i.x
             fi.r = [f.e]
             code[x] = fi
             ad = Ins("scalar.bin", "int", "add")
@@ -241,11 +246,13 @@ def gen_dictfuse(self, fn: IFn) -> int:
             self.runtime("pys_dict_entry")
             en = Ins("rt", "int", "dict.entry")
             en.a = [i.a[0], i.a[1]]
+            en.x = i.x
             en.r = [f.e]
             code.insert(x, en)
             self.runtime("pys_dict_val")
             i.s = "dict.val"
             i.a = [i.a[0], Val(f"%t{f.e}", "int")]
+            i.x = ""
         n += 1
     return n
 

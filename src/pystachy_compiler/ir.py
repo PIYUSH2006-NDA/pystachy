@@ -11,13 +11,14 @@ class Val:
 
 
 class Data:
-    # Immutable module data: string bytes, a callable's code/env, or an exception descriptor.
+    # Immutable module data: string bytes, callable/exception references, or constant tuple slots.
     # LLVM's concrete layout and declaration syntax belong to lower_module.
     def __init__(self, kind: str, name: str):
         self.kind = kind
         self.name = name
         self.text = ""
         self.refs: list[str] = []
+        self.items: list[Val] = []  # tuple slots: int literals or static string references
 
 
 class IterArg:
@@ -65,6 +66,23 @@ class SeqStart:
         self.used: list[str] = []
 
 
+class FmtArgs:
+    # The arguments of a str.format() call with a constant format (Gen.str_format), evaluated:
+    # the positional ones (pos), then a list of those that a list's * gives at run time (rest),
+    # the keywords by name (kwn, kwv) and a dict that ** gives (kd); format_map()'s mapping is
+    # kd, with mapping set. auto: CPython's AutoNumber, its state (0 none yet, 1 automatic,
+    # 2 manual) and the next automatic index.
+    def __init__(self, who: str) -> None:
+        self.who = who
+        self.pos: list[Val] = []
+        self.rest = Val("", "")
+        self.kwn: list[str] = []
+        self.kwv: list[Val] = []
+        self.kd = Val("", "")
+        self.mapping = False
+        self.auto: list[int] = [0, 0]
+
+
 class FnInfo:
     def __init__(self, name: str, ll: str, node: Node, cls: str):
         self.name = name
@@ -108,7 +126,12 @@ class FnInfo:
         self.iters = False  # an __iter__ that returns an Iterator[T]: ret is the list[T] it steps through (see iter_ret)
         self.synthetic = False  # a dataclass's method that the compiler writes (Gen.synth), not the program
         self.deco = ""  # a method's @staticmethod or @classmethod (whose cls names the class), or "": it takes self
-        self.prop = False  # a read-only @property: an attribute read calls this instance method
+        self.prop = False  # a @property getter: an attribute read calls this instance method
+        # a property's @name.setter or @name.deleter ("setter", "deleter"; its methods key is
+        # name.setter): an assignment or del of the attribute calls it; accof: what the decorator
+        # names the property by, name or Base.name
+        self.acc = ""
+        self.accof = ""
         self.clsuse = False  # a class method that uses cls, which names the class that defines it (see cls_bound)
         self.orig = node  # and then its immutable def before cls was renamed (shared by inherited methods)
         self.pending = False  # inherited class method: node shares orig's body until materialize()
@@ -234,6 +257,19 @@ class Try:
         self.final = ""  # the landing block of its finally block ("" without one)
         self.orelse = ""  # the block where its else block starts ("" without one)
         self.exit = ""  # where the normal path goes on: the copy of its finally block starts there
+
+
+class StopCatch:
+    # The handler of the StopIteration that a loop's __next__ calls (or next(it, default)'s)
+    # raise at the end of the items (Gen.stop_catch): the try's mark and the exception being
+    # handled, taken before the first call, the slot its landing block stores the exception in,
+    # that block's label, and its try's shape (whose body is the first call's block)
+    def __init__(self, mark: Val, old: str, slot: str, landing: str):
+        self.mark = mark
+        self.old = old
+        self.slot = slot
+        self.landing = landing
+        self.tr = Try("")
 
 
 class IFn:
@@ -395,7 +431,13 @@ class ClassInfo:
         self.mod = ""
         self.bad = ""  # why a class of an imported module cannot be compiled: an error where it is used
         self.hook = ""  # the same for a special method Pystachy never calls (UNCALLED): its class statement compiles
+        self.excluded = False  # bad_class: it has no objects, and dispatch on a base's class tag leaves it out
         self.kwonly = False  # @dataclass(kw_only=True): its __init__ takes the fields by keyword only
+        self.dcopts: dict[str, bool] = {}  # @dataclass(...)'s other options that differ from their defaults (frozen, order, no-eq, ...: dc_args)
+        # dataclasses.field(...)'s options of each field that differ from their defaults
+        # (no-init, no-repr, no-compare, kw_only), and the default_factory of those that have one
+        self.fopts: dict[str, dict[str, bool]] = {}
+        self.factory: dict[str, Node] = {}
         # its single base (a class of the program or a builtin exception class), and the
         # builtin exception class it derives from through it ("" for an ordinary class)
         self.base = ""
@@ -412,3 +454,8 @@ class ClassInfo:
         # a specialization of a generic class (Gen.tparams): the types its type variables are bound
         # to, by the call that made it (Gen.bind); a TypeVarTuple's is a tuple type of its types
         self.tvars: dict[str, str] = {}
+        # a specialization of a class that specializes on literal arguments (Gen.literal_class):
+        # its __init__'s parameters given literals, and its fields that hold constants, as the
+        # literal nodes of their values (see Gen.const_of)
+        self.lits: dict[str, Node] = {}
+        self.fconst: dict[str, Node] = {}

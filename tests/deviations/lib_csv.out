@@ -1,9 +1,3 @@
-0
-Error: unexpected end of data 3
-['x'] 3
-['y'] 3
-['z'] 3
-['h1', 'h2'] []
 NotImplementedError: csv.reader with QUOTE_NONNUMERIC gives floats for the unquoted fields, which the list[str] Pystachy returns cannot hold
 NotImplementedError: csv.reader with QUOTE_STRINGS gives floats for the unquoted fields (None for an empty one), which the list[str] Pystachy returns cannot hold
 NotImplementedError: csv.reader with QUOTE_NOTNULL gives None for an empty unquoted field, which the list[str] Pystachy returns cannot hold

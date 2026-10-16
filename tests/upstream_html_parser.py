@@ -8,7 +8,7 @@
 # The collector normalizes adjacent data events as upstream get_events does.
 # Each str source is fed both whole and one indexing unit at a time; explicit
 # upstream fragment lists keep their boundaries. Pystachy indexing uses bytes.
-# Selected methods avoid mock/decorators/str.format and dynamic helper collectors.
+# Selected methods avoid mock/decorators and dynamic helper collectors.
 # Exclusions: script/rawtext/rcdata decorator tables, autocdata, default conversion
 # collector tests and CPU-resource stress tests; add separate probes for these.
 # PSF License Version 2; see THIRD_PARTY_NOTICES.

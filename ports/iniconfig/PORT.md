@@ -17,7 +17,7 @@ print(config["app"]["name"])
 ## Coverage
 
 - `IniConfig`, section lookup and iteration, `get()`, `lineof()`, comments and parse errors.
-- `get()` accepts a string or `None` default; the adapted signatures omit `convert=` and defaults of other types.
+- `get()` takes `default=` and `convert=`. Without a conversion the default is a string or `None`; with one, it is `None` or of the converted type, as each call's result has one type.
 - `SectionWrapper.items()` returns a list of pairs rather than a generator.
 
 <a id="deviations-it-hits"></a>

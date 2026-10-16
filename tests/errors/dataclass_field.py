@@ -1,10 +1,10 @@
-# error: dataclasses.field is not supported
+# error: field(metadata=...) is not supported
 from dataclasses import dataclass, field
 
 
 @dataclass
 class D:
-    xs: list[int] = field(default_factory=list)
+    xs: list[int] = field(default_factory=list, metadata={"unit": 1})
 
 
 print(D())

@@ -90,7 +90,7 @@ def nth_day_of_month(n, weekday, month, year):
     If n==0, returns last weekday of month. Weekdays: Monday=0
     """
     if not 0 <= n <= 5:
-        raise IndexError(f"Nth day of month must be 0-5. Received: {n}")  # Pystachy port: no str.format() yet (M7, #12)
+        raise IndexError("Nth day of month must be 0-5. Received: {}".format(n))
 
     if not 0 <= weekday <= 6:
         raise IndexError("Weekday must be 0-6")
@@ -110,6 +110,6 @@ def nth_day_of_month(n, weekday, month, year):
     day = first_weekday_of_kind + ((n - 1) * 7)
 
     if day > daysinmonth:
-        raise IndexError(f"No {n}th day of month {month}")  # Pystachy port: no str.format() yet (M7, #12)
+        raise IndexError("No {}th day of month {}".format(n, month))
 
     return (year, month, day)

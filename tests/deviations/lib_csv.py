@@ -3,29 +3,6 @@
 import csv
 import sys
 
-# A reader parses all of its input when its iteration starts (CPython's reader is an iterator,
-# which parses a row at each step): an error in the data is raised before the loop sees a row, and
-# line_num is the last line's during the loop. CPython prints 0, ['a', 'b'], ['c', 'd'], then the
-# error with line_num 3; and ['x'] 1, ['y'] 2, ['z'] 3
-r = csv.reader(["a,b", "c,d", '"e'], strict=True)
-print(r.line_num)
-try:
-    for row in r:
-        print(row)
-except csv.Error as e:
-    print("Error:", e, r.line_num)
-r = csv.reader(["x", "y", "z"])
-for row in r:
-    print(row, r.line_num)
-
-# Once its first iteration has begun, a reader has no rows left for another one, also where that
-# iteration stopped early. CPython prints ['h1', 'h2'] [['1', '2'], ['3', '4']]
-r = csv.reader(["h1,h2", "1,2", "3,4"])
-header: list[str] = []
-for header in r:
-    break
-print(header, [row for row in r])
-
 # A row is a list[str]: QUOTE_NONNUMERIC and QUOTE_STRINGS, whose reader makes floats of the
 # unquoted fields, are refused when the reader is made, and QUOTE_NOTNULL's None of an empty
 # unquoted field raises where its row ends. CPython prints [[1.0, 'a', 2.5]], [[1.0, 'a', None]]

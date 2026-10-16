@@ -1,0 +1,52 @@
+1 [2, 3, 4]
+[1, 2, 3] 4
+1 [2, 3] 4
+1 [] 2 3
+[2, 3, 99] [1, 2, 3, 4]
+[1, 2, 3, 4] False
+5 [6]
+x y z
+10 [20, 30] 40
+h ['e', 'l', 'l', 'o']
+é ['naïve', '日本'] ü
+1 [2, 3]
+1 ['x', 'y'] 2.5
+7 [8]
+1 ['x', 2.5]
+1 [2, 3, 4] 5
+0 [1, 2, 3, 4]
+[3, 2] 1
+(0, 'a') [(1, 'b')]
+(1, 'a') [(2, 'b'), (3, 'c')]
+0 [1, 4, 9]
+1 ['2', '3']
+k1 ['k2', 'k3']
+('k1', 1) [('k2', 2), ('k3', 3)]
+[1, 2] 3
+5 []
+1 [2, 3]
+iter
+['p', 'q'] r
+('a', ['b', 'c']) ('z', [])
+1 [2, 3]
+4 []
+([1, 2], 3) (['a'], 'b') ([1.5], 2.5)
+10
+name ['1', '2']
+1 [2, 3]
+4 []
+5 [6]
+0 a ['b']
+1 c []
+x [1]
+y [2]
+[1, 3] 5
+[2, 4] 6
+[[2, 3], [5, 6]]
+['a', 'b']
+ValueError: not enough values to unpack (expected at least 2, got 1)
+ValueError: not enough values to unpack (expected at least 2, got 0)
+ValueError: not enough values to unpack (expected at least 2, got 1)
+TypeError: cannot unpack non-iterable NoneType object
+3 [4]
+[exit 0]

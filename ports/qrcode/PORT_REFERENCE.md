@@ -20,15 +20,20 @@ Archive SHA-256: `35c3f2a4172b33136ab9f6b3ef1c00260dd2f66f858f24d88418a015f44650
 | `constants.py` | `d02b1af1861d790f0d685ad19ade3799a560d763bcf5dfa82a088a01520edace` | none |
 | `exceptions.py` | `2f67d9b9838ab1cbdd9fbdab6bec05f06c2caf6641f5e4595aba757f4203c781` | none |
 | `LUT.py` | `3635ca3df1d24c56282e51a45e11637f6394abf1060fa9ab772607206ddd35c9` | none |
-| `base.py` | `f49ff52f29c5e5d5c92b5e00cecf17c87258eba15f4e5b9827ae85f198de4ad6` | 10 regions: 6 method annotations, a field's, an import, a slice, and the 160 rows of `RS_BLOCK_TABLE` in brackets |
-| `util.py` | `54e1b846b27a4243ecd1f2da6647de330c70c5d2292ac4479ba757be3a3d625e` | 28 regions, 9 of them method annotations |
-| `main.py` | `385eee1c3033d938a1a5ee857ed79fe9f8951f6b69a152797a42c2206e25c890` | 35 regions, 13 of them method annotations |
+| `base.py` | `f49ff52f29c5e5d5c92b5e00cecf17c87258eba15f4e5b9827ae85f198de4ad6` | 6 regions: 2 method annotations, a field's, an import, a slice, and the 160 rows of `RS_BLOCK_TABLE` in brackets |
+| `util.py` | `54e1b846b27a4243ecd1f2da6647de330c70c5d2292ac4479ba757be3a3d625e` | 18 regions, 1 of them a method annotation |
+| `main.py` | `385eee1c3033d938a1a5ee857ed79fe9f8951f6b69a152797a42c2206e25c890` | 23 regions, 4 of them method annotations |
 
 ## Adaptation record
 
-- Encoder methods/fields are annotated; properties become fields with explicit checks in `make()`, and unused image-factory paths are omitted.
+- Constructors and fields are annotated where a field's type would not be inferred, and so are
+  `Polynomial.__iter__()`, the recursive `best_fit()`'s result and the file parameters of the
+  printing methods; the other methods are specialized for their arguments. Properties with
+  setters become fields with explicit checks in `make()`, and unused image-factory paths are omitted.
 - The QR block table becomes lists of lists, preserving its values across rows of different lengths. Chunk generators materialize lists.
-- `mask_bit()` selects the same expressions as upstream’s returned lambdas. Narrow string scanners replace the chunker’s regular expressions.
+- `mask_bit()` selects the same expressions as upstream’s returned lambdas. Narrow string scanners replace the chunker’s bytes regular expressions.
+- The re-baseline (#262) restored the unannotated methods, `print_ascii()`'s nested
+  `get_module()`, `{0, 6}` and `map(_data_count, ...)`.
 - Strings carry the byte payload; a CPython-only UTF-8 conversion branch keeps the adapted module’s output comparable with upstream. `constants.py`, `exceptions.py` and `LUT.py` are unchanged.
 
 ## Validation snapshot

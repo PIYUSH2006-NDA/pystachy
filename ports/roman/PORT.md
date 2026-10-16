@@ -18,7 +18,7 @@ print(fromRoman("mcmlxxxvii"))
 
 - `toRoman(int)`, `fromRoman(str, special_case: bool = True)`, numeral mapping and error classes.
 - ASCII upper/lowercase numerals, `N` for zero and upstream’s final-newline validation behavior.
-- The argparse-based CLI is outside the validated port coverage. `romanNumeralPattern` is replaced by an internal boolean validator.
+- The argparse-based CLI is outside the validated port coverage. `romanNumeralPattern` is upstream's compiled regular expression, matched by [`lib/re`](../../lib/README.md).
 
 <a id="deviations-it-hits"></a>
 
@@ -47,7 +47,7 @@ Cases: [port_roman_convert.py](../../tests/port_roman_convert.py), [port_roman_v
 
 ## Performance snapshot
 
-A recorded workload of about one million conversions in each direction was **3.7× faster** than CPython 3.13.16 on upstream (**4.7×** on the same adapted code). The validator uses a Python function instead of upstream’s C regex engine.
+A recorded workload of about one million conversions in each direction was **1.9× faster** than CPython 3.13.16 on upstream. The port validates numerals with upstream's regular expression, which Pystachy's compiled `re` engine matches; the hand-written validator it used before ran the workload about 1.7 times faster again, and builds about 4 s sooner.
 
 These are recorded port measurements, not a fresh benchmark of the current compiler.
 See the [benchmark record](PORT_REFERENCE.md#benchmark-snapshot) for workloads, raw timings,

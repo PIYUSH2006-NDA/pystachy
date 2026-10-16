@@ -1,0 +1,25 @@
+[1, 2, 3, 4, 5]
+[0, 1, 2] [1, 2] ()
+(3, 4, 9) (3, 4) (1, 2, 3, 4)
+['h', 'e', 'z'] [0, 1, 2, 2, 1]
+iter
+['k', 'j'] [7] [5, 6] [8, 9]
+[0, 2, 4] ['1', '2'] [(0, 'x'), (1, 'y')]
+(1, 2, 10) 3 10 True
+(3, 4, 's', 2.5)
+[1, 2, 3, 3] [1, 2]
+[1.5, 2.0]
+[1, 2, 's', 'é', 'ü']
+[1, 2, None] (None, 1, 2)
+eval first
+eval second
+[1, 2]
+1 2 3 4 
+1 2
+3 4 7
+[1, 2, 1, 2] (3, 3) ('a', 'b', 'a', 'b')
+0 1 2 9 3 4
+4
+TypeError: Value after * must be an iterable, not NoneType
+ValueError: too many values to unpack (expected 2)
+[exit 0]

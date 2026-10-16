@@ -135,11 +135,10 @@ def _coerce_args(*args):
     #   - noop for str inputs
     #   - encoding function otherwise
     # Pystachy port: the first argument is named, as Pystachy decides isinstance() of a name as it
-    # compiles, and leaves out the return of bytes, in an else block, for strs; and the loop takes
-    # all of args, as Pystachy slices no tuple (the first one is no mix)
+    # compiles, and leaves out the return of bytes, in an else block, for strs
     first = args[0]
     str_input = isinstance(first, str)
-    for arg in args:
+    for arg in args[1:]:
         # We special-case the empty string to support the
         # "scheme=''" default argument to some functions
         if arg and isinstance(arg, str) != str_input:
@@ -746,9 +745,7 @@ def urljoin(base, url, allow_fragments=True):
         segments = base_parts + path.split('/')
         # filter out elements that would cause redundant slashes on re-joining
         # the resolved_path
-        # Pystachy port: a new list, as Pystachy assigns to no slice and has filter() only as the
-        # argument of a function that consumes it
-        segments = [s for i, s in enumerate(segments) if s or i == 0 or i == len(segments) - 1]
+        segments[1:-1] = filter(None, segments[1:-1])
 
     resolved_path = []
 

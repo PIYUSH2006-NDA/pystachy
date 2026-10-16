@@ -19,12 +19,13 @@ cover [typing](language/typing.md), [imports and builtins](language/modules.md),
 | Native reference unions | Up to four non-overlapping class/file types, such as `TextIO \| StringIO` |
 | Optional values | `T \| None`, `Optional[T]`, `Union[T, None]` |
 | Functions | Typed `Callable[[A, B], R]`, functions, lambdas, closures and bound methods |
-| Generics | Function templates and `Generic` classes with inferred or explicit type arguments |
+| Generics | Function templates and `Generic` or PEP 695 (`class Box[T]`) classes with inferred or explicit type arguments; module-level type aliases |
 
 Integers are checked 64-bit values. Strings hold UTF-8 bytes. Dictionary keys and set elements
-have a restricted set of types: integers, strings and supported tuples (whose items may
-include booleans).
-Fixed-shape tuples have at most nine items and require constant indices. Runtime-length
+have a restricted set of types: integers, strings, objects (hashed by identity, or by their
+class's `__hash__` and `__eq__`) and supported tuples (whose items may include booleans).
+Fixed-shape tuples have at most nine items; a variable index gives an item of their union
+type, and a constant index the item's own type. Runtime-length
 `tuple[T, ...]` values support integer indexing checked at runtime; their elements must be
 `int`, `float`, `bool`, `str`, or one of these with `None`.
 
@@ -32,6 +33,8 @@ Explicit closed scalar unions such as `int | str`, bounded native reference unio
 and optional unions are supported. Dynamic `Any` values are not.
 Generic classes can infer type arguments from construction or name them explicitly with
 `Box[int]` annotations and constructor subscriptions; variadic generic classes remain inferred.
+Module-level type aliases (`Row = list[str]`, `type Pair[T] = tuple[T, T]`) name types in
+annotations.
 
 See the [type reference](language/typing.md#supported-types) for exact forms, conversions and constraints.
 
@@ -97,10 +100,12 @@ Lambdas, closures and decorators of functions are supported. Functions with `*ar
 `**kwargs` specialize for the call's argument shape; forwarding is more restricted than in
 fully dynamic Python.
 
-Classes support fields, methods, class attributes, read-only `@property`, `@staticmethod`, `@classmethod` and
-supported operator and container methods. Dataclasses support `kw_only=True` and
-`__post_init__`; options such as `frozen=True`, `order=True` and `dataclasses.field()` are
-not supported.
+Classes support fields, methods, class attributes, `@property` with `@x.setter` and
+`@x.deleter`, `@staticmethod`, `@classmethod` and supported operator and container methods.
+Dataclasses support `__post_init__`, `dataclasses.field()`, `KW_ONLY`, `dataclasses.replace()`,
+the options `init`, `repr`, `eq`, `order`, `unsafe_hash`, `frozen`, `match_args` and
+`kw_only`, and inheritance from another dataclass; `slots=True`, `asdict()`, `astuple()` and
+`fields()` are not supported.
 
 Literal `__slots__` strings, tuples and lists restrict instance field writes when every
 base also declares slots. A subclass without slots, or with an unslotted base, may add
@@ -114,11 +119,13 @@ errors rather than catchable exceptions. Repeated slot declarations and
 class variables or methods shadowing inherited slots are also unsupported, as are
 new slots shadowing inherited methods, properties or class variables.
 
-Ordinary classes support single inheritance, inherited fields and constructors, instance-method
-overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
-class's override. Constructors in these hierarchies need annotated parameters; inheritance
-involving class templates, dataclasses, NamedTuples or builtin types is unsupported. Exception
-classes retain their separate inheritance rules, and `Generic[...]` declares a generic class.
+Ordinary classes support single inheritance, inherited fields and constructors, overrides of
+instance, static and class methods, `super()` and runtime `isinstance()` checks. A base-typed
+receiver calls its concrete class's instance-method override. Constructors in these
+hierarchies need annotated parameters; inheritance involving class templates, NamedTuples or
+builtin types, or between a dataclass and a class that is not one, is unsupported. Exception
+classes retain their separate inheritance rules, and `Generic[...]` or PEP 695 type
+parameters (`class Box[T]`) declare a generic class, which has no other base.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.
 
@@ -131,7 +138,8 @@ The usual assignments, `if`, `while`, `for`, loop `else`, `break`, `continue`,
 `return`, `assert`, `global` and `nonlocal` are supported. Loops can consume supported
 containers, ranges, files and iterator-like objects.
 
-Unpacking requires a fixed target shape. File context managers support `with open(...) as f:`;
+Unpacking takes a fixed target shape or one starred target, `first, *rest = xs`, whose name
+gets a new list of the remaining items. File context managers support `with open(...) as f:`;
 arbitrary context managers are not supported. Exceptions use the normal
 `try` / `except` / `else` / `finally` syntax.
 
@@ -140,18 +148,19 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Feature | Scope |
 |---|---|
 | Arithmetic and comparisons | Checked integer arithmetic, floating point, bitwise operations, chained comparisons |
-| Text formatting | F-strings and constant-string `%` formatting; no `str.format()` |
-| Containers | List, dictionary, set and tuple displays; list and set comprehensions |
-| Indexing and slicing | Negative indices; string and list slices without a step |
+| Assignment expressions | `x := v` in conditions, comprehensions, arguments and other expressions, binding `x` as `x = v` does |
+| Text formatting | F-strings, and `%` formatting and `str.format()` of a literal format string |
+| Containers | List, dictionary, set and tuple displays, `*` items in list and tuple displays; list, set and dict comprehensions with any number of `for` and `if` clauses |
+| Indexing and slicing | Negative indices; string, list and tuple slices with optional steps; list slice assignment and `del` |
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
-| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `sorted`, `any` and `str.join`; a generator expression elsewhere is a generator object |
+| Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join`; a generator expression elsewhere is a generator object |
 | Generators | Functions and methods (including `__iter__`) that `yield` or `yield from`, consumed by `for`, `next()`, `iter()`, `in` and the builtins that take iterables |
+| Iterators | Classes with `__iter__` and `__next__`; `iter()` and `next()` values that share their position |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
 [Generators](language/semantics.md#generators) do not support `send()`, `throw()` or
-`close()`. Standalone iterators with `__next__`, dict comprehensions and multi-clause
-comprehensions are not supported. See [execution rules](language/semantics.md) for consumer
-restrictions, evaluation order and protocols.
+`close()`. See [execution rules](language/semantics.md) for consumer restrictions, evaluation
+order, protocols and [iterators](language/semantics.md#iterators).
 
 <a id="exception-classes"></a>
 
@@ -183,9 +192,10 @@ restrictions.
 
 ### Decided at compile time, as CPython decides it at import time
 
-Imported modules' `__main__` guards, `TYPE_CHECKING` branches and recognized platform tests
-are resolved at compile time. Unused functions can contain unsupported features, but syntax
-checks still apply to their source.
+Imported modules' `__main__` guards, `TYPE_CHECKING` branches, recognized platform and
+`sys.version_info` tests, and module-level `NameError` feature tests (`try: unicode` /
+`except NameError:`) are resolved at compile time. Unused functions can contain unsupported
+features, but syntax checks still apply to their source.
 
 ### Optional imports
 
@@ -205,8 +215,9 @@ provide selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile`.
 An imported module name does not imply every CPython API is available.
 
 The shipped libraries include unchanged upstream modules, localized ports such as
-`fnmatch`, `textwrap` and `difflib`, and implementations such as `functools.cache` /
-`lru_cache`, `io.StringIO` and `csv`. Each has its own supported operations and deviations.
+`fnmatch`, `textwrap`, `difflib`, `random` and `datetime`, and implementations such as
+`functools.cache` / `lru_cache`, `collections` (`deque`, `defaultdict`, `OrderedDict`,
+`Counter`), `io.StringIO` and `csv`. Each has its own supported operations and deviations.
 
 Use the [builtin API reference](language/modules.md#builtins) and
 [library port notes](../lib/README.md) for current coverage. C calls and experimental
@@ -217,8 +228,8 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 ## Unsupported features
 
 The main gaps are multiple inheritance, general object unions and `Any`, generators' `send()`, `async`,
-`bytes` and binary files, complex and arbitrary-precision numbers, `match`, `:=`,
-dynamic attribute access, stepped slices and unrestricted argument expansion.
+`bytes` and binary files, complex and arbitrary-precision numbers, `match`,
+dynamic attribute access, slice objects and unrestricted argument expansion.
 
 Supported templates can avoid compiling unused branches containing some of these features.
 An unsupported feature that the program needs produces a compile-time error.

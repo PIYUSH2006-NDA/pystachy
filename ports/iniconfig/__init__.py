@@ -65,10 +65,10 @@ class SectionWrapper:
     def get(  # type: ignore [misc]
         self,
         key: str,
-        default: str | None = None,
-    ) -> str | None:
-        # Pystachy port: no convert= and a str default (they need callables and unions)
-        return self.config.get(self.name, key, default=default)
+        default: _D | None = None,
+        convert: Callable[[str], _T] | None = None,
+    ) -> _D | _T | str | None:
+        return self.config.get(self.name, key, convert=convert, default=default)
 
     def __getitem__(self, key: str) -> str:
         return self.config.sections[self.name][key]
@@ -221,15 +221,18 @@ class IniConfig:
         self,
         section: str,
         name: str,
-        default: str | None = None,
-    ) -> str | None:
-        # Pystachy port: no convert= and a str default (they need callables and unions)
+        default: _D | None = None,
+        convert: Callable[[str], _T] | None = None,
+    ) -> _D | _T | str | None:
         try:
             value: str = self.sections[section][name]
         except KeyError:
             return default
         else:
-            return value
+            if convert is not None:
+                return convert(value)
+            else:
+                return value
 
     def __getitem__(self, name: str) -> SectionWrapper:
         if name not in self.sections:

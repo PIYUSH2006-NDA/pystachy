@@ -1,9 +1,9 @@
 """Containers component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
 from src.pystachy_compiler.diagnostics import shown
-from src.pystachy_compiler.ir import Ins, IterArg, SetArg, Val
+from src.pystachy_compiler.ir import ClassInfo, Ins, IterArg, SetArg, Val
 from src.pystachy_compiler.names import short
-from src.pystachy_compiler.specs import OPTTYPES
+from src.pystachy_compiler.specs import ITERS, NONEVAR, OPTTYPES
 from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
     bool_for_int,
@@ -78,17 +78,17 @@ def gen_set_display(self, n: Node, want: str, folded: bool, returnctx: bool = Fa
         et = self.none_items(jt)  # (None among the strs of a tuple's item: str | None)
     if et == "":
         self.err("cannot infer the type of a set of None")
-    if elem_problem(et) != "":
-        self.err(elem_problem(et))
+    if self.elem_problem(et) != "":
+        self.err(self.elem_problem(et))
     if const:
         self.globs[gi].t = self.ctype("frozenset", [et])
     items = [self.store_elem(v, et) for v in items]
     r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
     for v in items:
-        self.rt("pys_set_add", "void", [f"ptr {r}", "i64 " + self.to_slot(v)])
+        self.rt("pys_set_add", "void", [f"ptr {r}", "i64 " + self.to_slot(v)], self.key_fx(et))
     if folded or (len(items) > 2 and folds(mk("tuple", "", n.line, n.kids))):
         c = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
-        self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"])
+        self.rt("pys_set_update_list", "void", [f"ptr {c}", f"ptr {self.rt('pys_set_list', 'ptr', [f'ptr {r}'])}"], self.key_fx(et))
         r = c
         if const:
             self.mstore('%ptr', r, g)
@@ -101,9 +101,83 @@ def gen_set_display(self, n: Node, want: str, folded: bool, returnctx: bool = Fa
             r = self.phi(ph)
         if not folded:
             m = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(et)}"])
-            self.rt("pys_set_update", "void", [f"ptr {m}", f"ptr {r}"])
+            self.rt("pys_set_update", "void", [f"ptr {m}", f"ptr {r}"], self.key_fx(et))
             r = m
     return Val(r, self.ctype("frozenset" if folded else "set", [et]))
+
+def gen_star_items(self, x: Node) -> Val:
+    # *x in a list or tuple display, taken where it stands, as CPython's LIST_EXTEND takes it: a
+    # tuple's (or NamedTuple's) items as they are, any other iterable's as a new list (a list's
+    # copied, a str's characters, a dict's keys, what __iter__ steps through, what range(), map()
+    # or a generator expression gives)
+    if self.iterator_call(x) or self.is_mapcall(x) or (x.kind == "listcomp" and x.s == "gen"):
+        return self.consume(x, "")
+    none = "TypeError: Value after * must be an iterable, not NoneType"
+    v = self.unwrap(self.expr(x, ""), none)
+    if v.t in self.nts:
+        self.notnone(v, none)
+        v = self.ntup(v, True)
+    if is_tuple(v.t):
+        return v
+    if v.t in self.classes:
+        v = self.obj_iter(v, none, f"Value after * must be an iterable, not {tname(v.t)}")
+    elif v.t == "str":
+        return Val(self.rt("pys_str_list", "ptr", [f"ptr {v.v}"]), "list[str]")
+    elif not is_list(v.t):
+        v = self.as_list(v, "unpack")  # (a new list)
+        if not is_list(v.t):
+            self.err(f"Value after * must be an iterable, not {tname(v.t)}")
+        return v
+    return Val(self.rt("pys_list_copy", "ptr", [f"ptr {v.v}"]), v.t)
+
+def gen_star_display(self, n: Node, want: str) -> Val:
+    # [a, *xs] and (a, *xs): the items in order, each starred one's where it stands (star_items):
+    # a tuple's become items of the display, any other's a list the display's list is extended
+    # with. A tuple display of items alone is a tuple of them; with a list's, a runtime-length one
+    w = unopt(want)
+    ew = elem(w) if n.kind == "list" and is_list(w) and "?" not in w else targs(w)[0] if n.kind == "tuple" and is_vtuple(w) else ""
+    parts: list[Val] = []
+    lists: list[bool] = []
+    for x in n.kids:
+        v = self.star_items(x.kids[0]) if x.kind == "starred" else self.expr(x, ew)
+        if x.kind == "starred" and is_tuple(v.t):
+            for i in range(len(targs(v.t))):
+                parts.append(self.tget(v, i))
+                lists.append(False)
+        else:
+            parts.append(v)
+            lists.append(x.kind == "starred")
+    if n.kind == "tuple" and len([b for b in lists if b]) == 0:
+        return self.tuple_(parts)
+    if len(parts) == 0:
+        return self.expr(mk("list", "", n.line, []), want)  # ([*()]: as [] is)
+    et = ew
+    for i in range(len(parts)):
+        t = elem(parts[i].t) if lists[i] else parts[i].t
+        if ew == "" and t != et:
+            j = self.join(et, t) if et != "" else t
+            if j == "" or "?" in j:
+                both = typestr(et) + " | " + typestr(t)
+                self.err(f"items of types {typestr(et)} and {typestr(t)} in one display need an annotation where it goes ({'list[' + both + ']' if n.kind == 'list' else 'tuple[' + both + ', ...]'})")
+            et = j
+    if et == "" or et == "None":
+        self.err("cannot infer the type of this display's items; annotate it")
+    for i in range(len(parts)):
+        if lists[i] and elem(parts[i].t) != et:
+            # (a list of other items, an int's where they are int | str: each converted)
+            item = mk("name", "__pys_item", n.line, [])
+            parts[i] = self.listcomp(mk("listcomp", "", n.line, [item, item, self.vnode(parts[i])]), self.ctype("list", [et]))
+    r = self.rt("pys_list_new", "ptr", [f"i64 {len([b for b in lists if not b])}"])
+    for i in range(len(parts)):
+        if lists[i]:
+            self.rt("pys_list_extend", "void", [f"ptr {r}", f"ptr {parts[i].v}"])
+        else:
+            self.rt("pys_list_append", "void", [f"ptr {r}", "i64 " + self.to_slot(self.coerce(parts[i], et))])
+    if n.kind == "list":
+        return Val(r, self.ctype("list", [et]))
+    if unopt(et) not in ["int", "float", "bool", "str"]:
+        self.err("runtime-length tuple elements must be int, float, bool, str or their optional types")
+    return Val(self.rt("pys_vtuple_new", "ptr", [f"ptr {r}"]), self.ctype("vtuple", [et]))
 
 def gen_iter_elem(self, t: str) -> str:
     # the type of the items a loop over a value of type t gets, or ""
@@ -145,33 +219,35 @@ def gen_sitems(self, v: Val, et: str, what: str) -> Val:
         self.err(f"cannot infer the type of an empty {tname(v.t)}; add a type annotation")
     if et != "" and it != et and self.wider(it, et) != et:
         self.err(f"{what} of {typestr(v.t)} for a set of {typestr(et)} is not supported: a set holds elements of one type")
-    if et == "" and elem_problem(it) != "":
-        self.err(elem_problem(it))
+    if et == "" and self.elem_problem(it) != "":
+        self.err(self.elem_problem(it))
     return v
 
-def gen_supdate(self, s: str, v: Val) -> None:
-    # set s takes the elements of v, a set, a dict or a list (siter), as CPython's update does
+def gen_supdate(self, s: str, v: Val, et: str) -> None:
+    # set s, of elements of type et, takes the elements of v, a set, a dict or a list (siter), as
+    # CPython's update does
     if is_set(v.t):
-        self.rt("pys_set_update", "void", [f"ptr {s}", f"ptr {v.v}"])
+        self.rt("pys_set_update", "void", [f"ptr {s}", f"ptr {v.v}"], self.key_fx(et))
     elif is_dict(v.t):
-        self.rt("pys_set_update_dict", "void", [f"ptr {s}", f"ptr {v.v}"])
+        self.rt("pys_set_update_dict", "void", [f"ptr {s}", f"ptr {v.v}"], self.key_fx(et))
     else:
-        self.rt("pys_set_update_list", "void", [f"ptr {s}", f"ptr {v.v}"])
+        self.rt("pys_set_update_list", "void", [f"ptr {s}", f"ptr {v.v}"], self.key_fx(et))
 
 def gen_sdiscard(self, ov: str, v: Val, et: str) -> None:
-    # set ov (of elements of type et) discards v, which it holds or not; None is no element
-    if v.t == "None":
+    # set ov (of elements of type et) discards v, which it holds or not; None is no element (but
+    # where the elements are objects, which may be None)
+    if v.t == "None" and et not in self.classes:
         return
     if is_opt(v.t) and unopt(v.t) == et:
         l1 = self.label()
         l2 = self.label()
         self.cbr(self.isnull(v), l2, l1)
         self.place(l1)
-        self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))])
+        self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(self.deref(v), et))], self.key_fx(et))
         self.br(l2)
         self.place(l2)
         return
-    self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(v, et))])
+    self.rt("pys_set_discard", "void", [ov, "i64 " + self.to_slot(self.dkey(v, et))], self.key_fx(et))
 
 def gen_sargs(self, o: Val, m: str, args: list[Node]) -> list[SetArg]:
     # the arguments of set o's method m (update(), union(), ...), evaluated in order before it
@@ -252,7 +328,7 @@ def gen_set_new(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if is_set(v.t):
         return Val(self.rt("pys_set_copy", "ptr", [f"ptr {v.v}"]), t)
     r = self.rt("pys_set_new", "ptr", [f"i64 {self.key_kind(selem(t))}"])
-    self.supdate(r, v)
+    self.supdate(r, v, selem(t))
     return Val(r, t)
 
 def gen_setop(self, op: str, a: Val, b: Val) -> Val:
@@ -262,7 +338,7 @@ def gen_setop(self, op: str, a: Val, b: Val) -> Val:
     if w == "":
         self.err(f"unsupported operand types for {op}: {typestr(a.t)} and {typestr(b.t)} (a set holds elements of one type)")
     fn = "pys_set_or" if op == "|" else "pys_set_and" if op == "&" else "pys_set_sub" if op == "-" else "pys_set_xor"
-    return Val(self.rt(fn, "ptr", [f"ptr {a.v}", f"ptr {b.v}"]), self.ctype("frozenset" if is_fset(a.t) else "set", [w]))
+    return Val(self.rt(fn, "ptr", [f"ptr {a.v}", f"ptr {b.v}"], self.key_fx(selem(a.t)) + self.key_fx(selem(b.t))), self.ctype("frozenset" if is_fset(a.t) else "set", [w]))
 
 def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
     # a method of a set or frozenset o, run as CPython's setobject.c runs it; the iterables the
@@ -281,15 +357,17 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
     if m in "add discard remove symmetric_difference symmetric_difference_update isdisjoint issubset issuperset".split() and n != 1:
         self.err(f"{tn}.{m}() takes exactly one argument ({n} given)")
     ov = f"ptr {o.v}"
+    kx = self.key_fx(et)  # (Ins.x of the ops that hash or compare elements)
     none = Val("null", "None")
     if m == "add":
         v = self.store_elem(self.expr(args[0], et), et)
-        self.rt("pys_set_add", "void", [ov, "i64 " + self.to_slot(v)])
+        self.rt("pys_set_add", "void", [ov, "i64 " + self.to_slot(v)], kx)
         return none
     if m == "discard" or m == "remove":
         v = self.expr(args[0], et)
-        if v.t == "None" or (is_opt(v.t) and unopt(v.t) == et):
-            # None is no element: discard() does nothing, remove() raises KeyError: None
+        if (v.t == "None" or (is_opt(v.t) and unopt(v.t) == et)) and et not in self.classes:
+            # None is no element (but an object's): discard() does nothing, remove() raises
+            # KeyError: None
             if m == "remove":
                 self.guard(self.isnull(v) if v.t != "None" else "true", "KeyError: None")
                 if v.t == "None":
@@ -305,12 +383,12 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
             # name the int
             l1 = self.label()
             l2 = self.label()
-            self.cbr(self.num_cmp('==', Val(self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)]), "int"), Val('0', "int")).v, l1, l2)
+            self.cbr(self.num_cmp('==', Val(self.rt('pys_set_has', 'i64', [ov, 'i64 ' + self.to_slot(k)], kx), "int"), Val('0', "int")).v, l1, l2)
             self.place(l1)
             self.raise_("KeyError", self.repr(v).v)
             self.place(l2)
             m = "discard"
-        self.rt("pys_set_discard" if m == "discard" else "pys_set_remove", "void", [ov, "i64 " + self.to_slot(k)])
+        self.rt("pys_set_discard" if m == "discard" else "pys_set_remove", "void", [ov, "i64 " + self.to_slot(k)], kx)
         return none
     if m == "pop":
         return self.from_slot(self.rt("pys_set_pop", "i64", [ov]), et)
@@ -330,24 +408,24 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
                 if v.t == "":
                     pass  # (a generator: each item went as it came)
                 elif m == "update":
-                    self.supdate(o.v, v)
+                    self.supdate(o.v, v, et)
                 else:
-                    self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"])
+                    self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [ov, f"ptr {self.keys_list(v).v}"], kx)
             return none
         if m == "union":
             r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
             for x in sa:
                 v = self.stake(o, m, x)
                 if is_set(v.t):
-                    self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"])  # (but o itself)
+                    self.rt("pys_set_union_more", "void", [f"ptr {r.v}", ov, f"ptr {v.v}"], kx)  # (but o itself)
                 else:
-                    self.supdate(r.v, v)
+                    self.supdate(r.v, v, et)
             return r
         if m == "intersection" or m == "intersection_update":
             r = o if n > 0 else Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
             for x in sa:
                 v = self.stake(o, m, x)
-                r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"]), o.t)
+                r = Val(self.rt("pys_set_and" if is_set(v.t) else "pys_set_and_list", "ptr", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"], kx), o.t)
             if m == "intersection":
                 return r
             self.rt("pys_set_assign", "void", [ov, f"ptr {r.v}"])  # (o takes the intersection's table)
@@ -359,13 +437,13 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
             # code runs as its items are taken (a generator's, __iter__): CPython's
             # set_copy_and_difference has copied o before
             r = Val(self.rt("pys_set_copy", "ptr", [ov]), o.t)
-            self.rt("pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.stake(o, m, x).v}"])
+            self.rt("pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.stake(o, m, x).v}"], kx)
         else:
             v = self.stake(o, m, x)
-            r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+            r = Val(self.rt("pys_set_sub" if is_set(v.t) else "pys_set_sub_dict" if is_dict(v.t) else "pys_set_sub_list", "ptr", [ov, f"ptr {v.v}"], kx), o.t)
         for x in sa[1:]:
             v = self.stake(o, m, x)
-            self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"])
+            self.rt("pys_set_isub" if is_set(v.t) else "pys_set_isub_list", "void", [f"ptr {r.v}", f"ptr {self.keys_list(v).v}"], kx)
         return r
     if (m == "issuperset" or m == "isdisjoint") and ((args[0].kind == "listcomp" and args[0].s == "gen") or self.is_mapcall(args[0])):
         # CPython takes a generator's items until one decides: one o lacks (issuperset), or one
@@ -376,16 +454,16 @@ def gen_smethod(self, o: Val, m: str, args: list[Node]) -> Val:
     vs = [self.siter(a, et, f"{tn}.{m}()") for a in args]
     v = vs[0]
     if m == "symmetric_difference":
-        return Val(self.rt("pys_set_xor" if is_set(v.t) else "pys_set_xor_dict" if is_dict(v.t) else "pys_set_xor_list", "ptr", [ov, f"ptr {v.v}"]), o.t)
+        return Val(self.rt("pys_set_xor" if is_set(v.t) else "pys_set_xor_dict" if is_dict(v.t) else "pys_set_xor_list", "ptr", [ov, f"ptr {v.v}"], kx), o.t)
     if m == "symmetric_difference_update":
-        self.rt("pys_set_ixor" if is_set(v.t) else "pys_set_ixor_dict" if is_dict(v.t) else "pys_set_ixor_list", "void", [ov, f"ptr {v.v}"])
+        self.rt("pys_set_ixor" if is_set(v.t) else "pys_set_ixor_dict" if is_dict(v.t) else "pys_set_ixor_list", "void", [ov, f"ptr {v.v}"], kx)
         return none
     if m == "isdisjoint":
-        hit = self.rt("pys_set_isdisjoint" if is_set(v.t) else "pys_set_isdisjoint_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
+        hit = self.rt("pys_set_isdisjoint" if is_set(v.t) else "pys_set_isdisjoint_list", "i64", [ov, f"ptr {self.keys_list(v).v}"], kx)
     elif is_set(v.t):
-        hit = self.rt("pys_set_cmp", "i64", [ov, f"ptr {v.v}", "i64 1" if m == "issubset" else "i64 3"])
+        hit = self.rt("pys_set_cmp", "i64", [ov, f"ptr {v.v}", "i64 1" if m == "issubset" else "i64 3"], kx)
     else:
-        hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"])
+        hit = self.rt("pys_set_le_list" if m == "issubset" else "pys_set_ge_list", "i64", [ov, f"ptr {self.keys_list(v).v}"], kx)
     return self.num_cmp('!=', Val(hit, "int"), Val('0', "int"))
 
 def gen_fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) -> Val:
@@ -414,8 +492,8 @@ def gen_fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) ->
     if not is_list(xs.t) and not is_dict(xs.t):
         self.err(f"'{tname(xs.t)}' object is not iterable")
     K = targs(xs.t)[0] if is_dict(xs.t) else elem(xs.t)
-    if key_problem(K) != "":
-        self.err(key_problem(K))
+    if self.key_problem(K) != "":
+        self.err(self.key_problem(K))
     if v.t == "None" and V == "":
         self.err(f"dict.fromkeys(keys{', None' if len(args) == 2 else ''}) needs the type of the dict it makes, whose values are None: annotate it (d: dict[K, V | None] = ...)")
     if v.t == "None" and self.optional(V) != V:
@@ -424,8 +502,8 @@ def gen_fromkeys(self, args: list[Node], want: str, resultsoft: bool = False) ->
     v = self.coerce(v, V)
     t = self.ctype("dict", [K, V])
     if is_dict(xs.t):
-        return Val(self.rt("pys_dict_fromkeys_dict", "ptr", [f"ptr {xs.v}", "i64 " + self.to_slot(v)]), t)
-    return Val(self.rt("pys_dict_fromkeys", "ptr", [f"i64 {self.key_kind(K)}", f"ptr {xs.v}", "i64 " + self.to_slot(v)]), t)
+        return Val(self.rt("pys_dict_fromkeys_dict", "ptr", [f"ptr {xs.v}", "i64 " + self.to_slot(v)], self.key_fx(K)), t)
+    return Val(self.rt("pys_dict_fromkeys", "ptr", [f"i64 {self.key_kind(K)}", f"ptr {xs.v}", "i64 " + self.to_slot(v)], self.key_fx(K)), t)
 
 def gen_affix_any(self, tup: Val, m: str, av: list[str]) -> Val:
     # s.startswith((a, b, ...), start, end) (or endswith), as CPython's loop over the tuple: each
@@ -456,10 +534,93 @@ def gen_optdefault(self, d: Val, t: str) -> str:
 
 def gen_key_kind(self, kt: str) -> str:
     # the key kind of a new dict whose keys have type kt (runtime.c's Dict.kind): 0 int, 1 str,
-    # or a tuple key's type descriptor
+    # or a tuple or object key's type descriptor (hash_desc)
     if kt == "int" or kt == "str":
         return "1" if kt == "str" else "0"
-    return f"ptrtoint (ptr {self.sconst(self.desc(kt, '=='))} to i64)"
+    return f"ptrtoint (ptr {self.sconst(self.hash_desc(kt))} to i64)"
+
+def gen_key_class(self, t: str) -> bool:
+    # can objects of class t be dict keys and set elements: those of the program's classes, but
+    # a NamedTuple's (a tuple's hash) and an exception class's
+    return t in self.classes and t not in self.nts and self.classes[t].exc == ""
+
+def gen_key_items(self, t: str) -> bool:
+    # are the items of tuple t a key's: int, bool, str, objects (key_class), str or an object
+    # that may be None, and such tuples (utils.key_items, objects too)
+    for x in targs(t):
+        u = unopt(x)
+        if x != "int" and x != "bool" and u != "str" and not self.key_class(u) and not (is_tuple(u) and self.key_items(u)):
+            return False
+    return True
+
+def gen_key_problem(self, t: str) -> str:
+    # why t cannot be a dict's key type, or "" (utils.key_problem): objects too
+    if self.key_class(t) or (is_tuple(t) and self.key_items(t)):
+        return ""
+    if t in self.nts:
+        return key_problem(t) + " (a NamedTuple, which CPython hashes as the tuple of its fields)"
+    if t in self.classes and self.classes[t].exc != "":
+        return key_problem(t) + " (an exception object)"
+    return key_problem(t)
+
+def gen_elem_problem(self, t: str) -> str:
+    # why t cannot be the element type of a set, or "": the types of dict keys (key_problem)
+    p = self.key_problem(t)
+    return elem_problem(t) if p != "" and is_opt(t) else p.replace("dict keys", "set elements")
+
+def gen_hash_kind(self, c: str) -> str:
+    # how CPython hashes an object of class c (not of a subclass): "id" by identity, as object's
+    # __hash__ does, "user" by c's __hash__, or "" not at all: a class that defines __eq__ but not
+    # __hash__ has __hash__ = None (TypeError: unhashable type), which its subclasses inherit
+    ms = self.classes[c].methods
+    if "__hash__" in ms and ("__eq__" not in ms or self.derives(ms["__hash__"].cls, ms["__eq__"].cls)):
+        return "user"
+    return "" if "__eq__" in ms else "id"
+
+def gen_hash_classes(self, t: str) -> list[ClassInfo]:
+    # the classes an object of static class t may be of (its own, and those derived from it),
+    # which hash_kind tells apart by their methods: an attribute that is no method (__hash__ =
+    # None, which CPython's unhashable classes have) is an error
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, t)] if self.classes[t].tag > 0 else [self.classes[t]]
+    for c in cs:
+        for m in ["__hash__", "__eq__"]:
+            if m in c.ftypes and m not in c.methods:
+                self.err(f"class attribute {m} of {shown(c.name)} is not supported where its objects are hashed: define a method, or leave __hash__ out")
+    return cs
+
+def gen_hash_desc(self, t: str) -> str:
+    # runtime.c's descriptor of keys of type t (Dict.kind): desc's, but an object is P<id> where
+    # it hashes and compares by identity alone (no class it may be of defines __eq__ or
+    # __hash__), else H<id>, which hashes through the program (obj_hash) and compares as O<id>
+    if t in self.classes:
+        d = self.desc(t, "==")
+        for c in self.hash_classes(t):
+            f = c.methods["__hash__"] if self.hash_kind(c.name) == "user" else None
+            if f is not None and f.bad != "":
+                self.err(f.bad)
+        p = len([c for c in self.hash_classes(t) if self.hash_kind(c.name) != "id"]) == 0
+        if not p and t not in self.hcls:
+            self.hcls[t] = True
+        return ("P" if p else "H") + d[1:]
+    if is_opt(t) and t != NONEVAR:
+        return "?" + self.hash_desc(unopt(t))
+    if is_tuple(t) and len(targs(t)) <= 9:
+        return "T" + str(len(targs(t))) + "".join([self.hash_desc(x) for x in targs(t)])
+    return self.desc(t, "==")
+
+def gen_key_fx(self, kt: str) -> str:
+    # Ins.x of a dict or set op on keys or elements of type kt: their descriptor where it holds an
+    # object whose class's __hash__ and __eq__ run (H), or whose __repr__ a KeyError runs (P),
+    # which RUNTIME's U? stands for; else ""
+    d = self.hash_desc(kt) if kt != "int" and kt != "str" else ""
+    return d if "H" in d or ("P" in d and self.key_repr(kt)) else ""
+
+def gen_key_repr(self, t: str) -> bool:
+    # may repr() of a key of type t run a __repr__ of the program (a KeyError's message)
+    u = unopt(t)
+    if u in self.classes:
+        return len([c for c in self.hash_classes(u) if "__repr__" in c.methods]) > 0
+    return is_tuple(u) and any(self.key_repr(x) for x in targs(u))
 
 def gen_dkey(self, k: Val, kt: str) -> Val:
     # a key to look up in a dict whose keys have type kt: one that may be None stays optional
@@ -504,20 +665,20 @@ def gen_store_elem(self, k: Val, et: str) -> Val:
         self.err(f"a {typestr(k.t)} element is added to a set of {typestr(et)} elements, where CPython keeps an element it adds as the bool it is (True, not 1): convert the bool with int()")
     return self.coerce(k, et)
 
-def gen_nonekey(self, k: Val, none: str, fn: str, av: list[str]) -> str:
-    # the slot fn(av) returns, a dict lookup of key k; a key that is None is in no dict: the
-    # result is then the slot none, or with none "" KeyError: None
+def gen_nonekey(self, k: Val, none: str, fn: str, av: list[str], x: str) -> str:
+    # the slot fn(av) returns, a dict lookup of key k (x: key_fx of the dict's keys); a key that
+    # is None is in no dict: the result is then the slot none, or with none "" KeyError: None
     if not is_opt(k.t):
-        return self.rt(fn, "i64", av)
+        return self.rt(fn, "i64", av, x)
     if none == "":
         self.guard(self.ptr_cmp('==', k, Val('null', 'None')).v, "KeyError: None")
-        return self.rt(fn, "i64", self.keyed(k, av))
+        return self.rt(fn, "i64", self.keyed(k, av), x)
     l1 = self.label()
     l2 = self.label()
     l3 = self.label()
     self.cbr(self.ptr_cmp('==', k, Val('null', 'None')).v, l1, l2)
     self.place(l2)
-    r = self.rt(fn, "i64", self.keyed(k, av))
+    r = self.rt(fn, "i64", self.keyed(k, av), x)
     e2 = self.cur
     self.br(l3)
     self.place(l1)
@@ -632,7 +793,8 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
         r = self.call_fn(ms[m], [v], [])
     else:
         # object.__repr__: <__main__.Name object at 0x...>, <module.Name object at 0x...>
-        qn = shown(v.t) if "$" in v.t and not v.t.startswith("__main__$") else "__main__." + short(v.t)
+        # (<list_iterator object at 0x...> of a builtin type's, whose module is builtins)
+        qn = short(v.t) if v.t.startswith(ITERS + "$") else shown(v.t) if "$" in v.t and not v.t.startswith("__main__$") else "__main__." + short(v.t)
         r = Val(self.rt("pys_default_repr", "ptr", [f"ptr {self.sconst(qn)}", f"ptr {v.v}"]), "str")
     e2 = self.cur
     self.br(l3)
@@ -641,6 +803,73 @@ def gen_obj_str(self, v: Val, m: str) -> Val:
     self.incoming(ph, self.sconst("None"), l1)
     self.incoming(ph, r.v, e2)
     return Val(self.phi(ph), "str")
+
+def gen_obj_hash(self, v: Val) -> Val:
+    # hash(v) of an object as CPython takes it from its class (hash_kind): object's identity hash,
+    # the class's __hash__ (-1 is -2, as in slot_tp_hash), or TypeError: unhashable type; None's
+    # is a constant
+    cs = self.hash_classes(v.t)
+    end = self.label()
+    ph = Ins("phi", "int", "")
+    if v.v not in self.nn:
+        some = self.label()
+        self.incoming(ph, str(0xFCA86420), self.cur)
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, end, some)
+        self.place(some)
+    tag = self.mload('int', v.v) if len(cs) > 1 else ""
+    narrow = dict(self.narrowed)
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        self.narrowed = dict(narrow)
+        k = self.hash_kind(c.name)
+        if k == "id":
+            r = Val(self.rt("pys_hash_id", "i64", [f"ptr {v.v}"]), "int")
+        elif k == "user":
+            h = self.as_int(self.call_fn(c.methods["__hash__"], [Val(v.v, c.name)], [], direct=True))
+            r = Val(self.select(self.num_cmp('==', h, Val('-1', 'int')).v, Val('-2', 'int'), h), "int")
+        else:
+            self.raise_("TypeError", self.sconst(f"unhashable type: '{short(c.name)}'"))
+            r = Val("0", "int")
+        if not self.term:
+            self.incoming(ph, r.v, self.cur)
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    self.narrowed = narrow
+    self.place(end)
+    if len(ph.a) == 0:
+        self.unreachable()
+        return Val("0", "int")
+    return Val(self.phi(ph), "int")
+
+def gen_hash_value(self, v: Val) -> Val:
+    # hash(v): CPython's where its own does not change from run to run (an int's, a float's, a
+    # tuple's of such items: runtime.c's hitem), a str's the dict's hash of it; TypeError for an
+    # unhashable type, as CPython's
+    t = v.t
+    if self.key_class(t):
+        return self.obj_hash(v)
+    if t == "None":
+        return Val(str(0xFCA86420), "int")
+    if is_list(t) or is_dict(t) or (is_set(t) and not is_fset(t)):
+        self.raise_("TypeError", self.sconst(f"unhashable type: '{tname(t)}'"))
+        return Val("0", "int")
+    if not self.hashable(t):
+        self.err(f"hash() of {typestr(t)} is not supported")
+    return Val(self.rt("pys_hash", "i64", ["i64 " + self.to_slot(v), f"ptr {self.sconst(self.hash_desc(t))}"]), "int")
+
+def gen_hashable(self, t: str) -> bool:
+    # can hash() take a value of type t (but an object's, obj_hash): a number, a str, None, an
+    # object, a tuple of such items, or one of these that may be None
+    u = unopt(t)
+    if u == "int" or u == "bool" or u == "float" or u == "str" or u == "None" or self.key_class(u):
+        return True
+    return (is_tuple(u) or is_vtuple(u)) and all(self.hashable(x) for x in targs(u))
 
 def gen_repr(self, v: Val) -> Val:
     if is_kw(v.t):

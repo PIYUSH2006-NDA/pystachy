@@ -107,8 +107,7 @@ def _data_count(block):
 BIT_LIMIT_TABLE = [
     [0]
     + [
-        # Pystachy port: a generator expression for map() (M3: functions as values)
-        8 * sum(_data_count(b) for b in base.rs_blocks(version, error_correction))
+        8 * sum(map(_data_count, base.rs_blocks(version, error_correction)))
         for version in range(1, 41)
     ]
     for error_correction in range(4)
@@ -378,7 +377,7 @@ def _lost_point_level3(modules, modules_count):
 
 
 def _lost_point_level4(modules, modules_count):
-    # Pystachy port: each row's count of True for sum(map(sum, modules)) (M3: map; sum() of
+    # Pystachy port: each row's count of True for sum(map(sum, modules)) (M4: sum() of
     # bool | None items); every module is True or False by now
     dark_count = sum(row.count(True) for row in modules)
     percent = float(dark_count) / (modules_count**2)
@@ -529,10 +528,10 @@ class QRData:
 
         self.data = data
 
-    def __len__(self) -> int:  # Pystachy port: annotated (M2)
+    def __len__(self):
         return len(self.data)
 
-    def write(self, buffer: "BitBuffer"):  # Pystachy port: annotated (M2)
+    def write(self, buffer):
         if self.mode == MODE_NUMBER:
             for i in range(0, len(self.data), 3):
                 chars = self.data[i : i + 3]
@@ -554,7 +553,7 @@ class QRData:
             for c in data:
                 buffer.put(ord(c), 8)  # Pystachy port: ord() of each byte (M7: bytes)
 
-    def __repr__(self) -> str:  # Pystachy port: annotated (M2)
+    def __repr__(self):
         return repr(self.data)
 
 
@@ -563,21 +562,21 @@ class BitBuffer:
         self.buffer: list[int] = []
         self.length = 0
 
-    def __repr__(self) -> str:  # Pystachy port: annotated (M2)
+    def __repr__(self):
         return ".".join([str(n) for n in self.buffer])
 
-    def get(self, index: int) -> bool:  # Pystachy port: annotated (M2)
+    def get(self, index):
         buf_index = math.floor(index / 8)
         return ((self.buffer[buf_index] >> (7 - index % 8)) & 1) == 1
 
-    def put(self, num: int, length: int):  # Pystachy port: annotated (M2)
+    def put(self, num, length):
         for i in range(length):
             self.put_bit(((num >> (length - i - 1)) & 1) == 1)
 
-    def __len__(self) -> int:  # Pystachy port: annotated (M2)
+    def __len__(self):
         return self.length
 
-    def put_bit(self, bit: bool):  # Pystachy port: annotated (M2)
+    def put_bit(self, bit):
         buf_index = self.length // 8
         if len(self.buffer) <= buf_index:
             self.buffer.append(0)
@@ -586,9 +585,7 @@ class BitBuffer:
         self.length += 1
 
 
-# Pystachy port: `-> list[int]`; a def with annotated parameters and no return annotation
-# returns None here (M1)
-def create_bytes(buffer: BitBuffer, rs_blocks: list[RSBlock]) -> list[int]:
+def create_bytes(buffer: BitBuffer, rs_blocks: list[RSBlock]):
     offset = 0
 
     maxDcCount = 0

@@ -55,8 +55,7 @@ def legal_date(year, month, day):
                 assert day == 1
 
     except AssertionError as err:
-        # Pystachy port: no str.format() yet (M7, #12)
-        raise ValueError(f"Invalid Positivist date: ({year}, {month}, {day})") from err
+        raise ValueError("Invalid Positivist date: ({}, {}, {})".format(year, month, day)) from err
 
     return True
 

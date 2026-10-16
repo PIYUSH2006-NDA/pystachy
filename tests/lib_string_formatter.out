@@ -1,0 +1,42 @@
+'' []
+'abc' [('abc', None, None, None)]
+'a{}b' [('a', '', '', None), ('b', None, None, None)]
+'{0}{1}' [('', '0', '', None), ('', '1', '', None)]
+'{{x}}' [('{', None, None, None), ('x}', None, None, None)]
+'}}{{' [('}', None, None, None), ('{', None, None, None)]
+'{a!r:>5}' [('', 'a', '>5', 'r')]
+'{a:{b}}' [('', 'a', '{b}', None)]
+'{a[1]}' [('', 'a[1]', '', None)]
+'{0[}]}' [('', '0[}]', '', None)]
+'{é}' [('', 'é', '', None)]
+'x{' ValueError: Single '{' encountered in format string
+'x}' ValueError: Single '}' encountered in format string
+'{a' ValueError: expected '}' before end of string
+'{a!' ValueError: end of string while looking for conversion specifier
+'{a!r' ValueError: unmatched '{' in format spec
+'{a!rr}' ValueError: expected ':' after conversion specifier
+'{a:{b}' ValueError: unmatched '{' in format spec
+'{a{}' ValueError: unexpected '{' in field name
+'{!}' ValueError: unmatched '{' in format spec
+'{a:}}' ValueError: Single '}' encountered in format string
+['a', 'b', '']
+1 2 a-b-a plain
+é|'é'|'\xe9'|   é
+    x| y |
+    3.14 0002.500 +7 ff
+[1, 2] None True   2.5
+Ann is   31 121
+003/4 1.5 2.25
+a and b
+'{0!x}' ValueError Unknown conversion specifier x
+'{} {1}' ValueError cannot switch from manual field specification to automatic field numbering
+'{0} {}' ValueError cannot switch from manual field specification to automatic field numbering
+'{0:{1:{2:{3:{4}}}}}' ValueError Max string recursion exceeded
+'{' ValueError Single '{' encountered in format string
+3
+'{9}' IndexError tuple index out of range
+'{0:{9}}' IndexError tuple index out of range
+'{missing}' KeyError 'missing'
+'{0}' IndexError tuple index out of range
+'{x!}' ValueError unmatched '{' in format spec
+[exit 0]

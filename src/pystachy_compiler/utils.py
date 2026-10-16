@@ -237,6 +237,60 @@ def short_ascii(s: str) -> bool:
     return n <= 18
 
 
+def literal_format(e: Node) -> bool:
+    # "...".format or "...".format_map: a method of a literal format, compiled for the format's
+    # fields where it is called (Gen.str_format)
+    return e.kind == "attr" and (e.s == "format" or e.s == "format_map") and e.kids[0].kind == "str"
+
+
+def runtime_format(m: str) -> str:
+    # the error for str.format() or str.format_map() (m), or % formatting (m "%"), of a format
+    # string that only run time knows
+    what = "% formatting with" if m == "%" else f"str.{m}() of"
+    how = '"%d" % x' if m == "%" else f'"{{}}".{m}(...)'
+    return f"{what} a format string computed at run time is not supported (only of a string literal, {how}, or of a module global that one module-level assignment binds to one, where nothing else in the program binds its name, not even as a local)"
+
+
+# Unicode 15.1's (CPython 3.13's) decimal digits: the first of each run of 0-9 (runtime.c's
+# decruns, with ASCII's)
+DECRUNS: list[int] = [0x30, 0x660, 0x6F0, 0x7C0, 0x966, 0x9E6, 0xA66, 0xAE6, 0xB66, 0xBE6, 0xC66, 0xCE6, 0xD66,
+                      0xDE6, 0xE50, 0xED0, 0xF20, 0x1040, 0x1090, 0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80, 0x1A90,
+                      0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0, 0xFF10,
+                      0x104A0, 0x10D30, 0x11066, 0x110F0, 0x11136, 0x111D0, 0x112F0, 0x11450, 0x114D0, 0x11650, 0x116C0, 0x11730,
+                      0x118E0, 0x11950, 0x11C50, 0x11D50, 0x11DA0, 0x11F50, 0x16A60, 0x16AC0, 0x16B50, 0x1D7CE, 0x1D7D8, 0x1D7E2,
+                      0x1D7EC, 0x1D7F6, 0x1E140, 0x1E2F0, 0x1E4F0, 0x1E950, 0x1FBF0]
+
+
+def fmt_index(s: str) -> int:
+    # a str.format() field's argument number or item index, as CPython's get_integer reads it
+    # (Unicode decimal digits, which s holds as UTF-8 bytes): -1 where s is empty or not all
+    # digits (a name or key), -2 where its digits so far exceed sys.maxsize (CPython's ValueError)
+    if s == "":
+        return -1
+    n = 0
+    i = 0
+    while i < len(s):
+        cp = ord(s[i])
+        i += 1
+        if cp >= 0xC0:
+            k = 1 if cp < 0xE0 else 2 if cp < 0xF0 else 3
+            cp &= 0x3F >> k
+            while k > 0 and i < len(s) and ord(s[i]) >= 0x80 and ord(s[i]) < 0xC0:
+                cp = cp * 64 + (ord(s[i]) & 0x3F)
+                i += 1
+                k -= 1
+        d = -1
+        for z in DECRUNS:
+            if cp >= z and cp < z + 10:
+                d = cp - z
+        if d < 0:
+            return -1
+        if n > (9223372036854775807 - d) // 10:
+            return -2
+        n = n * 10 + d
+    return n
+
+
 def may_raise(e: Node) -> bool:
     # does expression e hold such an operation
     if raising(e):
@@ -563,12 +617,13 @@ def empty_default(n: Node, name: str, kind: str) -> bool:
 
 def key_problem(t: str) -> str:
     # why t cannot be a dict's key type, or "": keys are ints, strs, or tuples whose items are ints,
-    # bools, strs, str | None or such tuples (runtime.c hashes and compares them by descriptor)
+    # bools, strs, str | None or such tuples (runtime.c hashes and compares them by descriptor), and
+    # objects, also as such items (Gen.key_problem)
     if t == "int" or t == "str" or (is_tuple(t) and key_items(t)):
         return ""
     if is_opt(t):
         return f"dict keys must be int or str, not {typestr(t)} (a key cannot be None)"
-    return f"dict keys must be int or str, or tuples of int, bool, str and str | None items, not {typestr(t)}"
+    return f"dict keys must be int or str, objects, or tuples of int, bool, str, str | None and objects, not {typestr(t)}"
 
 
 def elem_problem(t: str) -> str:
@@ -639,6 +694,24 @@ def targs(t: str) -> list[str]:
             start = i + 1
     out.append(t[start:-1])
     return out
+
+
+def slice_items(lo: int, hi: int, st: int, n: int) -> list[int]:
+    # the indices of n items that lo:hi:st selects, as CPython's slice.indices(n) gives them: -2**63
+    # is an omitted bound (Gen.slice_bound), and st is not 0
+    if lo == -9223372036854775808:
+        lo = n - 1 if st < 0 else 0
+    elif lo < 0:
+        lo = max(lo + n, -1 if st < 0 else 0)
+    elif lo >= n:
+        lo = n - 1 if st < 0 else n
+    if hi == -9223372036854775808:
+        hi = -1 if st < 0 else n
+    elif hi < 0:
+        hi = max(hi + n, -1 if st < 0 else 0)
+    elif hi >= n:
+        hi = n - 1 if st < 0 else n
+    return list(range(lo, hi, st))
 
 
 def hpush(h: list[int], x: int) -> None:

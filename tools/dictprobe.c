@@ -19,11 +19,12 @@
    The string-cache check counts calls/bytes through the real runtime.py hash, so repeated
    lookups must not rescan bytes. The storage check reads the kinds of the tables from the page
    map: the collector never scans the key arrays of dicts and sets of ints, and scans those of
-   strs and tuples and every dict's values, and the 8 slots of a new set whatever its kind (the
-   compiler may change the kind of an empty set); so ints that are the addresses of strs nothing
-   else holds keep none of them alive (#210). --hash-cache runs only these two checks, also under GC
-   stress. runtime.c's dict hash functions are in runtime.py, so the build links its IR
-   (pystachy rt).
+   strs, tuples and objects (P000: hashed by identity; H000: by their class, whose dicts have
+   CPython's index, KTAG) and every dict's values, and the 8 slots of a new set whatever its kind
+   (the compiler may change the kind of an empty set); so ints that are the addresses of strs
+   nothing else holds keep none of them alive (#210), and objects that are keys or elements stay.
+   --hash-cache runs only these two checks, also under GC stress.
+   runtime.c's dict hash functions are in runtime.py, so the build links its IR (pystachy rt).
    usage: make dictprobe   (build/dictprobe [N...] or build/dictprobe --hash-cache) */
 #include <time.h>
 static long long dict_slots;          /* (not a name the runtime's code uses: the set's lookups have a local probes) */
@@ -42,13 +43,15 @@ I counted_hash_str(Str *s) {
 }
 
 #define LIMIT 3.0
-I pys_obj_eq(I c, I a, I b) { (void)c; return a == b; }   /* the programs' callbacks: no objects here */
+/* the programs' callbacks, which objects hashed by identity (P000) never call; an H000 object of
+   the storage check (skey) hashes as its int field, which its __eq__ compares (c < 0: hash(a)) */
+I pys_obj_eq(I c, I a, I b) { return c < 0 ? ((I *)a)[1] * 7 : a == b || ((I *)a)[1] == ((I *)b)[1]; }
 I pys_obj_cmp(I c, I op, I a, I b) { (void)c; (void)op; return a < b ? -1 : a > b; }
 Str *pys_obj_repr(I c, I a, I b) { (void)c; (void)a; (void)b; return cstr("<object>"); }
 
 static const char *pats[] = {"i", "-i", "i << 46", "i << 32", "i * 1000", "(i // 128) << 32 | i % 128",
   "random", "f\"k{i}\"", "f\"{i:08}\"", "\"x\" * 64 + str(i)", "str(i) + \"x\" * 64", "letter case of i's bits",
-  "i << s, -(i << s): s <= 56"};
+  "objects, by identity", "i << s, -(i << s): s <= 56"};
 #define NPAT (I)(sizeof pats / sizeof *pats - 1)   /* the last one is the sweep's */
 #define MAXN 65536                     /* 2N keys i << 46 fit in 63 bits */
 static List *keys;                     /* the collector's roots */
@@ -137,10 +140,10 @@ static void dict_kinds(Dict *d, int ints, const char *how) {
 static void set_kinds(Set *s, int ints, const char *how) {
   if (atomic(s->keys) != ints || !atomic(s->hs)) storage_bad(how);
 }
-static I skey(I kind, I i) {           /* key i of a dict or set of kind 0 (ints), 1 (strs) or 2 (T2si) */
+static I skey(I kind, I i) {           /* key i of a dict or set of kind 0 (ints), 1 (strs), 2 (T2si), 3 (P000) or 4 (H000) */
   char b[24]; Str *s = pys_str(b, snprintf(b, sizeof b, "k%lld", (long long)i));
   if (kind < 2) return kind ? (I)s : i;
-  I *t = pys_alloc(16); t[0] = (I)s; t[1] = i; return (I)t;
+  I *t = pys_alloc(16); t[0] = (I)s; t[1] = i; return (I)t;   /* (a tuple, or an object of two fields) */
 }
 static Str *big(I i) {                 /* a str of 1 MiB, an object of its own; its first byte tells i */
   Str *s = pys_str_mul(cstr("x"), MIB); s->s[0] = (char)('a' + i); return s;
@@ -151,11 +154,16 @@ __attribute__((noinline)) static void addresses(void) {   /* ints that are the a
   for (I i = 0; i < 16; i++) { I a = (I)big(i); pys_list_append(h, a); pys_dict_set(d, a, i); pys_set_add(s, a); }
   keys->a[2] = 0; keys->len = 2;       /* (h kept the strs apart, so that the 16 addresses differ; now nothing holds them) */
 }
-__attribute__((noinline)) static void held(void) {        /* strs that are keys, elements, values, tuple items */
-  Dict *ds = pys_dict_new(1, 0), *dv = pys_dict_new(0, 0), *dt = pys_dict_new((I)cstr("T2si"), 0);
-  Set *ss = pys_set_new(1), *sk = pys_set_new(0);
+__attribute__((noinline)) static void held(void) {        /* strs that are keys, elements, values, tuple items, objects */
+  Dict *ds = pys_dict_new(1, 0), *dv = pys_dict_new(0, 0), *dt = pys_dict_new((I)cstr("T2si"), 0), *dp = pys_dict_new((I)cstr("P000"), 0);
+  Set *ss = pys_set_new(1), *sk = pys_set_new(0), *sp = pys_set_new((I)cstr("P000"));
   sk->kind = 1;                        /* (made of ints, then of strs: the compiler's typed_empty) */
-  keys = pys_list_new(5); keys->a[0] = (I)ds; keys->a[1] = (I)dv; keys->a[2] = (I)dt; keys->a[3] = (I)ss; keys->a[4] = (I)sk; keys->len = 5;
+  keys = pys_list_new(7); keys->a[0] = (I)ds; keys->a[1] = (I)dv; keys->a[2] = (I)dt; keys->a[3] = (I)ss; keys->a[4] = (I)sk;
+  keys->a[5] = (I)dp; keys->a[6] = (I)sp; keys->len = 7;
+  for (I i = 0; i < 40; i++) {         /* objects (4 strs, then fresh ones) in tables that grew: by identity */
+    I o = i < 4 ? (I)big(20 + i) : (I)pys_alloc(16);
+    pys_dict_set(dp, o, i < 4 ? 20 + i : -1); pys_set_add(sp, o);
+  }
   for (I i = 0; i < 20; i++) {
     Str *x = big(i);
     if (i >= 16) pys_set_add(sk, (I)x);  /* (4 of them: its 8 slots, not a table of strs it grew) */
@@ -173,8 +181,8 @@ __attribute__((noinline)) static void scrub_collect(void) {
 }
 static void big_ok(Str *s, I i) { if (s->len != MIB || s->s[0] != 'a' + i || s->s[MIB - 1] != 'x') storage_bad("a kept str changed"); }
 static void storage(void) {
-  for (I kind = 0; kind < 3; kind++) { /* every path that makes a table: of ints, strs, then tuples */
-    I k2 = kind < 2 ? kind : (I)cstr("T2si"); int ints = kind == 0;
+  for (I kind = 0; kind < 5; kind++) { /* every path that makes a table: of ints, strs, tuples, then objects */
+    I k2 = kind < 2 ? kind : (I)cstr(kind == 2 ? "T2si" : kind == 3 ? "P000" : "H000"); int ints = kind == 0;
     keys = pys_list_new(4);
     dict = pys_dict_new(k2, 10); keys->a[0] = (I)dict; keys->len = 1;
     dict_kinds(dict, ints, "a presized dict");
@@ -182,8 +190,11 @@ static void storage(void) {
     dict_kinds(dict, ints, "a dict that grew");
     dict_kinds(pys_dict_copy(dict), ints, "dict.copy()");
     dict_kinds(pys_dict_from(dict), ints, "dict(d)");
-    for (I i = 0; i < 100; i += 2) pys_dict_pop(dict, skey(kind, i));
-    dict_kinds(pys_dict_copy(dict), ints, "dict.copy() of a dict with holes");
+    for (I i = 0; i < 100; i += 2) pys_dict_pop(dict, kind == 3 ? dict->keys[i] : skey(kind, i));   /* (P000: an object is found as itself) */
+    Dict *c = pys_dict_copy(dict);
+    dict_kinds(c, ints, "dict.copy() of a dict with holes");
+    if ((kind == 4) != ((dict->kind & KTAG) != 0) || (c->kind & KTAG) != (dict->kind & KTAG)) storage_bad("KTAG");
+    for (I i = 1; i < 100; i += 2) if (pys_dict_get(c, kind == 3 ? dict->keys[i] : skey(kind, i), -1) != i) storage_bad("a key of a copy not found");
     pys_dict_clear(dict); pys_dict_set(dict, skey(kind, 1), 1);
     dict_kinds(dict, ints, "a dict filled again after clear()");
     Set *s = pys_set_new(k2); keys->a[1] = (I)s; keys->len = 2;
@@ -198,8 +209,15 @@ static void storage(void) {
   if (d->len != 16 || s->len != 16) storage_bad("int keys lost");
   for (I e = 0; e < d->n; e++) if (!pys_dict_has(d, d->keys[e]) || !pys_set_has(s, d->keys[e])) storage_bad("an int key not found");
   held(); scrub_collect(); scrub_collect();
-  if (gc_live < 20 * MIB) storage_bad("a str that is a key, element, value or tuple item was freed");
+  if (gc_live < 24 * MIB) storage_bad("a str that is a key, element, value, tuple item or object key was freed");
   Dict *ds = (Dict *)keys->a[0], *dv = (Dict *)keys->a[1], *dt = (Dict *)keys->a[2]; Set *ss = (Set *)keys->a[3], *sk = (Set *)keys->a[4];
+  Dict *dp = (Dict *)keys->a[5]; Set *sp = (Set *)keys->a[6];
+  dict_kinds(dp, 0, "a dict of objects"); set_kinds(sp, 0, "a set of objects");
+  if (dp->len != 40 || sp->len != 40) storage_bad("object keys lost");
+  for (I e = 0; e < 4; e++) {
+    big_ok((Str *)dp->keys[e], dp->vals[e]);
+    if (!pys_set_has(sp, dp->keys[e]) || pys_dict_get(dp, dp->keys[e], -2) != 20 + e) storage_bad("an object key not found");
+  }
   for (I e = 0; e < ds->n; e++) big_ok((Str *)ds->keys[e], ds->vals[e]);
   for (I e = 0; e < dv->n; e++) big_ok((Str *)dv->vals[e], dv->keys[e]);
   for (I e = 0; e < dt->n; e++) big_ok((Str *)((I *)dt->keys[e])[0], dt->vals[e]);
@@ -208,7 +226,7 @@ static void storage(void) {
   for (I j = 0; j <= sk->mask; j++) if (sk->hs[j] != -1) { Str *x = (Str *)sk->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
   if (sk->mask != 7 || ds->len + dv->len + dt->len + n != 20) storage_bad("kept strs lost");
   keys = 0; dict = 0;
-  printf("storage: the key tables of ints are never scanned; those of strs and tuples, and dict values, are\n");
+  printf("storage: the key tables of ints are never scanned; those of strs, tuples and objects, and dict values, are\n");
 }
 
 #define X64 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -227,7 +245,8 @@ static I key(I p, I i) {               /* key i of pattern p; the 2N keys of a p
   case 8: return (I)pys_str(b, snprintf(b, sizeof b, "%08lld", (long long)i));
   case 9: return (I)pys_str(b, snprintf(b, sizeof b, "%s%lld", X64, (long long)i));
   case 10: return (I)pys_str(b, snprintf(b, sizeof b, "%lld%s", (long long)i, X64));
-  case 12: return sign * (i << shift);
+  case 12: { I *o = pys_alloc(24); o[0] = i; return (I)o; }   /* (an object of three fields: P000) */
+  case 13: return sign * (i << shift);
   default: for (int j = 0; j < 20; j++) b[j] = (char)('a' + j - (i >> j & 1) * 32);   /* "aBcD..." */
     return (I)pys_str(b, 20);
   }
@@ -242,7 +261,7 @@ static _Noreturn void bad(I p, I n, const char *what) { fprintf(stderr, "dictpro
 static double run(I p, I n, long long c[4]) {  /* c: slots visited by insert, hit, miss, deleted */
   double t = 1e9;
   for (int r = 0; r < 3; r++) {
-    dict = pys_dict_new(p >= 7 && p < NPAT, 0);
+    dict = pys_dict_new(p == 12 ? (I)cstr("P000") : p >= 7 && p < NPAT, 0);
     dict_slots = 0; double t0 = now();
     for (I i = 0; i < n; i++) pys_dict_set(dict, keys->a[i], i);
     c[0] = dict_slots; dict_slots = 0;

@@ -143,7 +143,7 @@ class QRCode:
         self.data_cache = None
         self.data_list = []
 
-    def add_data(self, data: str, optimize: int = 20):  # Pystachy port: annotated (M2)
+    def add_data(self, data, optimize=20):
         """
         Add data to this QR Code.
 
@@ -159,7 +159,7 @@ class QRCode:
             self.data_list.append(util.QRData(data))
         self.data_cache = None
 
-    def make(self, fit: bool = True):  # Pystachy port: annotated (M2)
+    def make(self, fit=True):
         """
         Compile the data into a QR Code array.
 
@@ -177,7 +177,7 @@ class QRCode:
         else:
             self.makeImpl(False, self.mask_pattern)
 
-    def makeImpl(self, test: bool, mask_pattern: Optional[int]):  # Pystachy port: annotated (M2)
+    def makeImpl(self, test, mask_pattern):
         self.modules_count = self.version * 4 + 17
 
         if self.version in precomputed_qr_blanks:
@@ -209,7 +209,7 @@ class QRCode:
             )
         self.map_data(self.data_cache, mask_pattern)
 
-    def setup_position_probe_pattern(self, row: int, col: int):  # Pystachy port: annotated (M2)
+    def setup_position_probe_pattern(self, row, col):
         for r in range(-1, 8):
             if row + r <= -1 or self.modules_count <= row + r:
                 continue
@@ -218,18 +218,17 @@ class QRCode:
                 if col + c <= -1 or self.modules_count <= col + c:
                     continue
 
-                # Pystachy port: `in (0, 6)` for `in {0, 6}` (M7: sets)
                 if (
-                    (0 <= r <= 6 and c in (0, 6))
-                    or (0 <= c <= 6 and r in (0, 6))
+                    (0 <= r <= 6 and c in {0, 6})
+                    or (0 <= c <= 6 and r in {0, 6})
                     or (2 <= r <= 4 and 2 <= c <= 4)
                 ):
                     self.modules[row + r][col + c] = True
                 else:
                     self.modules[row + r][col + c] = False
 
-    # Pystachy port: annotated (M2)
-    def best_fit(self, start: Optional[int] = None) -> Optional[int]:
+    # Pystachy port: a return annotation, as best_fit() calls itself before it returns (M2)
+    def best_fit(self, start=None) -> Optional[int]:
         """
         Find the minimum size required to fit in the data.
         """
@@ -259,7 +258,7 @@ class QRCode:
             self.best_fit(start=self.version)
         return self.version
 
-    def best_mask_pattern(self) -> int:  # Pystachy port: annotated (M2)
+    def best_mask_pattern(self):
         """
         Find the most efficient mask pattern.
         """
@@ -338,8 +337,14 @@ class QRCode:
         if invert:
             codes.reverse()
 
-        # Pystachy port: the nested function get_module(x, y) is the method _get_module() below
-        # (M3: closures)
+        def get_module(x, y) -> int:
+            if invert and self.border and max(x, y) >= modcount + self.border:
+                return 1
+            if min(x, y) < 0 or max(x, y) >= modcount:
+                return 0
+            # Pystachy port: cast(int, cell) as the int that the bool cell is (M1: a builtin
+            # class is no value here)
+            return 1 if self.modules[x][y] else 0
 
         for r in range(-self.border, modcount + self.border, 2):
             if tty:
@@ -347,25 +352,12 @@ class QRCode:
                     out.write("\x1b[48;5;232m")  # Background black
                 out.write("\x1b[38;5;255m")  # Foreground white
             for c in range(-self.border, modcount + self.border):
-                # Pystachy port: see above
-                pos = self._get_module(r, c, invert, modcount) + (
-                    self._get_module(r + 1, c, invert, modcount) << 1
-                )
+                pos = get_module(r, c) + (get_module(r + 1, c) << 1)
                 out.write(codes[pos])
             if tty:
                 out.write("\x1b[0m")
             out.write("\n")
         out.flush()
-
-    # Pystachy port: print_ascii's nested get_module (M3: closures), given as arguments the
-    # names it read from print_ascii's scope; cast(int, cell) is written as the int that the
-    # bool cell is (a builtin class is no value here, M1)
-    def _get_module(self, x: int, y: int, invert: bool, modcount: int) -> int:
-        if invert and self.border and max(x, y) >= modcount + self.border:
-            return 1
-        if min(x, y) < 0 or max(x, y) >= modcount:
-            return 0
-        return 1 if self.modules[x][y] else 0
 
     # Pystachy port: make_image() and its two @overload stubs are left out with the image
     # factories: a method with **kwargs makes the class uncompilable (M2, M3)
@@ -415,7 +407,7 @@ class QRCode:
                         else:
                             self.modules[row + r][col + c] = False
 
-    def setup_type_number(self, test: bool):  # Pystachy port: annotated (M2)
+    def setup_type_number(self, test):
         bits = util.BCH_type_number(self.version)
 
         for i in range(18):
@@ -426,8 +418,7 @@ class QRCode:
             mod = not test and ((bits >> i) & 1) == 1
             self.modules[i % 3 + self.modules_count - 8 - 3][i // 3] = mod
 
-    # Pystachy port: annotated (M2)
-    def setup_type_info(self, test: bool, mask_pattern: Optional[int]):
+    def setup_type_info(self, test, mask_pattern):
         data = (self.error_correction << 3) | mask_pattern
         bits = util.BCH_type_info(data)
 
@@ -456,8 +447,7 @@ class QRCode:
         # fixed module
         self.modules[self.modules_count - 8][8] = not test
 
-    # Pystachy port: annotated (M2)
-    def map_data(self, data: Optional[list[int]], mask_pattern: Optional[int]):
+    def map_data(self, data, mask_pattern):
         inc = -1
         row = self.modules_count - 1
         bitIndex = 7
@@ -499,10 +489,7 @@ class QRCode:
                     inc = -inc
                     break
 
-    # Pystachy port: annotated, and so are `code` and `x_border`: a list holds items of one
-    # type, here the modules' `Optional[bool]`, which cast() named `bool` (M2; M1: a builtin
-    # class is no value)
-    def get_matrix(self) -> list[list[Optional[bool]]]:
+    def get_matrix(self):
         """
         Return the QR Code as a multidimensional array, including the border.
 
@@ -515,7 +502,9 @@ class QRCode:
             return self.modules
 
         width = len(self.modules) + self.border * 2
-        # Pystachy port: annotated, as is x_border, and `module` is not cast (see above)
+        # Pystachy port: annotated, as is x_border, and `module` is not cast: a list holds items of
+        # one type, here the modules' `Optional[bool]`, which cast() named `bool` (M1: a builtin
+        # class is no value)
         code: list[list[Optional[bool]]] = [[False] * width] * self.border
         x_border: list[Optional[bool]] = [False] * self.border
         for module in self.modules:

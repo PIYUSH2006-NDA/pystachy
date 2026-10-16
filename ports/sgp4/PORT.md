@@ -10,9 +10,9 @@ Propagate Earth-satellite orbits from two-line element sets with the pure-Python
 ## Coverage
 
 - `Satrec.twoline2rv()`, `sgp4()`, `sgp4_tsince()` and `sgp4init()` with WGS72OLD/WGS72/WGS84 gravity constants.
-- Near-Earth and deep-space/resonant propagation; the tested Julian-date, orbital-element and Alpha-5 helpers. Pass floating-point time arguments to the annotated propagation methods.
+- Near-Earth and deep-space/resonant propagation; the tested Julian-date, orbital-element and Alpha-5 helpers. Pass floating-point minutes to `sgp4_tsince()`; `sgp4(jd, fr)` also takes integers.
 - The C++ accelerator, NumPy array API, legacy `Satellite` API, datetime convenience helpers, TLE/OMM export and OMM import are outside the port’s coverage.
-- Use `sat.no_kozai` for the omitted `no` property and `from_alpha5(sat.satnum_str)` for the omitted `satnum` property.
+- `Satrec` keeps upstream's `__slots__` and its read-only `no` and `satnum` properties.
 
 <a id="deviations-it-hits"></a>
 
@@ -21,6 +21,7 @@ Propagate Earth-satellite orbits from two-line element sets with the pure-Python
 - TLE parsing requires ASCII and preserves fixed columns. It does not verify TLE checksums; checksum helpers are outside the validated API.
 - Native checked integers constrain extreme epochs. Negative mean-motion fractional powers raise `ValueError`, where CPython reaches a later complex-number `TypeError`.
 - `io.twoline2rv()` stores integer `ephtype`/`revnum` fields, and the legacy datetime-valued `epoch` field is omitted.
+- Assigning an attribute outside `Satrec.__slots__` is a compile-time error, where CPython raises `AttributeError`.
 
 <a id="tests"></a>
 

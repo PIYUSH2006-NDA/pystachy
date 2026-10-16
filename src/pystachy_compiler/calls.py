@@ -25,8 +25,10 @@ from src.pystachy_compiler.utils import (
     is_union,
     kw_names,
     kw_types,
+    literal_format,
     nonetest,
     pure_arg,
+    runtime_format,
     takes_self,
     targs,
     tname,
@@ -38,8 +40,21 @@ from src.pystachy_compiler.utils import (
 def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str = "") -> Val:
     f = n.kids[0]
     args = n.kids[1:]
+    if self.getattr_name(f) != "":
+        # getattr(o, "m")(args) is o.m(args): o, then the method, then the arguments
+        f = mk("attr", self.getattr_name(f), f.line, [f.kids[1]])
+        n = mk("call", n.s, n.line, [f] + args)
     if f.kind == "badattr":
         self.err(f.s)
+    f = self.format_of(f)
+    if literal_format(f):
+        return self.str_format(f.kids[0].s, f.s, args)
+    if f.kind == "attr" and (f.s == "format" or f.s == "format_map") and f.kids[0].kind == "name" and f.kids[0].s == "str" and not self.bound("str") and len(args) > 0:
+        fmt = self.const_str(args[0])
+        if fmt.kind == "str":
+            return self.str_format(fmt.s, f.s, args[1:])  # (str.format("...", args), also of a module's FMT)
+        if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+            self.err(runtime_format(f.s))
     if f.kind == "index" and f.kids[0].kind == "name" and f.kids[0].s in self.tparams and f.kids[0].s not in self.ltype:
         self.modchk(f.kids[0])
         sc = self.generic_ann(f.kids[0].s, f.kids[1])
@@ -130,6 +145,8 @@ def gen_star_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: 
         receiver = self.expr(f.kids[0], "")
         if self.reference_union(receiver.t):
             self.err("reference union methods do not support unpacked arguments")
+        if receiver.t == "str" and (f.s == "format" or f.s == "format_map"):
+            self.err(runtime_format(f.s))
         f = mk("attr", f.s, f.line, [self.vnode(receiver)])
     elif f.kind != "attr" and f.kind != "val" and not self.static_callee(f):
         f = self.vnode(self.expr(f, ""))
@@ -544,7 +561,7 @@ def gen_open_(self, args: list[Node]) -> Val:
                                            f"i64 {vals['buffering']}"]), "file")
 
 def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsoft: bool = False) -> Val:
-    if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and has_method(o.t[5:-1], m):
+    if (o.t == "fn[b:str]" or o.t == "fn[b:list]" or o.t == "fn[b:dict]") and (has_method(o.t[5:-1], m) or (o.t == "fn[b:str]" and (m == "format" or m == "format_map"))):
         return self.unbound_call(o.t[5:-1], m, args)
     if is_kw(o.t):
         return self.kw_method(o, m, args)
@@ -552,11 +569,13 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
         o = self.unwrap(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
     if is_union(o.t):
         return self.umethod(o, m, args)
-    if o.t in self.nts and m == "__init__":
-        # p.__init__(args) of a NamedTuple (also through p.__init__ as a value): object.__init__,
+    if (o.t in self.nts or self.literal_class(o.t)) and m == "__init__":
+        # p.__init__(args) of a NamedTuple or operator getter (also as a value): object.__init__,
         # as tuple.__new__ set the fields. It takes any arguments where the class has a __new__
         # of its own, and does nothing, also on None. The __init__ that makes the object is the
-        # compiler's (see nt_class), which only construction and _replace() call
+        # compiler's (see nt_class), which only construction and _replace() call. Operator's
+        # C getters likewise initialize through __new__; reinitialization must not mutate
+        # fields whose literal values the compiler has specialized.
         for a in args:
             x = a.kids[0] if a.kind == "kw" else a
             if not pure_arg(x):
@@ -581,15 +600,17 @@ def gen_method(self, o: Val, m: str, args: list[Node], want: str = "", resultsof
             self.err(f"{short(o.t)} has no method {m}() of its own, and BaseException.{m}() is not supported" + (" (call super().__init__(...) in __init__)" if m == "__init__" else ""))
         if m not in ci.methods and m in ci.ftypes:
             return self.obj_call(self.getfield(o, self.field(o, m), m), args, want, resultsoft)  # (o.f(args) of a field f)
-        if m not in ci.methods and not ((m == "_replace" or m == "_asdict") and o.t in self.nts):
+        if m not in ci.methods and not ((m == "_replace" or m == "_asdict" or m == "index" or m == "count") and o.t in self.nts):
             self.err(f"'{shown(o.t)}' object has no method '{m}'")  # (a specialization's is its class's)
         self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{m}'")
         if m == "_asdict" and m not in ci.methods:
             return self.asdict(o, args)
+        if (m == "index" or m == "count") and m not in ci.methods:
+            return self.tmethod(self.ntup(o, True), m, args)  # (tuple's, of its fields)
         if m not in ci.methods:
             return self.replace(o, args)
         if ci.methods[m].iters:
-            self.err(f"calling {short(o.t)}.__iter__() is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"calling {short(o.t)}.{m}() is not supported (its iterator is the list it steps through here): iterate over the object")
         if ci.methods[m].prop:
             return self.obj_call(self.call_fn(ci.methods[m], [o], []), args, "")
         self.cls_bound(ci.methods[m], o.t, True)
@@ -630,6 +651,14 @@ def gen_kw_method(self, o: Val, m: str, args: list[Node]) -> Val:
         if args[0].s in names:
             return self.tget(self.kw_tuple(o), names.index(args[0].s))
         return dv
+    if m == "get" and 1 <= len(args) <= 2 and len([a for a in args if a.kind != "kw" and a.kind != "starred"]) == len(args) and (len(names) == 0 or len([x for x in kw_types(o.t) if x != kw_types(o.t)[0]]) > 0):
+        # get(k, default) of values of different types (or none): the value of the name k is,
+        # of their union with the default's, or the default
+        k = self.expr(args[0], "str")
+        dv = self.expr(args[1], "") if len(args) == 2 else Val("null", "None")
+        if k.t != "str":
+            self.err(f"get() of a {typestr(k.t)} key of a {typestr(o.t)} is not supported: its keys are str")
+        return self.pick(self.kw_tuple(o), [self.cmp2("==", k, Val(self.sconst(x), "str")) for x in names], "", "", f"get() of a {typestr(o.t)} with a variable key", "", dv)
     if m == "keys" and len(args) == 0:
         return self.expr(mk("list", "", self.line, [mk("str", x, self.line, []) for x in names]), "list[str]")
     if m == "pop" or m == "popitem" or m == "setdefault" or m == "update" or m == "clear":
@@ -678,6 +707,8 @@ def gen_method_value(self, o: Val, name: str) -> Val:
     t = unopt(o.t)
     if (t == "fn[b:str]" or t == "fn[b:list]" or t == "fn[b:dict]") and has_method(t[5:-1], name):
         return Val("null", f"fn[u:{t[5:-1]}.{name}]")  # (str.lower: the method, which takes the str first)
+    if t == "fn[b:str]" and (name == "format" or name == "format_map"):
+        self.err(f'str.{name} as a value is not supported: call it, "...".{name}(...) or str.{name}("...", ...) of a string literal (map() takes "...".{name})')
     if t in self.classes:
         ci = self.classes[t]
         if name in ci.ftypes or name not in ci.methods:
@@ -689,7 +720,7 @@ def gen_method_value(self, o: Val, name: str) -> Val:
         if f.deco != "":
             self.err(f"{'a static' if f.deco == 'staticmethod' else 'a class'} method as a value ({short(t)}.{name}) is not supported: call it")
         if f.iters:
-            self.err(f"{short(t)}.__iter__ as a value is not supported (its iterator is the list it steps through here): iterate over the object")
+            self.err(f"{short(t)}.{name} as a value is not supported (its iterator is the list it steps through here): iterate over the object")
         if not (t in self.nts and name == "__init__"):  # (object.__init__, which None has too: method())
             self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'")
         return Val(o.v, f"fn[m:{t}.{name}]")
@@ -716,6 +747,60 @@ def gen_replace(self, o: Val, args: list[Node]) -> Val:
     self.call_fn(ci.methods["__init__"], vals, [])
     return vals[0]
 
+def gen_dc_replace(self, args: list[Node]) -> Val:
+    # dataclasses.replace(obj, **changes): a new object of obj's class, which its __init__ makes
+    # from the changes (each passed, as CPython passes them) and the values of obj's other
+    # init=True fields, read in field order
+    npos = len([a for a in args if a.kind != "kw"])
+    if len([a for a in args if a.kind == "starred" or a.kind == "dstar"]) > 0:
+        self.err("star arguments are not supported")
+    if npos != 1 or args[0].kind == "kw":
+        self.err("replace() missing 1 required positional argument: 'obj'" if npos == 0 else f"replace() takes 1 positional argument but {npos} were given")
+    o = self.expr(args[0], "")
+    if not self.is_dc(o.t) or o.t in self.nts:
+        self.err(f"replace() should be called on dataclass instances, not {tname(o.t)}")
+    ci = self.classes[o.t]
+    given: dict[str, Val] = {}
+    for a in args[1:]:
+        if a.s in ci.fopts and "no-init" in ci.fopts[a.s]:
+            self.err(f"field {a.s} is declared with init=False, it cannot be specified with replace()")
+        given[a.s] = self.expr(a.kids[0], ci.ftypes.get(a.s, ""))
+    self.notnone(o, "TypeError: replace() should be called on dataclass instances")
+    # (an object of a subclass: the subclass's __init__, also given its own fields)
+    cs = [c for c in self.classes.values() if c.tag > 0 and self.derives(c.name, o.t)] if ci.tag > 0 else [ci]
+    tag = self.mload('int', o.v) if len(cs) > 1 else ""
+    end = self.label() if len(cs) > 1 else ""
+    ph = Ins("phi", o.t, "")
+    r = o
+    for i in range(len(cs)):
+        c = cs[i]
+        nxt = self.label() if i + 1 < len(cs) else ""
+        if nxt != "":
+            arm = self.label()
+            self.cbr(self.num_cmp('==', Val(tag, "int"), Val(str(c.tag), "int")).v, arm, nxt)
+            self.place(arm)
+        x = Val(o.v, c.name)
+        kws: list[Node] = []
+        for k in given:
+            kws.append(mk("kw", k, self.line, [self.vnode(given[k])]))
+        for fl in self.dc_fields(c):
+            if "no-init" not in c.fopts[fl] and fl not in given:
+                kws.append(mk("kw", fl, self.line, [self.vnode(self.getfield(x, self.field(x, fl), fl))]))
+        r = self.new_obj(c.name)
+        self.call_fn(c.methods["__init__"], [r], kws, direct=True)
+        if end != "" and not self.term:
+            self.incoming(ph, r.v, self.cur)
+            self.br(end)
+        if nxt != "":
+            self.place(nxt)
+    if end == "":
+        return r
+    self.place(end)
+    if len(ph.a) == 0:
+        self.unreachable()
+        return Val("null", o.t)
+    return Val(self.phi(ph), o.t)
+
 def gen_asdict(self, o: Val, args: list[Node]) -> Val:
     # p._asdict(): a dict from its fields' names to their values, which must then share one type
     ci = self.classes[o.t]
@@ -739,7 +824,7 @@ def gen_new_obj(self, c: str) -> Val:
     self.nn[o.v] = True
     if self.classes[c].tag > 0:
         self.mstore('int', f'{self.classes[c].tag}', o.v)
-    if not (self.is_dc(c) and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
+    if not (self.is_dc(c) and "no-init" not in self.classes[c].dcopts and self.classes[c].methods["__init__"].node.kids[0].kind == "noann"):
         line = self.line
         self.class_defaults(o)
         self.line = line
@@ -828,8 +913,11 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
     vals: list[Val] = []
     # A surrounding annotation is a storage contract; C[T](...) alone only hints
     # at unbound or conflicting arguments. Keep both through unpacked calls.
-    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, want)) > 0
-    context = want if contract or typeargs == "" else typeargs
+    # C(...) of a generic class that a lambda returns is a forwarding call: the Callable's
+    # result type binds C's type variables, as lambda: defaultdict(int) takes them (see instance)
+    ctx = self.curfn.rctx if want == "?" and f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else want
+    contract = f.cls in self.tparams and len(self.want_tvars(f.cls, ctx)) > 0
+    context = ctx if contract or typeargs == "" else typeargs
     hint = self.want_params(f.cls, context) if f.name == "__init__" and len(pre) > 0 and pre[0].v == "" and f.cls in self.tparams else []
     for i in range(np):
         vals.append(self.pcoerce(pre[i], f.ptypes[i], f, i) if i < len(pre) else Val("", ""))
@@ -874,6 +962,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             wrapped = self.getfield(cache, self.field(cache, "__wrapped__"), "__wrapped__")
             pre[0] = Val(wrapped.v, "env")
     df = self.dflt_fn(f)
+    facs: list[int] = []  # (the parameters whose default is a dataclass field's default_factory)
     for j in range(np):
         if vals[j].t == "":
             t = f.ptypes[j]
@@ -883,6 +972,8 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 self.err(df.dglob[j][1:])
             if df.dglob[j] == "=None":
                 vals[j] = Val("null", "None")
+            elif df.dglob[j] == "()":
+                facs.append(j)
             elif df.dglob[j].startswith("&"):
                 # a closure's default: in its env (pre[0]), evaluated where it was defined
                 t = t if t != "" else df.dtypes[j]
@@ -893,6 +984,12 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
                 vals[j] = Val(self.mload(t, df.dglob[j]), t)
             else:
                 vals[j] = self.pcoerce(self.expr(f.defaults[j], t), t, f, j)
+    for fl in self.dc_fields(self.classes[f.cls]) if len(facs) > 0 else []:
+        # a dataclass field's default_factory, called for each object (see dc_factory), after
+        # the other defaults, which only read globals, in field order (see declare_fields)
+        for j in facs:
+            if f.params[j] == fl or f.params[j] == fl + ".factory":
+                vals[j] = self.call_fn(self.classes[f.cls].methods[fl + ".factory"], [], [])
     self.line = line
     if cache is not None:
         # Evaluate and bind as an ordinary call, including def-time closure defaults,
@@ -939,7 +1036,7 @@ def gen_call_fn(self, f: FnInfo, pre: list[Val], args: list[Node], want: str = "
             union_args = self.constructor_unions(f.cls, [v.t for v in vals[1:]])
             for j in range(len(union_args)):
                 vals[j + 1] = self.pcoerce(vals[j + 1], union_args[j], f, j + 1)
-        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False)
+        sc = self.specialize(f.cls, [v.t for v in vals[1:]], self.want_tvars(f.cls, context), False, self.literal_args(f, args) if self.literal_class(f.cls) else {})
         vals[0] = self.new_obj(sc)
         pre[0] = vals[0]
         f = self.classes[sc].methods["__init__"]
@@ -1019,7 +1116,7 @@ def gen_arity(self, f: FnInfo, npre: int, args: list[Node]) -> None:
         filled[j] = True
     off = 1 if f.deco == "classmethod" else -1 if f.clo >= 0 else 0  # (cls, which CPython counts and f.params leaves out; a closure's env, the reverse)
     if f.vararg < 0 and given > last:
-        if f.name == "__init__" and f.node.kids[0].kind == "noann" and not self.is_dc(f.cls):
+        if f.name == "__init__" and f.node.kids[0].kind == "noann" and (not self.is_dc(f.cls) or "no-init" in self.classes[f.cls].dcopts):
             self.err(f"{short(f.cls)}() takes no arguments")
         dflt = len([j for j in range(last) if f.defaults[j].kind != "noann"])
         kwg = len([j for j in range(last, np) if filled[j]])
@@ -1069,3 +1166,11 @@ def gen_tests(self, ns: list[Node], p: str) -> bool:
         if self.tests(n.kids, p):
             return True
     return False
+
+def gen_getattr_name(self, n: Node) -> str:
+    # n is getattr(o, name) with a str literal name (or a constant one, in a class that
+    # specializes on literals): that name; else ""
+    if n.kind != "call" or len(n.kids) != 3 or n.kids[0].kind != "name" or n.kids[0].s != "getattr" or self.bound("getattr") or n.kids[1].kind in ["kw", "starred"] or n.kids[2].kind in ["kw", "starred"]:
+        return ""
+    c = self.const_of(n.kids[2], {}, True) if self.lit_context() else n.kids[2] if n.kids[2].kind == "str" else None
+    return c.s if c is not None and c.kind == "str" and c.s != "" else ""

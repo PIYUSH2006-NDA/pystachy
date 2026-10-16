@@ -1,0 +1,15 @@
+{'a': 1, 'x': 9, 'y': 'é'} 3 True 9
+{'z': 0, 'a': 1, 'x': 'old'}
+{'x': 9, 'y': 'é'} 2 True 9
+{'z': 0}
+2- 2+
+{'a': 1, 'b': 3, 'c': 4} {'b': 2, 'c': 4, 'a': 1} {'z': 0, 'a': 5, 'b': 2} {'a': 1, 'b': 2}
+{'a': 1, 'b': 2, 'q': 7} {'a': 1, 'b': 2}
+eval k
+eval j
+eval i
+{'k': 1, 'j': 2, 'i': 3}
+{'a': 1, 'x': 1} {}
+{'base': 0, 'a': 1, 'b': 2}
+TypeError: 'NoneType' object is not a mapping
+[exit 0]

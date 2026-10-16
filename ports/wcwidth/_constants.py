@@ -4,9 +4,7 @@ from __future__ import annotations
 # std imports
 import os
 from operator import index as _index
-# Pystachy port: no functools (#11), so no @lru_cache below (decorators are M3, #8): the caches
-# only save time.
-# from functools import lru_cache
+from functools import lru_cache
 
 from typing import Tuple, NamedTuple
 
@@ -28,7 +26,7 @@ from .table_ambiguous import AMBIGUOUS_EASTASIAN
 #                               WIDE_OVERRIDES,
 #                               NARROW_OVERRIDES)
 from .unicode_versions import list_versions
-# Pystachy port: not imported: KNOWN_TERMINALS is a frozenset (sets are M7, #12), and only
+# Pystachy port: not imported: table_term_programs is left out of the port, as only
 # list_term_programs() and resolve_terminal() read these.
 # from .table_term_programs import ALIASES, KNOWN_TERMINALS
 
@@ -50,29 +48,22 @@ __all__ = (
     "list_term_programs",
 )
 
-# Pystachy port: the three frozensets of code points are dicts that map each to True, filled by
-# loops: sets, a generator with two for clauses and a starred tuple display are M7 (#12).
-_REGIONAL_INDICATOR_SET: dict[int, bool] = {}
-for _cp in range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1):
-    _REGIONAL_INDICATOR_SET[_cp] = True
-_ISC_VIRAMA_SET: dict[int, bool] = {}
-for _lo, _hi in ISC_VIRAMA:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
-for _lo, _hi in ISC_INVISIBLE_STACKER:
-    for _cp in range(_lo, _hi + 1):
-        _ISC_VIRAMA_SET[_cp] = True
+_REGIONAL_INDICATOR_SET = frozenset(
+    range(GRAPHEME_REGIONAL_INDICATOR[0][0], GRAPHEME_REGIONAL_INDICATOR[0][1] + 1)
+)
+_ISC_VIRAMA_SET = frozenset(
+    # Pystachy port: the tables concatenated: a starred tuple display is M7 (#12)
+    cp for lo, hi in ISC_VIRAMA + ISC_INVISIBLE_STACKER
+    for cp in range(lo, hi + 1)
+)
 # pylint: disable=invalid-name
 _LATEST_VERSION = list_versions()[-1]
 # Pystachy port: list() of each table bisearch() reads, here and below: a tuple is indexed only by
 # constants (M1, #6, item 8).
 _CATEGORY_MC_TABLE = list(CATEGORY_MC[_LATEST_VERSION])
-_EMOJI_ZWJ_SET: dict[int, bool] = {}  # Pystachy port: a dict filled by loops, as above
-for _lo, _hi in EXTENDED_PICTOGRAPHIC:
-    for _cp in range(_lo, _hi + 1):
-        _EMOJI_ZWJ_SET[_cp] = True
-for _cp in _REGIONAL_INDICATOR_SET:
-    _EMOJI_ZWJ_SET[_cp] = True
+_EMOJI_ZWJ_SET = frozenset(
+    cp for lo, hi in EXTENDED_PICTOGRAPHIC for cp in range(lo, hi + 1)
+) | _REGIONAL_INDICATOR_SET
 _FITZPATRICK_RANGE = (0x1F3FB, 0x1F3FF)
 
 _ZERO_WIDTH_TABLE = list(ZERO_WIDTH[_LATEST_VERSION])  # Pystachy port: list()
@@ -125,7 +116,9 @@ def list_term_programs() -> tuple[str, ...]:
 # _EMPTY_OVERRIDES = TerminalOverrides((), (), (), (), (), ())
 
 
-# @lru_cache(maxsize=32)  # Pystachy port
+# Pystachy port: no @lru_cache here and on resolve_terminal(), which read tables left out above:
+# applied at import, it would compile the function; the caches only save time.
+# @lru_cache(maxsize=32)
 def get_term_overrides(term_canonical: str) -> TerminalOverrides:
     """Return a TerminalOverrides, with all empty tuples when there are no overrides."""
     # wide, sri, sfz: all narrow characters Unicode expects wide (no 'wider' data exists)
@@ -155,7 +148,7 @@ def get_term_overrides(term_canonical: str) -> TerminalOverrides:
                              narrow_wider, narrow_zeroer)
 
 
-# @lru_cache(maxsize=32)  # Pystachy port
+# @lru_cache(maxsize=32)  # Pystachy port: (see get_term_overrides())
 def resolve_terminal(term_program: bool | str = False) -> str | None:
     """
     Resolve a terminal identifier to its canonical name.

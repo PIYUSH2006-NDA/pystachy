@@ -1,0 +1,18 @@
+0 0 12 12 6 1 0 7
+9223372036854775807 1 1099511627776
+1 0 120 0 60 30030 0
+0 9223372036854775806
+0.0 3.0 3.0 0.0 2.179449471770337 3.0 7.0
+1.7320508075688772e+308 1e-323 inf inf
+nan nan 42.24926034855522
+3.7416573867739413 0.0 1.7320508075688772 True
+120 120 1 2432902008176640000 1 20
+ValueError factorial() not defined for negative values
+ValueError factorial() not defined for negative values
+1 5 1 1 1
+1 6 4 1 1 1 0
+eval a; eval b; eval c; 2
+eval a; eval b; eval c; 0
+eval x; eval y; eval z; 13.0
+0 1 0.0 1.0 7.0
+[exit 0]

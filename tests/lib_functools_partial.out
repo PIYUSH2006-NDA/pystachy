@@ -1,0 +1,24 @@
+120 123 125 140
+127 129 (1,) {'c': 7} True
+137 (1, 3) {'c': 7} True False
+240 241 (2,) {'b': 4}
+523 {'c': 3, 'b': 2} 2
+True True True False
+5 255
+x x+y+z x/y a-b
+12 7 11 21
+éß
+51
+[1, 2, 3] 3
+[130, 230] [110, 120]
+990 110
+[410, 420]
+eval a
+eval b
+eval c
+eval d
+abcbd
+TypeError: the first argument must be callable
+TypeError: the first argument must be callable
+TypeError: the first argument must be callable
+[exit 0]
