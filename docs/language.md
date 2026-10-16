@@ -119,7 +119,8 @@ new slots shadowing inherited methods, properties or class variables.
 Ordinary classes support single inheritance, inherited fields and constructors, instance-method
 overrides, `super()` and runtime `isinstance()` checks. A base-typed receiver calls its concrete
 class's override. Constructors in these hierarchies need annotated parameters; inheritance
-involving class templates, dataclasses, NamedTuples or builtin types is unsupported. Exception
+involving class templates, NamedTuples or builtin types, or between a dataclass and a class
+that is not one, is unsupported. Exception
 classes retain their separate inheritance rules, and `Generic[...]` declares a generic class.
 Multiple inheritance, dynamic attribute hooks, metaclasses and general class or method
 decorators remain outside the supported subset.

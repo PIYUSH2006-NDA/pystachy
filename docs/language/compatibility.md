@@ -420,8 +420,9 @@ supported alternatives.
   `InitVar`, `object.__setattr__()` in a frozen dataclass, `FrozenInstanceError` other than in an
   `except` clause, `hash()` of a dataclass object, a base dataclass's field declared again with
   another type, and `repr=False` in a dataclass whose base has the `__repr__` `@dataclass` writes
-- a property's `@x.getter`, a setter or deleter of another name than its property, `property()`
-  called as a function, assigning `super().x`, and `del` of an attribute that is not a property
+- a property's `@x.getter`, a second setter or deleter, a setter or deleter of another name than
+  its property, `property()` called as a function, assigning `super().x`, and `del` of an
+  attribute that is not a property
 - a class attribute without an annotation in a dataclass or NamedTuple, and an assignment through
   its class to a dataclass's or NamedTuple's class attribute, or to one its class body does not
   bind
