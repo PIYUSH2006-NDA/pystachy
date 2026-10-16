@@ -289,7 +289,9 @@ per `group` call), runtime-length `groups(default=None)` tuples, indexing,
 dictionaries, positions, spans and expansion.
 
 - Matches decode code points, but positions (`pos`, `endpos`, group spans and
-  pattern-error positions) are byte indices.
+  pattern-error positions) are byte indices. A byte that `ord()` reads as no
+  character's part (a truncated, overlong or above-U+10FFFF sequence) is its own
+  character, as `chr()` made it.
 - `findall` with two or more groups still raises `NotImplementedError`; its
   ported result contract remains `list[str]`. `Match.regs` remains unsupported
   because its runtime-length tuple contains tuple elements.
