@@ -1,4 +1,4 @@
-# error: hasattr() of property 'value' is not supported
+# hasattr() of a property in a template's test (#486): decided at run time by its getter
 class C:
     @property
     def value(self) -> int:

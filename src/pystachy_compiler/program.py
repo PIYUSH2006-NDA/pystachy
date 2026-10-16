@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 import sys
+from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, calls_iter, collect, module_ints, module_strs, needs_eh, none_assigns
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
@@ -699,9 +700,13 @@ def gen_program(self, mods: list[Mod]) -> str:
         m.body.kids = self.abstract_defs(m.body.kids)
     # the modules in the order their code may first run, the main program last
     tops: list[list[Node]] = []
+    props: dict[str, bool] = {}
+    for m in mods:
+        refl_props(m.body, props)
     for m in mods:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
+        self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
     for m in mods:
@@ -717,6 +722,7 @@ def gen_program(self, mods: list[Mod]) -> str:
             elif st.kind == "subclass" and st.kids[1].kind == "typeparams" and self.class_params(st) == "":
                 m.body.kids[i] = st.kids[0]  # class C[T]: as class C(Generic[T]) (see class_params)
                 self.tparams[st.s] = st.kids[1].s.split()
+                self.pep695[st.s] = True
             elif self.typevar_def(st):
                 self.typevars.append(st.kids[0].s)
                 m.body.kids[i] = mk("pass", "", st.line, [])
