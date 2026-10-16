@@ -202,12 +202,13 @@ def has_value_return(n: Node) -> bool:
 
 
 def other_return(n: Node) -> bool:
-    # does n return a value other than iter(x) (outside the functions, classes and lambdas it
-    # defines): an __iter__ annotated -> Iterator[T] that does returns its iterator object, as
-    # an unannotated one does, rather than the list iter(x) steps through (Gen.iter_ret)
+    # does n return a value other than iter(x) or reversed(x) (outside the functions, classes and
+    # lambdas it defines): an __iter__ annotated -> Iterator[T] that does returns its iterator
+    # object, as an unannotated one does, rather than the list iter(x) steps through, or the new
+    # list of reversed(x)'s items (Gen.iter_ret)
     if n.kind == "return":
         e = n.kids[0] if len(n.kids) > 0 else n
-        return e.kind != "return" and e.kind != "None" and not (e.kind == "call" and e.kids[0].kind == "name" and e.kids[0].s == "iter" and len(e.kids) == 2)
+        return e.kind != "return" and e.kind != "None" and not (e.kind == "call" and e.kids[0].kind == "name" and (e.kids[0].s == "iter" or e.kids[0].s == "reversed") and len(e.kids) == 2)
     if n.kind in ["def", "class", "subclass", "lambda"]:
         return False
     for k in n.kids:
