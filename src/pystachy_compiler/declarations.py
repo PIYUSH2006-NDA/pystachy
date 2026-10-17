@@ -115,6 +115,12 @@ def gen_ann(self, n: Node) -> str:
     if k == "str":
         return self.ann(self.parse_expr(n.s))
     s = n.s
+    if k == "attr":
+        c = self.imported_ref(n)
+        if c.startswith("ffi.") and c[4:] in CTYPES:
+            return "int"
+        if c == "ffi.c_buf" or c == "ffi.c_float":
+            return "str" if c == "ffi.c_buf" else "float"
     if k == "name":
         if s in self.tmpl and self.selfcls in self.classes and self.classes[self.selfcls].origin == s:
             return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)
@@ -128,6 +134,8 @@ def gen_ann(self, n: Node) -> str:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
         if self.imported(s) == "ffi.c_buf":
             return "str"  # (a str's UTF-8 bytes, NULs and all, for a C function that takes their length too)
+        if self.imported(s) == "ffi.c_float":
+            return "float"  # (a C float, 32 bits, in an @extern function's signature)
         if is_excname(s):
             return "exc"  # (a builtin exception class: any exception, not only those of the class)
         if s in self.taliases:
