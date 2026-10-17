@@ -7,6 +7,8 @@ from src.pystachy_compiler.ir import Blk, ClassInfo, Exit, FnInfo, Ins, IterArg,
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
     ABCS,
+    ABCSMORE,
+    ABCSOTHER,
     DUNDER,
     FUTURE,
     FXBIT,
@@ -75,10 +77,12 @@ def gen_callable_guard(self, st: Node, f: FnInfo) -> str:
         return ""
     return c.kids[1].s
 
-def gen_obj_helpers(self, c: str) -> None:
+def gen_obj_helpers(self, c: str, which: list[int]) -> None:
     # @o.eq/cmp/repr.<class>: what the runtime's generic ==, ordering and repr do with objects
-    # of class c. They are compiled leniently: an operation the class does not support
-    # raises TypeError when it runs rather than failing the compilation.
+    # of class c, those which picks (0 eq, 1 cmp, 2 repr): @o.eq and @o.cmp only for a class that
+    # a descriptor compares (ocmp), so printing a container compiles no comparison. They are
+    # compiled leniently: an operation the class does not support raises TypeError when it
+    # runs rather than failing the compilation.
     line = self.classes[c].node.line
     a = mk("name", "a", line, [])
     b = mk("name", "b", line, [])
@@ -92,7 +96,7 @@ def gen_obj_helpers(self, c: str) -> None:
               [mk("return", "", line, [mk("call", "", line, [mk("name", "__pys_repr", line, []), a])])]]
     ops = ["eq", "cmp", "repr"]
     self.lenient = True
-    for i in range(3):
+    for i in which:
         f = FnInfo(ops[i], f"@o.{ops[i]}.{c}", self.classes[c].node, "")
         f.params = ["op", "a", "b"] if i == 1 else ["a", "b"]
         f.ptypes = ["int", c, c] if i == 1 else [c, c]
@@ -171,6 +175,8 @@ def gen_check_import(self, a: Node) -> None:
     if mod == "__future__":
         if x not in FUTURE:
             self.err(f"future feature {x} is not defined")
+    elif mod == "collections.abc" and x in ABCSMORE:
+        self.err(ABCSOTHER.replace("NAME", x))
     elif mod == "typing" or mod == "collections.abc":
         if x not in (TYPING if mod == "typing" else ABCS):
             self.err(f"cannot import name '{x}' from '{mod}'")

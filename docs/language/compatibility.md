@@ -507,7 +507,16 @@ supported alternatives.
   `int | None` and a `str | None`, which CPython finds equal only when both are `None`)
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class than the objects' class or one of its bases, which
-  CPython calls anyway
+  CPython calls anyway; this includes the method of a subclass whose objects the container may
+  hold, for objects of ordinary and exception classes (`Base() in xs`, `xs.count(x)`,
+  `xs.index(x)`, `xs == ys`, `sorted(xs)` or `<` of tuples holding them, where `Sub(Base)` defines
+  `__eq__(self, other: "Sub")` or `__lt__(self, other: "Sub")`), and comparing dataclass or
+  NamedTuple objects there whose fields hold such objects (`[NT(Sub(1))] == [NT(Base(1))]`);
+  printing such a container works, also one of those dataclass or NamedTuple objects
+- `x == y`, `!=` or an ordering of values typed by a class (ordinary or exception) when the
+  method CPython calls for a subclass whose objects they may be is annotated to take only that
+  subclass (`x == y` of `E`-typed values where `F(E)` defines `__eq__(self, other: "F")`; CPython
+  calls it with an `E`)
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
 - slicing a fixed-shape tuple or NamedTuple by bounds or a step that are not integer literals,
   unless its items have one type a `tuple[T, ...]` can hold (the result is then one); assigning
@@ -668,8 +677,15 @@ supported alternatives.
 - `except ... as x` in a function where `x` is a global (the end of the clause deletes it, as `del`
   would), and at a module's top level where `x` is a global of another type that a function reads
   (the function would not see the exception)
-- `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
-  or `__ne__` (`is` works), but between objects of classes with a base in common
+- `==` between exceptions of builtin classes (`except Exception as e`), or such an exception and
+  `None`, where an exception class defines `__eq__` or `__ne__` (`is` works), and between objects
+  of exception classes with no base in common where neither class nor any of their subclasses
+  defines a comparison method but another exception class defines `__eq__` or `__ne__`. Objects
+  of exception classes otherwise compare as CPython compares them, by the methods of the
+  objects' own classes (a right operand's reflected method first where its class derives from
+  the left one's), also between classes with no base in common, and else by identity; a method
+  annotated to take only its own class is rejected where CPython would call it with another
+  class's object (see [Objects and operators](#objects-and-operators))
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:
   annotate it with the class or a base of the program), objects of exception classes with no base
   in common in the program in one list, and a builtin exception where an object of an exception
