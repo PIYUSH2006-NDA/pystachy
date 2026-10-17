@@ -19,6 +19,10 @@ wide 2 ['é', '1', ' Ω', '2'] released True 0 0 True 120
 wide 3 ['é#', 'Ω#', '𝔄#'] released True 0 0 True 120
 wide 4 30 released True 0 0 True 120
 scanner 30 30 ab cd ef a cached 150 0 True
+windows 0 60 True True
+windows 1 60 True True
+windows 0 60 True True
+windows 1 60 True True
 nested ['[ab', '30', '30', '2]1', '[cd', '30'] released True 0 0
 purged ['ab311', 'cd3122', 'ef31333'] released True 0 0
 nested ['[é', '30', '30', '2]1', '[Ω', '30'] released False 150 0

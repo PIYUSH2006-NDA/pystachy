@@ -1,5 +1,5 @@
 # lib/re caches the last subject's code points (re._last_codes, absent in CPython) for the next
-# call on it. findall(), finditer(), split(), sub() and subn() read the subject to its end, so they
+# call on it. Unbounded findall()/finditer(), split(), sub() and subn() read the subject to its end, so they
 # release a cache that they filled for a subject longer than re._KEEP bytes (1 MB, lowered here):
 # its decoding does not outlive the call (#589). A cache that was there before, as match(s, pos)
 # loops fill it, stays. An operation keeps its own decoded lists, also while a sub() callback
@@ -54,6 +54,22 @@ while pos < len(long):
     pos = m.end()
 before = re._decoded
 print("scanner", n, len(num.findall(long)), num.sub("", long)[:10], state(long), re._decoded == before)
+
+
+# Bounded findall()/finditer() windows need the same geometrically growing prefix cache as
+# search(). Non-ASCII windows can start/end inside a UTF-8 character; the numeric matches still
+# have one byte each, and cache retention uses the normalized byte endpos, not a code-point index.
+for subject in [long, wide]:
+    for k in range(2):
+        re.purge()
+        before = re._decoded
+        n = 0
+        for pos in range(len(subject)):
+            if k == 0:
+                n += len(num.findall(subject, pos, pos + 1))
+            else:
+                n += len(num.finditer(subject, pos, pos + 1))
+        print("windows", k, n, re._decoded - before <= 3 * len(subject), re._last is subject)
 
 
 # In a sub() callback, sub() on another long subject releases its decoding, findall() on long then

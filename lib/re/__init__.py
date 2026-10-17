@@ -196,14 +196,14 @@ _last_codes: list[int] = []
 _last_offs: list[int] = []  # (the index in the str of each code point, and its length; [] for ASCII)
 _last_limit = 0  # greatest requested index covered, including a character at/after it if present
 _decoded = 0  # the code points decoded so far (tests/deviations/lib_re_decoding.py counts them)
-_KEEP = 1 << 20  # the longest subject (in bytes) that findall(), finditer(), split() and sub() leave cached
+_KEEP = 1 << 20  # the longest subject (in bytes) that full scans leave cached
 
 
 def _release(string: str, cached: bool) -> None:
-    # findall(), finditer(), split(), sub() and subn() read the subject to its end, so a cache that
-    # one of them filled saves a later call on the subject only its decoding, linear like the call
-    # itself. Past _KEEP bytes, drop it rather than keep 8 bytes per byte (16 per code point if it
-    # is not ASCII) alive once the program is done with the subject (#589). A cache that was there
+    # Full scans decode the subject to its end, so their cache saves a later scan only its
+    # decoding, linear like the call itself. Past _KEEP bytes, drop it rather than keep 8 bytes
+    # per byte (16 per code point if not ASCII) alive once the program is done with the subject
+    # (#589). A cache that was there
     # before the call stays: match() and search() loops with pos fill it, and need it. As purge(),
     # this drops only the cache's references: an operation still running (an outer sub() whose
     # callback made the call) keeps the lists its State has
@@ -2020,7 +2020,10 @@ class Pattern:
                 out.append(string[_to_index(offs, st.mark[0]) : _to_index(offs, st.mark[1])])
             st.must_advance = st.ptr == st.start
             st.start = st.ptr
-        _release(string, cached)
+        # Bounded windows may advance through the subject: preserve their growing prefix cache
+        # just as search() does, or decoding each window's prefix would make that loop quadratic.
+        if st.endpos == len(string):
+            _release(string, cached)
         return out
 
     def finditer(self, string: str, pos: int = 0, endpos: int = _MAXSIZE) -> "list[Match]":
@@ -2039,7 +2042,8 @@ class Pattern:
             out.append(self._new_match(string, st))
             st.must_advance = st.ptr == st.start
             st.start = st.ptr
-        _release(string, cached)
+        if st.endpos == len(string):
+            _release(string, cached)
         return out
 
     def split(self, string: str, maxsplit: int = 0) -> list[str]:
