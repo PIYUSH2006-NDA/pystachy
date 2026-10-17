@@ -1259,6 +1259,18 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             rhs = self.vnode(b)
         self.update(cur, [rhs])
         return cur
+    if op == "**" and cur.t in self.classes:
+        if "__ipow__" in self.classes[cur.t].methods:
+            b = self.expr(rhs, cur.t)
+            if self.isnum(b.t):
+                self.none_operand("**=", cur, b)
+                return self.call_fn(self.classes[cur.t].methods["__ipow__"], [cur, b], [])
+            return self.arith(op, cur, b, "**=")  # (retain the object/reflected-power diagnostic)
+        if self.classes[cur.t].tag > 0:
+            # Falling back to __pow__ must not skip a subtype-only __ipow__.
+            for c in self.classes.values():
+                if c.tag > 0 and self.derives(c.name, cur.t) and "__ipow__" in c.methods:
+                    self.err(f"**= through {tname(cur.t)} may call {tname(c.name)}.__ipow__; use the concrete receiver type")
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:
         b = self.expr(rhs, cur.t)  # (as for cur op rhs: c += Counter() types the empty Counter)
