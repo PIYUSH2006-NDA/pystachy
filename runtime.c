@@ -146,6 +146,7 @@ static uintptr_t *mstk;                /* mark stack of (address, bytes) ranges 
 static I msp, mcap;
 static Str *ch1[256];                  /* runtime statics that hold heap pointers (roots) */
 static List *args;
+static List *warnopts;                 /* sys.warnoptions, made by its first read (pys_warnoptions) */
 static struct { Exc *cur, *handled, *shown, *pend, *closed; } xr;   /* the exception raised last, the one being
                                      handled, the uncaught one whose str() is being shown, the one a with-file's
                                      close raised while unwinding (see exceptions), the one a generator raised
@@ -203,6 +204,7 @@ __attribute__((noinline, no_sanitize("address"))) static void mark_roots(void) {
   for (I i = 0; i < gc_nroots; i++) scan((const W *)gc_roots[i], (const W *)gc_roots[i] + 1);
   scan((const W *)ch1, (const W *)(ch1 + 256));
   scan((const W *)&args, (const W *)(&args + 1));
+  scan((const W *)&warnopts, (const W *)(&warnopts + 1));
   if (xthrow) {                        /* exceptions are on, or one is being reported (NULL: none to scan) */
     scan((const W *)&xr, (const W *)(&xr + 1));
     if (nunw) scan((const W *)unw, (const W *)(unw + nunw));   /* unw is NULL before the first */
@@ -3328,8 +3330,14 @@ void pys_init_lib(I **roots, I nroots) {
     std_err.f = stderr; std_err.wr = 1; std_err.std = 1;
   }
   args = pys_list_new(0);              /* sys.argv: the host's (pyext.c's pyx_argv appends it) */
+  warnopts = 0;                        /* and sys.warnoptions (pyx_argv appends the host's, if any) */
 }
 List *pys_argv(void) { return args; }
+List *pys_warnoptions(void) {          /* sys.warnoptions: [], CPython's for a program run without -W options (and
+                                          without PYTHONWARNINGS or PYTHONDEVMODE, which Pystachy does not read) */
+  if (!warnopts) warnopts = pys_list_new(0);
+  return warnopts;
+}
 File *pys_std(I i) { return i == 0 ? &std_in : i == 1 ? &std_out : &std_err; }
 void pys_write(Str *s, I fd) { io_in(); put1(fd == 2 ? &std_err : &std_out, s->s, s->len); io_out(); }
 void pys_file_flush(File *f);
