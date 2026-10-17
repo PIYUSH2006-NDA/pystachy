@@ -12,6 +12,7 @@ from src.pystachy_compiler.specs import (
     DUNDER,
     FUTURE,
     FXBIT,
+    GLUE,
     MODULES,
     NONEVAR,
     OPTTYPES,
@@ -124,6 +125,13 @@ def gen_check_special(self, f: FnInfo) -> None:
     # the special methods Pystachy calls implicitly must have the shape it relies on; in an
     # imported module's class, a wrong one is an error where the method is called, as is a
     # method whose declaration failed (f.bad: its types are placeholders)
+    if (f.name == "__pow__" or f.name == "__ipow__") and f.bad == "" and f.npos < 1:
+        # Power uses normal argument binding after its prebound receiver, including
+        # *args exponents. A variadic receiver cannot take that prebound self.
+        self.line = f.node.line
+        f.bad = f"{f.name} must take self as a positional argument"
+        if self.classes[f.cls].mod == "":
+            self.err(f.bad)
     if f.name not in SPECIAL or f.bad != "":
         return
     self.line = f.node.line
@@ -970,7 +978,7 @@ def gen_stmt(self, n: Node) -> None:
             self.decorators(self.funcs[n.s].node, self.funcs[n.s].node.kids[3:] if self.curfn.mod != "" else [], {})
             self.hoist(self.funcs[n.s])
             ef = self.funcs[n.s]
-            if ef.extern and not self.rtmode:
+            if ef.extern and not self.rtmode and ef.mod not in GLUE:
                 # @ffi.extern looks its C function up when the def runs, as ctypes.CDLL does (cextern)
                 xs = ef.ll[1:]
                 self.rt("pys_c_bind", "void", [f"ptr @ffi.fp.{xs}", f"ptr @ffi.lib.{xs}", f"ptr @ffi.sym.{xs}"])
@@ -1104,6 +1112,7 @@ def gen_augassign(self, n: Node) -> None:
             # o.x op= v of a property x: its getter, then its setter
             self.prop_store(o, t.s, self.inplace(op, self.method_value(o, t.s), n.kids[1]))
             return
+        self.glue_field(o, t.s)
         p = self.field(o, t.s, False)
         self.frozen(o.t, t.s)
         cur = self.getfield(o, p, t.s)
@@ -1264,6 +1273,18 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             rhs = self.vnode(b)
         self.update(cur, [rhs])
         return cur
+    if op == "**" and cur.t in self.classes:
+        if "__ipow__" in self.classes[cur.t].methods:
+            b = self.expr(rhs, cur.t)
+            if self.isnum(b.t):
+                self.none_operand("**=", cur, b)
+                return self.call_fn(self.classes[cur.t].methods["__ipow__"], [cur], [self.vnode(b)])
+            return self.arith(op, cur, b, "**=")  # (retain the object/reflected-power diagnostic)
+        if self.classes[cur.t].tag > 0:
+            # Falling back to __pow__ must not skip a subtype-only __ipow__.
+            for c in self.classes.values():
+                if c.tag > 0 and self.derives(c.name, cur.t) and "__ipow__" in c.methods:
+                    self.err(f"**= through {tname(cur.t)} may call {tname(c.name)}.__ipow__; use the concrete receiver type")
     im = "__i" + DUNDER.get(op, "__?")[2:]
     if cur.t in self.classes and im in self.classes[cur.t].methods:
         b = self.expr(rhs, cur.t)  # (as for cur op rhs: c += Counter() types the empty Counter)

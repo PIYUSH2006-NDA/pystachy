@@ -18,7 +18,7 @@ adaptations, deviations and tests. The [language guide](language.md) explains th
 | Approach | Modules and useful APIs |
 |---|---|
 | Unchanged CPython sources | `bisect`, `colorsys`, `stat` constants and predicates, path-string helpers from `posixpath` / `genericpath`, `curses.ascii`, `this`, and `struct`, on a port of `_struct` |
-| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template` / `Formatter`, selected `operator` functions and getters, selected `statistics` operations, `random`, `urllib.parse`, `html`, `keyword`, `shlex`, `datetime` (without the local time zone), `codecs` (without the codec registry) and the incremental `html.parser` probe |
+| Localized CPython ports | `heapq` selection helpers, `difflib.SequenceMatcher`, `getopt`, `fnmatch`, `textwrap`, `string.Template` / `Formatter`, selected `operator` functions and getters, selected `statistics` operations, `random`, `urllib.parse`, `html`, `keyword`, `token`, `shlex`, `datetime` (without the local time zone), `codecs` (without the codec registry) and the incremental `html.parser` probe |
 | Larger port | `re`: CPython's Python parser/compiler plus a matcher adapted from its C engine |
 | Subset implementations | `functools.cache` / `lru_cache` / `reduce` / `cmp_to_key` / `partial`, `collections` `deque` / `defaultdict` / `OrderedDict` / `Counter`, `io.StringIO` / `BytesIO` / `TextIOWrapper`, `csv`, `_string`'s format parsers, `_pyrandom`, the Mersenne Twister under `random`, `binascii`, `_codecs`, `atexit`, `_struct`, `_thread`, `unicodedata` and `itertools` (every function, on generators), which CPython builds in, `abc`, and `types` (`GenericAlias`, for `__class_getitem__ = classmethod(GenericAlias)`) |
 
@@ -78,7 +78,8 @@ The [compatibility reference](language/compatibility.md) lists the detailed rest
 Prioritize a small port when it offers a useful application without requiring a broad dynamic
 feature. Broader inference, generic typing, library coverage and optimizations remain areas of
 work; the repository's [issues](https://github.com/den-run-ai/pystachy/issues) track individual gaps.
-C calls and experimental CPython extension builds have their own [FFI guide](ffi.md).
+C calls, calls into an embedded CPython (`pyobj`) and experimental CPython extension builds
+have their own [FFI guide](ffi.md).
 
 <a id="2-method"></a>
 <a id="7-reproducing"></a>
