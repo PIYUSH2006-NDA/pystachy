@@ -598,13 +598,24 @@ supported alternatives.
   attribute through an object
 - a NamedTuple without fields, assigned a field outside its `__init__`, whose class defines
   `__getitem__` or `__iter__`, compared or added through its own operator method with another type,
-  given to `hasattr()` of a name it does not define, `_make()`, `_asdict()` of fields of different
-  types, the functional `NamedTuple("P", [...])`, slicing an object (whose `__getitem__`,
+  given to `hasattr()` of a name it does not define, `_make()` of a tuple whose length is not the
+  number of fields (CPython's `TypeError`), `_asdict()` of fields of different types,
+  `_field_defaults` of an annotated NamedTuple, `hash()` of one whose class defines `__eq__` or
+  `__hash__`, the functional `NamedTuple("P", [...])`, slicing an object (whose `__getitem__`,
   `__setitem__` or `__delitem__` would take a slice object), a tuple `*` a number that is not a
   constant, and CPython's class-creation errors of a NamedTuple (a field after a default, an
   underscored field, an overwritten `__init__`) and of a dataclass (a field without a default
   after one with it, also a base's, a mutable default, `order=True` without `eq`, a generated
   method the class defines, a frozen dataclass deriving from one that is not, or the reverse)
+- `collections.namedtuple()` other than as a module's top-level `NAME = namedtuple(...)` with
+  literal arguments (in a function or a compound statement, a non-literal argument, `*` or `**`
+  arguments, `rename=` other than `True` or `False`, a name that something else binds too, a
+  typename or field name with non-ASCII characters); a namedtuple without fields; a namedtuple
+  class as a base, also `class C(namedtuple(...))`; reading its `__doc__`, or a field through its
+  class (`NAME.field`, a descriptor in CPython: assigning `NAME.field.__doc__` a string literal is
+  accepted, another value is not); a field given `None`, and objects of two specializations in one
+  variable or container, as in other [class templates](#templates-and-empty-containers); and
+  `_field_defaults` whose defaults are all `None`
 
 ### Optional values
 
@@ -636,7 +647,8 @@ supported alternatives.
 
 - dict key types that may be `None` (but objects, which may be), tuple keys holding other items
   (a `float`, a `list`, a NamedTuple), and NamedTuple and exception objects as keys; set
-  elements of these types too, frozensets as set elements or keys, and `hash()` of these types;
+  elements of these types too, frozensets as set elements or keys, and `hash()` of these types
+  but a NamedTuple (whose hash is its fields' tuple's);
   objects whose class has a `__hash__` or `__eq__` that is no method (`__hash__ = None`) as keys
 - a `bool` added to a set of ints (CPython keeps it as the `bool` it is, which prints as `True`)
 - unpacking in a set display (`{*xs}`), a set operator with an operand that is not a set or

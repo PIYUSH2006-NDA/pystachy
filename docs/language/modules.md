@@ -210,7 +210,7 @@ determine whether a particular call compiles.
 supported for the program's classes, builtin values and exceptions (`type(e).__name__`).
 `getattr`, `setattr`, `hasattr`, `vars` and `dir` follow the [reflection rules](semantics.md#reflection);
 `delattr` is unsupported. `hash()` takes the
-values that can be [dict keys](typing.md#supported-types), floats too, and raises CPython's
+values that can be [dict keys](typing.md#supported-types), floats and NamedTuples too, and raises CPython's
 `TypeError` for a list, dict, set or unhashable object.
 
 `print()` accepts `sep`, `end`, `file` and `flush`. Its `file` may be a file or an object with
