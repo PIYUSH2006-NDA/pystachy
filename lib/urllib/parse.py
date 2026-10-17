@@ -32,19 +32,18 @@ It serves as a useful guide when making changes.
 """
 
 # Pystachy port: the result classes are typing.NamedTuple classes (below), as Pystachy has no
-# collections.namedtuple; and types, warnings and ipaddress, which Pystachy has not either, are
-# optional imports: the code that uses them runs in CPython only, in blocks that import types
-# (which Pystachy drops), or is not compiled
+# collections.namedtuple; and warnings and ipaddress are imported in CPython only: the code that
+# uses them runs in CPython only, in blocks that test sys.implementation.name == "cpython" (which
+# Pystachy decides at compile time, as its name is "pystachy", and drops), or is not compiled
 from typing import NamedTuple
 import functools
 import math
 import re
-try:
-    import types
+import sys
+import types
+if sys.implementation.name == "cpython":
     import warnings
     import ipaddress
-except ImportError:
-    pass
 
 __all__ = ["urlparse", "urlunparse", "urljoin", "urldefrag",
            "urlsplit", "urlunsplit", "urlencode", "parse_qs",
@@ -102,11 +101,8 @@ def clear_cache() -> None:
     """Clear internal performance caches. Undocumented; some tests want it."""
     urlsplit.cache_clear()
     _quoters.clear()  # Pystachy port: the string API's equivalent of byte quoters.
-    try:
-        import types
+    if sys.implementation.name == "cpython":
         _byte_quoter_factory.cache_clear()
-    except ImportError:
-        pass
 
 # Helpers for bytes handling
 # For 3.2, we deliberately require applications that
@@ -200,8 +196,7 @@ class _NetlocResultMixinBase(object):
                 raise ValueError("Port out of range 0-65535")
         return port
 
-    # Pystachy port: __class_getitem__ = classmethod(types.GenericAlias) is set in CPython only
-    # (below): Pystachy has no types module, which this class body would read as it runs
+    __class_getitem__ = classmethod(types.GenericAlias)
 
 
 class _NetlocResultMixinStr(_NetlocResultMixinBase, _ResultMixinStr):
@@ -321,9 +316,8 @@ _DefragResultBase = DefragResult
 _SplitResultBase = SplitResult
 _ParseResultBase = ParseResult
 
-# Pystachy port: in CPython only (Pystachy has no types module, and drops this block)
-try:
-    import types
+# Pystachy port: in CPython only (Pystachy drops this block)
+if sys.implementation.name == "cpython":
     _DefragResultBase.url.__doc__ = """The URL with no fragment identifier."""
 
     _DefragResultBase.fragment.__doc__ = """
@@ -363,8 +357,6 @@ access to perform some operation on the resource.
 
     _ParseResultBase.query.__doc__ = _SplitResultBase.query.__doc__
     _ParseResultBase.fragment.__doc__ = _SplitResultBase.fragment.__doc__
-except ImportError:
-    pass
 
 
 # For backwards compatibility, alias _NetlocResultMixinStr
@@ -404,18 +396,14 @@ def _fix_result_transcoding():
         _decoded._encoded_counterpart = _encoded
         _encoded._decoded_counterpart = _decoded
 
-# Pystachy port: in CPython only (Pystachy has no types module, and drops this block): the
-# structured result objects for string data derive from their mixins too, as CPython's do
-try:
-    import types
+# Pystachy port: in CPython only (Pystachy drops this block): the structured result objects for
+# string data derive from their mixins too, as CPython's do
+if sys.implementation.name == "cpython":
     DefragResult = type('DefragResult', (DefragResult, _ResultMixinStr), {'__slots__': ()})
     SplitResult = type('SplitResult', (SplitResult, _NetlocResultMixinStr), {'__slots__': ()})
     ParseResult = type('ParseResult', (ParseResult, _NetlocResultMixinStr), {'__slots__': ()})
-    _NetlocResultMixinBase.__class_getitem__ = classmethod(types.GenericAlias)
     _fix_result_transcoding()
     del _fix_result_transcoding
-except ImportError:
-    pass
 
 def urlparse(url, scheme='', allow_fragments=True):
     """Parse a URL into 6 components:
@@ -788,11 +776,9 @@ def urldefrag(url):
     return _coerce_result(DefragResult(defrag, frag))
 
 _hexdig = '0123456789ABCDEFabcdef'
-try:
-    import types
+# Pystachy port: in CPython only, as only the unavailable byte APIs use this table.
+if sys.implementation.name == "cpython":
     _hextobyte = None
-except ImportError:
-    pass  # Pystachy port: only the unavailable byte APIs use this table.
 
 def unquote_to_bytes(string):
     """unquote_to_bytes('abc%20def') -> b'abc def'."""
@@ -1256,17 +1242,14 @@ def unquote_plus(string, encoding='utf-8', errors='replace'):
     string = string.replace('+', ' ')
     return unquote(string, encoding, errors)
 
-# Pystachy port: the bytes, for bytes, in CPython only (Pystachy has no types module, and drops
-# this block), and _ALWAYS_SAFE_STR for strs
-try:
-    import types
+# Pystachy port: the bytes, for bytes, in CPython only (Pystachy drops this block), and
+# _ALWAYS_SAFE_STR for strs
+if sys.implementation.name == "cpython":
     _ALWAYS_SAFE = frozenset(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                              b'abcdefghijklmnopqrstuvwxyz'
                              b'0123456789'
                              b'_.-~')
     _ALWAYS_SAFE_BYTES = bytes(_ALWAYS_SAFE)
-except ImportError:
-    pass
 _ALWAYS_SAFE_STR = ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                     'abcdefghijklmnopqrstuvwxyz'
                     '0123456789'
@@ -1374,16 +1357,13 @@ def quote_plus(string, safe='', encoding=None, errors=None):
     return string.replace(' ', '+')
 
 # Expectation: A typical program is unlikely to create more than 5 of these.
-# Pystachy port: cached in CPython only (Pystachy has no types module, and drops the block below):
-# lib/functools caches a function whose parameters are annotated
+# Pystachy port: cached in CPython only (Pystachy drops the block below): lib/functools caches a
+# function whose parameters are annotated
 def _byte_quoter_factory(safe):
     return _Quoter(safe).__getitem__
 
-try:
-    import types
+if sys.implementation.name == "cpython":
     _byte_quoter_factory = functools.lru_cache(_byte_quoter_factory)
-except ImportError:
-    pass
 
 def quote_from_bytes(bs, safe='/'):
     """Like quote(), but accepts a bytes object rather than a str, and does

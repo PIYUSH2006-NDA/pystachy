@@ -46,6 +46,15 @@ outside this supported API set. Builtin `os.path` has its own documented APIs.
 `curses.ascii` supports ASCII characters; byte strings are not Unicode character
 sequences.
 
+## CPython-only code
+
+Ports keep code that only CPython can run, as CPython's sources have it, under
+`if sys.implementation.name == "cpython":`. Pystachy decides that test at compile time, as its
+`sys.implementation.name` is `"pystachy"`, and drops the block (see
+[compile-time branches](../docs/language/modules.md#compile-time-branches)): `urllib.parse`'s
+imports of `warnings` and `ipaddress`, its docstrings of the result fields and its
+byte tables, and `statistics`' import of `random` and table of kernels.
+
 ## Pure-Python accelerators
 
 `bisect`, `heapq`, `operator` and `stat` execute their Python implementations
@@ -241,6 +250,23 @@ stream errors follow CPython's implementation.
   `ValueError` for a closed one).
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
+
+`BytesIO` supports construction with `initial_bytes` (bytes or `None`, also by keyword, and
+`__init__` called again), `read`, `read1`, `readline`, `readlines` (whose size bound stops the
+lines once their total reaches it, as the C type's does), iteration, `write`, `writelines` (of
+any iterable of bytes), `getvalue`, `seek`, `tell` and `truncate` with CPython's `whence` rules,
+clamping and errors, `close`, the read-only `closed`, `with`, and `readable`, `writable`,
+`seekable`, `isatty` and `flush`. NUL bytes pad a write past the end, and a closed one raises
+CPython's `ValueError` for every method but `close()` (`iter()` returns it, and `next()`
+raises). Positions and sizes count bytes, as in CPython.
+
+- `getbuffer()` (a `memoryview` of the buffer), `readinto()` and `readinto1()` (into a writable
+  buffer, such as a `bytearray`) are unavailable, as Pystachy has no `memoryview`, `bytearray`
+  or `array`; so are `detach()` and `fileno()` (which raise `io.UnsupportedOperation`) and
+  pickling. A call of any is a compile-time error.
+- Invalid argument types such as `BytesIO("x")`, `write("x")` (and so `print(..., file=)` to a
+  `BytesIO`) are compile-time errors, as are attributes of the program's own on one.
+- `writelines([])` needs the empty list typed (`lines: list[bytes] = []`).
 
 ## Csv
 
@@ -465,7 +491,7 @@ variants, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
 iterators, properties or other features beyond the port's compiled paths. Only
 CPython runs the module's import of `random`, which `kde_random` and
-`NormalDist.samples` use.
+`NormalDist.samples` use ([CPython-only code](#cpython-only-code)).
 
 ## Random
 
@@ -766,6 +792,25 @@ class whose subclasses' `__init__` binds their fields.
   (Linux's signal numbers: those from 65 on are out of range).
 - `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
   `NotImplementedError`: no thread but the main one runs.
+
+## Types
+
+`types` is Pystachy's own module for CPython's `Lib/types.py`, of which it has `TracebackType`,
+the class of the object a `with` statement passes to `__exit__()` (see [Contextlib](#contextlib)),
+and `GenericAlias` for CPython's idiom for a generic class: `__class_getitem__ = classmethod(GenericAlias)` (or
+`classmethod(types.GenericAlias)`) in a class body defines nothing in Pystachy, so the class
+compiles as it does without it ([test](../tests/types_generic_alias.py)). Its subscripts in
+annotations are what they are for any class, and at run time, where CPython makes them
+`types.GenericAlias` objects, they are a compile-time error
+([error test](../tests/errors/types_generic_alias_subscript.py)).
+
+- Any other use of `GenericAlias`, such as calling it, is a compile-time error
+  ([error test](../tests/errors/types_generic_alias_call.py)).
+- The module's other names, CPython's (`MappingProxyType`, `SimpleNamespace`, `FunctionType`,
+  `MethodType`, `ModuleType`, `NoneType`, `new_class()`, `coroutine()`, ...), import as in
+  CPython, also in an optional import, but any use of one is a compile-time error
+  ([error test](../tests/errors/types_unsupported_name.py)): Pystachy has no such objects, or
+  none that behave exactly as CPython's.
 
 ## Contextlib
 

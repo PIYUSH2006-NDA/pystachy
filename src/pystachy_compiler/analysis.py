@@ -227,7 +227,7 @@ def known_path(p: str) -> bool:
     # a module attribute Pystachy implements: a CALLS entry, a modattr() value, a module, a
     # function builtin() handles itself (MODFUNCS), sys.float_info (whose attributes are
     # modattr() values), or sys.version_info
-    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "sys.version_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
+    if p in MODULES or p in MODATTRS or p in MODFUNCS or p == "sys.float_info" or p == "sys.implementation" or p == "sys.version_info" or p == "os.PathLike" or (p.startswith("errno.") and p[6:] in ERRNO):
         return True
     for k in CALLS:
         if k.startswith(p + "(") or k.startswith(p + "."):
@@ -448,6 +448,14 @@ def false_flag(body: list[Node]) -> int:
     names: dict[str, bool] = {}
     binds(body[:at] + body[at + 1 :] if at >= 0 else [], names, True)
     return at if at >= 0 and "TYPE_CHECKING" not in names and "*" not in names and not declares(body, "TYPE_CHECKING") else -1
+
+
+def sole_binding(body: list[Node], at: int, name: str) -> bool:
+    # is body[at], a top-level statement of module code body, the only one that binds or deletes
+    # name, where no star import may and no global statement names it (no function rebinds it)
+    names: dict[str, bool] = {}
+    binds(body[:at] + body[at + 1 :], names, True)
+    return name not in names and "*" not in names and not declares(body, name)
 
 
 def declares(body: list[Node], name: str) -> bool:

@@ -17,6 +17,7 @@ from src.pystachy_compiler.analysis import (
     del_line,
     deleted,
     false_flag,
+    sole_binding,
     fn_globals,
     global_assigns,
     globals_in,
@@ -59,9 +60,13 @@ from src.pystachy_compiler.specs import (
     MODNAMES,
     MODULES,
     NOCALL,
+    IMPLEMENTATION,
+    OSCONST,
+    PLATFORM,
     PYBUILTINS,
     RANGES,
     STANDINS,
+    TYPESMOD,
     TYPING,
     VERSIONINFO,
     is_excname,
@@ -151,8 +156,7 @@ def cm_methods(n: Node, names: list[str]) -> None:
 
 def tb_import(n: Node) -> None:
     # from types import TracebackType (an __exit__'s annotation) imports lib/_pystachy_types.py's
-    # TracebackType, which is all of types there is: an import of the module, or of any other name
-    # of it, still finds no module (the CPython-only blocks of lib's ports import it)
+    # TracebackType, which lib/types.py binds too, without the rest of lib/types.py
     for st in n.kids:
         if st.kind == "import" and st.s == "from" and len(st.kids) > 0 and len([a for a in st.kids if a.kind != "alias" or len(a.kids) != 2 or a.kids[0].s != "types.TracebackType" or a.kids[1].s != "types"]) == 0:
             for a in st.kids:
@@ -492,7 +496,7 @@ class Loader:
             hint = "; an optional import is supported only as try: <imports> / except ImportError: (except clauses naming only ImportError or ModuleNotFoundError, and no finally)" if self.optry else ""
             if name in CBUILTIN and self.filepath(name) != "":
                 fail(f"module '{name}' is not supported: it is built into CPython, which imports it rather than the {name} module on the module path, and Pystachy does not have it{hint}", line)
-            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi'])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
+            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi' and k != TYPESMOD])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
         if p.endswith("/__init__.py"):
             return self.load(name, p, p[:-12])
         if p.endswith(".py"):
@@ -1039,6 +1043,10 @@ class Loader:
             st = blk.kids[i]
             if blk is m.body:
                 self.pos = i
+            if blk is m.body and st.kind == "assign" and st.kids[0].kind == "name" and st.kids[0].s in m.flagat and m.flagat[st.kids[0].s] == i:
+                # (name = <a test of the platform>: the bool it is, as a literal, platform_flags())
+                st.kids[1] = mk("True" if m.flagval[st.kids[0].s] == 1 else "False", "", st.line, [])
+            self.fold_tests(m, st, scope)
             if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "attr" and st.kids[0].s == "__doc__" and st.kids[0].kids[0].kind == "name" and blk is m.body:
                 # f.__doc__ = g.__doc__: the docstrings of functions and classes cannot be read in
                 # Pystachy, so this is dropped; a read of a module's __doc__ that it assigns is an error
@@ -1090,6 +1098,21 @@ class Loader:
         for nm in added:
             del self.fsure[nm]
         blk.kids = out
+
+    def fold_tests(self, m: Mod, n: Node, scope: dict[str, bool]) -> None:
+        # the conditional expressions in n, but in its blocks (which simplify() takes), lambdas and
+        # comprehensions, whose test decide() decides with nothing else to run: what runs, in place
+        for i in range(len(n.kids)):
+            k = n.kids[i]
+            while k.kind == "ifexp":
+                pre: list[Node] = []
+                r = self.decide(m, k.kids[0], scope, pre)
+                if r < 0 or len(pre) > 0:
+                    break
+                k = k.kids[1] if r == 1 else k.kids[2]
+                n.kids[i] = k
+            if k.kind != "block" and k.kind != "except" and k.kind != "lambda" and k.kind != "listcomp" and k.kind != "asynccomp":
+                self.fold_tests(m, k, scope)
 
     def dropped_globals(self, c: Node, held: dict[str, int]) -> None:
         # a global statement in class c's body holds for the whole body in CPython, also in code
@@ -1699,9 +1722,9 @@ class Loader:
         return f"'{p}.{x}' is the package's own '{x}' until the program's first import of its submodule '{p}.{x}' replaces it, and Pystachy cannot tell which of the two this is (not supported)"
 
     def decide(self, m: Mod, e: Node, scope: dict[str, bool], pre: list[Node]) -> int:
-        # an if condition that tests the platform, decided for the POSIX systems Pystachy compiles
-        # for (sys.platform == "win32" or "cygwin", ..., sys.platform.startswith("win"), also of a
-        # tuple of such prefixes, os.name == "nt", sys.platform in ("win32", ...)), the version
+        # an if condition, or a conditional expression's test, that tests the system Pystachy
+        # compiles for (platform_test(); in module code also a name its module assigns such a test
+        # once, platform_flags()), the version
         # (a comparison of sys.version_info, a slice, an item or an attribute of it with a
         # literal: version_cmp()), TYPE_CHECKING, an
         # imported module's __name__ == "__main__" or, in module code outside class bodies, False and
@@ -1741,31 +1764,88 @@ class Loader:
             return 0
         if (m.name != "" or self.ext != "") and is_main_guard(e) and "__name__" not in scope and "__name__" not in m.rebound:
             return 0  # (in an imported module, or an extension module's)
-        other = "win32 cygwin msys nt java emscripten wasi ios android"
-        if e.kind == "cmp" and (e.s == "in" or e.s == "not in") and (e.kids[1].kind == "tuple" or e.kids[1].kind == "list") and e.kids[0].kind == "attr" and e.kids[0].s == "platform" and e.kids[0].kids[0].kind == "name" and self.special(m, e.kids[0].kids[0].s, scope) == "sys":
-            # sys.platform in ("win32", "cygwin")
-            for x in e.kids[1].kids:
-                if x.kind != "str" or x.s not in other.split():
-                    return -1
-            return 0 if e.s == "in" else 1
-        if e.kind == "cmp" and (e.s == "==" or e.s == "!=") and e.kids[1].kind == "str" and e.kids[0].kind == "attr" and e.kids[0].kids[0].kind == "name":
-            mod = self.special(m, e.kids[0].kids[0].s, scope)
-            r = -1
-            if mod == "sys" and e.kids[0].s == "platform" and e.kids[1].s in other.split():
-                r = 0
-            if mod == "os" and e.kids[0].s == "name":
-                r = 1 if e.kids[1].s == "posix" else 0
-            return r if r < 0 or e.s == "==" else 1 - r
-        if e.kind == "call" and len(e.kids) == 2 and (e.kids[1].kind == "str" or e.kids[1].kind == "tuple") and e.kids[0].kind == "attr" and e.kids[0].s == "startswith":
-            pa = e.kids[0].kids[0]
-            if pa.kind == "attr" and pa.s == "platform" and pa.kids[0].kind == "name" and self.special(m, pa.kids[0].s, scope) == "sys":
-                for x in e.kids[1].kids if e.kids[1].kind == "tuple" else [e.kids[1]]:
-                    if x.kind != "str" or x.s not in "win win32 cygwin msys emscripten wasi java".split():
-                        return -1
-                return 0
+        if e.kind == "name" and e.s in m.flagat and m.flagat[e.s] < self.pos and not self.incls:
+            return m.flagval[e.s]  # (in module code after its name = <a test of the platform>: platform_flags())
+        r = self.platform_test(m, e, scope)
+        if r >= 0:
+            return r
         if e.kind == "cmp" and e.s in ["<", "<=", ">", ">=", "==", "!="] and (self.version(m, e.kids[0], scope, True) != [] or self.version(m, e.kids[1], scope, True) != []):
             return self.version_cmp(e.s, self.version(m, e.kids[0], scope, False), self.version(m, e.kids[1], scope, False))
         return -1
+
+    def platform_test(self, m: Mod, e: Node, scope: dict[str, bool]) -> int:
+        # a test of the system Pystachy compiles for, which CPython makes as the code runs, with what
+        # the runtime reports: sys.platform == or != a literal str (PLATFORM), in or not in a tuple
+        # or list of those, sys.platform.startswith() of one or a tuple of those, os.name == or != a
+        # literal str ("posix") and sys.implementation.name == or != one ("pystachy"): 1 or 0; -1
+        # for anything else
+        if e.kind == "cmp" and (e.s == "in" or e.s == "not in") and (e.kids[1].kind == "tuple" or e.kids[1].kind == "list") and self.is_platform(m, e.kids[0], scope):
+            r = 0
+            for x in e.kids[1].kids:
+                if x.kind != "str":
+                    return -1
+                if x.s == PLATFORM:
+                    r = 1
+            return r if e.s == "in" else 1 - r
+        if e.kind == "cmp" and (e.s == "==" or e.s == "!=") and e.kids[1].kind == "str" and e.kids[0].kind == "attr":
+            a = e.kids[0]
+            r = -1
+            if self.is_platform(m, a, scope):
+                r = 1 if e.kids[1].s == PLATFORM else 0
+            elif a.s == "name" and a.kids[0].kind == "name" and self.special(m, a.kids[0].s, scope) == "os":
+                r = 1 if e.kids[1].s == OSCONST["os.name"] else 0
+            elif a.s == "name" and a.kids[0].kind == "attr" and a.kids[0].s == "implementation" and a.kids[0].kids[0].kind == "name" and self.special(m, a.kids[0].kids[0].s, scope) == "sys":
+                r = 1 if e.kids[1].s == IMPLEMENTATION else 0
+            return r if r < 0 or e.s == "==" else 1 - r
+        if e.kind == "call" and len(e.kids) == 2 and (e.kids[1].kind == "str" or e.kids[1].kind == "tuple") and e.kids[0].kind == "attr" and e.kids[0].s == "startswith" and self.is_platform(m, e.kids[0].kids[0], scope):
+            r = 0
+            for x in e.kids[1].kids if e.kids[1].kind == "tuple" else [e.kids[1]]:
+                if x.kind != "str":
+                    return -1
+                if PLATFORM.startswith(x.s):
+                    r = 1
+            return r
+        return -1
+
+    def is_platform(self, m: Mod, e: Node, scope: dict[str, bool]) -> bool:
+        # is e sys.platform, of the module sys (special())
+        return e.kind == "attr" and e.s == "platform" and e.kids[0].kind == "name" and self.special(m, e.kids[0].s, scope) == "sys"
+
+    def platform_value(self, m: Mod, e: Node) -> int:
+        # the value of e, in module m's top-level code, where it is built only from the tests that
+        # platform_test() decides, with not, and, or (a bool, as they are): 1 or 0; else -1
+        if e.kind == "unary" and e.s == "not":
+            r = self.platform_value(m, e.kids[0])
+            return 1 - r if r >= 0 else -1
+        if e.kind == "boolop":
+            a = self.platform_value(m, e.kids[0])
+            b = self.platform_value(m, e.kids[1])
+            if a < 0 or b < 0:
+                return -1
+            return min(a, b) if e.s == "and" else max(a, b)
+        return self.platform_test(m, e, {})
+
+    def platform_flags(self, m: Mod) -> None:
+        # module m's top-level name = <a test of the platform> (platform_value()), the only statement
+        # that binds name (sole_binding()), as _MS_WINDOWS = (sys.platform == 'win32'): its tests in
+        # module code after it, outside class bodies, are decided (decide()); simplify() makes it
+        # assign the literal, as which a store through the module may assign only that (Gen.store_name())
+        m.flagat = {}
+        m.flagval = {}
+        body = m.body.kids
+        pos = self.pos
+        fs = self.fs
+        self.fs = Mod("", "", "")
+        for i in range(len(body)):
+            st = body[i]
+            if st.kind == "assign" and len(st.kids) == 2 and st.kids[0].kind == "name" and st.kids[0].s != "TYPE_CHECKING" and st.kids[0].s not in m.flagat:
+                self.pos = i
+                r = self.platform_value(m, st.kids[1])
+                if r >= 0 and sole_binding(body, i, st.kids[0].s):
+                    m.flagat[st.kids[0].s] = i
+                    m.flagval[st.kids[0].s] = r
+        self.pos = pos
+        self.fs = fs
 
     def version(self, m: Mod, e: Node, scope: dict[str, bool], own: bool) -> list[str]:
         # the constant that e is, if it is sys.version_info, a slice, an item or an attribute of it
@@ -1857,6 +1937,7 @@ class Loader:
         m.rebound = rebound(m.body.kids, False)
         specials(m, m.body.kids, -1)
         m.falseat = false_flag(m.body.kids)
+        self.platform_flags(m)
 
     def imports(self, m: Mod, blk: Node, infn: bool) -> None:
         # load the user modules that the import statements in blk name, and rewrite those
@@ -1969,6 +2050,8 @@ class Loader:
                 # runs; it binds abc itself, as CPython's does
                 path = a.kids[0].s
             elif builtin_module(path):
+                if path == TYPESMOD and (len(self.dirs) == 0 or m.path != self.dirs[-1] + "/types.py"):
+                    fail(f"module '{TYPESMOD}' is not supported: it is Pystachy's own, which its types module imports (import types)", line)
                 if not infn and m.kinds.get(a.s, "") == "v":
                     fail(f"'{a.s}' is bound both as a variable and as a function, class or import (not supported)", line)
                 if a.s == "*":

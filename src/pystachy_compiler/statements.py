@@ -19,6 +19,7 @@ from src.pystachy_compiler.specs import (
     PYBUILTINS,
     RANGEC,
     SPECIAL,
+    TYPESMOD,
     TYPING,
     UNSUPPORTED,
 )
@@ -168,7 +169,7 @@ def gen_check_import(self, a: Node) -> None:
     mod = a.kids[1].s
     tgt = a.kids[0].s
     if mod not in MODULES and mod != "collections.abc":
-        self.err(f"module '{mod}' is not supported (available: {', '.join(MODULES.keys())})")
+        self.err(f"module '{mod}' is not supported (available: {', '.join([k for k in MODULES.keys() if k != TYPESMOD])})")
     if tgt == mod or tgt == mod[: mod.find(".")] or (tgt + ".") == mod[: len(tgt) + 1]:
         return
     x = tgt[len(mod) + 1 :]
@@ -1044,8 +1045,9 @@ def gen_del_name(self, n: Node) -> None:
         self.err(f"del of the global '{name}' in a function is not supported")
     if owner(name) != self.curfn.mod:
         self.err(f"del of module {owner(name)}'s attribute '{short(name)}' is not supported")
-    if name in self.falseflags and self.is_global(name):
-        self.err(f"del of '{owner(name)}.TYPE_CHECKING' is not supported: its module assigns it False once, so its tests of it are decided at compile time")
+    if name in self.constflags and self.is_global(name):
+        lit = self.constflags[name]
+        self.err(f"del of '{owner(name)}.{short(name)}' is not supported: its module assigns it {lit} once, so its tests of it are decided at compile time")
     self.nonecmp = True  # (a local only None was assigned to may be deleted)
     self.read(n)  # del of a name that is not bound raises as its read does
     self.nonecmp = False

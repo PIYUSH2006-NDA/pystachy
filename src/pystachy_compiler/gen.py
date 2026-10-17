@@ -673,6 +673,7 @@ from src.pystachy_compiler.program import (
     gen_class_effect as program_class_effect,
     gen_abc_class as program_abc_class,
     gen_abstract_defs as program_abstract_defs,
+    gen_generic_aliases as program_generic_aliases,
     gen_abstract_of as program_abstract_of,
     gen_class_problem as program_class_problem,
     gen_decorators as program_decorators,
@@ -995,7 +996,9 @@ class Gen:
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
         self.abstracts: dict[str, list[str]] = {}  # each class's own @abstractmethod methods (abstract_defs)
         self.abcmeta: dict[str, bool] = {}  # the classes whose statements pass metaclass=ABCMeta
-        self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
+        # each module's TYPE_CHECKING that is a constant False (false_flag()), and its names that hold a
+        # test of the platform (Loader.platform_flags()): the literal each holds, "False" or "True"
+        self.constflags: dict[str, str] = {}
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
         # code calling back into the module
@@ -1091,6 +1094,7 @@ class Gen:
         self.qforward: dict[str, bool] = {}  # open returns include a forwarded empty result
         self.inited: dict[str, bool] = {}  # the modules whose top-level code is compiled
         self.guessed: dict[str, str] = {}  # by function: why such a container is list[int] or dict[int, int] there, for a type error
+        self.galias: dict[str, bool] = {}  # the classes whose body binds __class_getitem__ = classmethod(GenericAlias) (generic_aliases)
         self.nts: dict[str, bool] = {}  # the typing.NamedTuple classes: a dataclass whose fields cannot be assigned (see nt_class)
         self.hasfrozen = False  # a @dataclass(frozen=True) class: except clauses list dataclasses.FrozenInstanceError
         self.scanning: dict[str, bool] = {}  # the properties whose setters scan_fields is scanning (C.x)
@@ -2251,6 +2255,9 @@ class Gen:
 
     def abstract_defs(self, body: list[Node]) -> list[Node]:
         return program_abstract_defs(self, body)
+
+    def generic_aliases(self, body: list[Node]) -> None:
+        return program_generic_aliases(self, body)
 
     def abstract_of(self, c: str) -> list[str]:
         return program_abstract_of(self, c)
