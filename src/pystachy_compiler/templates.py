@@ -510,10 +510,14 @@ def gen_fn_sig(self, t: str) -> list[str]:
     for j in range(1 if f.clo >= 0 else 0, len(f.params)):  # (a closure's env aside)
         if j >= f.npos and f.defaults[j].kind == "noann":
             return [f"!{name} takes the keyword-only parameter '{f.params[j]}', which Callable[[...], R] does not match"]
+        if j < f.npos and f.ptypes[j] == "" and f.params[j] in f.anys:
+            return [f"!{name}'s parameter '{f.params[j]}' is annotated Any, which gives no type to the type variables it matches"]
         if j < f.npos and f.ptypes[j] == "":
             return [f"!{name}'s parameter '{f.params[j]}' has no annotation, which the type variables it matches take their type from"]
         if j < f.npos:
             out.append(f.ptypes[j])
+    if f.ret == "" and "" in f.anys:
+        return [f"!{name}'s return is annotated Any, which gives no type to the type variable it matches"]
     if f.ret == "":
         return [f"!{name} has no return annotation, which the type variable it matches takes its type from"]
     return out

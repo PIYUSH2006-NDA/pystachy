@@ -77,7 +77,9 @@ which change from run to run, but are equal for equal strs and for the same obje
 `Optional[T]`, `None | T` and `Union[T, None]` are equivalent. Repeated members of
 `Union[...]` collapse: `Union[T, T, None]` is optional and `Union[T]` is `T`.
 Explicit closed scalar unions such as `int | str` are supported, including `None`.
-Bounded native reference unions are also supported; a dynamic `Any` type is unsupported.
+Bounded native reference unions are also supported. `typing.Any` can annotate function
+parameters and returns, which each call types ([templates](#function-and-method-templates));
+there is no dynamic `Any` value.
 `None` alone can annotate a return, but cannot be a container's entire element type.
 
 `List`, `Dict`, `Set`, `FrozenSet`, `Tuple`, `Optional`, `Union`, `Callable`, `TextIO`
@@ -487,6 +489,16 @@ A PEP 695 function's `**P` and `*Ts` are such type parameters too, also in its n
 `def logged[**P, R](fn: Callable[P, R]) -> Callable[P, R]` may return a nested
 `def wrapper(*args: P.args, **kwargs: P.kwargs) -> R` that forwards them (also with
 `Concatenate[int, P]`). A module-level `ParamSpec` is unsupported.
+
+`typing.Any` in a parameter or return annotation, also inside another type such as `list[Any]`,
+`Mapping[str, Any]`, `Callable[..., Any]` or `Any | None`, makes that part of the signature
+inferred in the same way. This applies to functions, nested functions and methods that may be
+templates, also under `from __future__ import annotations`. A parameter takes its argument's
+type, and `*args: Any` or `**kwargs: Any` those of each call's arguments; a return is inferred
+as an unannotated one is. Values keep their concrete types and are not boxed: a `list[Any]`
+parameter given a `list[int]` cannot append a `str`, and a function annotated `-> Any` returns
+one type for each specialization. `Any` remains unsupported in variables, fields, `__init__`
+parameters, properties and other special methods.
 
 ### Variadic arguments
 
