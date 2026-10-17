@@ -127,7 +127,8 @@ struct Seg {                           /* header on the first page of a chunk or
   void *raw;                           /* calloc'd block: the large object's, or the arena's (its
                                           first word counts the arena's chunks in use) */
   int k, large, used, dirty;           /* free list 2 * class + atomic (large: atomic); slots were
-                                          handed out since the last sweep; [bump, nobj) needs zeroing */
+                                          handed out since the last sweep (large: the copy of an owned
+                                          str, pys_str_iadd); [bump, nobj) needs zeroing */
   uint64_t mark[];                     /* one bit per slot */
 };
 #define HB ((I)((sizeof(Seg) + 8 + 15) & ~(size_t)15))   /* large-object header: one mark word */
@@ -345,10 +346,10 @@ static inline __attribute__((always_inline)) void *gc_alloc(I n, int atomic) {
 }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc(I n) { return gc_alloc(n, 0); }
 __attribute__((malloc, returns_nonnull)) void *pys_alloc_atomic(I n) { return gc_alloc(n, 1); }
-static I gc_room(const void *p) {      /* the bytes object p (from gc_alloc) can hold: its slot's, or a large
-                                          object's, less the byte of slack, as for the n that cls(n) took */
+static Seg *gc_seg(const void *p) {    /* the chunk or large object that holds p (from gc_alloc): p can hold
+                                          its size less the byte of slack, as for the n that cls(n) took */
   uintptr_t a = (uintptr_t)p;
-  return pmap[a >> 30][a >> 12 & 0x3ffff]->size - 1;
+  return pmap[a >> 30][a >> 12 & 0x3ffff];
 }
 /* Whether x is in a frame between this one and @main's: the *args tuple that a call made in its
    own frame (Gen.stack_tuple), which the function called copies before it keeps it
@@ -546,19 +547,34 @@ Str *pys_str_add(Str *a, Str *b) {
   s->len = a->len + b->len; memcpy(s->s, a->s, a->len); memcpy(s->s + a->len, b->s, b->len); return s;
 }
 /* s += t of a str local (Gen.str_append). owned: an append made s and nothing else holds it (nor
-   hashed it: dict_hash is 0), so t goes into s's own memory while it has room. Else a new str of
-   the size needed, which a small object's slot rounds up. Each copy of an owned str then takes a
-   larger size class, and past 136 bytes they grow by a seventh to a quarter: appending in a loop is
-   linear, as CPython's resizing in place of a str that one reference holds makes it, and a str that
-   appends build and a program keeps takes no more memory. A large object has no slack, so an owned
-   one's copy gets room for as much again */
+   hashed it: dict_hash is 0), so t goes into s's own memory while it has room (gc_seg). Else a new
+   str of the size needed, which a small object's slot rounds up. Each copy of an owned str then
+   takes a larger size class, and past 136 bytes they grow by a seventh to a quarter: appending in a
+   loop is linear, as CPython's resizing in place of a str that one reference holds makes it, and a
+   str that appends build and a program keeps takes no more memory. A large object (8,200 bytes or
+   more) has no slack. The first large copy of an owned str fits exactly, as most strs that cross
+   8,200 bytes stop soon after, and is marked (used); the copy of a marked one gets room for as much
+   again, so one that keeps growing is copied log(n) times, and pys_str_settle takes the room back
+   from the one that is kept (#567) */
 Str *pys_str_iadd(Str *s, Str *t, I owned) {
   I n = s->len + t->len, m = (I)sizeof(Str) + n + 1;
-  if (owned && m <= gc_room(s)) {
+  Seg *g = owned ? gc_seg(s) : 0;
+  if (g && m <= g->size - 1) {
     memcpy(s->s + s->len, t->s, t->len); s->s[n] = 0; s->len = n; return s;
   }
-  Str *r = pys_alloc_atomic(owned && m >= SMALL ? m + n : m);
+  Str *r = pys_alloc_atomic(g && g->large && g->used ? m + n : m);
+  if (g && m >= SMALL) gc_seg(r)->used = 1;
   r->len = n; memcpy(r->s, s->s, s->len); memcpy(r->s + s->len, t->s, t->len); return r;
+}
+/* s, the str of a local that an append made and nothing else holds (owned), is read other than by
+   an append (Gen.load_name): what reads it may keep it, so a large one with more than a quarter of
+   its room unused (the room a copy of pys_str_iadd left) is copied to an exact fit */
+Str *pys_str_settle(Str *s) {
+  Seg *g = gc_seg(s);
+  I m = (I)sizeof(Str) + s->len + 1;
+  if (!g->large || 4 * (g->size - 1 - m) <= g->size - 1) return s;
+  Str *r = pys_alloc_atomic(m);
+  r->len = s->len; memcpy(r->s, s->s, s->len); return r;
 }
 /* the first n (3 to 8) of a..h as one str, each copied once: the pieces of an f-string or a % format.
    The loops run eight times, so they unroll where LLVM inlines a call (n is a constant there) */

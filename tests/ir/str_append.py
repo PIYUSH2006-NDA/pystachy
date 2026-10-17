@@ -1,7 +1,7 @@
 # s += t and s = s + t of a str local append in place (Gen.str_append, runtime.c's pys_str_iadd)
 # while only the local holds its str. str_append.calls pins that these functions call
-# pys_str_iadd, and pys_str_add where the target is a global, a closure's variable, a field or
-# an optional str, and for a prepend.
+# pys_str_iadd (and pys_str_settle where a read follows an append), and pys_str_add where the
+# target is a global, a closure's variable, a field or an optional str, and for a prepend.
 total = ""
 
 
