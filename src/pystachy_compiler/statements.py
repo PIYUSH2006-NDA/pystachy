@@ -301,6 +301,10 @@ def gen_hoist_class(self, ci: ClassInfo) -> None:
         # an imported module's class Pystachy cannot compile: an error only where used
         self.left_out(self.cnodes[ci.node.line], ci.bad)
         return
+    if ci.name in self.cnts and self.nt_dflt_type(ci.name) != "":
+        # namedtuple()'s class: the dict of its defaults, its _field_defaults (nt_defaults)
+        t = self.nt_dflt_type(ci.name)
+        self.mstore(t, self.expr(self.nt_dflt_display(ci.name), t).v, f"@d.c.{ci.name}._field_defaults")
     bound: dict[str, bool] = {}
     syn = "__init__" in ci.methods and ci.methods["__init__"].node.kids[0].kind == "noann" and ci.methods["__init__"].cls == ci.name  # (a dataclass's)
     later = ""

@@ -67,6 +67,7 @@ CPython runs the source.
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
 | `collections.OrderedDict` | `Lib/collections/__init__.py`, `Objects/odictobject.c` | Two typed dicts, the first items reversed, with the Python class's docstrings and the C type's messages |
 | `collections.Counter` | `Lib/collections/__init__.py` | Typed dict wrapper keeping the Python class's methods and docstrings |
+| `collections.namedtuple` | `Lib/collections/__init__.py` | Made by the compiler (`Loader.nt_class`): the function's argument checks and messages, and a NamedTuple class template for the class |
 | `functools` | `Modules/_functoolsmodule.c`, `Lib/functools.py` | Generic cache wrapper, plus adapted reduction, comparison-key and `partial` fallbacks, and the unchanged `update_wrapper()` and `wraps()`, which the compiler applies |
 | `_pystachy_string` | `Objects/stringlib/unicode_format.h`, `Objects/unicodeobject.c` | `_string.formatter_parser()` and `formatter_field_name_split()`, returning lists |
 | `re` | `Lib/re/`, `Modules/_sre/sre_lib.h`, `sre.c` | Typed parser/compiler and matching engine with an explicit context stack |
@@ -128,7 +129,8 @@ The deque and defaultdict reference at the same pinned CPython commit,
 `tests/lib_collections.py` and `tests/lib_collections_mutation.py` exercise compiled
 queue operations, callback mutation and bounded repetition;
 `tests/lib_collections_counter.py`, `_defaultdict.py`, `_ordereddict.py` and
-`_reversed.py` the mappings and `reversed()`. Shlex's differential
+`_reversed.py` the mappings and `reversed()`; `tests/lib_collections_namedtuple.py`,
+`_methods.py` and `_mod.py` the namedtuple classes. Shlex's differential
 upstream selection retains its three split/join table methods; HTML retains both
 upstream methods, and keyword retains nine methods while excluding dynamic `exec`.
 Test headers record source-test hashes and exclusions.

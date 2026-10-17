@@ -155,8 +155,8 @@ does not change the predicates.
 
 ## Collections
 
-The shipped module provides `deque`, `defaultdict`, `OrderedDict` and `Counter`.
-Each is a generic class whose item types (`deque[T]`, `Counter[T]`,
+The shipped module provides `deque`, `defaultdict`, `OrderedDict` and `Counter`, and
+`namedtuple()` (below). Each of the four is a generic class whose item types (`deque[T]`, `Counter[T]`,
 `defaultdict[K, V]`, `OrderedDict[K, V]`) come from supported constructor
 arguments, an annotation (`q: deque[int] = deque()`,
 `d: defaultdict[str, list[int]] = defaultdict(list)`) or an explicit constructor
@@ -220,8 +220,20 @@ the counts; a `defaultdict`'s also replaces `default_factory`).
 
 A deque compares with deques: `==` with `None` is false and `<` raises CPython's
 `TypeError`. Its reflected multiplication and comparisons with other containers,
-pickling, `namedtuple`, `ChainMap` and the `User*` classes are unavailable. A `deque` is
+pickling, `ChainMap` and the `User*` classes are unavailable. A `deque` is
 not a `collections.abc.Sequence` to `isinstance`.
+
+`namedtuple()` is carried out by the compiler: a module's top-level
+`NAME = namedtuple(typename, field_names, *, rename=False, defaults=None, module=None)` with
+literal arguments is a class statement, a NamedTuple whose fields each call that makes an object
+types (a class template). Construction by position and keyword, defaults, field access,
+indexing, unpacking, iteration, `len()`, comparisons, `hash()`, `repr()`, `str()`, `_make()`,
+`_asdict()` (of fields of one type), `_replace()`, `_fields`, `_field_defaults` and
+`type(x).__name__` and `__module__` behave as CPython's, and CPython's errors for invalid
+names and too many defaults are compile errors. Assigning the class's or a field's `__doc__` a
+string literal is accepted; reading it, other uses of the function, subclassing and a field
+given `None` are rejected (see
+[compatibility](../docs/language/compatibility.md#classes-dataclasses-and-namedtuples)).
 
 ## Shlex
 
