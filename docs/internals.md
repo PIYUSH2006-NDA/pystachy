@@ -240,8 +240,11 @@ arguments and once for three `None`s. A program with such a class lets flow anal
 `open()`. `contextlib.suppress(A, B)` as an item is the except
 clause `except (A, B): pass` (`statements.suppress_item`), and the loader makes a method decorated
 `@contextmanager` the generator method `_pys_cm_NAME` and a method `NAME` that calls
-`contextmanager()` on it bound (`loader.cm_methods`), to `self` taken as an object of the class
-that first defines `NAME` so (`loader.cm_root`): `NAME` returns one type for every subclass. A program that reads `__cause__`
+`contextmanager()` on it bound (`loader.cm_methods`): it makes the `_GeneratorContextManager`
+itself, of the generator `C._pys_cm_NAME(self, ...)` of its own class `C` (so `super().NAME()`
+runs the base class's; `self._pys_cm_NAME(...)` where no class of the module derives from `C` or
+is a base of it) and of `_pys_cm_NAME` bound to `self` taken as an object of the class that
+first defines `NAME` so (`loader.cm_root`): `NAME` returns one type for every subclass. A program that reads `__cause__`
 (`Gen.causeread`) records it, `pys_exc_setcause`, for `raise ... from c` and PEP 479's
 `RuntimeError`.
 

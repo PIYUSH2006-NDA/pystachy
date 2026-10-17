@@ -342,9 +342,9 @@ supported alternatives.
   exception classes named (`contextlib.suppress` is compiled as an except clause) or used outside
   a `with` statement's item
 - an exception class as a value (`cm.__exit__(KeyError, None, None)`, `issubclass(t, cls)` of a
-  variable `cls`), `type(e)` of an exception object that may be `None`, attributes of an
-  exception's class other than `__name__`, and a `nullcontext(None)` that is not
-  `nullcontext()`
+  variable `cls`), `type(e)` of an exception object that may be `None` (but for
+  `type(e).__name__`, which is `NoneType` for `None`), attributes of an exception's class other
+  than `__name__`, and a `nullcontext(None)` that is not `nullcontext()`
 - `contextlib`'s `ExitStack`, `redirect_stdout`, `redirect_stderr`, `chdir`, `aclosing`,
   `asynccontextmanager` and `AsyncExitStack` (not ported: `lib/compatibility.md`)
 

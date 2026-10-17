@@ -96,29 +96,47 @@ def cm_root(c: str, name: str, bases: dict[str, list[str]], cms: list[str]) -> s
 
 def cm_methods(n: Node, names: list[str]) -> None:
     # a method decorated @contextmanager (names: as the module imports it) is the generator method
-    # _pys_cm_NAME, and NAME(self, /, *args, **kwds) returns contextmanager(self._pys_cm_NAME)(*args,
-    # **kwds): what CPython's helper does, bound to the object (the subset has no decorated methods).
-    # The receiver is taken as the class's, or that of the base class whose method NAME it
-    # overrides, so that NAME returns one type whatever subclass self is (_pys_cm_NAME is called
-    # by the object's class, an override included); in a generic class it keeps self's own type
+    # _pys_cm_NAME, and NAME(self, /, *args, **kwds) returns the manager that
+    # contextmanager(self._pys_cm_NAME)(*args, **kwds) makes: what CPython's helper does, bound to
+    # the object (the subset has no decorated methods). Its generator is C's own: in a class C
+    # that derives from a class of the module or that one derives from, C._pys_cm_NAME(self,
+    # *args, **kwds) (super().NAME() runs the base class's), else self._pys_cm_NAME(...); and the
+    # function it keeps (for a decorator's calls, which make the generator again) is bound to self
+    # taken as an object of the class that first defines NAME so, so that NAME returns one type
+    # whatever subclass self is. A generic class keeps contextmanager(self._pys_cm_NAME) (C alone
+    # names no type there)
     bases: dict[str, list[str]] = {}
+    for st in n.kids:
+        if st.kind == "subclass":
+            bases[st.s] = [x.s for x in st.kids[1:] if x.kind == "name"]
+        elif st.kind == "class":
+            bases[st.s] = []
+    derived: dict[str, bool] = {}
+    for c in bases:
+        for x in bases[c]:
+            if x in bases:
+                derived[c] = True
+                derived[x] = True
     cms: list[str] = []
+    top: list[Node] = []
+    imported = False
     for st in n.kids:
         if st.kind == "class" or st.kind == "subclass":
             b = st.kids[0] if st.kind == "class" else st.kids[0].kids[0]
             generic = st.kind == "subclass" and len([x for x in st.kids[1:] if x.kind == "typeparams"]) > 0
-            bases[st.s] = [x.s for x in st.kids[1:] if x.kind == "name"] if st.kind == "subclass" else []
             kept: list[Node] = []
             for d in b.kids:
                 if d.kind == "def" and len(d.kids) == 4 and d.kids[3].kind == "deco" and len(d.kids[3].kids) == 0 and d.kids[3].s in names and len(d.kids[0].kids) > 0 and d.kids[0].kids[0].kind == "param":
                     me = d.kids[0].kids[0].s
                     cms.append(st.s + "." + d.s)
-                    recv = me
-                    src0 = ""
-                    if not generic:
-                        recv = "_pys_cm_self"
-                        src0 = f"    {recv}: {cm_root(st.s, d.s, bases, cms)} = {me}\n"
-                    src = f"def {d.s}({me}, /, *args, **kwds):\n{src0}    return {d.kids[3].s}({recv}._pys_cm_{d.s})(*args, **kwds)\n"
+                    if generic:
+                        src = f"def {d.s}({me}, /, *args, **kwds):\n    return {d.kids[3].s}({me}._pys_cm_{d.s})(*args, **kwds)\n"
+                    else:
+                        if not imported:
+                            top.append(Parser(Lexer("from contextlib import _GeneratorContextManager as _pys_cm_GCM\n", st.line).file()).module().kids[0])
+                            imported = True
+                        own = f"{st.s}._pys_cm_{d.s}({me}, *args, **kwds)" if st.s in derived else f"{me}._pys_cm_{d.s}(*args, **kwds)"
+                        src = f"def {d.s}({me}, /, *args, **kwds):\n    _pys_cm_self: {cm_root(st.s, d.s, bases, cms)} = {me}\n    return _pys_cm_GCM(_pys_cm_self._pys_cm_{d.s}, args, kwds, {own})\n"
                     w = Parser(Lexer(src, d.line).file()).module().kids[0]
                     d.s = "_pys_cm_" + d.s
                     d.kids = d.kids[:3]
@@ -127,6 +145,8 @@ def cm_methods(n: Node, names: list[str]) -> None:
                 else:
                     kept.append(d)
             b.kids = kept
+        top.append(st)
+    n.kids = top
 
 
 def tb_import(n: Node) -> None:

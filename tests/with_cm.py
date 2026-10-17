@@ -219,3 +219,27 @@ try:
         raise ValueError("goes on")
 except ValueError as e:
     print("caught", e)
+
+
+# type(v).__name__ of an exception that may be None: NoneType for None
+class Named:
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(self, et: type[BaseException] | None, ev: BaseException | None, tb: TracebackType | None) -> bool:
+        print("Named", type(ev).__name__, type(ev).__qualname__)
+        return True
+
+
+with Named():
+    pass
+with Named():
+    raise IndexError("named")
+try:
+    raise ValueError("a") from KeyError("b")
+except ValueError as e:
+    print(type(e.__cause__).__name__)
+try:
+    raise ValueError("no cause")
+except ValueError as e:
+    print(type(e.__cause__).__name__)

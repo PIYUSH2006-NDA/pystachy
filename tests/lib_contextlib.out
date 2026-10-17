@@ -89,9 +89,12 @@ caught 'in method manager' 0
 [:Writer1]
 [[:Pretty1]]
 [:Plain1]
+<{{|f|}}>
 enter reused
 first reused
 exit reused
 AttributeError: '_GeneratorContextManager' object has no attribute 'args'
 AttributeError: '_GeneratorContextManager' object has no attribute 'func'
+1 6 6
+0
 [exit 0]

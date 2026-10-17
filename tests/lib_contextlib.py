@@ -295,13 +295,21 @@ print("".join(w.parts), w.depth)
 
 
 # a class with such a method may have subclasses, which inherit or override it: the method
-# returns one manager type whatever the object's class (its generator is the object's class's)
+# returns one manager type whatever the object's class (its generator is the object's class's),
+# and super().delimit() or Writer.delimit(self) runs the base class's generator
 class Pretty(Writer):
     @contextmanager
     def delimit(self, start: str, end: str) -> Iterator[None]:
         self.parts.append(start + start)
         yield
         self.parts.append(end + end)
+
+    def framed(self) -> str:
+        with super().delimit("<", ">"):
+            with self.delimit("{", "}"):
+                with Writer.delimit(self, "|", "|"):
+                    self.parts.append("f")
+        return "".join(self.parts)
 
 
 class Plain(Writer):
@@ -317,6 +325,7 @@ def render(o: Writer) -> str:
 
 for o in [Writer(), Pretty(), Plain()]:
     print(render(o))
+print(Pretty().framed())
 
 
 # a manager that @contextmanager makes is entered once: CPython's __enter__ deletes func, args
@@ -347,3 +356,23 @@ try:
     print(reused(doubled)(4))
 except AttributeError as e:
     print("AttributeError:", e)
+
+
+# a class of no hierarchy, with a defaulted parameter (as contextlib is imported here too)
+class Counter:
+    def __init__(self) -> None:
+        self.n = 0
+
+    @contextlib.contextmanager
+    def bump(self, by: int = 1) -> Iterator[int]:
+        self.n += by
+        try:
+            yield self.n
+        finally:
+            self.n -= by
+
+
+ctr = Counter()
+with ctr.bump() as c1, ctr.bump(by=5) as c2:
+    print(c1, c2, ctr.n)
+print(ctr.n)

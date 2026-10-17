@@ -83,4 +83,8 @@ exit clean False False
 exit key True False
 exit value False True
 caught goes on
+Named NoneType NoneType
+Named IndexError IndexError
+KeyError
+NoneType
 [exit 0]
