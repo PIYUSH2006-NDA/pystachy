@@ -470,7 +470,7 @@ def pys_str_replace_count(s: str, a: str, b: str, count: int) -> str:
 
 
 def tally(h: str, n: str, st: int, most: int) -> int:
-    # pys_str_count(h, n, st, len(h)), up to most, for a needle of 2 bytes or more, by seek()'s
+    # pys_str_count(h, n, st, len(h)), up to most, for a nonempty needle, by seek()'s
     # candidates; but -1 once the failed ones have cost more than the bytes passed (and 64), where
     # the count would go to memmem. replaced() then lists on: a text of costly candidates is
     # searched once, as before, not counted and searched again (DNA's "CA" in ACG took 1.6 times
@@ -537,7 +537,8 @@ def replaced(s: str, a: str, b: str, count: int) -> str:
         if j == -1 or len(pos) == count:
             break
         if j <= cap * weigh:
-            rest = pys_str_count(s, a, j, n) if len(a) == 1 else tally(s, a, j, count - len(pos))
+            # A bounded count must stop counting at its limit, including for one-byte needles.
+            rest = pys_str_count(s, a, j, n) if len(a) == 1 and count >= n else tally(s, a, j, count - len(pos))
             if rest >= 0:
                 return replaced_dense(s, a, b, count, pos, rest)
             weigh = 0  # costly candidates (DNA's "CA" in ACG): searched once, listed
