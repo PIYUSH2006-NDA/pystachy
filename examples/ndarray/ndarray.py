@@ -49,10 +49,18 @@ def _shape_str(shape: list[int]) -> str:
 
 
 def _new_shape(shape: list[int]) -> list[int]:
-    # a copy of a new array's shape, checked as NumPy checks it
+    # a copy of a new array's shape, checked as NumPy checks it: no negative dimension, and a size in
+    # bytes that fits in 64 bits. NumPy multiplies the nonzero dimensions by the 8 bytes of a float64,
+    # so a shape with a 0 in it can be too big too
     for d in shape:
         if d < 0:
             raise ValueError("negative dimensions are not allowed")
+    nbytes = 8
+    for d in shape:
+        if d != 0:
+            if nbytes > 9223372036854775807 // d:
+                raise ValueError("array is too big; `arr.size * arr.dtype.itemsize` is larger than the maximum possible size.")
+            nbytes *= d
     return list(shape)
 
 
