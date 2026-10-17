@@ -115,6 +115,12 @@ def gen_ann(self, n: Node) -> str:
     if k == "str":
         return self.ann(self.parse_expr(n.s))
     s = n.s
+    if k == "attr":
+        c = self.imported_ref(n)
+        if c.startswith("ffi.") and c[4:] in CTYPES:
+            return "int"
+        if c == "ffi.c_buf" or c == "ffi.c_float":
+            return "str" if c == "ffi.c_buf" else "float"
     if k == "name":
         if s in self.tmpl and self.selfcls in self.classes and self.classes[self.selfcls].origin == s:
             return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)

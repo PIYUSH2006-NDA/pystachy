@@ -58,7 +58,8 @@ _C = {c_int: ctypes.c_int, c_uint: ctypes.c_uint, c_int64: ctypes.c_int64, c_ssi
 
 
 # the lists an @extern function takes: their item type in a C array
-_LISTS = {list[float]: ctypes.c_double, list[c_int64]: ctypes.c_int64, list[c_ssize_t]: ctypes.c_int64}
+_LISTS = {list[float]: ctypes.c_double, list[c_int64]: ctypes.c_int64, list[c_ssize_t]: ctypes.c_int64,
+          typing.List[float]: ctypes.c_double, typing.List[c_int64]: ctypes.c_int64, typing.List[c_ssize_t]: ctypes.c_int64}
 
 
 def _check(t, v):
