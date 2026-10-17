@@ -245,6 +245,10 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   module whose code raises keeps the globals that code set before the raise, where CPython
   discards the half-run module; a later import runs the code again over them.
 
+- `sys.warnoptions` is `[]`, CPython's for a program run without `-W` options, also where the
+  environment sets `PYTHONWARNINGS` or `PYTHONDEVMODE`: CPython adds their options to it, and
+  Pystachy does not read them.
+
 - `sys.version_info` is a tuple of its items, CPython 3.13.16's: comparisons, indexing,
   slicing and unpacking work as on CPython's, and its attributes are read as
   `sys.version_info.major` and the like, but `str()` and `repr()` show `(3, 13, 16, 'final', 0)`.

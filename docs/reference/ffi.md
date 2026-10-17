@@ -94,7 +94,8 @@ are linked into one shared object, exposing only `PyInit_<name>` for `abi3` or
 - A public class or variable is rejected; prefix private helpers with `_`.
   Subset code cannot call an `@export` function directly, because the CPython twin
   applies boundary checks on each call. Both callers can use a private helper.
-- Module code runs at import with the module's `__name__` and the host's `sys.argv`.
+- Module code runs at import with the module's `__name__`, and with the host's `sys.argv`
+  and `sys.warnoptions`, copied at import.
   An `if __name__ == "__main__":` block does not run.
 - `print` uses the host's `sys.stdout`, including redirection and replacement;
   `input` and `sys.stdin` use the host's input. Failed writes raise in subset code.
