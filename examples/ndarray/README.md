@@ -50,7 +50,7 @@ operation here fixes its order:
 | Operation | How it adds | Against NumPy, in `check_numpy.py` |
 |---|---|---|
 | `total()`, `mean()` | Pairwise, as NumPy's `pairwise_sum`: eight accumulators over blocks of up to 128 items. Memory order for C- and F-ordered arrays, C order for other views | Equal for C- and F-ordered arrays; other views within 1e-12 on random data |
-| `sum_axis()` | Pairwise along a summed axis that is contiguous in memory; otherwise the lines across it one after another, into one result, as NumPy adds them | Equal |
+| `sum_axis()` | Pairwise along the fastest axis (absolute strides, ignoring singleton axes); otherwise the lines across it one after another, into one result, as NumPy adds them | Equal |
 | `lazy`'s `sum()` | Python's `sum()` of floats: in order, with Neumaier's compensation | Equal to `sum()` of the items; within 1e-12 of `np.sum` on random data |
 | `dot()` | `total(a * b)` | Equal to `np.sum(a * b)`; within 1e-12 of `np.dot`, which calls BLAS |
 | `matmul()`, `@` | Row by row | Within 1e-12 of BLAS |
@@ -68,10 +68,11 @@ python3 check_numpy.py
 ```
 
 ```
-111 checks equal NumPy's results, 6 agree within 1e-12, 4 check the summation policy, 7 check the checker (numpy 2.5.3)
+124 checks equal NumPy's results, 6 agree within 1e-12, 4 check the summation policy, 7 check the checker (numpy 2.3.5)
 ```
 
 These counts are results on the inputs the script generates, not a promise for every input.
+- Additional regression checks cover reversed and strided axis sums and empty reshapes with unrepresentable byte extents; these pass against NumPy 2.3.5 too.
 - **Self-checks first:** the script confirms that its comparisons reject a NaN against a number, lists of different lengths, and an infinity against a large number.
 - **Error messages:** broadcasting, `out=` shapes, `reshape`, indexing and `matmul` errors are checked against NumPy's messages.
 - **Compiled tests:** `tests/example_ndarray.py` carries representative NumPy results into the tests that run under the JIT and as an executable.

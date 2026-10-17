@@ -191,6 +191,20 @@ def checks() -> None:
         exact(f"sum axis {axis}", sum_axis(M, axis), np.sum(m, axis=axis))
         exact(f"sum axis {axis} of the transpose", sum_axis(M.T, axis), np.sum(m.T, axis=axis))
 
+    # Cancellation makes the wrong traversal order visible: pairwise gives 84, plain order 0.
+    cols = array2([[v, v] for v in [1e16] + [1.0] * 100 + [-1e16]])
+    cols_np = np.array(cols.values()).reshape(102, 2)
+    for rstep in [1, -1]:
+        for cstep in [1, -1]:
+            off = (202 if rstep < 0 else 0) + (1 if cstep < 0 else 0)
+            v = NDArray(cols.data, [102, 2], [2 * rstep, cstep], off)
+            v_np = cols_np[::rstep, ::cstep]
+            exact("sum reversed rows", sum_axis(v, 0), np.sum(v_np, axis=0))
+            exact("sum transposed reversed rows", sum_axis(v.T, 1), np.sum(v_np.T, axis=1))
+    singleton = NDArray(cols.data, [102, 1], [2, -1], 0)
+    exact("sum strided singleton column", sum_axis(singleton, 0), np.sum(cols_np[:, :1], axis=0))
+    exact("sum transposed singleton column", sum_axis(singleton.T, 1), np.sum(cols_np[:, :1].T, axis=1))
+
     # a 2-D view that is neither C- nor F-ordered: total() adds its C-order items, NumPy runs of
     # them in memory order; well-conditioned data agrees closely, ill-conditioned need not
     view = K.T.row(1)
@@ -234,6 +248,9 @@ def checks() -> None:
     raises("reshape", lambda: T.reshape([4]), lambda: two.reshape(4))
     raises("reshape unknown", lambda: T.reshape([4, -1]), lambda: two.reshape(4, -1))
     raises("reshape two unknowns", lambda: T.reshape([-1, -1]), lambda: two.reshape(-1, -1))
+    for huge in [[0, 4611686018427387904], [-1, 4611686018427387904], [0, 4294967296, 4294967296]]:
+        raises("reshape empty with unrepresentable extents", lambda shape=huge: zeros([0]).reshape(shape),
+               lambda shape=huge: np.zeros(0).reshape(shape))
     raises("negative dimensions", lambda: zeros([-1, -2]), lambda: np.zeros((-1, -2)))
     raises("index", lambda: T[2, 0], lambda: two[2, 0])
     raises("negative index", lambda: T[0, -4], lambda: two[0, -4])

@@ -10,7 +10,7 @@ existing one instead. Division by zero gives NumPy's inf and nan.
 
 Summation follows one policy (README.md): total() and mean() add pairwise, eight accumulators
 over blocks of up to 128 items, in memory order for a C- or F-ordered array and in C order for
-other views; sum_axis() adds each line along an axis contiguous in memory pairwise, and otherwise
+other views; sum_axis() adds each line along the fastest axis pairwise, and otherwise
 adds the lines of the other axis one after another into one result. That is NumPy's summation,
 and the tests find np.sum's results for such arrays, but the order of additions decides the
 rounding: ill-conditioned sums can differ by more than the last digit in another order.
@@ -135,6 +135,8 @@ class NDArray:
             dims[unknown] = self.size // known
         elif known != self.size:
             raise ValueError(f"cannot reshape array of size {self.size} into shape {_shape_str(dims)}")
+        # Even an empty result must have representable byte extents and strides.
+        dims = _new_shape(dims)
         src = ascontiguous(self)
         return NDArray(src.data, dims, _cstrides(dims), src.offset)
 
@@ -491,8 +493,8 @@ def mean(a: NDArray) -> float:
 
 
 def sum_axis(a: NDArray, axis: int) -> NDArray:
-    # np.sum(a, axis=axis) of a 2-D array, in NumPy's order: where the summed axis is the one whose
-    # items lie closer in memory, each line along it pairwise; otherwise the lines of the other axis
+    # np.sum(a, axis=axis) of a 2-D array, in NumPy's order: where the summed axis is fastest
+    # (ignoring singleton axes), each line along it pairwise; otherwise the lines of the other axis
     # one after another, from 0.0, into one result
     if a.ndim != 2:
         raise ValueError(f"sum_axis takes a 2-D array, not a {a.ndim}-D one")
@@ -505,7 +507,9 @@ def sum_axis(a: NDArray, axis: int) -> NDArray:
     sk = a.strides[k]
     so = a.strides[o]
     d = a.data
-    if sk <= so:
+    # Reversal changes the traversal direction, not which axis is fastest. An unsummed
+    # singleton axis contributes no traversal, regardless of its stride.
+    if m == 1 or abs(sk) <= abs(so):
         return array([0.0 + pairwise(d, a.offset + j * so, n, sk) for j in range(m)])
     out = [0.0] * m
     for i in range(n):
