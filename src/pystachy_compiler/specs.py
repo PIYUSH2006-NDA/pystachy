@@ -157,6 +157,15 @@ CALLS["math.fma(float,float,float)"] = "pys_m_fma:float"
 CALLS["math.ldexp(float,int)"] = "pys_m_ldexp:float"
 CALLS["math.frexp(float)"] = "pys_m_frexp:tuple[float,int]"
 CALLS["math.modf(float)"] = "pys_m_modf:tuple[float,float]"
+# Pystachy's own builtin module, which only lib/io.py imports (Loader.import_stmt), for its
+# TextIOWrapper: the encoding of one made without encoding=, the runtime's as a file's (CPython's
+# locale.getpreferredencoding(False)), the one encoding="locale" names (CPython's
+# locale.getencoding()), and unsupported(), which raises io.UnsupportedOperation as the runtime
+# does for a file
+IOMOD = "_pystachy_io"
+CALLS[IOMOD + ".default_encoding()"] = "pys_io_defenc:str"
+CALLS[IOMOD + ".locale_encoding()"] = "pys_io_locenc:str"
+CALLS[IOMOD + ".unsupported(str)"] = "pys_io_unsupported:None"
 # the functions of the builtin modules, which a program may also use as values (Gen.call_value): those
 # of CALLS, and those Gen.builtin compiles itself
 MODFUNCS: dict[str, bool] = {}
@@ -211,6 +220,7 @@ for _k in ("AsyncGeneratorType BuiltinFunctionType BuiltinMethodType CapsuleType
            "resolve_bases").split():
     MODATTRS[TYPESMOD + "." + _k] = True
 MODULES[TYPESMOD] = True
+MODULES[IOMOD] = True
 GALIAS = TYPESMOD + ".GenericAlias"
 GALIASUSE = "types.GenericAlias is supported only as a class body's __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class: Pystachy has no generic aliases"
 TYPESUSE = "types.NAME is not supported: of the types module, Pystachy has only GenericAlias, for a class body's __class_getitem__ = classmethod(GenericAlias)"
@@ -796,6 +806,8 @@ RUNTIME: dict[str, str] = {
     "file.write": "int:S,str|R A I rF wF|", "file.writelines": "None:S,list[str]|R A I rL rF wF|",
     "file.flush": "None:S|R I rF wF|", "file.close": "None:S|R I rF wF|", "file.drop": "None:S|R I rF wF|",
     "file.closed": "bool:S|rF|", "file.name": "str:S|A rF|", "file.mode": "str:S|A rF|",
+    # lib/io.py's TextIOWrapper (IOMOD): its default and "locale" encodings, io.UnsupportedOperation
+    "io.defenc": "str:|A I|", "io.locenc": "str:|A I|", "io.unsupported": "None:str|R N|",
     # runtime mode's primitives (Gen.primitive): a new str's memory, and the C library's searches
     # and copy, over the bytes of strs (a str that _rt.str_new made is written only before
     # _rt.str_done hands it out, so these need no letter either)

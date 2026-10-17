@@ -20,6 +20,7 @@ from src.pystachy_compiler.specs import (
     RANGEC,
     SPECIAL,
     TYPESMOD,
+    IOMOD,
     TYPING,
     UNSUPPORTED,
 )
@@ -169,7 +170,7 @@ def gen_check_import(self, a: Node) -> None:
     mod = a.kids[1].s
     tgt = a.kids[0].s
     if mod not in MODULES and mod != "collections.abc":
-        self.err(f"module '{mod}' is not supported (available: {', '.join([k for k in MODULES.keys() if k != TYPESMOD])})")
+        self.err(f"module '{mod}' is not supported (available: {', '.join([k for k in MODULES.keys() if k != TYPESMOD and k != IOMOD])})")
     if tgt == mod or tgt == mod[: mod.find(".")] or (tgt + ".") == mod[: len(tgt) + 1]:
         return
     x = tgt[len(mod) + 1 :]

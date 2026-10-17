@@ -3629,6 +3629,27 @@ void pys_file_drop(File *f) {          /* the compiler's close of a file used in
 I pys_file_closed(File *f) { return f->closed; }
 Str *pys_file_name(File *f) { return f->name ? f->name : cstr(f == &std_in ? "<stdin>" : f == &std_out ? "<stdout>" : "<stderr>"); }
 Str *pys_file_mode(File *f) { return f->mode ? f->mode : cstr(f == &std_in ? "r" : "w"); }
+/* lib/io.py's TextIOWrapper (_pystachy_io): the encoding of one made without encoding=, a file's (CPython's
+   locale.getpreferredencoding(False)); the one encoding="locale" names, CPython's locale.getencoding(): the
+   codeset of the LC_CTYPE locale the environment names, where CPython coerces the C locale to C.UTF-8 (PEP 538,
+   which LC_ALL turns off); and its io.UnsupportedOperation, as a file's */
+Str *pys_io_defenc(void) { return cstr(defenc()); }
+Str *pys_io_locenc(void) {
+  static char e[40];
+  if (!*e) {
+    static const char *const utf8[] = {"C.UTF-8", "C.utf8", "UTF-8"};   /* (the coercion's, in its order) */
+    char old[64]; snprintf(old, sizeof old, "%s", setlocale(LC_CTYPE, 0));   /* (a host's own is put back) */
+    const char *l = setlocale(LC_CTYPE, ""), *all = getenv("LC_ALL");
+    if (!l) l = setlocale(LC_CTYPE, "C");   /* (a locale the system does not have: CPython's stays C) */
+    if (l && !strcmp(l, "C") && !(all && *all))
+      for (int i = 0; i < 3 && !setlocale(LC_CTYPE, utf8[i]); i++) {}
+    const char *c = nl_langinfo(CODESET);
+    snprintf(e, sizeof e, "%s", c && *c ? c : "UTF-8");
+    setlocale(LC_CTYPE, old);
+  }
+  return cstr(e);
+}
+_Noreturn void pys_io_unsupported(Str *msg) { failf("io.UnsupportedOperation: %s", msg->s); }
 I pys_system(Str *c) {
   if (nul(c)) pys_fail("ValueError: embedded null byte");
   return system(c->s);                 /* like CPython, without flushing stdout first */
