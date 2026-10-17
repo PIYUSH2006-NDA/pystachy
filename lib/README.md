@@ -26,7 +26,7 @@ Imports search builtin modules first, then the program's directory,
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
 | `collections` | Subset implementation | Typed `deque` (both ends, bounded queues, searches and comparisons), `defaultdict`, `OrderedDict` and `Counter` | Items share one type; mappings hold dicts; deque iterators check mutation, other iteration is a snapshot |
 | `shlex` | Adapted CPython | `split`, `quote`, `join`, lexer options and source stacking | Files are read eagerly; punctuation field is writable |
-| `io` | Subset implementation | `StringIO` (also in `with`) and seek constants | Byte positions; lazy line iteration |
+| `io` | Subset implementation | `StringIO` (also in `with`), seek constants and `TextIOWrapper` over binary buffer objects, with CPython's chunked reads and writes | `StringIO`'s byte positions; lazy line iteration; UTF-8, Latin-1 and ASCII only; no `seek`/`tell`/`detach`/`reconfigure` |
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |
 | `re` | Subset port of parser/compiler and C engine | String regex syntax and matching, substitution, caches, runtime-length `Match.groups()` | Byte positions; other selected variable-length result APIs unavailable |
 | `fnmatch` | Adapted CPython | `fnmatch`, `fnmatchcase`, `filter`, `translate` | String patterns; POSIX case handling |

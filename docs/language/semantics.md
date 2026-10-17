@@ -259,7 +259,7 @@ handled (or `None`). `e.__cause__` is the cause that `raise ... from c` gave, or
 
 `lib/contextlib` provides `contextmanager` (also as a decorator, `@cm()`), `closing`,
 `nullcontext`, `suppress` (as a `with` statement's item, with exception classes named) and
-`AbstractContextManager`; `io.StringIO` and `_thread`'s locks are context managers too
+`AbstractContextManager`; `io.StringIO`, `io.TextIOWrapper` and `_thread`'s locks are context managers too
 ([library](../../lib/compatibility.md#contextlib)).
 
 ## Object protocols
