@@ -59,6 +59,7 @@ Builtin-module imports have a [documented scope deviation](../language.md#deviat
 | `from m import *` | Uses `__all__` when present; otherwise takes public names bound when the module's code ends. `__all__` may be extended with `+=`, `append()` and `extend()`. |
 | A package's own binding, such as `from .parse import parse` | Takes precedence over a submodule with the same name. |
 | A module-level alias, `name = function` | Names that function, including a from-imported function or class, for later from-imports and star imports. |
+| A class rebound to its instance, `class C: ...` directly followed by `C = C()` at module level (a sentinel, as `enum._not_given`) | `C` is the class in that call and the instance from then on, also in functions and other modules; the class keeps its name (`type(C).__name__`, `__qualname__`, reprs and messages). The class may have no base but `object`, and no decorator, `__init__` or `__new__`, so that the call runs none of the program's code, which could read `C` before it is bound. |
 | `from builtins import RuntimeError as error` at module level | Names that builtin exception class, also as `m.error` and through from-imports, in `except` clauses, `raise`, calls and `isinstance()`, as `_thread.error` names `RuntimeError`. |
 | A module-level [type alias](typing.md#type-aliases), `Row = list[str]` or `type Row = ...` | Names that type in the annotations of modules that import it, as `m.Row` or by a from-import or star import. |
 
