@@ -251,6 +251,23 @@ stream errors follow CPython's implementation.
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
 
+`BytesIO` supports construction with `initial_bytes` (bytes or `None`, also by keyword, and
+`__init__` called again), `read`, `read1`, `readline`, `readlines` (whose size bound stops the
+lines once their total reaches it, as the C type's does), iteration, `write`, `writelines` (of
+any iterable of bytes), `getvalue`, `seek`, `tell` and `truncate` with CPython's `whence` rules,
+clamping and errors, `close`, the read-only `closed`, `with`, and `readable`, `writable`,
+`seekable`, `isatty` and `flush`. NUL bytes pad a write past the end, and a closed one raises
+CPython's `ValueError` for every method but `close()` (`iter()` returns it, and `next()`
+raises). Positions and sizes count bytes, as in CPython.
+
+- `getbuffer()` (a `memoryview` of the buffer), `readinto()` and `readinto1()` (into a writable
+  buffer, such as a `bytearray`) are unavailable, as Pystachy has no `memoryview`, `bytearray`
+  or `array`; so are `detach()` and `fileno()` (which raise `io.UnsupportedOperation`) and
+  pickling. A call of any is a compile-time error.
+- Invalid argument types such as `BytesIO("x")`, `write("x")` (and so `print(..., file=)` to a
+  `BytesIO`) are compile-time errors, as are attributes of the program's own on one.
+- `writelines([])` needs the empty list typed (`lines: list[bytes] = []`).
+
 ## Csv
 
 The module provides `reader`, `writer`, `DictReader`, `DictWriter`, `Dialect`,
