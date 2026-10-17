@@ -1,4 +1,4 @@
-@main.init: pys_list_new pys_list_append pys_list_append pys_list_new pys_list_append pys_list_append pys_list_new pys_list_append pys_list_append pys_list_append pys_str_int pys_write pys_write pys_str_float pys_write pys_write pys_repr pys_write pys_write pys_write pys_write
+@main.init: pys_list_new pys_list_append pys_list_append pys_list_new_atomic pys_list_append pys_list_append pys_list_new_atomic pys_list_append pys_list_append pys_list_append pys_str_int pys_write pys_write pys_str_float pys_write pys_write pys_repr pys_write pys_write pys_write pys_write
 @f.pairs: pys_unpack_check pys_raise
 @f.ends: pys_unpack_ex_check pys_list_slice
 @f.swap: pys_unpack_check pys_list_set pys_list_set

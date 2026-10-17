@@ -4,7 +4,7 @@ import os
 import sys
 from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, collect, defines, module_ints, module_reads, module_strs, needs_eh, none_assigns, reads_builtin
-from src.pystachy_compiler.diagnostics import fail
+from src.pystachy_compiler.diagnostics import fail, shown
 from src.pystachy_compiler.generators import reads_cause, reads_handled, uses_protocol
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
@@ -819,7 +819,7 @@ def gen_program(self, mods: list[Mod]) -> str:
             if why != "":
                 # a class of an imported module that Pystachy cannot compile: an error only
                 # where the program uses it
-                self.unsupported[st.s] = f"class {st.s} is not supported: {why}"
+                self.unsupported[st.s] = f"class {shown(st.s)} is not supported: {why}"
             elif st.kind == "subclass":
                 # an ordinary class or an exception class (subclass_problem)
                 if st.s in self.classes:

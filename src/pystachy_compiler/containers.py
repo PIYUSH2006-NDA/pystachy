@@ -6,6 +6,7 @@ from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import ITERS, NONEVAR, OPTTYPES
 from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
+    atomic_list,
     bool_for_int,
     elem,
     elem_problem,
@@ -169,7 +170,7 @@ def gen_star_display(self, n: Node, want: str) -> Val:
             # (a list of other items, an int's where they are int | str: each converted)
             item = made_var("__pys_item", n.line)
             parts[i] = self.listcomp(mk("listcomp", "", n.line, [item, item, self.vnode(parts[i])]), self.ctype("list", [et]))
-    r = self.rt("pys_list_new", "ptr", [f"i64 {len([b for b in lists if not b])}"])
+    r = self.rt("pys_list_new_atomic" if atomic_list(self.ctype("list", [et])) else "pys_list_new", "ptr", [f"i64 {len([b for b in lists if not b])}"])
     for i in range(len(parts)):
         if lists[i]:
             self.rt("pys_list_extend", "void", [f"ptr {r}", f"ptr {parts[i].v}"])

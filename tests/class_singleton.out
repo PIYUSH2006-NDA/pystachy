@@ -1,0 +1,21 @@
+mods: init mods
+mods.shapes: init mods.shapes
+name '_not_given' is not defined
+<not given>
+<not given> <not given> <not given> <not given>
+_not_given _not_given __main__
+_not_given _not_given.__repr__
+not given given not given
+True True 3
+True True False
+True False True
+1 2 2 Counter
+1 1
+<token Token> Token
+_auto_null False True True
+MISSING False True True False
+MISSING MISSING mods.sentinels
+mods.sentinels _auto_null
+MISSING.__bool__ False
+True Plain
+[exit 0]

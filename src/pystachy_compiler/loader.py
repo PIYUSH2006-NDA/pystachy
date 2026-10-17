@@ -349,8 +349,26 @@ class Loader:
             if k.startswith("m:"):
                 fail(f"assigning the __doc__ of module '{k[2:]}' is not supported", self.docsets[i].line)
         for x in self.order:
+            self.singletons(x)
             self.qstmts(x, x.body.kids, {}, False)
         return self.order
+
+    def singletons(self, m: Mod) -> None:
+        # class C: ... directly followed by C = C() at module level (a singleton, as enum's
+        # _not_given): from then on C is a variable, the instance (its kind), and the class, which
+        # only that call names, is C-0, which keeps C's name (__name__, __qualname__, type(C): a
+        # specialization's name is its class's so, short()). Its call runs none of the program's
+        # code (no bases but object, which deftime() has dropped, decorators, __init__ or __new__),
+        # which could read C still unbound
+        b = m.body.kids
+        for i in range(len(b) - 1):
+            c = b[i]
+            a = b[i + 1]
+            if c.kind == "class" and len(c.kids) == 1 and a.kind == "assign" and len(a.kids) == 2 and a.kids[0].kind == "name" and a.kids[0].s == c.s and a.kids[1].kind == "call" and len(a.kids[1].kids) == 1 and a.kids[1].kids[0].kind == "name" and a.kids[1].kids[0].s == c.s:
+                own = top_bindings(c.kids[0].kids)
+                if "__init__" not in own and "__new__" not in own:
+                    c.s = m.q + c.s + "-0"  # (qualified: qname() keeps it)
+                    a.kids[1].kids[0].s = c.s
 
     def docstring(self, m: Mod) -> None:
         # m's __doc__ (Mod.doc): its docstring, a string literal alone in its first statement, as

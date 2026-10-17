@@ -2208,7 +2208,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:
         if name in ci.methods:
-            self.err(f"{o.t}.{name} is a method: call it, {name}(...) (methods are not values)")
+            self.err(f"{shown(o.t)}.{name} is a method: call it, {name}(...) (methods are not values)")
         if ci.exc != "":
             sub = [c for c in self.classes.values() if c.name != o.t and name in c.ftypes and self.derives(c.name, o.t)]
             if len(sub) > 0:
@@ -2222,7 +2222,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
             self.err(f"'{short(o.t)}' object has no attribute '{name}' (of an exception object, only the fields of its class are supported; str(e) and repr(e) are)")
         if o.t in self.nts and name == "__doc__":
             self.err(f"reading the __doc__ of NamedTuple {short(o.t)} is not supported (Pystachy keeps no docstrings of classes)")
-        self.err(f"'{shown(o.t) if ci.origin in self.cnts else o.t}' object has no attribute '{name}'")
+        self.err(f"'{shown(o.t)}' object has no attribute '{name}'")
     extra = " and no __dict__ for setting new attributes" if store else ""
     self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'{extra}")
     if name == "__slots__" and name not in ci.fpos:
