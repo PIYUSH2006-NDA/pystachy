@@ -193,6 +193,8 @@ def tname(t: str) -> str:
         return typestr(t)
     if t == "exc":
         return "BaseException"
+    if t == "exctype":
+        return "type"
     if is_gen(t):
         return "generator"
     if is_kw(t):
@@ -547,7 +549,7 @@ def typestr(t: str) -> str:
     w = ""
     for c in t + ",":
         if c == "[" or c == "]" or c == ",":
-            out.append("BaseException" if w == "exc" else "Generator" if w == "gen" and c == "[" else SPECSHOW[w] if w in SPECSHOW else short(w))
+            out.append("BaseException" if w == "exc" else "type[BaseException]" if w == "exctype" else "Generator" if w == "gen" and c == "[" else SPECSHOW[w] if w in SPECSHOW else short(w))
             out.append(c)
             w = ""
         else:
@@ -673,8 +675,14 @@ def elem(t: str) -> str:
 
 
 def gelem(t: str) -> str:
-    # Y, of a generator gen[Y]
-    return t[4:-1]
+    # Y, of a generator gen[Y] (or gen[Y,S], whose send type S is not None)
+    return targs(t)[0]
+
+
+def gsend(t: str) -> str:
+    # S, the send type of a generator gen[Y,S]: None for a gen[Y]
+    a = targs(t)
+    return a[1] if len(a) > 1 else "None"
 
 
 def targs(t: str) -> list[str]:
@@ -771,11 +779,12 @@ def fbits(text: str) -> str:
 def template_ok(name: str) -> bool:
     # may a method of this name be a template, its unannotated parameters typed by each call (M2)?
     # Not __init__, whose parameters type the fields it assigns, nor a special method that CPython
-    # calls implicitly, but an operator's (SPECIAL's of two parameters) and __call__, __getitem__
-    # and __contains__, which a call compiles as any other
+    # calls implicitly, but an operator's (SPECIAL's of two parameters) and __call__, __getitem__,
+    # __contains__, __enter__ and __exit__, which a call compiles as any other (a with statement's
+    # too: its __exit__ is called with an exception, and with None for each argument)
     if not (name.startswith("__") and name.endswith("__")):
         return True
-    return name in "__call__ __getitem__ __contains__".split() or (name in SPECIAL and SPECIAL[name].startswith("2:"))
+    return name in "__call__ __getitem__ __contains__ __enter__ __exit__".split() or (name in SPECIAL and SPECIAL[name].startswith("2:"))
 
 
 def takes_self(f: FnInfo) -> bool:

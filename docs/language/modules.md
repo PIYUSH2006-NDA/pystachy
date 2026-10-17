@@ -137,7 +137,7 @@ when the program first needs them, with the module and the reason, for example:
 m.total() is not supported: parameter 'xs': unsupported type annotation
 ```
 
-This permits a module to keep unsupported generator forms (such as `send()`), unsupported annotations or classes with unsupported
+This permits a module to keep unsupported generator forms (such as `async` generators), unsupported annotations or classes with unsupported
 inheritance beside functions that compile. An unsupported special method, such as an
 unannotated `__len__`, is rejected when an operation needs it, including implicit use by
 printing, sorting or container comparisons.

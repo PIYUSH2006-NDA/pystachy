@@ -734,6 +734,25 @@ def gen_to_str(self, v: Val) -> Val:
         return Val(self.select(self.ptr_cmp('==', v, Val('null', 'None')).v, Val(self.sconst("None"), "str"), Val(v.v, "str")), "str")
     if t == "exc":
         return Val(self.rt("pys_exc_str", "ptr", [f"ptr {v.v}"]), "str")
+    if t == "exctype":
+        return Val(self.rt("pys_exc_type", "ptr", [f"ptr {v.v}"]), "str")
+    if t == "opt[exc]" or t == "opt[exctype]":
+        # (an __exit__'s exception, or its class: str(e), or "None")
+        ln = self.label()
+        ls = self.label()
+        end = self.label()
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, ln, ls)
+        self.place(ls)
+        r = self.to_str(self.deref(v))
+        got = self.cur
+        self.br(end)
+        self.place(ln)
+        self.br(end)
+        self.place(end)
+        ph = Ins("phi", "str", "")
+        self.incoming(ph, r.v, got)
+        self.incoming(ph, self.sconst("None"), ln)
+        return Val(self.phi(ph), "str")
     return self.repr(v)
 
 def gen_obj_str(self, v: Val, m: str) -> Val:
@@ -890,4 +909,6 @@ def gen_repr(self, v: Val) -> Val:
         self.err(f"cannot convert {v.t} to str")
     if v.t == "exc":
         return Val(self.rt("pys_exc_repr", "ptr", [f"ptr {v.v}"]), "str")
+    if unopt(v.t) == "exctype":
+        return self.to_str(v)  # (a class's repr is its str)
     return Val(self.rt("pys_repr", "ptr", ["i64 " + self.to_slot(v), f"ptr {self.sconst(self.desc(v.t, 'repr'))}"]), "str")

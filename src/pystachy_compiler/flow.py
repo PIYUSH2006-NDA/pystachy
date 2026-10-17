@@ -741,11 +741,27 @@ def gen_fl_stmt(self, fl: Flow, n: Node) -> None:
             if k == "assert" and c is not n.kids[0]:
                 fl.undo(mark)  # (the message runs only where the assertion fails: its := bind nothing after it)
     elif k == "with":
+        # (in a program with a context manager of its own, whose __exit__ may suppress the
+        # exception, the block may end anywhere, and the statement goes on: as a try statement
+        # whose except clause passes; not where each item is a call of the builtin open(),
+        # whose file suppresses nothing)
+        mark = len(fl.log)
+        files = True
         for it in n.kids[:-1]:
             self.fl_expr(fl, it.kids[0])
             if len(it.kids) == 2:
                 self.fl_target(fl, it.kids[1])
+            if not self.open_call(it.kids[0]) or "open" in fl.scope:
+                files = False
         self.fl_stmts(fl, n.kids[-1].kids)
+        if not files and self.cm_exits():
+            st = fl.since(mark)
+            fl.undo(mark)
+            bdels: dict[str, bool] = {}
+            deleted(n.kids[-1].kids, bdels)
+            for nm in bdels:
+                fl.drop(nm)
+            fl.join(st, mark)
     elif k == "try":
         # an except clause starts from the state before the statement less what the body may
         # have unbound, the else block goes on from the body, and the statement ends in the
