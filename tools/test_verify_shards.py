@@ -14,12 +14,16 @@ CASES = ["tests/example.py", "tests/syntax_example.py", "tests/deviations/exampl
          "tests/errors/example.py", "tests/errors/syntax_example.py"]
 # group, its suite step, the modes it reports, the checks of its shard (tests/verify.sh's checks), and
 # how many tests/run.sh runs make them
-SHARDS = [("hosted-0", "tests-cpython-0", ["jit", "aot"], 6, 1), ("hosted-1", "tests-cpython-1", ["jit", "aot"], 4, 1),
+SHARDS = [("hosted-0", "tests-cpython-0", ["jit", "aot"], 3, 1), ("hosted-1", "tests-cpython-1", ["jit", "aot"], 5, 1),
+          ("hosted-2", "tests-cpython-2", ["jit", "aot"], 2, 1),
           ("native-0", "tests-native-0", ["jit", "aot"], 6, 1), ("native-1", "tests-native-1", ["jit", "aot"], 4, 1),
           ("opt-off-0", "tests-opt-off-0", ["jit", "aot"], 6, 1), ("opt-off-1", "tests-opt-off-1", ["jit", "aot"], 4, 1),
-          ("python-free-0", "python-free-0", None, 6, 1), ("python-free-1", "python-free-1", None, 4, 1),
+          ("python-free-0", "python-free-0", None, 3, 1), ("python-free-1", "python-free-1", None, 5, 1),
+          ("python-free-2", "python-free-2", None, 2, 1),
           ("ubsan-0", "ubsan-0", ["aot", "jit"], 4, 2), ("ubsan-1", "ubsan-1", ["aot", "jit"], 8, 2),
           ("ubsan-2", "ubsan-2", ["aot", "jit"], 2, 2)]
+# how many shards each suite has: the group kind-I runs shard I
+SHARD_COUNTS = {"hosted": 3, "native": 2, "opt-off": 2, "python-free": 3, "ubsan": 3}
 # the LLVM tools python-free links into its PATH (doubles: only clang is called)
 LLVM_TOOLS = ("clang", "opt", "lli", "llvm-link", "llvm-as")
 
@@ -127,7 +131,7 @@ esac
     def selected(self, log):
         return [line.removeprefix("selected: ") for line in log.splitlines() if line.startswith("selected: ")]
 
-    def test_each_shard_runs_its_half_of_the_corpus(self):
+    def test_each_shard_runs_its_share_of_the_corpus(self):
         observed = {}
         for group, name, modes, count, runs in SHARDS:
             with self.subTest(group=group):
@@ -139,7 +143,7 @@ esac
                 self.assertEqual((step["passed"], step["failed"], step["expected"]), (count, 0, count))
                 if modes:
                     self.assertEqual(step["modes"], modes)
-                index, shards = int(group[-1]), (3 if group.startswith("ubsan") else 2)
+                index, shards = int(group[-1]), SHARD_COUNTS[group.rsplit("-", 1)[0]]
                 self.assertEqual((step["shard_index"], step["shard_count"]), (index, shards))
                 self.assertEqual(self.selected(logs[name]), CASES[index::shards] * runs)
                 if group.startswith(("ubsan", "python-free")):
@@ -152,17 +156,16 @@ esac
                     self.assertEqual(step["PYSTACHY_OPT"], ["-all"])
                 self.assertEqual(report["sources"]["suite_checks"], 10)  # (CASES's checks in JIT and AOT)
                 observed[group] = CASES[index::shards]
-        for kind, shards in (("hosted", 2), ("native", 2), ("opt-off", 2), ("python-free", 2), ("ubsan", 3)):
+        for kind, shards in SHARD_COUNTS.items():
             parts = [observed[f"{kind}-{index}"] for index in range(shards)]
             self.assertEqual(sum(map(len, parts)), len(set().union(*parts)))  # disjoint
             self.assertCountEqual([case for part in parts for case in part], CASES)
 
-    def test_local_aliases_run_both_halves(self):
-        for group, steps, total in (("hosted", ["tests-cpython-0", "tests-cpython-1"], 10),
-                                    ("native", ["tests-native-0", "tests-native-1"], 10),
-                                    ("opt-off", ["tests-opt-off-0", "tests-opt-off-1"], 10),
-                                    ("python-free", ["python-free-0", "python-free-1"], 10),
-                                    ("ubsan", ["ubsan-0", "ubsan-1", "ubsan-2"], 14)):
+    def test_local_aliases_run_all_their_shards(self):
+        for group, prefix, total in (("hosted", "tests-cpython", 10), ("native", "tests-native", 10),
+                                     ("opt-off", "tests-opt-off", 10), ("python-free", "python-free", 10),
+                                     ("ubsan", "ubsan", 14)):
+            steps = [f"{prefix}-{index}" for index in range(SHARD_COUNTS[group])]
             with self.subTest(group=group):
                 result, report, _ = self.run_group(group)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -61,7 +61,7 @@ CPython runs the source.
 | Module | Upstream reference | Implementation |
 |---|---|---|
 | `io` | `Modules/_io/stringio.c` | Typed `StringIO`, with append chunks joined when read |
-| `types` (`_pystachy_types`) | `Lib/types.py` | `TracebackType` alone, as `from types import TracebackType` imports it for `__exit__`'s annotation |
+| `types` (`_pystachy_types`) | `Lib/types.py` (SHA-256 `3a289bc5366e96d01017038870b5b8861b87305d351b99c688bcc681d908fa7d`) | The module's docstring and its names: `TracebackType`, as `from types import TracebackType` imports it for `__exit__`'s annotation, and the others, of which the compiler supports `GenericAlias` in `__class_getitem__ = classmethod(GenericAlias)` |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |

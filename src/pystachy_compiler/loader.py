@@ -66,6 +66,7 @@ from src.pystachy_compiler.specs import (
     PYBUILTINS,
     RANGES,
     STANDINS,
+    TYPESMOD,
     TYPING,
     VERSIONINFO,
     is_excname,
@@ -155,8 +156,7 @@ def cm_methods(n: Node, names: list[str]) -> None:
 
 def tb_import(n: Node) -> None:
     # from types import TracebackType (an __exit__'s annotation) imports lib/_pystachy_types.py's
-    # TracebackType, which is all of types there is: an import of the module, or of any other name
-    # of it, still finds no module
+    # TracebackType, which lib/types.py binds too, without the rest of lib/types.py
     for st in n.kids:
         if st.kind == "import" and st.s == "from" and len(st.kids) > 0 and len([a for a in st.kids if a.kind != "alias" or len(a.kids) != 2 or a.kids[0].s != "types.TracebackType" or a.kids[1].s != "types"]) == 0:
             for a in st.kids:
@@ -506,7 +506,7 @@ class Loader:
             hint = "; an optional import is supported only as try: <imports> / except ImportError: (except clauses naming only ImportError or ModuleNotFoundError, and no finally)" if self.optry else ""
             if name in CBUILTIN and self.filepath(name) != "":
                 fail(f"module '{name}' is not supported: it is built into CPython, which imports it rather than the {name} module on the module path, and Pystachy does not have it{hint}", line)
-            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi'])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
+            fail(f"module '{name}' is not supported: it is not a builtin module ({', '.join([k for k in MODULES.keys() if k != 'ffi' and k != TYPESMOD])}) and there is no {name[dot + 1 :]}.py on the module path{hint}", line)
         if p.endswith("/__init__.py"):
             return self.load(name, p, p[:-12])
         if p.endswith(".py"):
@@ -2196,6 +2196,8 @@ class Loader:
                 # runs; it binds abc itself, as CPython's does
                 path = a.kids[0].s
             elif builtin_module(path):
+                if path == TYPESMOD and (len(self.dirs) == 0 or m.path != self.dirs[-1] + "/types.py"):
+                    fail(f"module '{TYPESMOD}' is not supported: it is Pystachy's own, which its types module imports (import types)", line)
                 if not infn and m.kinds.get(a.s, "") == "v":
                     fail(f"'{a.s}' is bound both as a variable and as a function, class or import (not supported)", line)
                 if a.s == "*":
