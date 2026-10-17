@@ -1,0 +1,88 @@
+assertEqual [1] [1]
+assertEqual 42 42
+assertEqual [1, 42, 999] [1, 42, 999]
+assertEqual [1] [1]
+assertEqual 42 42
+assertRaises ZeroDivisionError
+assertEqual [1, 42, 999] [1, 42, 999]
+assertFalse False
+assertRaises RuntimeError generator didn't stop after throw()
+assertRaises RuntimeError generator didn't yield
+assertRaises RuntimeError generator didn't stop
+assertEqual [1] [1]
+assertEqual 42 42
+assertEqual [1, 42, 999] [1, 42, 999]
+assertEqual [1, 42, 999] [1, 42, 999]
+assertIs True StopIteration
+assertIs True StopIterationSubclass
+assertIs True
+assertIs RuntimeError RuntimeError
+assertEqual issue29692:Chained issue29692:Chained
+assertIsInstance True
+assertIs StopIteration StopIteration
+assertEqual issue29692:Unchained issue29692:Unchained
+assertIsNone None
+assertRaises RuntimeError caught division by zero
+assertRaises StopIteration StopIteration()
+assertEqual (11, 22, 33, 44) (11, 22, 33, 44)
+assertEqual [] []
+assertEqual True
+assertEqual [1] [1]
+assertEqual [] []
+assertEqual True
+assertRaises ZeroDivisionError
+assertEqual [1] [1]
+assertIs True
+assertFalse False
+assertTrue True
+assertFalse False
+assertEqual 'Booh\n' 'Booh\n'
+assertRaises ZeroDivisionError
+assertTrue True
+assertFalse False
+assertTrue True
+assertFalse False
+assertTrue True
+assertRaises ZeroDivisionError
+assertFalse False
+assertFalse False
+assertTrue True
+assertFalse False
+assertTrue True
+assertRaises ZeroDivisionError
+assertFalse False
+assertIs True
+assertTrue True
+assertEqual None 3
+assertRaisesRegex NameError foo
+assertIs NameError
+assertIs NameError
+assertIsNone unset
+assertTrue True
+assertEqual None 3
+assertIsNone unset
+assertTrue True
+assertRaisesRegex NameError foo
+assertIs NameError
+assertEqual 1 1
+assertEqual 2 2
+assertEqual None None
+assertEqual 1 1
+assertEqual 2 2
+assertEqual 3 3
+assertEqual 2 2
+assertEqual 1 1
+assertEqual None None
+assertEqual 1 1
+assertEqual 2 2
+assertEqual ['1'] ['1']
+assertEqual ['1', 'something', '999'] ['1', 'something', '999']
+assertEqual ['1'] ['1']
+assertEqual ['1', 'something else', '999'] ['1', 'something else', '999']
+assertEqual 32 32
+suppressed
+suppressed
+assertRaises ZeroDivisionError
+assertRaises ZeroDivisionError
+suppressed
+[exit 0]

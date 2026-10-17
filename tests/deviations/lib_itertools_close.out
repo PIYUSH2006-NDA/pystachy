@@ -1,0 +1,5 @@
+acquire
+got 1
+got 2
+after the loop
+[exit 0]

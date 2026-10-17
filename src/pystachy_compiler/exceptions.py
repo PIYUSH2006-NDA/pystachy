@@ -75,7 +75,7 @@ def gen_try_(self, n: Node) -> None:
     mark = Val(self.rt("pys_try_mark", "i64", []), "int")
     if self.fn.gbase != "":
         mark = Val(self.scalar('sub', [mark, Val(self.mload('int', self.fn.gbase), 'int')]), "int")  # (see landing)
-    old = self.rt("pys_exc_handled", "ptr", [])
+    old = self.exc_mark()
     slot = self.alloca("exc", "")
     outer = self.handler
     he = self.label() if len(hs) > 0 else ""
@@ -150,7 +150,7 @@ def gen_try_(self, n: Node) -> None:
             self.excs.pop()
             self.exits.pop()
             if not self.term:
-                self.rt("pys_exc_restore", "void", [f"ptr {old}"])
+                self.exc_back(old)
                 self.unbind(h.s)
                 live = True
                 ends.append(self.narrowed)
@@ -540,20 +540,28 @@ def gen_exc_class(self, e: Node) -> str:
         return ""  # (a local the function assigns further on: reading it is the error, see read_ahead)
     return c.s if c.s in self.classes or c.s in EXCEPTIONS else ""
 
-def gen_cause(self, c: Node) -> None:
+def gen_cause(self, c: Node) -> Val:
     # raise ... from c: c is evaluated and checked (an exception class, a call of one, an
-    # exception or None: else CPython's TypeError is raised instead), and otherwise ignored:
-    # only a traceback would show it
+    # exception or None: else CPython's TypeError is raised instead); the exception it makes,
+    # the raised exception's __cause__, is returned where the program reads that (Gen.causeread),
+    # else only a traceback would show it (Val("", ""): none)
     if c.kind == "None":
-        return
+        return Val("", "")
     k = self.exc_class(c)
     if k == "" or k in self.classes:
         v = self.exc_value_of(c, k)
         if v.t != "exc" and v.t != "None" and not (v.t in self.classes and self.classes[v.t].exc != ""):
             self.raise_("TypeError", self.sconst("exception causes must derive from BaseException"))
             self.place(self.label())  # (what follows, the raise itself, is never reached)
-        return
-    self.exc_vals(self.exc_args(c), c.kids[0].s if c.kind == "call" else "")
+            return Val("", "")
+        if self.causeread and v.t in self.classes:
+            return self.exc_of(v)
+        return v if self.causeread and v.t == "exc" else Val("", "")
+    name = c.kids[0].s if c.kind == "call" else c.s
+    vals = self.exc_vals(self.exc_args(c), c.kids[0].s if c.kind == "call" else "")
+    if not self.causeread or not self.eh or name == "SystemExit":
+        return Val("", "")
+    return self.exc_value("OSError" if name == "IOError" or name == "EnvironmentError" else name, vals)
 
 def gen_exc_value_of(self, e: Node, k: str) -> Val:
     # the value of e, the exception of a raise statement, unless it is a builtin exception class
@@ -596,16 +604,23 @@ def gen_raise_stmt(self, n: Node) -> None:
         v = self.exc_value_of(e, k)
         if v.t in self.classes and self.classes[v.t].exc != "":
             v = self.exc_of(v)
+        if v.t == "opt[exc]":
+            # (an exception or None, as __exit__ takes it: raise None is CPython's TypeError)
+            self.guard(self.ptr_cmp('==', v, Val('null', 'None')).v, "TypeError: exceptions must derive from BaseException")
+            v = Val(v.v, "exc")
         if v.t != "exc":
             self.err("exceptions must derive from BaseException: raise needs an exception class or a call of one")
         if len(n.kids) > 1:
-            self.cause(n.kids[1])
+            cv = self.cause(n.kids[1])
+            if cv.v != "":
+                self.rt("pys_exc_setcause", "void", [f"ptr {v.v}", f"ptr {cv.v}"])
         self.throw(v)
         return
     name = e.kids[0].s if e.kind == "call" else e.s
     vals = self.exc_vals(self.exc_args(e), name)
+    cause = Val("", "")
     if len(n.kids) > 1:
-        self.cause(n.kids[1])
+        cause = self.cause(n.kids[1])
     if n.s == "init":
         # a module's raise of ImportError at its top level (Loader.init_raise()): under an optional
         # import (a "guard" in a uimport) the module returns, not imported, so that the importer's
@@ -623,7 +638,10 @@ def gen_raise_stmt(self, n: Node) -> None:
         self.exit_(vals, False)
         return
     if self.eh:
-        self.throw(self.exc_value("OSError" if name == "IOError" or name == "EnvironmentError" else name, vals))
+        xv = self.exc_value("OSError" if name == "IOError" or name == "EnvironmentError" else name, vals)
+        if cause.v != "":
+            self.rt("pys_exc_setcause", "void", [f"ptr {xv.v}", f"ptr {cause.v}"])
+        self.throw(xv)
         return
     if name == "SyntaxError" or name == "IndentationError" or name == "TabError":
         # CPython's traceback takes str(e), which is str(msg), then prints "E: " and str(msg or

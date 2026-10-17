@@ -1,0 +1,29 @@
+1
+g1 finally
+closed -1
+closed twice
+never started -1
+ignoring
+close: generator ignored GeneratorExit
+after 2
+-1
+ignoring
+close: generator ignored GeneratorExit
+suspended at the second yield: closed quietly
+close raised KeyError('cleanup')
+-1
+close raised RuntimeError('generator raised StopIteration')
+custom Oops('while closing')
+plain -1
+a b
+none left
+ValueError: generator already executing
+0 1
+[]
+g1 finally
+g1 finally
+g1 finally
+[0, 0, 0]
+g1 finally
+['closing', 'closed']
+[exit 0]

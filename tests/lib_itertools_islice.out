@@ -1,0 +1,45 @@
+['A', 'B'] ['C', 'D'] ['C', 'D', 'E', 'F', 'G'] ['A', 'C', 'E', 'G']
+['A', 'B', 'C', 'D', 'E', 'F', 'G'] ['A', 'B', 'C'] ['B', 'C', 'D', 'E', 'F', 'G'] []
+[] ['A', 'B', 'C', 'D', 'E', 'F', 'G'] ['D', 'F'] ['B', 'C']
+[2, 3] [1.5] ['b']
+[2, 7, 12, 17] [1, 2, 3]
+['E', 'F', 'G']
+['A', 'B', 'C']
+[0, 1, 2] 3
+[1, 4] 6
+[] 4
+[] 0
+made
+  read 0
+  read 1
+  read 2
+got 2
+  read 3
+  read 4
+got 4
+  read 5
+  read 6
+got 6
+  read 7
+after 7
+  read 0
+  read 1
+  read 2
+[1, 2]
+[]
+  read 0
+  read 1
+0 1 -1 -1
+ValueError: Stop argument for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Indices for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Indices for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Stop argument for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Indices for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Step for islice() must be a positive integer or None.
+ValueError: Step for islice() must be a positive integer or None.
+ValueError: Stop argument for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Indices for islice() must be None or an integer: 0 <= x <= sys.maxsize.
+ValueError: Step for islice() must be a positive integer or None.
+TypeError: islice expected at least 2 arguments, got 1
+TypeError: islice expected at most 4 arguments, got 5
+[exit 0]

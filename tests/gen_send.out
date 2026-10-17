@@ -1,0 +1,36 @@
+0.0
+10.0
+20.0
+got None
+20.0
+15.0
+can't send non-None value to a just-started generator
+ready
+echo a
+echo b
+stopped
+finished: StopIteration
+0 1 10 11 12
+1
+x is None
+2
+next() sends None
+and so does a loop: None
+[1, 2]
+0
+1 2 2
+['x', 'y']
+3
+4
+5
+['x', 'y', '0', '1', '2']
+5
+400
+pair got q
+(0, 'x') (1, 'x') (2, 'x')
+ValueError: generator already executing
+printer: hello
+printer: world
+[3]
+sums finished
+[exit 0]
