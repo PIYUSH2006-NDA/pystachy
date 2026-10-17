@@ -33,6 +33,7 @@ from src.pystachy_compiler.specs import (
 )
 from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
+    atomic_dict,
     atomic_list,
     bool_for_int,
     elem,
@@ -2232,11 +2233,11 @@ def gen_dict_pairs(self, v: Val, want: str, found: str = "") -> Val:
         if not is_dict(t) or "?" in t:
             t = self.ctype("dict", ["int", "int"])
             self.guessed[self.curfn.ll] = f"dict() at line {self.line} of tuples of {len(targs(et))} items makes only an empty dict, taken as {typestr(t)}: give it a type first, as in d: dict[K, V] = dict(...)"
-        return Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(targs(t)[0])}", "i64 0"]), t)
+        return Val(self.rt("pys_dict_new_atomic" if atomic_dict(t) else "pys_dict_new", "ptr", [f"i64 {self.key_kind(targs(t)[0])}", "i64 0"]), t)
     kv = targs(et)
     if self.key_problem(kv[0]) != "":
         self.err(self.key_problem(kv[0]))
-    d = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"])
+    d = self.rt("pys_dict_new_atomic" if atomic_dict(self.ctype("dict", kv)) else "pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"])
     self.rt("pys_dict_update_pairs", "void", [f"ptr {d}", f"ptr {v.v}"], self.key_fx(kv[0]))
     return Val(d, self.ctype("dict", kv))
 

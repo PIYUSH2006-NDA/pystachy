@@ -62,7 +62,7 @@ lengths and optimize construction loops. Runtime-mode unit-step range increments
 use LLVM's signed no-overflow form; runtime authors must keep the loop valid for
 that assumption.
 
-## List storage
+## List and dict storage
 
 List headers remain scanned so their backing arrays stay reachable. The backing of a
 `list[int]`, `list[float]` or `list[bool]` is pointer-free (allocated atomic, never scanned):
@@ -83,6 +83,13 @@ which each call's context types (`typed_empty`). It is allocated scanned, as are
 and growth made of it, because one allocation may serve a `list[int]` context and a
 `list[str]` one. `tests/gc_list_kinds.py` covers these cases under
 `PYSTACHY_GC_STRESS_PROGRAM=1`, and `make listprobe` checks the allocation kinds directly.
+
+Dict value arrays follow the same rule. The compiler makes a dict whose values are ints,
+floats or bools with `pys_dict_new_atomic`, which sets the dict's `vatomic` word. Every value
+array of that dict is then atomic, through growth and `clear()`, as are the value arrays of
+its copies (`dict.copy()`, `dict(d)`) and `list(d.values())`. `dict.fromkeys` and an open
+empty dict that a template returns are made scanned. Key arrays keep their own rule: those
+of int keys are atomic. `tests/gc_dict_values.py` and `make dictprobe` cover dict values.
 
 ## Build and cache
 

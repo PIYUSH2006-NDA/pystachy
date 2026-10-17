@@ -30,6 +30,7 @@ from src.pystachy_compiler.specs import (
 )
 from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, names_in
 from src.pystachy_compiler.utils import (
+    atomic_dict,
     atomic_list,
     bool_for_int,
     clone,
@@ -893,7 +894,7 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         vs = [self.coerce(x, kv[1]) for x in vs]
         if self.key_problem(kv[0]) != "":
             self.err(self.key_problem(kv[0]))
-        r = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", f"i64 {len(ks)}"])
+        r = self.rt("pys_dict_new_atomic" if atomic_dict(self.ctype("dict", kv)) else "pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", f"i64 {len(ks)}"])
         for i in range(len(ks)):
             self.rt("pys_dict_set", "void", [f"ptr {r}", "i64 " + self.to_slot(ks[i]), "i64 " + self.to_slot(vs[i])], self.key_fx(kv[0]))
         return Val(r, self.ctype("dict", kv))
@@ -1914,7 +1915,7 @@ def gen_dict_merge(self, n: Node, want: str) -> Val:
             v = self.unwrap(v, "TypeError: 'NoneType' object is not a mapping")
             if r.t == "":
                 kv = targs(v.t)
-                r = Val(self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"]), v.t)
+                r = Val(self.rt("pys_dict_new_atomic" if atomic_dict(v.t) else "pys_dict_new", "ptr", [f"i64 {self.key_kind(kv[0])}", "i64 0"]), v.t)
                 for j in range(0, len(pairs), 2):
                     self.rt("pys_dict_set", "void", [f"ptr {r.v}", "i64 " + self.to_slot(self.store_key(pairs[j], kv[0])), "i64 " + self.to_slot(self.coerce(pairs[j + 1], kv[1]))], self.key_fx(kv[0]))
             self.rt("pys_dict_update", "void", [f"ptr {r.v}", f"ptr {v.v}"], self.key_fx(targs(r.t)[0]))
