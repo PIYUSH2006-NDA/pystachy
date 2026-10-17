@@ -46,6 +46,15 @@ outside this supported API set. Builtin `os.path` has its own documented APIs.
 `curses.ascii` supports ASCII characters; byte strings are not Unicode character
 sequences.
 
+## CPython-only code
+
+Ports keep code that only CPython can run, as CPython's sources have it, under
+`if sys.implementation.name == "cpython":`. Pystachy decides that test at compile time, as its
+`sys.implementation.name` is `"pystachy"`, and drops the block (see
+[compile-time branches](../docs/language/modules.md#compile-time-branches)): `urllib.parse`'s
+imports of `types`, `warnings` and `ipaddress`, its docstrings of the result fields and its
+byte tables, and `statistics`' import of `random` and table of kernels.
+
 ## Pure-Python accelerators
 
 `bisect`, `heapq`, `operator` and `stat` execute their Python implementations
@@ -465,7 +474,7 @@ variants, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
 iterators, properties or other features beyond the port's compiled paths. Only
 CPython runs the module's import of `random`, which `kde_random` and
-`NormalDist.samples` use.
+`NormalDist.samples` use ([CPython-only code](#cpython-only-code)).
 
 ## Random
 

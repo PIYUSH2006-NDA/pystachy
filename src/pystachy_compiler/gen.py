@@ -995,7 +995,9 @@ class Gen:
         self.strtuples: dict[str, list[str]] = {}  # and tuples of them: functools.wraps()'s assigned
         self.abstracts: dict[str, list[str]] = {}  # each class's own @abstractmethod methods (abstract_defs)
         self.abcmeta: dict[str, bool] = {}  # the classes whose statements pass metaclass=ABCMeta
-        self.falseflags: dict[str, bool] = {}  # each module's TYPE_CHECKING that is a constant False (false_flag())
+        # each module's TYPE_CHECKING that is a constant False (false_flag()), and its names that hold a
+        # test of the platform (Loader.platform_flags()): the literal each holds, "False" or "True"
+        self.constflags: dict[str, str] = {}
         # an imported module's globals (and defs and classes) that other code may find unbound:
         # not assigned on every path through its module code, or before an import that may run
         # code calling back into the module

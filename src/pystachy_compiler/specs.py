@@ -1,5 +1,6 @@
 """Specs component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+import sys
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
@@ -186,6 +187,16 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.min_exp": "-1021", "sys.float_info.min_10_exp": "-307", "sys.float_info.dig": "15",
                              "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
+# sys.platform as the runtime reports it (pys_platform() in runtime.c) on the system the compiler
+# runs on, which is the one it compiles for, and sys.implementation.name: tests of them, and of
+# os.name (OSCONST), in if statements and conditional expressions are decided at compile time
+# (Loader.platform_test())
+PLATFORM = "unknown"
+for _k in ("linux", "darwin", "freebsd"):
+    if sys.platform.startswith(_k):
+        PLATFORM = _k
+IMPLEMENTATION = "pystachy"
+MODATTRS["sys.implementation.name"] = True
 for _k in FLOATINFO:
     MODATTRS[_k] = True
 # sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which
