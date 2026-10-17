@@ -1,0 +1,4 @@
+exit True True False
+exit False False True
+[3] [4, 5] 5 3 True
+[exit 0]

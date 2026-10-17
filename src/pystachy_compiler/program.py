@@ -14,6 +14,7 @@ from src.pystachy_compiler.specs import (
     EXCBASES,
     EXCEPTIONS,
     exc_derives,
+    GALIAS,
     INERT,
     INERT_DECOS,
     is_excname,
@@ -628,6 +629,29 @@ def gen_partly(self, e: Node, use: int) -> str:
         r = r if r != "" else self.partly(e.kids[i], 2 if e.kind == "set" or (e.kind == "dict" and i % 2 == 0) else use)
     return r if e.kind in ["tuple", "list", "set", "dict"] else self.effect(e, {}, use)
 
+def gen_generic_aliases(self, body: list[Node]) -> None:
+    # CPython's idiom for a generic class, __class_getitem__ = classmethod(GenericAlias) of types in a
+    # class body (also in a block, a function or another class), which makes C[...] a
+    # types.GenericAlias: left out, as it defines nothing Pystachy has, and the class recorded
+    # (galias), whose subscripts at run time are an error (index())
+    for st in body:
+        c = st.kids[0] if st.kind == "subclass" else st
+        if c.kind == "class":
+            keep: list[Node] = []
+            for x in c.kids[0].kids:
+                v = x.kids[1] if x.kind == "assign" and len(x.kids) == 2 and x.kids[0].kind == "name" and x.kids[0].s == "__class_getitem__" else x
+                if v.kind == "call" and len(v.kids) == 2 and v.kids[0].kind == "name" and v.kids[0].s == "classmethod" and "classmethod" not in self.funcs and self.imported_ref(v.kids[1]) == GALIAS:
+                    self.galias[c.s] = True
+                else:
+                    keep.append(x)
+            c.kids[0].kids = keep if len(keep) > 0 else [mk("pass", "", c.line, [])]
+        for k in c.kids:
+            if k.kind == "block":
+                self.generic_aliases(k.kids)
+            elif k.kind == "except":
+                self.generic_aliases(k.kids[1].kids)
+
+
 def gen_abstract_defs(self, body: list[Node]) -> list[Node]:
     # the class statements of a module's body as the compiler applies abc's ABCMeta to them: a
     # method's @abstractmethod (the loader's qdeco names it abc$abstractmethod) is left out, the
@@ -724,6 +748,8 @@ def gen_program(self, mods: list[Mod]) -> str:
         # iterator object's), and by next(it, default) (not range's __iter__, which steps through
         # a list)
         self.eh = len([m for m in mods if (defines(m.body, "__iter__") and m.name != RANGES) or module_reads(m.body, "next")]) > 0
+    for m in mods:
+        self.generic_aliases(m.body.kids)
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
