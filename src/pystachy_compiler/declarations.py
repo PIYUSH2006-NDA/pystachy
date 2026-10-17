@@ -7,6 +7,7 @@ from src.pystachy_compiler.ir import ClassInfo, FnInfo, Ins, Val
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import owner, short
 from src.pystachy_compiler.specs import (
+    ANYUSE,
     CLASSVAR,
     CTYPES,
     EXCATTRS,
@@ -135,6 +136,8 @@ def gen_ann(self, n: Node) -> str:
         t = self.typing_name(s)
         if t == "TextIO" or t == "Self" or t.startswith("!"):
             return "file" if t == "TextIO" else self.self_type() if t == "Self" else t
+        if t == "Any":
+            return "!" + ANYUSE  # (where no call types what it annotates: see declare_fn)
         if s in self.unsupported:
             return "!" + self.unsupported[s]
         if s in self.typevars:
@@ -146,6 +149,8 @@ def gen_ann(self, n: Node) -> str:
         return "file"
     elif k == "attr" and self.typing_attr(n) == "Self":
         return self.self_type()
+    elif k == "attr" and self.typing_attr(n) == "Any":
+        return "!" + ANYUSE
     elif k == "binop" and n.s == "|" and self.has_path(n):
         return self.path_union(self.union_members(n, []))
     elif k == "binop" and n.s == "|" and n.kids[1].kind == "None":
@@ -170,6 +175,8 @@ def gen_ann(self, n: Node) -> str:
         base = self.ann_base(n.kids[0])
         if base.startswith("!"):
             return base
+        if base == "literal":
+            return "!unsupported type annotation"  # (its arguments are values, not annotations: Literal["Any"])
         a: list[Node] = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
         if base == "iterator" or base == "generator":
             # Iterator[T], Generator[Y, None, R] (typing's or collections.abc's): a generator object
@@ -358,6 +365,20 @@ def gen_typevar_in(self, anns: list[Node], skip: list[str]) -> str:
         if r != "":
             return r
     return ""
+
+def gen_any_in(self, anns: list[Node]) -> bool:
+    # do annotations anns mention typing.Any (also in a string: Any, list[Any], Mapping[str, Any],
+    # Callable[..., Any]); a type alias they name is its value already (see unalias_all)
+    for a in anns:
+        if a.kind == "str":
+            a = self.parse_expr(a.s)
+        if (a.kind == "attr" or (a.kind == "name" and a.s not in self.classes)) and self.typing_ref(a) == "Any":
+            return True
+        if a.kind == "index" and self.typing_ref(a.kids[0]) == "Literal":
+            continue  # (its strings are values: Literal["Any"])
+        if a.kind != "attr" and self.any_in(a.kids):
+            return True
+    return False
 
 def gen_class_params(self, st: Node) -> str:
     # class C[T, *Ts] (subclass node st, its type parameters its first base): why it cannot be a
@@ -982,6 +1003,18 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         # types (any argument: isinstance() narrows it), where a template may be
         if ps[i].kind == "param" and ps[i].kids[0].kind == "name" and ps[i].kids[0].s == "object" and not (cls != "" and i == 0 and f.deco != "staticmethod") and (cls == "" or template_ok(d.s)):
             ps[i].kids[0] = mk("noann", "", d.line, [])
+    if (cls == "" or template_ok(d.s)) and not f.prop and f.acc == "" and not f.extern and not f.export and not f.pyexport:
+        # typing.Any, also in list[Any] or Mapping[str, Any]: what it annotates is left to each
+        # call, as a TypeVar's is. A parameter takes its argument's type (*args and **kwargs
+        # those of each call's), the return what the function returns; no value is boxed, so
+        # storage that a value of any type reaches (x: Any = v, a field) is still an error
+        for i in range(len(ps)):
+            if not (cls != "" and i == 0 and f.deco != "staticmethod") and self.any_in([ps[i].kids[0]]):
+                ps[i].kids[0] = mk("noann", "", d.line, [])
+                f.anys.append(ps[i].s)
+        if self.any_in([d.kids[1]]):
+            d.kids[1] = mk("noann", "", d.line, [])
+            f.anys.append("")
     tvbad = f"method '{d.s}' of class '{short(cls)}' mentions TypeVar '{short(tv)}', which is not supported: {d.s}() is not a template (another method whose parameters mention a TypeVar is, compiled for each call's argument types)"
     if tv != "" and cls != "" and not template_ok(d.s) and not self.lib:
         self.err(tvbad)

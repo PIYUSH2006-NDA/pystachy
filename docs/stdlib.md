@@ -68,7 +68,7 @@ surface and changes. Application examples show these libraries in use; the
 
 ## Remaining limits
 
-Multiple/generic inheritance, arbitrary unions and `Any`, generator functions and first-class
+Multiple/generic inheritance, arbitrary unions and dynamic `Any` values, generator functions and first-class
 generator objects, `bytearray` and binary files, dynamic reflection and unrestricted argument expansion still
 limit library coverage. CPython extensions and import
 graphs through unavailable modules can block otherwise suitable pure-Python functions.
