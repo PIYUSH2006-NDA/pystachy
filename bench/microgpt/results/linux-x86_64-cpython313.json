@@ -1103,5 +1103,26 @@
         ]
       }
     }
-  ]
+  ],
+  "gc_diagnostic": {
+    "kind": "AOT allocation/GC diagnostic; timing not used for performance conclusions",
+    "steps": 100,
+    "samples": 5,
+    "compiler_git_revision": "d3fbfc6f5f6d5650f25ffc0d97be93b512f41a6f",
+    "source_sha256": "4f9b17df915794436aca3987c7c774e13a5655a5179de8a66c3ad7e3ae5a7a6b",
+    "dataset_sha256": "0a30b5557f192f32ab962680889aac5f6fda0f4cecf40a6d0b5694f58ea8cc4d",
+    "aot_sha256": "ec58b0b9d51c0f629f45c66906e5d9d95db29d70478b64b0ebc7ea039c732762",
+    "PYSTACHY_GC": "stats",
+    "comparison": {
+      "numeric_values": 25252,
+      "max_abs_error": 8.881784197001252e-16,
+      "max_relative_error_floor_atol": 5.3003678201595825e-12,
+      "max_scaled_error": 2.7803196509424358e-06,
+      "rtol": 1e-09,
+      "atol": 1e-10
+    },
+    "checks_sha256": "841db24d46ed2f8f929d3183f07279df6389306508d2be4105992fcd9b5561dd",
+    "stderr": "gc: 50 collections, 221.6 ms; heap peak 58.0 MiB; live 13.8 MiB at the last\n",
+    "returncode": 0
+  }
 }

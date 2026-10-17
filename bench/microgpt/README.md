@@ -106,6 +106,12 @@ Backward propagation remains the largest AOT phase (0.498 s median, about 56%
 of training); forward computation takes 0.374 s and Adam 0.0255 s. No dedicated
 profile yet attributes those costs to individual runtime operations.
 
+A separate AOT run with `PYSTACHY_GC=stats` reported 50 collections, a 58.0 MiB
+peak managed heap and 13.8 MiB live at the last collection, with the same
+numerical checks passing. These are runtime heap statistics, not process RSS.
+Its GC timing is retained only as a diagnostic because other compilation work
+was running concurrently.
+
 ## Adaptations and remaining gaps
 
 | Original construct | Adaptation | Remaining work |
