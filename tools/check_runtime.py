@@ -100,9 +100,10 @@ BUG_ONLY = ("IndexError: string index out of range", "IndexError: compare out of
 # the end of the program (R and N stand for it; running out of memory, oom, for A) and the
 # allocator (A), which I does not look into; gc_seg and gc_find read its page map for the
 # header of the object that holds a str (pys_str_iadd's: its room, which a collection may
-# trim, and the mark that its copy writes), which no str's value depends on
+# trim, and the mark that its copy writes), which no str's value depends on; atomic_items
+# reads the kind of a list's item array (scanned or not), which is fixed when the array is made
 END = RAISES | {"oom"}
-ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic", "gc_seg", "gc_find"}
+ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic", "gc_seg", "gc_find", "atomic_items"}
 # C library functions that use no state but the memory their arguments point to
 PURE_C = set("""sqrt sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh exp log log2 log10 log1p expm1
     exp2 cbrt fmod atan2 pow ldexp frexp modf erf erfc nextafter remainder atoi memcmp bcmp memchr memmem strlen
