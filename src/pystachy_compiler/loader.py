@@ -16,6 +16,7 @@ from src.pystachy_compiler.analysis import (
     collect,
     del_line,
     declares,
+    deferred_use,
     deleted,
     false_flag,
     sole_binding,
@@ -2265,7 +2266,9 @@ class Loader:
         # the import on that runs before the statement binds name (its decorators, defaults,
         # annotations, bases and class body too), nor a function or class defined before it that
         # uses name, or one that does, where code before it names one (which may run it, or keep
-        # it) or decorates one (else an error). False where the import binds name (take())
+        # it) or decorates one, nor a lambda or generator expression before it that reads name
+        # (else an error). Another module's code that reads it during an import cycle finds it
+        # unbound (NameError, AttributeError: docs). False where the import binds name (take())
         k = m.kinds.get(name, "")
         sk = src.kinds.get(x, "")
         if infn or (k != "f" and k != "c") or src.name == m.name or not src.done or not (sk == "f" or sk == "c" or sk.startswith("a:")):
@@ -2293,9 +2296,13 @@ class Loader:
                     grew = True
         fns = dict(uses)
         del fns[name]
+        own: dict[str, bool] = {name: True}
         what = f"'{name}' is bound both by an import and by a def or class, and "
         for i in range(d + 1):
             st = body[i]
+            r = deferred_use(st, own)  # (also one made before the import, which may be kept)
+            if r is not None:
+                fail(what + "a lambda or generator expression here that reads it may run in between (not supported)", r.line)
             r = first_use(st, uses, True) if i >= s else first_use(st, fns, True) if len(fns) > 0 else None
             if r is not None:
                 nm = r.s.split(".")[0]

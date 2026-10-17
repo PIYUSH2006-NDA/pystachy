@@ -947,6 +947,20 @@ def first_use(n: Node, names: dict[str, bool], now: bool) -> Node | None:
     return None
 
 
+def deferred_use(n: Node, names: dict[str, bool]) -> Node | None:
+    # first_use() in the lambdas and generator expressions of the code that runs when n does (not
+    # in the bodies of the functions it defines), which run when what holds them calls or
+    # iterates them: then, or later
+    if n.kind == "lambda" or (n.kind == "listcomp" and n.s == "gen"):
+        return first_use(n, names, False)
+    for i in range(len(n.kids)):
+        if not (n.kind == "def" and i == 2):
+            r = deferred_use(n.kids[i], names)
+            if r is not None:
+                return r
+    return None
+
+
 def all_imports(body: list[Node], out: list[str]) -> None:
     # the user modules that body imports, in its functions too
     for st in body:

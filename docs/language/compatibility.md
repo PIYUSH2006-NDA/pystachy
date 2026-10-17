@@ -360,7 +360,10 @@ supported alternatives.
   too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
   which assigns the local, and for a module-level `def` or `class` that rebinds a function or class
   an earlier from-import or `import *` of a Python module bound, where nothing may read the import's
-  binding in between ([module scope](modules.md#module-scope))
+  binding in between ([module scope](modules.md#module-scope)). Not caught: another module's code
+  that reads the name in between, while an import cycle runs the module's code (as `m.name`, or
+  through a function of the module), raises `AttributeError` or `NameError` where CPython reads
+  the imported value
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
   one named like a builtin or `__name__`, also in an imported module, and `__doc__` in a class
   body (the class's docstring)
