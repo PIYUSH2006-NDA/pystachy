@@ -439,6 +439,21 @@ def fuzz_replace():
         for k in [-1, cap + 5]:
             check(unit * (cap + 40), n, "_", k)
     check("a," * (cap + 7), ",", ";", -1)
+    # dense, but failed candidates costlier than the bytes they pass, so the rest is listed (DNA's
+    # "CA" in ACG, and a run of the needle's first byte after a dense prefix), and cheap ones
+    for k, n in [(3, "CA"), (4, "GA"), (2, "CAC")]:
+        dna = "".join(R.choice("ACGT"[:k]) for _ in range(1100000))
+        for c in [-1, cap + 1, R.randrange(cap, dna.count(n) + 2)]:
+            check(dna, n, R.choice(["", "#", "<n>"]), c)
+    for n in ["ab", "a" * 15 + "b", "é" * 3 + "è"]:
+        for c in [-1, cap + 1, 70000, 70001]:
+            check(n * 70000 + n[0] * 30000 + n, n, "_", c)
+    for n, unit in [("aa", "a"), ("aaa", "a"), ("abab", "ab")]:  # needles that overlap themselves
+        for c in [-1, cap + 1]:
+            check(unit * (3 * cap * len(n) + 7), n, "-", c)
+    for c in [-1, cap + 1, 140000]:
+        check("ab" * 70000 + ("a" * 40 + "ab") * 300 + "ab" * 100000, "ab", "Z", c)
+        check(("ab" + "y" * 13 + "ab" + "y" * 12 + "a") * 40000, "ab", "", c)
     for n, r in [("ab", "X"), ("é", ""), ("</p>", "\n"), ("aa", "b"), ("𝄞", "→")]:
         for k in [-1, cap + 1]:
             check((n + "y") * (cap + 40) + n[:-1], n, r, k)
@@ -447,7 +462,7 @@ def fuzz_replace():
         r = R.choice(["", "_", ";;", "XYZ", "é", "\n", n])
         parts = []
         while len(parts) < 3 or R.randrange(3):
-            gap = R.choice(["", "y", "é", "yz" * R.randrange(8), "y" * R.randrange(17, 80), "a"])
+            gap = R.choice(["", "y", "é", "yz" * R.randrange(8), "y" * R.randrange(17, 80), "a", "a" * R.randrange(40)])
             parts.append((n + gap) * R.randrange(1, 70000))
         h = "".join(parts)
         k = R.choice([-1, -1, cap - 1, cap, cap + 1, 3 * cap, R.randrange(h.count(n) + 2)])
