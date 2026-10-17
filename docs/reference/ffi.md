@@ -20,8 +20,9 @@ A missing library raises `OSError`; a missing symbol raises `AttributeError`, wi
 Calls bind positional and keyword arguments and declared defaults using the
 function's normal signature. The compiler rejects:
 
-- Bare `int`, `bool`, containers, classes and optionals other than a `str | None`
-  return; every C integer must specify its width.
+- Bare `int`, `bool`, classes, containers other than `list[float]` and
+  `list[ffi.c_int64]` arguments, and optionals other than a `str | None` return; every C
+  integer must specify its width, a list's items too (`list[ffi.c_int64]`, not `list[int]`).
 - Unannotated parameters, `*args`, a body other than `...`, or `@extern` on a method.
 - Nonliteral library/symbol names, embedded NULs and invalid decorator arguments.
 - Conflicting declarations of one C symbol, including conflicts with the runtime's
@@ -43,6 +44,8 @@ The compiler does not read C headers or infer C calling conventions.
 | `float` | `double` | Preserves signed zero, infinities and NaN. |
 | `str` argument | `const char *` | NUL-terminated UTF-8 bytes, valid during the call; NUL in the value raises `ValueError`. |
 | `ffi.c_buf` argument | `const char *` | Same bytes, NULs allowed; pass the length separately. |
+| `list[float]` argument | `double *` | The list's own items, for the call: C reads and writes them in place. Pass the length separately. |
+| `list[ffi.c_int64]` argument | `int64_t *` | The same, for a list of ints (`list[ffi.c_ssize_t]` too). Other item types are rejected: a list's items are 8 bytes each. |
 | `str` result | `char *` | Copied into a new string; NULL raises `ValueError`. |
 | `str \| None` result | `char *` | Copied into a new string; NULL becomes `None`. |
 | `None` result | `void` | No value. |
@@ -53,10 +56,19 @@ C integer annotations are ordinary `int` inside a stub's subset signature.
 
 ## Pointer lifetimes and foreign control flow
 
-A C function must not retain a `str` or `c_buf` pointer after returning. Returned
+A C function must not retain a `str`, `c_buf` or list pointer after returning. Returned
 strings are copied; that copy does not free the source allocation. If C allocated
 it, declare a pointer result, copy it with `string_at` and call the library's
 matching deallocator. Pointer addresses and lengths must designate valid memory.
+
+A list argument lends C its item array for the call. The collector moves nothing, and no
+subset code runs until the call returns, so the list cannot grow or lose its array
+meanwhile. C may read and write `len(xs)` items, and what it writes is in the list when the
+call returns; pass a copy (`xs[:]`) to keep the original.
+
+The CPython twin copies each distinct list into one C array before the call and back into the
+list after it, so a list passed for two parameters is one array there as it is natively:
+`f(xs, xs)` sees its own writes in both runtimes.
 
 A declaration must match the real C prototype. A mismatch in widths or calling
 convention, C++ exception or `longjmp` across subset frames, or retained temporary
@@ -145,7 +157,9 @@ unwinding. macOS would need `-undefined dynamic_lookup` for extensions and lacks
 Keyword arguments/defaults for exports, public classes, exception classes,
 containers, C callbacks and calls from arbitrary threads are unsupported. Mutable
 containers are not copied implicitly because that would lose identity and shared
-mutation; see [#108](https://github.com/den-run-ai/pystachy/issues/108).
+mutation; see [#108](https://github.com/den-run-ai/pystachy/issues/108). A
+`list[float]` or `list[ffi.c_int64]` argument of `@extern` is lent, not copied, for
+the call.
 Calling CPython from a Pystachy program is proposed in
 [PR #170](https://github.com/den-run-ai/pystachy/pull/170), not implemented on `main`.
 

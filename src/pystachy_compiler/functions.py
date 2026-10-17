@@ -9,6 +9,7 @@ from src.pystachy_compiler.syntax import Node, mk
 from src.pystachy_compiler.utils import (
     RtFn,
     clone,
+    is_list,
     is_opt,
     lt,
     rename,
@@ -299,15 +300,26 @@ def gen_extern_args(self, x: Node, more: bool) -> list[str]:
     return r
 
 def gen_externtype(self, a: Node, t: str, what: str, f: FnInfo) -> str:
-    # an @extern signature's type: "float", "str", "None", "opt[str]" or a CTYPES name
+    # an @extern signature's type: "float", "str", "None", "opt[str]" or a CTYPES name, or a list
+    # taken as its items, "list[float]" (double *) or "list[c_int64]" (int64_t *): the 8-byte slots
+    # of runtime.c's List hold a float's bits and an int as they are, so C sees them in place
     c = self.imported(a.s)[4:] if a.kind == "name" and self.imported(a.s).startswith("ffi.") else ""
     if c in CTYPES or (c == "c_buf" and what == "takes"):
         return c
+    if what == "takes" and is_list(t) and a.kind == "index" and a.kids[1].kind == "name":
+        e = a.kids[1].s
+        ce = self.imported(e)[4:] if self.imported(e).startswith("ffi.") else ""
+        if t == "list[float]" or ce == "c_int64" or ce == "c_ssize_t":
+            return "list[float]" if t == "list[float]" else "list[c_int64]"
+        if e == "int":
+            self.err(f"C function {f.name}() takes list[int]: say which C integer type its items are (list[ffi.c_int64], which C gets as an int64_t *)")
+        if ce in CTYPES:
+            self.err(f"C function {f.name}() takes list[{e}]: C gets a list's items in place, 8 bytes each, as a double * (list[float]) or an int64_t * (list[ffi.c_int64]); copy them into the C type with a shim")
     if t == "int":
         self.err(f"C function {f.name}() {what} int: say which C integer type (ffi.c_int, c_uint, c_int64, c_uint64, c_size_t, c_ssize_t or c_void_p)")
     if t in ("float", "str") or (what == "returns" and t in ("None", "opt[str]")):
         return t
-    self.err(f"C function {f.name}() {what} {typestr(t)}: an @extern function {'takes' if what == 'takes' else 'returns'} a C integer type, float or str{', str | None or None' if what == 'returns' else ''}")
+    self.err(f"C function {f.name}() {what} {typestr(t)}: an @extern function {'takes a C integer type, float, str, list[float] or list[ffi.c_int64]' if what == 'takes' else 'returns a C integer type, float or str, str | None or None'}")
     return ""
 
 def gen_untold(self, f: FnInfo, ts: list[str], how: str) -> None:

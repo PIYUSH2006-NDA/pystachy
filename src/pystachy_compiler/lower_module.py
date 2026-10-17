@@ -56,7 +56,10 @@ def lower_data(d: Data) -> str:
 def gen_cextern(self, f: FnInfo) -> None:
     # @ffi.extern: the program calls @f.<name> as any function, an internal stub that checks and
     # narrows C integers (OverflowError), passes a str as its bytes (const char *, NUL-terminated;
-    # ValueError for a NUL in it) and copies a returned char * (NULL: None, or ValueError). It calls
+    # ValueError for a NUL in it) and a list[float] or list[c_int64] as its items (double *,
+    # int64_t *: runtime.c's List.a, which C reads and writes in place for the call; the collector
+    # moves nothing, and no subset code runs until the call returns, so the list cannot grow
+    # meanwhile), and copies a returned char * (NULL: None, or ValueError). It calls
     # the C function through @ffi.fp.<f.ll>, which the def statement set as ctypes.CDLL would find it, in
     # the library's own handle (pys_c_bind: see stmt's defaults)
     self.line = f.node.line
@@ -77,6 +80,10 @@ def gen_cextern(self, f: FnInfo) -> None:
                 self.runtime("pys_c_str")
                 code.append(f"  call void @pys_c_str(ptr %a{j})")
             code.append(f"  %p{j} = getelementptr i8, ptr %a{j}, i64 16")  # (the bytes, after the length and dict hash: runtime.c's Str)
+            cts.append("ptr")
+        elif c == "list[float]" or c == "list[c_int64]":
+            code.append(f"  %l{j} = getelementptr inbounds {{i64, i64, ptr}}, ptr %a{j}, i64 0, i32 2")  # (List.a: runtime.c's {len, cap, a})
+            code.append(f"  %p{j} = load ptr, ptr %l{j}")
             cts.append("ptr")
         elif c == "float":
             code.append(f"  %p{j} = bitcast double %a{j} to double")  # (as it is: -0.0, inf and nan too)
