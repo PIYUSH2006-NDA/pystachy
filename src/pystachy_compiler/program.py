@@ -935,7 +935,9 @@ def gen_program(self, mods: list[Mod]) -> str:
             if nones and nm not in self.gflag and nm in self.mvars and (m.name != "" or nm not in m.fnglobal):
                 self.noneglobals[nm] = True
         if m.falseat >= 0:
-            self.falseflags[m.q + "TYPE_CHECKING"] = True
+            self.constflags[m.q + "TYPE_CHECKING"] = "False"
+        for nm in m.flagat:
+            self.constflags[m.q + nm] = "True" if m.flagval[nm] == 1 else "False"
     docinfer: dict[str, bool] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:

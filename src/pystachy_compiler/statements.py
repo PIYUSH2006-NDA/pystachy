@@ -956,8 +956,9 @@ def gen_del_name(self, n: Node) -> None:
         self.err(f"del of the global '{name}' in a function is not supported")
     if owner(name) != self.curfn.mod:
         self.err(f"del of module {owner(name)}'s attribute '{short(name)}' is not supported")
-    if name in self.falseflags and self.is_global(name):
-        self.err(f"del of '{owner(name)}.TYPE_CHECKING' is not supported: its module assigns it False once, so its tests of it are decided at compile time")
+    if name in self.constflags and self.is_global(name):
+        lit = self.constflags[name]
+        self.err(f"del of '{owner(name)}.{short(name)}' is not supported: its module assigns it {lit} once, so its tests of it are decided at compile time")
     self.nonecmp = True  # (a local only None was assigned to may be deleted)
     self.read(n)  # del of a name that is not bound raises as its read does
     self.nonecmp = False

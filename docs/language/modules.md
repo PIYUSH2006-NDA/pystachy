@@ -89,13 +89,15 @@ Pystachy resolves these guards while compiling:
 | `if typing.TYPE_CHECKING:` or the imported `TYPE_CHECKING` | Drops the body, including the common optional `typing` import whose handler sets `TYPE_CHECKING = False`. |
 | Module-level `if False:` or `if 0:` | Drops the body outside functions and classes. |
 | Module-level `TYPE_CHECKING = False` followed by `if TYPE_CHECKING:` | Drops the body when that is the name's only binding; other assignments, deletion, imports, star imports or `global` declarations disable this rule. |
-| Windows tests of `sys.platform` or tests of `os.name` | Resolves them for POSIX. `sys.platform` tests support `==`, `!=`, `startswith()` (including tuple prefixes), and membership in a tuple or list of Windows names. |
+| Tests of the platform: `sys.platform ==` or `!=` a literal string, `in` or `not in` a tuple or list of them, `sys.platform.startswith()` of one or a tuple of them, `os.name ==` or `!=` one, `sys.implementation.name ==` or `!=` one | Resolves them for the system Pystachy compiles for, the one it runs on, with the values its runtime reports: `sys.platform` is `"linux"`, `"darwin"` or `"freebsd"`, `os.name` is `"posix"` and `sys.implementation.name` is `"pystachy"`. This also holds in conditional expressions (`sep = "\\" if sys.platform == "win32" else "/"`), in functions, and in module code for a name that the module assigns such a test once, which nothing else binds, deletes or declares global (`_MS_WINDOWS = sys.platform == "win32"`, then `if _MS_WINDOWS:`); another module may assign that name only the value it holds. |
 | Version tests: `sys.version_info`, a slice, an item or an attribute of it compared with a literal int, str or tuple of those | Resolves them for CPython 3.13.16, as in `if sys.version_info < (3,):`. |
 | A module-level `try:` without `finally` whose first statement reads or assigns a name (or a tuple of names) that is no builtin and that nothing but the `try` binds (no other module-level statement, `global` declaration, star import or, in a package, submodule of that name; and where the `try` binds it, no import of a Python module before the `try`, whose code could assign it through the module), with a handler that catches `NameError` without naming it or re-raising | Runs that handler instead of the `try`, as CPython does: shims such as `try: unicode` / `except NameError: unicode = str`. |
 | A module-level `try:` without `finally` whose statements only read builtins or assign them to names, such as `try: text_type = str`, which nothing else binds | Runs its body and `else` block; its handlers never run. |
 
 These tests work inside `not`, `and` and `or`, while preserving the other operands' evaluation
-order. For example, `effect()` still runs in `if effect() and os.name == "nt":`.
+order. The branch that does not run is not compiled at all, as CPython never runs it: its
+imports are not resolved and its code is not checked, so `import nt` under
+`if sys.platform == "win32":` compiles. For example, `effect()` still runs in `if effect() and os.name == "nt":`.
 They apply only when a name still refers to the imported module or constant; a parameter,
 local, loop variable or another import can shadow it.
 
@@ -255,7 +257,7 @@ arguments. Supported iteration contexts and other restrictions are in the
 
 | Module | Supported surface |
 |---|---|
-| `sys` | `argv`, `exit`, `stdin`, `stdout`, `stderr`, `maxsize`, `platform`, `setrecursionlimit`, `getrecursionlimit`; the streams are files. |
+| `sys` | `argv`, `exit`, `stdin`, `stdout`, `stderr`, `maxsize`, `platform`, `implementation.name` (`"pystachy"`), `setrecursionlimit`, `getrecursionlimit`; the streams are files. |
 | `sys.version_info` | CPython 3.13.16's, a tuple of its items, and `major`, `minor`, `micro`, `releaselevel`, `serial` read as `sys.version_info.major` and the like; `str()` shows the tuple. |
 | `sys.float_info` | `max`, `max_exp`, `max_10_exp`, `min`, `min_exp`, `min_10_exp`, `dig`, `mant_dig`, `epsilon`, `radix`, `rounds`, matching CPython for IEEE 754 doubles. `sys.float_info` itself is not a value. |
 | `os` | `system`, `execv`, `getpid`, `getenv`, `remove`, `rmdir`, `fspath`; `name`, `sep`, `curdir`, `pardir`, `extsep`, `pathsep`, `linesep`, `devnull`. |

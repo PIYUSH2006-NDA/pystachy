@@ -1,0 +1,6 @@
+a POSIX platform
+not cygwin or windows
+not graalpy
+separator /
+/ native posix False
+[exit 0]

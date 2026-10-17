@@ -1435,10 +1435,11 @@ def gen_store_name(self, name: str, v: Val, retype: bool = False) -> None:
             self.err(f"'{name}' is None in its module's code: giving it a {v.t} elsewhere (a function or another module) is not supported")
         return
     if self.is_global(name):
-        if name in self.falseflags and v.v != "false":
+        if name in self.constflags and v.v != self.constflags[name].lower():
             # (through the module, m.TYPE_CHECKING = x, also after its own import of itself:
-            # false_flag() leaves no other store)
-            self.err(f"assigning '{owner(name)}.TYPE_CHECKING' anything but the literal False is not supported: its module assigns it False once, so its tests of it are decided at compile time")
+            # false_flag() and Loader.platform_flags() leave no other store)
+            lit = self.constflags[name]
+            self.err(f"assigning '{owner(name)}.{short(name)}' anything but the literal {lit} is not supported: its module assigns it {lit} once, so its tests of it are decided at compile time")
         if name not in self.gtypes:
             t0 = self.none_type(name) if v.t == "None" and self.modlevel else ""
             if v.t == "None" and t0 == "":

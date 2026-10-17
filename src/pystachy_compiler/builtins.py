@@ -12,6 +12,7 @@ from src.pystachy_compiler.specs import (
     DEFAULTS,
     ERRNO,
     FLOATINFO,
+    IMPLEMENTATION,
     FROZENERR,
     FROZENUSE,
     ITERS,
@@ -98,6 +99,10 @@ def gen_modattr(self, path: str) -> Val:
         return Val(fbits(c), "float") if "e" in c else Val(c, "int")
     if path == "sys.float_info":
         self.err("sys.float_info cannot be used as a value (read its attributes: sys.float_info.max, sys.float_info.epsilon, ...)")
+    if path == "sys.implementation.name":
+        return Val(self.sconst(IMPLEMENTATION), "str")
+    if path == "sys.implementation":
+        self.err("sys.implementation cannot be used as a value (read sys.implementation.name, which is \"pystachy\")")
     if path in VERSIONINFO:
         c = VERSIONINFO[path]
         return Val(self.sconst(c[1:-1]), "str") if c.startswith("'") else Val(c, "int")
