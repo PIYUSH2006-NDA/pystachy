@@ -1,0 +1,45 @@
+1
+caught boom
+throw gives 10
+11
+finally
+done
+1
+finally
+propagated KeyError('k')
+-1
+not started ValueError()
+-1
+outside a handler: generator raised StopIteration
+not started: StopIteration as it is
+finished: t
+throw finished it: StopIteration
+MyErr MyErr('one')
+ok
+MyErr MyErr()
+ok
+Detailed 7 code 7
+ok
+MyErr MyErr('kept')
+ok
+one
+propagated in with
+done
+1
+outer caught at 1
+2
+inner closed
+TypeError out t
+-1
+genexp throw ix
+[]
+GeneratorExit thrown
+throw(GeneratorExit) gives 2
+re-raising
+re-raised again
+inner finally
+outer caught [Errno 2] No such file
+recovered
+end
+['other raised from a generator']
+[exit 0]

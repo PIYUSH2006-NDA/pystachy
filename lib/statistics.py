@@ -130,8 +130,8 @@ __all__ = [
 ]
 
 import math
-# Pystachy port: optional imports, as only functions Pystachy leaves uncompiled use them; random's
-# in CPython only (Pystachy drops that block); sumprod is imported below
+# Pystachy port: optional imports, which only uncompiled functions use (but correlation(), which
+# uses itertools'); random's in CPython only (Pystachy drops that block)
 try:
     import numbers
 except ImportError:
@@ -424,7 +424,7 @@ def _rank(data, /, *, key=None, reverse=False, ties='average', start=1) -> list[
         data = map(key, data)
     val_pos = sorted(zip(data, count()), reverse=reverse)
     i = start - 1
-    result = [0] * len(val_pos)
+    result = [0.0] * len(val_pos)  # Pystachy port: [0] in CPython, but a list has one item type: the float ranks
     for _, g in groupby(val_pos, key=itemgetter(0)):
         group = list(g)
         size = len(group)

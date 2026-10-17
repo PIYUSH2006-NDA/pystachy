@@ -1,0 +1,90 @@
+enter a
+body A
+exit a None None True
+enter b
+body B
+exit b <class 'KeyError'> KeyError('k') False
+   KeyError True True <class 'KeyError'> <class 'KeyError'>
+after b
+enter c
+exit c <class 'ValueError'> ValueError('v') False
+   ValueError False False <class 'ValueError'> <class 'ValueError'>
+caught v
+enter d
+exit d <class '__main__.MyError'> MyError('mine') False
+   MyError False False <class '__main__.MyError'> <class '__main__.MyError'>
+after d
+enter loop0
+exit loop0 None None True
+enter loop1
+exit loop1 None None True
+enter loop2
+exit loop2 None None True
+enter while
+exit while None None True
+enter ret
+exit ret None None True
+50
+enter outer
+enter inner
+OUTER INNER
+exit inner <class 'OSError'> OSError('os') False
+   OSError False True <class 'OSError'> <class 'OSError'>
+exit outer None None True
+after stacked
+enter o2
+enter i2
+exit i2 <class 'IndexError'> IndexError(3) False
+   IndexError True False <class 'IndexError'> <class 'IndexError'>
+exit o2 <class 'IndexError'> IndexError(3) False
+   IndexError True False <class 'IndexError'> <class 'IndexError'>
+after nested
+plain body Plain
+plain exit None None
+plain exit <class 'ValueError'> plain swallowed
+plain exit <class 'KeyError'> 'plain kept'
+caught 'plain kept'
+star 7
+star exit 3 None
+star exit 3 None
+caught from __enter__
+raising exit <class 'ValueError'>
+caught 'from __exit__'
+normal end
+raising exit None
+caught 'from __exit__'
+TypeError 'NoneType' object does not support the context manager protocol
+enter unpack
+exit unpack <class 'ValueError'> ValueError('too many values to unpack (expected 2)') False
+   ValueError False False <class 'ValueError'> <class 'ValueError'>
+caught too many values to unpack (expected 2)
+enter parse
+exit parse None None True
+enter parse
+exit parse <class 'ValueError'> ValueError("invalid literal for int() with base 10: 'x'") False
+   ValueError False False <class 'ValueError'> <class 'ValueError'>
+fell through
+5 -1
+enter unbound
+exit unbound None None True
+1
+enter unbound
+exit unbound <class 'ValueError'> ValueError("invalid literal for int() with base 10: 'y'") False
+   ValueError False False <class 'ValueError'> <class 'ValueError'>
+UnboundLocalError cannot access local variable 'n' where it is not associated with a value
+None None [None] False
+invalid literal for int() with base 10: 'x' ValueError("invalid literal for int() with base 10: 'x'") [invalid literal for int() with base 10: 'x'] False
+ValueError
+'key' KeyError('key') ['key'] True
+KeyError
+reraised invalid literal for int() with base 10: 'x' True
+TypeError exceptions must derive from BaseException
+exit clean False False
+exit key True False
+exit value False True
+caught goes on
+Named NoneType NoneType
+Named IndexError IndexError
+KeyError
+NoneType
+[exit 0]

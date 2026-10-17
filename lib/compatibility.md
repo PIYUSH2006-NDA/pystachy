@@ -246,7 +246,8 @@ stream errors follow CPython's implementation.
 
 - Sizes and positions count bytes rather than Unicode characters.
 - Iteration and `next()` read one line at a time from the shared stream position.
-- `with StringIO()` is unsupported; `with` handles files only.
+- `with StringIO() as f:` closes it as the block is left (`__enter__` raises CPython's
+  `ValueError` for a closed one).
 - `newlines`, `detach`, `fileno` and pickling are unavailable.
 - Invalid argument types such as `StringIO(5)` are compile-time errors.
 
@@ -450,8 +451,9 @@ Field names count UTF-8 bytes, so only ASCII digits make positional ones.
 ## Statistics
 
 Supported APIs are `fmean` (including weights), `geometric_mean`, `median`,
-`median_low`, `median_high`, `median_grouped`, `quantiles`, `mode` and `multimode`
-for the compatible sequence types. Weighted `fmean` uses the port of CPython's
+`median_low`, `median_high`, `median_grouped`, `quantiles`, `mode`, `multimode` and
+`covariance` for the compatible sequence types, and `correlation` (linear and ranked) of
+floats. Weighted `fmean` uses the port of CPython's
 `math.sumprod` algorithm; unsupported iterators are materialized first.
 
 - `median` and `quantiles` require floats: integer/bool inputs can produce
@@ -462,9 +464,13 @@ for the compatible sequence types. Weighted `fmean` uses the port of CPython's
   CPython's integers continue growing.
 - The port's `sumprod` returns a float, including `11.0` for integer inputs and
   `0.0` for empty inputs, where CPython can return an integer.
+- `correlation` of ints is a compile-time error: it rebinds its list-of-int parameters to
+  the float deviations or ranks ([error test](../tests/errors/lib_statistics_correlation.py)).
+  Its ranks for `method='ranked'` come from itertools' `count()` and `groupby()`, in a list
+  that starts as floats, where CPython's starts as ints and holds the same float ranks.
 
 Unsupported APIs are `mean`, `harmonic_mean`, variance/stdev and their population
-variants, `covariance`, `correlation`, `linear_regression`, `kde`, `kde_random`,
+variants, `linear_regression`, `kde`, `kde_random`,
 and `NormalDist`. These depend on exact fractions, decimal/long integers,
 iterators, properties or other features beyond the port's compiled paths. Only
 CPython runs the module's import of `random`, which `kde_random` and
@@ -762,14 +768,50 @@ class whose subclasses' `__init__` binds their fields.
   `RuntimeError: deadlock: ...`, where CPython waits for another thread to release the lock, and
   so do `_acquire_restore()` of a reentrant lock that is held and `join()` of a thread handle that
   is not done ([deviation](../tests/deviations/lib_thread_deadlock.py)).
-- `with lock:` is a compile-time error, as `with` takes only files
-  ([error test](../tests/errors/lib_thread_with.py)): call `acquire()` and `release()`.
+- `with lock:` acquires the lock and releases it as the block is left, for both kinds of lock.
 - `get_ident()` is the process's id, and so is `get_native_id()`, as Linux gives a process's main
   thread the process's id; CPython's `get_ident()` is the thread's `pthread_t`.
 - `interrupt_main()` of another signal than SIGINT does nothing, as CPython's default handlers do
   (Linux's signal numbers: those from 65 on are out of range).
 - `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
   `NotImplementedError`: no thread but the main one runs.
+
+## Contextlib
+
+Ported from CPython 3.13's `Lib/contextlib.py`, each change marked `Pystachy port`.
+`@contextmanager` keeps `_GeneratorContextManager`'s `__enter__` and `__exit__`: "generator
+didn't yield", "generator didn't stop" and "generator didn't stop after throw()" are its
+`RuntimeError`s, an exception of the block is thrown into the generator where it is suspended and
+suppressed where the generator swallows it, and a `StopIteration` or `GeneratorExit` of the block,
+or a `RuntimeError` that PEP 479 or the generator made of the `StopIteration`, goes on as itself.
+A manager it makes also decorates a function (`@cm()`, `ContextDecorator`), and both take keyword
+arguments. `closing(thing)`, `nullcontext()`, `nullcontext(value)`, `suppress(A, B)` and
+`AbstractContextManager` (to derive from) are the others.
+
+- `@contextmanager` (or `@contextlib.contextmanager`, as the module imports it) on a method, its
+  only decorator, makes the generator method `_pys_cm_NAME` and a method `NAME(self, /, *args,
+  **kwds)` that returns what `contextmanager(self._pys_cm_NAME)(*args, **kwds)` returns (the
+  subset has no other decorated methods): `dir()` and `vars()` of the class show the first, and
+  those of the module `_pys_cm_GCM`, the name it imports `_GeneratorContextManager` as. Subclasses
+  inherit and override such a method, and `super().NAME()` runs the base class's generator, but a
+  manager that `super().NAME()` makes and that decorates a function makes its generator for each
+  call with the method of the object's class; an override of a method of a class of another module is
+  rejected as the program compiles (the managers' types differ).
+- `suppress()` takes exception classes, named, as a `with` statement's item, which is compiled
+  as an `except` clause that catches them (exception classes are no values of the subset);
+  `with suppress(...) as x`, and a `suppress` object elsewhere, are compile-time errors.
+- `nullcontext(enter_result)` takes it positionally, and not `None` alone (`nullcontext(None)`
+  is `nullcontext()`); `nullcontext` is a function that makes one of two classes' objects, and
+  the managers are no subclasses of `AbstractContextManager` (class templates have no bases).
+- `__doc__`, `__name__` (no `functools.wraps()`) and `gen` of a `_GeneratorContextManager` are
+  not available, and its `__exit__` called with a class but no exception returns `False` (CPython
+  makes the exception, `typ()`; a class is no value).
+- A function that a manager decorates and that calls itself is rejected (the decorator's `inner()`
+  calls itself before its return type is inferred): use the manager inside it instead.
+- `ExitStack`, `redirect_stdout`, `redirect_stderr`, `chdir` and the async managers
+  (`asynccontextmanager`, `aclosing`, `AsyncExitStack`, `AbstractAsyncContextManager`) are not
+  ported: the subset has no list of managers of different classes, no assignable `sys.stdout`,
+  no `os.getcwd()` and no `async def`.
 
 ## Unicodedata
 
@@ -797,3 +839,96 @@ reference](../docs/language/compatibility.md#text-and-file-positions)).
 - The tables, about 850 KB of source, are compiled into each program that imports
   `unicodedata`: they add about 1 MB of IR and 0.4 s to a `pystachy run`. A function decodes
   the table it reads the first time it reads it, into a few lists of ints.
+
+## Itertools
+
+`itertools` is `_pystachy_itertools`, which Pystachy loads for `import itertools`, where CPython
+imports its C module (`Modules/itertoolsmodule.c`). It has all of the module's functions:
+`count`, `cycle`, `repeat`, `accumulate` (with `func` and `initial`), `batched` (with `strict`),
+`chain` and `chain.from_iterable`, `compress`, `dropwhile`, `filterfalse`, `groupby`, `islice`,
+`pairwise`, `starmap`, `takewhile`, `tee`, `zip_longest`, `product` (with `repeat`),
+`permutations`, `combinations` and `combinations_with_replacement`. Each iterates as the
+pure-Python equivalent that CPython's documentation gives for it (`Doc/library/itertools.rst`),
+on generators, with the C module's argument checks and messages when it is called and the C
+types' order of reads: an iterator reads its input one item at a time, as it is iterated, so
+infinite inputs (`count()`, `cycle()`, generators) end where `islice()`, `zip()`, `takewhile()`
+or `break` stop reading, and `islice()` reads no item past its stop. As in CPython, `cycle()`
+keeps the items it has read, `tee()` keeps the items its slowest iterator has not read (in
+shared links of 57), and `product()`, `permutations()`, `combinations()` and
+`combinations_with_replacement()` read the whole of their iterables when they are called. The
+functions are templates: each call's argument types make its code
+([tests](../tests/lib_itertools_terminating.py), [ranges](../tests/lib_itertools_range.py),
+[generators](../tests/lib_itertools_generators.py),
+[upstream](../tests/upstream_itertools.py)).
+
+- The iterators are generators (`Generator[T]`), which yield items of one type: `chain()` of
+  iterables of different item types ([error test](../tests/errors/lib_itertools_chain_mixed.py)),
+  an `accumulate()` function that returns another type than the items'
+  ([error test](../tests/errors/lib_itertools_accumulate_type.py)) and a `zip_longest()`
+  `fillvalue` of another type than an iterable's items
+  ([error test](../tests/errors/lib_itertools_zip_longest_fillvalue.py)) are compile-time
+  errors, as is an `accumulate()` `initial` of another type than its sums, such as `initial=0`
+  of floats, where CPython yields the int `0` and then floats (`initial=0.0` is not an error)
+  ([error test](../tests/errors/lib_itertools_accumulate_initial.py)). `accumulate()` of bools
+  gives a bool and then ints, as in CPython, and `zip_longest()` without `fillvalue` gives
+  optional items.
+- `batched()`, `permutations()`, `combinations()`, `combinations_with_replacement()` and
+  `product(..., repeat=n)` yield tuples whose length the program knows only as it runs, whose
+  items must be ints, floats, bools, strs or their optional types
+  ([tuples](../docs/language/typing.md)): of tuples, lists or objects, they are compile-time
+  errors ([error test](../tests/errors/lib_itertools_combinations_objects.py),
+  [another](../tests/errors/lib_itertools_batched_tuples.py)), and `product()` with `repeat`
+  needs one item type across its iterables
+  ([error test](../tests/errors/lib_itertools_product_repeat_mixed.py)). `product()` without
+  `repeat` and `zip_longest()` yield a tuple with an item of each iterable, of its type.
+- A list unpacked into the iterables of `chain()`, `zip_longest()` or `product()` is a number of
+  arguments known only as the program runs, a compile-time error
+  ([error test](../tests/errors/lib_itertools_star_list.py)); `chain.from_iterable()` takes a
+  list of iterables. `starmap()` takes tuples of arguments, not lists
+  ([error test](../tests/errors/lib_itertools_starmap_list.py)).
+- `tee(iterable, n)` gives a list of the `n` iterators, where CPython gives a tuple
+  ([deviation](../tests/deviations/lib_itertools_tee_list.py)); `tee(iterable)` gives a tuple of
+  two. Unpacking, indexing, `len()` and loops see the same iterators.
+- `groupby()`'s key of `None` groups by the items themselves; a key function that is an object
+  in a variable may be `None`, so its keys must have the items' type unless it is made in the
+  call ([error test](../tests/errors/lib_itertools_groupby_key_object.py)). Its groups are
+  generators that share the `groupby()`'s iterator, as the C type's do: advancing the
+  `groupby()` ends the group before it ([test](../tests/lib_itertools_groupby.py)). A key that
+  is not equal to itself (a NaN) still makes a group of its item, as in CPython; but a float
+  has no identity, so the same NaN object twice makes two groups, where CPython makes one
+  ([deviation](../tests/deviations/lib_itertools_groupby_nan.py)).
+- An argument whose type the C function rejects (`permutations()`' `r` of another type than
+  `int`, `count()` of something other than a number) and `islice()` or `tee()` with too few or
+  too many arguments raise CPython's `TypeError` as the program runs
+  ([test](../tests/lib_itertools_argtypes.py)); other wrong numbers of arguments, keywords a
+  function has not, and non-iterables are compile-time errors.
+- An iterator that an exception has left (from its function, predicate or key, or from its
+  input) is finished, as a generator is, where CPython's C iterators can go on
+  ([deviation](../tests/deviations/lib_itertools_exception.py)). So is an iterator whose input
+  has ended: called again, it reads no input, where CPython's `accumulate()`, `compress()`,
+  `dropwhile()`, `filterfalse()`, `groupby()`, `starmap()` and `takewhile()` read their inputs
+  again, which an input that yields again after its end, or `compress()`'s data, which it reads
+  before it finds its selectors' end, shows
+  ([deviation](../tests/deviations/lib_itertools_ended.py)). An iterator that its own input
+  resumes raises `ValueError: generator already executing`, where CPython's go on
+  ([deviation](../tests/deviations/lib_itertools_reenter.py)); `tee()` raises CPython's
+  `RuntimeError`.
+- An input generator is not closed when the iterator reading it is dropped, as a generator the
+  program drops is not ([deviation](../tests/deviations/lib_itertools_close.py)). As generators,
+  the iterators have the generator's attributes for `hasattr()` (`send`, `close`, `gi_frame`,
+  ...), which CPython's have not
+  ([deviation](../tests/deviations/lib_itertools_hasattr.py)), and `send()`, `throw()` and
+  `close()` work on them where CPython raises `AttributeError`
+  ([deviation](../tests/deviations/lib_itertools_protocol.py)).
+- `chain` is an object whose calls make generators, with `from_iterable()` as a method and the C
+  type's repr, not a class: `isinstance(x, itertools.chain)` is a compile-time error
+  ([error test](../tests/errors/lib_itertools_isinstance.py)), as are the other functions as
+  classes. The iterators do not print (CPython prints `count(5)`), and their type's name,
+  pickling, `copy.copy()` (but for `tee()`'s `__copy__()`), `__reduce__()`, `__setstate__()`
+  and `__length_hint__()` are not there
+  ([error test](../tests/errors/lib_itertools_print.py),
+  [another](../tests/errors/lib_itertools_type_name.py)).
+- `zip()`, `map()`, `filter()`, `enumerate()` and `reversed()` are not values, so an itertools
+  function cannot take one ([error test](../tests/errors/lib_itertools_zip_argument.py)); it can
+  take a generator expression over them. Ints are 64-bit: `count()` past `2**63 - 1` raises
+  `OverflowError`, where CPython's ints grow.

@@ -74,6 +74,97 @@ from src.pystachy_compiler.syntax import Node, comp_names, has_kind, mk, names_i
 from src.pystachy_compiler.utils import clone, int_fits
 
 
+
+def cm_names(body: Node) -> list[str]:
+    # the names module body imports contextlib's contextmanager as (contextmanager,
+    # contextlib.contextmanager, or another as)
+    out: list[str] = []
+    for st in body.kids:
+        for a in st.kids if st.kind == "import" else []:
+            if a.kind == "alias" and len(a.kids) == 2 and a.kids[0].s == "contextlib.contextmanager" and st.s == "from":
+                out.append(a.s)
+            elif a.kind == "alias" and len(a.kids) == 2 and a.kids[0].s == "contextlib" and st.s != "from":
+                out.append(a.s + ".contextmanager")
+    return out
+
+
+def cm_root(c: str, name: str, bases: dict[str, list[str]], cms: list[str]) -> str:
+    # the first class from c up its bases (classes of the module, by name) that defines the
+    # @contextmanager method name, the furthest up it; "" when none does
+    for b in bases.get(c, []):
+        r = cm_root(b, name, bases, cms)
+        if r != "":
+            return r
+    return c if c + "." + name in cms else ""
+
+
+def cm_methods(n: Node, names: list[str]) -> None:
+    # a method decorated @contextmanager (names: as the module imports it) is the generator method
+    # _pys_cm_NAME, and NAME(self, /, *args, **kwds) returns the manager that
+    # contextmanager(self._pys_cm_NAME)(*args, **kwds) makes: what CPython's helper does, bound to
+    # the object (the subset has no decorated methods). Its generator is C's own: in a class C
+    # that derives from a class of the module or that one derives from, C._pys_cm_NAME(self,
+    # *args, **kwds) (super().NAME() runs the base class's), else self._pys_cm_NAME(...); and the
+    # function it keeps (for a decorator's calls, which make the generator again) is bound to self
+    # taken as an object of the class that first defines NAME so, so that NAME returns one type
+    # whatever subclass self is. A generic class keeps contextmanager(self._pys_cm_NAME) (C alone
+    # names no type there)
+    bases: dict[str, list[str]] = {}
+    for st in n.kids:
+        if st.kind == "subclass":
+            bases[st.s] = [x.s for x in st.kids[1:] if x.kind == "name"]
+        elif st.kind == "class":
+            bases[st.s] = []
+    derived: dict[str, bool] = {}
+    for c in bases:
+        for x in bases[c]:
+            if x in bases:
+                derived[c] = True
+                derived[x] = True
+    cms: list[str] = []
+    top: list[Node] = []
+    imported = False
+    for st in n.kids:
+        if st.kind == "class" or st.kind == "subclass":
+            b = st.kids[0] if st.kind == "class" else st.kids[0].kids[0]
+            generic = st.kind == "subclass" and len([x for x in st.kids[1:] if x.kind == "typeparams"]) > 0
+            kept: list[Node] = []
+            for d in b.kids:
+                if d.kind == "def" and len(d.kids) == 4 and d.kids[3].kind == "deco" and len(d.kids[3].kids) == 0 and d.kids[3].s in names and len(d.kids[0].kids) > 0 and d.kids[0].kids[0].kind == "param":
+                    me = d.kids[0].kids[0].s
+                    cms.append(st.s + "." + d.s)
+                    if generic:
+                        src = f"def {d.s}({me}, /, *args, **kwds):\n    return {d.kids[3].s}({me}._pys_cm_{d.s})(*args, **kwds)\n"
+                    else:
+                        if not imported:
+                            top.append(Parser(Lexer("from contextlib import _GeneratorContextManager as _pys_cm_GCM\n", st.line).file()).module().kids[0])
+                            imported = True
+                        own = f"{st.s}._pys_cm_{d.s}({me}, *args, **kwds)" if st.s in derived else f"{me}._pys_cm_{d.s}(*args, **kwds)"
+                        src = f"def {d.s}({me}, /, *args, **kwds):\n    _pys_cm_self: {cm_root(st.s, d.s, bases, cms)} = {me}\n    return _pys_cm_GCM(_pys_cm_self._pys_cm_{d.s}, args, kwds, {own})\n"
+                    w = Parser(Lexer(src, d.line).file()).module().kids[0]
+                    d.s = "_pys_cm_" + d.s
+                    d.kids = d.kids[:3]
+                    kept.append(d)
+                    kept.append(w)
+                else:
+                    kept.append(d)
+            b.kids = kept
+        top.append(st)
+    n.kids = top
+
+
+def tb_import(n: Node) -> None:
+    # from types import TracebackType (an __exit__'s annotation) imports lib/_pystachy_types.py's
+    # TracebackType, which is all of types there is: an import of the module, or of any other name
+    # of it, still finds no module
+    for st in n.kids:
+        if st.kind == "import" and st.s == "from" and len(st.kids) > 0 and len([a for a in st.kids if a.kind != "alias" or len(a.kids) != 2 or a.kids[0].s != "types.TracebackType" or a.kids[1].s != "types"]) == 0:
+            for a in st.kids:
+                a.kids[0].s = "_pystachy_types.TracebackType"
+                a.kids[1].s = "_pystachy_types"
+        elif st.kind != "def" and st.kind != "class" and st.kind != "subclass":
+            tb_import(st)
+
 class Loader:
     def __init__(self, dirs: list[str]):
         self.dirs = dirs  # the module search path
@@ -181,6 +272,8 @@ class Loader:
         m = Mod("", path, "")
         FILES.append(path)
         m.body = Parser(Lexer(src, 1).file()).module()
+        tb_import(m.body)
+        cm_methods(m.body, cm_names(m.body))
         self.prescan(m)
         self.simplify(m, m.body, {})
         self.docstring(m)
@@ -448,6 +541,8 @@ class Loader:
         k = len(FILES)
         FILES.append(path[2:] if path.startswith("./") else path)
         self.parsed[path] = Parser(Lexer(src, k * LINES + 1).file()).module()
+        tb_import(self.parsed[path])
+        cm_methods(self.parsed[path], cm_names(self.parsed[path]))
         return self.parsed[path]
 
     def bindings(self, m: Mod) -> None:

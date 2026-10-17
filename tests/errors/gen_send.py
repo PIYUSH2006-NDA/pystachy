@@ -1,4 +1,4 @@
-# error: generator.send() is not supported: generators have no send(), throw() or close() (for loops, yield from, next() and the functions that take an iterable run them)
+# error: cannot send float to Generator[float], whose send type is None: annotate its generator function -> Generator[Y, S, R]
 from collections.abc import Iterator
 
 

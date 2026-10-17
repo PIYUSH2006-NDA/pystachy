@@ -144,8 +144,9 @@ The usual assignments, `if`, `while`, `for`, loop `else`, `break`, `continue`,
 containers, ranges, files and iterator-like objects.
 
 Unpacking takes a fixed target shape or one starred target, `first, *rest = xs`, whose name
-gets a new list of the remaining items. File context managers support `with open(...) as f:`;
-arbitrary context managers are not supported. Exceptions use the normal
+gets a new list of the remaining items. `with` takes files and context managers of the
+program's classes (`__enter__` and `__exit__`), and `lib/contextlib` provides
+`@contextmanager`, `closing`, `nullcontext` and `suppress`. Exceptions use the normal
 `try` / `except` / `else` / `finally` syntax.
 
 ## Expressions
@@ -160,13 +161,13 @@ arbitrary context managers are not supported. Exceptions use the normal
 | Iterator-like expressions | `range`, `enumerate`, `zip`, `reversed` in supported loops and consumers |
 | Range objects | `range()` as a value: iteration, `len`, `in`, indexing and slicing, `start`, `stop` and `step`, `==`, `hash`, `index`, `count`; see [range objects](language/semantics.md#range-objects) |
 | Generator expressions, `map`, `filter` | Direct arguments of supported consumers such as `sum`, `list`, `tuple`, `sorted`, `any` and `str.join`; a generator expression elsewhere is a generator object |
-| Generators | Functions and methods (including `__iter__`) that `yield` or `yield from`, consumed by `for`, `next()`, `iter()`, `in` and the builtins that take iterables |
+| Generators | Functions and methods (including `__iter__`) that `yield` or `yield from`, consumed by `for`, `next()`, `iter()`, `in` and the builtins that take iterables; `send()`, `throw()`, `close()` and the value of a `yield` expression |
 | Iterators | Classes with `__iter__` and `__next__`; `iter()` and `next()` values that share their position |
 | Object operations | Supported operator and container methods, with runtime overrides in single-inheritance hierarchies |
 
-[Generators](language/semantics.md#generators) do not support `send()`, `throw()` or
-`close()`. See [execution rules](language/semantics.md) for consumer restrictions, evaluation
-order, protocols and [iterators](language/semantics.md#iterators).
+[Generators](language/semantics.md#generators) take values from `send()` where their function
+is annotated `Generator[Y, S, R]`. See [execution rules](language/semantics.md) for consumer
+restrictions, evaluation order, protocols and [iterators](language/semantics.md#iterators).
 
 <a id="exception-classes"></a>
 
@@ -233,7 +234,7 @@ CPython extension builds are documented separately in [FFI](ffi.md).
 
 ## Unsupported features
 
-The main gaps are multiple inheritance, general object unions and `Any`, generators' `send()`, `async`,
+The main gaps are multiple inheritance, general object unions and `Any`, `async`,
 `bytearray`, `memoryview` and binary files, complex and arbitrary-precision numbers, `match`,
 attribute values looked up by names only the run time knows (their text and `hasattr()` are
 supported), slice objects and unrestricted argument expansion.

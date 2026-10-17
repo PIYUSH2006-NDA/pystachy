@@ -275,6 +275,9 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         self.err("delattr() is not supported: deleting an attribute needs an unbound state for each field (#489)")
     if name == "type" and len(args) == 1 and args[0].kind != "kw" and args[0].kind != "starred":
         tv = self.expr(args[0], "")
+        if tv.t == "exc" or (tv.t in self.classes and self.classes[tv.t].exc != "" and tv.v in self.nn):
+            # (type(e) of an exception, as a value: its class, an exctype, which is the exception)
+            return Val(tv.v if tv.t == "exc" else self.exc_of(tv).v, "exctype")
         if tv.t == "exc" or (tv.t in self.classes and self.classes[tv.t].exc != ""):
             self.err(f"unsupported call type({tv.t}): type(e) of an exception is supported as type(e).__name__ (and isinstance(e, C) tests its class)")
         self.err("type(x) as a value (a class object) is not supported (#7); type(x).__name__, x.__class__.__name__, type(x) is C and type(a) == type(b) are (#486)")
@@ -345,12 +348,38 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
         if hy < 0:
             return self.ptr_cmp('!=', hv, Val('null', 'None'))
         return Val("true" if hy == 1 else "false", "bool")
+    if name == "issubclass" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw" and self.exc_classes(args[1]):
+        # issubclass(t, C) of the class of an exception (exctype: the exception itself)
+        v = self.expr(args[0], "")
+        if unopt(v.t) != "exctype":
+            self.err(f"issubclass() is supported for the class of an exception (type[BaseException], as __exit__ takes it), not {typestr(v.t)}")
+        self.isinst_reads(args[1])
+        v = self.unwrap(v, "TypeError: issubclass() arg 1 must be a class")
+        return self.exc_isinst(Val(v.v, "exc"), args[1])
     if name == "isinstance" and len(args) == 2 and args[0].kind != "kw" and args[1].kind != "kw":
         # decided by the static types, or by whether it is None (an optional value, an object)
         v = self.expr(args[0], "")
         self.isinst_reads(args[1])
         if (v.t == "exc" or (v.t in self.classes and self.classes[v.t].exc != "")) and self.exc_classes(args[1]):
             return self.exc_isinst(v, args[1])
+        if v.t == "opt[exc]" and self.exc_classes(args[1]):
+            # (__exit__'s exception, which may be None: not an instance)
+            e0 = self.cur
+            l1 = self.label()
+            l2 = self.label()
+            self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, l2, l1)
+            self.place(l1)
+            xin = self.exc_isinst(Val(v.v, "exc"), args[1]).v
+            e1 = self.cur
+            self.br(l2)
+            self.place(l2)
+            ph = Ins("phi", "bool", "")
+            self.incoming(ph, "false", e0)
+            self.incoming(ph, xin, e1)
+            return Val(self.phi(ph), "bool")
+        if v.t == "None" and self.exc_classes(args[1]):
+            # (None is no exception: __exit__(None, None, None) of an unannotated __exit__)
+            return Val("false", "bool")
         if is_union(unopt(v.t)) and self.isinst(v.t, args[1]) == -1:
             return Val(self.uisinst(v, args[1]), "bool")
         known = self.isinst(v.t, args[1])
@@ -565,6 +594,10 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     if name == "input" and len(vals) == 0:
         # no prompt: CPython writes nothing to sys.stdout (which may be closed) before reading
         return Val(self.rt("pys_input", "ptr", ["ptr null"]), "str")
+    if name == "sys.exception" and len(vals) == 0:
+        # the exception being handled (an except clause's, a finally block's on the way out of
+        # one), or None
+        return Val(self.rt("pys_exc_handled", "ptr", []), "opt[exc]")
     if name == "sys.exit" or name == "exit" or name == "quit":
         if len(vals) > 1:
             self.err(f"sys.exit() takes at most 1 argument ({len(vals)} given)")

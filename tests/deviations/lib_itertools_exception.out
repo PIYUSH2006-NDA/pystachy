@@ -1,0 +1,5 @@
+ValueError: two
+[] [1, 2]
+ZeroDivisionError: integer division or modulo by zero
+[]
+[exit 0]

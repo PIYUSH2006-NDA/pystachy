@@ -559,6 +559,9 @@ from src.pystachy_compiler.flow import (
     gen_user_call as flow_user_call,
 )
 from src.pystachy_compiler.generators import (
+    gen_exc_back as generators_exc_back,
+    gen_exc_mark as generators_exc_mark,
+    gen_pep479 as generators_pep479,
     gen_builtin_catch as generators_builtin_catch,
     gen_gen_ann_ret as generators_gen_ann_ret,
     gen_gen_begin as generators_gen_begin,
@@ -589,6 +592,17 @@ from src.pystachy_compiler.generators import (
     gen_owned_loop as generators_owned_loop,
     gen_yield_from as generators_yield_from,
     gen_yield_stmt as generators_yield_stmt,
+    gen_gen_type as generators_gen_type,
+    gen_yield_value as generators_yield_value,
+    gen_yield_from_proto as generators_yield_from_proto,
+    gen_gen_stop as generators_gen_stop,
+    gen_gen_raised as generators_gen_raised,
+    gen_gen_close as generators_gen_close,
+    gen_exc_operand as generators_exc_operand,
+    gen_gen_throw_into as generators_gen_throw_into,
+    gen_gen_throw as generators_gen_throw,
+    gen_gen_send as generators_gen_send,
+    gen_yield_from_iter as generators_yield_from_iter,
 )
 from src.pystachy_compiler.functions import (
     gen_enter as functions_enter,
@@ -712,6 +726,9 @@ from src.pystachy_compiler.statements import (
     gen_iterarg as statements_iterarg,
     gen_ival as statements_ival,
     gen_leave as statements_leave,
+    gen_with_cm as statements_with_cm,
+    gen_cm_exits as statements_cm_exits,
+    gen_suppress_item as statements_suppress_item,
     gen_loop as statements_loop,
     gen_may_change as statements_may_change,
     gen_no_class_names as statements_no_class_names,
@@ -873,6 +890,7 @@ class Gen:
         self.bstrs: dict[str, str] = {}  # the name of each bytes constant (@b.N), by its bytes
         self.strvals: list[str] = []  # the text of each @s.N
         self.vnodes: list[Val] = []  # the values of "val" nodes, which the compiler makes (vnode)
+        self.cmexit = -1  # does a class of the program define __exit__ (1), so that a with block may be skipped (cm_exits)
         # the runtime functions declared, by RUNTIME key, in the order of their first use (which
         # the program's declare lines keep)
         self.rtfns: dict[str, RtFn] = {}
@@ -1021,6 +1039,18 @@ class Gen:
         self.ngenexp = 0  # the generator expressions made values (genexp_value): each a function of its own
         self.vowned: dict[str, FnInfo] = {}  # val nodes of such generators (owned_node), by the node's text
         self.gendrops = False  # a gen.drop op was lowered: the module defines its helper (lower_module)
+        # the program uses the generator protocol's send() or throw(), or the value of a yield
+        # (generators.uses_protocol, closed world): its generators' promises hold what is sent and
+        # thrown, and their yields take them (docs/internals.md#generators)
+        self.gproto = False
+        # the program reads the exception being handled, sys.exception() (generators.reads_handled):
+        # a generator's try statements tell its own from its resumer's (exc_mark, exc_back)
+        self.excread = False
+        # the program reads an exception's __cause__ (generators.reads_cause): raise ... from c
+        # and PEP 479's RuntimeError record it (pys_exc_setcause)
+        self.causeread = False
+        self.stmtexpr: Node | None = None  # the expression of the expression statement being compiled
+        self.mcall: Node | None = None  # the call o.m(...) whose method Gen.method is compiling (close())
         self.coros = False  # a generator function was lowered: the module declares LLVM's coroutine intrinsics
         self.lowblk = ""  # the label of the block being lowered (gen.start's phi names it)
         self.elsekids: list[Node] = []  # the body of a for/while ... else loop being compiled
@@ -2041,8 +2071,50 @@ class Gen:
     def gen_stream(self, name: str, v: Val, args: list[Node], want: str, resultsoft: bool) -> Val:
         return generators_gen_stream(self, name, v, args, want, resultsoft)
 
-    def gen_suspend(self, slot: str, k: int, sub: Val) -> None:
-        return generators_gen_suspend(self, slot, k, sub)
+    def gen_suspend(self, slot: str, k: int, sub: Val, thrown: str = "") -> None:
+        return generators_gen_suspend(self, slot, k, sub, thrown)
+
+    def yield_from_iter(self, what: str) -> None:
+        return generators_yield_from_iter(self, what)
+
+    def gen_type(self, y: str, s: str) -> str:
+        return generators_gen_type(self, y, s)
+
+    def yield_value(self, n: Node) -> Val:
+        return generators_yield_value(self, n)
+
+    def yield_from_proto(self, v: Val, t: str, y: str, callee: FnInfo | None) -> Val:
+        return generators_yield_from_proto(self, v, t, y, callee)
+
+    def gen_stop(self) -> None:
+        return generators_gen_stop(self)
+
+    def gen_raised(self, e: Val) -> None:
+        return generators_gen_raised(self, e)
+
+    def gen_close(self, h: Val) -> None:
+        return generators_gen_close(self, h)
+
+    def exc_mark(self) -> str:
+        return generators_exc_mark(self)
+
+    def pep479(self, e: Val) -> None:
+        return generators_pep479(self, e)
+
+    def exc_back(self, old: str) -> None:
+        return generators_exc_back(self, old)
+
+    def exc_operand(self, e: Node) -> Val:
+        return generators_exc_operand(self, e)
+
+    def gen_throw_into(self, h: Val, e: Val, done: str) -> str:
+        return generators_gen_throw_into(self, h, e, done)
+
+    def gen_throw(self, g: Val, args: list[Node]) -> Val:
+        return generators_gen_throw(self, g, args)
+
+    def gen_send(self, g: Val, args: list[Node]) -> Val:
+        return generators_gen_send(self, g, args)
 
     def owned_gen(self, v: Val, it: Node) -> int:
         return generators_owned_gen(self, v, it)
@@ -2335,6 +2407,15 @@ class Gen:
     def leave(self, depth: int) -> bool:
         return statements_leave(self, depth)
 
+    def with_cm(self, m: Val, it: Node, body: list[Node]) -> None:
+        return statements_with_cm(self, m, it, body)
+
+    def cm_exits(self) -> bool:
+        return statements_cm_exits(self)
+
+    def suppress_item(self, e: Node) -> bool:
+        return statements_suppress_item(self, e)
+
     def try_(self, n: Node) -> None:
         return exceptions_try_(self, n)
 
@@ -2395,7 +2476,7 @@ class Gen:
     def exc_class(self, e: Node) -> str:
         return exceptions_exc_class(self, e)
 
-    def cause(self, c: Node) -> None:
+    def cause(self, c: Node) -> Val:
         return exceptions_cause(self, c)
 
     def exc_value_of(self, e: Node, k: str) -> Val:
