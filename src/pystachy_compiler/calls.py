@@ -9,6 +9,7 @@ from src.pystachy_compiler.specs import EXCEPTIONS, GLUE, HASATTR, MODATTRS, PYB
 from src.pystachy_compiler.structs import STRUCT_FNS
 from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
+    atomic_dict,
     codec,
     fbits,
     has_method,
@@ -871,7 +872,7 @@ def gen_asdict(self, o: Val, args: list[Node]) -> Val:
         vt = self.wider(vt, ci.ftypes[fl])
         if vt == "":
             self.err(f"_asdict() of a NamedTuple whose fields have different types is not supported (a dict's values have one type): {short(o.t)}")
-    r = self.rt("pys_dict_new", "ptr", [f"i64 {self.key_kind('str')}", f"i64 {len(ci.fields)}"])
+    r = self.rt("pys_dict_new_atomic" if atomic_dict(self.ctype("dict", ["str", vt])) else "pys_dict_new", "ptr", [f"i64 {self.key_kind('str')}", f"i64 {len(ci.fields)}"])
     for fl in ci.fields:
         v = self.coerce(self.getfield(o, self.field(o, fl), fl), vt)
         self.rt("pys_dict_set", "void", [f"ptr {r}", "i64 " + self.to_slot(Val(self.sconst(fl), "str")), "i64 " + self.to_slot(v)])
