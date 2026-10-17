@@ -289,6 +289,7 @@ unsupported. Power dispatch with an object exponent, optional numeric exponent, 
 three-argument `pow(o, n, modulus)` is unsupported. A power method may declare an optional
 modulus parameter; two-argument power leaves it at its default. Returning `NotImplemented`
 from an operator remains unsupported.
+Power methods require a positional `self`; following arguments may use `*args`.
 For `**=`, a base-typed receiver whose subclass introduces an `__ipow__` that the base
 lacks must be narrowed to the concrete receiver type; otherwise compilation rejects the
 operation rather than skipping the subclass method.

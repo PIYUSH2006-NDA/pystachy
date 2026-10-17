@@ -123,6 +123,13 @@ def gen_check_special(self, f: FnInfo) -> None:
     # the special methods Pystachy calls implicitly must have the shape it relies on; in an
     # imported module's class, a wrong one is an error where the method is called, as is a
     # method whose declaration failed (f.bad: its types are placeholders)
+    if (f.name == "__pow__" or f.name == "__ipow__") and f.bad == "" and f.npos < 1:
+        # Power uses normal argument binding after its prebound receiver, including
+        # *args exponents. A variadic receiver cannot take that prebound self.
+        self.line = f.node.line
+        f.bad = f"{f.name} must take self as a positional argument"
+        if self.classes[f.cls].mod == "":
+            self.err(f.bad)
     if f.name not in SPECIAL or f.bad != "":
         return
     self.line = f.node.line
@@ -1264,7 +1271,7 @@ def gen_inplace(self, op: str, cur: Val, rhs: Node) -> Val:
             b = self.expr(rhs, cur.t)
             if self.isnum(b.t):
                 self.none_operand("**=", cur, b)
-                return self.call_fn(self.classes[cur.t].methods["__ipow__"], [cur, b], [])
+                return self.call_fn(self.classes[cur.t].methods["__ipow__"], [cur], [self.vnode(b)])
             return self.arith(op, cur, b, "**=")  # (retain the object/reflected-power diagnostic)
         if self.classes[cur.t].tag > 0:
             # Falling back to __pow__ must not skip a subtype-only __ipow__.
