@@ -1,7 +1,11 @@
-/* Empty reachable lists must not retain their historical capacity. Range-list backing
-   is pointer-free, while headers and general list backing are scanned. These are deterministic
-   allocation-kind, capacity and live-byte checks, not RSS/timing thresholds. Like dictprobe,
-   this includes the real runtime and links runtime.py's IR. usage: make listprobe */
+/* Empty reachable lists must not retain their historical capacity. The item arrays of range
+   lists and of pys_list_new_atomic's lists (the compiler's list[int], list[float] and list[bool])
+   are pointer-free, and so are the arrays that growth, copies, slices, + and * make of them, and
+   a cleared one's sentinel; headers and other lists' arrays are scanned, and stay so through the
+   same operations. Ints in a pointer-free array that are the addresses of objects keep none of
+   them alive. These are deterministic allocation-kind, capacity and live-byte checks, not
+   RSS/timing thresholds. Like dictprobe, this includes the real runtime and links runtime.py's
+   IR. usage: make listprobe */
 #include "../runtime.c"
 
 I pys_obj_eq(I c, I a, I b) { (void)c; return a == b; }
@@ -88,7 +92,7 @@ static void ranges(void) {
     if (l->len != n || l->cap != (n > 4 ? n : 4)) bad("range-list length/capacity");
     for (I i = 0; i < n; i++) if (l->a[i] != 2 + 3 * i) bad("range-list values");
     List *copy = pys_list_copy(l), *slice = pys_list_slice(l, 1, n - 1);
-    kinds(copy, 0); kinds(slice, 0);   /* copies do not yet preserve pointer-free backing */
+    kinds(copy, 1); kinds(slice, 1);   /* copies keep the pointer-free kind */
     if (copy->len != n || slice->len != (n > 2 ? n - 2 : 0)) bad("range-list copy/slice length");
     for (I i = 0; i < n; i++) if (copy->a[i] != 2 + 3 * i) bad("range-list copy values");
     for (I i = 0; i < slice->len; i++) if (slice->a[i] != 5 + 3 * i) bad("range-list slice values");
@@ -97,7 +101,7 @@ static void ranges(void) {
     while (l->len < cap) pys_list_append(l, 9);
     kinds(l, 1);                     /* writes within the original buffer keep its kind */
     pys_list_append(l, 11);
-    kinds(l, 0);                     /* generic growth remains conservatively scanned */
+    kinds(l, 1);                     /* and so does growth */
     if (l->len != cap + 1 || l->a[cap] != 11 || (n && l->a[0] != -7)) bad("range-list growth");
   }
   scrub_collect(); scrub_collect();
@@ -105,7 +109,9 @@ static void ranges(void) {
     List *l = (List *)buffers->a[i];
     if (l->a[l->len - 1] != 11) bad("range-list growth lost through collection");
     pys_list_clear(l); check_empty(l);
+    if (l->a != empty_atomic) bad("a cleared range list forgets its kind");
     pys_list_append(l, 13);
+    kinds(l, 1);
     if (l->len != 1 || l->a[0] != 13) bad("range-list reuse after clear");
   }
   List *descending = pys_range_list(7, -3, -3);
@@ -119,8 +125,74 @@ static void ranges(void) {
   kinds(r, 1);                                    /* changes within the backing keep its kind */
   if (r->len != 4 || r->a[0] != 0 || r->a[1] != 7 || r->a[2] != 8 || r->a[3] != 8) bad("range-list slice changes");
   pys_list_set_slice(r, NONE, NONE, 1, seven);
-  kinds(r, 0);                                    /* growth past it is scanned */
+  kinds(r, 1);                                    /* growth past it keeps the kind */
   if (r->len != 7 || r->a[6] != 6) bad("range-list slice growth");
+}
+static Str *big(I i) {                 /* a str of 1 MiB; its first byte tells i */
+  Str *s = pys_str_mul(cstr("x"), 1 << 20); s->s[0] = (char)('a' + i); return s;
+}
+static void same(List *l, I n, I first, I step, const char *what) {
+  if (l->len != n) bad(what);
+  for (I i = 0; i < n; i++) if (l->a[i] != first + i * step) bad(what);
+}
+__attribute__((noinline)) static void addresses(void) {   /* the 16 strs' addresses, in a pointer-free list only */
+  List *a = pys_list_new_atomic(0), *h = pys_list_new(16);
+  buffers = pys_list_new(2); pys_list_append(buffers, (I)a); pys_list_append(buffers, (I)h);
+  for (I i = 0; i < 16; i++) { I x = (I)big(i); pys_list_append(h, x); pys_list_append(a, x); }
+  buffers->a[1] = 0; buffers->len = 1;   /* (h kept the strs apart; now nothing scanned holds them) */
+}
+__attribute__((noinline)) static void held(void) {        /* the same in a scanned list keeps them */
+  List *h = pys_list_new(0);
+  buffers = pys_list_new(1); pys_list_append(buffers, (I)h);
+  for (I i = 0; i < 16; i++) pys_list_append(h, (I)big(i));
+}
+/* the operations that make an item array, on a list of each kind: they keep it */
+static void numeric(void) {
+  for (int pf = 0; pf < 2; pf++) {
+    List *l = pf ? pys_list_new_atomic(0) : pys_list_new(0), *k;
+    buffers = pys_list_new(16); pys_list_append(buffers, (I)l);
+    kinds(l, pf);
+    for (I i = 0; i < 100; i++) pys_list_append(l, i);          /* growth, small arrays to large */
+    kinds(l, pf); same(l, 100, 0, 1, "appended items");
+    pys_list_insert(l, 0, -1); pys_list_del(l, 0); kinds(l, pf);
+    k = pys_list_copy(l); pys_list_append(buffers, (I)k); kinds(k, pf); same(k, 100, 0, 1, "copy");
+    k = pys_list_slice(l, 10, 20); pys_list_append(buffers, (I)k); kinds(k, pf); same(k, 10, 10, 1, "slice");
+    k = pys_list_slice_step(l, 99, NONE, -3); pys_list_append(buffers, (I)k); kinds(k, pf); same(k, 34, 99, -3, "slice step");
+    k = pys_list_mul(l, 3); pys_list_append(buffers, (I)k); kinds(k, pf);
+    if (k->len != 300 || k->a[299] != 99 || k->a[100] != 0) bad("list * n");
+    k = pys_list_mul(pys_list_slice(l, 0, 0), 5); pys_list_append(buffers, (I)k); kinds(k, pf);
+    k = pys_list_add(l, l); pys_list_append(buffers, (I)k); kinds(k, pf);
+    k = pys_list_add(l, pys_list_new(0)); pys_list_append(buffers, (I)k); kinds(k, 0);   /* (one scanned array: scanned) */
+    k = pys_list_add(pys_range_list(0, 3, 1), pys_list_new_atomic(0)); pys_list_append(buffers, (I)k); kinds(k, 1);
+    k = pys_list_copy(l); pys_list_append(buffers, (I)k);
+    pys_list_imul(k, 4); kinds(k, pf); if (k->len != 400) bad("list *= n");
+    pys_list_extend(k, l); kinds(k, pf);
+    pys_list_set_slice(k, 0, 1, 1, pys_list_mul(l, 20)); kinds(k, pf);
+    pys_list_sort(l, cstr("i")); kinds(l, pf); same(l, 100, 0, 1, "sort");
+    pys_list_clear(k); check_empty(k);
+    if (k->a != (pf ? empty_atomic : empty_list)) bad("cleared list's sentinel");
+    pys_list_append(k, 5); kinds(k, pf);
+    while (k->len) pys_list_pop(k, -1);
+    if (k->a != (pf ? empty_atomic : empty_list)) bad("emptied list's sentinel");
+    k = pys_list_copy(k); pys_list_append(buffers, (I)k); kinds(k, pf);   /* (the copy of an empty list) */
+    scrub_collect();
+    same(l, 100, 0, 1, "items through collection");
+  }
+  Dict *d = pys_dict_new(0, 0), *s = pys_dict_new(1, 0); Set *t = pys_set_new(0), *u = pys_set_new(0);
+  buffers = pys_list_new(4); buffers->a[0] = (I)d; buffers->a[1] = (I)s; buffers->a[2] = (I)t; buffers->a[3] = (I)u; buffers->len = 4;
+  for (I i = 0; i < 100; i++) { pys_dict_set(d, i, i * 2); pys_dict_set(s, (I)cstr("k"), i); pys_set_add(t, i); }
+  pys_set_add(u, 1);
+  kinds(pys_dict_keys(d), 1); kinds(pys_dict_values(d), 0); kinds(pys_dict_keys(s), 0);   /* (int keys only) */
+  kinds(pys_set_list(t), 1); kinds(pys_set_list(u), 0);   /* (an int set's first 8 slots are scanned) */
+  same(pys_dict_keys(d), 100, 0, 1, "dict keys"); same(pys_dict_values(d), 100, 0, 2, "dict values");
+  addresses(); scrub_collect(); scrub_collect();
+  if (gc_live >= 4 << 20) bad("ints that are the addresses of strs, in a pointer-free list, kept them alive");
+  if (((List *)buffers->a[0])->len != 16) bad("the addresses' list lost");
+  held(); scrub_collect(); scrub_collect();
+  if (gc_live < 16 << 20) bad("a scanned list's strs were freed");
+  List *h = (List *)buffers->a[0];
+  for (I i = 0; i < 16; i++) { Str *x = (Str *)h->a[i]; if (x->len != 1 << 20 || x->s[0] != 'a' + i) bad("a kept str changed"); }
+  buffers = 0;
 }
 int main(void) {
   gc_init(__builtin_frame_address(0), roots, 1);
@@ -131,6 +203,7 @@ int main(void) {
   for (I i = 0; i < buffers->len; i++) check_empty((List *)buffers->a[i]);
   operations();
   ranges();
-  puts("listprobe: empty-list reuse and range-list storage/mutation passed");
+  numeric();
+  puts("listprobe: empty-list reuse, range-list storage/mutation and pointer-free list kinds passed");
   return 0;
 }

@@ -2194,7 +2194,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:
         if name in ci.methods:
-            self.err(f"{o.t}.{name} is a method: call it, {name}(...) (methods are not values)")
+            self.err(f"{shown(o.t)}.{name} is a method: call it, {name}(...) (methods are not values)")
         if ci.exc != "":
             sub = [c for c in self.classes.values() if c.name != o.t and name in c.ftypes and self.derives(c.name, o.t)]
             if len(sub) > 0:
@@ -2206,7 +2206,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
                 if name in EXCINIT[b].split() and exc_derives(ci.exc, b):
                     self.err(f"'{short(o.t)}' object has no attribute '{name}': {b}'s attribute {name} is not supported (a field of the class assigned in __init__, after super().__init__(...), is)")
             self.err(f"'{short(o.t)}' object has no attribute '{name}' (of an exception object, only the fields of its class are supported; str(e) and repr(e) are)")
-        self.err(f"'{o.t}' object has no attribute '{name}'")
+        self.err(f"'{shown(o.t)}' object has no attribute '{name}'")
     extra = " and no __dict__ for setting new attributes" if store else ""
     self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'{extra}")
     if name == "__slots__" and name not in ci.fpos:
