@@ -1,0 +1,7 @@
+2 [Rec(err=E('b'))]
+[NT(err=F('a')), NT(err=E('b'))]
+[Pair(err=G1, k=2), Pair(err=G3, k=4)]
+Pair(err=G1, k=2) {'r': [Pair(err=G1, k=2), Pair(err=G3, k=4)]} (NP(err=G5, k=6), 7)
+[NP(err=G1, k=2), NP(err=G3, k=4)]
+[Box(b=Base(1)), Box(b=Base(2))]
+[exit 0]
