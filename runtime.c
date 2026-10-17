@@ -556,21 +556,25 @@ Str *pys_str_add(Str *a, Str *b) {
    more) has no slack. The first large copy of an owned str fits exactly, as most strs that cross
    8,200 bytes stop soon after, and is marked (used); the copy of a marked one gets room for as much
    again, so one that keeps growing is copied log(n) times, and pys_str_settle takes the room back
-   from the one that is kept (#567) */
+   from the one that is kept (#567). The copy of s is out of line, and t is not passed to it: LLVM
+   inlines the rest, and a constant t stays one */
+__attribute__((noinline)) static Str *str_grow(Str *s, Seg *g, I m) {   /* s in a new str of m bytes
+                                          (2 * m: the copy of a marked str; g: s's, where owned) */
+  Str *r = pys_alloc_atomic(g && g->large && g->used ? 2 * m : m);
+  if (g && m >= SMALL) gc_seg(r)->used = 1;
+  r->len = s->len; memcpy(r->s, s->s, s->len); return r;
+}
 Str *pys_str_iadd(Str *s, Str *t, I owned) {
   I n = s->len + t->len, m = (I)sizeof(Str) + n + 1;
-  Seg *g = owned ? gc_seg(s) : 0;
-  if (g && m <= g->size - 1) {
-    memcpy(s->s + s->len, t->s, t->len); s->s[n] = 0; s->len = n; return s;
-  }
-  Str *r = pys_alloc_atomic(g && g->large && g->used ? m + n : m);
-  if (g && m >= SMALL) gc_seg(r)->used = 1;
-  r->len = n; memcpy(r->s, s->s, s->len); memcpy(r->s + s->len, t->s, t->len); return r;
+  if (!owned) s = str_grow(s, 0, m);
+  else if (m > gc_seg(s)->size - 1) s = str_grow(s, gc_seg(s), m);
+  memcpy(s->s + s->len, t->s, t->len); s->s[n] = 0; s->len = n; return s;
 }
 /* s, the str of a local that an append made and nothing else holds (owned), is read other than by
    an append (Gen.load_name): what reads it may keep it, so a large one with more than a quarter of
-   its room unused (the room a copy of pys_str_iadd left) is copied to an exact fit */
-Str *pys_str_settle(Str *s) {
+   its room unused (the room a copy of pys_str_iadd left) is copied to an exact fit. Called once per
+   escape, from a block of its own: not inlined */
+__attribute__((noinline)) Str *pys_str_settle(Str *s) {
   Seg *g = gc_seg(s);
   I m = (I)sizeof(Str) + s->len + 1;
   if (!g->large || 4 * (g->size - 1 - m) <= g->size - 1) return s;
