@@ -3332,7 +3332,7 @@ void pys_set_hooks(int (*s)(const char *, I, I), Str *(*i)(I, Str *, I)) { std_h
 void pys_enter(char *sb) { if (!lib_depth++) gc_bottom = sb + 2 * sizeof(void *); }
 I pys_leave(void) { return --lib_depth; }
 void pys_out_sync(void) {              /* embedded CPython is about to run: what Pystachy wrote to stdout goes first */
-  if (!std_out.closed && (std_out.pn || std_out.bn || __fpending(stdout))) flush1(&std_out);
+  if (!std_out.closed) flush1(&std_out);   /* fflush of an empty stream is harmless; no libc-specific pending probe */
 }
 void pys_init_lib(I **roots, I nroots) {
   pys_c_numeric();                     /* (the host may call setlocale) */
