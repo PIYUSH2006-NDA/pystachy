@@ -60,7 +60,7 @@ CPython runs the source.
 
 | Module | Upstream reference | Implementation |
 |---|---|---|
-| `io` | `Modules/_io/stringio.c`, `Modules/_io/textio.c` | Typed `StringIO`, with append chunks joined when read; `TextIOWrapper`, generic over its buffer's class, with the C type's chunks, decoders and messages |
+| `io` | `Modules/_io/stringio.c`, `Modules/_io/bytesio.c`, `Modules/_io/textio.c` | Typed `StringIO` and `BytesIO`, with append chunks joined when read; `TextIOWrapper`, generic over its buffer's class, with the C type's chunks, decoders and messages |
 | `types` (`_pystachy_types`) | `Lib/types.py` (SHA-256 `3a289bc5366e96d01017038870b5b8861b87305d351b99c688bcc681d908fa7d`) | The module's docstring and its names: `TracebackType`, as `from types import TracebackType` imports it for `__exit__`'s annotation, and the others, of which the compiler supports `GenericAlias` in `__class_getitem__ = classmethod(GenericAlias)` |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
@@ -101,6 +101,7 @@ Historical upstream-suite checks recorded with the ports:
 | `getopt` | `test_getopt` | 8 tests and doctest passed; translation-catalog tooling excluded |
 | `heapq` | `test_heapq` | 51 tests passed |
 | `io.StringIO` | `test_memoryio` StringIO cases | 29 of 39 passed, with `IntLike` replaced by int |
+| `io.BytesIO` | `test_memoryio` BytesIO cases (`PyBytesIOTest`, and `CBytesIOTest`'s own) | 25 of 47 passed, with `IntLike` replaced by int; the others need `getbuffer()`, `readinto()`, `detach()`, pickling, `array` or buffer-protocol objects, or test a `TypeError` that Pystachy's types make a compile-time error |
 | `textwrap` | `test_textwrap` | 66 tests passed |
 | `string` | `test_string` | 39 tests passed, including 25 Template tests |
 | `statistics` | `test_statistics` | All 401 tests passed, including a run with the ported `sumprod` |
