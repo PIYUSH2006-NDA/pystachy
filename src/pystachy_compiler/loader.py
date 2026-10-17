@@ -693,14 +693,9 @@ class Loader:
         for nm in [tn.s] + [x.s for x in [fn] + fn.kids if x.kind == "str"]:
             if len([c for c in nm if ord(c) >= 128]) > 0:
                 fail("namedtuple() of a typename or field name with non-ASCII characters is not supported", line)
-        names: list[str] = fn.s.replace(",", " ").split() if fn.kind == "str" else []
-        for x in fn.kids if fn.kind == "list" or fn.kind == "tuple" else []:
-            if x.kind != "str":
-                fn = x
-                break
-            names.append(x.s)
-        if fn.kind != "str" and fn.kind != "list" and fn.kind != "tuple":
+        if (fn.kind != "str" and fn.kind != "list" and fn.kind != "tuple") or any(x.kind != "str" for x in fn.kids):
             fail("namedtuple() is only supported with field names that are a string literal or a list or tuple of string literals (the compiler makes the class)", line)
+        names: list[str] = fn.s.replace(",", " ").split() if fn.kind == "str" else [x.s for x in fn.kids]
         rn = args.get("rename", mk("False", "", line, []))
         dn = args.get("defaults", mk("None", "", line, []))
         rep = 1

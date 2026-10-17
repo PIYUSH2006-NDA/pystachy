@@ -803,7 +803,7 @@ def gen_replace(self, o: Val, args: list[Node]) -> Val:
     if len(bad) > 0:
         self.err("Got unexpected field names: [" + ", ".join([f"'{x}'" for x in bad]) + "]")
     for a in args:
-        given[a.s] = self.expr(a.kids[0], ci.ftypes[a.s])
+        given[a.s] = self.expr(a.kids[0], ci.ftypes[a.s], resultsoft=ci.origin in self.cnts)
     if ci.origin in self.cnts:
         return self.nt_new(ci.origin, [given[fl] if fl in given else self.getfield(o, self.field(o, fl), fl) for fl in ci.fields], "")
     vals: list[Val] = [self.new_obj(o.t)]
