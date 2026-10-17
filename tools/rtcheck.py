@@ -421,7 +421,41 @@ def fuzz_search():
         same("replace", outcome(rt.pys_str_replace, h, n, "X"), outcome(h.replace, n, "X"), (h, n))
 
 
+def fuzz_replace():
+    # replace past the 65,536 occurrences replaced() lists before it weighs them: dense ones
+    # counted and copied as they are found, sparse ones listed on, and texts that change between
+    # the two, with a count that stops before, at or after each place the way changes
+    def check(h, n, r, k):
+        h, n, r = b(h), b(n), b(r)
+        same("replace", outcome(rt.pys_str_replace_count, h, n, r, k), outcome(h.replace, n, r, k), (len(h), n, r, k))
+
+    cap = 65536
+    for g in [0, 1, 15, 16, 17]:  # an occurrence every g + 1 bytes: dense up to 16
+        for i, k in enumerate([-1, cap - 1, cap, cap + 1, 2 * cap + 3]):
+            check(("*" + "y" * g) * (cap + 40) + "end", "*", ["", "_", ";;", "é", "XYZ"][(i + g) % 5], k)
+    check("*" * cap, "*", "_", -1)  # exactly the listed ones, none left to count
+    check("*" * (cap + 2), "*", "_", cap + 1)  # one more left than count lets go
+    for n, unit in [("ab", "aba"), ("</p>", "</p><"), ("aab", "aaab")]:  # failed candidates
+        for k in [-1, cap + 5]:
+            check(unit * (cap + 40), n, "_", k)
+    check("a," * (cap + 7), ",", ";", -1)
+    for n, r in [("ab", "X"), ("é", ""), ("</p>", "\n"), ("aa", "b"), ("𝄞", "→")]:
+        for k in [-1, cap + 1]:
+            check((n + "y") * (cap + 40) + n[:-1], n, r, k)
+    for _ in range(max(2, N // 2500)):
+        n = R.choice(["*", ",", "ab", "\r\n", "é", "𝄞", "</p>", "aa"])
+        r = R.choice(["", "_", ";;", "XYZ", "é", "\n", n])
+        parts = []
+        while len(parts) < 3 or R.randrange(3):
+            gap = R.choice(["", "y", "é", "yz" * R.randrange(8), "y" * R.randrange(17, 80), "a"])
+            parts.append((n + gap) * R.randrange(1, 70000))
+        h = "".join(parts)
+        k = R.choice([-1, -1, cap - 1, cap, cap + 1, 3 * cap, R.randrange(h.count(n) + 2)])
+        check(h, n, r, k)
+
+
 fuzz_str()
+fuzz_replace()
 fuzz_bytes()
 fuzz_search()
 fuzz_math()
