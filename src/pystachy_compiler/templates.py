@@ -14,8 +14,10 @@ from src.pystachy_compiler.specs import (
 from src.pystachy_compiler.syntax import Node, mentions, mk
 from src.pystachy_compiler.utils import (
     elem,
+    gelem,
     is_callable,
     is_dict,
+    is_gen,
     is_list,
     is_set,
     is_tuple,
@@ -432,6 +434,10 @@ def gen_match(self, a: Node, t: str, tv: dict[str, str], tvs: list[str]) -> str:
     gc = a.kids[0].s if a.kind == "index" and a.kids[0].kind == "name" and a.kids[0].s in self.tparams else ""
     if gc != "" and t in self.classes and self.classes[t].origin == gc and len([x for x in self.tparams[gc] if x in self.tvtuples]) == 0:
         return self.match_items(xs, [self.classes[t].tvars[x] for x in self.tparams[gc]], tv, tvs)  # (C[K, V] of a C object)
+    if (base == "iterator" or base == "generator") and is_gen(t) and len(xs) >= 1:
+        # (a generator, where the annotation is Iterator[T] or Generator[T, S, R]: what it yields
+        # binds T; the rest of Generator[...] binds nothing)
+        return self.match(xs[0], gelem(t), tv, tvs)
     if (base == "iterable" or base == "iterator") and len(xs) == 1:
         if t == "tuple[]":
             return ""  # (no items bind T; the context can still give it)
@@ -627,6 +633,7 @@ def gen_instance(self, f: FnInfo, ts: list[str], nnp: list[str], want: str = "",
     g.iters = f.iters
     g.gen = f.gen
     g.gret = f.gret
+    g.gsend = f.gsend
     g.gclose = f.gclose
     g.gwith = f.gwith
     g.gtry = f.gtry

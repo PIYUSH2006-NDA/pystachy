@@ -164,6 +164,7 @@ def gen_call(self, n: Node, want: str, resultsoft: bool = False, typeargs: str =
                 return self.refl_dict_copy(f.kids[0])  # (vars(x).copy(): reflection.py)
             self.err(VARS_USES)
         o = self.expr(f.kids[0], self.default_want(f.kids[0], f.s, args, ""))
+        self.mcall = n
         r = self.method(o, f.s, args, want, resultsoft)
         if f.s != "close":
             self.close_temp(f.kids[0], o)

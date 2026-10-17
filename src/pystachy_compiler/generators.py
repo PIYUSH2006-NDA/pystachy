@@ -6,7 +6,8 @@ passes compute what lives across each yield, lay the frame out and outline the r
 destroy functions (CoroSplit), and may put the frame of a generator a loop owns in the loop's
 own frame (CoroElide). The frame comes from pys_alloc, which the collector scans; nothing frees
 it (coro.free has nothing to do). A consumer resumes the handle (gen.resume) and reads the
-promise (gen.promise): the value yielded, the state, the value returned. See
+promise (gen.promise): the value yielded, the state, the value returned; close(), send() and
+throw() give it a command or a value there before they resume it. See
 docs/internals.md#generators.
 """
 from __future__ import annotations
@@ -15,16 +16,22 @@ from src.pystachy_compiler.ir import Exit, FnInfo, Ins, IterArg, SeqStart, Try, 
 from src.pystachy_compiler.names import short
 from src.pystachy_compiler.specs import (
     EXCBASES,
+    GENCLEAN,
+    GENCLOSEC,
     GENCMD,
     GENDONE,
+    GENEXC,
     GENNAME,
+    GENNEW,
     GENRET,
     GENRUN,
+    GENSEND,
     GENSTATE,
+    GENTHROWC,
     exc_derives,
 )
 from src.pystachy_compiler.syntax import Node, comp_names, has_kind, made_var, mk, names_in
-from src.pystachy_compiler.utils import gelem, is_gen, typestr
+from src.pystachy_compiler.utils import gelem, gsend, is_gen, typestr
 
 
 def with_yield(body: list[Node]) -> bool:
@@ -64,6 +71,70 @@ def yields_from(n: Node) -> bool:
         if yields_from(k):
             return True
     return False
+
+
+def uses_protocol(n: Node) -> bool:
+    # does code n use the generator protocol beyond iteration and close() (Gen.gproto): a call of
+    # a method named send or throw (of any object: what it is is not known before the types are).
+    # Without one, nothing sends a generator a value: a yield's value is None
+    if n.kind == "call" and n.kids[0].kind == "attr" and (n.kids[0].s == "send" or n.kids[0].s == "throw"):
+        return True
+    for k in n.kids:
+        if uses_protocol(k):
+            return True
+    return False
+
+
+def reads_handled(n: Node) -> bool:
+    # does code n call sys.exception() (Gen.excread), which tells a generator's own exception
+    # being handled from its resumer's
+    if n.kind == "call" and n.kids[0].kind == "attr" and n.kids[0].s == "exception" and n.kids[0].kids[0].kind == "name" and n.kids[0].kids[0].s == "sys":
+        return True
+    for k in n.kids:
+        if reads_handled(k):
+            return True
+    return False
+
+
+def reads_cause(n: Node) -> bool:
+    # does code n read an attribute named __cause__ (Gen.causeread)
+    if n.kind == "attr" and n.s == "__cause__":
+        return True
+    for k in n.kids:
+        if reads_cause(k):
+            return True
+    return False
+
+
+def gen_pep479(self, e: Val) -> None:
+    # PEP 479's RuntimeError, raised for StopIteration e that leaves a generator: its __cause__
+    # is e where the program reads it (Gen.causeread)
+    if not self.causeread:
+        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+        return
+    r = self.exc_value("RuntimeError", [Val(self.sconst("generator raised StopIteration"), "str")])
+    self.rt("pys_exc_setcause", "void", [f"ptr {r.v}", f"ptr {e.v}"])
+    self.throw(r)
+
+
+def gen_exc_mark(self) -> str:
+    # the exception being handled where a try statement starts, which its clauses' ends restore
+    # (exc_back): in a generator of a program that reads it (Gen.excread), null where it is its
+    # resumer's (the generator handles none of its own), as that resumer may differ by then
+    h = self.rt("pys_exc_handled", "ptr", [])
+    if not self.excread or self.fn.gouter == "":
+        return h
+    same = self.ptr_cmp("==", Val(h, "exc"), Val(self.mload("%ptr", self.fn.gouter), "exc")).v
+    return self.select(same, Val("null", "exc"), Val(h, "exc"))
+
+
+def gen_exc_back(self, old: str) -> None:
+    # the exception being handled is old (exc_mark) again: in a generator of a program that reads
+    # it, null is its resumer's now
+    if self.excread and self.fn.gouter != "":
+        none = self.ptr_cmp("==", Val(old, "exc"), Val("null", "exc")).v
+        old = self.select(none, Val(self.mload("%ptr", self.fn.gouter), "exc"), Val(old, "exc"))
+    self.rt("pys_exc_restore", "void", [f"ptr {old}"])
 
 
 def comp_clauses(c: Node, body: list[Node], inline: bool) -> list[Node]:
@@ -107,37 +178,50 @@ def gen_gen_declare(self, f: FnInfo, d: Node) -> str:
     yr = self.gen_ann_ret(d.kids[1])
     if len(yr) == 1:
         return yr[0]
-    f.ret = self.ctype("gen", [yr[0]])
+    f.ret = self.gen_type(yr[0], yr[2])
     f.gret = yr[1]
+    f.gsend = yr[2]
     return ""
 
 
+def gen_gen_type(self, y: str, s: str) -> str:
+    # the type of the generators that yield y and take s from send(): gen[Y], or gen[Y,S] where S
+    # is not None (a generator whose yields' values are S | None, None being what next() sends)
+    return self.ctype("gen", [y] if s == "None" else [y, s])
+
+
 def gen_gen_ann_ret(self, n: Node) -> list[str]:
-    # [Y, R] of a generator's return annotation n: Iterator[Y] or Iterable[Y] (R None),
-    # Generator[Y, None, R] or Generator[Y] (typing's or collections.abc's); [why] where it is
-    # no such annotation, or Pystachy does not support its types
+    # [Y, R, S] of a generator's return annotation n: Iterator[Y] or Iterable[Y] (R and S None),
+    # Generator[Y, S, R] or Generator[Y] (typing's or collections.abc's); [why] where it is no
+    # such annotation, or Pystachy does not support its types
     if n.kind == "str":
         n = self.parse_expr(n.s)
     base = self.typing_ref(n.kids[0]) if n.kind == "index" else ""
     if base != "Iterator" and base != "Iterable" and base != "Generator":
-        return ["a generator function's return annotation must be Iterator[T], Iterable[T] or Generator[Y, None, R]"]
+        return ["a generator function's return annotation must be Iterator[T], Iterable[T] or Generator[Y, S, R]"]
     a = n.kids[1].kids if n.kids[1].kind == "tuple" else [n.kids[1]]
     if base != "Generator" and len(a) != 1:
         return [f"{base}[...] takes one type: {base}[T]"]
     if base == "Generator" and len(a) != 1 and len(a) != 3:
         return ["Generator[...] takes three types: Generator[Y, S, R]"]
-    if len(a) == 3 and a[1].kind != "None":
-        return ["a generator whose send type is not None (Generator[Y, S, R]) is not supported: generators have no send()"]
     why = self.ann_problem(a[0], False) if a[0].kind != "None" else ""
     if why != "":
         return [why]
+    sv = "None"
+    if len(a) == 3 and a[1].kind != "None":
+        why = self.ann_problem(a[1], False)
+        if why != "":
+            return [why]
+        sv = self.ann(a[1])
+        if sv != "None" and self.optional(sv) == "":
+            return [f"a generator's send type must be one that may be None (next() sends None), not {typestr(sv)}"]
     r = "None"
     if len(a) == 3 and a[2].kind != "None":
         why = self.ann_problem(a[2], False)
         if why != "":
             return [why]
         r = self.ann(a[2])
-    return ["None" if a[0].kind == "None" else self.ann(a[0]), r]
+    return ["None" if a[0].kind == "None" else self.ann(a[0]), r, sv]
 
 
 def gen_gen_name(self, f: FnInfo) -> str:
@@ -236,7 +320,7 @@ def gen_gen_end(self, f: FnInfo) -> None:
         lo = self.label()
         self.cbr(self.exc_match(e, self.builtin_catch("StopIteration")), ls, lo)
         self.place(ls)
-        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+        self.pep479(e)
         self.place(lo)
         self.throw(e)
     f.noret = False
@@ -292,7 +376,7 @@ def gen_gen_none_end(self) -> None:
     f = self.curfn
     r = f.gret
     if r != "" and r != "None" and self.optional(r) != r and (f.node.kids[1].kind != "noann" or not self.none_null(r)):
-        self.err(f"{short(f.name)}() returns {typestr(r)} and ends without a value elsewhere: annotate it Generator[Y, None, {typestr(r)} | None]" if f.node.kids[1].kind != "noann" else f"{short(f.name)}() returns {typestr(r)} and ends without a value elsewhere, which the value of yield from cannot hold: return a value on every path, or annotate it Generator[Y, None, {typestr(r)} | None]")
+        self.err(f"{short(f.name)}() returns {typestr(r)} and ends without a value elsewhere: annotate it Generator[Y, {typestr(f.gsend)}, {typestr(r)} | None]" if f.node.kids[1].kind != "noann" else f"{short(f.name)}() returns {typestr(r)} and ends without a value elsewhere, which the value of yield from cannot hold: return a value on every path, or annotate it Generator[Y, None, {typestr(r)} | None]")
     self.fn.gnone = True
 
 
@@ -308,11 +392,13 @@ def gen_gen_return(self, n: Node) -> None:
     v = Val("null", "None")
     if len(n.kids) > 0 and n.kids[0].kind != "None":
         r = f.gret
-        if r == "None":
-            self.err(f"{short(f.name)}() is annotated to return no value (Iterator[T], Iterable[T] or Generator[Y, None, None]): annotate it Generator[Y, None, R] to return one")
-        v = self.expr(n.kids[0], r)
-        if r == "":
-            if v.t == "None" or "?" in v.t:
+        v = self.expr(n.kids[0], r if r != "None" else "")
+        if (r == "" or r == "None") and v.t == "None":
+            self.gen_none_end()  # (return f(), return (yield): a value that is None, as a return without one)
+        elif r == "None":
+            self.err(f"{short(f.name)}() is annotated to return no value (Iterator[T], Iterable[T] or Generator[Y, {'None' if f.gsend == 'None' else 'S'}, None]): annotate it Generator[Y, {typestr(f.gsend)}, R] to return one")
+        elif r == "":
+            if "?" in v.t:
                 self.err(f"cannot infer what {short(f.name)}() returns from {typestr(v.t)}; annotate it Generator[Y, None, R]")
             if self.fn.gnone and self.optional(v.t) != v.t and not self.none_null(v.t):
                 self.err(f"{short(f.name)}() returns {typestr(v.t)} and ends without a value elsewhere, which the value of yield from cannot hold: return a value on every path, or annotate it Generator[Y, None, {typestr(v.t)} | None]")
@@ -344,10 +430,13 @@ def gen_gen_cleanup(self) -> int:
     return 0
 
 
-def gen_gen_suspend(self, slot: str, k: int, sub: Val) -> None:
+def gen_gen_suspend(self, slot: str, k: int, sub: Val, thrown: str = "") -> None:
     # the generator being compiled yields the value in slot, then goes on where it is resumed.
     # k: closing it here runs code of its (gen_cleanup), so a close raises GeneratorExit here,
-    # having closed sub first, the generator a yield from delegates to (or none: Val("", ""))
+    # having closed sub first, the generator a yield from delegates to (or none: Val("", "")):
+    # what closing sub raises is raised here (PEP 380). In a program that uses throw()
+    # (Gen.gproto), the exception thrown into it is raised here too, or handed to thrown, the
+    # block of a yield from that throws it into its generator
     fn = self.fn
     if fn.gsaved != "":
         sv = self.rt("pys_gen_leave", "ptr", [f"i64 {self.mload('int', fn.gbase)}"])
@@ -369,10 +458,46 @@ def gen_gen_suspend(self, slot: str, k: int, sub: Val) -> None:
         lgo = self.label()
         self.cbr(self.num_cmp("!=", Val(cmd, "int"), Val("0", "int")).v, lx, lgo)
         self.place(lx)
+        if self.gproto:
+            # throw(): the command is done once the exception is raised here (or thrown on)
+            lt = self.label()
+            lc = self.label()
+            ca = self.maddr("int", p, str(GENCMD))
+            self.cbr(self.num_cmp("==", Val(cmd, "int"), Val(str(GENTHROWC), "int")).v, lt, lc)
+            self.place(lt)
+            self.mstore("int", "0", ca)
+            if thrown != "":
+                self.br(thrown)
+            else:
+                ea = self.maddr("int", p, str(GENEXC))
+                e = Val(self.mload("exc", ea), "exc")
+                self.mstore("int", "0", ea)
+                self.throw(e)
+            self.place(lc)
         if sub.v != "":
+            self.gen_close(sub)
             self.gen_drop(sub)
         self.raise_("GeneratorExit", self.sconst(""))
         self.place(lgo)
+
+
+def gen_yield_value(self, n: Node) -> Val:
+    # the value of yield v (yield, (yield)) in an expression: what send() sent to the generator as
+    # it resumed it (None from next(), a for loop and throw()), of type S | None for a generator
+    # whose send type is S; None where S is None (Iterator[T], Generator[Y, None, R], no annotation)
+    f = self.curfn
+    if n.s == "from":
+        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
+    self.yield_stmt(n)
+    if f.gsend == "None":
+        return Val("null", "None")
+    t = self.optional(f.gsend)
+    if self.term:
+        return Val("undef", t)
+    if not self.gproto:
+        return Val("null", t)  # (a program without send(): next() and its loops resume it)
+    p = self.gen_promise(Val("", ""))
+    return self.from_slot(self.mload("int", self.maddr("int", p, str(GENSEND))), t)
 
 
 def gen_yield_stmt(self, n: Node) -> None:
@@ -425,6 +550,7 @@ def gen_yield_from(self, x: Node) -> Val:
     if self.iterator_call(x):
         # yield from range(...), enumerate(...), zip(...) or reversed(...): each item, as a for
         # loop over the call takes it
+        self.yield_from_iter(x.kids[0].s + "()")
         it = mk("name", "__yf", x.line, [])
         self.hidden_loop(mk("for", "", x.line, [it, x, mk("block", "", x.line, [mk("expr", "", x.line, [mk("yield", "", x.line, [mk("name", "__yf", x.line, [])])])])]), ["__yf"], ["__yf"])
         return Val("null", "None")
@@ -432,6 +558,7 @@ def gen_yield_from(self, x: Node) -> Val:
     v = self.expr(x, "")
     callee = self.gencallf if v.v == self.gencall and self.gencall != "" else None
     if not is_gen(v.t):
+        self.yield_from_iter(typestr(v.t))
         it = mk("name", "__yf", x.line, [])
         self.hidden_loop(mk("for", "", x.line, [it, self.vnode(v), mk("block", "", x.line, [mk("expr", "", x.line, [mk("yield", "", x.line, [mk("name", "__yf", x.line, [])])])])]), ["__yf"], ["__yf"])
         return Val("null", "None")
@@ -441,6 +568,8 @@ def gen_yield_from(self, x: Node) -> Val:
         f.ret = self.ctype("gen", [y])
     if t != y and not self.widens(t, y):
         self.err(f"{short(f.name)}() yields {typestr(y)}, but yield from delegates to a generator that yields {typestr(t)}")
+    if self.gproto:
+        return self.yield_from_proto(v, t, y, callee)
     head = self.label()
     done = self.label()
     self.br(head)
@@ -460,6 +589,75 @@ def gen_yield_from(self, x: Node) -> Val:
     if callee is not None:
         self.gen_drop(v)  # (it has finished: destroyed, LLVM may put its frame in this one's)
     return res
+
+
+def gen_yield_from_proto(self, v: Val, t: str, y: str, callee: FnInfo | None) -> Val:
+    # yield from v, generator v that yields t, in a generator that yields y, in a program that uses
+    # send() or throw() (Gen.gproto), as PEP 380 delegates: what is sent to this generator is sent
+    # on to v, an exception thrown into it is thrown into v (GeneratorExit closes v, then is raised
+    # here), and closing it closes v first; what v raises is raised here. Its value, the value
+    # v returns (where its type is known: callee)
+    f = self.curfn
+    fs = f.gsend
+    if fs != "None" and gsend(v.t) != fs:
+        self.err(f"{short(f.name)}() takes {typestr(fs)} from send(), which yield from sends on to a generator that takes {typestr(gsend(v.t))}: annotate them with the same send type")
+    ys = self.alloca("int", "")
+    head = self.label()
+    done = self.label()
+    susp = self.label()
+    thrown = self.label() if self.eh else ""
+    self.br(head)
+    self.place(head)
+    p = self.gen_next(v, done)
+    if fs != "None":
+        self.mstore("int", "0", self.maddr("int", p, str(GENSEND)))  # (taken where v resumed)
+    s = self.mload("int", p)
+    if t != y:
+        s = self.to_slot(self.coerce(self.from_slot(s, t), y))
+    self.mstore("int", s, ys)
+    self.br(susp)
+    self.place(susp)
+    self.gen_suspend(self.mload("int", ys), 1 if self.eh else 0, v if self.eh else Val("", ""), thrown)
+    if fs != "None":
+        own = self.gen_promise(Val("", ""))
+        x = self.mload("int", self.maddr("int", own, str(GENSEND)))
+        self.mstore("int", x, self.maddr("int", self.gen_promise(v), str(GENSEND)))
+    self.br(head)
+    if thrown != "":
+        self.place(thrown)
+        ea = self.maddr("int", self.gen_promise(Val("", "")), str(GENEXC))
+        e = Val(self.mload("exc", ea), "exc")
+        self.mstore("int", "0", ea)
+        lx = self.label()
+        lt = self.label()
+        self.cbr(self.exc_match(e, self.builtin_catch("GeneratorExit")), lx, lt)
+        self.place(lx)
+        self.gen_close(v)
+        self.throw(e)
+        self.place(lt)
+        p2 = self.gen_throw_into(v, e, done)
+        s2 = self.mload("int", p2)
+        if t != y:
+            s2 = self.to_slot(self.coerce(self.from_slot(s2, t), y))
+        self.mstore("int", s2, ys)
+        self.br(susp)
+    self.place(done)
+    r = callee.gret if callee is not None else ""
+    res = Val("null", "None") if r == "None" else Val("", "")
+    if r != "" and r != "None":
+        pr = self.gen_promise(v)
+        res = self.from_slot(self.mload("int", self.maddr("int", pr, str(GENRET))), r)
+    if callee is not None:
+        self.gen_drop(v)
+    return res
+
+
+def gen_yield_from_iter(self, what: str) -> None:
+    # yield from an iterator that is no generator (of what), in the generator being compiled: one
+    # that takes a value from send() would send it on to that iterator, which has no send()
+    f = self.curfn
+    if f.gsend != "None":
+        self.err(f"yield from {what} in {short(f.name)}(), which takes {typestr(f.gsend)} from send(), is not supported: PEP 380 sends the value on to the iterator, which has no send() (iterate it with for and yield each item)")
 
 
 def gen_hidden_loop(self, loop: Node, own: list[str], names: list[str]) -> None:
@@ -657,9 +855,21 @@ def gen_gen_contains(self, x: Val, g: Val) -> Val:
 
 
 def gen_gen_method(self, o: Val, m: str, args: list[Node]) -> Val:
-    # o.m(args) of generator o: __next__() is next(o), __iter__() o itself
-    if m == "send" or m == "throw" or m == "close":
-        self.err(f"generator.{m}() is not supported: generators have no send(), throw() or close() (for loops, yield from, next() and the functions that take an iterable run them)")
+    # o.m(args) of generator o: __next__() is next(o), __iter__() o itself, close(), throw(e)
+    # and send(v)
+    if m == "close":
+        if len(args) != 0:
+            self.err(f"generator.close() takes no arguments ({len(args)} given)")
+        if self.mcall is None or self.mcall is not self.stmtexpr:
+            self.err("the value of generator.close() is not supported (it is what a generator returns as it closes): call close() as a statement")
+        self.gen_close(o)
+        return Val("null", "None")
+    if (m == "send" or m == "throw") and not self.gproto:
+        self.err(f"generator.{m}() is supported where it is called (g.{m}(...)), not as a value")
+    if m == "throw":
+        return self.gen_throw(o, args)
+    if m == "send":
+        return self.gen_send(o, args)
     if m == "__next__" and len(args) == 0:
         return self.gen_next_value(o, Val("", ""))
     if m == "__iter__" and len(args) == 0:
@@ -686,10 +896,7 @@ def gen_gen_next_value(self, g: Val, dflt: Val) -> Val:
     self.br(end)
     self.place(done)
     if dflt.v == "":
-        if self.curfn.gen and not self.eh:
-            self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
-        else:
-            self.raise_("StopIteration", self.sconst(""))
+        self.gen_stop()
         self.place(end)
         return v
     d = self.coerce(dflt, t)
@@ -702,6 +909,188 @@ def gen_gen_next_value(self, g: Val, dflt: Val) -> Val:
     self.incoming(ph, v.v, got)
     self.incoming(ph, d.v, dl)
     return Val(self.phi(ph), t)
+
+
+def gen_gen_stop(self) -> None:
+    # StopIteration, which next(), send() and throw() of a generator raise once it has finished
+    # (in a generator with exceptions off, which nothing in it can catch, PEP 479's RuntimeError
+    # at once)
+    if self.curfn.gen and not self.eh:
+        self.raise_("RuntimeError", self.sconst("generator raised StopIteration"))
+    else:
+        self.raise_("StopIteration", self.sconst(""))
+
+
+def gen_gen_raised(self, e: Val) -> None:
+    # exception e, which leaves a generator, raised here: a StopIteration as PEP 479's RuntimeError
+    ls = self.label()
+    lo = self.label()
+    self.cbr(self.exc_match(e, self.builtin_catch("StopIteration")), ls, lo)
+    self.place(ls)
+    self.pep479(e)
+    self.place(lo)
+    self.throw(e)
+
+
+def gen_gen_close(self, h: Val) -> None:
+    # h.close() of generator h (also as a yield from closes the generator it delegates to): one
+    # suspended where closing it runs code of its (GENCLEAN) is resumed with close()'s command, which
+    # raises GeneratorExit at its yield; what it raises then is raised here (its landing block
+    # leaves it for pys_gen_closed: a StopIteration as RuntimeError), and if it yields instead,
+    # RuntimeError (it stays suspended there). Any other one (not started, suspended where nothing
+    # handles GeneratorExit, finished) is finished at once; a running one raises ValueError
+    p = self.gen_promise(h)
+    st = self.maddr("int", p, str(GENSTATE))
+    s0 = self.mload("int", st)
+    self.guard(self.num_cmp("==", Val(s0, "int"), Val(str(GENRUN), "int")).v, "ValueError: generator already executing")
+    fin = self.label()
+    if self.eh:
+        # (with exceptions off, no yield is in a try or with block: nothing runs as one closes)
+        end = self.label()
+        go = self.label()
+        self.cbr(self.num_cmp("==", Val(s0, "int"), Val(str(GENCLEAN), "int")).v, go, fin)
+        self.place(go)
+        ca = self.maddr("int", p, str(GENCMD))
+        self.mstore("int", str(GENCLOSEC), ca)
+        self.mstore("int", str(GENRUN), st)
+        x = self.rt("pys_exc_handled", "ptr", [])
+        i = Ins("gen.resume", "", "")
+        i.a = [h]
+        self.add(i)
+        self.rt("pys_exc_restore", "void", [f"ptr {x}"])
+        e = Val(self.rt("pys_gen_closed", "ptr", []), "exc")
+        lr = self.label()
+        lok = self.label()
+        self.cbr(self.ptr_cmp("!=", e, Val("null", "None")).v, lr, lok)
+        self.place(lr)
+        self.gen_raised(e)
+        self.place(lok)
+        s1 = self.mload("int", st)
+        lign = self.label()
+        self.cbr(self.num_cmp("!=", Val(s1, "int"), Val(str(GENDONE), "int")).v, lign, end)
+        self.place(lign)
+        self.mstore("int", "0", ca)
+        self.raise_("RuntimeError", self.sconst("generator ignored GeneratorExit"))
+        self.place(fin)
+        self.mstore("int", str(GENDONE), st)
+        self.br(end)
+        self.place(end)
+        return
+    self.br(fin)
+    self.place(fin)
+    self.mstore("int", str(GENDONE), st)
+
+
+def gen_exc_operand(self, e: Node) -> Val:
+    # the exception that raise e would raise, as a value (throw(e)): an exception, or an
+    # exception class (whose call without arguments makes it) or a call of one
+    k = self.exc_class(e)
+    if k == "" or k in self.classes:
+        v = self.exc_value_of(e, k)
+        if v.t in self.classes and self.classes[v.t].exc != "":
+            v = self.exc_of(v)
+        if v.t != "exc":
+            self.err("exceptions must derive from BaseException: throw() needs an exception, an exception class or a call of one")
+        return v
+    name = e.kids[0].s if e.kind == "call" else e.s
+    vals = self.exc_vals(self.exc_args(e), name)
+    if name == "SystemExit":
+        return self.exit_value(vals)
+    return self.exc_value("OSError" if name == "IOError" or name == "EnvironmentError" else name, vals)
+
+
+def gen_gen_throw_into(self, h: Val, e: Val, done: str) -> str:
+    # exception e thrown into generator h (Gen.gproto): raised at the yield where h is suspended,
+    # if a try, with or yield from there may handle it (GENCLEAN): it is resumed with throw()'s
+    # command, and goes to done if it finishes then, else (it yields again) the address of its
+    # promise is returned. Elsewhere nothing in h handles it: it is raised here as it is (h has not
+    # started, or has finished), or as it leaves h (suspended at a yield outside any handler: a
+    # StopIteration as RuntimeError), and h is finished. A running one raises ValueError
+    p = self.gen_promise(h)
+    st = self.maddr("int", p, str(GENSTATE))
+    s0 = self.mload("int", st)
+    self.guard(self.num_cmp("==", Val(s0, "int"), Val(str(GENRUN), "int")).v, "ValueError: generator already executing")
+    go = self.label()
+    lnot = self.label()
+    self.cbr(self.num_cmp("==", Val(s0, "int"), Val(str(GENCLEAN), "int")).v if self.eh else "false", go, lnot)
+    self.place(lnot)
+    lsusp = self.label()
+    lraw = self.label()
+    self.cbr(self.num_cmp("==", Val(s0, "int"), Val("0", "int")).v, lsusp, lraw)
+    self.place(lsusp)
+    self.mstore("int", str(GENDONE), st)
+    self.gen_raised(e)
+    self.place(lraw)
+    self.mstore("int", str(GENDONE), st)
+    self.throw(e)
+    self.place(go)
+    self.mstore("int", str(GENTHROWC), self.maddr("int", p, str(GENCMD)))
+    self.mstore("exc", e.v, self.maddr("int", p, str(GENEXC)))
+    self.mstore("int", str(GENRUN), st)
+    i = Ins("gen.resume", "", "")
+    i.a = [h]
+    self.add(i)
+    s1 = self.mload("int", st)
+    got = self.label()
+    self.cbr(self.num_cmp("==", Val(s1, "int"), Val(str(GENDONE), "int")).v, done, got)
+    self.place(got)
+    return p
+
+
+def gen_gen_throw(self, g: Val, args: list[Node]) -> Val:
+    # g.throw(e) of generator g: e raised where g is suspended (gen_throw_into); the value g yields
+    # next, or StopIteration if it finishes
+    if len(args) != 1 or args[0].kind == "kw" or args[0].kind == "starred":
+        self.err("generator.throw() takes one argument, the exception (throw(type, value, traceback) is deprecated and not supported)")
+    e = self.exc_operand(args[0])
+    done = self.label()
+    p = self.gen_throw_into(g, e, done)
+    v = self.from_slot(self.mload("int", p), gelem(g.t))
+    end = self.label()
+    self.br(end)
+    self.place(done)
+    self.gen_stop()
+    self.place(end)
+    return v
+
+
+def gen_gen_send(self, g: Val, args: list[Node]) -> Val:
+    # g.send(v) of generator g: g resumed with v, which the yield where it is suspended gives (an
+    # S | None of a generator whose send type is S); the value g yields next, or StopIteration if
+    # it finishes. send(None) is next(g); a value other than None cannot start g (TypeError)
+    if len(args) != 1 or args[0].kind == "kw" or args[0].kind == "starred":
+        self.err("generator.send() takes exactly one argument")
+    s = gsend(g.t)
+    if s == "None":
+        v = self.expr(args[0], "None")
+        if v.t != "None":
+            self.err(f"cannot send {typestr(v.t)} to {typestr(g.t)}, whose send type is None: annotate its generator function -> Generator[Y, S, R]")
+        return self.gen_next_value(g, Val("", ""))
+    ot = self.optional(s)
+    v = self.coerce(self.expr(args[0], ot), ot)
+    p = self.gen_promise(g)
+    if v.t != "None" and v.v != "null":
+        lnew = self.label()
+        lok = self.label()
+        s0 = self.mload("int", self.maddr("int", p, str(GENSTATE)))
+        self.cbr(self.num_cmp("==", Val(s0, "int"), Val(str(GENNEW), "int")).v, lnew, lok)
+        self.place(lnew)
+        self.guard(self.ptr_cmp("!=", v, Val("null", "None")).v, "TypeError: can't send non-None value to a just-started generator")
+        self.br(lok)
+        self.place(lok)
+    sa = self.maddr("int", p, str(GENSEND))
+    self.mstore("int", self.to_slot(v), sa)
+    done = self.label()
+    self.gen_next(g, done)
+    self.mstore("int", "0", sa)  # (taken where g resumed)
+    r = self.from_slot(self.mload("int", p), gelem(g.t))
+    end = self.label()
+    self.br(end)
+    self.place(done)
+    self.mstore("int", "0", sa)
+    self.gen_stop()
+    self.place(end)
+    return r
 
 
 def binds(n: Node, x: str, loop: bool) -> int:
