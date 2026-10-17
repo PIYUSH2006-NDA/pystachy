@@ -15,9 +15,12 @@ from src.pystachy_compiler.analysis import (
     clean_doc,
     collect,
     del_line,
+    declares,
+    deferred_use,
     deleted,
     false_flag,
     sole_binding,
+    first_use,
     fn_globals,
     global_assigns,
     globals_in,
@@ -2132,22 +2135,26 @@ class Loader:
                 flags[-1] = self.import_binds(m, a.s, infn)
             elif a.s == "*":
                 for x in self.public(src):
-                    k = self.take(m, src, x, x, infn, keep, inits, copies, line)
-                    took.append(x if k != "v" else "")
+                    mine = self.rebinds(m, src, x, x, infn)  # (a def or class statement of m binds x)
+                    k = src.kinds[x] if mine else self.take(m, src, x, x, infn, keep, inits, copies, line)
+                    took.append(" " if mine else x if k != "v" else "")
                     key = f"{src.name}  {x}"
                     checks.append(f"{self.fragile[key]} {x} I" if k != "v" and key in self.fragile else "")
-                    names.append(x)
+                    if not mine:
+                        names.append(x)
                 if src.pdir != "" and not has_all(src.body.kids):
                     self.stars.append(mk("star", "", line, [mk("str", src.name, line, [])]))
                     self.starm.append(m)
             else:
                 tgt = a.kids[0].s
-                k = self.take(m, src, tgt[tgt.rfind(".") + 1 :], a.s, infn, keep, inits, copies, line)
-                took.append(a.s if k != "v" else "")
                 x = tgt[tgt.rfind(".") + 1 :]
+                mine = self.rebinds(m, src, x, a.s, infn)
+                k = src.kinds[x] if mine else self.take(m, src, x, a.s, infn, keep, inits, copies, line)
+                took.append(" " if mine else a.s if k != "v" else "")
                 key = f"{src.name}  {x}"
                 checks.append(f"{self.fragile[key]} {x} I" if k != "v" and key in self.fragile else "")
-                names.append(a.s)
+                if not mine:
+                    names.append(a.s)
         at.append(len(inits.kids))
         cat.append(len(copies))
         binds: list[Node] = []  # (a from-import's copies, and the bound nodes of its names that have flags, in order)
@@ -2157,6 +2164,12 @@ class Loader:
             if nm == "":
                 binds.append(copies[c])
                 c += 1
+                continue
+            if nm == " ":
+                if checks[i] != "":
+                    b = mk("bound", "", line, [])  # (only the check: a def or class binds the name, rebinds())
+                    b.mchk = checks[i]
+                    binds.append(b)
                 continue
             flags.append(self.import_binds(m, nm, infn))
             if flags[-1] != "" or checks[i] != "":
@@ -2264,6 +2277,62 @@ class Loader:
                 out.append(x.s)
         else:
             fail(f"from {src.name} import *: __all__ must be a list or tuple of strings", v.line)
+
+    def rebinds(self, m: Mod, src: Mod, x: str, name: str, infn: bool) -> bool:
+        # from src import x as name (or *) in module code, of a function or class of src's (whose
+        # code has run), where only a def or class statement after it binds name besides: CPython's
+        # import binds src's x until that statement rebinds name. The statement's binding
+        # (m.kinds) stands for all of m's code, and the import binds nothing (it checks that src has
+        # bound x, as for a name it binds), where nothing may read the import's: neither code from
+        # the import on that runs before the statement binds name (its decorators, defaults,
+        # annotations, bases and class body too), nor a function or class defined before it that
+        # uses name, or one that does, where code before it names one (which may run it, or keep
+        # it) or decorates one, nor a lambda or generator expression before it that reads name
+        # (else an error). Another module's code that reads it during an import cycle finds it
+        # unbound (NameError, AttributeError: docs). False where the import binds name (take())
+        k = m.kinds.get(name, "")
+        sk = src.kinds.get(x, "")
+        if infn or (k != "f" and k != "c") or src.name == m.name or not src.done or not (sk == "f" or sk == "c" or sk.startswith("a:")):
+            return False
+        body = m.body.kids
+        s = 0
+        while s < len(body) and body[s].line != m.at:
+            s += 1
+        d = s + 1
+        while d < len(body) and not ((body[d].kind == "def" or body[d].kind == "class" or body[d].kind == "subclass") and body[d].s == name):
+            d += 1
+        if d >= len(body):
+            return False
+        others: dict[str, bool] = {}
+        binds([st for st in body[:s] + body[s + 1 : d] + body[d + 1 :] if st.kind != "import"], others, True)  # (another import is checked so too)
+        if name in others or declares(body, name):
+            return False
+        uses: dict[str, bool] = {name: True}  # (and the functions and classes before the statement that use it)
+        grew = True
+        while grew:
+            grew = False
+            for st in body[:d]:
+                if (st.kind == "def" or st.kind == "class" or st.kind == "subclass") and st.s not in uses and first_use(st, uses, False) is not None:
+                    uses[st.s] = True
+                    grew = True
+        fns = dict(uses)
+        del fns[name]
+        own: dict[str, bool] = {name: True}
+        what = f"'{name}' is bound both by an import and by a def or class, and "
+        for i in range(d + 1):
+            st = body[i]
+            r = deferred_use(st, own)  # (also one made before the import, which may be kept)
+            if r is not None:
+                fail(what + "a lambda or generator expression here that reads it may run in between (not supported)", r.line)
+            r = first_use(st, uses, True) if i >= s else first_use(st, fns, True) if len(fns) > 0 else None
+            if r is not None:
+                nm = r.s.split(".")[0]
+                fail(what + ("is read here in between" if nm == name else f"'{nm}', which uses it, may run in between") + " (not supported)", r.line)
+            c = st.kids[0] if st.kind == "subclass" else st
+            for dx in c.kids[3:] if st.kind == "def" else c.kids[1:] if st.kind == "class" or st.kind == "subclass" else st.kids[:0]:
+                if dx.kind == "deco" and dx.s != "async" and (st.s in fns or (i == d and first_use(st, uses, False) is not None)):
+                    fail(what + "a decorator here may run a function or class that uses it in between (not supported)", dx.line)
+        return True
 
     def take(self, m: Mod, src: Mod, x: str, name: str, infn: bool, keep: Node, inits: Node, copies: list[Node], line: int) -> str:
         # from src import x as name; what x is in src ("" for a submodule, "v" for a variable, which
