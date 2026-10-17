@@ -126,7 +126,8 @@ def gen_ann(self, n: Node) -> str:
         if s in self.tmpl and self.selfcls in self.classes and self.classes[self.selfcls].origin == s:
             return self.selfcls  # (in its specialization's methods and fields: that specialization, as Self)
         if s in self.tmpl:
-            return f"!class {shown(s)} is a class template (its __init__ takes a parameter without an annotation): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
+            why = "namedtuple() made it, whose fields each call types" if s in self.cnts else "its __init__ takes a parameter without an annotation"
+            return f"!class {shown(s)} is a class template ({why}): each call makes an object of a specialization of its own, which an annotation cannot name here; leave the annotation out"
         if s == "int" or s == "float" or s == "bool" or s == "str" or s == "bytes" or s in self.classes:
             return s
         if s == "range" and RANGEC in self.classes:
@@ -1461,10 +1462,10 @@ def gen_declare_fields(self, ci: ClassInfo) -> None:
         for m in b.methods:
             if m not in ci.methods and (m != "__init__" or "no-init" in ci.dcopts):
                 ci.methods[m] = b.methods[m]
-    if ci.name in self.nts:
+    if ci.name in self.nts and ci.name not in self.cnts:
         self.nt_class(ci)
-    if self.is_dc(ci.name):
-        self.dc_methods(ci)
+    if self.is_dc(ci.name) and ci.name not in self.cnts:
+        self.dc_methods(ci)  # (namedtuple()'s: its specializations', see specialize)
     for m in UNCALLED:
         # a def or a class attribute (CPython calls what it binds), also a base's, then named; an
         # imported module's class: an error only where the program uses it (see hoist_class)
@@ -1590,6 +1591,49 @@ def gen_generic_base(self, n: Node) -> list[str]:
 def gen_nt_base(self, n: Node) -> bool:
     # does a class's base n name typing.NamedTuple
     return (n.kind == "name" and self.imported(n.s) == "typing.NamedTuple") or (n.kind == "attr" and self.typing_attr(n) == "NamedTuple")
+
+def gen_nt_fields(self, c: str) -> list[str]:
+    # the fields of NamedTuple class c: those its "namedtuple" node names where namedtuple() made
+    # it, a class template, whose specializations declare them (see specialize)
+    if c in self.cnts:
+        return [x.s for x in self.cnts[c].kids[0].kids]
+    return self.classes[c].fields
+
+def gen_nt_defaults(self, c: str) -> Val:
+    # C._field_defaults of namedtuple()'s class C (also through an object of C): the dict of its
+    # fields' defaults that its class statement makes (hoist_class) and that C keeps, as CPython's
+    # class attribute is kept
+    if c not in self.cnts:
+        self.err(f"{short(c)}._field_defaults is not supported (of a typing.NamedTuple class)")
+    t = self.nt_dflt_type(c)
+    if t == "":
+        self.err(f"{short(c)}._field_defaults is not supported where its defaults are all None (a dict of None values)")
+    return Val(self.mload(t, f"@d.c.{c}._field_defaults"), t)
+
+def gen_nt_dflt_type(self, c: str) -> str:
+    # (nt_defaults) the type of the _field_defaults of namedtuple()'s class c, whose global it
+    # declares: a dict whose values have the types of its constants (a union of them, with None an
+    # optional; of no defaults, a dict[str, int]); "" where there is no such type (all None)
+    if c not in self.ntdflts:
+        ks: list[str] = []
+        for x in self.cnts[c].kids[1].kids:
+            ks.append(x.kids[0].kind if x.kind == "unary" else "bool" if x.kind == "True" or x.kind == "False" else x.kind)
+        t = self.union_type(ks) if len(ks) > 0 else "int"
+        self.ntdflts[c] = "" if t.startswith("!") or t == "None" else self.ctype("dict", ["str", t])
+        if self.ntdflts[c] != "":
+            self.global_var(f"@d.c.{c}._field_defaults", self.ntdflts[c])
+    return self.ntdflts[c]
+
+def gen_nt_dflt_display(self, c: str) -> Node:
+    # (nt_defaults) a dict display of the fields of namedtuple()'s class c that have defaults,
+    # and their constants
+    line = self.cnts[c].line
+    d = mk("dict", "", line, [])
+    fs = self.nt_fields(c)
+    ds = self.cnts[c].kids[1].kids
+    for i in range(len(ds)):
+        d.kids.extend([mk("str", fs[len(fs) - len(ds) + i], line, []), clone(ds[i])])
+    return d
 
 def gen_dc_fields(self, ci: ClassInfo) -> list[str]:
     # the fields of dataclass (or NamedTuple) ci that @dataclass knows: those with options (not
@@ -1798,7 +1842,10 @@ def gen_scan_fields(self, ci: ClassInfo, f: FnInfo, body: list[Node], known: dic
                 t = "" if why != "" else self.vtype(st.kids[1]) if k == "annassign" else self.guess(st.kids[-1], f)
                 if t.startswith("!"):
                     why = t[1:]  # (a call of a function Pystachy cannot compile: its error)
+                given = t
                 t = "" if t == "None" or why != "" else t  # (f() that returns None: a field has a value type)
+                if t == "" and why == "" and ci.origin in self.cnts:
+                    why = f"field '{name}' of namedtuple {short(ci.name)} given {'None' if given == 'None' else 'a value whose type cannot be inferred'} is not supported (the call that makes an object types its fields)"
                 if t == "" and why == "":
                     why = f"cannot infer the type of field '{name}'; annotate it (self.{name}: T = ...)"
                 if t == "" and ci.mod == "":
@@ -2170,7 +2217,7 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
         self.err(f"field '{name}' is outside __slots__ of '{short(ci.name)}'")
     if name not in ci.ftypes:
         if name in ci.methods:
-            self.err(f"{o.t}.{name} is a method: call it, {name}(...) (methods are not values)")
+            self.err(f"{shown(o.t)}.{name} is a method: call it, {name}(...) (methods are not values)")
         if ci.exc != "":
             sub = [c for c in self.classes.values() if c.name != o.t and name in c.ftypes and self.derives(c.name, o.t)]
             if len(sub) > 0:
@@ -2182,7 +2229,9 @@ def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
                 if name in EXCINIT[b].split() and exc_derives(ci.exc, b):
                     self.err(f"'{short(o.t)}' object has no attribute '{name}': {b}'s attribute {name} is not supported (a field of the class assigned in __init__, after super().__init__(...), is)")
             self.err(f"'{short(o.t)}' object has no attribute '{name}' (of an exception object, only the fields of its class are supported; str(e) and repr(e) are)")
-        self.err(f"'{o.t}' object has no attribute '{name}'")
+        if o.t in self.nts and name == "__doc__":
+            self.err(f"reading the __doc__ of NamedTuple {short(o.t)} is not supported (Pystachy keeps no docstrings of classes)")
+        self.err(f"'{shown(o.t)}' object has no attribute '{name}'")
     extra = " and no __dict__ for setting new attributes" if store else ""
     self.notnone(o, f"AttributeError: 'NoneType' object has no attribute '{name}'{extra}")
     if name == "__slots__" and name not in ci.fpos:

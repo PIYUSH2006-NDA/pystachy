@@ -151,6 +151,7 @@ static uintptr_t *mstk;                /* mark stack of (address, bytes) ranges 
 static I msp, mcap;
 static Str *ch1[256];                  /* runtime statics that hold heap pointers (roots) */
 static List *args;
+static List *warnopts;                 /* sys.warnoptions, made by its first read (pys_warnoptions) */
 static struct { Exc *cur, *handled, *shown, *pend, *closed; } xr;   /* the exception raised last, the one being
                                      handled, the uncaught one whose str() is being shown, the one a with-file's
                                      close raised while unwinding (see exceptions), the one a generator raised
@@ -208,6 +209,7 @@ __attribute__((noinline, no_sanitize("address"))) static void mark_roots(void) {
   for (I i = 0; i < gc_nroots; i++) scan((const W *)gc_roots[i], (const W *)gc_roots[i] + 1);
   scan((const W *)ch1, (const W *)(ch1 + 256));
   scan((const W *)&args, (const W *)(&args + 1));
+  scan((const W *)&warnopts, (const W *)(&warnopts + 1));
   if (xthrow) {                        /* exceptions are on, or one is being reported (NULL: none to scan) */
     scan((const W *)&xr, (const W *)(&xr + 1));
     if (nunw) scan((const W *)unw, (const W *)(unw + nunw));   /* unw is NULL before the first */
@@ -3405,8 +3407,14 @@ void pys_init_lib(I **roots, I nroots) {
     std_err.f = stderr; std_err.wr = 1; std_err.std = 1;
   }
   args = pys_list_new(0);              /* sys.argv: the host's (pyext.c's pyx_argv appends it) */
+  warnopts = 0;                        /* and sys.warnoptions (pyx_argv appends the host's, if any) */
 }
 List *pys_argv(void) { return args; }
+List *pys_warnoptions(void) {          /* sys.warnoptions: [], CPython's for a program run without -W options (and
+                                          without PYTHONWARNINGS or PYTHONDEVMODE, which Pystachy does not read) */
+  if (!warnopts) warnopts = pys_list_new(0);
+  return warnopts;
+}
 File *pys_std(I i) { return i == 0 ? &std_in : i == 1 ? &std_out : &std_err; }
 void pys_write(Str *s, I fd) { io_in(); put1(fd == 2 ? &std_err : &std_out, s->s, s->len); io_out(); }
 void pys_file_flush(File *f);
@@ -3671,6 +3679,27 @@ void pys_file_drop(File *f) {          /* the compiler's close of a file used in
 I pys_file_closed(File *f) { return f->closed; }
 Str *pys_file_name(File *f) { return f->name ? f->name : cstr(f == &std_in ? "<stdin>" : f == &std_out ? "<stdout>" : "<stderr>"); }
 Str *pys_file_mode(File *f) { return f->mode ? f->mode : cstr(f == &std_in ? "r" : "w"); }
+/* lib/io.py's TextIOWrapper (_pystachy_io): the encoding of one made without encoding=, a file's (CPython's
+   locale.getpreferredencoding(False)); the one encoding="locale" names, CPython's locale.getencoding(): the
+   codeset of the LC_CTYPE locale the environment names, where CPython coerces the C locale to C.UTF-8 (PEP 538,
+   which LC_ALL turns off); and its io.UnsupportedOperation, as a file's */
+Str *pys_io_defenc(void) { return cstr(defenc()); }
+Str *pys_io_locenc(void) {
+  static char e[40];
+  if (!*e) {
+    static const char *const utf8[] = {"C.UTF-8", "C.utf8", "UTF-8"};   /* (the coercion's, in its order) */
+    char old[64]; snprintf(old, sizeof old, "%s", setlocale(LC_CTYPE, 0));   /* (a host's own is put back) */
+    const char *l = setlocale(LC_CTYPE, ""), *all = getenv("LC_ALL");
+    if (!l) l = setlocale(LC_CTYPE, "C");   /* (a locale the system does not have: CPython's stays C) */
+    if (l && !strcmp(l, "C") && !(all && *all))
+      for (int i = 0; i < 3 && !setlocale(LC_CTYPE, utf8[i]); i++) {}
+    const char *c = nl_langinfo(CODESET);
+    snprintf(e, sizeof e, "%s", c && *c ? c : "UTF-8");
+    setlocale(LC_CTYPE, old);
+  }
+  return cstr(e);
+}
+_Noreturn void pys_io_unsupported(Str *msg) { failf("io.UnsupportedOperation: %s", msg->s); }
 I pys_system(Str *c) {
   if (nul(c)) pys_fail("ValueError: embedded null byte");
   return system(c->s);                 /* like CPython, without flushing stdout first */

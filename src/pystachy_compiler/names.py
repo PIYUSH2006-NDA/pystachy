@@ -8,9 +8,16 @@ def owner(name: str) -> str:
     return "" if o == "__main__" else o
 
 
+# the classes named otherwise than the name their statement binds, by their qualified names: those
+# namedtuple() makes, named by its typename (_Mismatch = namedtuple("Mismatch", ...)), see Gen.program
+RENAMED: dict[str, str] = {}
+
+
 def short(name: str) -> str:
     # a function's or class's own name, without its module (heapq$heappush: heappush), a class
     # template's specialization its class's (Box-2: Box)
+    if len(RENAMED) > 0 and unspec(name) in RENAMED:
+        return RENAMED[unspec(name)]
     return unspec(name[name.rfind("$") + 1 :])
 
 
@@ -30,7 +37,8 @@ def retoken(t: str, name: str, to: str) -> str:
 
 def unspec(name: str) -> str:
     # the class that a specialization of a class template is (Box-2, re$Match-1: Box, re$Match):
-    # its name and a number, joined by "-", which no class name of Python's has
+    # its name and a number, joined by "-", which no class name of Python's has (C-0: the class
+    # of a module-level C rebound to its instance, Loader.singletons)
     i = name.rfind("-")
     if i <= 0 or i + 1 == len(name) or not name[i + 1 :].isdigit():
         return name
