@@ -1,6 +1,6 @@
 # strs that appends in place (#112) grow across 8,200 bytes, the largest size class, where a copy
-# is a large object (#567): the first large copy fits exactly, later ones get room, and the first
-# other read of the local gives the room back. Strs grown just past the boundary and far past it,
+# is a large object (#567): the first large copy fits exactly, later ones get room, which the
+# collector gives back once a str stops growing. Strs grown just past the boundary and far past it,
 # kept in lists, then read, sliced, compared, hashed and grown again; reads between appends,
 # s += s and generators.
 from collections.abc import Iterator
@@ -69,7 +69,7 @@ def read_between() -> None:
 
 
 def regrow() -> None:
-    # a kept str grown again: its room was given back, and the next appends copy it
+    # a kept str grown again: it was read, so the next appends copy it
     s = grow(2500, "ab|")
     first = s
     for i in range(1000):

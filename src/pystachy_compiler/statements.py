@@ -1179,9 +1179,7 @@ def gen_str_append(self, t: Node, rhs: Node, shown: str) -> None:
     # flag is 1 where t holds a str that an append made and that nothing else holds, which
     # pys_str_iadd then writes in place while its memory has room: every other read of t clears
     # it before it loads t (load_name), as what reads t may keep its str (in a list, a field, a
-    # variable), and so does every other store (store_name). A read that finds the flag set first
-    # gives back the room that a copy of a large str left (pys_str_settle), so a str that appends
-    # grew past 8,200 bytes and a program keeps is no larger than on main. The flag is loaded once rhs has
+    # variable), and so does every other store (store_name). The flag is loaded once rhs has
     # run, as rhs may read t (t += t copies t). A str is hashed only through a read, so an owned
     # one's dict_hash is still 0
     self.appending = True

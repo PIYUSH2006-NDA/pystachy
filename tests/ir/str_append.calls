@@ -1,6 +1,6 @@
 @main.init: pys_alloc pys_str_int pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_write pys_raise pys_raise
 @f.loop: pys_str_int pys_str_iadd
-@f.plus: pys_str_iadd pys_str_settle
+@f.plus: pys_str_iadd
 @f.prepend: pys_str_add
 @f.glob: pys_str_add
 @c.0.1:

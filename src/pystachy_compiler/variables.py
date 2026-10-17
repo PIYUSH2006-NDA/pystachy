@@ -111,18 +111,7 @@ def gen_load_name(self, name: str) -> Val:
             if t == "None":
                 return Val("null", "None")
         if name in self.owned and not self.appending:
-            own = Val(self.owned[name], "*int")
-            if t == "str" and self.owns(name):
-                # (and where it was set, the str gives back the room that appends left: str_append)
-                give = self.label()
-                read = self.label()
-                self.cbr(self.num_cmp("!=", self.mem_load(own), Val("0", "int")).v, give, read)
-                self.place(give)
-                slot = Val(self.lreg[name], "*str")
-                self.mem_store(slot, Val(self.rt("pys_str_settle", "ptr", [f"ptr {self.mem_load(slot).v}"]), "str"))
-                self.br(read)
-                self.place(read)
-            self.mem_store(own, Val("0", "int"))  # (what reads it may keep it: str_append)
+            self.mem_store(Val(self.owned[name], "*int"), Val("0", "int"))  # (what reads it may keep it: str_append)
         r = self.mem_load(Val(self.lreg[name], "*" + t)).v
         if name == self.selfname and name not in self.compvars:
             self.nn[r] = True
