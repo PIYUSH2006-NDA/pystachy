@@ -14,6 +14,9 @@ from src.pystachy_compiler.specs import (
     FLOATINFO,
     FROZENERR,
     FROZENUSE,
+    GALIAS,
+    GALIASUSE,
+    IMPLEMENTATION,
     ITERS,
     METHODS,
     MODATTRS,
@@ -28,6 +31,8 @@ from src.pystachy_compiler.specs import (
     PYBUILTINS,
     RANGEC,
     RANGES,
+    TYPESMOD,
+    TYPESUSE,
     VERSIONINFO,
 )
 from src.pystachy_compiler.syntax import Node, made_var, mk
@@ -98,6 +103,12 @@ def gen_modattr(self, path: str) -> Val:
         return Val(fbits(c), "float") if "e" in c else Val(c, "int")
     if path == "sys.float_info":
         self.err("sys.float_info cannot be used as a value (read its attributes: sys.float_info.max, sys.float_info.epsilon, ...)")
+    if path == "sys.implementation.name":
+        return Val(self.sconst(IMPLEMENTATION), "str")
+    if path.startswith(TYPESMOD + "."):
+        self.err(GALIASUSE if path == GALIAS else TYPESUSE.replace("NAME", path[len(TYPESMOD) + 1 :]))
+    if path == "sys.implementation":
+        self.err("sys.implementation cannot be used as a value (read sys.implementation.name, which is \"pystachy\")")
     if path in VERSIONINFO:
         c = VERSIONINFO[path]
         return Val(self.sconst(c[1:-1]), "str") if c.startswith("'") else Val(c, "int")
@@ -131,6 +142,8 @@ def gen_builtin(self, name: str, args: list[Node], want: str, resultsoft: bool =
     # retval's open-result marker belongs to forwarding calls, not to the
     # arguments a builtin consumes (sorted/list/dict may reuse their context).
     want = "" if want == "?" else want
+    if name.startswith(TYPESMOD + "."):
+        self.err(GALIASUSE if name == GALIAS else TYPESUSE.replace("NAME", name[len(TYPESMOD) + 1 :]))
     if name == "__pys_exc_repr":
         return self.exc_brepr(self.expr(args[0], ""))  # (exc_helpers)
     if name == "__pys_repr_enter" or name == "__pys_repr_leave":

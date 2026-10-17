@@ -26,7 +26,7 @@ Imports search builtin modules first, then the program's directory,
 | `keyword` | Adapted CPython | Keyword lists, `iskeyword`, `issoftkeyword` | Compiled predicates accept strings and `None` |
 | `collections` | Subset implementation | Typed `deque` (both ends, bounded queues, searches and comparisons), `defaultdict`, `OrderedDict` and `Counter` | Items share one type; mappings hold dicts; deque iterators check mutation, other iteration is a snapshot |
 | `shlex` | Adapted CPython | `split`, `quote`, `join`, lexer options and source stacking | Files are read eagerly; punctuation field is writable |
-| `io` | Subset implementation | `StringIO` (also in `with`) and seek constants | Byte positions; lazy line iteration |
+| `io` | Subset implementation | `StringIO` and `BytesIO` (also in `with`) and seek constants | `StringIO`'s byte positions; lazy line iteration; no `getbuffer()` or `readinto()` |
 | `csv` | Subset implementation | Reader/writer, dict reader/writer, dialects and registry | Eager reading; reader fields are strings; no `Sniffer` |
 | `re` | Subset port of parser/compiler and C engine | String regex syntax and matching, substitution, caches, runtime-length `Match.groups()` | Byte positions; other selected variable-length result APIs unavailable |
 | `fnmatch` | Adapted CPython | `fnmatch`, `fnmatchcase`, `filter`, `translate` | String patterns; POSIX case handling |
@@ -45,7 +45,7 @@ Imports search builtin modules first, then the program's directory,
 | `struct` | Unchanged CPython on a subset port of the C module `_struct` (`_pystachy_struct`) | `pack`, `unpack`, `unpack_from`, `iter_unpack`, `calcsize` and `Struct` for every code of the native and standard tables, with CPython's bytes, values and errors | The format must be known as the program compiles (`calcsize()` takes any); `bytes` buffers; no `pack_into` |
 | `itertools` | Subset implementation of CPython's C module on generators (`_pystachy_itertools`), following the documented pure-Python equivalents | Every function: `count`, `cycle`, `repeat`, `accumulate`, `batched`, `chain` and `chain.from_iterable`, `compress`, `dropwhile`, `filterfalse`, `groupby`, `islice`, `pairwise`, `starmap`, `takewhile`, `tee`, `zip_longest`, `product`, `permutations`, `combinations` and `combinations_with_replacement`, lazy as in CPython, with the C module's argument checks and messages | Iterators are generators of one item type; runtime-length tuples (`batched`, the combinatorics) of scalar items; `tee(it, n)` gives a list; an iterator an exception has left is finished |
 | `contextlib` | Adapted CPython | `contextmanager` (also as a decorator), `closing`, `nullcontext`, `suppress` (as a `with` item), `AbstractContextManager`, `ContextDecorator` | No `ExitStack`, `redirect_stdout`, `chdir` or async managers; positional `nullcontext(value)` |
-| `types` | Subset implementation (`_pystachy_types`) | `from types import TracebackType`, for `__exit__`'s annotation | No other name; `import types` finds no module |
+| `types` | Subset implementation (`_pystachy_types`, and the compiler's `_pystachy_typenames`) | `TracebackType`, for `__exit__`'s annotation; `GenericAlias`, for CPython's idiom for a generic class: `__class_getitem__ = classmethod(GenericAlias)` in a class body | Its other names import, but any use of one is a compile-time error; a generic-alias class's subscripts at run time are too |
 | `datetime` | Adapted CPython (`_pydatetime`, following `_datetime`) | `timedelta`, `date`, `time`, `datetime`, fixed-offset `timezone`, `tzinfo` subclasses, ISO 8601, `strftime()` | No local time zone; no `strptime()` or pickling |
 
 The [compatibility reference](compatibility.md) defines each module's accepted
@@ -100,7 +100,8 @@ where CPython imports its C modules.
 `tools/unicodedata_tables.py` writes the tables of `unicodedata`, `_pystachy_unicodedata_db.py` and
 `_pystachy_unicodedata_names.py`, from CPython's own module.
 `_pystachy_abc.py` is `abc`, which CPython imports as it starts, so that a program's own `abc.py`
-is never imported there. `_collections_abc` has no file here: it is the compiler's builtin
+is never imported there. `types.py` binds `TracebackType` from `_pystachy_types.py` and CPython's
+other names of `types` from `_pystachy_typenames`, the compiler's, which only it may import. `_collections_abc` has no file here: it is the compiler's builtin
 `collections.abc`, as CPython's `collections` makes it `collections.abc`.
 
 `_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers

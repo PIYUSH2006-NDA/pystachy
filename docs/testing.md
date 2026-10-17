@@ -142,15 +142,15 @@ to `main` and manual dispatch. Pull requests test the branch merged with the the
 `main`. A newer PR push cancels its previous run; commits on `main` run to completion.
 The toolchain is Ubuntu 24.04, LLVM 18 and the CPython version pinned in `.python-version`.
 
-Twenty-one groups run in parallel, each with its own fixed-point bootstrap. The target is under
+Twenty-three groups run in parallel, each with its own fixed-point bootstrap. The target is under
 ten minutes of work per group; the 15-minute job limit leaves room for runner variation:
 
 | Group | Work after bootstrap |
 |---|---|
-| `hosted-0`, `hosted-1` | Two disjoint halves of the CPython-hosted differential suite, JIT and AOT. |
+| `hosted-0`, `hosted-1`, `hosted-2` | Three disjoint thirds of the CPython-hosted differential suite, JIT and AOT. |
 | `native-0`, `native-1` | Two disjoint halves of the native differential suite, JIT and AOT. |
 | `opt-off-0`, `opt-off-1` | Two disjoint halves of the native suite with IR optimizations disabled. |
-| `python-free-0`, `python-free-1` | Rebuild with no Python on `PATH`; two disjoint halves of the suite with that compiler. |
+| `python-free-0`, `python-free-1`, `python-free-2` | Rebuild with no Python on `PATH`; three disjoint thirds of the suite with that compiler. |
 | `ubsan-0`, `ubsan-1`, `ubsan-2` | Sanitized compiler/runtime; three disjoint thirds of the JIT/AOT suite. |
 | `gc-self` | Collector-stressed self-compilation and identical-IR check. |
 | `gc-jit-0`, `gc-jit-1` | Two disjoint halves of the full JIT suite, with compiler and program GC stress. |
@@ -182,14 +182,14 @@ intervals, distinct shard identities and complete counts for every job: the JIT 
 AOT thirds each make as many checks as `tests/verify.sh` counts in the whole corpus in one mode
 (each report's `sources.mode_checks`). `tests/verify.sh gc-stress` still runs all GC checks
 locally with one bootstrap; `gc-jit` runs the two JIT halves and `gc-aot` the three AOT thirds.
-The CPython-hosted, native, opt-off and python-free suites are split the same way, in halves, and
-the UBSan suite in thirds (`tests/verify.sh`'s `shard_cases`). The gate requires each shard's
-identity and complete count, and that the shards together make as many checks as an unsharded suite: the JIT and AOT
-halves as many as `tests/verify.sh` counts in the whole corpus (each report's
-`sources.suite_checks`; opt-off's once per `PYSTACHY_OPT` setting), and the UBSan thirds, which run
-in each mode, twice `sources.mode_checks`. Locally, `hosted`, `native` and `opt-off` run both of their halves,
-`python-free` rebuilds the compiler once and runs both of its halves, and `ubsan` builds the
-sanitized compiler once and runs its three thirds.
+The native and opt-off suites are split the same way, in halves, and the CPython-hosted,
+python-free and UBSan suites in thirds (`tests/verify.sh`'s `shard_cases`). The gate requires each
+shard's identity and complete count, and that the shards together make as many checks as an
+unsharded suite: the JIT and AOT shards as many as `tests/verify.sh` counts in the whole corpus
+(each report's `sources.suite_checks`; opt-off's once per `PYSTACHY_OPT` setting), and the UBSan
+thirds, which run in each mode, twice `sources.mode_checks`. Locally, `native` and `opt-off` run
+both of their halves and `hosted` its three thirds, `python-free` rebuilds the compiler once and
+runs its three thirds, and `ubsan` builds the sanitized compiler once and runs its three thirds.
 The compiler-scaling check is split by shapes: `scaling-0` (in `benchmarks`) checks those of
 `SCALING_0`, about half of the lines the CPython-hosted compiler executes, and `scaling-1` every
 other shape of `tools/scaling.py` (its `-x`), so a new shape is checked as well; the gate requires

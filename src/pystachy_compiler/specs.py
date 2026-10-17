@@ -1,5 +1,6 @@
 """Specs component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+import sys
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
@@ -186,6 +187,34 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.min_exp": "-1021", "sys.float_info.min_10_exp": "-307", "sys.float_info.dig": "15",
                              "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
+# sys.platform as the runtime reports it (pys_platform() in runtime.c) on the system the compiler
+# runs on, which is the one it compiles for, and sys.implementation.name: tests of them, and of
+# os.name (OSCONST), in if statements and conditional expressions are decided at compile time
+# (Loader.platform_test())
+PLATFORM = "unknown"
+for _k in ("linux", "darwin", "freebsd"):
+    if sys.platform.startswith(_k):
+        PLATFORM = _k
+IMPLEMENTATION = "pystachy"
+MODATTRS["sys.implementation.name"] = True
+# Pystachy's own builtin module, which only lib/types.py imports (Loader.import_stmt): CPython
+# 3.13's names of types, which lib/types.py binds, but TracebackType (lib/_pystachy_types.py's
+# class, which a with statement passes to __exit__). GenericAlias is supported only as a class body's
+# __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class, which defines
+# nothing in Pystachy (Gen.generic_aliases()); any other use of these names is an error
+TYPESMOD = "_pystachy_typenames"
+for _k in ("AsyncGeneratorType BuiltinFunctionType BuiltinMethodType CapsuleType CellType ClassMethodDescriptorType CodeType "
+           "CoroutineType DynamicClassAttribute EllipsisType FrameType FunctionType GeneratorType GenericAlias "
+           "GetSetDescriptorType LambdaType MappingProxyType MemberDescriptorType MethodDescriptorType MethodType "
+           "MethodWrapperType ModuleType NoneType NotImplementedType SimpleNamespace UnionType "
+           "WrapperDescriptorType _GeneratorWrapper _calculate_meta coroutine get_original_bases new_class prepare_class "
+           "resolve_bases").split():
+    MODATTRS[TYPESMOD + "." + _k] = True
+MODULES[TYPESMOD] = True
+GALIAS = TYPESMOD + ".GenericAlias"
+GALIASUSE = "types.GenericAlias is supported only as a class body's __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class: Pystachy has no generic aliases"
+TYPESUSE = "types.NAME is not supported: of the types module, Pystachy has only GenericAlias, for a class body's __class_getitem__ = classmethod(GenericAlias)"
+GALIASSUB = "subscripting class 'NAME' at run time is not supported: CPython makes NAME[...] a types.GenericAlias (its __class_getitem__ = classmethod(GenericAlias)), and Pystachy has no generic aliases"
 for _k in FLOATINFO:
     MODATTRS[_k] = True
 # sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which

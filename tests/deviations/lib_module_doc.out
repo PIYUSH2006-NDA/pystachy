@@ -1,5 +1,5 @@
 functools for Pystachy: caching, reduction, comparison keys and partial application.
-The io module's in-memory text stream, StringIO, written for Pystachy.
+The io module's in-memory streams, StringIO and BytesIO, written for Pystachy.
 Pystachy's stand-in for the curses package: only its pure-Python submodule curses.ascii.
 Operator Interface
 [exit 0]
