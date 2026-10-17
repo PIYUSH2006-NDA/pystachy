@@ -57,7 +57,7 @@ typedef int64_t I;
 typedef struct { I len; uint64_t dict_hash; char s[]; } Str; /* immutable bytes, NUL-terminated; lazy dict hash (0: unset) */
 typedef struct { I len, cap; I *a; } List;
 typedef struct { I len; I a[]; } VTuple;                /* immutable homogeneous tuple, counted inline slots */
-typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; I cut; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple or object keys; see dicts */
+typedef struct { I len, kind, n, size; I *keys, *vals; uint64_t *hs; int32_t *idx; I cut, vatomic; } Dict; /* kind 0: int keys, 1: str, else a Str *: the descriptor of tuple or object keys; vatomic: the values are ints, floats or bools, whose arrays are atomic; see dicts */
 typedef struct { I len, kind, fill, mask, finger; I *keys, *hs; } Set; /* a set or frozenset, kind as Dict's; see sets */
 typedef struct { char *p; I n, cap; } Buf;
 typedef struct Exc Exc;                                /* a raised exception (see exceptions) */
@@ -75,11 +75,12 @@ typedef struct Exc Exc;                                /* a raised exception (se
    page map (48-bit addresses, 4 KiB pages) sends each of its pages to that header, so "is
    this word a pointer into the heap, and into which object" is a range check, two loads and
    a multiply by the reciprocal of the slot size: O(1), interior pointers included.
-   Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and general backing
-   arrays, dict value arrays, the key arrays of dicts and sets of strs, tuples and objects); pys_alloc_atomic returns
-   memory that is never scanned (strings, Buf data, dict hash and index arrays, set hash arrays,
-   range-list arrays, the key arrays of dicts and sets of ints, the merge buffers of sorts of
-   ints and floats),
+   Kinds. pys_alloc returns scanned memory (objects, tuples, list headers and the item arrays of
+   other lists, the value arrays of other dicts, the key arrays of dicts and sets of strs, tuples
+   and objects); pys_alloc_atomic returns memory that is never scanned (strings, Buf data, dict
+   hash and index arrays, set hash arrays, the item arrays of lists of ints, floats and bools (see
+   lists) and the value arrays of dicts of them (Dict.vatomic), the key arrays of dicts and sets
+   of ints, the merge buffers of sorts of ints and floats),
    since none of it can hold a pointer. Each (class, kind) has a free list. Memory is
    handed out zeroed: the sweep zeroes dead slots, so allocation pops a slot and clears its
    link word (inlined into callers for the classes up to 136 bytes). A chunk's never-used
@@ -1803,17 +1804,31 @@ I pys_vtuple_index(VTuple *t, I v, Str *d, I st, I en) {   /* tuple.index(v, sta
 }
 I pys_vtuple_count(VTuple *t, I v, Str *d) { I c = 0; for (I i = 0; i < t->len; i++) c += eqitem(t->a[i], v, d->s); return c; }
 
-/* ---------- lists ---------- */
+/* ---------- lists ----------
+   A list's header is scanned. Its item array is atomic when the items cannot be pointers: the
+   compiler makes list[int], list[float] and list[bool] with pys_list_new_atomic, and a list's
+   type never changes (lists are invariant, and only an empty result whose type is still open
+   is typed later: its array is scanned). Growth, copies, slices, + and * make new arrays of
+   the kind of the arrays they copy (atomic_items), so a list keeps its kind for its lifetime,
+   and an emptied list keeps it in the sentinel it is left with. */
 static I empty_list[1];                /* valid even for zero-byte copies; distinct from sort's sentinel */
-static void empty(List *l) {           /* detach an empty list's historical storage without allocating */
-  if (l->cap) { l->cap = 0; l->a = empty_list; }   /* cap 0 during sort: preserve its mutation marker */
+static I empty_atomic[1];              /* the same, for a list whose array was atomic */
+static int atomic_items(const I *a) {  /* is the item array a atomic? its kind, from the page map */
+  uintptr_t w = (uintptr_t)a; Seg **m, *s;
+  if (a == empty_atomic) return 1;
+  return w - gc_lo < gc_hi - gc_lo && (m = pmap[w >> 30]) && (s = m[w >> 12 & 0x3ffff]) && (s->k & 1);
 }
+static void empty(List *l) {           /* detach an empty list's historical storage without allocating */
+  if (l->cap) { l->cap = 0; l->a = atomic_items(l->a) ? empty_atomic : empty_list; }   /* cap 0 during sort: preserve its mutation marker */
+}
+static I *item_array(I n, int atomic) { return atomic ? pys_alloc_atomic(n * 8) : pys_alloc(n * 8); }
 static List *list_new(I cap, int atomic) {
   List *l = pys_alloc(sizeof(List));
   l->cap = cap > 4 ? cap : 4;
-  l->a = atomic ? pys_alloc_atomic(l->cap * 8) : pys_alloc(l->cap * 8); return l;
+  l->a = item_array(l->cap, atomic); return l;
 }
 List *pys_list_new(I cap) { return list_new(cap, 0); }
+List *pys_list_new_atomic(I cap) { return list_new(cap, 1); }   /* a list[int], list[float] or list[bool] */
 List *pys_vtuple_list(VTuple *t) {
   if (!t) pys_fail("TypeError: 'NoneType' object is not iterable");
   List *l = pys_list_new(t->len);
@@ -1825,7 +1840,7 @@ static void reserve(List *l, I n) {
   if (n <= l->cap) return;
   I c = l->cap * 2 > n ? l->cap * 2 : n;
   if (c < 4) c = 4;
-  I *a = pys_alloc(c * 8);
+  I *a = item_array(c, atomic_items(l->a));
   memcpy(a, l->a, l->len * 8); l->a = a; l->cap = c;
 }
 /* element access through a distinct struct type: TBAA then knows a store to an element
@@ -1853,13 +1868,13 @@ void pys_list_insert(List *l, I i, I v) {
 void pys_list_extend(List *l, List *m) { I n = m->len; reserve(l, l->len + n); memcpy(l->a + l->len, m->a, n * 8); l->len += n; }
 List *pys_list_slice(List *l, I lo, I hi) {
   span(&lo, &hi, l->len);
-  List *r = pys_list_new(hi - lo); memcpy(r->a, l->a + lo, (hi - lo) * 8); r->len = hi - lo; return r;
+  List *r = list_new(hi - lo, atomic_items(l->a)); memcpy(r->a, l->a + lo, (hi - lo) * 8); r->len = hi - lo; return r;
 }
 List *pys_list_copy(List *l) { return pys_list_slice(l, NONE, NONE); }
 void pys_list_clear(List *l) { memset(l->a, 0, l->len * 8); l->len = 0; empty(l); }
 List *pys_list_slice_step(List *l, I lo, I hi, I st) {
   I n = sspan(&lo, hi, &st, l->len);
-  List *r = pys_list_new(n);
+  List *r = list_new(n, atomic_items(l->a));
   for (I i = 0; i < n; i++) r->a[i] = l->a[lo + i * st];
   r->len = n; return r;
 }
@@ -1895,7 +1910,10 @@ void pys_list_del_slice(List *l, I lo, I hi, I st) {
   memset(l->a + w, 0, k * 8);
   if (!(l->len = w)) empty(l);
 }
-List *pys_list_add(List *a, List *b) { List *r = pys_list_new(a->len + b->len); pys_list_extend(r, a); pys_list_extend(r, b); return r; }
+List *pys_list_add(List *a, List *b) {
+  List *r = list_new(a->len + b->len, atomic_items(a->a) && atomic_items(b->a));
+  pys_list_extend(r, a); pys_list_extend(r, b); return r;
+}
 void pys_list_imul(List *l, I n) {               /* xs *= n, in place */
   I m = l->len;
   if (n <= 0 || !m) { pys_list_clear(l); return; }
@@ -1908,7 +1926,7 @@ List *pys_list_mul(List *a, I n) {
   I m = a->len;
   if (!m) n = 0;
   if (n > 0 && m > (INT64_MAX >> 4) / n) pys_fail("MemoryError");
-  List *r = pys_list_new(n > 0 ? m * n : 0);
+  List *r = list_new(n > 0 ? m * n : 0, atomic_items(a->a));
   for (I i = 0; i < n; i++) memcpy(r->a + i * m, a->a, m * 8);
   r->len = n > 0 ? m * n : 0; return r;
 }
@@ -2460,7 +2478,7 @@ static I dempty(Dict *d, uint64_t h) {               /* find_empty_slot: hash h'
 }
 static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a table of this size, holes dropped */
   if (khash(d->kind)) d->kind |= KTAG;
-  I u = size * 2 / 3, *k = keymem(d->kind, u), *v = pys_alloc(u * 8), n = 0, m = d->kind & KTAG ? size - 1 : size * 2 - 1;
+  I u = size * 2 / 3, *k = keymem(d->kind, u), *v = item_array(u, (int)d->vatomic), n = 0, m = d->kind & KTAG ? size - 1 : size * 2 - 1;
   uint64_t *hs = pys_alloc_atomic(u * 8); int32_t *ix = pys_alloc_atomic((m + 1) * 4);
   for (I e = 0; e < src->n; e++) {
     uint64_t h = src->hs[e], p = h, i = p & m;
@@ -2471,11 +2489,16 @@ static void build(Dict *d, Dict *src, I size) {      /* d := src's items in a ta
   }
   d->len = n; d->n = n; d->cut = 0; d->size = size; d->keys = k; d->vals = v; d->hs = hs; d->idx = ix;
 }
-Dict *pys_dict_new(I kind, I n) {                     /* a display of n items is presized, as in CPython */
-  Dict *d = pys_alloc(sizeof(Dict)); d->kind = kind;
+static Dict *dict_new(I kind, I n, I vatomic) {      /* a display of n items is presized, as in CPython */
+  Dict *d = pys_alloc(sizeof(Dict)); d->kind = kind; d->vatomic = vatomic;
   if (n > 5) build(d, d, n > 87381 ? 1 << 17 : keysize((n * 3 + 1) / 2));
   return d;
 }
+Dict *pys_dict_new(I kind, I n) { return dict_new(kind, n, 0); }
+/* a dict of int, float or bool values, which the compiler makes with this: the arrays of its values
+   are atomic, and so are those of its copies (dict.copy(), dict(d)); dict.fromkeys and the
+   empty dicts that a template returns while their type is open are made by pys_dict_new */
+Dict *pys_dict_new_atomic(I kind, I n) { return dict_new(kind, n, 1); }
 static _Noreturn void keyerr(Dict *d, I k) {
   Buf b = {0}; put(&b, "KeyError: ", 10); repr(&b, k, d->kind > 1 ? kdesc(d->kind) : d->kind ? "s" : "i"); put(&b, "", 1); pys_fail(b.p);
 }
@@ -2580,7 +2603,11 @@ I pys_dict_prev(Dict *d, I e, I used, I count) {
   if (e >= 0 && count >= used) pys_fail("RuntimeError: dictionary keys changed during iteration");
   return e;
 }
-static List *col(Dict *d, I *a) { List *l = pys_list_new(d->len); for (I e = 0; e < d->n; e++) if (dlive(d, e)) l->a[l->len++] = a[e]; return l; }
+static List *col(Dict *d, I *a) {    /* the keys or values in a list whose array is of a's kind (an int key's: atomic) */
+  List *l = list_new(d->len, atomic_items(a));
+  for (I e = 0; e < d->n; e++) if (dlive(d, e)) l->a[l->len++] = a[e];
+  return l;
+}
 List *pys_dict_keys(Dict *d) { return col(d, d->keys); }
 List *pys_dict_values(Dict *d) { return col(d, d->vals); }
 List *pys_dict_items(Dict *d) {
@@ -2598,16 +2625,16 @@ List *pys_dict_items(Dict *d) {
 static void retable(Dict *r, Dict *d) {              /* r := d's table, holes included */
   I u = d->size * 2 / 3, x = (I)(dmask(d) + 1) * 4;
   r->kind |= d->kind & KTAG;                         /* (r's descriptor is d's) */
-  r->keys = keymem(r->kind, u); r->vals = pys_alloc(u * 8); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(x);
+  r->keys = keymem(r->kind, u); r->vals = item_array(u, (int)r->vatomic); r->hs = pys_alloc_atomic(u * 8); r->idx = pys_alloc_atomic(x);
   memcpy(r->keys, d->keys, d->n * 8); memcpy(r->vals, d->vals, d->n * 8); memcpy(r->hs, d->hs, d->n * 8);
   memcpy(r->idx, d->idx, x); r->len = d->len; r->n = d->n; r->cut = d->cut; r->size = d->size;
 }
-static Dict *clone(Dict *d) { Dict *r = pys_dict_new(d->kind, 0); retable(r, d); return r; }
+static Dict *clone(Dict *d) { Dict *r = dict_new(d->kind, 0, d->vatomic); retable(r, d); return r; }
 static int clean(Dict *d) { return d->len && d->len == d->n && (d->size == 8 || d->size / 2 * 2 / 3 < d->len); }
 void pys_dict_update(Dict *d, Dict *o);
 Dict *pys_dict_from(Dict *d) {
   if (clean(d)) return clone(d);
-  Dict *r = pys_dict_new(d->kind, 0);
+  Dict *r = dict_new(d->kind, 0, d->vatomic);
   if (d->kind & KTAG) pys_dict_update(r, d);
   else if (d->len) build(r, d, keysize((d->len * 3 + 1) / 2));
   return r;
@@ -2973,7 +3000,7 @@ I pys_set_next(Set *s, I i, I used) {
 I pys_set_key(Set *s, I i) { return s->keys[i]; }
 /* list(s), sorted(s), ...: the elements in the order a loop sees them */
 List *pys_set_list(Set *s) {
-  List *l = pys_list_new(s->len);
+  List *l = list_new(s->len, atomic_items(s->keys));   /* (an int set's table past 8 slots is atomic) */
   for (I i = 0; i <= s->mask; i++) if (s->hs[i] != -1) l->a[l->len++] = s->keys[i];
   return l;
 }

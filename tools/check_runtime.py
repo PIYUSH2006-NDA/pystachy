@@ -99,9 +99,10 @@ BUG_ONLY = ("IndexError: string index out of range", "IndexError: compare out of
             "ValueError: cannot convert float NaN to integer", "ValueError: math domain error")
 # the end of the program (R and N stand for it; running out of memory, oom, for A) and the
 # allocator (A), which I does not look into; gc_room reads its page map for the room of an
-# object it made (pys_str_iadd's own str), which no other allocation changes
+# object it made (pys_str_iadd's own str), which no other allocation changes, and atomic_items
+# for the kind of a list's item array (scanned or not), which is fixed when the array is made
 END = RAISES | {"oom"}
-ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic", "gc_room"}
+ALLOC = {"gc_slow", "pys_alloc", "pys_alloc_atomic", "gc_room", "atomic_items"}
 # C library functions that use no state but the memory their arguments point to
 PURE_C = set("""sqrt sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh exp log log2 log10 log1p expm1
     exp2 cbrt fmod atan2 pow ldexp frexp modf erf erfc nextafter remainder atoi memcmp bcmp memchr memmem strlen
