@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.pystachy_compiler.diagnostics import fail
 from src.pystachy_compiler.ir import Blk, IFn, Ins, Val
 from src.pystachy_compiler.specs import CHECKED, FCMP, FXBIT, GENDONE, GENNAME, GENNEW, GENRET, GENSLOTS, GENSLOTSX, GENSTATE, ICMP, RANGEC, STRLEN_RANGE, TBAA_BYTES, TBAA_LEN
-from src.pystachy_compiler.utils import is_dict, is_tuple, lt, selem, takes_self, targs
+from src.pystachy_compiler.utils import atomic_list, is_dict, is_tuple, lt, selem, takes_self, targs
 
 
 def gen_lower(self, fn: IFn) -> None:
@@ -136,6 +136,10 @@ def gen_lower_ins(self, fn: IFn, i: Ins) -> None:
         o.append("  unreachable")
     elif op == "rt":
         f = self.rtfns[i.s]
+        if i.k > 0 and i.s == "list.new" and atomic_list(self.holes[i.k]):
+            # a list created empty whose type a later use decided: list[int], list[float] or
+            # list[bool], whose items no other type can reach (an open hole is not one of these)
+            f = self.rtfns[self.runtime("pys_list_new_atomic")]
         ll = f.ll
         vs = [ll[j + 1] + " " + i.a[j].v for j in range(len(i.a))]
         if i.k > 0 and (i.s == "dict.new" or i.s == "set.new"):

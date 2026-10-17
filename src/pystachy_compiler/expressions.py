@@ -30,6 +30,7 @@ from src.pystachy_compiler.specs import (
 )
 from src.pystachy_compiler.syntax import Node, comp_names, made_var, mk, names_in
 from src.pystachy_compiler.utils import (
+    atomic_list,
     bool_for_int,
     clone,
     elem,
@@ -845,10 +846,11 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
                     numeric = "; for numeric promotion instead, write float literals or use float() on the integer items" if all(x.t in ["int", "float"] for x in items) else ""
                     self.err(f"expected {typestr(et)}, got {typestr(v.t)}; this list literal needs list[{advice}] to preserve its mixed item types (include enclosing containers in the annotation){numeric}")
         items = [self.coerce(v, et) for v in items]
-        r = self.rt("pys_list_new", "ptr", [f"i64 {len(items)}"])
+        lty = self.ctype("list", [et])
+        r = self.rt("pys_list_new_atomic" if atomic_list(lty) else "pys_list_new", "ptr", [f"i64 {len(items)}"])
         for v in items:
             self.rt("pys_list_append", "void", [f"ptr {r}", "i64 " + self.to_slot(v)])
-        return Val(r, self.ctype("list", [et]))
+        return Val(r, lty)
     if k == "dict":
         kv = targs(want) if is_dict(want) and "?" not in want else ["", ""]
         soft = n is self.soft

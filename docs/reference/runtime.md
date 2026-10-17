@@ -64,12 +64,25 @@ that assumption.
 
 ## List storage
 
-List headers remain scanned so their backing arrays stay reachable. `list(range(...))`
-initially uses pointer-free backing because every element is an unboxed integer, including
-for an empty range's minimum-capacity buffer. The list layout and mutation interface are
-unchanged. Generic growth, copies and slices (stepped too) still allocate scanned backing;
-preserving element kinds through those operations is a separate follow-up. Slice assignment
-and deletion move items within a list's backing, which keeps its kind unless the list grows.
+List headers remain scanned so their backing arrays stay reachable. The backing of a
+`list[int]`, `list[float]` or `list[bool]` is pointer-free (allocated atomic, never scanned):
+`list(range(...))` makes one, and the compiler makes every other list of those types with
+`pys_list_new_atomic`. That covers displays, comprehensions, `list()` of a tuple, and empty
+lists whose type a later use decides, once it has decided it. The list layout and mutation
+interface are unchanged.
+
+Growth, copies, slices (stepped too), `+` and `*` allocate a new backing of the kind of the
+backing they copy, which the page map records (`atomic_items`). A list that is emptied keeps
+its kind in the sentinel it is left with. `list(d)` of a dict with int keys and `list(s)` of
+an int set past its first 8 slots are pointer-free too. Slice assignment and deletion move
+items within a list's backing. So a list keeps its kind for its lifetime: its type never
+changes, since lists are invariant.
+
+The one exception is an empty list that a template returns while its type is still open,
+which each call's context types (`typed_empty`). It is allocated scanned, as are the copies
+and growth made of it, because one allocation may serve a `list[int]` context and a
+`list[str]` one. `tests/gc_list_kinds.py` covers these cases under
+`PYSTACHY_GC_STRESS_PROGRAM=1`, and `make listprobe` checks the allocation kinds directly.
 
 ## Build and cache
 

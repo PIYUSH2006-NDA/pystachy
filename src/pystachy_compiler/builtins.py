@@ -33,6 +33,7 @@ from src.pystachy_compiler.specs import (
 )
 from src.pystachy_compiler.syntax import Node, made_var, mk
 from src.pystachy_compiler.utils import (
+    atomic_list,
     bool_for_int,
     elem,
     fbits,
@@ -1370,7 +1371,7 @@ def gen_as_list(self, v: Val, name: str) -> Val:
                 self.err(f"assigning a {typestr(v.t)} to a list slice is not supported: its items have different types")
             else:
                 self.err(f"{name}() of a {v.t} needs items of a single type")
-        r = self.rt("pys_list_new", "ptr", [f"i64 {len(ts)}"])
+        r = self.rt("pys_list_new_atomic" if atomic_list(self.ctype("list", [et])) else "pys_list_new", "ptr", [f"i64 {len(ts)}"])
         for i in range(len(ts)):
             item = self.tget(v, i)
             self.rt("pys_list_append", "void", [f"ptr {r}", "i64 " + self.to_slot(self.as_float(item) if et == "float" else item)])
