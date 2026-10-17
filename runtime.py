@@ -470,12 +470,21 @@ def pys_str_replace_count(s: str, a: str, b: str, count: int) -> str:
 
 
 def tally(h: str, n: str, st: int, most: int) -> int:
-    # pys_str_count(h, n, st, len(h)), up to most, for a nonempty needle, by seek()'s
+    # pys_str_count(h, n, st, len(h)), up to most. One-byte needles use its optimized counting
+    # loop in bounded chunks, so a small count does not search a long unchanged tail and a large
+    # count keeps the same throughput. Multi-byte needles are counted by seek()'s
     # candidates; but -1 once the failed ones have cost more than the bytes passed (and 64), where
     # the count would go to memmem. replaced() then lists on: a text of costly candidates is
     # searched once, as before, not counted and searched again (DNA's "CA" in ACG took 1.6 times
     # as long, and "ab" * 70000 + "a" * 20000000 + "ab" 1.3 times)
     m = len(n)
+    if m == 1:
+        c = 0
+        while st < len(h) and c < most:
+            end = st + min(len(h) - st, max(65536, most - c))
+            c += pys_str_count(h, n, st, end)
+            st = end
+        return min(c, most)
     first = _rt.byte(n, 0)
     last = len(h) - m
     c = 0

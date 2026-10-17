@@ -62,3 +62,7 @@ print(t.replace("", "-", 70000) == "-a-b" * 35000 + "ab" * 15000)
 print(len(t.replace("", "")), t.replace("", "", 5) == t)
 # a needle that never occurs, and a count of zero
 print(t.replace("c", "d") == t, s.replace("a", "b", 0) == s)
+# bytes use the same dense replacement path, including NUL and non-UTF-8 data.
+raw = b"\x00" * (CAP + 7) + b"\xff"
+print(raw.replace(b"\x00", b"\xff", CAP + 1) == b"\xff" * (CAP + 1) + b"\x00" * 6 + b"\xff")
+print(raw.replace(b"\x00", b"", CAP + 1) == b"\x00" * 6 + b"\xff")
