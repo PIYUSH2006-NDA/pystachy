@@ -224,6 +224,30 @@ Handlers match exception classes and rethrow unmatched exceptions. `finally` and
 cleanup run on the relevant normal and exceptional exits. Nested `finally` handling avoids
 exponential duplication. The C runtime is compiled with exception support in both tiers.
 
+A `with` statement over a file registers the file's close as an unwind action. Over an object
+of a class that defines `__enter__` and `__exit__`, `statements.with_cm` builds a `try`
+statement of its own and compiles it as any other: the block (after the `as` target, assigned
+from `__enter__()`) is its body, its one except clause calls `__exit__` with the exception's
+class and the exception (`excinfo` nodes, which read the clause's exception) and raises it again
+unless the call returns a true value, and its else block calls `__exit__(None, None, None)`, as
+an exit pushed for the block (like a finally block's) does for a `break`, `continue` or
+`return`. The items after the first such manager, and the block, are its body (they nest). The
+exception's class is the exception itself under another type (`exctype`); an exception that may
+be `None` is `opt[exc]`, both null for `None`. `__enter__` and `__exit__` are method templates
+(`utils.template_ok`), so an unannotated `__exit__` is compiled once for the exception's
+arguments and once for three `None`s. A program with such a class lets flow analysis end a
+`with` block anywhere (`Gen.cm_exits`), unless each of its items is a call of the builtin
+`open()`. `contextlib.suppress(A, B)` as an item is the except
+clause `except (A, B): pass` (`statements.suppress_item`), and the loader makes a method decorated
+`@contextmanager` the generator method `_pys_cm_NAME` and a method `NAME` that calls
+`contextmanager()` on it bound (`loader.cm_methods`): it makes the `_GeneratorContextManager`
+itself, of the generator `C._pys_cm_NAME(self, ...)` of its own class `C` (so `super().NAME()`
+runs the base class's; `self._pys_cm_NAME(...)` where no class of the module derives from `C` or
+is a base of it) and of `_pys_cm_NAME` bound to `self` taken as an object of the class that
+first defines `NAME` so (`loader.cm_root`): `NAME` returns one type for every subclass. A program that reads `__cause__`
+(`Gen.causeread`) records it, `pys_exc_setcause`, for `raise ... from c` and PEP 479's
+`RuntimeError`.
+
 Iterator objects are ordinary class objects. A loop, `in`, unpacking or `next(it, default)`
 over one calls its `__next__` in a block whose landing pad catches only `StopIteration`
 (and its subclasses), restores the exception being handled and leaves the loop; the loop
@@ -251,10 +275,11 @@ a handle (an `invoke` in a `try`), and `gen.drop` closes and destroys a generato
 lives in a scanned stack frame.
 
 A generator object is the coroutine's handle, so every generator that yields `Y` has the type
-`gen[Y]` (shown as `Generator[Y]`), whatever function made it. The promise holds five words:
-the value yielded last, the value returned (`r = yield from g()`), the state (suspended, suspended
-where closing it runs its code, finished, running), the consumer's command (close) and the
-generator's `__qualname__`. A consumer checks the state before it resumes (a finished generator
+`gen[Y]` (shown as `Generator[Y]`), whatever function made it; one whose function takes `S` from
+`send()` (`Generator[Y, S, R]`, `S` not `None`) has the type `gen[Y,S]`, which widens to `gen[Y]`.
+The promise holds five words: the value yielded last, the value returned (`r = yield from g()`),
+the state (suspended, suspended where closing it runs its code, finished, running), the
+consumer's command (close by a loop, `close()`, `throw()`) and the generator's `__qualname__`. A consumer checks the state before it resumes (a finished generator
 is never resumed; a running one raises `ValueError`) and after (finished: the loop ends).
 `for_seq` takes a generator as one more kind of sequence, so `for`, `enumerate()`, `zip()` and
 comprehensions iterate generators; consumers that take all items read them into a list, and
@@ -273,7 +298,29 @@ suspended generator keeps none of its exception state among its consumer's: it s
 blocks' unwind actions aside (`pys_gen_leave`, `pys_gen_enter`), its `try` statements' marks
 (and those of the `StopIteration` catches of its loops over iterator objects) are relative to the
 depth where it was last resumed, and the exception it handles in an
-`except` clause or a `finally` block is its own again when it resumes.
+`except` clause or a `finally` block is its own again when it resumes. In a program that reads
+`sys.exception()` (`Gen.excread`), a try statement in a generator notes the exception being
+handled as it starts as null where it is the resumer's (`exc_mark`), and the end of its clauses
+restores the resumer's of the current resume for null (`exc_back`), as CPython's generator
+falls back on its caller's exception state.
+
+`close()` resumes a generator suspended where closing it runs its code with the `close()`
+command, under which its landing block leaves what it raises for `close()` (`pys_gen_unraisable`
+keeps it, `pys_gen_closed` takes it) instead of reporting it; any other generator is just marked
+finished. A `yield from` suspended so closes the generator it delegates to the same way before it
+raises `GeneratorExit` (PEP 380), so what that raises is raised at the `yield from`. A program
+that calls a method named `send` or `throw` (`Gen.gproto`, decided from the source before
+anything is compiled) gives its generators two more promise words, the value sent and the
+exception thrown, and a state for a generator that has not started (a `send()` of a value and a
+`throw()` tell it from one suspended at a `yield`). `send(v)` stores `v` and resumes, and a
+`yield` whose value is used reads it (in a program without `send()`, a `yield`'s value is
+`None`); `throw(e)` stores `e` and resumes with the `throw()` command, which the `yield` raises,
+where a `try`, `with` or `yield from` may handle it, and raises it in the thrower elsewhere (a
+`StopIteration` as PEP 479's `RuntimeError` where it leaves a suspended generator). A `yield from`
+there sends what it is sent on to its generator, throws what is thrown into it into its generator
+(closing it for `GeneratorExit`) and suspends again with what that yields, or finishes with its
+value. Programs without `send` and `throw` keep five words and the code they had; only a
+`yield from` whose closing may run code closes its generator as above.
 
 A generator expression that no consumer takes directly becomes an anonymous generator
 function, called with its first iterable (evaluated where it is written) and the values of

@@ -47,7 +47,7 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
                             "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "_thread": "_pystachy_thread",
-                            "unicodedata": "_pystachy_unicodedata"}
+                            "unicodedata": "_pystachy_unicodedata", "itertools": "_pystachy_itertools"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -198,14 +198,15 @@ for _k in ("linux", "darwin", "freebsd"):
 IMPLEMENTATION = "pystachy"
 MODATTRS["sys.implementation.name"] = True
 # Pystachy's own builtin module, which only lib/types.py imports (Loader.import_stmt): CPython
-# 3.13's names of types, which lib/types.py binds. GenericAlias is supported only as a class body's
+# 3.13's names of types, which lib/types.py binds, but TracebackType (lib/_pystachy_types.py's
+# class, which a with statement passes to __exit__). GenericAlias is supported only as a class body's
 # __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class, which defines
 # nothing in Pystachy (Gen.generic_aliases()); any other use of these names is an error
-TYPESMOD = "_pystachy_types"
+TYPESMOD = "_pystachy_typenames"
 for _k in ("AsyncGeneratorType BuiltinFunctionType BuiltinMethodType CapsuleType CellType ClassMethodDescriptorType CodeType "
            "CoroutineType DynamicClassAttribute EllipsisType FrameType FunctionType GeneratorType GenericAlias "
            "GetSetDescriptorType LambdaType MappingProxyType MemberDescriptorType MethodDescriptorType MethodType "
-           "MethodWrapperType ModuleType NoneType NotImplementedType SimpleNamespace TracebackType UnionType "
+           "MethodWrapperType ModuleType NoneType NotImplementedType SimpleNamespace UnionType "
            "WrapperDescriptorType _GeneratorWrapper _calculate_meta coroutine get_original_bases new_class prepare_class "
            "resolve_bases").split():
     MODATTRS[TYPESMOD + "." + _k] = True
@@ -556,16 +557,29 @@ IROPS: dict[str, str] = {
 # a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
 # state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
 # what closing it raises). State: suspended where closing it runs no code of its, suspended
-# where it does (a yield in try, with or yield from), finished, running
+# where it does (a yield in try, with or yield from), finished, running. In a program that uses
+# the generator protocol's send() or throw(), or the value of a yield (Gen.gproto), seven: also
+# the value sent to it (send(), which the yield it resumes at gives) and the exception thrown
+# into it (throw()); a generator that has not started yet is in state new there, so that a
+# send() of a value other than None and a throw() can tell it from one suspended at a yield.
+# Commands: close (a loop that owns it drops it: what closing raises is reported), close()
+# (raised by close()), throw() (raised at the yield)
 GENVAL = 0
 GENRET = 1
 GENSTATE = 2
 GENCMD = 3
 GENNAME = 4
 GENSLOTS = 5
+GENSEND = 5
+GENEXC = 6
+GENSLOTSX = 7
 GENCLEAN = 1
 GENDONE = 2
 GENRUN = 3
+GENNEW = 4
+GENDROPC = 1
+GENCLOSEC = 2
+GENTHROWC = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -765,13 +779,15 @@ RUNTIME: dict[str, str] = {
     "exc.begin": "exc:exc,int|R I wL rF wF|", "exc.in": "int:exc,str||", "exc.str": "str:exc|U|", "exc.repr": "str:exc|A U|",
     "exc.new": "exc:str,str,str|A|", "exc.exit": "exc:int,str,str|A|", "exc.detail": "exc:exc,str||", "throw": "None:exc|R N|",
     "exc.user": "exc:%ptr|A|", "exc.obj": "%ptr:exc||", "exc.id": "%ptr:exc||", "exc.ostr": "str:%ptr|U|", "exc.orepr": "str:%ptr|U|",
-    "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
+    "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.type": "str:exc|A|",
+    "exc.setcause": "None:exc,exc|wO|", "exc.cause": "exc:exc|rO|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
     # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
     # again when it resumes (gen.enter, which returns their depth below them); the reports of a
-    # generator closed by its loop that yielded again or raised
+    # generator closed by its loop that yielded again or raised, and what one that close() closed
+    # raised (gen.closed: null if nothing)
     "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
-    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|", "gen.closed": "exc:|I|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
     "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams

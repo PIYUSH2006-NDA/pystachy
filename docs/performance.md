@@ -22,8 +22,11 @@ The runtime compilation cache is primed first, and outputs are checked against C
 | `dictlookup.py`: integer and string keys | 0.90 s | 0.47 s | 0.39 s | 2× |
 | `dictkeys.py`: adversarial keys | 0.50 s | 0.25 s | 0.16 s | 3× |
 | `setdisplay.py`: constant set displays | 0.40 s | 0.20 s | 0.12 s | 3× |
+| `itertools_loops.py`: `product`, `combinations`, `groupby`, `chain` | 0.65 s | 0.43 s | 0.17 s | 4× |
 
-Speedups use the unrounded timings. The README rounds the maximum 67× to about 70×.
+The `itertools_loops.py` row was added on 2026-10-16 on a 4-core VM shared with another job:
+the median of five runs of each mode, with lib/_pystachy_itertools.py's generators. Speedups use
+the unrounded timings. The README rounds the maximum 67× to about 70×.
 Run `make bench` to collect current results. Each invocation of `bench/run.sh` measures each
 mode once; repeat it to obtain a median. The benchmark gate in `make verify` rejects output
 mismatches, without imposing timing thresholds.

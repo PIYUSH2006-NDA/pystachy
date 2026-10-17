@@ -2,7 +2,8 @@
 # __class_getitem__ = classmethod(GenericAlias) in a class body, which defines nothing in
 # Pystachy: the classes work as they do without it, whichever way the module names GenericAlias,
 # also in a block and in a subclass. Its other names import as in CPython (unused here), also in an
-# optional import, whose except clause runs in neither
+# optional import, whose except clause runs in neither; types.TracebackType is the class of what a
+# with statement passes to __exit__ (an object, where an exception reaches it, else None)
 import sys
 import types
 import types as _types
@@ -39,6 +40,19 @@ if sys.platform != "win32":
         second: int = 2
 
 
+class Managed:
+    def __enter__(self) -> "Managed":
+        return self
+
+    def __exit__(self, typ: type[BaseException] | None, value: BaseException | None, tb: types.TracebackType | None) -> bool:
+        print("exit", value is None, tb is None, isinstance(tb, types.TracebackType))
+        return True
+
+
+with Managed():
+    pass
+with Managed():
+    raise ValueError("suppressed")
 q = Queue()
 q.put(3)
 s = Stack()

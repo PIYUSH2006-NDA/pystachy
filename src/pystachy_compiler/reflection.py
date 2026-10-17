@@ -235,6 +235,23 @@ def gen_refl_type_attr(self, x: Node, what: str) -> Val:
         if v.t == "exc":
             return Val(self.rt("pys_exc_name", "ptr", [f"ptr {v.v}"]), "str")
         return Val(self.rt("pys_exc_cls", "ptr", [f"ptr {v.v}"]), "str")
+    if v.t == "opt[exc]":
+        # (an exception or None, as __exit__ and __cause__ give it: NoneType for None)
+        if what != "__name__" and what != "__qualname__":
+            self.err(f"type(e).{what} of an exception is not supported; type(e).__name__ is")
+        e0 = self.cur
+        l1 = self.label()
+        l2 = self.label()
+        self.cbr(self.ptr_cmp('==', v, Val('null', 'None')).v, l2, l1)
+        self.place(l1)
+        nv = self.rt("pys_exc_name", "ptr", [f"ptr {v.v}"])
+        e1 = self.cur
+        self.br(l2)
+        self.place(l2)
+        ph = Ins("phi", "str", "")
+        self.incoming(ph, self.sconst("NoneType"), e0)
+        self.incoming(ph, nv, e1)
+        return Val(self.phi(ph), "str")
     cs = self.refl_type_of(v, what, known)
     names = [self.refl_type_name(c.c, what) for c in cs]
     if len([s for s in names if s != names[0]]) == 0:

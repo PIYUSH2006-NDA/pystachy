@@ -608,6 +608,9 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         want = self.generic_hint(n, want)
     if k == "val":
         return self.vnodes[int(n.s)]  # (a value computed already: see vnode)
+    if k == "excinfo":
+        # (with_cm's except clause: the exception it handles, and its class as an exctype)
+        return Val(self.excs[-1].v, "exctype" if n.s == "type" else "exc")
     if k == "int":
         if not int_fits(n.s):
             self.err("integer literal does not fit in 64 bits")
@@ -655,10 +658,8 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         return self.listcomp(n.kids[0], want, "", "", None, k[:-4], resultsoft)
     if k == "dictstar":
         return self.dict_merge(n, want)
-    if k == "yield" and n.s == "from":
-        self.err("the value of yield from is supported assigned to a variable (r = yield from g()); a yield from elsewhere in an expression is not")
     if k == "yield":
-        self.err("the value of a yield expression is not supported: generators have no send(), so yield is a statement (yield v)")
+        return self.yield_value(n)  # (what send() sends the generator)
     if k in UNSUPPORTED:
         self.err(UNSUPPORTED[k])
     if k == "walrus":
@@ -752,6 +753,13 @@ def gen_expr(self, n: Node, want: str, returnctx: bool = False, resultsoft: bool
         if o.t in self.nts and n.s == "_fields":
             self.notnone(o, "AttributeError: 'NoneType' object has no attribute '_fields'")
             return self.tuple_([Val(self.sconst(x), "str") for x in self.classes[o.t].fields])
+        if o.t == "exc" and n.s == "__cause__" and self.causeread:
+            # (raise ... from c's c, or the StopIteration of PEP 479's RuntimeError; else None)
+            return Val(self.rt("pys_exc_cause", "ptr", [f"ptr {o.v}"]), "opt[exc]")
+        if unopt(o.t) == "exctype" and n.s == "__name__":
+            # (the class of an exception, as __exit__ takes it: the exception itself)
+            o = self.unwrap(o, "AttributeError: 'NoneType' object has no attribute '__name__'")
+            return Val(self.rt("pys_exc_name", "ptr", [f"ptr {o.v}"]), "str")
         if o.t == "file" and (n.s == "closed" or n.s == "name" or n.s == "mode"):
             r = self.rt(f"pys_file_{n.s}", "i64" if n.s == "closed" else "ptr", [f"ptr {o.v}"])
             return self.num_cmp('!=', Val(r, "int"), Val('0', "int")) if n.s == "closed" else Val(r, "str")

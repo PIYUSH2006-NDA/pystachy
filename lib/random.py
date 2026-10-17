@@ -70,11 +70,11 @@ except ImportError:
         if isinstance(a, int):
             return int(a)
         return a.__index__()
-# Pystachy port: itertools is built into CPython, so no file on the module path stands in for it;
-# where it is missing (Pystachy), _accumulate() makes accumulate()'s running totals in a list (of
-# ints for bools, which a Pystachy list of bools cannot hold), and loops over range(k) take the
-# place of repeat(None, k)
+# Pystachy port: Pystachy's itertools (lib/_pystachy_itertools.py) accumulates bools as a bool and
+# then ints, which bisect() cannot compare: without _operator (Pystachy), _accumulate() makes the
+# totals in a list (of ints for bools), and loops over range(k) take the place of repeat(None, k)
 try:
+    from _operator import index as _index
     from itertools import accumulate as _accumulate, repeat as _repeat
 except ImportError:
     def _accumulate(iterable):
