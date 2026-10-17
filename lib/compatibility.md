@@ -52,7 +52,7 @@ Ports keep code that only CPython can run, as CPython's sources have it, under
 `if sys.implementation.name == "cpython":`. Pystachy decides that test at compile time, as its
 `sys.implementation.name` is `"pystachy"`, and drops the block (see
 [compile-time branches](../docs/language/modules.md#compile-time-branches)): `urllib.parse`'s
-imports of `types`, `warnings` and `ipaddress`, its docstrings of the result fields and its
+imports of `warnings` and `ipaddress`, its docstrings of the result fields and its
 byte tables, and `statistics`' import of `random` and table of kernels.
 
 ## Pure-Python accelerators
@@ -770,6 +770,24 @@ class whose subclasses' `__init__` binds their fields.
   (Linux's signal numbers: those from 65 on are out of range).
 - `_excepthook()`, which reports an exception that a thread's `run()` raises, raises
   `NotImplementedError`: no thread but the main one runs.
+
+## Types
+
+`types` is Pystachy's own module for CPython's `Lib/types.py`, of which it has `GenericAlias`
+for CPython's idiom for a generic class: `__class_getitem__ = classmethod(GenericAlias)` (or
+`classmethod(types.GenericAlias)`) in a class body defines nothing in Pystachy, so the class
+compiles as it does without it ([test](../tests/types_generic_alias.py)). Its subscripts in
+annotations are what they are for any class, and at run time, where CPython makes them
+`types.GenericAlias` objects, they are a compile-time error
+([error test](../tests/errors/types_generic_alias_subscript.py)).
+
+- Any other use of `GenericAlias`, such as calling it, is a compile-time error
+  ([error test](../tests/errors/types_generic_alias_call.py)).
+- The module's other names, CPython's (`MappingProxyType`, `SimpleNamespace`, `FunctionType`,
+  `MethodType`, `ModuleType`, `NoneType`, `new_class()`, `coroutine()`, ...), import as in
+  CPython, also in an optional import, but any use of one is a compile-time error
+  ([error test](../tests/errors/types_unsupported_name.py)): Pystachy has no such objects, or
+  none that behave exactly as CPython's.
 
 ## Unicodedata
 

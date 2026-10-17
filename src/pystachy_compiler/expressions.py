@@ -11,6 +11,7 @@ from src.pystachy_compiler.specs import (
     DUNDER,
     FOPS,
     FRT,
+    GALIASSUB,
     HASATTR,
     ICMP,
     IOPS,
@@ -2124,6 +2125,8 @@ def gen_tstore(self, v: Val, index: int, slot: str) -> None:
 
 def gen_index(self, n: Node, want: str = "") -> Val:
     c = n.kids[0]
+    if c.kind == "name" and c.s in self.galias and c.s not in self.ltype:
+        self.err(GALIASSUB.replace("NAME", short(c.s)))
     f = c.kids[0] if c.kind == "call" else c
     if c.kind == "call" and n.kids[1].kind == "int" and n.kids[1].s == "0" and f.kind == "attr" and f.s == "split" and len(c.kids) <= 3 and plain_args(c.kids[1:]) and self.dotted(f) == "" and (f.kids[0].kind != "name" or self.static_type(f.kids[0]) == "str") and not is_super(f.kids[0]):
         # s.split()[0], s.split(sep)[0], s.split(sep, n)[0]: the first part alone, made without

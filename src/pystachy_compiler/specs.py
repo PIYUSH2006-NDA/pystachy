@@ -197,6 +197,23 @@ for _k in ("linux", "darwin", "freebsd"):
         PLATFORM = _k
 IMPLEMENTATION = "pystachy"
 MODATTRS["sys.implementation.name"] = True
+# Pystachy's own builtin module, which only lib/types.py imports (Loader.import_stmt): CPython
+# 3.13's names of types, which lib/types.py binds. GenericAlias is supported only as a class body's
+# __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class, which defines
+# nothing in Pystachy (Gen.generic_aliases()); any other use of these names is an error
+TYPESMOD = "_pystachy_types"
+for _k in ("AsyncGeneratorType BuiltinFunctionType BuiltinMethodType CapsuleType CellType ClassMethodDescriptorType CodeType "
+           "CoroutineType DynamicClassAttribute EllipsisType FrameType FunctionType GeneratorType GenericAlias "
+           "GetSetDescriptorType LambdaType MappingProxyType MemberDescriptorType MethodDescriptorType MethodType "
+           "MethodWrapperType ModuleType NoneType NotImplementedType SimpleNamespace TracebackType UnionType "
+           "WrapperDescriptorType _GeneratorWrapper _calculate_meta coroutine get_original_bases new_class prepare_class "
+           "resolve_bases").split():
+    MODATTRS[TYPESMOD + "." + _k] = True
+MODULES[TYPESMOD] = True
+GALIAS = TYPESMOD + ".GenericAlias"
+GALIASUSE = "types.GenericAlias is supported only as a class body's __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class: Pystachy has no generic aliases"
+TYPESUSE = "types.NAME is not supported: of the types module, Pystachy has only GenericAlias, for a class body's __class_getitem__ = classmethod(GenericAlias)"
+GALIASSUB = "subscripting class 'NAME' at run time is not supported: CPython makes NAME[...] a types.GenericAlias (its __class_getitem__ = classmethod(GenericAlias)), and Pystachy has no generic aliases"
 for _k in FLOATINFO:
     MODATTRS[_k] = True
 # sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which

@@ -123,7 +123,9 @@ Evaluated annotations may name classes, supported typing forms, builtin generics
 type variables and [type aliases](#type-aliases). Aliases of supported classes can name
 those classes. Generic class subscriptions such as `Box[int]` are supported
 when they use the standard `typing.Generic` hook. Calls, other operators, custom class
-subscripting, and expressions that could execute user code are rejected. `os.PathLike` and the supported
+subscripting, and expressions that could execute user code are rejected. CPython's idiom for a
+generic class, `__class_getitem__ = classmethod(types.GenericAlias)` in its body, defines
+nothing: the class's subscripts at run time, generic aliases in CPython, are rejected. `os.PathLike` and the supported
 `collections.abc` names are exceptions to the restriction on builtin module attributes.
 
 `Final[T]` uses type `T` without enforcing immutability. `x: Final = value` infers the

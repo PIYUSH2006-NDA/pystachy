@@ -39,6 +39,7 @@ Imports search builtin modules first, then the program's directory,
 | `codecs` | Adapted CPython on a subset `_codecs` (`_pystachy_codecs`) | BOM constants, `encode`, `decode`, the UTF-8, Latin-1, ASCII and charmap codec functions, `lookup_error`, `register_error`, the incremental classes | No codec registry (`lookup()`); no UTF-16, UTF-32, UTF-7 or escape codecs |
 | `atexit` | Subset port of CPython's C module (`_pystachy_atexit`) | `register` (also as a decorator, with arguments), callbacks run at the end of the program, also after `sys.exit()` or an uncaught exception; `_run_exitfuncs`, `_clear`, `_ncallbacks` | No `unregister`; a failing callback's report shows the exception's last line |
 | `abc` | Subset implementation (`_pystachy_abc`) | `ABC`, `metaclass=ABCMeta`, `@abstractmethod` (also under `@property`, `@classmethod`, `@staticmethod`) and the deprecated `abstractproperty`, `abstractclassmethod`, `abstractstaticmethod`, with CPython's `TypeError` for a class with abstract methods; `get_cache_token` | No virtual subclasses (`register()`), `__subclasshook__` or `__abstractmethods__` |
+| `types` | Subset implementation, on the compiler's `_pystachy_types` | `GenericAlias`, for CPython's idiom for a generic class: `__class_getitem__ = classmethod(GenericAlias)` in a class body | Its other names import, but any use of one is a compile-time error; a generic-alias class's subscripts at run time are too |
 | `_thread` | Subset port of CPython's C module for one thread (`_pystachy_thread`) | `allocate_lock`, `LockType`, `RLock` (with `_is_owned`, `_release_save`, `_acquire_restore`), `get_ident`, `get_native_id`, `stack_size`, `interrupt_main`, `exit`, `TIMEOUT_MAX`, `error`, `_local` as a base class | One thread: `start_new_thread()` raises `NotImplementedError`, and an acquire that would wait for ever raises `RuntimeError`; no `with lock:` |
 | `unicodedata` | Port of CPython's C module (`_pystachy_unicodedata`) on its tables of Unicode 15.1.0 | Every function: the properties, numeric values and decompositions of characters, `normalize()` and `is_normalized()` in the four forms, `name()`, `lookup()` (also of aliases, named sequences and derived names) and `ucd_3_2_0` | `lookup()` takes `str` only; no `_ucnhash_CAPI` |
 | `binascii` | Subset port of CPython's C module (`_pystachy_binascii`) | Hex with separators, base64 with strict mode, uu, quoted-printable, `crc32`, `crc_hqx`, `Error` and `Incomplete` | Bytes and ASCII-str arguments only; Python functions, not builtins |
@@ -96,7 +97,8 @@ loads those files for `import binascii`, `import _codecs`, `import atexit`, `imp
 `tools/unicodedata_tables.py` writes the tables of `unicodedata`, `_pystachy_unicodedata_db.py` and
 `_pystachy_unicodedata_names.py`, from CPython's own module.
 `_pystachy_abc.py` is `abc`, which CPython imports as it starts, so that a program's own `abc.py`
-is never imported there. `_collections_abc` has no file here: it is the compiler's builtin
+is never imported there. `types.py` binds CPython's names of `types` from `_pystachy_types`, the
+compiler's, which only it may import. `_collections_abc` has no file here: it is the compiler's builtin
 `collections.abc`, as CPython's `collections` makes it `collections.abc`.
 
 `_pystachy_iterators.py` holds the iterator classes of `iter()` over builtin containers

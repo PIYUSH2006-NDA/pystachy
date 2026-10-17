@@ -32,16 +32,16 @@ It serves as a useful guide when making changes.
 """
 
 # Pystachy port: the result classes are typing.NamedTuple classes (below), as Pystachy has no
-# collections.namedtuple; and types, warnings and ipaddress are imported in CPython only: the code
-# that uses them runs in CPython only, in blocks that test sys.implementation.name == "cpython"
-# (which Pystachy decides at compile time, as its name is "pystachy", and drops), or is not compiled
+# collections.namedtuple; and warnings and ipaddress are imported in CPython only: the code that
+# uses them runs in CPython only, in blocks that test sys.implementation.name == "cpython" (which
+# Pystachy decides at compile time, as its name is "pystachy", and drops), or is not compiled
 from typing import NamedTuple
 import functools
 import math
 import re
 import sys
+import types
 if sys.implementation.name == "cpython":
-    import types
     import warnings
     import ipaddress
 
@@ -196,8 +196,7 @@ class _NetlocResultMixinBase(object):
                 raise ValueError("Port out of range 0-65535")
         return port
 
-    # Pystachy port: __class_getitem__ = classmethod(types.GenericAlias) is set in CPython only
-    # (below): Pystachy has no types module, which this class body would read as it runs
+    __class_getitem__ = classmethod(types.GenericAlias)
 
 
 class _NetlocResultMixinStr(_NetlocResultMixinBase, _ResultMixinStr):
@@ -403,7 +402,6 @@ if sys.implementation.name == "cpython":
     DefragResult = type('DefragResult', (DefragResult, _ResultMixinStr), {'__slots__': ()})
     SplitResult = type('SplitResult', (SplitResult, _NetlocResultMixinStr), {'__slots__': ()})
     ParseResult = type('ParseResult', (ParseResult, _NetlocResultMixinStr), {'__slots__': ()})
-    _NetlocResultMixinBase.__class_getitem__ = classmethod(types.GenericAlias)
     _fix_result_transcoding()
     del _fix_result_transcoding
 
