@@ -30,7 +30,8 @@ Selected APIs from `sys`, `os`, `math`, `time`, `errno` and `tempfile` are compi
 `typing`, `collections.abc` (also imported as `_collections_abc`) and `dataclasses` also have
 compiler support; this does not provide
 the full dynamic `collections` package; its shipped subset provides `deque`, `defaultdict`,
-`OrderedDict` and `Counter`, without `namedtuple`.
+`OrderedDict`, `Counter` and `namedtuple()`, whose class the compiler makes from a module's
+top-level `NAME = namedtuple(...)` with literal arguments.
 See the [builtin module table](language/modules.md#builtin-modules-and-files).
 
 <a id="1-the-changes"></a>
