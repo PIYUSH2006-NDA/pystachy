@@ -95,7 +95,8 @@ static branch need not be type-checked. The [typing](language/typing.md) and
 | `IFn` | Function signature, parameter indices, entry slots, blocks, loops, handlers and effect summary |
 
 Types are canonical strings, such as `list[int]`, `dict[str,int]`, `opt[str]` and
-`union[int,str]`. A closed union is an immutable pointer to a program-wide
+`union[int,str]`; `exc` is an exception, `exctype` its class (the exception itself, as a
+context manager's `__exit__` takes it), and `opt[exc]` and `opt[exctype]` use null for `None`. A closed union is an immutable pointer to a program-wide
 type tag and an eight-byte payload slot; `opt[union[...]]` uses null for `None`.
 Mixed scalar/list/dict unions store the original container pointer in that slot;
 unboxing never copies a container or changes its element storage type.
@@ -262,7 +263,8 @@ The generator operations mark an LLVM switched-resume coroutine's structure (see
 [generators](internals.md#generators)). `gen.start` ends the entry block of a generator function
 (`IFn.coro`, printed `presplitcoroutine`) and holds its name; `gen.yield` (a `%slot` value and a
 flag: whether closing the generator there runs its code) and `gen.ret` (an optional `%slot`)
-end blocks where it suspends; `gen.promise` without an operand is its own promise's address,
+end blocks where it suspends (lowering alone sizes the promise, five words or seven with `send()`
+and `throw()` in the program, and gives a generator that has not started its state); `gen.promise` without an operand is its own promise's address,
 and with a generator operand that generator's. `gen.resume` runs a generator to its next
 suspend and has every effect (user code); the exception passes make it an `invoke` like a
 call. `gen.drop` closes and destroys a generator a loop owns and never raises. The verifier

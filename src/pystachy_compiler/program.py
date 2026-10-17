@@ -5,6 +5,7 @@ import sys
 from src.pystachy_compiler.reflection import refl_needs_eh, refl_props
 from src.pystachy_compiler.analysis import all_imports, collect, defines, module_ints, module_reads, module_strs, needs_eh, none_assigns, reads_builtin
 from src.pystachy_compiler.diagnostics import fail
+from src.pystachy_compiler.generators import reads_cause, reads_handled, uses_protocol
 from src.pystachy_compiler.ir import Val, ClassInfo, FnInfo, NOLABELS, NONUMS, NOVALS
 from src.pystachy_compiler.module import Mod
 from src.pystachy_compiler.names import short
@@ -13,6 +14,7 @@ from src.pystachy_compiler.specs import (
     EXCBASES,
     EXCEPTIONS,
     exc_derives,
+    GALIAS,
     INERT,
     INERT_DECOS,
     is_excname,
@@ -627,6 +629,29 @@ def gen_partly(self, e: Node, use: int) -> str:
         r = r if r != "" else self.partly(e.kids[i], 2 if e.kind == "set" or (e.kind == "dict" and i % 2 == 0) else use)
     return r if e.kind in ["tuple", "list", "set", "dict"] else self.effect(e, {}, use)
 
+def gen_generic_aliases(self, body: list[Node]) -> None:
+    # CPython's idiom for a generic class, __class_getitem__ = classmethod(GenericAlias) of types in a
+    # class body (also in a block, a function or another class), which makes C[...] a
+    # types.GenericAlias: left out, as it defines nothing Pystachy has, and the class recorded
+    # (galias), whose subscripts at run time are an error (index())
+    for st in body:
+        c = st.kids[0] if st.kind == "subclass" else st
+        if c.kind == "class":
+            keep: list[Node] = []
+            for x in c.kids[0].kids:
+                v = x.kids[1] if x.kind == "assign" and len(x.kids) == 2 and x.kids[0].kind == "name" and x.kids[0].s == "__class_getitem__" else x
+                if v.kind == "call" and len(v.kids) == 2 and v.kids[0].kind == "name" and v.kids[0].s == "classmethod" and "classmethod" not in self.funcs and self.imported_ref(v.kids[1]) == GALIAS:
+                    self.galias[c.s] = True
+                else:
+                    keep.append(x)
+            c.kids[0].kids = keep if len(keep) > 0 else [mk("pass", "", c.line, [])]
+        for k in c.kids:
+            if k.kind == "block":
+                self.generic_aliases(k.kids)
+            elif k.kind == "except":
+                self.generic_aliases(k.kids[1].kids)
+
+
 def gen_abstract_defs(self, body: list[Node]) -> list[Node]:
     # the class statements of a module's body as the compiler applies abc's ABCMeta to them: a
     # method's @abstractmethod (the loader's qdeco names it abc$abstractmethod) is left out, the
@@ -711,6 +736,9 @@ def gen_program(self, mods: list[Mod]) -> str:
         self.scan_imports(m.body.kids)
         self.eh = self.eh or needs_eh(m.body.kids) or self.ext != ""  # (an extension's calls are tries)
         self.eh = self.eh or refl_needs_eh(m.body, props)  # (reflection.py: a getter's AttributeError caught)
+        self.gproto = self.gproto or uses_protocol(m.body)  # (generators: send(), throw(), a yield's value)
+        self.excread = self.excread or reads_handled(m.body)  # (sys.exception() in a generator)
+        self.causeread = self.causeread or reads_cause(m.body)  # (e.__cause__: lib/contextlib.py's)
         for q in m.taliases:
             self.taliases[q] = m.taliases[q]
         self.typevars.extend(m.deftps)
@@ -720,6 +748,8 @@ def gen_program(self, mods: list[Mod]) -> str:
         # iterator object's), and by next(it, default) (not range's __iter__, which steps through
         # a list)
         self.eh = len([m for m in mods if (defines(m.body, "__iter__") and m.name != RANGES) or module_reads(m.body, "next")]) > 0
+    for m in mods:
+        self.generic_aliases(m.body.kids)
     for m in mods:
         m.body.kids = self.typing_forms(m, m.body.kids, False)
         for i in range(len(m.body.kids)):
@@ -813,6 +843,7 @@ def gen_program(self, mods: list[Mod]) -> str:
         if ci.tag != 0:
             tag += 1
             ci.tag = tag
+    self.cm_exits()  # (decided while the class templates are classes too: see cm_exits)
     grow = True
     while grow:
         # the class templates: an __init__ parameter without an annotation, or with one that
@@ -935,7 +966,9 @@ def gen_program(self, mods: list[Mod]) -> str:
             if nones and nm not in self.gflag and nm in self.mvars and (m.name != "" or nm not in m.fnglobal):
                 self.noneglobals[nm] = True
         if m.falseat >= 0:
-            self.falseflags[m.q + "TYPE_CHECKING"] = True
+            self.constflags[m.q + "TYPE_CHECKING"] = "False"
+        for nm in m.flagat:
+            self.constflags[m.q + nm] = "True" if m.flagval[nm] == 1 else "False"
     docinfer: dict[str, bool] = {}
     for m in mods:
         for st in m.body.kids if m.name != "" else []:
@@ -1023,14 +1056,23 @@ def gen_program(self, mods: list[Mod]) -> str:
             hpush(self.wake, i)
     done: dict[str, bool] = {}
     helped: dict[str, bool] = {}
+    cmped: dict[str, bool] = {}
     hashed: dict[str, bool] = {}
     xmade: dict[str, bool] = {}
     while True:
-        before = len(done) + len(helped) + len(hashed) + len(xmade)
+        before = len(done) + len(helped) + len(cmped) + len(hashed) + len(xmade)
         for c in [x for x in self.ocls]:
             if c not in helped:
                 helped[c] = True
-                self.obj_helpers(c)
+                if c in self.ocmp:
+                    cmped[c] = True
+                    self.obj_helpers(c, [0, 1, 2])  # (in the order of a class's helpers before ocmp)
+                else:
+                    self.obj_helpers(c, [2])
+        for c in [x for x in self.ocmp]:
+            if c not in cmped:
+                cmped[c] = True
+                self.obj_helpers(c, [0, 1])
         for c in [x for x in self.hcls]:
             if c not in hashed:
                 hashed[c] = True
@@ -1052,7 +1094,7 @@ def gen_program(self, mods: list[Mod]) -> str:
                     self.function(lz[i], lz[i].node.kids[2].kids)
         for i in later:
             hpush(self.wake, i)
-        if len(done) + len(helped) + len(hashed) + len(xmade) == before:
+        if len(done) + len(helped) + len(cmped) + len(hashed) + len(xmade) == before:
             break
     for nm in self.flagged:
         if nm not in self.gtypes and nm not in self.funcs and nm not in self.classes:

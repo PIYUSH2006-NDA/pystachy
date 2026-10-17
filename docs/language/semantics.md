@@ -12,7 +12,7 @@ closures and class fields are described in [typing](typing.md); imports and buil
 | Control flow | `if` / `elif` / `else`, `while`, `for`, loop `else`, `break`, `continue`, `return` |
 | Scope and definitions | `global`, `nonlocal`, `def`, nested function definitions, lambdas, supported class definitions |
 | Runtime checks | `assert`, `raise`, `try` / `except` / `else` / `finally` |
-| Resources | `with open(...) as f:`, including several file contexts, with or without parentheses |
+| Resources | `with` over files and [context managers](#context-managers) of the program's classes, several items, with or without parentheses |
 | Deletion | `del` of a local, list item, dict key or supported object's item |
 | Other | Imports, docstrings, `pass` and `...` |
 
@@ -176,13 +176,15 @@ has its value's type. A `Generic[T]` class's `Iterable[T]` parameter binds `T` t
 
 A function or method whose body contains `yield` or `yield from` is a generator function.
 Calling one runs none of its body: it makes a generator object, which runs to its next `yield`
-each time a consumer asks for an item. Generator functions that yield one type share one static
-type (`Generator[T]` in messages). A generator function's return annotation is `Iterator[T]`,
-`Iterable[T]` or `Generator[Y, None, R]`, from `typing` or `collections.abc`; elsewhere
+each time a consumer asks for an item. Generator functions that yield one type and take one
+type from `send()` share one static type (`Generator[T]` in messages, `Generator[T, S]` where
+the send type `S` is not `None`). A generator function's return annotation is `Iterator[T]`,
+`Iterable[T]` or `Generator[Y, S, R]`, from `typing` or `collections.abc`; elsewhere
 `Iterator[T]` and `Iterable[T]` type nothing (see [iterators](#iterators)), so a parameter
 annotated so takes generators as well as iterator objects, and `Generator[T, None, None]` names
-a generator's type (`holder: list[Generator[int, None, None]] = []`). An unannotated generator
-function is a template: its first `yield` gives the type for each call's argument types. An
+a generator's type (`holder: list[Generator[int, None, None]] = []`). A generator that takes `S`
+is also one that takes `None`. An unannotated generator function is a template: its first
+`yield` gives the type for each call's argument types, and its send type is `None`. An
 `__iter__` or `__reversed__` that yields makes the generator that iterates its object.
 
 | Use | Behavior |
@@ -194,7 +196,11 @@ function is a template: its first `yield` gives the type for each call's argumen
 | `list`, `tuple`, `sorted`, `set`, `frozenset`, `str.join`, `list.extend` | All the items |
 | `x in g` | Iterates until an item equals `x` |
 | `a, b = g`, `a, *rest = g` | One item for each target, then one more step that must find `g` finished; with a starred target, all the items |
-| `yield from x` | Each item of `x`; for a generator, delegation, and `r = yield from g()` is `g`'s return value |
+| `yield from x` | Each item of `x`; for a generator, delegation (PEP 380: `send()`, `throw()` and `close()` go on to `x`), and `r = yield from g()` is `g`'s return value |
+| `g.send(v)` | Resumes `g` with `v` as the value of the `yield` where it is suspended; returns the next item, or raises `StopIteration` once it has finished; `send(None)` is `next(g)`, and another value cannot start `g` (`TypeError`) |
+| `g.throw(e)` | Raises `e` (an exception, an exception class or a call of one) at the suspended `yield`; returns the next item if `g` handles it, raises `StopIteration` if `g` finishes, and the exception if it leaves `g`. Into a generator that has not started or has finished, `e` is raised as it is |
+| `g.close()` | Raises `GeneratorExit` at the suspended `yield` where a `try`, `with` or `yield from` there may see it, else finishes `g` at once; what `g` raises then comes out of `close()`, and a `yield` after `GeneratorExit` raises `RuntimeError: generator ignored GeneratorExit` |
+| `x = yield v` | The value `send()` gave as it resumed the generator: `None` from `next()`, a loop or `throw()`. In a generator annotated `Generator[Y, S, R]` its type is `S \| None`; with a send type of `None`, `None` |
 
 A generator expression that no consumer takes directly, such as one stored in a variable or
 returned, is an anonymous generator: its first iterable is evaluated where it is written and
@@ -214,9 +220,47 @@ leaves a generator's body finishes the generator; a `StopIteration` becomes
 `RuntimeError: generator raised StopIteration` (PEP 479). A generator that resumes itself raises
 `ValueError: generator already executing`.
 
-`send()`, `throw()`, `close()`, the value of a `yield` expression, `async` generators and frame
-introspection are not supported. A generator the program drops while it is suspended is not
-closed (see [deviations](compatibility.md#memory-and-resource-lifetime)).
+A generator suspended inside a `with` block keeps its context manager: closing it, or throwing
+into it, runs the manager's `__exit__` as CPython does, and `contextlib.contextmanager` drives a
+generator through these calls (see [context managers](#context-managers)).
+
+`close()` is supported as a statement; its value (what a generator returns as it closes, in
+CPython 3.13) is not. `throw(type, value, traceback)`, `async` generators and frame
+introspection are not supported, nor `yield from` of an iterator that is no generator in a
+generator that takes a value from `send()` (CPython sends the value on to the iterator, which has
+no `send()`). A generator the program drops while it is suspended is not closed (see
+[deviations](compatibility.md#memory-and-resource-lifetime)).
+
+<a id="context-managers"></a>
+
+## Context managers
+
+A `with` statement takes a file (`with open(...) as f:`) or an object of a class of the program
+that defines `__enter__` and `__exit__` (PEP 343). `__enter__()` gives the `as` target; an
+exception in the block goes to `__exit__(type, value, traceback)`, which suppresses it by
+returning a true value, and leaving the block otherwise (its end, `break`, `continue`,
+`return`) calls `__exit__(None, None, None)`. Several items nest as CPython nests them, and a
+name the block binds may be unbound after a suppressed exception. A class without `__enter__`
+or `__exit__` is a compile-time error with CPython's message; a manager that is `None` raises
+CPython's `TypeError`.
+
+`__exit__` may be annotated as typeshed annotates it, left unannotated (each of its two calls is
+compiled for its arguments), or take `*args`:
+
+| Parameter | Annotation | Value |
+|---|---|---|
+| The exception's class | `type[BaseException] \| None` | `None`, or the class: `__name__`, `issubclass()`, `str()` and `repr()` (`<class 'KeyError'>`) |
+| The exception | `BaseException \| None` | `None`, or the exception: `str()`, `repr()`, `isinstance()`, `is`, `raise` |
+| The traceback | `TracebackType \| None` (`from types import TracebackType`) | `None`, or an object with none of a traceback's attributes |
+
+`type(e)` of an exception is such a class value, and `sys.exception()` the exception being
+handled (or `None`). `e.__cause__` is the cause that `raise ... from c` gave, or the
+`StopIteration` that PEP 479's `RuntimeError` replaced.
+
+`lib/contextlib` provides `contextmanager` (also as a decorator, `@cm()`), `closing`,
+`nullcontext`, `suppress` (as a `with` statement's item, with exception classes named) and
+`AbstractContextManager`; `io.StringIO` and `_thread`'s locks are context managers too
+([library](../../lib/compatibility.md#contextlib)).
 
 ## Object protocols
 
@@ -418,13 +462,16 @@ Calling a builtin exception class produces an exception value. Values can be sto
 printed, converted to `str` / `repr`, formatted, raised, compared by identity, and tested
 with `isinstance()` or `type(e).__name__`. An annotation such as `Exception` names the
 builtin exception value type; it does not accept arbitrary user exception objects.
+`BaseException | None` (any exception class with `| None`) is an exception that may be
+`None`, which `raise` raises as CPython does (`TypeError` for `None`), and
+`type[BaseException]` the class of an exception ([context managers](#context-managers)).
 
 `OSError(errno, strerror[, filename])` selects the subclass associated with the errno.
 `UnicodeDecodeError(encoding, object, start, end, reason)` (of a bytes object) and
 `UnicodeEncodeError(...)` (of a str, whose characters `start` and `end` count) take CPython's
 five arguments and give its message, which names the byte or character at `start` or the range
 to `end`. `ImportError`, `AttributeError` and `NameError` accept their supported keyword
-arguments. Exception attributes such as `args` are unsupported.
+arguments. Exception attributes such as `args` are unsupported; `__cause__` is supported.
 
 ### Control flow
 
@@ -433,9 +480,9 @@ A return value is computed before `finally`; a return, break or continue in `fin
 discards the exception in flight.
 
 Bare `raise` re-raises the currently handled exception, with the prior handler restored
-when an inner handler exits. `raise ... from ...` evaluates and validates its cause, but
-the abbreviated error output does not show exception chaining. A cause that is not an
-exception raises `TypeError`.
+when an inner handler exits; `sys.exception()` returns it. `raise ... from ...` evaluates and
+validates its cause, which `e.__cause__` reads, but the abbreviated error output does not show
+exception chaining. A cause that is not an exception raises `TypeError`.
 
 An exception leaving a file context closes the file. If closing fails, its `OSError`
 replaces the exception being handled. A failed Python-module import leaves its imported
@@ -452,7 +499,12 @@ exception class in the program. It supports fields, constructors, class-body def
 methods, docstrings and custom `__str__` / `__repr__`.
 
 A subclass inherits fields and methods and can override `__init__`, `__str__` and
-`__repr__`. String conversion and uncaught error output use the object's actual class.
+`__repr__`. String conversion, comparisons and uncaught error output use the object's actual
+class: `x == y` of `E`-typed values runs `__eq__` of a subclass that defines it. Where that
+method is annotated to take only its subclass (`__eq__(self, other: "F")`), CPython would call
+it with an `E`, so the comparison, and `in`, `count()`, `index()`, `==` and sorting of
+containers of `E` (or of dataclass or NamedTuple objects with an `E` field), are rejected at
+compile time, as for ordinary classes. Printing such a container compiles and works.
 `super().__init__`, `super().__str__`, `super().__repr__`, explicit base calls and
 `super(E, self)` are supported within the documented restrictions.
 

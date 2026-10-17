@@ -39,6 +39,7 @@ from src.pystachy_compiler.utils import (
     clone,
     elem,
     gelem,
+    gsend,
     is_callable,
     is_const,
     is_dict,
@@ -157,6 +158,10 @@ def gen_ann(self, n: Node) -> str:
             if t.startswith("!"):
                 return t
         return self.union_type(ts)  # A | B
+    elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s == "type" and n.kids[1].kind == "name" and (is_excname(n.kids[1].s) or (n.kids[1].s in self.classes and self.classes[n.kids[1].s].exc != "")):
+        # type[BaseException], as __exit__ takes the class of the exception: exctype, which is the
+        # exception itself (its class is what it shows)
+        return "exctype"
     elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s in self.taliases:
         return self.alias_ann(n)
     elif k == "index" and n.kids[0].kind == "name" and n.kids[0].s in self.tparams:
@@ -170,7 +175,7 @@ def gen_ann(self, n: Node) -> str:
             # Iterator[T], Generator[Y, None, R] (typing's or collections.abc's): a generator object
             # (an iterator of another kind, as #477 makes them, is not one of these)
             yr = self.gen_ann_ret(n)
-            return "!" + yr[0] if len(yr) == 1 else self.ctype("gen", [yr[0]])
+            return "!" + yr[0] if len(yr) == 1 else self.gen_type(yr[0], yr[2])
         if base == "callable":
             # Callable[[A, B], R] (typing's or collections.abc's): callable[R,A,B]
             if len(a) != 2 or (a[0].kind != "list" and a[0].kind != "ellipsis"):
@@ -722,8 +727,7 @@ def gen_opt(self, t: str, x: Node) -> str:
     if t.startswith("!"):
         return t
     if t == "exc":
-        c = short(x.s) if x.kind == "name" or x.kind == "attr" else "Exception"
-        return f"!an exception that may be None ({c} | None) is not supported: only an object of an exception class of the program may be None"
+        return self.ctype("opt", [t])  # (an exception or None: __exit__'s exception)
     r = self.optional(t)
     return r if r != "" else f"!None/Optional is only supported for {OPTTYPES}, not {typestr(t)}"
 
@@ -734,7 +738,7 @@ def gen_optional(self, t: str) -> str:
     if is_union(t):
         # (a union that holds a class's objects may be None, as the class's objects may)
         return t if len([m for m in umembers(t) if m in self.classes]) > 0 else self.ctype("opt", [t])
-    if (t == "str" or t == "bytes" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t) or is_gen(t)) and "?" not in t:
+    if (t == "str" or t == "bytes" or t == "exc" or t == "exctype" or self.isnum(t) or is_list(t) or is_dict(t) or is_set(t) or is_tuple(t) or is_vtuple(t) or is_callable(t) or is_gen(t)) and "?" not in t:
         return self.ctype("opt", [t])
     return ""
 
@@ -865,6 +869,8 @@ def gen_widens(self, a: str, b: str) -> bool:
         return True
     if is_opt(b):
         return a == "None" or (not is_sopt(b) and self.widens(unopt(a), unopt(b)))  # (an int | None is a box)
+    if is_gen(a) and is_gen(b) and gsend(b) == "None" and gelem(a) == gelem(b):
+        return True  # (a generator that takes S from send() as one that next() alone resumes)
     if b in self.classes:
         return a == "None" or (a in self.classes and self.derives(a, b))
     if is_union(b):
@@ -1057,8 +1063,6 @@ def gen_declare_fn(self, d: Node, cls: str, inherited: bool = False) -> FnInfo:
         elif p.kids[0].kind == "noann":
             if not f.generic and p not in held:
                 # A generic class's TypeVar annotation is restored on its specializations.
-                if cls != "" and d.s == "__exit__":
-                    self.err("unannotated __exit__() is not supported; user-defined context managers cannot be used in 'with' (files only)")
                 self.err(f"parameter '{p.s}' of '{d.s}' needs a type annotation")
             f.ptypes.append("")
         elif f.generic and self.tmpl_ann(p.kids[0]) and not (cls in self.classes and self.classes[cls].origin != "" and not init and not template_ok(d.s)):
@@ -2130,6 +2134,8 @@ def gen_guess_iter(self, a: Node, f: FnInfo) -> str:
     return self.specialize(c, [t], {}, False, {}) if name != "" and c in self.tmpl else ""
 
 def gen_field(self, o: Val, name: str, store: bool = False) -> Val:
+    if o.t == "exctype":
+        self.err(f"the attributes of the class of an exception (type[BaseException]) other than __name__ are not supported (.{name})")
     if name == "__class__" and (o.t == "exc" or (o.t in self.classes and self.classes[o.t].exc != "")):
         self.err("e.__class__ of an exception is not supported; type(e).__name__ is")
     if o.t == "exc":

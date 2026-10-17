@@ -13,13 +13,14 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-native-0", "tests-native-1", "tests-opt-off-0",
-               "tests-opt-off-1", "runtime-cache", "python-free-0", "python-free-1", "ubsan-0", "ubsan-1",
-               "ubsan-2", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
+SUITE_STEPS = {"tests-cpython-0", "tests-cpython-1", "tests-cpython-2", "tests-native-0", "tests-native-1",
+               "tests-opt-off-0", "tests-opt-off-1", "runtime-cache", "python-free-0", "python-free-1",
+               "python-free-2", "ubsan-0", "ubsan-1", "ubsan-2", "gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1",
+               "gc-aot-2"}
 # Steps that run one of the disjoint shards of the corpus (tests/verify.sh shard_cases), and how many
 # shards their suite has: the name ends in the shard index.
 SHARDED_STEPS = {f"{suite}-{index}": count for suite, count in
-                 (("tests-cpython", 2), ("tests-native", 2), ("tests-opt-off", 2), ("python-free", 2),
+                 (("tests-cpython", 3), ("tests-native", 2), ("tests-opt-off", 2), ("python-free", 3),
                   ("ubsan", 3), ("gc-jit", 2), ("gc-aot", 3))
                  for index in range(count)}
 GC_STEPS = {"gc-jit-0", "gc-jit-1", "gc-aot-0", "gc-aot-1", "gc-aot-2"}
@@ -167,22 +168,26 @@ def merge_reports(directory, groups, expected_commit=None):
     if set(reports) != set(wanted):
         raise ValueError(f"missing report groups: {sorted(set(wanted) - set(reports))}")
     # Shards together must make as many checks as an unsharded suite of the same modes (each
-    # group's suite is its last step, whose count validate_report checked). The halves of a JIT and
+    # group's suite is its last step, whose count validate_report checked). The shards of a JIT and
     # AOT suite make as many as tests/verify.sh counts in the whole corpus (sources.suite_checks, the
-    # same in every report: see the identities below), opt-off's once per PYSTACHY_OPT setting.
+    # same in every report: see the identities below), opt-off's once per PYSTACHY_OPT setting. The
+    # group kind-I runs shard I of its suite step, of as many as SHARDED_STEPS gives that step.
     suite = reports[wanted[0]]["sources"]["suite_checks"]
-    for kind, what in (("hosted", "CPython-hosted"), ("native", "native"), ("opt-off", "opt-off"),
-                       ("python-free", "python-free")):
-        halves = [reports[group]["steps"][-1] for group in (f"{kind}-0", f"{kind}-1") if group in reports]
-        if len(halves) < 2:
+    for kind, prefix, what in (("hosted", "tests-cpython", "CPython-hosted"), ("native", "tests-native", "native"),
+                               ("opt-off", "tests-opt-off", "opt-off"),
+                               ("python-free", "python-free", "python-free")):
+        count = SHARDED_STEPS[f"{prefix}-0"]
+        shards = [reports[f"{kind}-{index}"]["steps"][-1] for index in range(count) if f"{kind}-{index}" in reports]
+        if len(shards) < count:
             continue
         runs = 1
         if kind == "opt-off":
-            settings = halves[0].get("PYSTACHY_OPT")
-            if not isinstance(settings, list) or not settings or halves[1].get("PYSTACHY_OPT") != settings:
+            settings = shards[0].get("PYSTACHY_OPT")
+            if (not isinstance(settings, list) or not settings or
+                    any(shard.get("PYSTACHY_OPT") != settings for shard in shards)):
                 raise ValueError("opt-off shards must run the same PYSTACHY_OPT settings")
             runs = len(settings)
-        if halves[0]["expected"] + halves[1]["expected"] != suite * runs:
+        if sum(shard["expected"] for shard in shards) != suite * runs:
             raise ValueError(f"{what} shards must cover the same full-suite check count as the corpus")
     # The shards of a GC suite, which runs in one mode, make as many as the corpus has in one mode
     # (sources.mode_checks), and the UBSan thirds, which run in both modes one at a time, twice as many.

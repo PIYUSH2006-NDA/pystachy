@@ -28,6 +28,7 @@ observable contract.
 | `operator` | `Lib/operator.py` | `c048f8a6852832d5fa750d6ae772d7658c52c3511d261cb902f7edfd262e9127` |
 | `statistics` | `Lib/statistics.py` | `80b677e786418c299ced99993f4a89804d4532e0b5e26971286713a6de538c18` |
 | `urllib.parse` | `Lib/urllib/parse.py` | `491b233e8d87a2ab73964afff029717177d53ad8def328ed9b00575db983da27` |
+| `contextlib` | `Lib/contextlib.py` | `c1e0d67b2007de11ae93cd36cf6faf38d9ab32656a832d592a49325eec579f96` |
 | `html` | `Lib/html/__init__.py` | `923d82d821e75e8d235392c10c145ab8587927b3faf9c952bbd48081eebd8522` |
 | `html.entities` | `Lib/html/entities.py` | `d9c65fb2828dbc1f3e399058a341d51e9375ec5bca95a8e92599c41bd5b78bde` |
 | `keyword` | `Lib/keyword.py` | `18c2be738c04ad20ad375f6a71db34b3823c7f40b0340f5294d0e89f3c9b093b` |
@@ -60,6 +61,7 @@ CPython runs the source.
 | Module | Upstream reference | Implementation |
 |---|---|---|
 | `io` | `Modules/_io/stringio.c` | Typed `StringIO`, with append chunks joined when read |
+| `types` (`_pystachy_types`) | `Lib/types.py` (SHA-256 `3a289bc5366e96d01017038870b5b8861b87305d351b99c688bcc681d908fa7d`) | The module's docstring and its names: `TracebackType`, as `from types import TracebackType` imports it for `__exit__`'s annotation, and the others, of which the compiler supports `GenericAlias` in `__class_getitem__ = classmethod(GenericAlias)` |
 | `csv` | `Modules/_csv.c`, `Lib/csv.py` | Reader state machine, writer and dialect APIs |
 | `collections.deque` | `Modules/_collectionsmodule.c` | Typed two-list queue with CPython comparison-state checks |
 | `collections.defaultdict` | `Modules/_collectionsmodule.c` | Typed dict wrapper with the C type's factory, repr and `\|` |
@@ -76,6 +78,7 @@ CPython runs the source.
 | `_struct` (`_pystachy_struct`) | `Modules/_struct.c`, `Objects/floatobject.c` | `calcsize()`, and the packing and unpacking of each item, which the compiler composes into `pack()`, `unpack()`, `unpack_from()` and `iter_unpack()` for a format it knows, with the C module's sizes, alignment, errors and messages and `PyFloat_Pack2()`'s rounding; `Struct`; their docstrings |
 | `_thread` (`_pystachy_thread`) | `Modules/_threadmodule.c`, `Python/pytime.c` | Locks and reentrant locks for one thread, with `acquire()`'s checks of its arguments and the C module's errors and messages; thread identities and handles, `stack_size()`, `interrupt_main()`, `exit()`; their docstrings |
 | `unicodedata` (`_pystachy_unicodedata`) | `Modules/unicodedata.c`, `Tools/unicode/makeunicodedata.py` | Every function and `ucd_3_2_0`, with the C module's errors and messages, on the tables that `tools/unicodedata_tables.py` takes from CPython's `unicodedata`; their docstrings |
+| `itertools` (`_pystachy_itertools`) | `Doc/library/itertools.rst` (SHA-256 `1c100cdb246d6281ba452bc230a9b05f4bc4838be3080e3e3b7a17cec8d728b1`), `Modules/itertoolsmodule.c` (SHA-256 `41d82be144617b20c4ae75a171e8cb65ed6e00f43cc3994340eea06d21a8cf6e`) | Every function of the C module as a generator, following the documentation's pure-Python equivalents, with the C types' argument checks, messages, order of reads, and the module's docstring; `tee()`'s shared links and `groupby()`'s shared state as the C types keep them |
 | `_pystachy_iterators` | `Objects/listobject.c`, `tupleobject.c`, `unicodeobject.c`, `rangeobject.c`, `dictobject.c`, `setobject.c` | Iterator classes of `iter()` over builtin containers, with CPython's exhaustion and size-change checks and messages |
 
 `re/_constants.py` retains upstream opcode/flag numbers. `tools/re_tables.py`
@@ -168,6 +171,16 @@ formats, with those of the C module (`Modules/_struct.c`, SHA-256
 `be9a74fef157cf6105de8ce3beedb5325f0b433ebd4c64e604aeb9ebf29394b1`), and compares the functions'
 signatures and docstrings.
 
+`tools/itertools_check.py` runs `lib/_pystachy_itertools.py` on CPython and compares it with the
+C module (`Modules/itertoolsmodule.c`, SHA-256
+`41d82be144617b20c4ae75a171e8cb65ed6e00f43cc3994340eea06d21a8cf6e`) for 40,000 random calls of
+its twenty functions, over inputs that log their reads: the errors of the calls, the items and
+errors as they are taken one at a time (interleaving `tee()`'s iterators and `groupby()`'s
+groups), and the order in which the inputs are read, but for the reads that CPython's iterators
+make after their inputs' end (`tests/deviations/lib_itertools_ended.py`).
+`tests/upstream_itertools.py` adapts `Lib/test/test_itertools.py` (SHA-256
+`b356e71312eaac265c7104c32176c5150ab06433754bcb25d6e0013f321ca1c9`); its header lists the
+adopted and excluded cases.
 `tools/thread_check.py` runs `lib/_pystachy_thread.py` on CPython and compares it with the C
 module (`Modules/_threadmodule.c`, SHA-256
 `2bda8f59c35c9939a45819471b248115284f4d74405c5f4172e65ee058d5bc70`, whose timeouts

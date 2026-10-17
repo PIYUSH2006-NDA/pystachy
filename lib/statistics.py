@@ -130,19 +130,16 @@ __all__ = [
 ]
 
 import math
-# Pystachy port: optional imports, as only functions Pystachy leaves uncompiled use them; random's
-# in CPython only (Pystachy has no types module, and drops that block); sumprod is imported below
+# Pystachy port: optional imports, which only uncompiled functions use (but correlation(), which
+# uses itertools'); random's in CPython only (Pystachy drops that block)
 try:
     import numbers
 except ImportError:
     pass
-try:
-    import types
+import sys
+if sys.implementation.name == "cpython":
     import random
     _random = random
-except ImportError:
-    pass
-import sys
 
 try:
     from fractions import Fraction
@@ -427,7 +424,7 @@ def _rank(data, /, *, key=None, reverse=False, ties='average', start=1) -> list[
         data = map(key, data)
     val_pos = sorted(zip(data, count()), reverse=reverse)
     i = start - 1
-    result = [0] * len(val_pos)
+    result = [0.0] * len(val_pos)  # Pystachy port: [0] in CPython, but a list has one item type: the float ranks
     for _, g in groupby(val_pos, key=itemgetter(0)):
         group = list(g)
         size = len(group)
@@ -1894,10 +1891,9 @@ _triweight_invcdf = _newton_raphson(
     f = lambda t: 35/32 * (-1/7*t**7 + 3/5*t**5 - t**3 + t) + 1/2,
     f_prime = lambda t: 35/32 * (1.0 - t * t) ** 3)
 
-# Pystachy port: made in CPython only (Pystachy has no types module, and drops this block): a dict
-# of Pystachy holds functions of one type, and it does not compile NormalDist (its properties)
-try:
-    import types
+# Pystachy port: made in CPython only (Pystachy drops this block): a dict of Pystachy holds
+# functions of one type, and it does not compile NormalDist (its properties)
+if sys.implementation.name == "cpython":
     _kernel_invcdfs = {
         'normal': NormalDist().inv_cdf,
         'logistic': lambda p: log(p / (1 - p)),
@@ -1913,8 +1909,6 @@ try:
     _kernel_invcdfs['uniform'] = _kernel_invcdfs['rectangular']
     _kernel_invcdfs['epanechnikov'] = _kernel_invcdfs['parabolic']
     _kernel_invcdfs['biweight'] = _kernel_invcdfs['quartic']
-except ImportError:
-    pass
 
 def kde_random(data, h, kernel='normal', *, seed=None):
     """Return a function that makes a random selection from the estimated

@@ -208,6 +208,11 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   lookup that misses an object key runs the key's `__repr__` as it is raised, likewise, where
   CPython runs it only when the error is printed.
 
+- An `__exit__` whose traceback parameter is not annotated `TracebackType | None` (from `types`)
+  is given `None` for it where CPython passes the exception's traceback (`tb is None` is true);
+  annotated so, it takes an object of `TracebackType` that has none of a traceback's attributes.
+  (`tests/deviations/with_traceback_none.py`)
+
 ### Modules and libraries
 
 - An import of a builtin module binds its names for the whole program, wherever it appears.
@@ -288,12 +293,14 @@ A cached ASCII flag and code-point operations remain follow-ups to #120.
   generator's own body is converted, and so is everything in a program with `try` or `with`.
   (`tests/deviations/gen_pep479_no_try.py`)
 
-- What closing a generator raises (other than `GeneratorExit`) is reported, not propagated, when
-  a `yield from` closes the generator it delegates to: CPython raises it in the delegating
-  generator, whose own handlers may see it. A generator expression's first iterable is evaluated
-  where it is written, but a `range()`, `enumerate()`, `zip()` or `reversed()` there checks its
-  arguments (a zero step), and a dict's or set's iterator records its size, when the generator
-  first runs, not where it is made.
+- The `StopIteration` that `next()`, `send()` or `throw()` raises as a generator returns a value
+  has no value (`str(e)` is empty, `repr(e)` is `StopIteration()`), where CPython's shows it; a
+  generator's static type does not hold its return type. `r = yield from g()` gets the value.
+  (`tests/deviations/gen_stop_value.py`)
+
+- A generator expression's first iterable is evaluated where it is written, but a `range()`,
+  `enumerate()`, `zip()` or `reversed()` there checks its arguments (a zero step), and a dict's or
+  set's iterator records its size, when the generator first runs, not where it is made.
 
 ## Rejected rather than miscompiled
 
@@ -304,14 +311,19 @@ supported alternatives.
 
 ### Generators
 
-- the value of a `yield` expression (`x = yield v`: there is no `send()`), a `yield from` whose
-  value is used other than assigned to a variable (`r = yield from g()`), the value of a
-  `yield from` that delegates to a generator other than a call of a generator function (whose
-  return type is not known), and a `return v` in a generator annotated `Iterator[T]` or
-  `Iterable[T]`
-- `send()`, `throw()` and `close()` of a generator, `Generator[Y, S, R]` with a send type other
-  than `None`, a generator function's return annotation other than `Iterator[T]`, `Iterable[T]`
-  or `Generator[Y, None, R]`, async generators, and printing or comparing a generator object
+- a `yield from` whose value is used other than assigned to a variable (`r = yield from g()`),
+  the value of a `yield from` that delegates to a generator other than a call of a generator
+  function (whose return type is not known), and a `return v` of a value other than `None` in a
+  generator annotated `Iterator[T]` or `Iterable[T]`
+- `send()` of a value other than `None` to a generator whose send type is `None` (its function is
+  annotated `Iterator[T]`, `Generator[Y, None, R]` or not at all), a send type that cannot be
+  `None` (`next()` sends `None`), a `yield from` that sends on to a generator with another send
+  type, or to an iterator that is no generator, in a generator that takes a value from `send()`
+- the value of `close()` (in CPython 3.13, what the generator returns as it closes), `throw()` with
+  more than one argument (the deprecated `throw(type, value, traceback)`), a generator's `send`
+  or `throw` method as a value
+- a generator function's return annotation other than `Iterator[T]`, `Iterable[T]` or
+  `Generator[Y, S, R]`, async generators, and printing or comparing a generator object
 - an unannotated generator function that delegates to itself (`yield from f(...)`) before its
   first `yield`, whose yield type is not known there
 - a generator expression made a value (not a direct argument of a consumer) that reads a
@@ -321,6 +333,20 @@ supported alternatives.
   where the expression is
 - `reversed()` of a generator, `len()` of one, `dict()` of one (a dict comprehension over it
   works), and a generator where a list is expected
+
+### Context managers
+
+- a `with` item whose value is neither a file nor an object of a class of the program that
+  defines `__enter__` and `__exit__` (a union of such classes, a class without `__exit__`: CPython's
+  `TypeError` message), and `with suppress(...) as x` or `suppress()` with something other than
+  exception classes named (`contextlib.suppress` is compiled as an except clause) or used outside
+  a `with` statement's item
+- an exception class as a value (`cm.__exit__(KeyError, None, None)`, `issubclass(t, cls)` of a
+  variable `cls`), `type(e)` of an exception object that may be `None` (but for
+  `type(e).__name__`, which is `NoneType` for `None`), attributes of an exception's class other
+  than `__name__`, and a `nullcontext(None)` that is not `nullcontext()`
+- `contextlib`'s `ExitStack`, `redirect_stdout`, `redirect_stderr`, `chdir`, `aclosing`,
+  `asynccontextmanager` and `AsyncExitStack` (not ported: `lib/compatibility.md`)
 
 ### Names and scopes
 
@@ -481,7 +507,16 @@ supported alternatives.
   `int | None` and a `str | None`, which CPython finds equal only when both are `None`)
 - comparing or sorting objects in a container when the `__eq__` or ordering method the operation
   calls is annotated to take another class than the objects' class or one of its bases, which
-  CPython calls anyway
+  CPython calls anyway; this includes the method of a subclass whose objects the container may
+  hold, for objects of ordinary and exception classes (`Base() in xs`, `xs.count(x)`,
+  `xs.index(x)`, `xs == ys`, `sorted(xs)` or `<` of tuples holding them, where `Sub(Base)` defines
+  `__eq__(self, other: "Sub")` or `__lt__(self, other: "Sub")`), and comparing dataclass or
+  NamedTuple objects there whose fields hold such objects (`[NT(Sub(1))] == [NT(Base(1))]`);
+  printing such a container works, also one of those dataclass or NamedTuple objects
+- `x == y`, `!=` or an ordering of values typed by a class (ordinary or exception) when the
+  method CPython calls for a subclass whose objects they may be is annotated to take only that
+  subclass (`x == y` of `E`-typed values where `F(E)` defines `__eq__(self, other: "F")`; CPython
+  calls it with an `E`)
 - a constant fixed-shape tuple index out of range (CPython raises `IndexError` where it runs; runtime-length tuples check indices at runtime)
 - slicing a fixed-shape tuple or NamedTuple by bounds or a step that are not integer literals,
   unless its items have one type a `tuple[T, ...]` can hold (the result is then one); assigning
@@ -642,10 +677,15 @@ supported alternatives.
 - `except ... as x` in a function where `x` is a global (the end of the clause deletes it, as `del`
   would), and at a module's top level where `x` is a global of another type that a function reads
   (the function would not see the exception)
-- `==` between exceptions (or an exception and `None`) where an exception class defines `__eq__`
-  or `__ne__` (`is` works), but between objects of classes with a base in common
-- an exception that may be `None` (`Exception | None`, `ValueError | None`; an object of an
-  exception class may be)
+- `==` between exceptions of builtin classes (`except Exception as e`), or such an exception and
+  `None`, where an exception class defines `__eq__` or `__ne__` (`is` works), and between objects
+  of exception classes with no base in common where neither class nor any of their subclasses
+  defines a comparison method but another exception class defines `__eq__` or `__ne__`. Objects
+  of exception classes otherwise compare as CPython compares them, by the methods of the
+  objects' own classes (a right operand's reflected method first where its class derives from
+  the left one's), also between classes with no base in common, and else by identity; a method
+  annotated to take only its own class is rejected where CPython would call it with another
+  class's object (see [Objects and operators](#objects-and-operators))
 - an object of an exception class where a builtin exception is expected (`list[Exception]`:
   annotate it with the class or a base of the program), objects of exception classes with no base
   in common in the program in one list, and a builtin exception where an object of an exception
@@ -667,7 +707,9 @@ supported alternatives.
   `obj` of `AttributeError`, `name` of `NameError`, `name` and `path` of `ImportError`: assign it
   after `super().__init__(...)`, or give it a default in the class body, which CPython's objects
   keep apart from the base's attribute)
-- reading those attributes where the class has no such field (`self.args`, `S(5).value`),
+- exception attributes other than `__cause__` (`e.args`, `e.__context__`, `e.__traceback__`),
+  `__cause__` of an object of an exception class (catch it as a builtin class to read it), and
+  reading those attributes where the class has no such field (`self.args`, `S(5).value`),
   `BaseException`'s methods other than `__str__` and `__repr__` (`e.add_note()`,
   `e.with_traceback()`), a field of a class deriving from a value's class read after `isinstance()`
   tested the value (`isinstance()` does not change the type of a value), a call `x.__init__(...)`

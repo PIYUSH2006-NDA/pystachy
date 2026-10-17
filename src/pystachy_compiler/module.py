@@ -24,6 +24,10 @@ class Mod:
         self.spec: dict[str, str] = {}  # and those it binds so (specials()): the module, or "" if two differ
         self.specat: dict[str, int] = {}  # the top-level statement that first does
         self.falseat = -1  # the top-level TYPE_CHECKING = False, if nothing else binds it (false_flag())
+        # its top-level name = <a test of the platform> that nothing else binds (Loader.platform_flags()):
+        # the statement's index and the test's value (1 or 0)
+        self.flagat: dict[str, int] = {}
+        self.flagval: dict[str, int] = {}
         self.fails = ""  # the exception its top-level code surely raises, ImportError or ModuleNotFoundError
         self.doc = mk("None", "", 1, [])  # its __doc__ while its code binds none: its docstring (Loader.docstring())
         # a package's names that an import of the submodule of that name rebinds at a time Pystachy

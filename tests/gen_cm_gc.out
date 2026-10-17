@@ -1,0 +1,49 @@
+1
+1
+1
+1
+2
+2
+2
+2
+3
+3
+3
+3
+4
+4
+4
+4
+scope w0 w00,w01,w02,r0k0,r1k0,r2k0
+open w0
+r0k0r0k0
+r1k0r1k0
+r2k0r2k0
+close w0 GeneratorExit
+scope w1 w10,w11,w12,r0k1,r1k1,r2k1
+open w1
+r0k1r0k1
+r1k1r1k1
+r2k1r2k1
+close w1 KeyError
+w1 suppressed and finished
+scope w2 w20,w21,w22,r0k2,r1k2,r2k2
+open w2
+r0k2r0k2
+r1k2r1k2
+r2k2r2k2
+close w2 ValueError
+w2 raised out
+scope w3 w30,w31,w32,r0k3,r1k3,r2k3,stop
+open w3
+r0k3r0k3
+r1k3r1k3
+r2k3r2k3
+stopstop
+close w3
+w3 finished
+finished
+finished
+finished
+finished
+[exit 0]

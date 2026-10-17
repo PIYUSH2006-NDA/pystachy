@@ -1,5 +1,6 @@
 """Specs component of the self-hosting Pystachy compiler."""
 from __future__ import annotations
+import sys
 from src.pystachy_compiler.diagnostics import MODDUNDERS
 
 
@@ -46,7 +47,7 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
                             "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "_thread": "_pystachy_thread",
-                            "unicodedata": "_pystachy_unicodedata"}
+                            "unicodedata": "_pystachy_unicodedata", "itertools": "_pystachy_itertools"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())
@@ -186,6 +187,34 @@ FLOATINFO: dict[str, str] = {"sys.float_info.max": "1.7976931348623157e+308", "s
                              "sys.float_info.min_exp": "-1021", "sys.float_info.min_10_exp": "-307", "sys.float_info.dig": "15",
                              "sys.float_info.mant_dig": "53", "sys.float_info.epsilon": "2.220446049250313e-16",
                              "sys.float_info.radix": "2", "sys.float_info.rounds": "1"}
+# sys.platform as the runtime reports it (pys_platform() in runtime.c) on the system the compiler
+# runs on, which is the one it compiles for, and sys.implementation.name: tests of them, and of
+# os.name (OSCONST), in if statements and conditional expressions are decided at compile time
+# (Loader.platform_test())
+PLATFORM = "unknown"
+for _k in ("linux", "darwin", "freebsd"):
+    if sys.platform.startswith(_k):
+        PLATFORM = _k
+IMPLEMENTATION = "pystachy"
+MODATTRS["sys.implementation.name"] = True
+# Pystachy's own builtin module, which only lib/types.py imports (Loader.import_stmt): CPython
+# 3.13's names of types, which lib/types.py binds, but TracebackType (lib/_pystachy_types.py's
+# class, which a with statement passes to __exit__). GenericAlias is supported only as a class body's
+# __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class, which defines
+# nothing in Pystachy (Gen.generic_aliases()); any other use of these names is an error
+TYPESMOD = "_pystachy_typenames"
+for _k in ("AsyncGeneratorType BuiltinFunctionType BuiltinMethodType CapsuleType CellType ClassMethodDescriptorType CodeType "
+           "CoroutineType DynamicClassAttribute EllipsisType FrameType FunctionType GeneratorType GenericAlias "
+           "GetSetDescriptorType LambdaType MappingProxyType MemberDescriptorType MethodDescriptorType MethodType "
+           "MethodWrapperType ModuleType NoneType NotImplementedType SimpleNamespace UnionType "
+           "WrapperDescriptorType _GeneratorWrapper _calculate_meta coroutine get_original_bases new_class prepare_class "
+           "resolve_bases").split():
+    MODATTRS[TYPESMOD + "." + _k] = True
+MODULES[TYPESMOD] = True
+GALIAS = TYPESMOD + ".GenericAlias"
+GALIASUSE = "types.GenericAlias is supported only as a class body's __class_getitem__ = classmethod(GenericAlias), CPython's idiom for a generic class: Pystachy has no generic aliases"
+TYPESUSE = "types.NAME is not supported: of the types module, Pystachy has only GenericAlias, for a class body's __class_getitem__ = classmethod(GenericAlias)"
+GALIASSUB = "subscripting class 'NAME' at run time is not supported: CPython makes NAME[...] a types.GenericAlias (its __class_getitem__ = classmethod(GenericAlias)), and Pystachy has no generic aliases"
 for _k in FLOATINFO:
     MODATTRS[_k] = True
 # sys.version_info of the CPython whose behaviour Pystachy follows (.python-version, which
@@ -221,6 +250,18 @@ for _k in ("Awaitable Coroutine AsyncIterable AsyncIterator AsyncGenerator Hasha
            "Container Callable Collection Set MutableSet Mapping MutableMapping MappingView KeysView ItemsView ValuesView Sequence "
            "MutableSequence ByteString Buffer").split():
     ABCS[_k] = True
+# the other names of CPython's collections.abc, the module _collections_abc (collections binds
+# sys.modules['collections.abc'] to it), that Pystachy lacks: its helpers, the types of the
+# iterators, views and functions it names, its imports, and a module's attributes. An import of
+# one is rejected (ABCSOTHER), not an ImportError that an except clause would handle
+ABCSMORE: dict[str, bool] = {}
+for _k in ("ABCMeta EllipsisType FunctionType GenericAlias _CallableGenericAlias _DeprecateByteStringMeta _check_methods "
+           "_is_param_expr _type_repr abstractmethod sys async_generator coroutine generator bytearray_iterator bytes_iterator "
+           "dict_itemiterator dict_items dict_keyiterator dict_keys dict_valueiterator dict_values framelocalsproxy list_iterator "
+           "list_reverseiterator longrange_iterator mappingproxy range_iterator set_iterator str_iterator tuple_iterator "
+           "zip_iterator __all__ __builtins__ __doc__ __file__ __loader__ __name__ __package__ __spec__").split():
+    ABCSMORE[_k] = True
+ABCSOTHER = "collections.abc.NAME is not supported: Pystachy's collections.abc (which _collections_abc is too) has only the ABCs"
 CLASSVAR = "typing.ClassVar (a class attribute) is not supported"
 ITERS = "_pystachy_iterators"  # lib's module of the iterator classes iter() makes objects of (Loader.program)
 RANGES = "_pystachy_range"  # lib's module of the class of range objects, range() as a value (Loader.program)
@@ -516,16 +557,29 @@ IROPS: dict[str, str] = {
 # a generator's promise, five i64 slots: the value it yielded last, the value it returned, its
 # state and the command its consumer gives it, and its __qualname__ (a str, for the reports of
 # what closing it raises). State: suspended where closing it runs no code of its, suspended
-# where it does (a yield in try, with or yield from), finished, running
+# where it does (a yield in try, with or yield from), finished, running. In a program that uses
+# the generator protocol's send() or throw(), or the value of a yield (Gen.gproto), seven: also
+# the value sent to it (send(), which the yield it resumes at gives) and the exception thrown
+# into it (throw()); a generator that has not started yet is in state new there, so that a
+# send() of a value other than None and a throw() can tell it from one suspended at a yield.
+# Commands: close (a loop that owns it drops it: what closing raises is reported), close()
+# (raised by close()), throw() (raised at the yield)
 GENVAL = 0
 GENRET = 1
 GENSTATE = 2
 GENCMD = 3
 GENNAME = 4
 GENSLOTS = 5
+GENSEND = 5
+GENEXC = 6
+GENSLOTSX = 7
 GENCLEAN = 1
 GENDONE = 2
 GENRUN = 3
+GENNEW = 4
+GENDROPC = 1
+GENCLOSEC = 2
+GENTHROWC = 3
 # the optimizations, passes over each IFn once the program is built (docs/typed-ir.md 7.1) and
 # tupleiter and listfast, choices of lowering (a tuple's slots in Gen.iterable, and checked
 # list[int] reads in Gen.list_read), which PYSTACHY_OPT turns off: "-name", comma-separated, or "-all"
@@ -725,13 +779,15 @@ RUNTIME: dict[str, str] = {
     "exc.begin": "exc:exc,int|R I wL rF wF|", "exc.in": "int:exc,str||", "exc.str": "str:exc|U|", "exc.repr": "str:exc|A U|",
     "exc.new": "exc:str,str,str|A|", "exc.exit": "exc:int,str,str|A|", "exc.detail": "exc:exc,str||", "throw": "None:exc|R N|",
     "exc.user": "exc:%ptr|A|", "exc.obj": "%ptr:exc||", "exc.id": "%ptr:exc||", "exc.ostr": "str:%ptr|U|", "exc.orepr": "str:%ptr|U|",
-    "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.errcls": "str:int|A|",
+    "exc.brepr": "str:%ptr,str|A|", "exc.cls": "str:%ptr|A|", "exc.name": "str:exc|A|", "exc.type": "str:exc|A|",
+    "exc.setcause": "None:exc,exc|wO|", "exc.cause": "exc:exc|rO|", "exc.errcls": "str:int|A|",
     "reraise": "None:|R N|", "unwind_file": "None:file|I|", "unwind_pop": "None:|I|",
     # generators: the unwind actions a suspended generator sets aside (gen.leave) and takes up
     # again when it resumes (gen.enter, which returns their depth below them); the reports of a
-    # generator closed by its loop that yielded again or raised
+    # generator closed by its loop that yielded again or raised, and what one that close() closed
+    # raised (gen.closed: null if nothing)
     "gen.enter": "int:%ptr|I|", "gen.leave": "%ptr:int|A I|",
-    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|",
+    "gen.ignored": "None:str,%ptr|A I|", "gen.unraisable": "None:exc,str,%ptr|U|", "gen.closed": "exc:|I|",
     "personality": "%i32:%i32,%i32,int,%ptr,%ptr|I|",
     "init": "None:%i32,%ptr,%ptr,%ptr,int|A I|", "finish": "None:|U|", "exit_hook": "None:%ptr|I|", "frameaddress": "%ptr:%i32||llvm.frameaddress.p0",
     # files and the standard streams

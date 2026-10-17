@@ -1,0 +1,32 @@
+inner got 0
+inner received a
+inner got 1
+inner received b
+inner got 2
+inner caught v
+after ValueError
+inner finally
+inner returned 2
+outer continues
+outer finally
+end
+inner finally
+outer caught KeyError('k')
+outer handled
+outer finally
+--- close
+1
+sub2 finally raises
+top2 saw KeyError('from sub2')
+close: generator ignored GeneratorExit
+sub2 finally raises
+top2 saw KeyError('from sub2')
+throw(GeneratorExit) gives 99
+delegating generator saw generator ignored GeneratorExit
+--- deep
+d0 deep a deep b mid end: deep done
+exhausted
+returned on ValueError
+1 -1 0
+0 10 20 -1
+[exit 0]

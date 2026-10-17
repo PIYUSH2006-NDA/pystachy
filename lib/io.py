@@ -171,6 +171,15 @@ class StringIO:
         self._check_base()
         return self
 
+    def __enter__(self):  # (compiled only where a with statement calls it, as __exit__ is)
+        """Context management protocol.  Returns self (an instance of IOBase)."""
+        self._check_base()
+        return self
+
+    def __exit__(self, *args) -> None:
+        """Context management protocol.  Calls close()"""
+        self.close()
+
     def __next__(self) -> str:
         line = self.readline()
         if line == "":
