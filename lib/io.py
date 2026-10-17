@@ -1,17 +1,20 @@
-"""The io module's in-memory text stream, StringIO, written for Pystachy.
+"""The io module's in-memory streams, StringIO and BytesIO, written for Pystachy.
 
 CPython's io is a C module (Modules/_io); this one has StringIO, after Modules/_io/stringio.c of
 CPython 3.13.16: the same reads, writes, seeks, newline translation and errors, on a str buffer
 (lib/README.md). Positions and sizes count a str's bytes past ASCII, as len() and slicing do.
+BytesIO follows Modules/_io/bytesio.c in the same way, on a bytes buffer.
 """
 
 from typing import Self
 
-__all__ = ["StringIO", "SEEK_SET", "SEEK_CUR", "SEEK_END"]
+__all__ = ["StringIO", "BytesIO", "SEEK_SET", "SEEK_CUR", "SEEK_END"]
 
 SEEK_SET = 0
 SEEK_CUR = 1
 SEEK_END = 2
+# the largest Py_ssize_t (PY_SSIZE_T_MAX), which bounds BytesIO's positions and size
+_SSIZE_MAX = 9223372036854775807
 
 
 class StringIO:
@@ -265,3 +268,243 @@ class StringIO:
         """Return whether this is an 'interactive' stream."""
         self._check_base()
         return False
+
+
+class BytesIO:
+    """Buffered I/O implementation using an in-memory bytes buffer."""
+
+    def __init__(self, initial_bytes: bytes | None = None) -> None:
+        # (CPython's default is no argument, as None is.) __init__ may be called again: with bytes,
+        # the object holds them, open; without, it is emptied, and a closed one stays closed
+        self._buf = b"" if initial_bytes is None else initial_bytes  # the bytes, but for _tail
+        self._tail: list[bytes] = []  # what was written at the end since _buf was last joined
+        self._size = len(self._buf)  # the length of the bytes: of _buf and _tail
+        self._pos = 0
+        if initial_bytes is not None or not hasattr(self, "_closed"):
+            self._closed = False
+
+    def _check(self) -> None:
+        if self._closed:
+            raise ValueError("I/O operation on closed file.")
+
+    def _join(self) -> None:
+        if self._tail:
+            self._buf = self._buf + b"".join(self._tail)
+            self._tail = []
+
+    def _line(self, size: int) -> bytes:
+        # the next line, of at most size bytes if size >= 0 (scan_eol, then read_bytes)
+        start = self._pos
+        n = self._size - start
+        if 0 <= size < n:
+            n = size
+        if n <= 0:
+            return b""
+        self._join()
+        i = self._buf.find(b"\n", start, start + n)
+        if i >= 0:
+            n = i + 1 - start
+        self._pos = start + n
+        return self._buf[start:self._pos]
+
+    @property
+    def closed(self) -> bool:
+        """True if the file is closed."""
+        return self._closed
+
+    @closed.setter
+    def closed(self, value: object) -> None:
+        # (an attribute of the C type that has no setter)
+        raise AttributeError("attribute 'closed' of '_io.BytesIO' objects is not writable")
+
+    def readable(self) -> bool:
+        """Returns True if the IO object can be read."""
+        self._check()
+        return True
+
+    def writable(self) -> bool:
+        """Returns True if the IO object can be written."""
+        self._check()
+        return True
+
+    def seekable(self) -> bool:
+        """Returns True if the IO object can be seeked."""
+        self._check()
+        return True
+
+    def flush(self) -> None:
+        """Does nothing."""
+        self._check()
+
+    def getvalue(self) -> bytes:
+        """Retrieve the entire contents of the BytesIO object."""
+        self._check()
+        self._join()
+        return self._buf
+
+    def isatty(self) -> bool:
+        """Always returns False.
+
+        BytesIO objects are not connected to a TTY-like device."""
+        self._check()
+        return False
+
+    def tell(self) -> int:
+        """Current file position, an integer."""
+        self._check()
+        return self._pos
+
+    def read(self, size: int | None = -1, /) -> bytes:
+        """Read at most size bytes, returned as a bytes object.
+
+        If the size argument is negative, read until EOF is reached.
+        Return an empty bytes object at EOF."""
+        self._check()
+        n = self._size - self._pos
+        if size is not None and 0 <= size < n:
+            n = size
+        if n <= 0:
+            return b""
+        self._join()
+        start = self._pos
+        self._pos += n
+        return self._buf[start:self._pos]
+
+    def read1(self, size: int | None = -1, /) -> bytes:
+        """Read at most size bytes, returned as a bytes object.
+
+        If the size argument is negative or omitted, read until EOF is
+        reached.  Return an empty bytes object at EOF."""
+        return self.read(size)
+
+    def readline(self, size: int | None = -1, /) -> bytes:
+        """Next line from the file, as a bytes object.
+
+        Retain newline.  A non-negative size argument limits the maximum
+        number of bytes to return (an incomplete line may be returned then).
+        Return an empty bytes object at EOF."""
+        self._check()
+        return self._line(-1 if size is None else size)
+
+    def readlines(self, size: int | None = None, /) -> list[bytes]:
+        """List of bytes objects, each a line from the file.
+
+        Call readline() repeatedly and return a list of the lines so read.
+        The optional size argument, if given, is an approximate bound on the
+        total number of bytes in the lines returned."""
+        self._check()
+        maxsize = -1 if size is None else size
+        lines: list[bytes] = []
+        total = 0
+        while True:
+            line = self._line(-1)
+            if line == b"":
+                break
+            lines.append(line)
+            total += len(line)
+            # (the C type's bound: the lines stop once their total reaches it)
+            if maxsize > 0 and total >= maxsize:
+                break
+        return lines
+
+    def truncate(self, size: int | None = None, /) -> int:
+        """Truncate the file to at most size bytes.
+
+        Size defaults to the current file position, as returned by tell().
+        The current file position is unchanged.  Returns the new size."""
+        self._check()
+        n = self._pos if size is None else size
+        if n < 0:
+            raise ValueError(f"negative size value {n}")
+        if n < self._size:
+            self._join()
+            self._buf = self._buf[:n]
+            self._size = n
+        return n
+
+    def __iter__(self) -> Self:
+        # (the C type's is the object itself, open or closed: its __next__ checks)
+        return self
+
+    def __next__(self) -> bytes:
+        self._check()
+        line = self._line(-1)
+        if line == b"":
+            raise StopIteration
+        return line
+
+    def seek(self, pos: int, whence: int = 0, /) -> int:
+        """Change stream position.
+
+        Seek to byte offset pos relative to position indicated by whence:
+             0  Start of stream (the default).  pos should be >= 0;
+             1  Current position - pos may be negative;
+             2  End of stream - pos usually negative.
+        Returns the new absolute position."""
+        if whence < -2147483648 or whence > 2147483647:
+            # (whence is a C int, converted before anything is checked)
+            raise OverflowError("Python int too large to convert to C int")
+        self._check()
+        if pos < 0 and whence == 0:
+            raise ValueError(f"negative seek value {pos}")
+        if whence == 1:
+            if pos > _SSIZE_MAX - self._pos:
+                raise OverflowError("new position too large")
+            pos += self._pos
+        elif whence == 2:
+            if pos > _SSIZE_MAX - self._size:
+                raise OverflowError("new position too large")
+            pos += self._size
+        elif whence != 0:
+            raise ValueError(f"invalid whence ({whence}, should be 0, 1 or 2)")
+        if pos < 0:
+            pos = 0
+        self._pos = pos
+        return pos
+
+    def write(self, b: bytes, /) -> int:
+        """Write bytes to file.
+
+        Return the number of bytes written."""
+        self._check()
+        n = len(b)
+        if n == 0:
+            return 0
+        if self._pos > _SSIZE_MAX - n:
+            raise OverflowError("new buffer size too large")
+        if self._pos == self._size:
+            self._tail.append(b)
+        else:
+            self._join()
+            if self._pos > self._size:
+                # a write past the end pads the gap with NUL bytes
+                self._buf = self._buf + b"\0" * (self._pos - self._size) + b
+            else:
+                self._buf = self._buf[:self._pos] + b + self._buf[self._pos + n:]
+        self._pos += n
+        if self._pos > self._size:
+            self._size = self._pos
+        return n
+
+    def writelines(self, lines, /) -> None:  # (lines: any iterable of bytes)
+        """Write lines to the file.
+
+        Note that newlines are not added.  lines can be any iterable object
+        producing bytes-like objects.  This is equivalent to calling write()
+        for each element."""
+        self._check()
+        for line in lines:
+            self.write(line)
+
+    def close(self) -> None:
+        """Disable all I/O operations."""
+        self._closed = True
+        self._buf = b""
+        self._tail = []
+
+    def __enter__(self):  # (compiled only where a with statement calls it, as __exit__ is)
+        self._check()
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
