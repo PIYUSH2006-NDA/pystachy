@@ -185,7 +185,7 @@ def gen_pyext(self) -> list[str]:
     o.append(f"@pyx_exports = constant [{len(tab) + 1} x {{ptr, ptr, ptr, ptr}}] [{', '.join(tab + ['{ptr, ptr, ptr, ptr} zeroinitializer'])}]")
     # what CPython would see of the module but an extension cannot give it yet: an error
     for ci in self.classes.values():
-        if "$" not in ci.name and not ci.name.startswith("_"):
+        if "$" not in ci.name and not ci.name.startswith("_") and short(ci.name) == ci.name:
             self.line = ci.node.line
             self.err(f"class {ci.name} is public in extension module '{self.ext}', but classes cannot cross to CPython yet: name it _{ci.name}")
     for nm in self.mvars:

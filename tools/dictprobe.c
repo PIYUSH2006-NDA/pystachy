@@ -226,7 +226,44 @@ static void storage(void) {
   for (I j = 0; j <= sk->mask; j++) if (sk->hs[j] != -1) { Str *x = (Str *)sk->keys[j]; big_ok(x, x->s[0] - 'a'); n++; }
   if (sk->mask != 7 || ds->len + dv->len + dt->len + n != 20) storage_bad("kept strs lost");
   keys = 0; dict = 0;
-  printf("storage: the key tables of ints are never scanned; those of strs, tuples and objects, and dict values, are\n");
+  printf("storage: the key tables of ints are never scanned; those of strs, tuples and objects, and pys_dict_new's values, are\n");
+}
+static void val_kinds(Dict *d, int nums, const char *how) {
+  if (atomic(d->vals) != nums || !atomic(d->hs) || !atomic(d->idx)) storage_bad(how);
+}
+__attribute__((noinline)) static void value_addresses(void) {   /* the addresses of 16 strs, values of a dict of ints only */
+  Dict *d = pys_dict_new_atomic(1, 0); List *h = pys_list_new(16);
+  keys = pys_list_new(2); keys->a[0] = (I)d; keys->a[1] = (I)h; keys->len = 2;
+  for (I i = 0; i < 16; i++) { I a = (I)big(i); pys_list_append(h, a); pys_dict_set(d, skey(1, i), a); }
+  keys->a[1] = 0; keys->len = 1;       /* (h kept the strs apart; now nothing scanned holds them) */
+}
+/* the value arrays of pys_dict_new_atomic's dicts (the compiler's dicts of ints, floats and bools)
+   are atomic, through every path that makes one; pys_dict_new's are scanned */
+static void values(void) {
+  for (I kind = 0; kind < 2; kind++) {
+    keys = pys_list_new(4);
+    Dict *a = pys_dict_new_atomic(kind, 10), *s = pys_dict_new(kind, 10), *u = pys_dict_new_atomic(kind, 0);
+    keys->a[0] = (I)a; keys->a[1] = (I)s; keys->a[2] = (I)u; keys->len = 3;
+    val_kinds(a, 1, "a presized dict of numbers"); val_kinds(s, 0, "a presized dict");
+    for (I i = 0; i < 100; i++) { pys_dict_set(a, skey(kind, i), i * 3); pys_dict_set(s, skey(kind, i), i * 3); }
+    val_kinds(a, 1, "a dict of numbers that grew"); val_kinds(s, 0, "a dict that grew");
+    val_kinds(pys_dict_copy(a), 1, "dict.copy() of numbers"); val_kinds(pys_dict_from(a), 1, "dict(d) of numbers");
+    val_kinds(pys_dict_copy(s), 0, "dict.copy()"); val_kinds(pys_dict_from(s), 0, "dict(d)");
+    pys_dict_update(u, a); val_kinds(u, 1, "an empty dict of numbers updated (a clone of the table)");
+    for (I i = 0; i < 100; i += 2) pys_dict_pop(a, skey(kind, i));
+    val_kinds(pys_dict_copy(a), 1, "dict.copy() of numbers with holes"); val_kinds(pys_dict_from(a), 1, "dict(d) of numbers with holes");
+    val_kinds(pys_dict_fromkeys_dict(a, 0), 0, "dict.fromkeys(d, v)");   /* (v's type is not the values') */
+    if (!atomic(pys_dict_values(a)->a) || atomic(pys_dict_values(s)->a)) storage_bad("values() as a list");
+    scrub_collect();
+    for (I i = 1; i < 100; i += 2) if (pys_dict_get(a, skey(kind, i), -1) != i * 3) storage_bad("a value lost");
+    pys_dict_clear(a); pys_dict_set(a, skey(kind, 1), 1);
+    val_kinds(a, 1, "a dict of numbers filled again after clear()");
+  }
+  value_addresses(); scrub_collect(); scrub_collect();
+  if (gc_live >= 4 * MIB) storage_bad("int values that are the addresses of strs kept them alive");
+  if (((Dict *)keys->a[0])->len != 16) storage_bad("the addresses' dict lost");
+  keys = 0;
+  printf("values: the value arrays of dicts of numbers are never scanned, also in their copies; other dicts' are\n");
 }
 
 #define X64 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -292,6 +329,7 @@ int main(int argc, char **argv) {
   gc_init(__builtin_frame_address(0), roots, 2);
   hash_cache();
   storage();
+  values();
   if (argc == 2 && !strcmp(argv[1], "--hash-cache")) return 0;
   I ns[8] = {4000, 8000, 16000, 30000}, nn = 4;
   if (argc > 1) for (nn = 0; nn + 1 < argc && nn < 8; nn++) ns[nn] = atoll(argv[nn + 1]) & ~(I)1;

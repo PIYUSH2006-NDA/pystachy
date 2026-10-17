@@ -674,6 +674,18 @@ def elem(t: str) -> str:
     return t[5:-1]
 
 
+def atomic_list(t: str) -> bool:
+    # is t a list type whose items are never pointers (ints, floats and bools in their slots), so
+    # that its item array may be memory the collector does not scan (pys_list_new_atomic; #210)
+    return is_list(t) and elem(t) in ["int", "float", "bool"]
+
+
+def atomic_dict(t: str) -> bool:
+    # is t a dict type whose values are never pointers, so that its value arrays may be memory
+    # the collector does not scan (pys_dict_new_atomic; its keys' arrays have their own kind)
+    return is_dict(t) and targs(t)[1] in ["int", "float", "bool"]
+
+
 def gelem(t: str) -> str:
     # Y, of a generator gen[Y] (or gen[Y,S], whose send type S is not None)
     return targs(t)[0]
