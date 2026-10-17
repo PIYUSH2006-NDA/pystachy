@@ -358,7 +358,9 @@ supported alternatives.
 - a function, class, method or import name bound twice, or a name that is both a variable and a
   function, class or import, also in a function: a parameter or local that an import in it binds
   too (`pi = 3.0` ... `from math import pi`), but for a from-import of a Python module's variable,
-  which assigns the local
+  which assigns the local, and for a module-level `def` or `class` that rebinds a function or class
+  an earlier from-import or `import *` of a Python module bound, where nothing may read the import's
+  binding in between ([module scope](modules.md#module-scope))
 - a class-body default that names an earlier class attribute (Pystachy has no class scope), also
   one named like a builtin or `__name__`, also in an imported module, and `__doc__` in a class
   body (the class's docstring)
