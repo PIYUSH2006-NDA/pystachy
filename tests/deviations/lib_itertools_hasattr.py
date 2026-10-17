@@ -1,6 +1,6 @@
 # itertools' iterators are generators here (lib/compatibility.md), so hasattr() finds the
 # generator's methods and attributes on them, where CPython's iterators are objects of the C
-# types, which have none of them (calling one is a compile-time error here)
+# types, which have none of them (calling one works here: lib_itertools_protocol)
 from itertools import chain, count, islice
 
 print(hasattr(count(), "send"), hasattr(count(), "close"), hasattr(count(), "throw"))

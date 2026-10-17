@@ -908,7 +908,9 @@ functions are templates: each call's argument types make its code
   program drops is not ([deviation](../tests/deviations/lib_itertools_close.py)). As generators,
   the iterators have the generator's attributes for `hasattr()` (`send`, `close`, `gi_frame`,
   ...), which CPython's have not
-  ([deviation](../tests/deviations/lib_itertools_hasattr.py)).
+  ([deviation](../tests/deviations/lib_itertools_hasattr.py)), and `send()`, `throw()` and
+  `close()` work on them where CPython raises `AttributeError`
+  ([deviation](../tests/deviations/lib_itertools_protocol.py)).
 - `chain` is an object whose calls make generators, with `from_iterable()` as a method and the C
   type's repr, not a class: `isinstance(x, itertools.chain)` is a compile-time error
   ([error test](../tests/errors/lib_itertools_isinstance.py)), as are the other functions as
