@@ -1,0 +1,13 @@
+1.0 -1.0
+0.5
+-0.9428090415820634
+1.0
+-0.9746794344808964
+0.36764705882352944
+1.0
+StatisticsError: correlation requires at least two data points
+StatisticsError: correlation requires that both inputs have same number of data points
+ValueError: Unknown method: 'x'
+StatisticsError: at least one of the inputs is constant
+StatisticsError: at least one of the inputs is constant
+[exit 0]

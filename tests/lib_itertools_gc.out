@@ -1,0 +1,13 @@
+pairwise 1726
+tee 70 w696969 970 60
+groupby 10 0=0:0,0:1,0:2,0:3 9=9:36,9:37,9:38,9:39
+cycle ['w444', 'w000', 'w111']
+product 384
+combinations 210 60
+accumulate w000w111w222w333w444w555
+chain 90
+batched ['w555', 'w111111', 'w171717', 'w191919']
+zip_longest ('-', 'W444')
+suspended 350 0x 49x
+counters 200
+[exit 0]

@@ -46,7 +46,7 @@ ABSTRACT_DECOS: dict[str, str] = {"abc$abstractmethod": "", "abc$abstractpropert
 # that file as the module (Loader.modpath), where CPython imports its C module
 STANDINS: dict[str, str] = {"binascii": "_pystachy_binascii", "_codecs": "_pystachy_codecs", "atexit": "_pystachy_atexit",
                             "abc": "_pystachy_abc", "_struct": "_pystachy_struct", "_thread": "_pystachy_thread",
-                            "unicodedata": "_pystachy_unicodedata"}
+                            "unicodedata": "_pystachy_unicodedata", "itertools": "_pystachy_itertools"}
 
 
 # the kinds of nodes whose code calls no function or method of the program (Loader.raises_in())

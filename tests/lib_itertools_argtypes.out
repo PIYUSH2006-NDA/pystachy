@@ -1,0 +1,26 @@
+permutations float TypeError Expected int as r
+permutations str TypeError Expected int as r
+permutations None ok 6
+permutations negative ValueError r must be non-negative
+permutations Optional None ok 24
+permutations Optional 2 ok 12
+count str TypeError a number is required
+count step str TypeError a number is required
+count None TypeError a number is required
+islice no index TypeError islice expected at least 2 arguments, got 1
+islice five TypeError islice expected at most 4 arguments, got 5
+tee three TypeError tee expected at most 2 arguments, got 3
+tee three unpacked TypeError tee expected at most 2 arguments, got 3
+count -1 TypeError a number is required
+count step -1 TypeError a number is required
+batched -1 TypeError 'NoneType' object cannot be interpreted as an integer
+repeat -1 TypeError 'NoneType' object cannot be interpreted as an integer
+product -1 TypeError 'NoneType' object cannot be interpreted as an integer
+tee -1 TypeError 'NoneType' object cannot be interpreted as an integer
+count 2 ok [2, 3, 4]
+count step 2 ok [1, 3, 5]
+batched 2 ok [('a', 'b'), ('c', 'd'), ('e',)]
+repeat 2 ok ['a', 'a']
+product 2 ok 4
+tee 2 ok 2
+[exit 1]

@@ -116,6 +116,14 @@ tools/unicodedata_tables.py from CPython's unicodedata module and from the Unico
 Database (see "Unicode Character Database" below). They are derived from Python and are used
 under the same license and copyright notice.
 
+lib/_pystachy_itertools.py ports CPython 3.13.16's Modules/itertoolsmodule.c to Pystachy's
+subset as generators that follow the pure-Python equivalents in its Doc/library/itertools.rst,
+with the C module's behaviour, messages and docstrings; it is derived from Python and is used
+under the same license and copyright notice (the documentation's code examples are also
+offered under the Zero-Clause BSD license). tests/upstream_itertools.py adapts selected tests
+of that release's Lib/test/test_itertools.py; its header names them, the adaptations and the
+exclusions, and the same license applies.
+
 lib/re/__init__.py, lib/re/_constants.py and lib/re/_sre.py port CPython 3.13.16's
 Lib/re/__init__.py, _parser.py, _compiler.py and _constants.py, and the matching engine of its
 Modules/_sre/sre.c and sre_lib.h, to Pystachy's subset (lib/README.md). lib/re/_unicode.py is
