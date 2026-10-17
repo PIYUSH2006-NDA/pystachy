@@ -88,6 +88,9 @@ def gen_cextern(self, f: FnInfo) -> None:
         elif c == "float":
             code.append(f"  %p{j} = bitcast double %a{j} to double")  # (as it is: -0.0, inf and nan too)
             cts.append("double")
+        elif c == "c_float":
+            code.append(f"  %p{j} = fptrunc double %a{j} to float")  # (to the nearest float, ties to even; too large: an infinity)
+            cts.append("float")
         else:
             ll, k = CTYPES[c].split(":")
             v = f"%a{j}"
@@ -99,7 +102,7 @@ def gen_cextern(self, f: FnInfo) -> None:
             cts.append(ll)
         args.append(f"{cts[-1]} %p{j}")
     c = self.externtype(f.node.kids[1], f.ret, "returns", f)
-    r = "ptr" if c in ("str", "opt[str]") else "double" if c == "float" else "void" if c == "None" else CTYPES[c].split(":")[0]
+    r = "ptr" if c in ("str", "opt[str]") else "double" if c == "float" else "float" if c == "c_float" else "void" if c == "None" else CTYPES[c].split(":")[0]
     rr = r[r.find(" ") + 1 :] + " " + r[: r.find(" ")] if " " in r else r  # (a result's attribute comes first: zeroext i32)
     cl = f"call {rr} %fp({', '.join(args)})"
     code.insert(0, f"  %fp = load ptr, ptr @ffi.fp.{f.ll[1:]}")
@@ -110,6 +113,8 @@ def gen_cextern(self, f: FnInfo) -> None:
         code.extend([f"  %r = {cl}", f"  %s = call ptr @pys_cstr(ptr %r, i64 {1 if c == 'str' else 0})", "  ret ptr %s"])
     elif c == "float":
         code.extend([f"  %r = {cl}", "  ret double %r"])
+    elif c == "c_float":
+        code.extend([f"  %r = {cl}", "  %x = fpext float %r to double", "  ret double %x"])  # (exactly)
     else:
         k = CTYPES[c].split(":")[1]
         code.append(f"  %r = {cl}")

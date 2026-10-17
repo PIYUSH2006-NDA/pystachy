@@ -42,10 +42,11 @@ The compiler does not read C headers or infer C calling conventions.
 | `ffi.c_uint64`, `ffi.c_size_t` | `uint64_t`, `size_t` | An argument must be nonnegative; a result must be below `2**63`. |
 | `ffi.c_void_p` | Pointer carried as `int` | `0` is NULL. |
 | `float` | `double` | Preserves signed zero, infinities and NaN. |
+| `ffi.c_float` | 32-bit `float` | An argument is rounded to the nearest float, ties to even, and past the largest float to an infinity, as ctypes rounds it; a result widens to a `float` exactly. Declare C `float` parameters with it: passed as `float`, a C `float` parameter would read the wrong register bits. |
 | `str` argument | `const char *` | NUL-terminated UTF-8 bytes, valid during the call; NUL in the value raises `ValueError`. |
 | `ffi.c_buf` argument | `const char *` | Same bytes, NULs allowed; pass the length separately. |
 | `list[float]` argument | `double *` | The list's own items, for the call: C reads and writes them in place. Pass the length separately. |
-| `list[ffi.c_int64]` argument | `int64_t *` | The same, for a list of ints (`list[ffi.c_ssize_t]` too). Other item types are rejected: a list's items are 8 bytes each. |
+| `list[ffi.c_int64]` argument | `int64_t *` | The same, for a list of ints (`list[ffi.c_ssize_t]` too). Other item types, `list[ffi.c_float]` and `list[ffi.c_int]` among them, are rejected: a list's items are 8 bytes each. |
 | `str` result | `char *` | Copied into a new string; NULL raises `ValueError`. |
 | `str \| None` result | `char *` | Copied into a new string; NULL becomes `None`. |
 | `None` result | `void` | No value. |

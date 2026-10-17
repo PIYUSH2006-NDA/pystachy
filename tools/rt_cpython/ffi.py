@@ -48,9 +48,13 @@ class c_void_p(int):
     """a pointer, as an int (NULL is 0)"""
 
 
+class c_float(float):
+    """C's float (32 bits) in an @extern function's signature; a float everywhere else"""
+
+
 _C = {c_int: ctypes.c_int, c_uint: ctypes.c_uint, c_int64: ctypes.c_int64, c_ssize_t: ctypes.c_ssize_t,
       c_uint64: ctypes.c_uint64, c_size_t: ctypes.c_size_t, c_void_p: ctypes.c_void_p,
-      c_buf: ctypes.c_char_p, float: ctypes.c_double, str: ctypes.c_char_p, type(None): None, typing.Optional[str]: ctypes.c_char_p}
+      c_buf: ctypes.c_char_p, float: ctypes.c_double, c_float: ctypes.c_float, str: ctypes.c_char_p, type(None): None, typing.Optional[str]: ctypes.c_char_p}
 
 
 # the lists an @extern function takes: their item type in a C array
@@ -64,8 +68,8 @@ def _check(t, v):
         return v.encode("utf-8", "surrogatepass")
     if t is c_buf:
         return v.encode("utf-8", "surrogatepass")
-    if t is float:
-        return float(v)
+    if t is float or t is c_float:
+        return float(v)  # (ctypes rounds a c_float argument to the nearest float, as C does)
     if t is c_int and not -2**31 <= v < 2**31:
         raise OverflowError("Python int too large to convert to C int")
     if t in (c_uint, c_uint64, c_size_t) and v < 0:

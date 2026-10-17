@@ -128,6 +128,8 @@ def gen_ann(self, n: Node) -> str:
             return "int"  # (a C integer type, in an @extern function's signature: see CTYPES)
         if self.imported(s) == "ffi.c_buf":
             return "str"  # (a str's UTF-8 bytes, NULs and all, for a C function that takes their length too)
+        if self.imported(s) == "ffi.c_float":
+            return "float"  # (a C float, 32 bits, in an @extern function's signature)
         if is_excname(s):
             return "exc"  # (a builtin exception class: any exception, not only those of the class)
         if s in self.taliases:

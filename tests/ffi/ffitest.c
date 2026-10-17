@@ -15,3 +15,8 @@ void ffi_scale(double *x, size_t n, double k) { for (size_t i = 0; i < n; i++) x
 void ffi_reverse(const double *x, double *y, size_t n) { for (size_t i = 0; i < n; i++) y[i] = x[n - 1 - i]; }
 int64_t ffi_isum(const int64_t *x, size_t n) { int64_t s = 0; for (size_t i = 0; i < n; i++) s += x[i]; return s; }
 void ffi_iota(int64_t *x, size_t n, int64_t start) { for (size_t i = 0; i < n; i++) x[i] = start + (int64_t)i; }
+
+/* tests/ffi/c_float.py's functions of C floats (ffi.c_float) */
+double ffi_widen(float x) { return x; }
+float ffi_narrow(double x) { return (float)x; }
+float ffi_fmul(float a, float b) { return a * b; }
